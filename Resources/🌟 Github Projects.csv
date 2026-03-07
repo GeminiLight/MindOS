@@ -1,0 +1,2 @@
+name,author,github,language,tags,description
+pi coding agent,Mario Zechner (badlogic),https://github.com/badlogic/pi-mono,TypeScript,agent|minimal|cli,只有 read/write/edit/bash 四个工具的极简 coding agent，其他能力靠 skills 扩展，prompt caching 命中率高

@@ -25,6 +25,7 @@
 | `Research/` | 文献调研、idea 生成、实验、论文写作与投稿 |
 | `Startup/` | 产品设计、技术开发、市场营销 |
 | `Growth/` | 个人成长、学习规划 |
+| `Resources/` | 外部资源收藏（GitHub 项目、工具、文章等）|
 
 ## 📁 目录结构
 
@@ -52,6 +53,9 @@ sop_note/
 └── Growth/             # 个人成长
     ├── Information/
     └── Cognition/
+Resources/              # 外部资源收藏
+    ├── 🌟 Github Projects.csv
+    └── Github Projects/
 ```
 
 ## 📐 扩展规范
@@ -65,6 +69,12 @@ sop_note/
 
 - 目录名使用英文，体现领域或场景
 - 在 README.md 目录结构和目录职责表中同步更新
+
+### 添加产品
+
+- 当用户提供一个产品（含产品名称或 URL）时，抓取产品信息并追加一行到 `Resources/Products/Products.csv`
+- CSV 字段：`Name, URL, Category, Description, Key Features, Target Users, Pricing`
+- 若 `Resources/Products/Products.csv` 不存在，先创建并写入表头再追加
 
 ### 文件变更
 

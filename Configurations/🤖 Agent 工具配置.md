@@ -44,21 +44,7 @@ source ~/.zshrc
 
 ## 4️⃣ MCP 配置
 
-参考 [Agents/🤖 Agent 常用MCP.md](Agents/🤖 Agent 常用MCP.md)，对每个工具全局安装：
-
-```bash
-# Claude Code
-claude mcp add --scope user <name> <command>
-
-# Codex
-codex mcp add <name> --url <url>
-
-# iFlow
-iflow mcp add --scope user <name> <command>
-
-# Gemini CLI（编辑配置文件）
-# ~/.gemini/settings.json → mcpServers 下添加
-```
+参考 [Agents/🤖 Agent 常用MCP.md](Agents/🤖 Agent 常用MCP.md)，对每个工具全局安装。
 
 ## 5️⃣ Skill 配置
 

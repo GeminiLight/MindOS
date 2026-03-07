@@ -1,0 +1,3 @@
+name,category,url,description
+Apify,Web Scraping,https://apify.com/,云端网页爬取与自动化平台，支持构建、部署和分享爬虫 Actor
+Firecrawl,Web Scraping,https://firecrawl.dev/,将网站转化为 LLM 可用数据的爬取 API，输出干净的 Markdown 或结构化数据

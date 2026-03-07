@@ -1,5 +1,25 @@
 # 🤖 Agent 常用MCP
 
+## 1️⃣ 安装方式与路径
+
+各工具全局安装 MCP 的命令格式：
+
+```bash
+# Claude Code
+claude mcp add --scope user <name> <command>
+
+# Codex
+codex mcp add <name> --url <url>
+
+# iFlow
+iflow mcp add --scope user <name> <command>
+
+# Gemini CLI（编辑配置文件）
+# ~/.gemini/settings.json → mcpServers 下添加
+```
+
+## 2️⃣ 常用 MCP 及分类
+
 | 名称 | 类别 | 用途 | 安装方式 | 备注 |
 |------|------|------|----------|------|
 | filesystem MCP | 本地系统 | 让 AI 读写本地指定目录，支持批量操作和目录树 | `npx @modelcontextprotocol/server-filesystem` | 需指定允许访问的目录 |
@@ -7,6 +27,8 @@
 | GitHub MCP Server | 代码托管 | 让 AI 操作 GitHub Issues、PR、Actions、仓库等 | Docker 方式，见下方配置 | 需要 GitHub PAT |
 | Playwright MCP | 浏览器 | 让 AI 控制真实浏览器，导航、点击、截图、抓动态内容 | `npx @playwright/mcp@latest` | 需要 Node.js 18+ |
 | Notion MCP Server | 知识库 | 让 AI 访问 Notion 工作区，支持搜索、创建/更新页面、管理数据库 | `npx @notionhq/notion-mcp-server` | 需要 Notion 集成令牌 |
+| 语雀 MCP Server | 知识库 | 让 AI 访问语雀知识库，支持文档读写、搜索、目录管理等 25 个工具 | `npx yuque-mcp-server` | 需要语雀 Personal Token |
+| xiaohongshu-mcp | 社交媒体 | 让 AI 搜索小红书、获取帖子详情/评论/互动数据、发布笔记 | 二进制，见下方配置 | 需登录态，配合 xiaohongshu skill 使用 |
 | arxiv-mcp-server | 科研 | 搜索、下载、本地存储并全文读取 arXiv 论文 | `uv tool install arxiv-mcp-server` | 需指定本地存储路径 |
 
 ---
@@ -123,6 +145,26 @@
 }
 ```
 
+### 语雀 MCP Server
+
+访问语雀 **设置 → 账号与安全 → Token**，创建 Personal Token。
+
+```json
+{
+  "mcpServers": {
+    "yuque": {
+      "command": "npx",
+      "args": ["-y", "yuque-mcp-server"],
+      "env": {
+        "YUQUE_PERSONAL_TOKEN": "your_token_here"
+      }
+    }
+  }
+}
+```
+
+提供工具：文档读写、知识库搜索、目录管理、版本管理、团队管理等 25 个工具
+
 ---
 
 ## 科研
@@ -150,3 +192,28 @@ uv tool install arxiv-mcp-server
 ```
 
 提供工具：`search_papers`、`download_paper`、`list_papers`、`read_paper`
+
+---
+
+## 社交媒体
+
+### xiaohongshu-mcp
+
+> Mac 用户参考 [Credentials/🍪 小红书.md](../Credentials/🍪 小红书.md) 完成登录，生成 `cookies.json`。
+
+```json
+{
+  "mcpServers": {
+    "xiaohongshu": {
+      "command": "/path/to/xiaohongshu-mcp"
+    }
+  }
+}
+```
+
+提供工具：搜索笔记、获取帖子详情/评论/互动数据、发布笔记、获取用户主页
+
+配合 skill 使用：
+- `xiaohongshu`：内容搜索与舆情分析
+- `write-xiaohongshu`：研究爆款 → 写作 → 发布全流程
+- `xiaohongshu-note-analyzer`：发布前内容审核与优化
