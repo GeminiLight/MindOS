@@ -95,7 +95,7 @@ npx skills check                                     # 检查可用更新
 
 | 名称 | 用途 | 触发场景 | 文件链接 |
 |------|------|----------|----------|
-| arxiv-search | 语义搜索 arXiv 论文 | 查找某方向的相关论文 | [yorkeccak/scientific-skills](https://github.com/yorkeccak/scientific-skills) |
+
 | ml-paper-writing | 撰写 ML/AI 论文（NeurIPS/ICML/ICLR 等） | 从研究仓库起草论文、准备投稿 | [zechenzhangagi/ai-research-skills](https://github.com/zechenzhangagi/ai-research-skills) |
 | research-paper-writer | 撰写正式学术论文（IEEE/ACM 格式） | 写研究论文、会议论文 | [ailabs-393/ai-labs-claude-skills](https://github.com/ailabs-393/ai-labs-claude-skills) |
 | scientific-paper-figure-generator | 生成发表级科学图表 | 为论文生成实验结果图、可视化 | [dkyazzentwatwa/chatgpt-skills](https://github.com/dkyazzentwatwa/chatgpt-skills) |

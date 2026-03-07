@@ -2,21 +2,16 @@
 
 ## 1️⃣ 安装方式与路径
 
-各工具全局安装 MCP 的命令格式：
+通过修改各工具的全局配置文件来配置 MCP Server。
 
-```bash
-# Claude Code
-claude mcp add --scope user <name> <command>
+| 工具 | 配置文件路径 | 配置字段 | 格式 |
+|------|-------------|----------|------|
+| Claude Code | `~/.claude/config.json` | `mcpServers` | JSON |
+| Codex | `~/.codex/config.toml` | `[mcpServers]` | TOML |
+| Gemini CLI | `~/.gemini/settings.json` | `mcpServers` | JSON |
+| iFlow | `~/.iflow/config.json` | `mcpServers` | JSON |
 
-# Codex
-codex mcp add <name> --url <url>
-
-# iFlow
-iflow mcp add --scope user <name> <command>
-
-# Gemini CLI（编辑配置文件）
-# ~/.gemini/settings.json → mcpServers 下添加
-```
+> **注意**：下方提供的配置示例均为 JSON 格式。Codex 用户需将其转换为 TOML 格式。
 
 ## 2️⃣ 常用 MCP 及分类
 
@@ -27,7 +22,6 @@ iflow mcp add --scope user <name> <command>
 | GitHub MCP Server | 代码托管 | 让 AI 操作 GitHub Issues、PR、Actions、仓库等 | Docker 方式，见下方配置 | 需要 GitHub PAT |
 | Playwright MCP | 浏览器 | 让 AI 控制真实浏览器，导航、点击、截图、抓动态内容 | `npx @playwright/mcp@latest` | 需要 Node.js 18+ |
 | Notion MCP Server | 知识库 | 让 AI 访问 Notion 工作区，支持搜索、创建/更新页面、管理数据库 | `npx @notionhq/notion-mcp-server` | 需要 Notion 集成令牌 |
-| 语雀 MCP Server | 知识库 | 让 AI 访问语雀知识库，支持文档读写、搜索、目录管理等 25 个工具 | `npx yuque-mcp-server` | 需要语雀 Personal Token |
 | xiaohongshu-mcp | 社交媒体 | 让 AI 搜索小红书、获取帖子详情/评论/互动数据、发布笔记 | 二进制，见下方配置 | 需登录态，配合 xiaohongshu skill 使用 |
 | arxiv-mcp-server | 科研 | 搜索、下载、本地存储并全文读取 arXiv 论文 | `uv tool install arxiv-mcp-server` | 需指定本地存储路径 |
 
@@ -144,26 +138,6 @@ iflow mcp add --scope user <name> <command>
   }
 }
 ```
-
-### 语雀 MCP Server
-
-访问语雀 **设置 → 账号与安全 → Token**，创建 Personal Token。
-
-```json
-{
-  "mcpServers": {
-    "yuque": {
-      "command": "npx",
-      "args": ["-y", "yuque-mcp-server"],
-      "env": {
-        "YUQUE_PERSONAL_TOKEN": "your_token_here"
-      }
-    }
-  }
-}
-```
-
-提供工具：文档读写、知识库搜索、目录管理、版本管理、团队管理等 25 个工具
 
 ---
 
