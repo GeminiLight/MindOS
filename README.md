@@ -1,113 +1,129 @@
-# SOP Note
+# MindOS
 
-个人知识库与 SOP 系统，将工作流程、偏好和配置沉淀为可复用的文档，供 Agent 执行时直接引用。
+[中文版](README_zh.md)
 
-## ✨ 项目特点
+**The OS where humans think and agents act.**
 
-- **一次定义，随处执行** — 重复操作写成 SOP，Agent 按步骤执行，无需每次对话重复说明
-- **人机共读** — 内容面向 Agent 执行，格式同样对人类友好易读
-- **场景分类** — 按科研、创业、配置、成长等场景组织，职责清晰不混杂
-- **持续沉淀** — 随着使用不断完善，个人偏好和最佳实践逐步积累
+MindOS is a local-first knowledge base with a browser UI, an MCP server for Agent access, and a structured template to organize your notes, workflows, and personal context in a way that both humans and AI Agents can read and execute.
 
-## 🤖 Agent 使用指南
+> No database. No cloud sync. Runs entirely on your machine.
 
-### 进入项目时
+---
 
-1. 先读取本文件（README.md），了解整体结构
-2. 根据任务类型，进入对应目录读取相关 SOP
-3. 执行环境配置类任务前，先读取 `Configurations/🧠 使用规范.md`
+## ✨ Features
 
-### 各目录适用任务
+- **Browser UI** — browse, edit, and search your notes at `localhost:3000`
+- **MCP Server** — expose your knowledge base as MCP tools so any Agent can read, write, and search your notes
+- **Structured template** — opinionated directory layout for Profile, Workflows, Configurations, and more
+- **AI Ask** — `⌘/` to chat with your knowledge base (streaming, file attachment via `@`)
+- **Full-text search** — `⌘K` fuzzy search with snippet preview
+- **Markdown + CSV** — GFM rendering, sortable CSV viewer, CodeMirror editor
 
-| 目录 | 适用任务 |
-|------|----------|
-| `Profile/` | 个人身份、偏好、目标与全局上下文 |
-| `Configurations/` | 环境初始化、工具安装、Agent 配置 |
-| `Workflows/Research/` | 文献调研、idea 生成、实验、论文写作与投稿 |
-| `Workflows/Startup/` | 产品设计、技术开发、市场营销 |
-| `Workflows/Media/` | 媒体内容创作 |
-| `Workflows/Information/` | 信息获取与整理 |
-| `Growth/` | 个人成长、学习规划 |
-| `Resources/` | 外部资源收藏（GitHub 项目、工具、文章等）|
+---
 
-## 📁 目录结构
+## 🚀 Quick Start
 
-```
-sop_note/
-├── Profile/            # 个人身份与上下文配置
-│   ├── README.md
-│   ├── 👤_Identity.md
-│   ├── ⚙️_Preferences.md
-│   ├── 🎯_Objectives.md
-│   └── 🧠_Context.md
-├── Configurations/     # 环境配置与工具 SOP
-│   ├── 🧠 使用规范.md
-│   ├── 🖥️ Server Setup.md
-│   ├── 💻 MacBook Setup.md
-│   ├── 🤖 Agent 工具配置.md
-│   ├── Agents/         # Claude Code、MCP、Skill 配置
-│   ├── Apps/           # 常用软件清单
-│   ├── Tools/          # SSH、Python、HuggingFace 配置
-│   └── Orgs/           # 公司特定配置（腾讯等）
-├── Workflows/          # 工作流 SOP
-│   ├── Research/       # 科研工作流
-│   │   ├── Survey/
-│   │   ├── Ideation/
-│   │   ├── Experiment/
-│   │   ├── Writing/
-│   │   └── Review/
-│   ├── Startup/        # 创业相关
-│   │   ├── Product/
-│   │   ├── Development/
-│   │   └── Marketing/
-│   ├── Media/          # 媒体内容创作
-│   └── Information/    # 信息获取与整理
-└── Growth/             # 个人成长
-    └── Cognition/
-├── Resources/              # 外部资源收藏
-│   ├── Products.csv        # 产品收藏
-│   ├── 🌟 Github Projects.csv
-│   └── Github Projects/
-└── Projects/               # 个人项目
-    ├── Research/
-    └── Products/
+```bash
+# 1. Clone
+git clone https://github.com/geminilight/mind_os
+cd mind_os
+
+# 2. Initialize your knowledge base from template
+cp -r template/ my-mind/
+
+# 3. Configure
+cp app/.env.example app/.env.local
+# Edit MIND_ROOT to point to your my-mind/ directory
+
+# 4. Start the app
+cd app && npm install && npm run dev
 ```
 
-## 📐 扩展规范
+Open [http://localhost:3000](http://localhost:3000).
 
-### 新增文件
+---
 
-- 文件名以 emoji 开头，使用中文，英文专有名词保留原文
-- 新增后必须同步更新所属目录的 `🧠 使用规范.md`（每个根目录下的直接子目录均有此文件）
+## 📁 Project Structure
 
-### 🧠 使用规范.md 规范
+```
+mind_os/
+├── app/              # Next.js frontend — browse, edit, search your notes
+├── mcp/              # MCP Server — Agent tools for your knowledge base
+├── template/         # Starter template — copy to my-mind/ to get started
+├── my-mind/          # Your private knowledge base (gitignored)
+├── SERVICES.md       # Technical services reference
+└── README.md
+```
 
-每个根目录下的直接子目录须包含 `🧠 使用规范.md`，固定包含以下部分：
+---
 
-1. **一句话说明** — 本目录的职责与定位
-2. **📁 目录结构** — 当前目录的完整文件树（含注释）
-3. **💡 使用说明** — 各子目录/文件的用途，以及 Agent 执行时的注意事项
-4. **📐 更新规则** — 在本目录新增文件、目录或内容时需遵守的规则
+## 🔌 MCP Server
 
-### 新增目录
+Register the MindOS MCP server so any Agent can access your knowledge base:
 
-- 目录名使用英文，体现领域或场景
-- 在 README.md 目录结构和目录职责表中同步更新
+```json
+{
+  "mcpServers": {
+    "mindos": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/path/to/mind_os/mcp/dist/index.js"],
+      "env": {
+        "MIND_ROOT": "/path/to/mind_os/my-mind"
+      }
+    }
+  }
+}
+```
 
-### 添加产品
+Available tools: `mindos_list_files`, `mindos_read_file`, `mindos_write_file`, `mindos_create_file`, `mindos_delete_file`, `mindos_search_notes`, `mindos_get_recent`, `mindos_append_csv`
 
-- 当用户提供一个产品（含产品名称或 URL）时，抓取产品信息并追加一行到 `Resources/Products.csv`
-- CSV 字段：`Name, URL, Category, Tags, Description, Key Features, Target Users, Pricing`
-- 若 `Resources/Products.csv` 不存在，先创建并写入表头再追加
+Build the server:
 
-### 文件变更
+```bash
+cd mcp && npm install && npm run build
+```
 
-- 文件重命名或移动后，更新所有引用该文件的地方
-- `README.md` 是项目总索引，目录结构变更必须同步更新
-- `Configurations/🧠 使用规范.md` 是 `Configurations/` 目录的索引，该目录内的变更必须同步更新
+---
 
-## 📝 格式规范
+## ⚙️ Environment Variables
 
-- 命令统一用 code 格式，独立执行的命令用 code block，行内提及用 `行内代码`
-- 章节标题和关键条目适当添加 emoji
-- 内容精炼，不啰嗦，面向执行而非解释
+Create `app/.env.local`:
+
+```env
+MIND_ROOT=/path/to/mind_os/my-mind
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MIND_ROOT` | — | Absolute path to your knowledge base |
+| `AI_PROVIDER` | `anthropic` | `anthropic` or `openai` |
+| `ANTHROPIC_API_KEY` | — | Required for Anthropic |
+| `OPENAI_API_KEY` | — | Required for OpenAI |
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` | Search |
+| `⌘/` | Ask AI |
+| `E` | Edit file |
+| `⌘S` | Save |
+| `Esc` | Cancel / close |
+
+---
+
+## 🛠️ Tech Stack
+
+Next.js 15 · TypeScript · Tailwind CSS · CodeMirror 6 · Vercel AI SDK · MCP SDK
+
+---
+
+## License
+
+MIT
