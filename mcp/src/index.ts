@@ -196,6 +196,72 @@ function getRecentlyModified(limit = 10): Array<{ path: string; mtime: number; m
   return withMtime.slice(0, limit);
 }
 
+// ─── Line-level operations ────────────────────────────────────────────────────
+
+function readLines(filePath: string): string[] {
+  return readFile(filePath).split("\n");
+}
+
+function insertLines(filePath: string, afterIndex: number, lines: string[]): void {
+  const existing = readLines(filePath);
+  const insertAt = afterIndex < 0 ? 0 : afterIndex + 1;
+  existing.splice(insertAt, 0, ...lines);
+  writeFile(filePath, existing.join("\n"));
+}
+
+function updateLines(filePath: string, startIndex: number, endIndex: number, newLines: string[]): void {
+  const existing = readLines(filePath);
+  existing.splice(startIndex, endIndex - startIndex + 1, ...newLines);
+  writeFile(filePath, existing.join("\n"));
+}
+
+function deleteLines(filePath: string, startIndex: number, endIndex: number): void {
+  const existing = readLines(filePath);
+  existing.splice(startIndex, endIndex - startIndex + 1);
+  writeFile(filePath, existing.join("\n"));
+}
+
+// ─── Semantic operations ──────────────────────────────────────────────────────
+
+function appendToFile(filePath: string, content: string): void {
+  const existing = readFile(filePath);
+  const separator = existing.length > 0 && !existing.endsWith("\n\n") ? "\n" : "";
+  writeFile(filePath, existing + separator + content);
+}
+
+function insertAfterHeading(filePath: string, heading: string, content: string): void {
+  const lines = readLines(filePath);
+  const idx = lines.findIndex((l) => {
+    const trimmed = l.trim();
+    return trimmed === heading || trimmed.replace(/^#+\s*/, "") === heading.replace(/^#+\s*/, "");
+  });
+  if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+  let insertAt = idx + 1;
+  while (insertAt < lines.length && lines[insertAt].trim() === "") insertAt++;
+  insertLines(filePath, insertAt - 1, ["", content]);
+}
+
+function updateSection(filePath: string, heading: string, newContent: string): void {
+  const lines = readLines(filePath);
+  const idx = lines.findIndex((l) => {
+    const trimmed = l.trim();
+    return trimmed === heading || trimmed.replace(/^#+\s*/, "") === heading.replace(/^#+\s*/, "");
+  });
+  if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+
+  const headingLevel = (lines[idx].match(/^#+/) ?? [""])[0].length;
+  let sectionEnd = lines.length - 1;
+  for (let i = idx + 1; i < lines.length; i++) {
+    const m = lines[i].match(/^(#+)\s/);
+    if (m && m[1].length <= headingLevel) {
+      sectionEnd = i - 1;
+      break;
+    }
+  }
+  while (sectionEnd > idx && lines[sectionEnd].trim() === "") sectionEnd--;
+  updateLines(filePath, idx + 1, sectionEnd, ["", newContent]);
+}
+
 function appendCsvRow(filePath: string, row: string[]): { newRowCount: number } {
   const resolved = resolveSafe(filePath);
   if (!filePath.endsWith(".csv")) throw new Error("Only .csv files support row append");
@@ -571,6 +637,246 @@ Error Handling:
     try {
       const { newRowCount } = appendCsvRow(filePath, row);
       return { content: [{ type: "text", text: `Appended row to "${filePath}". File now has ${newRowCount} rows (including header).` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_read_lines ─────────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_read_lines",
+  {
+    title: "Read File as Lines",
+    description: `Read the content of a file as a numbered array of lines.
+Useful when you need to reference specific line numbers for subsequent insert/update/delete operations.
+
+Args:
+  - path (string): Relative file path from knowledge base root
+
+Returns: JSON array of line strings (0-indexed).
+
+Examples:
+  - Use when: You need to know line numbers before editing
+  - Use when: "Show me the lines in TODO.md"`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path from knowledge base root"),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  async ({ path: filePath }) => {
+    try {
+      const lines = readLines(filePath);
+      const numbered = lines.map((l, i) => `${i}: ${l}`).join("\n");
+      return { content: [{ type: "text", text: `${lines.length} lines total:\n\n${numbered}` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_insert_lines ───────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_insert_lines",
+  {
+    title: "Insert Lines into File",
+    description: `Insert one or more lines into a file at a specific position (0-based index).
+
+Args:
+  - path (string): Relative file path
+  - after_index (number): Insert after this 0-based line index. Use -1 to prepend at the start.
+  - lines (string[]): Lines to insert
+
+Examples:
+  - Use when: "Insert a new task after line 5 in TODO.md"
+  - Use when: "Add two lines after the header"
+  - Use -1 to insert at the very beginning of the file`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      after_index: z.number().int().describe("Insert after this 0-based line index (-1 to prepend)"),
+      lines: z.array(z.string()).min(1).describe("Lines to insert"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  async ({ path: filePath, after_index, lines }) => {
+    try {
+      insertLines(filePath, after_index, lines);
+      return { content: [{ type: "text", text: `Inserted ${lines.length} line(s) after index ${after_index} in "${filePath}"` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_update_lines ───────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_update_lines",
+  {
+    title: "Replace Lines in File",
+    description: `Replace a range of lines in a file with new content (both start and end are inclusive, 0-based).
+
+Args:
+  - path (string): Relative file path
+  - start (number): First line to replace (0-based, inclusive)
+  - end (number): Last line to replace (0-based, inclusive)
+  - lines (string[]): Replacement lines (can be more or fewer than the replaced range)
+
+Examples:
+  - Use when: "Update line 3 of TODO.md"           → start=3, end=3
+  - Use when: "Replace lines 5–8 with new content" → start=5, end=8
+  - Use when: "Update a CSV row at line 12"         → start=12, end=12`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      start: z.number().int().min(0).describe("First line to replace (0-based, inclusive)"),
+      end: z.number().int().min(0).describe("Last line to replace (0-based, inclusive)"),
+      lines: z.array(z.string()).min(1).describe("Replacement lines"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  async ({ path: filePath, start, end, lines }) => {
+    try {
+      updateLines(filePath, start, end, lines);
+      return { content: [{ type: "text", text: `Replaced lines ${start}–${end} in "${filePath}" with ${lines.length} new line(s)` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_delete_lines ───────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_delete_lines",
+  {
+    title: "Delete Lines from File",
+    description: `Delete a range of lines from a file (both start and end are inclusive, 0-based).
+
+Args:
+  - path (string): Relative file path
+  - start (number): First line to delete (0-based, inclusive)
+  - end (number): Last line to delete (0-based, inclusive)
+
+Examples:
+  - Use when: "Delete line 7 from TODO.md"       → start=7, end=7
+  - Use when: "Remove lines 10–14 from the file" → start=10, end=14`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      start: z.number().int().min(0).describe("First line to delete (0-based, inclusive)"),
+      end: z.number().int().min(0).describe("Last line to delete (0-based, inclusive)"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  },
+  async ({ path: filePath, start, end }) => {
+    try {
+      deleteLines(filePath, start, end);
+      return { content: [{ type: "text", text: `Deleted lines ${start}–${end} from "${filePath}"` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_append_to_file ─────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_append_to_file",
+  {
+    title: "Append Content to File",
+    description: `Append text to the end of an existing file. Automatically inserts a blank line separator if needed.
+
+Args:
+  - path (string): Relative file path
+  - content (string): Text to append
+
+Examples:
+  - Use when: "Add a new entry to the bottom of my notes"
+  - Use when: "Append a new section to TODO.md"
+  - Use when: "Add a log entry to a Markdown file"`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      content: z.string().min(1).describe("Content to append to the file"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  async ({ path: filePath, content }) => {
+    try {
+      appendToFile(filePath, content);
+      return { content: [{ type: "text", text: `Appended ${content.length} character(s) to "${filePath}"` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_insert_after_heading ───────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_insert_after_heading",
+  {
+    title: "Insert Content After Heading",
+    description: `Insert content immediately after the first occurrence of a Markdown heading.
+Matches by heading text (ignores leading #s). Skips blank lines after the heading before inserting.
+
+Args:
+  - path (string): Relative file path (must be a .md file)
+  - heading (string): Heading text to find (e.g. "## Tasks" or just "Tasks")
+  - content (string): Content to insert after the heading
+
+Examples:
+  - Use when: "Add a new item under the ## Tasks section"
+  - Use when: "Insert a note right after the Introduction heading"
+
+Error: Throws if heading not found.`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      heading: z.string().min(1).describe("Heading text (with or without leading #s)"),
+      content: z.string().min(1).describe("Content to insert after the heading"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  async ({ path: filePath, heading, content }) => {
+    try {
+      insertAfterHeading(filePath, heading, content);
+      return { content: [{ type: "text", text: `Inserted content after heading "${heading}" in "${filePath}"` }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+  }
+);
+
+// ── mindos_update_section ─────────────────────────────────────────────────────
+
+server.registerTool(
+  "mindos_update_section",
+  {
+    title: "Replace Markdown Section Content",
+    description: `Replace the entire content of a Markdown section identified by its heading.
+The section spans from the line after the heading to the line before the next heading of equal or higher level (or end of file).
+
+Args:
+  - path (string): Relative file path (must be a .md file)
+  - heading (string): Heading text to find (e.g. "## Status" or just "Status")
+  - content (string): New content for the section (replaces everything between heading and next sibling heading)
+
+Examples:
+  - Use when: "Update the ## Status section of my project file"
+  - Use when: "Replace the Goals section with new objectives"
+
+Error: Throws if heading not found.`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative file path"),
+      heading: z.string().min(1).describe("Heading text (with or without leading #s)"),
+      content: z.string().describe("New content for the section"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  async ({ path: filePath, heading, content }) => {
+    try {
+      updateSection(filePath, heading, content);
+      return { content: [{ type: "text", text: `Updated section "${heading}" in "${filePath}"` }] };
     } catch (err) {
       return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
