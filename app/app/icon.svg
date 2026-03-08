@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="2" y1="0" x2="16" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8873a" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#c8873a" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="16" y1="0" x2="30" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8873a" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#c8873a" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+  <!-- Left loop -->
+  <path
+    d="M16,16 C16,9 12,5 9,5 C6,5 2,8 2,16 C2,24 6,27 9,27 C12,27 16,23 16,16 Z"
+    stroke="url(#g1)"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <!-- Right loop -->
+  <path
+    d="M16,16 C16,9 20,5 23,5 C26,5 30,8 30,16 C30,24 26,27 23,27 C20,27 16,23 16,16 Z"
+    stroke="url(#g2)"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <!-- Center node -->
+  <circle cx="16" cy="16" r="2.8" stroke="#c8873a" stroke-width="2.2" fill="none"/>
+</svg>
