@@ -1,10 +1,17 @@
-import { streamText, stepCountIs } from 'ai';
-import { NextRequest } from 'next/server';
+import { streamText, stepCountIs, type ModelMessage } from 'ai';
+import { NextRequest, NextResponse } from 'next/server';
 import { getFileContent } from '@/lib/fs';
 import { getModel, knowledgeBaseTools, truncate, AGENT_SYSTEM_PROMPT } from '@/lib/agent';
 
 export async function POST(req: NextRequest) {
-  const { messages, currentFile, attachedFiles } = await req.json();
+  let body: { messages: ModelMessage[]; currentFile?: string; attachedFiles?: string[] };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { messages, currentFile, attachedFiles } = body;
 
   // Build initial context from attached/current files
   const contextParts: string[] = [];
@@ -34,13 +41,22 @@ export async function POST(req: NextRequest) {
     ? `${AGENT_SYSTEM_PROMPT}\n\n---\n\nThe user is currently viewing these files:\n\n${contextParts.join('\n\n---\n\n')}`
     : AGENT_SYSTEM_PROMPT;
 
-  const result = streamText({
-    model: getModel(),
-    system: systemPrompt,
-    messages,
-    tools: knowledgeBaseTools,
-    stopWhen: stepCountIs(10),
-  });
+  try {
+    const model = getModel();
+    const result = streamText({
+      model,
+      system: systemPrompt,
+      messages,
+      tools: knowledgeBaseTools,
+      stopWhen: stepCountIs(10),
+    });
 
-  return result.toTextStreamResponse();
+    return result.toTextStreamResponse();
+  } catch (err) {
+    console.error('[ask] Failed to initialize model:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to initialize AI model' },
+      { status: 500 },
+    );
+  }
 }

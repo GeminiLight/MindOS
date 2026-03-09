@@ -3,6 +3,22 @@
 - Settings页面下的Apperance下的Content width，点了其他按钮没反应，内容长度不变
 - 前端密码验证
 
+
+- 用户在Settings/AI下面点 从env中恢复的时候，你需要相应将环境变量更新到mindos-settings.json
+- 另外Settings页面下的Plugins下的插件状态按钮UI有点奇怪，就是圆圈超出了扁圆角了
+
+
+对于Ask MindOS界面
+1. 它应该更新title成MindOS Agent
+2. 当API活跃正在加载的时候，它应该的有动态提示效果
+3. 如果API报错，也应当及时提示用户
+
+
+<!--  -->
+
+Skill
+
+
 Landing的
 即刻开启 Shared Mind
 应该体现下安装Skill
