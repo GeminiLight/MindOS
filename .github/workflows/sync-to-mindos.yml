@@ -1,0 +1,79 @@
+name: Sync to MindOS
+
+# 手动触发 或 push 到 main 时自动触发
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'mcp/**'
+      - 'skills/**'
+      - 'template/**'
+      - 'wiki/**'
+      - 'landing/**'
+      - 'README.md'
+      - 'README_zh.md'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mindos-dev
+        uses: actions/checkout@v4
+      - name: Sync to mindos repo
+        env:
+          PAT: ${{ secrets.MINDOS_SYNC_TOKEN }}
+        run: |
+          git config --global user.name "GeminiLight"
+          git config --global user.email "wtfly2018@163.com"
+
+          # Clone target repo (create if not exists)
+          git clone --depth 1 https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos || {
+            echo "Target repo not found. Please create GeminiLight/mindos first."
+            exit 1
+          }
+
+          # Sync app/, mcp/, skills/ directories
+          rsync -av --delete --exclude='node_modules' --exclude='.next' app/ /tmp/mindos/app/
+          rsync -av --delete --exclude='node_modules' mcp/ /tmp/mindos/mcp/
+          [ -d skills/ ] && rsync -av --delete --exclude='node_modules' skills/ /tmp/mindos/skills/
+          [ -d template/ ] && rsync -av --delete template/ /tmp/mindos/template/
+          [ -d wiki/ ] && rsync -av --delete wiki/ /tmp/mindos/wiki/
+
+          # Copy root config files if they exist
+          # Copy .gitignore.prod as .gitignore for the public repo
+          [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
+
+          for f in package.json README.md README_zh.md LICENSE; do
+            [ -f "$f" ] && cp "$f" /tmp/mindos/
+          done
+
+          # Commit and push to main
+          cd /tmp/mindos
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to sync."
+          else
+            git commit -m "sync: update from mindos-dev @ $(git -C $GITHUB_WORKSPACE rev-parse --short HEAD)"
+            git push
+          fi
+
+          # Deploy landing/ to gh-pages branch
+          cd $GITHUB_WORKSPACE
+          git clone --depth 1 -b gh-pages https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages 2>/dev/null || {
+            git clone --depth 1 https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages
+            cd /tmp/mindos-pages
+            git checkout --orphan gh-pages
+            git rm -rf .
+          }
+          cd $GITHUB_WORKSPACE
+          rsync -av --delete landing/ /tmp/mindos-pages/
+          cd /tmp/mindos-pages
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No landing changes to deploy."
+          else
+            git commit -m "deploy: landing page from mindos-dev @ $(git -C $GITHUB_WORKSPACE rev-parse --short HEAD)"
+            git push origin gh-pages
+          fi
