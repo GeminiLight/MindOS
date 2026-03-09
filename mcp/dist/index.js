@@ -3,8 +3,11 @@
  * MindOS MCP Server
  *
  * Exposes the MindOS personal knowledge base as MCP tools:
- * read, write, create, delete, search files, list file tree,
- * get recently modified files, and append rows to CSV files.
+ * read, write, create, delete, search, rename, move files,
+ * list file tree, get recently modified files, append CSV rows,
+ * bootstrap agent context, find backlinks, and git history.
+ *
+ * Protected files: root INSTRUCTION.md cannot be modified via MCP (§7).
  *
  * Transport: stdio (local personal knowledge base tool)
  *
@@ -14,6 +17,7 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
@@ -32,6 +36,18 @@ function resolveSafe(filePath) {
         throw new Error(`Access denied: path "${filePath}" is outside MIND_ROOT`);
     }
     return resolved;
+}
+// ─── Protected files ────────────────────────────────────────────────────────
+const ROOT_PROTECTED_FILES = new Set(["INSTRUCTION.md"]);
+function isRootProtected(filePath) {
+    const normalized = path.normalize(filePath);
+    return ROOT_PROTECTED_FILES.has(normalized);
+}
+function assertNotProtected(filePath, operation) {
+    if (isRootProtected(filePath)) {
+        throw new Error(`Protected file: root "${filePath}" cannot be ${operation} via MCP. ` +
+            `This is a system kernel file (§7 of INSTRUCTION.md). Edit it manually or use a dedicated confirmation workflow.`);
+    }
 }
 // ─── File system utilities ───────────────────────────────────────────────────
 function getFileTree(dirPath = MIND_ROOT) {
@@ -127,14 +143,44 @@ function deleteFile(filePath) {
         throw new Error(`File not found: ${filePath}`);
     fs.unlinkSync(resolved);
 }
-function searchFiles(query, limit = 20) {
+function searchFiles(query, opts = {}) {
     if (!query.trim())
         return [];
-    const allFiles = collectAllFiles();
+    const { limit = 20, scope, file_type = "all", modified_after } = opts;
+    let allFiles = collectAllFiles();
+    // Filter by scope (directory prefix)
+    if (scope) {
+        const normalizedScope = scope.endsWith("/") ? scope : scope + "/";
+        allFiles = allFiles.filter(f => f.startsWith(normalizedScope) || f === scope);
+    }
+    // Filter by file type
+    if (file_type !== "all") {
+        const ext = `.${file_type}`;
+        allFiles = allFiles.filter(f => f.endsWith(ext));
+    }
+    // Filter by modification time
+    let mtimeThreshold = 0;
+    if (modified_after) {
+        mtimeThreshold = new Date(modified_after).getTime();
+        if (isNaN(mtimeThreshold))
+            mtimeThreshold = 0;
+    }
     const results = [];
     const lowerQuery = query.toLowerCase();
     const escapedQuery = lowerQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     for (const filePath of allFiles) {
+        // Check mtime filter before reading content (cheaper)
+        if (mtimeThreshold > 0) {
+            try {
+                const abs = path.join(MIND_ROOT, filePath);
+                const stat = fs.statSync(abs);
+                if (stat.mtimeMs < mtimeThreshold)
+                    continue;
+            }
+            catch {
+                continue;
+            }
+        }
         let content;
         try {
             content = readFile(filePath);
@@ -188,11 +234,6 @@ function insertLines(filePath, afterIndex, lines) {
 function updateLines(filePath, startIndex, endIndex, newLines) {
     const existing = readLines(filePath);
     existing.splice(startIndex, endIndex - startIndex + 1, ...newLines);
-    writeFile(filePath, existing.join("\n"));
-}
-function deleteLines(filePath, startIndex, endIndex) {
-    const existing = readLines(filePath);
-    existing.splice(startIndex, endIndex - startIndex + 1);
     writeFile(filePath, existing.join("\n"));
 }
 // ─── Semantic operations ──────────────────────────────────────────────────────
@@ -272,6 +313,84 @@ function renameFile(oldPath, newName) {
     }
     fs.renameSync(oldResolved, newResolved);
     return path.relative(root, newResolved);
+}
+// ─── Backlinks ─────────────────────────────────────────────────────────────
+function findBacklinks(targetPath) {
+    const allFiles = collectAllFiles().filter(f => f.endsWith(".md") && f !== targetPath);
+    const results = [];
+    const bname = path.basename(targetPath, ".md");
+    const escapedTarget = targetPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedBname = bname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+        new RegExp(`\\[\\[${escapedBname}(?:[|#][^\\]]*)?\\]\\]`, "i"),
+        new RegExp(`\\[\\[${escapedTarget}(?:[|#][^\\]]*)?\\]\\]`, "i"),
+        new RegExp(`\\[[^\\]]+\\]\\(${escapedTarget}(?:#[^)]*)?\\)`, "i"),
+        new RegExp(`\\[[^\\]]+\\]\\([^)]*${escapedBname}\\.md(?:#[^)]*)?\\)`, "i"),
+        new RegExp("`" + escapedTarget.replace(/\//g, "\\/") + "`"),
+    ];
+    for (const filePath of allFiles) {
+        let content;
+        try {
+            content = readFile(filePath);
+        }
+        catch {
+            continue;
+        }
+        const lines = content.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            if (patterns.some(p => p.test(lines[i]))) {
+                const start = Math.max(0, i - 1);
+                const end = Math.min(lines.length - 1, i + 1);
+                const ctx = lines.slice(start, end + 1).join("\n").trim();
+                results.push({ source: filePath, line: i + 1, context: ctx });
+                break; // one match per file is enough for overview
+            }
+        }
+    }
+    return results;
+}
+// ─── Git helpers ────────────────────────────────────────────────────────────
+function isGitRepo() {
+    try {
+        execSync("git rev-parse --is-inside-work-tree", { cwd: MIND_ROOT, stdio: "pipe" });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function gitLog(filePath, limit) {
+    const resolved = resolveSafe(filePath);
+    const output = execSync(`git log --follow --format="%H%x00%aI%x00%s%x00%an" -n ${limit} -- "${resolved}"`, { cwd: MIND_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (!output)
+        return [];
+    return output.split("\n").map(line => {
+        const [hash, date, message, author] = line.split("\0");
+        return { hash, date, message, author };
+    });
+}
+function gitShowFile(filePath, commitHash) {
+    const resolved = resolveSafe(filePath);
+    const relFromGitRoot = execSync(`git ls-files --full-name "${resolved}"`, { cwd: MIND_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (!relFromGitRoot) {
+        // Fallback: try relative path directly
+        return execSync(`git show ${commitHash}:"${filePath}"`, { cwd: MIND_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    }
+    return execSync(`git show ${commitHash}:"${relFromGitRoot}"`, { cwd: MIND_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+}
+// ─── Move file helper ───────────────────────────────────────────────────────
+function moveFile(fromPath, toPath) {
+    const fromResolved = resolveSafe(fromPath);
+    const toResolved = resolveSafe(toPath);
+    if (!fs.existsSync(fromResolved))
+        throw new Error(`Source not found: ${fromPath}`);
+    if (fs.existsSync(toResolved))
+        throw new Error(`Destination already exists: ${toPath}`);
+    fs.mkdirSync(path.dirname(toResolved), { recursive: true });
+    fs.renameSync(fromResolved, toResolved);
+    // Find files that reference the old path
+    const backlinks = findBacklinks(fromPath);
+    return { newPath: toPath, affectedFiles: backlinks.map(b => b.source) };
 }
 // ─── Format helpers ───────────────────────────────────────────────────────────
 function renderTree(nodes, indent = "") {
@@ -433,6 +552,7 @@ Error Handling:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ path: filePath, content }) => {
     try {
+        assertNotProtected(filePath, "modified");
         let before = "";
         try {
             before = readFile(filePath);
@@ -502,6 +622,7 @@ Error Handling:
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath }) => {
     try {
+        assertNotProtected(filePath, "deleted");
         let before = "";
         try {
             before = readFile(filePath);
@@ -525,6 +646,9 @@ Returns matching files with a snippet showing context around the first match, so
 Args:
   - query (string): Search string (case-insensitive, literal match)
   - limit (number): Max results to return (default: 20, max: 50)
+  - scope (string, optional): Limit search to a subdirectory (e.g. "Workflows/", "Profile/")
+  - file_type (string, optional): Filter by file type — "md", "csv", or "all" (default: "all")
+  - modified_after (string, optional): Only include files modified after this date (ISO format, e.g. "2025-01-01")
   - response_format: 'markdown' for readable list, 'json' for structured data
 
 Returns (JSON format):
@@ -538,27 +662,33 @@ Returns (JSON format):
 
 Examples:
   - Use when: "Find all notes about MCP configuration"
-  - Use when: "Search for dida365 mentions"
-  - Use when: "Which files mention YouTube?"`,
+  - Use when: "Search for dida365 in Workflows/" → scope="Workflows/"
+  - Use when: "Which CSV files mention YouTube?" → file_type="csv"
+  - Use when: "Find recently modified files mentioning TODO" → modified_after="2025-03-01"`,
     inputSchema: z.object({
         query: z.string().min(1).max(200).describe("Search string (case-insensitive)"),
         limit: z.number().int().min(1).max(50).default(20).describe("Max results to return"),
+        scope: z.string().optional().describe("Limit search to a subdirectory (e.g. \"Workflows/\")"),
+        file_type: z.enum(["md", "csv", "all"]).default("all").describe("Filter by file type"),
+        modified_after: z.string().optional().describe("Only files modified after this ISO date (e.g. \"2025-01-01\")"),
         response_format: z.enum(["markdown", "json"]).default("markdown")
             .describe("Output format"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-}, async ({ query, limit, response_format }) => {
+}, async ({ query, limit, scope, file_type, modified_after, response_format }) => {
     try {
-        const results = searchFiles(query, limit);
+        const results = searchFiles(query, { limit, scope, file_type, modified_after });
         if (results.length === 0) {
-            return { content: [{ type: "text", text: `No results found for "${query}"` }] };
+            return { content: [{ type: "text", text: `No results found for "${query}"${scope ? ` in ${scope}` : ""}` }] };
         }
         if (response_format === "json") {
-            const output = { query, total: results.length, results };
+            const output = { query, total: results.length, scope: scope ?? null, file_type, modified_after: modified_after ?? null, results };
             const { text } = truncate(JSON.stringify(output, null, 2));
             return { content: [{ type: "text", text }] };
         }
-        const lines = [`# Search Results: "${query}"`, ``, `Found ${results.length} file(s)`, ``];
+        const filters = [scope ? `scope: ${scope}` : null, file_type !== "all" ? `type: .${file_type}` : null, modified_after ? `after: ${modified_after}` : null].filter(Boolean);
+        const filterStr = filters.length > 0 ? ` (${filters.join(", ")})` : "";
+        const lines = [`# Search Results: "${query}"${filterStr}`, ``, `Found ${results.length} file(s)`, ``];
         for (const r of results) {
             lines.push(`## ${r.path}`);
             lines.push(`- **Occurrences**: ${r.occurrences}`);
@@ -687,6 +817,7 @@ Examples:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath, after_index, lines }) => {
     try {
+        assertNotProtected(filePath, "modified");
         insertLines(filePath, after_index, lines);
         logOp("mindos_insert_lines", { path: filePath, after_index, lines_count: lines.length }, "ok");
         return { content: [{ type: "text", text: `Inserted ${lines.length} line(s) after index ${after_index} in "${filePath}"` }] };
@@ -720,42 +851,13 @@ Examples:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ path: filePath, start, end, lines }) => {
     try {
+        assertNotProtected(filePath, "modified");
         updateLines(filePath, start, end, lines);
         logOp("mindos_update_lines", { path: filePath, start, end, lines_count: lines.length }, "ok");
         return { content: [{ type: "text", text: `Replaced lines ${start}–${end} in "${filePath}" with ${lines.length} new line(s)` }] };
     }
     catch (err) {
         logOp("mindos_update_lines", { path: filePath, start, end }, "error", String(err));
-        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
-    }
-});
-// ── mindos_delete_lines ───────────────────────────────────────────────────────
-server.registerTool("mindos_delete_lines", {
-    title: "Delete Lines from File",
-    description: `Delete a range of lines from a file (both start and end are inclusive, 0-based).
-
-Args:
-  - path (string): Relative file path
-  - start (number): First line to delete (0-based, inclusive)
-  - end (number): Last line to delete (0-based, inclusive)
-
-Examples:
-  - Use when: "Delete line 7 from TODO.md"       → start=7, end=7
-  - Use when: "Remove lines 10–14 from the file" → start=10, end=14`,
-    inputSchema: z.object({
-        path: z.string().min(1).describe("Relative file path"),
-        start: z.number().int().min(0).describe("First line to delete (0-based, inclusive)"),
-        end: z.number().int().min(0).describe("Last line to delete (0-based, inclusive)"),
-    }),
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-}, async ({ path: filePath, start, end }) => {
-    try {
-        deleteLines(filePath, start, end);
-        logOp("mindos_delete_lines", { path: filePath, start, end }, "ok");
-        return { content: [{ type: "text", text: `Deleted lines ${start}–${end} from "${filePath}"` }] };
-    }
-    catch (err) {
-        logOp("mindos_delete_lines", { path: filePath, start, end }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -779,6 +881,7 @@ Examples:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath, content }) => {
     try {
+        assertNotProtected(filePath, "modified");
         appendToFile(filePath, content);
         logOp("mindos_append_to_file", { path: filePath, content: content.slice(0, 120) + (content.length > 120 ? "…" : "") }, "ok");
         return { content: [{ type: "text", text: `Appended ${content.length} character(s) to "${filePath}"` }] };
@@ -812,6 +915,7 @@ Error: Throws if heading not found.`,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath, heading, content }) => {
     try {
+        assertNotProtected(filePath, "modified");
         insertAfterHeading(filePath, heading, content);
         logOp("mindos_insert_after_heading", { path: filePath, heading }, "ok");
         return { content: [{ type: "text", text: `Inserted content after heading "${heading}" in "${filePath}"` }] };
@@ -845,6 +949,7 @@ Error: Throws if heading not found.`,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ path: filePath, heading, content }) => {
     try {
+        assertNotProtected(filePath, "modified");
         let before = "";
         try {
             before = readFile(filePath);
@@ -887,12 +992,226 @@ Error Handling:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath, new_name }) => {
     try {
+        assertNotProtected(filePath, "renamed");
         const newPath = renameFile(filePath, new_name);
         logOp("mindos_rename_file", { path: filePath, new_name }, "ok", `Renamed to ${newPath}`);
         return { content: [{ type: "text", text: `Renamed "${filePath}" → "${newPath}"` }] };
     }
     catch (err) {
         logOp("mindos_rename_file", { path: filePath, new_name }, "error", String(err));
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_bootstrap ──────────────────────────────────────────────────────────
+server.registerTool("mindos_bootstrap", {
+    title: "Bootstrap Agent Context",
+    description: `Load the MindOS startup context in one call (implements §1 Startup Protocol of INSTRUCTION.md).
+
+Returns the system rules (INSTRUCTION.md), root index (README.md), and optionally the target directory's README.md and local INSTRUCTION.md.
+
+This is the recommended first tool call for any Agent entering the knowledge base.
+
+Args:
+  - target_dir (string, optional): Target directory to load context for (e.g. "Workflows/Research")
+
+Returns:
+  {
+    instruction: root INSTRUCTION.md content,
+    index: root README.md content,
+    target_readme?: target directory README.md (if target_dir specified and file exists),
+    target_instruction?: target directory INSTRUCTION.md (if exists)
+  }`,
+    inputSchema: z.object({
+        target_dir: z.string().optional().describe("Optional target directory to load context for"),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ target_dir }) => {
+    try {
+        let instruction = "";
+        try {
+            instruction = readFile("INSTRUCTION.md");
+        }
+        catch {
+            instruction = "[INSTRUCTION.md not found]";
+        }
+        let index = "";
+        try {
+            index = readFile("README.md");
+        }
+        catch {
+            index = "[README.md not found]";
+        }
+        const result = { instruction, index };
+        if (target_dir) {
+            const dir = target_dir.endsWith("/") ? target_dir.slice(0, -1) : target_dir;
+            try {
+                result.target_readme = readFile(`${dir}/README.md`);
+            }
+            catch { /* not found */ }
+            try {
+                result.target_instruction = readFile(`${dir}/INSTRUCTION.md`);
+            }
+            catch { /* not found */ }
+        }
+        const sections = Object.entries(result)
+            .map(([key, val]) => `--- ${key} ---\n\n${val}`)
+            .join("\n\n");
+        return { content: [{ type: "text", text: sections }] };
+    }
+    catch (err) {
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_get_backlinks ──────────────────────────────────────────────────────
+server.registerTool("mindos_get_backlinks", {
+    title: "Find Backlinks to File",
+    description: `Find all files that reference a given file path via wikilinks, markdown links, or backtick references.
+
+Essential for §4.2 sync rules — before renaming or deleting a file, check what references it.
+
+Args:
+  - path (string): Relative file path to find backlinks for (e.g. "Profile/👤 Identity.md")
+
+Returns: Array of { source, line, context } showing each referencing file with surrounding context.
+
+Examples:
+  - Use when: "What files link to Profile/👤 Identity.md?"
+  - Use when: About to rename/delete a file and need to know what to update
+  - Use when: Understanding the dependency graph of a specific file`,
+    inputSchema: z.object({
+        path: z.string().min(1).describe("Relative file path to find backlinks for"),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ path: filePath }) => {
+    try {
+        const backlinks = findBacklinks(filePath);
+        if (backlinks.length === 0) {
+            return { content: [{ type: "text", text: `No backlinks found for "${filePath}"` }] };
+        }
+        const lines = [`# Backlinks to "${filePath}"`, ``, `Found ${backlinks.length} file(s) referencing this file:`, ``];
+        for (const bl of backlinks) {
+            lines.push(`## ${bl.source} (line ${bl.line})`);
+            lines.push("```");
+            lines.push(bl.context);
+            lines.push("```");
+            lines.push("");
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+    catch (err) {
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_get_history ────────────────────────────────────────────────────────
+server.registerTool("mindos_get_history", {
+    title: "Get File Git History",
+    description: `Get the git commit history for a specific file. Requires the knowledge base to be a git repository.
+
+Args:
+  - path (string): Relative file path
+  - limit (number): Max commits to return (default: 10, max: 50)
+
+Returns: Array of { hash, date, message, author } sorted newest first.
+
+Examples:
+  - Use when: "Show the edit history of TODO.md"
+  - Use when: "Who last modified Profile/Identity.md?"
+  - Use when: "What changes were made to this file recently?"`,
+    inputSchema: z.object({
+        path: z.string().min(1).describe("Relative file path"),
+        limit: z.number().int().min(1).max(50).default(10).describe("Max commits to return"),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ path: filePath, limit }) => {
+    try {
+        if (!isGitRepo()) {
+            return { isError: true, content: [{ type: "text", text: "Knowledge base is not a git repository" }] };
+        }
+        const history = gitLog(filePath, limit);
+        if (history.length === 0) {
+            return { content: [{ type: "text", text: `No git history found for "${filePath}"` }] };
+        }
+        const lines = [`# Git History: ${filePath}`, ``, `${history.length} commit(s):`, ``];
+        for (const h of history) {
+            lines.push(`- **${h.date}** \`${h.hash.slice(0, 8)}\` — ${h.message} (${h.author})`);
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+    catch (err) {
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_get_file_at_version ────────────────────────────────────────────────
+server.registerTool("mindos_get_file_at_version", {
+    title: "Read File at Git Version",
+    description: `Read the content of a file at a specific git commit. Use mindos_get_history first to find commit hashes.
+
+Args:
+  - path (string): Relative file path
+  - commit (string): Git commit hash (full or abbreviated)
+
+Returns: File content at that version.
+
+Examples:
+  - Use when: "Show me TODO.md as of commit abc1234"
+  - Use when: "What did this file look like before the last change?"`,
+    inputSchema: z.object({
+        path: z.string().min(1).describe("Relative file path"),
+        commit: z.string().min(4).describe("Git commit hash"),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ path: filePath, commit }) => {
+    try {
+        if (!isGitRepo()) {
+            return { isError: true, content: [{ type: "text", text: "Knowledge base is not a git repository" }] };
+        }
+        const content = gitShowFile(filePath, commit);
+        const { text, truncated } = truncate(content);
+        const header = `# ${filePath} @ ${commit.slice(0, 8)}\n\n`;
+        return { content: [{ type: "text", text: header + text + (truncated ? "\n\n[truncated]" : "") }] };
+    }
+    catch (err) {
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_move_file ──────────────────────────────────────────────────────────
+server.registerTool("mindos_move_file", {
+    title: "Move File",
+    description: `Move a file to a new path within the knowledge base. Parent directories are created automatically.
+Also returns a list of files that reference the old path (backlinks) so you can update them.
+
+Args:
+  - from_path (string): Current relative file path
+  - to_path (string): Destination relative file path
+
+Returns: New path + list of files that need their references updated.
+
+Examples:
+  - Use when: "Move this file from Workflows/ to Projects/"
+  - Use when: Reorganizing directory structure (§8.1)`,
+    inputSchema: z.object({
+        from_path: z.string().min(1).describe("Current relative file path"),
+        to_path: z.string().min(1).describe("Destination relative file path"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ from_path, to_path }) => {
+    try {
+        assertNotProtected(from_path, "moved");
+        const { newPath, affectedFiles } = moveFile(from_path, to_path);
+        logOp("mindos_move_file", { from: from_path, to: to_path }, "ok");
+        const lines = [`Moved "${from_path}" → "${newPath}"`];
+        if (affectedFiles.length > 0) {
+            lines.push("", `⚠️ ${affectedFiles.length} file(s) reference the old path and may need updating:`);
+            for (const f of affectedFiles)
+                lines.push(`  - ${f}`);
+        }
+        else {
+            lines.push("", "No files reference the old path.");
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+    catch (err) {
+        logOp("mindos_move_file", { from: from_path, to: to_path }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });

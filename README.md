@@ -17,7 +17,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-MindOS is a **Human-AI Collaborative Mind Platform**—a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by AI Agents. **Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.**
+MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by AI Agents. **Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.**
 
 ---
 
@@ -27,15 +27,15 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ### 1. Global Mind Sync — Breaking Mind Silos
 *   **Pain Point:** Traditional cloud notes are cumbersome to manage, hindered by API barriers, and have high capture friction, making it hard for Agents to access deep human context and real-time epiphanies.
-*   **Evolution:** Record once, empower everywhere. MindOS provides an ultra-lightweight web capture entry and a built-in standard MCP Server. Any compatible Agent can seamlessly sync your Profile, SOPs, and experiences, enabling "plug-and-play" personal context and real-time mind alignment.
+*   **Shift:** Record once, empower everywhere. MindOS provides an ultra-lightweight web capture entry and a built-in standard MCP Server. Any compatible Agent can seamlessly sync your Profile, SOPs, and experiences, enabling "plug-and-play" personal context and real-time mind alignment.
 
 ### 2. Transparent & Controllable — Eliminating Agent Black Boxes
 *   **Pain Point:** Current AI assistant memories are locked in system black boxes. Humans cannot intuitively inspect or correct the Agent's intermediate reasoning, leading to uncontrolled hallucinations.
-*   **Evolution:** Let Agents think in the light. Every Agent retrieval, reflection, and action is distilled directly into local plain text (Markdown/CSV) via MCP. Humans hold absolute audit, intervention, and mind-correction rights in the intuitive GUI workbench.
+*   **Shift:** Let Agents think in the light. Every Agent retrieval, reflection, and action is distilled directly into local plain text (Markdown/CSV) via MCP. Humans hold absolute audit, intervention, and mind-correction rights in the intuitive GUI workbench.
 
 ### 3. Symbiotic Evolution — Dynamic Instruction Flow
 *   **Pain Point:** Traditional document management is deeply nested and hard to sync, failing to serve as an "execution engine" in complex human-AI collaborative tasks.
-*   **Evolution:** Knowledge as Code. Through the Prompt-Native recording paradigm and reference-driven auto-sync, your daily notes naturally become high-quality Agent execution instructions. Humans and AI inspire each other and grow together in a single Shared Mind.
+*   **Shift:** Knowledge as Code. Through the Prompt-Native recording paradigm and reference-driven auto-sync, your daily notes naturally become high-quality Agent execution instructions. Humans and AI inspire each other and grow together in a single Shared Mind.
 
 > **Foundational Pillar:** MindOS adheres to the **Local-first** principle. All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.
 
@@ -43,15 +43,28 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ## Features
 
-*   **Prompt-Native Document Style** — Advocates for a "mind-first" recording paradigm, providing restrictive writing templates that align with LLM reasoning logic, naturally transforming daily human notes into high-quality Agent execution instructions.
-*   **Reference-Driven Synchronization** — Abandons traditional isolated task management by using @ references and bi-directional links between Markdown files to achieve automatic cross-file synchronization and flow of project status, task progress, and context.
-*   **Human GUI Workbench** — Provides an intuitive and friendly interaction experience for browsing, editing, and searching notes, with a UI specifically designed for human-AI co-creation.
-*   **Built-in Agent Assistant** — Use `⌘/` to converse with and manage the knowledge base within context. Agents manage files while editing seamlessly captures human-curated knowledge.
-*   **MCP Server & Skills** — Exposes the knowledge base as a standard MCP toolset. Any Agent can connect with zero configuration, instantly gaining specialized skills to read, write, search, and execute local workflows.
-*   **Structured Templates** — Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart your personal context.
-*   **Visual Knowledge Graph** — Dynamically parses and visualizes inter-file references and dependencies, making it easy to manage complex human-AI context networks.
-*   **Time Machine & Git-backed** — Automatically records every read/write and edit history by both humans and Agents. Supports one-click rollback and visualizes the evolution of context and Agent reasoning trajectories.
-*   **Flexible Plugin Extensions** — Supports custom view plugins for specific files or scenarios (e.g., TODO lists, Kanban task management), enabling highly elastic knowledge management.
+### For Humans
+
+*   **GUI Workbench** — Browse, edit, and search notes with a unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
+*   **Built-in Agent Assistant** — Converse with the knowledge base in context. Agents manage files while editing seamlessly captures human-curated knowledge.
+*   **Plugin Extensions** — Custom view plugins for specific scenarios (TODO lists, Kanban, Timeline, etc.) for elastic knowledge management.
+
+### For Agents
+
+*   **MCP Server & Skills** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
+*   **Structured Templates** — Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
+*   **Prompt-Driven Document Management** — Organize documents with a prompt-first mindset, so everyday notes double as high-quality executable instructions for Agents.
+
+### Infrastructure
+
+*   **Reference-Driven Sync** — @ references and bi-directional links between Markdown files for automatic cross-file synchronization of project status, tasks, and context.
+*   **Visual Knowledge Graph** — Dynamically parses and visualizes inter-file references and dependencies across the human-AI context network.
+*   **Time Machine & Git-backed** — Records every edit by both humans and Agents. One-click rollback and visual evolution of context and reasoning trajectories.
+
+**Coming Soon:**
+
+- [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
+- [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
 
 ---
 
@@ -59,8 +72,8 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/geminilight/mind-os
-cd mind-os
+git clone https://github.com/GeminiLight/MindOS
+cd MindOS
 
 # 2. Initialize your knowledge base from the template
 cp -r template/ my-mind/
@@ -79,7 +92,22 @@ Open [http://localhost:3000](http://localhost:3000) to get started.
 
 ## MCP Server Integration Guide
 
-Register the MindOS MCP Server in your Agent client (e.g., Claude Desktop) to allow the Agent to directly access and operate your local knowledge base:
+Register the MindOS MCP Server in your Agent client to allow the Agent to directly access and operate your local knowledge base.
+
+**Tested Agents:**
+
+| Agent | Status | Notes |
+|:------|:------:|:------|
+| Claude Desktop | ✅ | Native MCP support |
+| Claude Code | ✅ | Via `claude mcp add` |
+| Cursor | ✅ | MCP config in settings |
+| Windsurf | ✅ | MCP config in settings |
+| Cline | ✅ | MCP config in settings |
+| Trae | ✅ | MCP config in settings |
+| Gemini CLI | 🔜 | Coming soon |
+| GitHub Copilot | 🔜 | Coming soon |
+
+**Configuration example (Claude Desktop):**
 
 ```json
 {
@@ -87,9 +115,9 @@ Register the MindOS MCP Server in your Agent client (e.g., Claude Desktop) to al
     "mindos": {
       "type": "stdio",
       "command": "node",
-      "args": ["/path/to/mind-os/mcp/dist/index.js"],
+      "args": ["/path/to/MindOS/mcp/dist/index.js"],
       "env": {
-        "MIND_ROOT": "/path/to/mind-os/my-mind"
+        "MIND_ROOT": "/path/to/MindOS/my-mind"
       }
     }
   }
@@ -97,7 +125,29 @@ Register the MindOS MCP Server in your Agent client (e.g., Claude Desktop) to al
 ```
 
 **Underlying Toolset for Agents:**
-`mindos_list_files`, `mindos_read_file`, `mindos_write_file`, `mindos_create_file`, `mindos_delete_file`, `mindos_search_notes`, `mindos_get_recent`, `mindos_append_csv`
+
+| Tool | Description |
+|------|-------------|
+| `mindos_bootstrap` | Load startup context (INSTRUCTION + README) in one call |
+| `mindos_list_files` | Full file tree of the knowledge base |
+| `mindos_read_file` | Read file content with pagination |
+| `mindos_write_file` | Overwrite file (protected files blocked) |
+| `mindos_create_file` | Create new .md/.csv file |
+| `mindos_delete_file` | Delete file (protected files blocked) |
+| `mindos_rename_file` | Rename file in-place |
+| `mindos_move_file` | Move file + report affected backlinks |
+| `mindos_search_notes` | Full-text search with scope/type/date filters |
+| `mindos_get_recent` | Recently modified files |
+| `mindos_get_backlinks` | Find all files referencing a given file |
+| `mindos_get_history` | Git commit history for a file |
+| `mindos_get_file_at_version` | Read file at a specific git commit |
+| `mindos_append_csv` | Append row to CSV file |
+| `mindos_read_lines` | Read file as numbered lines |
+| `mindos_insert_lines` | Insert lines at position |
+| `mindos_update_lines` | Replace line range |
+| `mindos_append_to_file` | Append content to file end |
+| `mindos_insert_after_heading` | Insert content after a heading |
+| `mindos_update_section` | Replace a markdown section |
 
 **Build the Server:**
 ```bash
@@ -109,7 +159,7 @@ cd mcp && npm install && npm run build
 ## Project Structure
 
 ```bash
-mind-os/
+MindOS/
 ├── app/              # Next.js 15 Frontend — Browse, edit, and interact with AI
 ├── mcp/              # MCP Server Core — Standardized toolset for Agents
 ├── template/         # Knowledge base structure template — Copy to my-mind/
@@ -125,7 +175,7 @@ mind-os/
 Configure in `app/.env.local`:
 
 ```env
-MIND_ROOT=/path/to/mind-os/my-mind
+MIND_ROOT=/path/to/MindOS/my-mind
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
