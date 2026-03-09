@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, Puzzle } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
+import { encodePath, relativeTime } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 
@@ -11,59 +13,114 @@ interface RecentFile {
   mtime: number;
 }
 
-function encodePath(filePath: string): string {
-  return filePath.split('/').map(encodeURIComponent).join('/');
-}
-
 // Maps a renderer id to a canonical entry file path
 const RENDERER_ENTRY: Record<string, string> = {
   todo: 'TODO.md',
   csv: 'Resources/Products.csv',
+  graph: 'README.md',
+  timeline: 'CHANGELOG.md',
+  backlinks: 'BACKLINKS.md',
+  summary: 'DAILY.md',
+  'agent-inspector': 'Agent-Audit.md',
+  workflow: 'Workflow.md',
+  'diff-viewer': 'Agent-Diff.md',
 };
 
 function deriveEntryPath(id: string): string | null {
   return RENDERER_ENTRY[id] ?? null;
 }
 
+function triggerSearch() {
+  // Dispatch ⌘K to open the Sidebar's SearchModal
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+}
+
 export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const { t } = useLocale();
+  const [showAll, setShowAll] = useState(false);
 
-  function relativeTime(mtime: number): string {
-    const diff = Date.now() - mtime;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (minutes < 1) return t.home.relativeTime.justNow;
-    if (minutes < 60) return t.home.relativeTime.minutesAgo(minutes);
-    if (hours < 24) return t.home.relativeTime.hoursAgo(hours);
-    if (days < 7) return t.home.relativeTime.daysAgo(days);
-    return new Date(mtime).toLocaleDateString();
-  }
+  const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
   const renderers = getAllRenderers();
 
   const shortcuts = [
-    { key: '⌘K', label: t.home.shortcuts.searchFiles },
     { key: '⌘/', label: t.home.shortcuts.askAI },
     { key: '⌘,', label: t.home.shortcuts.settings },
   ];
 
+  const lastFile = recent[0];
+
   return (
     <div className="max-w-[900px] mx-auto px-6 py-12">
       {/* Hero */}
-      <div className="mb-12">
+      <div className="mb-10">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-5 rounded-full" style={{ background: 'var(--amber)' }} />
           <h1 className="text-2xl font-semibold tracking-tight" style={{ fontFamily: "'IBM Plex Mono', monospace", color: 'var(--foreground)' }}>
             MindOS
           </h1>
         </div>
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--muted-foreground)', paddingLeft: '1rem' }}>
+        <p className="text-sm leading-relaxed mb-5" style={{ color: 'var(--muted-foreground)', paddingLeft: '1rem' }}>
           {t.app.tagline}
         </p>
 
-        {/* Hint pills */}
-        <div className="flex flex-wrap gap-2 mt-5" style={{ paddingLeft: '1rem' }}>
+        {/* Search bar — prominent, clickable */}
+        <button
+          onClick={triggerSearch}
+          className="w-full max-w-[520px] flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 cursor-text hover:border-amber-500/40 group"
+          style={{
+            background: 'var(--card)',
+            borderColor: 'var(--border)',
+            marginLeft: '1rem',
+          }}
+        >
+          <Search size={16} style={{ color: 'var(--muted-foreground)' }} className="shrink-0 group-hover:text-amber-500 transition-colors" />
+          <span className="text-sm flex-1 text-left" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+            {t.search.placeholder}
+          </span>
+          <kbd
+            className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium"
+            style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+          >
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* Quick Actions */}
+        <div className="flex flex-wrap gap-2.5 mt-4" style={{ paddingLeft: '1rem' }}>
+          {lastFile && (
+            <Link
+              href={`/view/${encodePath(lastFile.path)}`}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5"
+              style={{
+                background: 'var(--amber-dim)',
+                color: 'var(--amber)',
+                fontFamily: "'IBM Plex Sans', sans-serif",
+              }}
+            >
+              <ArrowRight size={14} />
+              <span>{t.home.continueEditing}</span>
+              <span className="text-xs opacity-60 truncate max-w-[160px]" suppressHydrationWarning>
+                {lastFile.path.split('/').pop()}
+              </span>
+            </Link>
+          )}
+          <Link
+            href="/view/Untitled.md"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors"
+            style={{
+              background: 'var(--muted)',
+              color: 'var(--muted-foreground)',
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            <FilePlus size={14} />
+            <span>{t.home.newNote}</span>
+          </Link>
+        </div>
+
+        {/* Remaining shortcut hints (search removed — has its own bar now) */}
+        <div className="flex flex-wrap gap-2 mt-3" style={{ paddingLeft: '1rem' }}>
           {shortcuts.map(({ key, label }) => (
             <span key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
               <kbd className="font-mono text-xs font-medium" style={{ color: 'var(--foreground)' }}>{key}</kbd>
@@ -73,42 +130,34 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
         </div>
       </div>
 
-      {/* Plugins */}
+      {/* Plugins — compact 3-column grid, always visible */}
       {renderers.length > 0 && (
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-4">
             <Puzzle size={13} style={{ color: 'var(--amber)' }} />
             <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
-              Plugins
+              {t.home.plugins}
             </h2>
+            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
+              {renderers.length}
+            </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {renderers.map((r) => {
-              // Derive a suggested entry path from the match pattern
-              // e.g. todo renderer → link to TODO.md if it exists, otherwise just show the renderer
               const entryPath = deriveEntryPath(r.id);
               return (
                 <Link
                   key={r.id}
                   href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
-                  className="group flex items-start gap-3 px-4 py-3.5 rounded-xl border border-border transition-all hover:border-amber-500/30 hover:bg-muted/50"
+                  className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  <span className="text-xl leading-none mt-0.5 shrink-0">{r.icon}</span>
+                  <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-semibold" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                        {r.name}
-                      </span>
-                      {r.builtin && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--amber-dim)', color: 'var(--amber)', fontFamily: "'IBM Plex Mono', monospace" }}>
-                          built-in
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
-                      {r.description}
-                    </p>
+                    <span className="text-xs font-semibold truncate block" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {r.name}
+                    </span>
                   </div>
                 </Link>
               );
@@ -118,8 +167,13 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
       )}
 
       {/* Recently modified — timeline feed */}
-      {recent.length > 0 && (
-        <section>
+      {recent.length > 0 && (() => {
+        const INITIAL_COUNT = 5;
+        const visibleRecent = showAll ? recent : recent.slice(0, INITIAL_COUNT);
+        const hasMore = recent.length > INITIAL_COUNT;
+
+        return (
+        <section className="mb-12">
           <div className="flex items-center gap-2 mb-5">
             <Clock size={13} style={{ color: 'var(--amber)' }} />
             <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -132,7 +186,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
             <div className="absolute left-0 top-1 bottom-1 w-px" style={{ background: 'var(--border)' }} />
 
             <div className="flex flex-col gap-0.5">
-              {recent.map(({ path: filePath, mtime }, idx) => {
+              {visibleRecent.map(({ path: filePath, mtime }, idx) => {
                 const isCSV = filePath.endsWith('.csv');
                 const name = filePath.split('/').pop() || filePath;
                 const dir = filePath.split('/').slice(0, -1).join('/');
@@ -159,16 +213,33 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
                         {dir && <span className="text-xs truncate block" style={{ color: 'var(--muted-foreground)', opacity: 0.6 }}>{dir}</span>}
                       </div>
                       <span className="text-xs shrink-0 tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5, fontFamily: "'IBM Plex Mono', monospace" }} suppressHydrationWarning>
-                        {relativeTime(mtime)}
+                        {formatTime(mtime)}
                       </span>
                     </Link>
                   </div>
                 );
               })}
             </div>
+
+            {/* Show more / less */}
+            {hasMore && (
+              <button
+                onClick={() => setShowAll(v => !v)}
+                className="flex items-center gap-1.5 mt-2 ml-3 text-xs font-medium transition-colors hover:opacity-80 cursor-pointer"
+                style={{ color: 'var(--amber)', fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                <ChevronDown
+                  size={12}
+                  className="transition-transform duration-200"
+                  style={{ transform: showAll ? 'rotate(180deg)' : undefined }}
+                />
+                <span>{showAll ? t.home.showLess : t.home.showMore}</span>
+              </button>
+            )}
           </div>
         </section>
-      )}
+        );
+      })()}
 
       {/* Footer */}
       <div className="mt-16 flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4, fontFamily: "'IBM Plex Mono', monospace" }}>

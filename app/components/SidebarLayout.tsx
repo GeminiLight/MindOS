@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Sidebar from './Sidebar';
+import AskFab from './AskFab';
 import { FileNode } from '@/lib/types';
 
 interface SidebarLayoutProps {
@@ -29,6 +30,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           {children}
         </div>
       </main>
+      <AskFab />
     </>
   );
 }

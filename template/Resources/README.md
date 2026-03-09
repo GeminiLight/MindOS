@@ -1,4 +1,4 @@
-# 🧠 使用规范
+# Resources
 
 本文件是 Resources 目录的总览与使用约定，Agent 执行任务前应先读取此文件。
 
@@ -6,7 +6,7 @@
 
 ```
 Resources/
-├── 🧠 使用规范.md          # 本文件，总览与约定
+├── README.md                   # 本文件，总览与约定
 ├── Products.csv            # 产品收藏（Name, URL, Category, Tags, Description, Key Features, Target Users, Pricing）
 ├── AI Scholars.csv         # AI 学者收藏（Category, Name, Institution, Research Focus, Representative Works, Homepage）
 ├── 🌟 Github Projects.csv  # GitHub 项目收藏

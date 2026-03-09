@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MindOS — Human-AI Collaborative Mind Platform</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <!-- Fonts: using local system fallbacks for offline/intranet compatibility -->
+    <!-- Original Google Fonts: IBM Plex Mono, IBM Plex Sans, Lora -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -33,7 +32,7 @@
                 </svg>
                 <span class="logo-text">MindOS</span>
             </a>
-            
+
             <div class="nav-right">
                 <div class="nav-links">
                     <a href="#vision"><span data-zh>愿景</span><span data-en>Vision</span></a>
@@ -43,9 +42,7 @@
                 </div>
                 <div class="controls">
                     <button id="theme-toggle" class="control-btn" title="Toggle Theme">◐</button>
-                    <button id="lang-toggle" class="control-btn">
-                        <span data-zh>EN</span><span data-en>中文</span>
-                    </button>
+                    <button id="lang-toggle" class="control-btn"><span data-zh>EN</span><span data-en>ZH</span></button>
                     <a href="https://github.com/geminilight/mind-os" class="btn-primary">GitHub</a>
                 </div>
             </div>
@@ -63,11 +60,11 @@
                 <span class="accent-text" data-zh>Agent 依此行动。</span><span class="accent-text" data-en>Agent Acts There.</span>
             </h1>
             <p class="hero-sub animate-up" style="animation-delay: 0.2s;">
-                <span data-zh>为所有 Agent 全局同步你的心智：透明可控，共生演进。</span>
+                <span data-zh>为所有 Agents 全局同步你的心智：透明可控，共生演进。</span>
                 <span data-en>Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.</span>
             </p>
             <div class="hero-actions animate-up" style="animation-delay: 0.3s;">
-                <div class="cmd-box">
+                <div class="cmd-box" id="copy-box">
                     <span class="cmd-text">git clone https://github.com/geminilight/mind-os</span>
                     <button class="copy-btn" id="copy-btn">Copy</button>
                 </div>
@@ -130,63 +127,156 @@
         </div>
     </section>
 
-    <!-- SECTION 2: VISION -->
+    <!-- SECTION 2: VISION — Three Pillars + Foundation -->
     <section id="vision" class="section">
         <div class="container">
             <div class="section-header">
                 <span class="mono">02. THE VISION</span>
-                <h2 data-zh>为何需要 Shared Mind?</h2><h2 data-en>Why Shared Mind?</h2>
+                <h2 data-zh>人机共享思维</h2><h2 data-en>Human-AI Shared Mind</h2>
+                <p class="section-sub" data-zh>MindOS 彻底重构人机协作范式，让人机在同一个 Shared Mind 中协作演进。</p>
+                <p class="section-sub" data-en>MindOS refactors the human-AI collaboration paradigm, enabling co-evolution within a single Shared Mind.</p>
             </div>
-            <div class="vision-grid">
-                <div class="v-card animate-up">
-                    <div class="v-icon">👁️</div>
-                    <h3 data-zh>透明上下文</h3><h3 data-en>Transparent Context</h3>
-                    <p data-zh>Agent 的推理与沉淀直接写入本地 Markdown。人类可直观审查并修正“记忆”，彻底消除幻觉。</p>
-                    <p data-en>Agent reflections and intermediate steps are written to local Markdown. Humans can intuitively review and correct AI "memory".</p>
-                </div>
-                <div class="v-card animate-up" style="animation-delay: 0.1s;">
-                    <div class="v-icon">🔓</div>
-                    <h3 data-zh>原生 Agent 访问</h3><h3 data-en>Native Agent Access</h3>
-                    <p data-zh>无需复杂的 API 鉴权。内置 MCP Server 让 Agent 像原生应用一样读写你的 Profile 和经验。</p>
-                    <p data-en>No complex cloud APIs. Built-in MCP Server lets Agents access your Profile and SOPs as if they were native apps.</p>
-                </div>
-                <div class="v-card animate-up" style="animation-delay: 0.2s;">
-                    <div class="v-icon">⚡</div>
-                    <h3 data-zh>解放文档管理</h3><h3 data-en>Liberating Doc Management</h3>
-                    <p data-zh>通过文件引用自动化管理。知识库不再是静态记录，而是 Agent 随时调用的动态指令集。</p>
-                    <p data-en>Automate management via prompt references. Your notes become executable instruction sets for Agents.</p>
-                </div>
-                <div class="v-card animate-up" style="animation-delay: 0.3s;">
-                    <div class="v-icon">🛡️</div>
-                    <h3 data-zh>极致本地掌控</h3><h3 data-en>Ultimate Local Control</h3>
-                    <p data-zh>无数据库、无云同步。所有数据以纯文本运行在本地，确保绝对隐私与极速响应。</p>
-                    <p data-en>Zero database, zero cloud sync. All data stays local as plain text, ensuring absolute privacy and speed.</p>
-                </div>
-            </div>
-        </div>
-    </section>
 
-    <!-- SECTION 3: MANIFESTO -->
-    <section class="section dark-bg">
-        <div class="container">
-            <div class="section-header" style="text-align:center;">
-                <span class="mono">03. MANIFESTO</span>
-                <h2 data-zh>数据主权与透明性</h2><h2 data-en>Data Sovereignty & Transparency</h2>
-            </div>
-            <div class="manifesto-wrapper animate-up">
-                <div class="m-side m-legacy">
-                    <div class="m-title" style="color:var(--danger)">✕ <span data-zh="传统 AI 范式">Legacy AI Flow</span><span data-en="Legacy AI Flow">Legacy AI Flow</span></div>
-                    <ul class="m-list">
-                        <li class="m-item"><div><strong data-zh>封闭黑箱</strong><strong data-en>Black Box Memory</strong><span data-zh>Agent 记忆不可见</span><span data-en>Hidden agent memory</span></div></li>
-                        <li class="m-item"><div><strong data-zh>数据孤岛</strong><strong data-en>Data Silos</strong><span data-zh>笔记难以被模型原生访问</span><span data-en>Notes hard to access for LLMs</span></div></li>
-                    </ul>
+            <div class="pillar-stack">
+                <!-- Pillar 1: Global Sync -->
+                <div class="pillar-card animate-up">
+                    <div class="pillar-head">
+                        <span class="pillar-num">01</span>
+                        <div>
+                            <h3 data-zh>全局同步</h3><h3 data-en>Global Mind Sync</h3>
+                            <p class="pillar-tagline" data-zh>打破心智孤岛</p>
+                            <p class="pillar-tagline" data-en>Breaking Mind Silos</p>
+                        </div>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>云端笔记 API 壁垒重重，Agent 无法直接读取</li>
+                                <li>灵感捕获成本高，碎片化想法难以实时沉淀</li>
+                                <li>个人深度背景散落多处，Agent 缺乏完整上下文</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Cloud note APIs are walled off — Agents can't read directly</li>
+                                <li>High capture friction — fleeting ideas fail to be recorded</li>
+                                <li>Deep personal context scattered — Agents lack full picture</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-evo">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>内置标准 MCP Server，Agent 零配置直连知识库</li>
+                                <li>极致轻量的 Web 捕获入口，一键沉淀灵感</li>
+                                <li>Profile、SOP、经验一处记录，全量赋能所有 Agents</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Built-in MCP Server — Agents connect with zero config</li>
+                                <li>Ultra-lightweight web capture for instant idea recording</li>
+                                <li>Profile, SOPs & experience: record once, empower all Agents</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-                <div class="m-side m-mindos">
-                    <div class="m-title" style="color:var(--accent)">✓ <span data-zh="MindOS 范式">The MindOS Way</span><span data-en="The MindOS Way">The MindOS Way</span></div>
-                    <ul class="m-list">
-                        <li class="m-item"><div><strong data-zh>透明上下文</strong><strong data-en>Transparent Context</strong><span data-zh>推理过程直接本地存储</span><span data-en>Reasoning saved locally</span></div></li>
-                        <li class="m-item"><div><strong data-zh>绝对掌控</strong><strong data-en>Absolute Control</strong><span data-zh>纯文本、零数据库、极速响应</span><span data-en>Plain text, zero DB, instant</span></div></li>
-                    </ul>
+
+                <!-- Pillar 2: Transparent & Controllable -->
+                <div class="pillar-card animate-up" style="animation-delay: 0.15s;">
+                    <div class="pillar-head">
+                        <span class="pillar-num">02</span>
+                        <div>
+                            <h3 data-zh>透明可控</h3><h3 data-en>Transparent & Controllable</h3>
+                            <p class="pillar-tagline" data-zh>消除 Agent 黑箱</p>
+                            <p class="pillar-tagline" data-en>Eliminating Agent Black Boxes</p>
+                        </div>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>Agent 的"记忆"锁在系统黑箱，人类完全不可见</li>
+                                <li>中间推理过程无法审查，错误难以追溯和纠正</li>
+                                <li>幻觉不受控地累积，信任链随时间持续崩塌</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Agent memory locked in black boxes — fully invisible to humans</li>
+                                <li>Intermediate reasoning can't be audited or traced back</li>
+                                <li>Hallucinations compound unchecked, eroding trust over time</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-evo">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>每次检索、反思与执行均沉淀为本地纯文本</li>
+                                <li>GUI 工作台提供完整的审查与干预界面</li>
+                                <li>人类拥有绝对的心智修正权，随时纠偏 Agent</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Every retrieval, reflection & action saved as local plain text</li>
+                                <li>GUI workbench provides full audit & intervention interface</li>
+                                <li>Humans hold absolute mind-correction rights over Agents</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pillar 3: Symbiotic Evolution -->
+                <div class="pillar-card animate-up" style="animation-delay: 0.3s;">
+                    <div class="pillar-head">
+                        <span class="pillar-num">03</span>
+                        <div>
+                            <h3 data-zh>共生演进</h3><h3 data-en>Symbiotic Evolution</h3>
+                            <p class="pillar-tagline" data-zh>动态指令流转</p>
+                            <p class="pillar-tagline" data-en>Dynamic Instruction Flow</p>
+                        </div>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>传统文档层级深、嵌套多，人工同步成本极高</li>
+                                <li>静态笔记只是记录，无法作为执行引擎流转</li>
+                                <li>人机协作断裂，Agent 每次都从零开始理解上下文</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Traditional docs deeply nested — manual sync cost is huge</li>
+                                <li>Static notes are dead records, not executable instructions</li>
+                                <li>Human-AI context breaks — Agents restart from zero each time</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-evo">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>Prompt-Native 记录范式，日常笔记即 Agent 指令</li>
+                                <li>引用驱动的自动同步，跨文件状态实时流转</li>
+                                <li>人机在 Shared Mind 中相互启发，共同迭代生长</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Prompt-Native paradigm — daily notes become Agent instructions</li>
+                                <li>Reference-driven auto-sync flows state across files in real-time</li>
+                                <li>Humans & AI co-inspire and co-evolve in a single Shared Mind</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Foundation Banner: Local-first -->
+            <div class="foundation-banner animate-up" style="animation-delay: 0.45s;">
+                <div class="foundation-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div class="foundation-content">
+                    <h4 data-zh>底层基石：本地优先</h4><h4 data-en>Foundational Pillar: Local-first</h4>
+                    <p data-zh>所有数据以纯文本形式存储在本地，彻底消除隐私顾虑，确保你拥有绝对的数据主权与极致的读写性能。</p>
+                    <p data-en>All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.</p>
                 </div>
             </div>
         </div>
@@ -196,7 +286,7 @@
     <section id="features" class="section">
         <div class="container">
             <div class="section-header">
-                <span class="mono">04. FEATURES</span>
+                <span class="mono">03. FEATURES</span>
                 <h2 data-zh>核心功能特性</h2><h2 data-en>Core Features</h2>
             </div>
             <div class="vision-grid">
@@ -214,7 +304,7 @@
                 </div>
                 <div class="v-card animate-up" style="animation-delay: 0.2s;">
                     <div class="v-icon">🔗</div>
-                    <h3 data-zh="关联视图 Backlinks</h3><h3 data-en>Backlinks View</h3>
+                    <h3 data-zh>关联视图 Backlinks</h3><h3 data-en>Backlinks View</h3>
                     <p data-zh>自动索引全库引用。每一篇笔记底部展示相关 Context，打通知识孤岛。</p>
                     <p data-en>Auto-indexed references. Every note shows its surrounding context snippets.</p>
                 </div>
@@ -232,15 +322,35 @@
     <section class="section dark-bg">
         <div class="container ecosystem-section">
             <div class="section-header">
-                <span class="mono">05. AGENT ECOSYSTEM</span>
-                <h2 data-zh>无缝链接 Agent 生态</h2><h2 data-en>Seamless Agent Integration</h2>
+                <span class="mono">04. AGENT ECOSYSTEM</span>
+                <h2 data-zh>无缝链接 Agents 生态</h2><h2 data-en>Seamless Agent Ecosystem</h2>
             </div>
             <div class="eco-grid animate-up">
-                <div class="eco-item">Claude Desktop</div>
-                <div class="eco-item">Claude Code</div>
-                <div class="eco-item">OpenClaw</div>
-                <div class="eco-item">CodeX</div>
-                <div class="eco-item">Gemini Agent</div>
+                <div class="eco-item">
+                    <img src="img/logos/claude-desktop.svg" alt="Claude Desktop" class="eco-logo" />
+                    <span class="eco-name">Claude Desktop</span>
+                    <span class="eco-desc" data-zh>桌面端 AI 助手</span><span class="eco-desc" data-en>Desktop AI Assistant</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/claude-code.svg" alt="Claude Code" class="eco-logo" />
+                    <span class="eco-name">Claude Code</span>
+                    <span class="eco-desc" data-zh>终端编程 Agent</span><span class="eco-desc" data-en>Terminal Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/openclaw.svg" alt="OpenClaw" class="eco-logo" />
+                    <span class="eco-name">OpenClaw</span>
+                    <span class="eco-desc" data-zh>开源 Agent 框架</span><span class="eco-desc" data-en>Open-source Agent Framework</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codex.svg" alt="Codex" class="eco-logo" />
+                    <span class="eco-name">Codex</span>
+                    <span class="eco-desc" data-zh>OpenAI 编程 Agent</span><span class="eco-desc" data-en>OpenAI Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/gemini.svg" alt="Gemini" class="eco-logo" />
+                    <span class="eco-name">Gemini Agent</span>
+                    <span class="eco-desc" data-zh>Google AI Agent</span><span class="eco-desc" data-en>Google AI Agent</span>
+                </div>
             </div>
         </div>
     </section>
@@ -249,7 +359,7 @@
     <section id="quickstart" class="section">
         <div class="container">
             <div class="section-header">
-                <span class="mono">06. QUICKSTART</span>
+                <span class="mono">05. QUICKSTART</span>
                 <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start the Shared Mind</h2>
             </div>
             <div class="vision-grid">
@@ -271,56 +381,33 @@
     </footer>
 
     <script>
-        // --- State ---
-        const state = { 
-            theme: localStorage.getItem('mindos-theme') || 'dark', 
-            lang: localStorage.getItem('mindos-lang') || 'zh', 
-            loopStarted: false 
-        };
-
+        const state = { theme: localStorage.getItem('mindos-theme') || 'dark', lang: localStorage.getItem('mindos-lang') || 'zh', loopStarted: false };
         const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); };
         const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
         applyTheme(state.theme); applyLang(state.lang);
 
-        document.getElementById('theme-toggle').addEventListener('click', () => { 
-            state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); 
-        });
-        document.getElementById('lang-toggle').addEventListener('click', () => { 
-            state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang);
-            // Reload page or re-run dynamic text if needed, but here typewriter respects state.lang
-        });
+        document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
+        document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
-        // --- Copy Logic ---
         document.getElementById('copy-btn')?.addEventListener('click', (e) => {
             navigator.clipboard.writeText('git clone https://github.com/geminilight/mind-os');
             e.target.textContent = 'Copied!';
             setTimeout(() => e.target.textContent = 'Copy', 2000);
         });
 
-        // --- Narrative Loop ---
         const runMindLoop = async () => {
             if(state.loopStarted) return; state.loopStarted = true;
             const humanEditor = document.getElementById('typewriter-human');
             const spark = document.getElementById('spark-pulse');
-            
-            const typingText = state.lang === 'zh' 
-                ? "Idea: 实现一个动态星芒脉冲效果。" 
-                : "Idea: Build a dynamic spark pulse effect.";
-            
-            for(let char of typingText) {
-                humanEditor.innerHTML += char;
-                await new Promise(r => setTimeout(r, 50));
-            }
+            const typingText = state.lang === 'zh' ? "Idea: 实现一个动态星芒脉冲效果。" : "Idea: Build a dynamic spark pulse effect.";
+            for(let char of typingText) { humanEditor.innerHTML += char; await new Promise(r => setTimeout(r, 50)); }
             humanEditor.innerHTML += '<span class="type-cursor"></span>';
-            
             await new Promise(r => setTimeout(r, 400));
             spark.classList.add('animate');
-            
             setTimeout(async () => {
                 const status = document.getElementById('agent-status');
                 status.innerHTML = `<span style="width:6px; height:6px; background:var(--accent); border-radius:50%; box-shadow: 0 0 10px var(--accent);"></span> PROCESSING`;
                 status.style.color = "var(--accent)";
-
                 const consoleBody = document.getElementById('agent-console');
                 const logs = [
                     { tag: 'MCP', msg: 'Context Bridge active.' },
@@ -328,7 +415,6 @@
                     { tag: 'AI', msg: state.lang === 'zh' ? '意图识别：UI 反馈逻辑' : 'Intent: UI Feedback Logic' },
                     { tag: 'EXEC', msg: 'Updated project wiki.', type: 'success' }
                 ];
-                
                 for(let log of logs) {
                     await new Promise(r => setTimeout(r, 600));
                     const div = document.createElement('div');
@@ -340,11 +426,11 @@
         };
 
         const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => { 
-                if (entry.isIntersecting) { 
-                    entry.target.classList.add('active'); 
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
                     if(entry.target.id === 'workflow') { setTimeout(runMindLoop, 800); }
-                } 
+                }
             });
         }, { threshold: 0.3 });
         document.querySelectorAll('.animate-up, .loop-section').forEach(el => observer.observe(el));

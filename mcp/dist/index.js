@@ -252,6 +252,27 @@ function appendCsvRow(filePath, row) {
     const newRowCount = content.trim().split("\n").length;
     return { newRowCount };
 }
+// ─── Rename helper ────────────────────────────────────────────────────────
+function renameFile(oldPath, newName) {
+    if (newName.includes("/") || newName.includes("\\")) {
+        throw new Error("Invalid filename: must not contain path separators");
+    }
+    const root = path.resolve(MIND_ROOT);
+    const oldResolved = path.resolve(path.join(root, oldPath));
+    if (!oldResolved.startsWith(root + path.sep) && oldResolved !== root) {
+        throw new Error(`Access denied: path "${oldPath}" is outside MIND_ROOT`);
+    }
+    const dir = path.dirname(oldResolved);
+    const newResolved = path.join(dir, newName);
+    if (!newResolved.startsWith(root + path.sep) && newResolved !== root) {
+        throw new Error("Access denied: new path is outside MIND_ROOT");
+    }
+    if (fs.existsSync(newResolved)) {
+        throw new Error("A file with that name already exists");
+    }
+    fs.renameSync(oldResolved, newResolved);
+    return path.relative(root, newResolved);
+}
 // ─── Format helpers ───────────────────────────────────────────────────────────
 function renderTree(nodes, indent = "") {
     const lines = [];
@@ -274,6 +295,42 @@ function truncate(text, limit = CHARACTER_LIMIT) {
         text: text.slice(0, limit) + `\n\n[... truncated at ${limit} characters. Use offset/limit params for paginated access.]`,
         truncated: true,
     };
+}
+// ─── Audit logging ────────────────────────────────────────────────────────────
+const AUDIT_FILE = "Agent-Audit.md";
+const DIFF_FILE = "Agent-Diff.md";
+function ensureAuditFile(filePath, title) {
+    const resolved = path.join(MIND_ROOT, filePath);
+    if (!fs.existsSync(resolved)) {
+        fs.mkdirSync(path.dirname(resolved), { recursive: true });
+        fs.writeFileSync(resolved, `# ${title}\n\n`, "utf-8");
+    }
+}
+function logOp(tool, params, result, message) {
+    try {
+        ensureAuditFile(AUDIT_FILE, "Agent Audit Log");
+        const entry = JSON.stringify({ ts: new Date().toISOString(), tool, params, result, message });
+        const block = `\n\`\`\`agent-op\n${entry}\n\`\`\`\n`;
+        const resolved = path.join(MIND_ROOT, AUDIT_FILE);
+        fs.appendFileSync(resolved, block, "utf-8");
+    }
+    catch { /* never throw from audit */ }
+}
+function logDiff(tool, filePath, before, after) {
+    try {
+        ensureAuditFile(DIFF_FILE, "Agent Diff Log");
+        // Truncate very large before/after to avoid bloating the diff file
+        const MAX = 8000;
+        const entry = JSON.stringify({
+            ts: new Date().toISOString(), path: filePath, tool,
+            before: before.length > MAX ? before.slice(0, MAX) + "\n[truncated]" : before,
+            after: after.length > MAX ? after.slice(0, MAX) + "\n[truncated]" : after,
+        });
+        const block = `\n\`\`\`agent-diff\n${entry}\n\`\`\`\n`;
+        const resolved = path.join(MIND_ROOT, DIFF_FILE);
+        fs.appendFileSync(resolved, block, "utf-8");
+    }
+    catch { /* never throw from audit */ }
 }
 // ─── MCP Server ───────────────────────────────────────────────────────────────
 const server = new McpServer({
@@ -376,10 +433,19 @@ Error Handling:
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ path: filePath, content }) => {
     try {
+        let before = "";
+        try {
+            before = readFile(filePath);
+        }
+        catch { /* new file */ }
         writeFile(filePath, content);
+        logOp("mindos_write_file", { path: filePath, content: content.slice(0, 200) + (content.length > 200 ? "…" : "") }, "ok", `Wrote ${content.length} chars`);
+        if (before !== content)
+            logDiff("mindos_write_file", filePath, before, content);
         return { content: [{ type: "text", text: `Successfully wrote ${content.length} characters to "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_write_file", { path: filePath }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -409,9 +475,11 @@ Error Handling:
 }, async ({ path: filePath, content }) => {
     try {
         createFile(filePath, content);
+        logOp("mindos_create_file", { path: filePath }, "ok", `Created ${content.length} chars`);
         return { content: [{ type: "text", text: `Created "${filePath}" (${content.length} characters)` }] };
     }
     catch (err) {
+        logOp("mindos_create_file", { path: filePath }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -434,10 +502,17 @@ Error Handling:
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 }, async ({ path: filePath }) => {
     try {
+        let before = "";
+        try {
+            before = readFile(filePath);
+        }
+        catch { /* ignore */ }
         deleteFile(filePath);
+        logOp("mindos_delete_file", { path: filePath }, "ok", `Deleted (was ${before.length} chars)`);
         return { content: [{ type: "text", text: `Deleted "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_delete_file", { path: filePath }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -613,9 +688,11 @@ Examples:
 }, async ({ path: filePath, after_index, lines }) => {
     try {
         insertLines(filePath, after_index, lines);
+        logOp("mindos_insert_lines", { path: filePath, after_index, lines_count: lines.length }, "ok");
         return { content: [{ type: "text", text: `Inserted ${lines.length} line(s) after index ${after_index} in "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_insert_lines", { path: filePath, after_index }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -644,9 +721,11 @@ Examples:
 }, async ({ path: filePath, start, end, lines }) => {
     try {
         updateLines(filePath, start, end, lines);
+        logOp("mindos_update_lines", { path: filePath, start, end, lines_count: lines.length }, "ok");
         return { content: [{ type: "text", text: `Replaced lines ${start}–${end} in "${filePath}" with ${lines.length} new line(s)` }] };
     }
     catch (err) {
+        logOp("mindos_update_lines", { path: filePath, start, end }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -672,9 +751,11 @@ Examples:
 }, async ({ path: filePath, start, end }) => {
     try {
         deleteLines(filePath, start, end);
+        logOp("mindos_delete_lines", { path: filePath, start, end }, "ok");
         return { content: [{ type: "text", text: `Deleted lines ${start}–${end} from "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_delete_lines", { path: filePath, start, end }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -699,9 +780,11 @@ Examples:
 }, async ({ path: filePath, content }) => {
     try {
         appendToFile(filePath, content);
+        logOp("mindos_append_to_file", { path: filePath, content: content.slice(0, 120) + (content.length > 120 ? "…" : "") }, "ok");
         return { content: [{ type: "text", text: `Appended ${content.length} character(s) to "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_append_to_file", { path: filePath }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -730,9 +813,11 @@ Error: Throws if heading not found.`,
 }, async ({ path: filePath, heading, content }) => {
     try {
         insertAfterHeading(filePath, heading, content);
+        logOp("mindos_insert_after_heading", { path: filePath, heading }, "ok");
         return { content: [{ type: "text", text: `Inserted content after heading "${heading}" in "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_insert_after_heading", { path: filePath, heading }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });
@@ -760,10 +845,54 @@ Error: Throws if heading not found.`,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ path: filePath, heading, content }) => {
     try {
+        let before = "";
+        try {
+            before = readFile(filePath);
+        }
+        catch { /* ignore */ }
         updateSection(filePath, heading, content);
+        const after = readFile(filePath);
+        logOp("mindos_update_section", { path: filePath, heading }, "ok");
+        if (before !== after)
+            logDiff("mindos_update_section", filePath, before, after);
         return { content: [{ type: "text", text: `Updated section "${heading}" in "${filePath}"` }] };
     }
     catch (err) {
+        logOp("mindos_update_section", { path: filePath, heading }, "error", String(err));
+        return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
+    }
+});
+// ── mindos_rename_file ─────────────────────────────────────────────────────
+server.registerTool("mindos_rename_file", {
+    title: "Rename File",
+    description: `Rename a file within its current directory. The file stays in the same folder — only the filename changes.
+
+Args:
+  - path (string): Current relative file path (e.g. "Profile/Identity.md")
+  - new_name (string): New filename only, no path separators (e.g. "My Identity.md")
+
+Returns: The new relative path after renaming.
+
+Examples:
+  - Use when: "Rename TODO.md to Tasks.md"
+  - Use when: "Change the filename of Profile/Identity.md to My-Profile.md"
+
+Error Handling:
+  - Returns error if new_name contains path separators
+  - Returns error if a file with that name already exists in the same directory`,
+    inputSchema: z.object({
+        path: z.string().min(1).describe("Current relative file path"),
+        new_name: z.string().min(1).describe("New filename (no path separators)"),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ path: filePath, new_name }) => {
+    try {
+        const newPath = renameFile(filePath, new_name);
+        logOp("mindos_rename_file", { path: filePath, new_name }, "ok", `Renamed to ${newPath}`);
+        return { content: [{ type: "text", text: `Renamed "${filePath}" → "${newPath}"` }] };
+    }
+    catch (err) {
+        logOp("mindos_rename_file", { path: filePath, new_name }, "error", String(err));
         return { isError: true, content: [{ type: "text", text: `Error: ${err instanceof Error ? err.message : String(err)}` }] };
     }
 });

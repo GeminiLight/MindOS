@@ -1,4 +1,4 @@
-# 🧠 使用规范
+# Workflows
 
 本文件是 Workflows 目录的总览与使用约定，Agent 执行任务前应先读取此文件。
 
@@ -6,7 +6,7 @@
 
 ```
 Workflows/
-├── 🧠 使用规范.md       # 本文件，总览与约定
+├── README.md                # 本文件，总览与约定
 ├── Research/            # 科研工作流
 │   ├── Survey/
 │   ├── Ideation/
