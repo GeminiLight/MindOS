@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#1B1913"/>
+  <!-- Cursor: isometric cube in monochrome greys -->
+  <polygon points="24,12 36,19 36,31 24,38 12,31 12,19" fill="none" stroke="#72716D" stroke-width="1"/>
+  <!-- Top face -->
+  <polygon points="24,12 36,19 24,26 12,19" fill="#F0EFEA" opacity="0.9"/>
+  <!-- Right face -->
+  <polygon points="36,19 36,31 24,38 24,26" fill="#72716D" opacity="0.7"/>
+  <!-- Left face -->
+  <polygon points="12,19 24,26 24,38 12,31" fill="#EDECEC" opacity="0.5"/>
+</svg>

@@ -43,7 +43,7 @@
                 <div class="controls">
                     <button id="theme-toggle" class="control-btn" title="Toggle Theme">◐</button>
                     <button id="lang-toggle" class="control-btn"><span data-zh>EN</span><span data-en>ZH</span></button>
-                    <a href="https://github.com/geminilight/mind-os" class="btn-primary">GitHub</a>
+                    <a href="https://github.com/GeminiLight/MindOS" class="btn-primary">GitHub</a>
                 </div>
             </div>
         </div>
@@ -64,9 +64,22 @@
                 <span data-en>Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.</span>
             </p>
             <div class="hero-actions animate-up" style="animation-delay: 0.3s;">
-                <div class="cmd-box" id="copy-box">
-                    <span class="cmd-text">git clone https://github.com/geminilight/mind-os</span>
-                    <button class="copy-btn" id="copy-btn">Copy</button>
+                <div class="hero-cta-group">
+                    <a href="#quickstart" class="cta-primary">
+                        <span data-zh>开始构建</span><span data-en>Get Started</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="https://github.com/GeminiLight/MindOS" class="cta-secondary" target="_blank">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        GitHub
+                    </a>
+                </div>
+                <div class="hero-trust-bar">
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Local-first</span>
+                    <span class="trust-sep"></span>
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Open Source</span>
+                    <span class="trust-sep"></span>
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> MCP-native</span>
                 </div>
             </div>
         </div>
@@ -127,53 +140,57 @@
         </div>
     </section>
 
-    <!-- SECTION 2: VISION — Three Pillars + Foundation -->
-    <section id="vision" class="section">
+    <!-- SECTION 2: VISION — Why Shared Mind? -->
+    <section id="vision" class="section vision-section">
         <div class="container">
             <div class="section-header">
                 <span class="mono">02. THE VISION</span>
-                <h2 data-zh>人机共享思维</h2><h2 data-en>Human-AI Shared Mind</h2>
-                <p class="section-sub" data-zh>MindOS 彻底重构人机协作范式，让人机在同一个 Shared Mind 中协作演进。</p>
-                <p class="section-sub" data-en>MindOS refactors the human-AI collaboration paradigm, enabling co-evolution within a single Shared Mind.</p>
+                <h2 data-zh>为什么需要 Shared Mind?</h2><h2 data-en>Why Shared Mind?</h2>
+                <p class="section-sub" data-zh>人机协作正面临三道结构性鸿沟。MindOS 逐一击破，让人与 AI 在同一个心智空间中共生演进。</p>
+                <p class="section-sub" data-en>Human-AI collaboration faces three structural gaps. MindOS bridges each one, enabling co-evolution within a single Shared Mind.</p>
             </div>
 
             <div class="pillar-stack">
                 <!-- Pillar 1: Global Sync -->
                 <div class="pillar-card animate-up">
                     <div class="pillar-head">
-                        <span class="pillar-num">01</span>
-                        <div>
-                            <h3 data-zh>全局同步</h3><h3 data-en>Global Mind Sync</h3>
-                            <p class="pillar-tagline" data-zh>打破心智孤岛</p>
-                            <p class="pillar-tagline" data-en>Breaking Mind Silos</p>
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                         </div>
+                        <div>
+                            <h3 data-zh>全局同步 — 打破心智孤岛</h3><h3 data-en>Global Mind Sync — Breaking Silos</h3>
+                            <p class="pillar-tagline" data-zh>一处记录，全量赋能所有 Agents</p>
+                            <p class="pillar-tagline" data-en>Record once, empower every Agent</p>
+                        </div>
+                        <span class="pillar-num">01</span>
                     </div>
                     <div class="pillar-body">
                         <div class="pillar-col pillar-pain">
                             <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
                             <ul class="pillar-list" data-zh>
-                                <li>云端笔记 API 壁垒重重，Agent 无法直接读取</li>
-                                <li>灵感捕获成本高，碎片化想法难以实时沉淀</li>
-                                <li>个人深度背景散落多处，Agent 缺乏完整上下文</li>
+                                <li>云端笔记 API 壁垒重重，Agent 无法直接读取人类上下文</li>
+                                <li>灵感捕获成本高，碎片化想法与瞬间顿悟难以实时沉淀</li>
+                                <li>个人深度背景散落多处，Agent 每次都缺乏完整 Context</li>
                             </ul>
                             <ul class="pillar-list" data-en>
-                                <li>Cloud note APIs are walled off — Agents can't read directly</li>
-                                <li>High capture friction — fleeting ideas fail to be recorded</li>
-                                <li>Deep personal context scattered — Agents lack full picture</li>
+                                <li>Cloud note APIs are walled off — Agents can't read human context</li>
+                                <li>High capture friction — fleeting ideas and epiphanies fail to land</li>
+                                <li>Deep personal context scattered — Agents always lack full picture</li>
                             </ul>
                         </div>
                         <div class="pillar-arrow" aria-hidden="true">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
                         </div>
-                        <div class="pillar-col pillar-evo">
-                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
                             <ul class="pillar-list" data-zh>
-                                <li>内置标准 MCP Server，Agent 零配置直连知识库</li>
-                                <li>极致轻量的 Web 捕获入口，一键沉淀灵感</li>
-                                <li>Profile、SOP、经验一处记录，全量赋能所有 Agents</li>
+                                <li>内置标准 MCP Server，任意 Agent 零配置直连知识库</li>
+                                <li>极致轻量的 Web 捕获入口，一键沉淀灵感与想法</li>
+                                <li>Profile、SOP 与经验一处记录，全量赋能所有 Agents</li>
                             </ul>
                             <ul class="pillar-list" data-en>
-                                <li>Built-in MCP Server — Agents connect with zero config</li>
+                                <li>Built-in MCP Server — any Agent connects with zero config</li>
                                 <li>Ultra-lightweight web capture for instant idea recording</li>
                                 <li>Profile, SOPs & experience: record once, empower all Agents</li>
                             </ul>
@@ -184,18 +201,21 @@
                 <!-- Pillar 2: Transparent & Controllable -->
                 <div class="pillar-card animate-up" style="animation-delay: 0.15s;">
                     <div class="pillar-head">
-                        <span class="pillar-num">02</span>
-                        <div>
-                            <h3 data-zh>透明可控</h3><h3 data-en>Transparent & Controllable</h3>
-                            <p class="pillar-tagline" data-zh>消除 Agent 黑箱</p>
-                            <p class="pillar-tagline" data-en>Eliminating Agent Black Boxes</p>
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         </div>
+                        <div>
+                            <h3 data-zh>透明可控 — 消除 Agent 黑箱</h3><h3 data-en>Transparent & Controllable — No Black Boxes</h3>
+                            <p class="pillar-tagline" data-zh>让 Agent 在阳光下思考</p>
+                            <p class="pillar-tagline" data-en>Let Agents think in the light</p>
+                        </div>
+                        <span class="pillar-num">02</span>
                     </div>
                     <div class="pillar-body">
                         <div class="pillar-col pillar-pain">
                             <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
                             <ul class="pillar-list" data-zh>
-                                <li>Agent 的"记忆"锁在系统黑箱，人类完全不可见</li>
+                                <li>Agent 的"记忆"锁在系统黑箱中，人类完全不可见</li>
                                 <li>中间推理过程无法审查，错误难以追溯和纠正</li>
                                 <li>幻觉不受控地累积，信任链随时间持续崩塌</li>
                             </ul>
@@ -206,19 +226,20 @@
                             </ul>
                         </div>
                         <div class="pillar-arrow" aria-hidden="true">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
                         </div>
-                        <div class="pillar-col pillar-evo">
-                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
                             <ul class="pillar-list" data-zh>
-                                <li>每次检索、反思与执行均沉淀为本地纯文本</li>
-                                <li>GUI 工作台提供完整的审查与干预界面</li>
-                                <li>人类拥有绝对的心智修正权，随时纠偏 Agent</li>
+                                <li>每次检索、反思与执行均通过 MCP 沉淀为本地纯文本</li>
+                                <li>GUI 工作台提供完整的审查、干预与心智修正界面</li>
+                                <li>人类拥有绝对的心智纠偏权，随时校准 Agent 行为</li>
                             </ul>
                             <ul class="pillar-list" data-en>
-                                <li>Every retrieval, reflection & action saved as local plain text</li>
-                                <li>GUI workbench provides full audit & intervention interface</li>
-                                <li>Humans hold absolute mind-correction rights over Agents</li>
+                                <li>Every retrieval, reflection & action saved as local plain text via MCP</li>
+                                <li>GUI workbench provides full audit, intervention & correction interface</li>
+                                <li>Humans hold absolute mind-correction rights — recalibrate Agents anytime</li>
                             </ul>
                         </div>
                     </div>
@@ -227,12 +248,15 @@
                 <!-- Pillar 3: Symbiotic Evolution -->
                 <div class="pillar-card animate-up" style="animation-delay: 0.3s;">
                     <div class="pillar-head">
-                        <span class="pillar-num">03</span>
-                        <div>
-                            <h3 data-zh>共生演进</h3><h3 data-en>Symbiotic Evolution</h3>
-                            <p class="pillar-tagline" data-zh>动态指令流转</p>
-                            <p class="pillar-tagline" data-en>Dynamic Instruction Flow</p>
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
                         </div>
+                        <div>
+                            <h3 data-zh>共生演进 — 动态指令流转</h3><h3 data-en>Symbiotic Evolution — Dynamic Instruction Flow</h3>
+                            <p class="pillar-tagline" data-zh>知识库即代码，笔记即指令</p>
+                            <p class="pillar-tagline" data-en>Knowledge as Code, notes as instructions</p>
+                        </div>
+                        <span class="pillar-num">03</span>
                     </div>
                     <div class="pillar-body">
                         <div class="pillar-col pillar-pain">
@@ -249,19 +273,20 @@
                             </ul>
                         </div>
                         <div class="pillar-arrow" aria-hidden="true">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
                         </div>
-                        <div class="pillar-col pillar-evo">
-                            <div class="pillar-label"><span class="pillar-dot pillar-dot--evo"></span><span data-zh>进化</span><span data-en>Evolution</span></div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
                             <ul class="pillar-list" data-zh>
-                                <li>Prompt-Native 记录范式，日常笔记即 Agent 指令</li>
-                                <li>引用驱动的自动同步，跨文件状态实时流转</li>
-                                <li>人机在 Shared Mind 中相互启发，共同迭代生长</li>
+                                <li>Prompt-Native 记录范式，日常笔记天然就是 Agent 指令</li>
+                                <li>引用驱动的自动同步，跨文件状态与上下文实时流转</li>
+                                <li>人机在同一个 Shared Mind 中相互启发，共同迭代生长</li>
                             </ul>
                             <ul class="pillar-list" data-en>
-                                <li>Prompt-Native paradigm — daily notes become Agent instructions</li>
-                                <li>Reference-driven auto-sync flows state across files in real-time</li>
-                                <li>Humans & AI co-inspire and co-evolve in a single Shared Mind</li>
+                                <li>Prompt-Native paradigm — daily notes naturally become Agent instructions</li>
+                                <li>Reference-driven auto-sync flows context across files in real-time</li>
+                                <li>Humans & AI co-inspire and co-evolve within a single Shared Mind</li>
                             </ul>
                         </div>
                     </div>
@@ -289,47 +314,117 @@
                 <span class="mono">03. FEATURES</span>
                 <h2 data-zh>核心功能特性</h2><h2 data-en>Core Features</h2>
             </div>
-            <div class="vision-grid">
-                <div class="v-card animate-up">
-                    <div class="v-icon">⌘/</div>
-                    <h3 data-zh>AI 对话 & 管理</h3><h3 data-en>AI Ask & Management</h3>
-                    <p data-zh>在上下文中与知识库对话。Agent 自动化管理文件，人机协同无缝沉淀。</p>
-                    <p data-en>Chat with your mind in context. Agents manage files while you curate knowledge effortlessly.</p>
+
+            <!-- Row 1: For Humans -->
+            <div class="feat-row-label animate-up">
+                <span class="feat-row-tag" data-zh>人类侧</span><span class="feat-row-tag" data-en>For Humans</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <h3 data-zh>GUI 工作台</h3><h3 data-en>GUI Workbench</h3>
+                    <p data-zh>浏览、编辑、搜索笔记，统一搜索 + AI 入口（⌘K / ⌘/），专为人机共创设计。</p>
+                    <p data-en>Browse, edit, search notes with unified search + AI entry (⌘K / ⌘/), designed for human-AI co-creation.</p>
                 </div>
-                <div class="v-card animate-up" style="animation-delay: 0.1s;">
-                    <div class="v-icon">🕸️</div>
-                    <h3 data-zh>Wiki Graph 图谱</h3><h3 data-en>Wiki Graph</h3>
-                    <p data-zh>动态解析引用关系，全景管理复杂的人机上下文语义网络。</p>
-                    <p data-en>Visualize inter-file relationships. Manage complex Human-AI semantic networks.</p>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <h3 data-zh>内置 Agent 助手</h3><h3 data-en>Built-in Agent Assistant</h3>
+                    <p data-zh>在上下文中与知识库对话，Agent 管理文件，编辑无缝沉淀人类主动管理的知识。</p>
+                    <p data-en>Converse with the knowledge base in context. Agents manage files while editing seamlessly captures human-curated knowledge.</p>
                 </div>
-                <div class="v-card animate-up" style="animation-delay: 0.2s;">
-                    <div class="v-icon">🔗</div>
-                    <h3 data-zh>关联视图 Backlinks</h3><h3 data-en>Backlinks View</h3>
-                    <p data-zh>自动索引全库引用。每一篇笔记底部展示相关 Context，打通知识孤岛。</p>
-                    <p data-en>Auto-indexed references. Every note shows its surrounding context snippets.</p>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    </div>
+                    <h3 data-zh>插件扩展</h3><h3 data-en>Plugin Extensions</h3>
+                    <p data-zh>针对特定场景的自定义视图插件 — TODO 列表、看板、时间线等，实现弹性知识管理。</p>
+                    <p data-en>Custom view plugins for specific scenarios — TODO lists, Kanban, Timeline, etc. for elastic knowledge management.</p>
                 </div>
-                <div class="v-card animate-up" style="animation-delay: 0.3s;">
-                    <div class="v-icon">📊</div>
-                    <h3 data-zh>MCP 标准化工具</h3><h3 data-en>MCP Toolset</h3>
-                    <p data-zh>提供 15+ 种标准工具。让任意 Agent 获得读写本地工作流的专属技能。</p>
-                    <p data-en>15+ specialized tools for Agents to read, write, and execute local workflows.</p>
+            </div>
+
+            <!-- Row 2: For Agents -->
+            <div class="feat-row-label animate-up" style="margin-top: 2.5rem;">
+                <span class="feat-row-tag" data-zh>Agent 侧</span><span class="feat-row-tag" data-en>For Agents</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    </div>
+                    <h3 data-zh>MCP Server & Skills</h3><h3 data-en>MCP Server & Skills</h3>
+                    <p data-zh>将知识库暴露为标准 MCP 工具集，任意 Agent 零配置接入，读写、搜索及执行本地工作流。</p>
+                    <p data-en>Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero config to read, write, search, and execute workflows.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </div>
+                    <h3 data-zh>结构化模板</h3><h3 data-en>Structured Templates</h3>
+                    <p data-zh>预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。</p>
+                    <p data-en>Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </div>
+                    <h3 data-zh>Prompt-Driven 文档管理</h3><h3 data-en>Prompt-Driven Docs</h3>
+                    <p data-zh>以 Prompt 思维组织文档结构与内容，人类的日常笔记即 Agent 可直接执行的高质量指令。</p>
+                    <p data-en>Organize documents with a prompt-first mindset — everyday notes double as high-quality executable instructions for Agents.</p>
+                </div>
+            </div>
+
+            <!-- Row 3: Infrastructure -->
+            <div class="feat-row-label animate-up" style="margin-top: 2.5rem;">
+                <span class="feat-row-tag" data-zh>基础设施</span><span class="feat-row-tag" data-en>Infrastructure</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                    </div>
+                    <h3 data-zh>引用驱动同步</h3><h3 data-en>Reference-Driven Sync</h3>
+                    <p data-zh>通过引用与双链关联，实现项目状态、任务进度与上下文的跨文件自动同步流转。</p>
+                    <p data-en>@ references and bi-directional links for automatic cross-file synchronization of project status, tasks, and context.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="6" y1="6" x2="9.5" y2="10"/><line x1="18" y1="6" x2="14.5" y2="10"/><line x1="6" y1="18" x2="9.5" y2="14"/><line x1="18" y1="18" x2="14.5" y2="14"/></svg>
+                    </div>
+                    <h3 data-zh>可视化知识图谱</h3><h3 data-en>Visual Knowledge Graph</h3>
+                    <p data-zh>动态解析并可视化文件间的引用与依赖关系，直观管理人机上下文网络。</p>
+                    <p data-en>Dynamically parses and visualizes inter-file references and dependencies across the human-AI context network.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <h3 data-zh>时光机 & 版本控制</h3><h3 data-en>Time Machine & Git-backed</h3>
+                    <p data-zh>自动记录人类与 Agent 的每次编辑历史，一键回滚，可视化 Context 演变与推理轨迹。</p>
+                    <p data-en>Records every edit by both humans and Agents. One-click rollback, visualize context evolution & reasoning trajectories.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- SECTION 5: ECOSYSTEM -->
+    <!-- SECTION 5: ECOSYSTEM — Infinite Marquee -->
     <section class="section dark-bg">
         <div class="container ecosystem-section">
             <div class="section-header">
                 <span class="mono">04. AGENT ECOSYSTEM</span>
                 <h2 data-zh>无缝链接 Agents 生态</h2><h2 data-en>Seamless Agent Ecosystem</h2>
             </div>
-            <div class="eco-grid animate-up">
+        </div>
+        <div class="marquee-wrap">
+            <div class="marquee-track">
+                <!-- Set 1 -->
                 <div class="eco-item">
-                    <img src="img/logos/claude-desktop.svg" alt="Claude Desktop" class="eco-logo" />
-                    <span class="eco-name">Claude Desktop</span>
-                    <span class="eco-desc" data-zh>桌面端 AI 助手</span><span class="eco-desc" data-en>Desktop AI Assistant</span>
+                    <img src="img/logos/openclaw.svg" alt="OpenClaw" class="eco-logo" />
+                    <span class="eco-name">OpenClaw</span>
+                    <span class="eco-desc" data-zh>开源 Agent 框架</span><span class="eco-desc" data-en>Open-source Agent Framework</span>
                 </div>
                 <div class="eco-item">
                     <img src="img/logos/claude-code.svg" alt="Claude Code" class="eco-logo" />
@@ -337,9 +432,45 @@
                     <span class="eco-desc" data-zh>终端编程 Agent</span><span class="eco-desc" data-en>Terminal Coding Agent</span>
                 </div>
                 <div class="eco-item">
+                    <img src="img/logos/codex.svg" alt="Codex" class="eco-logo" />
+                    <span class="eco-name">Codex</span>
+                    <span class="eco-desc" data-zh>OpenAI 编程 Agent</span><span class="eco-desc" data-en>OpenAI Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="eco-logo" />
+                    <span class="eco-name">Gemini CLI</span>
+                    <span class="eco-desc" data-zh>Google 终端 Agent</span><span class="eco-desc" data-en>Google Terminal Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/github-copilot.svg" alt="GitHub Copilot" class="eco-logo" />
+                    <span class="eco-name">GitHub Copilot</span>
+                    <span class="eco-desc" data-zh>AI 编程副驾驶</span><span class="eco-desc" data-en>AI Pair Programmer</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/cursor.svg" alt="Cursor" class="eco-logo" />
+                    <span class="eco-name">Cursor</span>
+                    <span class="eco-desc" data-zh>AI 原生编辑器</span><span class="eco-desc" data-en>AI-native Code Editor</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/trae.svg" alt="Trae" class="eco-logo" />
+                    <span class="eco-name">Trae</span>
+                    <span class="eco-desc" data-zh>字节 AI IDE</span><span class="eco-desc" data-en>ByteDance AI IDE</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codebuddy.svg" alt="CodeBuddy" class="eco-logo" />
+                    <span class="eco-name">CodeBuddy</span>
+                    <span class="eco-desc" data-zh>腾讯 AI 编程助手</span><span class="eco-desc" data-en>Tencent AI Coding Assistant</span>
+                </div>
+                <!-- Set 2 (duplicate for seamless loop) -->
+                <div class="eco-item">
                     <img src="img/logos/openclaw.svg" alt="OpenClaw" class="eco-logo" />
                     <span class="eco-name">OpenClaw</span>
                     <span class="eco-desc" data-zh>开源 Agent 框架</span><span class="eco-desc" data-en>Open-source Agent Framework</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/claude-code.svg" alt="Claude Code" class="eco-logo" />
+                    <span class="eco-name">Claude Code</span>
+                    <span class="eco-desc" data-zh>终端编程 Agent</span><span class="eco-desc" data-en>Terminal Coding Agent</span>
                 </div>
                 <div class="eco-item">
                     <img src="img/logos/codex.svg" alt="Codex" class="eco-logo" />
@@ -347,25 +478,113 @@
                     <span class="eco-desc" data-zh>OpenAI 编程 Agent</span><span class="eco-desc" data-en>OpenAI Coding Agent</span>
                 </div>
                 <div class="eco-item">
-                    <img src="img/logos/gemini.svg" alt="Gemini" class="eco-logo" />
-                    <span class="eco-name">Gemini Agent</span>
-                    <span class="eco-desc" data-zh>Google AI Agent</span><span class="eco-desc" data-en>Google AI Agent</span>
+                    <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="eco-logo" />
+                    <span class="eco-name">Gemini CLI</span>
+                    <span class="eco-desc" data-zh>Google 终端 Agent</span><span class="eco-desc" data-en>Google Terminal Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/github-copilot.svg" alt="GitHub Copilot" class="eco-logo" />
+                    <span class="eco-name">GitHub Copilot</span>
+                    <span class="eco-desc" data-zh>AI 编程副驾驶</span><span class="eco-desc" data-en>AI Pair Programmer</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/cursor.svg" alt="Cursor" class="eco-logo" />
+                    <span class="eco-name">Cursor</span>
+                    <span class="eco-desc" data-zh>AI 原生编辑器</span><span class="eco-desc" data-en>AI-native Code Editor</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/trae.svg" alt="Trae" class="eco-logo" />
+                    <span class="eco-name">Trae</span>
+                    <span class="eco-desc" data-zh>字节 AI IDE</span><span class="eco-desc" data-en>ByteDance AI IDE</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codebuddy.svg" alt="CodeBuddy" class="eco-logo" />
+                    <span class="eco-name">CodeBuddy</span>
+                    <span class="eco-desc" data-zh>腾讯 AI 编程助手</span><span class="eco-desc" data-en>Tencent AI Coding Assistant</span>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- SECTION 6: QUICKSTART -->
+    <!-- SECTION 6: QUICKSTART — Dual Path -->
     <section id="quickstart" class="section">
         <div class="container">
             <div class="section-header">
                 <span class="mono">05. QUICKSTART</span>
-                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start the Shared Mind</h2>
+                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start to Share Mind</h2>
             </div>
-            <div class="vision-grid">
-                <div class="v-card animate-up"><code style="color:var(--accent)">cp -r template/ my-mind/</code></div>
-                <div class="v-card animate-up" style="animation-delay: 0.1s;"><code style="color:var(--accent)">MIND_ROOT=/path/to/my-mind</code></div>
-                <div class="v-card animate-up" style="animation-delay: 0.2s;"><code style="color:var(--accent)">npm run dev</code></div>
+
+            <div class="qs-dual">
+                <!-- Path 1: For Humans -->
+                <div class="qs-path animate-up">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--human">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div>
+                            <h3>For Humans</h3>
+                            <p class="qs-path-sub" data-zh>3 步启动 GUI 工作台</p>
+                            <p class="qs-path-sub" data-en>3 steps to launch the GUI</p>
+                        </div>
+                    </div>
+                    <div class="qs-terminal">
+                        <div class="qs-terminal-bar">
+                            <div class="qs-dots"><span></span><span></span><span></span></div>
+                            <span class="qs-terminal-title">Terminal</span>
+                        </div>
+                        <div class="qs-terminal-body">
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># 1. Clone & init</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/ my-mind/</div>
+                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 2. Configure</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span data-zh>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span><span data-en>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span></div>
+                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 3. Launch</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>Ready on http://localhost:3000</span>
+                                <span data-en>Ready on http://localhost:3000</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Path 2: For Agents -->
+                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--agent">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <div>
+                            <h3>For Agents</h3>
+                            <p class="qs-path-sub" data-zh>发送这段 Prompt 给你的 Agent</p>
+                            <p class="qs-path-sub" data-en>Send this prompt to your Agent</p>
+                        </div>
+                    </div>
+                    <div class="qs-prompt-card">
+                        <div class="qs-prompt-bar">
+                            <div class="qs-prompt-badge">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                Prompt
+                            </div>
+                            <button class="qs-copy-btn" id="copy-prompt-btn">Copy</button>
+                        </div>
+                        <div class="qs-prompt-body" id="agent-prompt-text">
+                            <p data-zh>请帮我搭建 MindOS 知识库：</p>
+                            <p data-en>Help me set up MindOS knowledge base:</p>
+                            <p data-zh>1. 从 GitHub 克隆 GeminiLight/MindOS</p>
+                            <p data-en>1. Clone GeminiLight/MindOS from GitHub</p>
+                            <p data-zh>2. 复制 template/ 为 my-mind/ 目录</p>
+                            <p data-en>2. Copy template/ as my-mind/ directory</p>
+                            <p data-zh>3. 配置 app/.env.local（设置 MIND_ROOT 为 my-mind 的绝对路径）</p>
+                            <p data-en>3. Configure app/.env.local (set MIND_ROOT to my-mind absolute path)</p>
+                            <p data-zh>4. 安装依赖并启动 app（npm install && npm run dev）</p>
+                            <p data-en>4. Install deps and start app (npm install && npm run dev)</p>
+                            <p data-zh>5. 将 mcp/ 目录下的 MCP Server 注册到我的 Agent 客户端</p>
+                            <p data-en>5. Register the MCP Server from mcp/ into my Agent client</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -374,7 +593,7 @@
         <div class="container">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <p style="font-weight: 500;"><span data-zh>MindOS · 人机协同心智平台</span><span data-en>MindOS · Human-AI Collaborative Mind Platform</span></p>
-                <a href="https://github.com/geminilight/mind-os" style="color: var(--muted-fg); text-decoration: none;">GitHub</a>
+                <a href="https://github.com/GeminiLight/MindOS" style="color: var(--muted-fg); text-decoration: none;">GitHub</a>
             </div>
             <p style="color: var(--muted-fg); font-size: 0.75rem; margin-top: 2rem; opacity: 0.5;">MIT © 2026 GeminiLight</p>
         </div>
@@ -389,8 +608,10 @@
         document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
         document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
-        document.getElementById('copy-btn')?.addEventListener('click', (e) => {
-            navigator.clipboard.writeText('git clone https://github.com/geminilight/mind-os');
+        document.getElementById('copy-prompt-btn')?.addEventListener('click', (e) => {
+            const body = document.getElementById('agent-prompt-text');
+            const lines = Array.from(body.querySelectorAll(`p[data-${state.lang}]`)).map(p => p.textContent);
+            navigator.clipboard.writeText(lines.join('\n'));
             e.target.textContent = 'Copied!';
             setTimeout(() => e.target.textContent = 'Copy', 2000);
         });
