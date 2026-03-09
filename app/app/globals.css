@@ -119,6 +119,10 @@ body {
   body { @apply bg-background text-foreground; }
 }
 
+/* Content width — controlled by Settings > Appearance */
+:root { --content-width: 780px; }
+.content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; }
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }

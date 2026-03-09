@@ -490,13 +490,13 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                                   setRendererEnabled(renderer.id, next);
                                   setPluginStates(s => ({ ...s, [renderer.id]: next }));
                                 }}
-                                className={`shrink-0 w-10 h-5 rounded-full transition-colors relative ${enabled ? '' : 'bg-muted'}`}
-                                style={{ background: enabled ? 'var(--amber)' : undefined }}
+                                role="switch"
+                                aria-checked={enabled}
+                                className={`shrink-0 w-9 h-[20px] rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
                                 title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled}
                               >
                                 <span
-                                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                                  style={{ transform: enabled ? 'translateX(21px)' : 'translateX(2px)' }}
+                                  className={`absolute top-[3px] w-[14px] h-[14px] rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/60'}`}
                                 />
                               </button>
                             </div>

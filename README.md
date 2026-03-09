@@ -65,6 +65,10 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 - [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
 - [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
+- [ ] Backlinks View: display all files that reference the current file, helping you understand how a note fits into the knowledge network
+- [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
+- [ ] Workflow Runner: render SOP/Workflow documents as an interactive step-by-step execution panel, letting AI execute each step with one click
+- [ ] Agent Diff Reviewer: render Agent file modifications as a line-by-line diff view with one-click approve or rollback
 
 ---
 
@@ -73,42 +77,25 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 A fleeting idea becomes shared intelligence through three interlocking loops:
 
 ```mermaid
-graph TB
-    H(("👤<br/>Human<br/>Idea"))
-    A(("🤖<br/>Agent<br/>Executes"))
-    M[("📚 MindOS<br/>Knowledge Accumulates")]
-    R(("👁️<br/>Human<br/>Reviews"))
+graph LR
+    H["👤 Human<br/><sub>thinks · reviews · evolves</sub>"]
+    M[("📚 MindOS")]
+    A["🤖 Agent<br/><sub>executes · retrospects · extracts SOPs</sub>"]
+    EXT["🌐 All Agents"]
 
-    H -- "delegates" --> A
-    A -- "writes back" --> M
-    M -- "surfaces results" --> R
-    R -- "next task" --> H
-
-    S1["🔄 Agent Retrospects<br/>→ Extracts SOPs"]
-    M -. "periodic" .-> S1
-    S1 -. "enriches" .-> M
-
-    S2["💡 Human Inspired<br/>→ Upgrades Mental Model"]
-    M -. "sparks insight" .-> S2
-    S2 -. "higher-quality ideas" .-> H
-
-    EXT["🌐 All Agents Reuse"]
+    H -- "ideas & feedback" --> M
+    M -- "context & insights" --> H
+    M -- "instructions & context" --> A
+    A -- "results & SOPs" --> M
     M -. "via MCP" .-> EXT
-    EXT -. "stronger execution" .-> A
 
     style H fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
+    style M fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px
     style A fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
-    style M fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px,font-weight:bold
-    style R fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
-    style S1 fill:#818cf8,stroke:#6366f1,color:#fff,stroke-dasharray:5 5
-    style S2 fill:#fbbf24,stroke:#f59e0b,color:#333,stroke-dasharray:5 5
     style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
 ```
 
-> **Three loops, one shared mind:**
-> - **Execution loop** (solid lines) — spins on every interaction: human thinks → Agent acts → results saved → human reviews
-> - **Agent evolution loop** (dashed) — periodic: Agent retrospects, extracts SOPs, enriches MindOS
-> - **Human evolution loop** (dashed) — gradual: accumulated knowledge sparks new insights, upgrades mental models
+> **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
 
 **Who is this for?**
 

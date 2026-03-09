@@ -130,7 +130,7 @@ export default function ViewPageClient({
     <div className="flex flex-col min-h-screen">
       {/* Top bar */}
       <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 py-2.5" style={{ background: 'var(--background)' }}>
-        <div className="max-w-[900px] mx-auto xl:mr-[220px] flex items-center justify-between gap-2">
+        <div className="content-width xl:mr-[220px] flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={filePath} />
           </div>
@@ -206,7 +206,7 @@ export default function ViewPageClient({
       {/* Content */}
       <div className="flex-1 px-6 py-8">
         {editing ? (
-          <div className="max-w-[900px] mx-auto xl:mr-[220px]">
+          <div className="content-width xl:mr-[220px]">
             {isCsv ? (
               <CsvView
                 content={editContent}
@@ -228,7 +228,7 @@ export default function ViewPageClient({
             )}
           </div>
         ) : showRenderer ? (
-          <div className="max-w-[900px] mx-auto xl:mr-[220px]">
+          <div className="content-width xl:mr-[220px]">
             <renderer.component
               filePath={filePath}
               content={savedContent}
@@ -238,7 +238,7 @@ export default function ViewPageClient({
             <Backlinks filePath={filePath} />
           </div>
         ) : (
-          <div className="max-w-[900px] mx-auto xl:mr-[220px]">
+          <div className="content-width xl:mr-[220px]">
             {extension === 'csv' ? (
               <CsvView
                 content={savedContent}
