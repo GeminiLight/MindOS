@@ -12,7 +12,7 @@ export const messages = {
     home: {
       recentlyModified: 'Recently Modified',
       continueEditing: 'Continue editing',
-      newNote: 'New note',
+      newNote: 'New Notes',
       plugins: 'Plugins',
       showMore: 'Show more',
       showLess: 'Show less',
@@ -52,9 +52,11 @@ export const messages = {
       send: 'send',
       attachFile: 'attach file',
       stopTitle: 'Stop',
+      connecting: 'Connecting to model...',
       thinking: 'Thinking...',
       searching: 'Searching knowledge base...',
       generating: 'Generating response...',
+      stopped: 'Generation stopped.',
       errorNoResponse: 'No response from AI. Please check your API key and provider settings.',
       suggestions: [
         'Summarize this document',
@@ -183,9 +185,11 @@ export const messages = {
       send: '发送',
       attachFile: '附加文件',
       stopTitle: '停止',
+      connecting: '正在连接模型...',
       thinking: '思考中...',
       searching: '正在搜索知识库...',
       generating: '正在生成回复...',
+      stopped: '已停止生成。',
       errorNoResponse: 'AI 未返回响应，请检查 API Key 和服务商设置。',
       suggestions: [
         '总结这篇文档',

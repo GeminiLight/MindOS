@@ -1,0 +1,186 @@
+{
+  "schemaVersion": "1.1",
+  "locale": "zh",
+  "filename": {
+    "emojiPrefixDefault": true,
+    "allowEmojiPrefix": true,
+    "exampleSuffixSingle": "_example",
+    "exampleSuffixCollection": "_examples"
+  },
+  "structure": {
+    "requireFirstLevelReadme": true,
+    "recommendFirstLevelInstruction": true,
+    "syncEnAndZhStructure": true
+  },
+  "document": {
+    "title": {
+      "emojiEnabled": true,
+      "defaultHeadingLevel": 2
+    }
+  },
+  "connections": {
+    "requireRootCsv": true,
+    "rootCsvName": "Connections.csv",
+    "examplesCsvName": "Connections_examples.csv",
+    "onePersonOneMarkdown": true
+  },
+  "profile": {
+    "minimalFiles": [
+      "👤 Identity.md",
+      "⚙️ Preferences.md",
+      "🎯 Focus.md"
+    ]
+  },
+  "protocol": {
+    "readMode": "config_and_doc",
+    "priorityBetweenConfigAndDoc": "none",
+    "notes": [
+      "CONFIG.json 与 CONFIG.md 需同时读取",
+      "两者是互补关系，不分优先级"
+    ]
+  },
+  "uiSchema": {
+    "version": "1.0",
+    "sections": [
+      {
+        "id": "filename",
+        "title": "文件命名",
+        "description": "控制模板生成时的文件命名规则",
+        "fields": [
+          "filename.emojiPrefixDefault",
+          "filename.allowEmojiPrefix",
+          "filename.exampleSuffixSingle",
+          "filename.exampleSuffixCollection"
+        ]
+      },
+      {
+        "id": "structure",
+        "title": "结构约束",
+        "description": "控制目录结构与中英文同步要求",
+        "fields": [
+          "structure.requireFirstLevelReadme",
+          "structure.recommendFirstLevelInstruction",
+          "structure.syncEnAndZhStructure"
+        ]
+      },
+      {
+        "id": "document_title",
+        "title": "标题生成",
+        "description": "控制文档标题的默认生成方式",
+        "fields": [
+          "document.title.emojiEnabled",
+          "document.title.defaultHeadingLevel"
+        ]
+      },
+      {
+        "id": "connections",
+        "title": "Connections 规则",
+        "description": "控制关系数据索引与详情文件规范",
+        "fields": [
+          "connections.requireRootCsv",
+          "connections.rootCsvName",
+          "connections.examplesCsvName",
+          "connections.onePersonOneMarkdown"
+        ]
+      },
+      {
+        "id": "profile",
+        "title": "Profile 最小集",
+        "description": "定义 Profile 的核心文件集合",
+        "fields": [
+          "profile.minimalFiles"
+        ]
+      }
+    ]
+  },
+  "keySpecs": {
+    "filename.emojiPrefixDefault": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "文件名默认 emoji 前缀",
+      "description": "新建文件时是否默认以 emoji 开头"
+    },
+    "filename.allowEmojiPrefix": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "允许 emoji 前缀",
+      "description": "是否允许文件名包含 emoji 前缀"
+    },
+    "filename.exampleSuffixSingle": {
+      "type": "string",
+      "control": "text",
+      "label": "单文件示例后缀",
+      "description": "单个示例文件命名后缀，默认 _example"
+    },
+    "filename.exampleSuffixCollection": {
+      "type": "string",
+      "control": "text",
+      "label": "示例集合后缀",
+      "description": "示例目录命名后缀，默认 _examples"
+    },
+    "structure.requireFirstLevelReadme": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "一级目录必须有 README",
+      "description": "项目根目录下每个一级目录都需包含 README.md"
+    },
+    "structure.recommendFirstLevelInstruction": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "建议一级目录有 INSTRUCTION",
+      "description": "是否建议一级目录提供局部规则文件"
+    },
+    "structure.syncEnAndZhStructure": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "中英文结构同构",
+      "description": "要求 template/en 与 template/zh 目录结构一致"
+    },
+    "document.title.emojiEnabled": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "标题允许 emoji",
+      "description": "生成标题时是否默认允许 emoji"
+    },
+    "document.title.defaultHeadingLevel": {
+      "type": "integer",
+      "control": "number",
+      "label": "默认标题层级",
+      "description": "生成文档标题时的默认 Markdown 标题层级",
+      "constraints": {
+        "min": 1,
+        "max": 6
+      }
+    },
+    "connections.requireRootCsv": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Connections 需要根 CSV",
+      "description": "Connections 根目录必须维护索引 CSV"
+    },
+    "connections.rootCsvName": {
+      "type": "string",
+      "control": "text",
+      "label": "正式索引 CSV 名称",
+      "description": "Connections 正式索引 CSV 文件名"
+    },
+    "connections.examplesCsvName": {
+      "type": "string",
+      "control": "text",
+      "label": "示例索引 CSV 名称",
+      "description": "Connections 示例索引 CSV 文件名"
+    },
+    "connections.onePersonOneMarkdown": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "一人一份 Markdown",
+      "description": "每个人必须对应一个独立详情 Markdown 文件"
+    },
+    "profile.minimalFiles": {
+      "type": "array<string>",
+      "control": "tag-list",
+      "label": "Profile 最小文件集",
+      "description": "Profile 目录建议保留的核心文件列表"
+    }
+  }
+}

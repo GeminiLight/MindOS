@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Edit3, Save, X, Loader2, LayoutTemplate } from 'lucide-react';
 import MarkdownView from '@/components/MarkdownView';
 import CsvView from '@/components/CsvView';
@@ -9,6 +10,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import TableOfContents from '@/components/TableOfContents';
 import { resolveRenderer, loadDisabledState } from '@/lib/renderers/registry';
+import { encodePath } from '@/lib/utils';
 import '@/lib/renderers/index'; // registers all renderers
 
 interface ViewPageClientProps {
@@ -18,6 +20,9 @@ interface ViewPageClientProps {
   saveAction: (content: string) => Promise<void>;
   appendRowAction?: (newRow: string[]) => Promise<{ newContent: string }>;
   initialEditing?: boolean;
+  isDraft?: boolean;
+  draftDirectories?: string[];
+  createDraftAction?: (targetPath: string, content: string) => Promise<void>;
 }
 
 export default function ViewPageClient({
@@ -27,47 +32,43 @@ export default function ViewPageClient({
   saveAction,
   appendRowAction,
   initialEditing = false,
+  isDraft = false,
+  draftDirectories = [],
+  createDraftAction,
 }: ViewPageClientProps) {
+  const router = useRouter();
   const [editing, setEditing] = useState(initialEditing || content === '');
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [useRaw, setUseRaw] = useState(true); // Default to true, will be overridden by useEffect
-  const [rendererKey, setRendererKey] = useState(0);
-  const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
-
-  // Load persistent renderer preference
-  useEffect(() => {
+  const [useRaw, setUseRaw] = useState(() => {
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('mindos-use-raw');
-    if (saved !== null) {
-      setUseRaw(saved === 'true');
-    } else {
-      // Default: if it's an .md file, maybe we want the graph by default?
-      // But user said "Wiki Graph是否开启的状态应该是全局的", 
-      // let's default to false (show graph) if not set, to be "Agentic"
-      setUseRaw(false);
-    }
-  }, []);
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
+  const [renderersLoaded] = useState(() => {
+    if (typeof window !== 'undefined') loadDisabledState();
+    return true;
+  });
+
+  const inferredName = filePath.split('/').pop() || 'Untitled.md';
+  const [showSaveAs, setShowSaveAs] = useState(isDraft);
+  const [saveDir, setSaveDir] = useState('');
+  const [saveName, setSaveName] = useState(inferredName);
 
   const handleToggleRaw = useCallback(() => {
-    setUseRaw(prev => {
+    setUseRaw((prev) => {
       const next = !prev;
       localStorage.setItem('mindos-use-raw', String(next));
       return next;
     });
   }, []);
 
-  // Load disabled state from localStorage on mount
-  useEffect(() => {
-    loadDisabledState();
-    setRendererKey(k => k + 1); // re-resolve renderer after load
-  }, []);
-
   const renderer = resolveRenderer(filePath, extension);
-  // rendererKey forces re-evaluation after disabled state loads from localStorage
-  void rendererKey;
+  void renderersLoaded;
   const isCsv = extension === 'csv';
   const showRenderer = !editing && !useRaw && !!renderer;
 
@@ -79,18 +80,58 @@ export default function ViewPageClient({
   }, [savedContent]);
 
   const handleCancel = useCallback(() => {
+    if (isDraft) {
+      router.push('/');
+      return;
+    }
     setEditing(false);
     setSaveError(null);
-  }, []);
+  }, [isDraft, router]);
+
+  const handleConfirmDraftSave = useCallback(() => {
+    const trimmed = saveName.trim();
+    if (!trimmed) {
+      setSaveError('Please enter a file name');
+      return;
+    }
+    if (!createDraftAction) {
+      setSaveError('Draft save is not available');
+      return;
+    }
+
+    const finalName = trimmed.endsWith('.md') || trimmed.endsWith('.csv') ? trimmed : `${trimmed}.md`;
+    const targetPath = saveDir ? `${saveDir}/${finalName}` : finalName;
+
+    setSaveError(null);
+    startTransition(async () => {
+      try {
+        await createDraftAction(targetPath, editContent);
+        setSavedContent(editContent);
+        setEditing(false);
+        setShowSaveAs(false);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2500);
+        router.push(`/view/${encodePath(targetPath)}`);
+        router.refresh();
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'Failed to save');
+      }
+    });
+  }, [saveName, createDraftAction, saveDir, editContent, router]);
 
   const handleSave = useCallback(() => {
     if (isCsv) {
-      // CSV cells are written on each change; Save just exits editing mode
       setEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
       return;
     }
+
+    if (isDraft) {
+      setShowSaveAs(true);
+      return;
+    }
+
     setSaveError(null);
     startTransition(async () => {
       try {
@@ -103,7 +144,7 @@ export default function ViewPageClient({
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, saveAction, editContent]);
+  }, [isCsv, isDraft, saveAction, editContent]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
@@ -147,12 +188,12 @@ export default function ViewPageClient({
             )}
 
             {/* Renderer toggle — only shown when a custom renderer exists */}
-            {renderer && !editing && (
+            {renderer && !editing && !isDraft && (
               <button
                 onClick={handleToggleRaw}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{
-                  background: useRaw ? 'var(--muted)' : 'var(--amber)' + '22',
+                  background: useRaw ? 'var(--muted)' : `${'var(--amber)'}22`,
                   color: useRaw ? 'var(--muted-foreground)' : 'var(--amber)',
                   fontFamily: "'IBM Plex Mono', monospace",
                 }}
@@ -163,13 +204,13 @@ export default function ViewPageClient({
               </button>
             )}
 
-            {!editing && !showRenderer && (
+            {!editing && !showRenderer && !isDraft && (
               <button
                 onClick={handleEdit}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--foreground)'; e.currentTarget.style.background = 'var(--accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'var(--muted)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)'; e.currentTarget.style.background = 'var(--accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'var(--muted)'; }}
               >
                 <Edit3 size={13} />
                 <span className="hidden sm:inline">Edit</span>
@@ -182,14 +223,14 @@ export default function ViewPageClient({
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
                   style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--muted)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
                 >
                   <X size={13} />
                   <span className="hidden sm:inline">Cancel</span>
                 </button>
                 <button
-                  onClick={handleSave}
+                  onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
                   style={{ background: 'var(--amber)', color: '#131210', fontFamily: "'IBM Plex Mono', monospace" }}
@@ -207,6 +248,33 @@ export default function ViewPageClient({
       <div className="flex-1 px-6 py-8">
         {editing ? (
           <div className="content-width xl:mr-[220px]">
+            {isDraft && showSaveAs && (
+              <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col md:flex-row md:items-end gap-2">
+                <div className="flex-1 min-w-[180px]">
+                  <label className="text-xs text-muted-foreground">Directory</label>
+                  <select
+                    value={saveDir}
+                    onChange={(e) => setSaveDir(e.target.value)}
+                    className="mt-1 w-full px-2 py-1.5 text-sm bg-background border border-border rounded text-foreground"
+                  >
+                    <option value="">/</option>
+                    {draftDirectories.map((dir) => (
+                      <option key={dir} value={dir}>{dir}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-muted-foreground">File name</label>
+                  <input
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
+                    className="mt-1 w-full px-2 py-1.5 text-sm bg-background border border-border rounded text-foreground"
+                    placeholder="Untitled.md"
+                  />
+                </div>
+              </div>
+            )}
             {isCsv ? (
               <CsvView
                 content={editContent}

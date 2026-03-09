@@ -1,11 +1,23 @@
 import { notFound } from 'next/navigation';
-import { getFileContent, saveFileContent, isDirectory, getDirEntries } from '@/lib/fs';
+import { getFileContent, saveFileContent, isDirectory, getDirEntries, createFile, getFileTree } from '@/lib/fs';
+import type { FileNode } from '@/lib/types';
 import ViewPageClient from './ViewPageClient';
 import DirView from '@/components/DirView';
 import Papa from 'papaparse';
 
 interface PageProps {
   params: Promise<{ path: string[] }>;
+}
+
+function collectDirectories(nodes: FileNode[]): string[] {
+  const dirs: string[] = [];
+  for (const n of nodes) {
+    if (n.type === 'directory') {
+      dirs.push(n.path);
+      if (n.children) dirs.push(...collectDirectories(n.children));
+    }
+  }
+  return dirs;
 }
 
 export default async function ViewPage({ params }: PageProps) {
@@ -16,13 +28,6 @@ export default async function ViewPage({ params }: PageProps) {
   if (isDirectory(filePath)) {
     const entries = getDirEntries(filePath);
     return <DirView dirPath={filePath} entries={entries} />;
-  }
-
-  let content: string;
-  try {
-    content = getFileContent(filePath);
-  } catch {
-    notFound();
   }
 
   const extension = filePath.split('.').pop()?.toLowerCase() || '';
@@ -43,15 +48,46 @@ export default async function ViewPage({ params }: PageProps) {
     return { newContent };
   }
 
+  async function createDraftAction(targetPath: string, draftContent: string) {
+    'use server';
+    createFile(targetPath, draftContent);
+  }
+
+  let content = '';
+  let exists = true;
+  try {
+    content = getFileContent(filePath);
+  } catch {
+    exists = false;
+  }
+
+  if (!exists) {
+    // Special draft entry used by homepage "New Notes"
+    if (filePath === 'Untitled.md') {
+      const draftDirectories = collectDirectories(getFileTree());
+      return (
+        <ViewPageClient
+          filePath={filePath}
+          content=""
+          extension="md"
+          saveAction={saveAction}
+          initialEditing
+          isDraft
+          draftDirectories={draftDirectories}
+          createDraftAction={createDraftAction}
+        />
+      );
+    }
+    notFound();
+  }
+
   return (
     <ViewPageClient
       filePath={filePath}
-      content={content!}
+      content={content}
       extension={extension}
       saveAction={saveAction}
       appendRowAction={extension === 'csv' ? appendRowAction : undefined}
     />
   );
 }
-
-

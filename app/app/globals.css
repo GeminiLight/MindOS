@@ -144,7 +144,7 @@ body {
 }
 
 .prose {
-  font-family: 'Lora', Georgia, serif;
+  font-family: var(--prose-font-override, 'Lora', Georgia, serif);
   color: var(--prose-body);
   line-height: 1.85;
   font-size: 1rem;

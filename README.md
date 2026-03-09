@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -72,15 +73,14 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## ⏱️ 30-Second Summary
+## 🚀 Getting Started
 
-> ✅ If you already have an Agent (Claude Code/Cursor/Cline/GitHub Copilot, etc.),
-> you only need two steps:
+> ✅ If you have already set up your local knowledge base, skip installation and environment variable setup.
+> In each Agent client (OpenClaw/Claude Code/Cursor, etc.), you only need two steps:
 > 1) Configure MindOS MCP
 > 2) Install MindOS Skills
 > After that, your Agent can directly read/write your knowledge base and execute SOPs.
 
-## 🚀 Getting Started
 
 ### 1. Install & Run
 
@@ -129,6 +129,13 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 
 Register the MindOS MCP Server in your Agent client:
 
+MindOS now supports two transports:
+
+- `stdio` (default): for local agents that spawn the MCP process directly.
+- `Streamable HTTP`: for remote agents/devices calling over a URL.
+
+**Option A: Local stdio (default)**
+
 ```json
 {
   "mcpServers": {
@@ -138,6 +145,36 @@ Register the MindOS MCP Server in your Agent client:
       "args": ["/path/to/MindOS/mcp/dist/index.js"],
       "env": {
         "MIND_ROOT": "/path/to/MindOS/my-mind"
+      }
+    }
+  }
+}
+```
+
+**Option B: Remote URL (Streamable HTTP)**
+
+Start MCP in HTTP mode on the host machine:
+
+```bash
+cd mcp && npm install && npm run build
+MIND_ROOT=/path/to/MindOS/my-mind \
+MCP_TRANSPORT=http \
+MCP_HOST=0.0.0.0 \
+MCP_PORT=8787 \
+MCP_ENDPOINT=/mcp \
+MCP_API_KEY=your-strong-token \
+npm start
+```
+
+Then configure URL access on another device's Agent client (field names vary by client):
+
+```json
+{
+  "mcpServers": {
+    "mindos-remote": {
+      "url": "http://<server-ip>:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer your-strong-token"
       }
     }
   }
@@ -166,11 +203,20 @@ npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
 
 MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
 
-#### Common Pitfalls
+#### 3.3 Common Pitfalls
 
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
 - `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
+- No `MCP_API_KEY` in HTTP mode: your server is exposed on the network and unsafe.
+- `MCP_HOST=127.0.0.1`: only localhost can access it; other devices cannot connect via URL.
+
+#### 4. Collaboration Loop (Human + Multi-Agent)
+
+1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
+2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
+3. With Skills enabled, those Agents execute workflows and SOP tasks in a guided way.
+4. Execution results are written back to MindOS so humans can audit and refine continuously.
 
 ## ⚙️ How It Works
 

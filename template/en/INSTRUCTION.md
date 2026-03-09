@@ -97,6 +97,17 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 - Root rules win on conflict
 ```
 
+### 3.5 Recommendation for First-Level Directories (Project Root Children)
+
+- First-level directories are direct children of the project root, for example: `Connections/`, `Workflows/`, `Profile/`, `Configurations/`.
+- It is recommended that these first-level directories provide a lightweight `INSTRUCTION.md` by default.
+- A lightweight version should include at least:
+  - Directory goal
+  - Local rules (2-5 items)
+  - Execution order (root rules -> local rules -> README/target files)
+  - Conflict fallback statement (root rules win)
+- If a first-level directory truly has no stable rules, you may skip it temporarily; once repeated constraints appear, add it immediately.
+
 ---
 
 ## 4. Filesystem Rules
@@ -145,4 +156,3 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 - `TODO.md`: pending tasks
 - `CHANGELOG.md`: completed items (reverse chronological)
-

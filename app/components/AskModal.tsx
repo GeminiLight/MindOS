@@ -66,7 +66,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingPhase, setLoadingPhase] = useState<'thinking' | 'streaming'>('thinking');
+  const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming'>('connecting');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
 
   // @-mention state
@@ -162,12 +162,12 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
     if (!text || isLoading) return;
 
     const userMsg: Message = { role: 'user', content: text };
-    const nextMessages = [...messages, userMsg];
-    setMessages(nextMessages);
+    const requestMessages = [...messages, userMsg];
+    setMessages([...requestMessages, { role: 'assistant', content: '' }]);
     setInput('');
     setAttachedFiles([]);
     setIsLoading(true);
-    setLoadingPhase('thinking');
+    setLoadingPhase('connecting');
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -176,7 +176,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages, currentFile, attachedFiles }),
+        body: JSON.stringify({ messages: requestMessages, currentFile, attachedFiles }),
         signal: controller.signal,
       });
 
@@ -195,14 +195,13 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let assistantContent = '';
-
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      setLoadingPhase('thinking');
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        if (chunk && loadingPhase === 'thinking') setLoadingPhase('streaming');
+        if (chunk) setLoadingPhase('streaming');
         assistantContent += chunk;
         setMessages(prev => {
           const updated = [...prev];
@@ -224,19 +223,34 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
-        // Stopped by user — leave partial content as-is
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content.trim()) {
+            updated[lastIdx] = { role: 'assistant', content: `__error__${t.ask.stopped}` };
+          }
+          return updated;
+        });
       } else {
         const errMsg = err instanceof Error ? err.message : 'Something went wrong';
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `__error__${errMsg}`,
-        }]);
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content.trim()) {
+            updated[lastIdx] = { role: 'assistant', content: `__error__${errMsg}` };
+            return updated;
+          }
+          return [...updated, {
+            role: 'assistant',
+            content: `__error__${errMsg}`,
+          }];
+        });
       }
     } finally {
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, messages, isLoading, currentFile, attachedFiles, mentionQuery, loadingPhase, t.ask.errorNoResponse]);
+  }, [input, messages, isLoading, currentFile, attachedFiles, mentionQuery, t.ask.errorNoResponse, t.ask.stopped]);
 
   if (!open) return null;
 
@@ -321,7 +335,11 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                       ? <div className="flex items-center gap-2 py-1">
                           <Loader2 size={14} className="animate-spin" style={{ color: 'var(--amber)' }} />
                           <span className="text-xs text-muted-foreground animate-pulse">
-                            {loadingPhase === 'thinking' ? t.ask.thinking : t.ask.generating}
+                            {loadingPhase === 'connecting'
+                              ? t.ask.connecting
+                              : loadingPhase === 'thinking'
+                                ? t.ask.thinking
+                                : t.ask.generating}
                           </span>
                         </div>
                       : null

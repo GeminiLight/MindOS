@@ -18,9 +18,42 @@ MIND_ROOT=/path/to/your/my-mind npm start
 MIND_ROOT=/path/to/your/my-mind npm run dev
 ```
 
+## Transports
+
+MindOS MCP supports:
+
+- `stdio` (default): local process transport.
+- `Streamable HTTP`: URL-based transport for remote clients.
+
+### Run with stdio (default)
+
+```bash
+MIND_ROOT=/path/to/your/my-mind npm start
+```
+
+### Run with Streamable HTTP
+
+```bash
+MIND_ROOT=/path/to/your/my-mind \
+MCP_TRANSPORT=http \
+MCP_HOST=0.0.0.0 \
+MCP_PORT=8787 \
+MCP_ENDPOINT=/mcp \
+MCP_API_KEY=your-strong-token \
+npm start
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8787/healthz
+```
+
 ## Agent Configuration
 
 Register in your Agent client's MCP config:
+
+### Local stdio
 
 ```json
 {
@@ -31,6 +64,21 @@ Register in your Agent client's MCP config:
       "args": ["/path/to/MindOS/mcp/dist/index.js"],
       "env": {
         "MIND_ROOT": "/path/to/MindOS/my-mind"
+      }
+    }
+  }
+}
+```
+
+### Remote URL (Streamable HTTP)
+
+```json
+{
+  "mcpServers": {
+    "mindos-remote": {
+      "url": "http://<server-ip>:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer your-strong-token"
       }
     }
   }
@@ -72,6 +120,12 @@ claude mcp add mindos -- node /path/to/MindOS/mcp/dist/index.js
 | Variable | Required | Description |
 |:---------|:--------:|:------------|
 | `MIND_ROOT` | Yes | Absolute path to the knowledge base root directory |
+| `MCP_TRANSPORT` | No | `stdio` (default) or `http` (`streamable-http` also accepted) |
+| `MCP_HOST` | No | HTTP bind host (default: `127.0.0.1`) |
+| `MCP_PORT` | No | HTTP bind port (default: `8787`) |
+| `MCP_ENDPOINT` | No | HTTP MCP endpoint path (default: `/mcp`) |
+| `MCP_HTTP_STATEFUL` | No | `true` to enable stateful sessions, default `false` (stateless) |
+| `MCP_API_KEY` | No | Bearer token for HTTP auth. Strongly recommended in remote mode |
 
 ## Tech Stack
 

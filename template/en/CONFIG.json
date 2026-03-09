@@ -1,0 +1,186 @@
+{
+  "schemaVersion": "1.1",
+  "locale": "en",
+  "filename": {
+    "emojiPrefixDefault": true,
+    "allowEmojiPrefix": true,
+    "exampleSuffixSingle": "_example",
+    "exampleSuffixCollection": "_examples"
+  },
+  "structure": {
+    "requireFirstLevelReadme": true,
+    "recommendFirstLevelInstruction": true,
+    "syncEnAndZhStructure": true
+  },
+  "document": {
+    "title": {
+      "emojiEnabled": true,
+      "defaultHeadingLevel": 2
+    }
+  },
+  "connections": {
+    "requireRootCsv": true,
+    "rootCsvName": "Connections.csv",
+    "examplesCsvName": "Connections_examples.csv",
+    "onePersonOneMarkdown": true
+  },
+  "profile": {
+    "minimalFiles": [
+      "👤 Identity.md",
+      "⚙️ Preferences.md",
+      "🎯 Focus.md"
+    ]
+  },
+  "protocol": {
+    "readMode": "config_and_doc",
+    "priorityBetweenConfigAndDoc": "none",
+    "notes": [
+      "CONFIG.json and CONFIG.md must be read together",
+      "They are complementary and have no priority relationship"
+    ]
+  },
+  "uiSchema": {
+    "version": "1.0",
+    "sections": [
+      {
+        "id": "filename",
+        "title": "Filename",
+        "description": "Controls naming behavior for generated files",
+        "fields": [
+          "filename.emojiPrefixDefault",
+          "filename.allowEmojiPrefix",
+          "filename.exampleSuffixSingle",
+          "filename.exampleSuffixCollection"
+        ]
+      },
+      {
+        "id": "structure",
+        "title": "Structure",
+        "description": "Controls directory constraints and locale sync",
+        "fields": [
+          "structure.requireFirstLevelReadme",
+          "structure.recommendFirstLevelInstruction",
+          "structure.syncEnAndZhStructure"
+        ]
+      },
+      {
+        "id": "document_title",
+        "title": "Title Generation",
+        "description": "Controls default generation behavior for document titles",
+        "fields": [
+          "document.title.emojiEnabled",
+          "document.title.defaultHeadingLevel"
+        ]
+      },
+      {
+        "id": "connections",
+        "title": "Connections",
+        "description": "Controls index/detail contract for relationship data",
+        "fields": [
+          "connections.requireRootCsv",
+          "connections.rootCsvName",
+          "connections.examplesCsvName",
+          "connections.onePersonOneMarkdown"
+        ]
+      },
+      {
+        "id": "profile",
+        "title": "Profile Minimal Set",
+        "description": "Defines the core file set for Profile",
+        "fields": [
+          "profile.minimalFiles"
+        ]
+      }
+    ]
+  },
+  "keySpecs": {
+    "filename.emojiPrefixDefault": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Default Emoji Prefix",
+      "description": "Whether newly generated filenames should default to emoji prefix"
+    },
+    "filename.allowEmojiPrefix": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Allow Emoji Prefix",
+      "description": "Whether filenames are allowed to include emoji prefix"
+    },
+    "filename.exampleSuffixSingle": {
+      "type": "string",
+      "control": "text",
+      "label": "Single Example Suffix",
+      "description": "Filename suffix for single example files, default _example"
+    },
+    "filename.exampleSuffixCollection": {
+      "type": "string",
+      "control": "text",
+      "label": "Example Collection Suffix",
+      "description": "Directory suffix for example collections, default _examples"
+    },
+    "structure.requireFirstLevelReadme": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Require First-Level README",
+      "description": "Each first-level directory under root must include README.md"
+    },
+    "structure.recommendFirstLevelInstruction": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Recommend First-Level INSTRUCTION",
+      "description": "Whether first-level directories are recommended to include local INSTRUCTION.md"
+    },
+    "structure.syncEnAndZhStructure": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Sync EN/ZH Structure",
+      "description": "Whether template/en and template/zh structures must stay isomorphic"
+    },
+    "document.title.emojiEnabled": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Emoji in Title",
+      "description": "Whether generated titles allow emoji by default"
+    },
+    "document.title.defaultHeadingLevel": {
+      "type": "integer",
+      "control": "number",
+      "label": "Default Heading Level",
+      "description": "Default Markdown heading level for generated titles",
+      "constraints": {
+        "min": 1,
+        "max": 6
+      }
+    },
+    "connections.requireRootCsv": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "Require Root CSV",
+      "description": "Connections root directory must keep an index CSV"
+    },
+    "connections.rootCsvName": {
+      "type": "string",
+      "control": "text",
+      "label": "Root CSV Name",
+      "description": "Filename of the official Connections index CSV"
+    },
+    "connections.examplesCsvName": {
+      "type": "string",
+      "control": "text",
+      "label": "Examples CSV Name",
+      "description": "Filename of the Connections examples index CSV"
+    },
+    "connections.onePersonOneMarkdown": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "One Person One Markdown",
+      "description": "Each person must map to an individual markdown detail file"
+    },
+    "profile.minimalFiles": {
+      "type": "array<string>",
+      "control": "tag-list",
+      "label": "Profile Minimal Files",
+      "description": "Core file list recommended for Profile"
+    }
+  }
+}

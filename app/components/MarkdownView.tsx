@@ -57,6 +57,9 @@ const components: Components = {
   h4: makeHeading('h4'),
   h5: makeHeading('h5'),
   h6: makeHeading('h6'),
+  code({ children, ...props }) {
+    return <code {...props} suppressHydrationWarning>{children}</code>;
+  },
   pre({ children, ...props }) {
     // Extract code string from children
     let codeString = '';
@@ -66,7 +69,7 @@ const components: Components = {
     }
     return (
       <div className="relative group">
-        <pre {...props}>{children}</pre>
+        <pre {...props} suppressHydrationWarning>{children}</pre>
         <CopyButton code={codeString} />
       </div>
     );

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
@@ -28,11 +27,10 @@ function getCurrentFilePath(pathname: string): string {
   return encoded.split('/').map(decodeURIComponent).join('/');
 }
 
-function NewFileInline({ dirPath, onDone }: { dirPath: string; onDone: () => void }) {
+function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: number; onDone: () => void }) {
   const [value, setValue] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { t } = useLocale();
 
@@ -52,10 +50,9 @@ function NewFileInline({ dirPath, onDone }: { dirPath: string; onDone: () => voi
   }, [value, dirPath, onDone, router, t]);
 
   return (
-    <div className="px-2 pb-1" style={{ paddingLeft: '20px' }}>
+    <div className="px-2 pb-1" style={{ paddingLeft: `${depth * 12 + 20}px` }}>
       <div className="flex items-center gap-1">
         <input
-          ref={inputRef}
           autoFocus
           type="text"
           value={value}
@@ -88,17 +85,88 @@ function NewFileInline({ dirPath, onDone }: { dirPath: string; onDone: () => voi
   );
 }
 
-// Wrapper to inject t into DirectoryNode and FileNodeItem via props
-// We need to use the hook at top-level components, so we pass t down
-
 function DirectoryNode({ node, depth, currentPath, onNavigate }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
 }) {
+  const router = useRouter();
   const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
   const [open, setOpen] = useState(depth === 0 ? true : isActive);
   const [showNewFile, setShowNewFile] = useState(false);
-  const toggle = useCallback(() => setOpen(v => !v), []);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(node.name);
+  const [isPending, startTransition] = useTransition();
+  const renameRef = useRef<HTMLInputElement>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
+
+  const toggle = useCallback(() => setOpen(v => !v), []);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
+
+  const startRename = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    setRenameValue(node.name);
+    setRenaming(true);
+    setTimeout(() => renameRef.current?.select(), 0);
+  }, [node.name]);
+
+  const commitRename = useCallback(() => {
+    const newName = renameValue.trim();
+    if (!newName || newName === node.name) { setRenaming(false); return; }
+    startTransition(async () => {
+      const result = await renameFileAction(node.path, newName);
+      if (result.success && result.newPath) {
+        setRenaming(false);
+        router.push(`/view/${encodePath(result.newPath)}`);
+        router.refresh();
+      } else {
+        setRenaming(false);
+      }
+    });
+  }, [renameValue, node.name, node.path, router]);
+
+  const handleSingleClick = useCallback(() => {
+    if (renaming) return;
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => {
+      router.push(`/view/${encodePath(node.path)}`);
+      onNavigate?.();
+      clickTimerRef.current = null;
+    }, 180);
+  }, [renaming, router, node.path, onNavigate]);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    startRename(e);
+  }, [startRename]);
+
+  if (renaming) {
+    return (
+      <div className="relative px-2 py-0.5" style={{ paddingLeft: `${depth * 12 + 8}px` }}>
+        <input
+          ref={renameRef}
+          autoFocus
+          value={renameValue}
+          onChange={e => setRenameValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitRename();
+            if (e.key === 'Escape') setRenaming(false);
+          }}
+          onBlur={commitRename}
+          className="w-full bg-muted border border-blue-500/60 rounded px-2 py-0.5 text-xs text-foreground focus:outline-none"
+        />
+        {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -113,11 +181,12 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
             <ChevronDown size={13} />
           </span>
         </button>
-        <Link
-          href={`/view/${encodePath(node.path)}`}
-          onClick={onNavigate}
+        <button
+          type="button"
+          onClick={handleSingleClick}
+          onDoubleClick={handleDoubleClick}
           className={`
-            flex-1 flex items-center gap-1.5 px-1 py-1 rounded text-left min-w-0
+            flex-1 flex items-center gap-1.5 px-1 py-1 rounded text-left min-w-0 pr-16
             text-sm transition-colors duration-100
             hover:bg-muted
             ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
@@ -128,20 +197,30 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
             : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
-        </Link>
-        <button
-          onClick={(e) => { e.stopPropagation(); setOpen(true); setShowNewFile(true); }}
-          className="
-            absolute right-1 top-1/2 -translate-y-1/2
-            p-0.5 rounded
-            opacity-0 group-hover/dir:opacity-100
-            text-muted-foreground hover:text-foreground hover:bg-muted
-            transition-all duration-100
-          "
-          title={t.fileTree.newFileTitle}
-        >
-          <Plus size={13} />
         </button>
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(true);
+              setShowNewFile(true);
+            }}
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={t.fileTree.newFileTitle}
+          >
+            <Plus size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={startRename}
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={t.fileTree.rename}
+          >
+            <Pencil size={12} />
+          </button>
+        </div>
       </div>
 
       <div
@@ -154,6 +233,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
         {showNewFile && (
           <NewFileInline
             dirPath={node.path}
+            depth={depth}
             onDone={() => setShowNewFile(false)}
           />
         )}
@@ -266,7 +346,6 @@ export default function FileTree({ nodes, depth = 0, onNavigate }: FileTreeProps
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
 
-  // Scroll active file into view in the sidebar
   useEffect(() => {
     if (!currentPath || depth !== 0) return;
     const timer = setTimeout(() => {

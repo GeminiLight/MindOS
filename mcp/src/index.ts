@@ -18,7 +18,11 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "child_process";
+import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
@@ -31,6 +35,12 @@ const MIND_ROOT = process.env.MIND_ROOT
 const IGNORED_DIRS = new Set([".git", "node_modules", "app", ".next", ".DS_Store", "mcp"]);
 const ALLOWED_EXTENSIONS = new Set([".md", ".csv"]);
 const CHARACTER_LIMIT = 25_000;
+const MCP_TRANSPORT = (process.env.MCP_TRANSPORT ?? "stdio").toLowerCase();
+const MCP_HOST = process.env.MCP_HOST ?? "127.0.0.1";
+const MCP_PORT = Number(process.env.MCP_PORT ?? 8787);
+const MCP_ENDPOINT = process.env.MCP_ENDPOINT ?? "/mcp";
+const MCP_HTTP_STATEFUL = (process.env.MCP_HTTP_STATEFUL ?? "false").toLowerCase() === "true";
+const MCP_API_KEY = process.env.MCP_API_KEY;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -522,6 +532,7 @@ function logDiff(tool: string, filePath: string, before: string, after: string):
 
 // ─── MCP Server ───────────────────────────────────────────────────────────────
 
+function createMindosServer(): McpServer {
 const server = new McpServer({
   name: "mindos-mcp-server",
   version: "1.0.0",
@@ -1369,12 +1380,151 @@ Examples:
   }
 );
 
+return server;
+}
+
 // ─── Start server ─────────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
+function getAuthToken(authorizationHeader: string | undefined): string | undefined {
+  if (!authorizationHeader) return undefined;
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
+}
+
+function isAuthorized(authorizationHeader: string | undefined): boolean {
+  if (!MCP_API_KEY) return true;
+  return getAuthToken(authorizationHeader) === MCP_API_KEY;
+}
+
+function sendJsonRpcError(
+  res: { status: (code: number) => { json: (payload: unknown) => void } },
+  status: number,
+  code: number,
+  message: string,
+): void {
+  res.status(status).json({
+    jsonrpc: "2.0",
+    error: { code, message },
+    id: null,
+  });
+}
+
+async function startStdioServer(): Promise<void> {
+  const server = createMindosServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write(`MindOS MCP Server running (MIND_ROOT=${MIND_ROOT})\n`);
+  process.stderr.write(`MindOS MCP Server running via stdio (MIND_ROOT=${MIND_ROOT})\n`);
+}
+
+async function startHttpServer(): Promise<void> {
+  if (!Number.isInteger(MCP_PORT) || MCP_PORT <= 0 || MCP_PORT > 65535) {
+    throw new Error(`Invalid MCP_PORT: ${process.env.MCP_PORT}`);
+  }
+
+  const app = createMcpExpressApp({ host: MCP_HOST });
+  const sessions: Record<string, { transport: StreamableHTTPServerTransport; server: McpServer }> = {};
+
+  app.get("/healthz", (_req: any, res: any) => {
+    res.status(200).json({ status: "ok", transport: "streamable-http" });
+  });
+
+  app.all(MCP_ENDPOINT, async (req: any, res: any) => {
+    const authHeader = Array.isArray(req.headers.authorization)
+      ? req.headers.authorization[0]
+      : req.headers.authorization;
+
+    if (!isAuthorized(authHeader)) {
+      sendJsonRpcError(res, 401, -32001, "Unauthorized: invalid MCP_API_KEY bearer token");
+      return;
+    }
+
+    if (!MCP_HTTP_STATEFUL) {
+      const server = createMindosServer();
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+
+      try {
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (err) {
+        process.stderr.write(`HTTP transport error: ${err}\n`);
+        if (!res.headersSent) {
+          sendJsonRpcError(res, 500, -32603, "Internal server error");
+        }
+      } finally {
+        res.on("close", () => {
+          void transport.close();
+          void server.close();
+        });
+      }
+      return;
+    }
+
+    try {
+      const rawSessionId = req.headers["mcp-session-id"];
+      const sessionId = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+      let transport: StreamableHTTPServerTransport | undefined;
+
+      if (sessionId) {
+        transport = sessions[sessionId]?.transport;
+      } else if (req.method === "POST" && isInitializeRequest(req.body)) {
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (newSessionId) => {
+            sessions[newSessionId] = { transport: transport!, server };
+          },
+        });
+
+        transport.onclose = () => {
+          const sid = transport?.sessionId;
+          if (sid) {
+            const session = sessions[sid];
+            if (session) {
+              void session.server.close();
+              delete sessions[sid];
+            }
+          }
+        };
+
+        const server = createMindosServer();
+        await server.connect(transport);
+      }
+
+      if (!transport) {
+        sendJsonRpcError(res, 400, -32000, "Bad Request: No valid session ID provided");
+        return;
+      }
+
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      process.stderr.write(`HTTP transport error: ${err}\n`);
+      if (!res.headersSent) {
+        sendJsonRpcError(res, 500, -32603, "Internal server error");
+      }
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const httpServer = app.listen(MCP_PORT, MCP_HOST, () => resolve());
+    httpServer.on("error", reject);
+  });
+
+  process.stderr.write(
+    `MindOS MCP Server running via Streamable HTTP at http://${MCP_HOST}:${MCP_PORT}${MCP_ENDPOINT} (stateful=${MCP_HTTP_STATEFUL})\n`,
+  );
+}
+
+async function main(): Promise<void> {
+  if (MCP_TRANSPORT === "stdio") {
+    await startStdioServer();
+    return;
+  }
+
+  if (MCP_TRANSPORT === "http" || MCP_TRANSPORT === "streamable-http") {
+    await startHttpServer();
+    return;
+  }
+
+  throw new Error(`Unsupported MCP_TRANSPORT: ${MCP_TRANSPORT}. Use "stdio" or "http".`);
 }
 
 main().catch((err) => {

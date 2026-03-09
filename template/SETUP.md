@@ -1,4 +1,4 @@
-# template/
+# templates/
 
 MindOS 知识库模板，用于初始化你自己的个人知识库。
 
@@ -6,9 +6,9 @@ MindOS 知识库模板，用于初始化你自己的个人知识库。
 
 ```bash
 # 1. 选择一个预设复制到 my-mind/
-cp -r template/zh my-mind/
+cp -r templates/zh my-mind/
 # 或
-# cp -r template/en my-mind/
+# cp -r templates/en my-mind/
 
 # 2. 配置 MIND_ROOT（让 MCP 和 App 指向你的知识库）
 echo "MIND_ROOT=$(pwd)/my-mind" >> app/.env.local

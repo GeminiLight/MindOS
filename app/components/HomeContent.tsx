@@ -51,7 +51,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const lastFile = recent[0];
 
   return (
-    <div className="max-w-[900px] mx-auto px-6 py-12">
+    <div className="content-width px-6 py-12">
       {/* Hero */}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-3">
@@ -64,44 +64,44 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
           {t.app.tagline}
         </p>
 
-        {/* Search bar — dual-mode: Search + Ask AI */}
+        {/* AI-first command bar */}
         <div
-          className="w-full max-w-[520px] flex items-center rounded-xl border transition-all duration-150 hover:border-amber-500/40 group"
+          className="w-full max-w-[620px] flex items-center gap-2"
           style={{
-            background: 'var(--card)',
-            borderColor: 'var(--border)',
             marginLeft: '1rem',
           }}
         >
-          {/* Search area */}
+          {/* Ask AI (primary) */}
           <button
-            onClick={triggerSearch}
-            className="flex-1 flex items-center gap-3 px-4 py-3 cursor-text"
+            onClick={triggerAsk}
+            title="⌘/"
+            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 hover:border-amber-500/50 hover:bg-amber-500/8"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
           >
-            <Search size={16} style={{ color: 'var(--muted-foreground)' }} className="shrink-0 group-hover:text-amber-500 transition-colors" />
-            <span className="text-sm flex-1 text-left" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
-              {t.search.placeholder}
+            <Sparkles size={15} style={{ color: 'var(--amber)' }} className="shrink-0" />
+            <span className="text-sm flex-1 text-left" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              {t.home.shortcuts.askAI}
             </span>
             <kbd
               className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium"
-              style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+              style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}
             >
-              ⌘K
+              ⌘/
             </kbd>
           </button>
 
-          {/* Divider */}
-          <div className="w-px h-5 shrink-0" style={{ background: 'var(--border)' }} />
-
-          {/* Ask AI button */}
+          {/* Search files (secondary) */}
           <button
-            onClick={(e) => { e.stopPropagation(); triggerAsk(); }}
-            title="⌘/"
-            className="flex items-center gap-1.5 px-3 py-3 rounded-r-xl text-sm font-medium transition-colors hover:bg-amber-500/10 shrink-0"
-            style={{ color: 'var(--amber)', fontFamily: "'IBM Plex Sans', sans-serif" }}
+            onClick={triggerSearch}
+            title="⌘K"
+            className="flex items-center gap-2 px-3 py-3 rounded-xl border text-sm transition-colors shrink-0 hover:bg-muted"
+            style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}
           >
-            <Sparkles size={14} />
-            <span className="hidden sm:inline">{t.home.shortcuts.askAI}</span>
+            <Search size={14} />
+            <span className="hidden sm:inline">{t.home.shortcuts.searchFiles}</span>
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono" style={{ background: 'var(--muted)' }}>
+              ⌘K
+            </kbd>
           </button>
         </div>
 
@@ -139,6 +139,42 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
         </div>
 
       </div>
+
+      {/* Plugins — compact 3-column grid */}
+      {renderers.length > 0 && (
+        <section className="mb-12">
+          <div className="flex items-center gap-2 mb-4">
+            <Puzzle size={13} style={{ color: 'var(--amber)' }} />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
+              {t.home.plugins}
+            </h2>
+            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
+              {renderers.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {renderers.map((r) => {
+              const entryPath = deriveEntryPath(r.id);
+              return (
+                <Link
+                  key={r.id}
+                  href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
+                  className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-semibold truncate block" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {r.name}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Recently modified — timeline feed */}
       {recent.length > 0 && (() => {
@@ -214,42 +250,6 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
         </section>
         );
       })()}
-
-      {/* Plugins — compact 3-column grid */}
-      {renderers.length > 0 && (
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <Puzzle size={13} style={{ color: 'var(--amber)' }} />
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
-              {t.home.plugins}
-            </h2>
-            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
-              {renderers.length}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {renderers.map((r) => {
-              const entryPath = deriveEntryPath(r.id);
-              return (
-                <Link
-                  key={r.id}
-                  href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
-                  className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-semibold truncate block" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                      {r.name}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Footer */}
       <div className="mt-16 flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4, fontFamily: "'IBM Plex Mono', monospace" }}>

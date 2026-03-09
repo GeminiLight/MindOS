@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -130,6 +131,13 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 
 将 MindOS MCP Server 注册到你的 Agent 客户端：
 
+本项目现在同时支持两种传输方式：
+
+- `stdio`（默认）：适合本机 Agent 直接调用本地进程。
+- `Streamable HTTP`：适合其他设备通过 URL 远程调用。
+
+**方式 A：本机 stdio（默认）**
+
 ```json
 {
   "mcpServers": {
@@ -139,6 +147,36 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
       "args": ["/path/to/MindOS/mcp/dist/index.js"],
       "env": {
         "MIND_ROOT": "/path/to/MindOS/my-mind"
+      }
+    }
+  }
+}
+```
+
+**方式 B：远程 URL（Streamable HTTP）**
+
+先在运行 MCP 的机器上用 HTTP 模式启动：
+
+```bash
+cd mcp && npm install && npm run build
+MIND_ROOT=/path/to/MindOS/my-mind \
+MCP_TRANSPORT=http \
+MCP_HOST=0.0.0.0 \
+MCP_PORT=8787 \
+MCP_ENDPOINT=/mcp \
+MCP_API_KEY=your-strong-token \
+npm start
+```
+
+然后在其他设备的 Agent 客户端里配置 URL（字段名因客户端不同可能略有差异）：
+
+```json
+{
+  "mcpServers": {
+    "mindos-remote": {
+      "url": "http://<服务器IP>:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer your-strong-token"
       }
     }
   }
@@ -167,11 +205,20 @@ npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
 
 MCP = 连接能力，Skills = 工作流能力；两者都开启后体验完整。
 
-#### 常见误区
+#### 3.3 常见误区
 
 - 只配 MCP，不装 Skills：能调用工具，但缺少最佳实践指引。
 - 只装 Skills，不配 MCP：有流程提示，但无法操作本地知识库。
 - `MIND_ROOT` 不是绝对路径：MCP 工具调用会失败。
+- HTTP 远程模式未设置 `MCP_API_KEY`：服务会暴露在网络上，存在高风险。
+- `MCP_HOST=127.0.0.1`：只允许本机访问，其他设备无法通过 URL 连接。
+
+#### 4. 协作闭环（人类 + 多 Agent）
+
+1. 人类在 MindOS GUI 中审阅并更新笔记/SOP（单一事实来源）。
+2. 其他 Agent 客户端（OpenClaw、Claude Code、Cursor 等）通过 MCP 读取同一份记忆与上下文。
+3. 启用 Skills 后，Agent 按工作流指引执行任务与 SOP。
+4. 执行结果回写到 MindOS，供人类持续审查与迭代。
 
 ## ⚙️ 运作机制
 
