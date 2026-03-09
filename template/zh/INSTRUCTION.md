@@ -44,7 +44,7 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 ### 2.3 README.md 规范
 
-每个一级子目录（如 `Profile/`、`Configurations/`、`Workflows/`）应包含 `README.md`，固定包含：
+每个一级子目录（如 `👤 画像/`、`🔗 关系/`、`🔄 流程/`）应包含 `README.md`，固定包含：
 
 1. **一句话说明**（目录职责）
 2. **📁 目录结构**（文件树 + 注释）
@@ -100,7 +100,7 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 ### 3.5 一级目录建议（项目根目录的子目录）
 
-- 一级目录指项目根目录下的直接子目录，例如：`Connections/`、`Workflows/`、`Profile/`、`Configurations/`。
+- 一级目录指项目根目录下的直接子目录，例如：`🔗 关系/`、`🔄 流程/`、`👤 画像/`、`🚀 项目/`。
 - 建议这些一级目录默认提供一个轻量 `INSTRUCTION.md`。
 - 轻量版至少包含：
   - 本目录目标
@@ -117,12 +117,13 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 - 文档：`.md`
 - 数据：`.csv`
+- 配置：`.json`
 
 ### 4.2 命名规则
 
 - 内容文件：可用 `emoji + 名称`
-- 目录名：英文，首字母大写
-- 系统文件：`README.md`、`INSTRUCTION.md`、`TODO.md`、`CHANGELOG.md`
+- 目录名：按 `languagePreference.folderNamingLanguage` 生成；中文模板默认中文，英文模板默认英文。
+- 系统文件：`README.md`、`INSTRUCTION.md`、`TODO.md`、`CHANGELOG.md`、`CONFIG.json`、`CONFIG.md`
 
 ### 4.3 读写前置
 

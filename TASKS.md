@@ -1,6 +1,13 @@
 template重命名为templates
 
+- 历史对话的问题。
+
+1. 优化模版
+
 1. 优化Skill
+
+1. 加上Agent沉淀到笔记。
+
 2. 开放MCP公开API
 
 n. 优化REAMDE.md
@@ -10,11 +17,11 @@ n. 优化REAMDE.md
 n. 文件改动版本历史
 通过git管理？如何记录agent操作历史？
 
+Landing Page
+1. 移动端Landing页面Topbar显示问题
+创造者故事
 
-- Settings页面下的Apperance下的Content width，点了其他按钮没反应，内容长度不变
 - 前端密码验证
-
-
 
 首页下
 - search files应当和Ask AI调换位置和大小来显示AI-nature的特性

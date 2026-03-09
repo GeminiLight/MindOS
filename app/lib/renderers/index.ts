@@ -4,6 +4,7 @@ import { CsvRenderer } from '@/components/renderers/CsvRenderer';
 import { GraphRenderer } from '@/components/renderers/GraphRenderer';
 import { TimelineRenderer } from '@/components/renderers/TimelineRenderer';
 import { SummaryRenderer } from '@/components/renderers/SummaryRenderer';
+import { ConfigRenderer } from '@/components/renderers/ConfigRenderer';
 
 registerRenderer({
   id: 'todo',
@@ -27,6 +28,18 @@ registerRenderer({
   builtin: true,
   match: ({ extension, filePath }) => extension === 'csv' && !/\bTODO\b/i.test(filePath),
   component: CsvRenderer,
+});
+
+registerRenderer({
+  id: 'config-panel',
+  name: 'Config Panel',
+  description: 'Renders CONFIG.json as an editable control panel based on uiSchema/keySpecs. Changes are written back to the JSON file directly.',
+  author: 'MindOS',
+  icon: '🧩',
+  tags: ['config', 'json', 'settings', 'schema'],
+  builtin: true,
+  match: ({ filePath, extension }) => extension === 'json' && /(^|\/)CONFIG\.json$/i.test(filePath),
+  component: ConfigRenderer,
 });
 
 registerRenderer({

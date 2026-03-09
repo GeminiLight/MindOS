@@ -1,296 +1,206 @@
 ---
 name: mindos
 description: >
-  MindOS knowledge base operation guide. Use this Skill whenever interacting with
-  the MindOS knowledge base — reading/writing notes, searching files, managing SOPs,
-  maintaining Profiles, operating CSV data tables, executing workflows, or reviewing
-  Agent outputs. Trigger when the user mentions "knowledge base", "notes", "MindOS",
-  "my files", "SOP", "Profile", "jot this down", "organize my notes",
-  "update the knowledge base", "search my notes", or any operation involving the
-  my-mind/ directory. Even if the user doesn't explicitly mention MindOS, proactively
-  use this Skill whenever the task involves personal knowledge management, file
-  organization, workflow execution, or Agent collaboration context.
+  MindOS knowledge base operation guide for agent tasks on local markdown/csv knowledge bases.
+  Use proactively whenever work touches note files, SOP/workflow docs, profile/context docs,
+  CSV tables, knowledge-base organization, cross-agent handoff, or decision sync through MindOS MCP tools.
+  Trigger on requests like "update notes", "search knowledge base", "organize files", "execute SOP",
+  "review with our standards", "handoff to another agent", "sync decisions", "append CSV",
+  "retrospective", "distill this conversation", "capture key learnings", "update related docs adaptively",
+  and generally any local knowledge-maintenance workflow even if the user does not explicitly mention MindOS.
 ---
 
 # MindOS Knowledge Base Operation Guide
 
-MindOS is a **Human-AI Collaborative Mind System** — a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by AI Agents.
+Use this skill to operate safely and consistently in a MindOS-style local knowledge base.
 
-This Skill defines the complete protocol for you (the Agent) to operate within a MindOS knowledge base.
+## Core Principles
 
----
+- Treat repository state as source of truth.
+- Read before write.
+- Prefer minimal, precise edits.
+- Keep changes auditable and easy to review.
 
-## Core Philosophy
+## Startup Protocol
 
-**Human Thinks Here, Agent Acts There.**
+Run this sequence before substantive edits:
 
-Three pillars:
-1. **Global Mind Sync** — Record once, reuse everywhere. Via MCP, any Agent connects zero-config to your Profile, SOPs, and experiences.
-2. **Transparent & Controllable** — Every Agent retrieval, reflection, and action is distilled into local plain text. Humans hold absolute audit and correction rights.
-3. **Symbiotic Evolution** — The Prompt-Driven recording paradigm turns everyday notes into Agent execution instructions. Humans and AI co-evolve in a single Shared Mind.
+1. Load root guidance.
+- Prefer `mindos_bootstrap`.
+- If unavailable, read root `INSTRUCTION.md` and root `README.md` directly.
 
-> **Foundation: Local-first.** All data stored locally as Markdown/CSV plain text — zero privacy concerns.
+2. Discover current structure dynamically.
+- Use `mindos_list_files` and targeted `mindos_search_notes`.
+- Do not assume fixed top-level directory names.
 
----
+3. Load local guidance around target paths.
+- Read nearby `README.md` / `INSTRUCTION.md` when present.
+- Follow local conventions over global assumptions.
 
-## Bootstrap Protocol
+4. Execute edits.
 
-When entering the knowledge base, load context in this order:
+If required context is missing, continue with best effort and state assumptions explicitly.
 
-1. **Read `INSTRUCTION.md`** — System rules (MUST)
-2. **Read `README.md`** — Directory index and responsibility map (MUST)
-3. Route to the target directory based on task type, read its `README.md` (SHOULD)
-4. If the target directory has an `INSTRUCTION.md`, read its local rules (SHOULD)
-5. Begin execution
+## Dynamic Structure Rules
 
-Steps 1-2 are non-negotiable. Blind execution without context leads to rule violations.
+- Do not hardcode a canonical directory tree.
+- Infer conventions from neighboring files before creating or rewriting content.
+- Mirror existing local patterns for naming, heading structure, CSV schema, and references.
+- For new files, follow sibling style rather than inventing a new standard.
 
----
+## Pre-Write Checklist
 
-## Knowledge Base Structure
+Before any non-trivial write, confirm all checks:
 
-```
-my-mind/
-├── INSTRUCTION.md          # System rules (source of truth)
-├── README.md               # Root index — directory structure & responsibilities
-├── TODO.md                 # Pending tasks (single source)
-├── CHANGELOG.md            # Completed items (reverse chronological)
-├── Profile/                # Identity, preferences, style, goals, connections
-├── Configurations/         # Agent tool configs (MCP, Skills, Claude Code, etc.)
-├── Workflows/              # SOPs & workflows (directly executable instruction docs)
-├── Projects/               # Product projects (proposals, PRDs, competitive analysis)
-├── Resources/              # Product library, AI Scholars, GitHub Projects
-├── Research/               # Research materials & notes
-└── Reference/              # Reference docs & templates
-```
+1. Target file/path is confirmed and exists or should be created.
+2. Current content has been read, or absence is explicitly confirmed.
+3. Local governance docs near the target path are considered.
+4. Edit scope is minimal and aligned with user intent.
+5. Reference/backlink impact is evaluated for path changes.
 
----
+## Tool Selection Guide
 
-## Available Toolset (20 MCP Tools)
+### Discovery
 
-Use these tools to operate on the knowledge base:
+- `mindos_bootstrap`: Load startup context.
+- `mindos_list_files`: Inspect file tree.
+- `mindos_search_notes`: Locate relevant files by keyword/scope/type/date.
+- `mindos_get_recent`: Inspect latest activity.
+- `mindos_get_backlinks`: Assess impact before rename/move/delete.
 
-### File Operations
+### Read and write
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_list_files` | File tree | Understand the full knowledge base, locate files |
-| `mindos_read_file` | Read file (paginated) | Read any .md/.csv file |
-| `mindos_write_file` | Overwrite file | Major rewrites (protected files blocked) |
-| `mindos_create_file` | Create new file | New .md or .csv files |
-| `mindos_delete_file` | Delete file | Remove unneeded files (protected files blocked) |
-| `mindos_rename_file` | Rename file | In-place rename |
-| `mindos_move_file` | Move file | Move file and report affected backlinks |
+- `mindos_read_file`: Read file content.
+- `mindos_write_file`: Use only for true full replacement.
+- `mindos_create_file`: Create `.md`/`.csv` files.
+- `mindos_delete_file`: Delete only with explicit user intent.
+- `mindos_rename_file`, `mindos_move_file`: Structural edits with follow-up reference checks.
 
-### Search & Discovery
+### Precise editing
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_search_notes` | Full-text search | Filter by keyword, scope, type, date |
-| `mindos_get_recent` | Recently modified | Understand recent work state |
-| `mindos_get_backlinks` | Backlinks | Find all files referencing a given file |
+- `mindos_read_lines`: Locate exact lines.
+- `mindos_insert_lines`: Insert at index.
+- `mindos_update_lines`: Replace specific range.
+- `mindos_append_to_file`: Append to end.
+- `mindos_insert_after_heading`: Insert under heading.
+- `mindos_update_section`: Replace one markdown section.
 
-### Version History
+### History and tables
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_get_history` | Git commit history | View a file's modification trail |
-| `mindos_get_file_at_version` | Read historical version | Roll back to a specific Git commit |
+- `mindos_get_history`, `mindos_get_file_at_version`: Investigate/recover history.
+- `mindos_append_csv`: Append validated row after header check.
 
-### Precise Editing
+## Fallback Rules
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_read_lines` | Read by line number | Locate exact lines before editing |
-| `mindos_insert_lines` | Insert lines | Add content at a specific position |
-| `mindos_update_lines` | Replace line range | Precisely replace specific lines |
-| `mindos_append_to_file` | Append content | Add content to end of file |
-| `mindos_insert_after_heading` | Insert after heading | Add content below a Markdown heading |
-| `mindos_update_section` | Replace section | Replace an entire Markdown section |
+- If some `mindos_*` tools are unavailable, use equivalent available tools while preserving the same safety discipline.
+- If `mindos_bootstrap` is unavailable, do manual startup reads.
+- If line/section edit tools are unavailable, emulate minimal edits through read plus constrained rewrite.
 
-### Data Table Operations
+## Execution Patterns
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_append_csv` | Append CSV row | Add a new record to a data table |
+### Capture or update notes
 
-### Bootstrap Context
+1. Search existing docs.
+2. Read target docs and local rules.
+3. Apply minimal edit.
+4. Keep references consistent when paths change.
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `mindos_bootstrap` | Load startup context | Read INSTRUCTION.md + README.md in one call |
+### Distill cross-agent discussion
 
----
+1. Ask user to confirm key decisions and conclusions.
+2. Locate destination docs.
+3. Structure content as problem, decision, rationale, caveats, next actions.
+4. Write back with minimal invasive edits.
 
-## Operating Rules
+Never imply access to private history from other agent sessions.
 
-### Read-Before-Write Discipline
+### Conversation retrospective and adaptive updates
 
-- **You MUST read before writing.** Never overwrite content based on assumptions. This is a hard rule.
-- Read CSV headers before appending to ensure field alignment.
-- Prefer precise editing tools (`insert_lines`, `update_section`) over unnecessary full-file overwrites.
+1. Ask the user to confirm retrospective objective and scope for this conversation.
+2. Extract reusable artifacts: decisions, rationale, pitfalls, unresolved questions, and next actions.
+3. Route each artifact to the most appropriate existing file by searching and reading candidate docs.
+4. If a matching file exists, update minimally at section/line level; if not, create a well-scoped new file near related docs.
+5. Keep references/backlinks consistent and add a short trace note of what changed and why.
+6. If confidence in file routing is low, present 1-2 candidate destinations and ask user to choose before writing.
 
-### File Naming
+### Execute or update workflow/SOP docs
 
-| Type | Convention | Example |
-|------|-----------|---------|
-| Content files | emoji + Chinese name, English proper nouns kept | `👤 Identity.md` |
-| Directories | English, capitalized | `Workflows/` |
-| System files | ALL-CAPS English, no emoji | `README.md`, `TODO.md` |
+1. Read workflow doc fully.
+2. Execute stepwise and record outcomes.
+3. If outdated, update only affected section and include rationale.
 
-### References & Sync
+### CSV operations
 
-Files reference each other via relative paths:
-```markdown
-See `Profile/👤 Identity.md`
-Details in `Workflows/Research/README.md`
-```
+1. Read header.
+2. Validate field order, count, and type.
+3. Append one row.
 
-**Must-sync operations** (structural changes):
-- Add/delete/rename a top-level subdirectory → Update root `README.md`
-- Delete/rename a file → Update all `README.md` files that reference it
+### Information collection and outreach
 
-**Should-sync operations** (content changes):
-- Add a new file → Update the parent directory's `README.md`
+1. Locate authoritative contact/list sources.
+2. Read relevant outreach/execution workflow docs.
+3. Generate personalized outputs per target using profile tags, domain, and tone.
+4. Write outcomes and next actions back for traceability.
 
-### TODO & CHANGELOG
+### Project bootstrap with personal/team standards
 
-- `TODO.md`: Single source for pending tasks. Format: `- [ ] task description`
-- `CHANGELOG.md`: Completed items in reverse chronological order. Migrate done items from TODO to CHANGELOG.
+1. Read preference/context docs such as stack, style, and constraints.
+2. Read startup/engineering workflow docs.
+3. Produce initial scaffold/configuration aligned with those standards.
+4. Record key decisions and setup status for future handoff.
 
-### Safety Boundaries
+### Standards-aligned code review
 
-- Never delete files the user hasn't explicitly specified
-- Never store secrets, tokens, or passwords in the knowledge base
-- Confirm with the user before modifying `INSTRUCTION.md`
-- Confirm before bulk deletions or directory restructuring
+1. Read applicable review and engineering standards.
+2. Review naming, error handling, performance, security, and maintainability.
+3. Output actionable findings with concrete file-level suggestions.
+4. Keep tone and structure consistent with team review style.
 
----
+### Cross-agent handoff continuity
 
-## Common Task Patterns
+1. Treat the shared knowledge base as handoff contract.
+2. Before continuing work, read task state, decisions, and pending items.
+3. Continue without re-discovery and preserve conventions/rationale.
+4. Write back progress so later sessions can resume immediately.
 
-### Post-Conversation Knowledge Distillation
+### Relationship and follow-up management
 
-This is one of MindOS's most critical use cases. After a long conversation in another Agent (Cursor, Claude Desktop, Copilot, etc.), the user wants to distill insights back into the knowledge base. The key: don't just "record the conversation" — **extract, structure, and file it properly**.
+1. Extract factual updates, intent, and sentiment from user-provided conversation notes.
+2. Update relationship/contact records in structured form.
+3. Generate next-step strategy, todo items, and suggested follow-up timing.
+4. Store updates in reusable format for future session continuity.
 
-**Scenario A: Summarize Learnings / Document Pitfalls**
+## Safety Rules
 
-User says something like "just spent two hours debugging, save my learnings" or "store this solution":
+- By default, treat root `INSTRUCTION.md`, root `README.md`, and any directory-level `INSTRUCTION.md` governance docs as high-sensitivity; ask for confirmation before modifying them.
+- Ask before editing high-sensitivity governance files.
+- Ask before high-impact actions.
+- High-impact actions include bulk deletion, large-scale rename/move, broad directory restructuring, and cross-file mass rewrites.
+- Never store secrets, tokens, or passwords.
+- Never delete or rewrite outside user intent.
 
-```
-1. Ask the user to confirm the core content (key decisions, solutions, pitfalls)
-2. mindos_search_notes — Check if related notes already exist
-3. If found → mindos_read_file → understand existing structure
-   → mindos_insert_after_heading or mindos_append_to_file — append, avoid duplication
-4. If not → mindos_create_file — create in the appropriate directory
-5. Content should be distilled into reusable patterns, not a conversation transcript
-```
+## Continuous Evaluation Loop
 
-**Scenario B: Reverse-Update an SOP / Workflow**
+For important workflows, run a fast iterate loop:
 
-User says something like "this SOP has some wrong steps, update it" or "I found a better process":
+1. Define 2-3 representative prompts for the current task type.
+2. Run the workflow with this skill guidance.
+3. Check result quality against user intent, local conventions, and safety rules.
+4. Identify the smallest instruction change that would prevent observed failure modes.
+5. Re-run prompts and keep only changes that improve consistency without overfitting.
 
-```
-1. mindos_search_notes — Locate the SOP file
-2. mindos_read_file — Read the full SOP content
-3. Align with user on what needs changing (add steps? remove outdated ones? reorder?)
-4. mindos_update_section — Precisely replace the changed sections
-5. If the SOP references other files, verify those references still hold
-```
+## Quality Gates
 
-**Scenario C: Extract Patterns from a Discussion**
+Before finishing, verify:
 
-User says something like "organize the methodology we just discussed into a doc":
+1. Result directly answers user intent.
+2. Updated content matches local style and structure.
+3. References/links remain valid after structural edits.
+4. No sensitive information was introduced.
+5. Summary to user is specific enough for quick audit.
 
-```
-1. Ask the user to provide or confirm key points (don't assume you know the full conversation)
-2. mindos_search_notes — Check if there's an existing doc to extend
-3. Structure the pattern as: Problem → Solution → When to Apply → Caveats
-4. mindos_create_file or mindos_update_section — file into the right directory
-```
+## Style Rules
 
-**Scenario D: Cross-Agent Context Sync**
-
-User says something like "I made some architecture decisions in Cursor, sync them to the knowledge base":
-
-```
-1. Ask the user to confirm the decision points (you can't read other Agents' history)
-2. mindos_search_notes — Find the relevant project doc
-3. mindos_read_file — Read current state
-4. mindos_update_section or mindos_insert_after_heading — append the decisions
-5. If changes span multiple files, update each and keep references consistent
-```
-
-> **Core principle: You weren't in that conversation.** When a user says "summarize what we just discussed," you must first ask them to confirm what to distill. Never pretend you have access to another Agent's conversation history. Ask proactively, extract precisely, archive structurally.
-
-### Capture a New Idea
-
-```
-1. mindos_search_notes — Check if related notes exist
-2. If found → mindos_read_file → mindos_insert_after_heading or mindos_append_to_file
-3. If not → mindos_create_file in the appropriate directory
-```
-
-### Execute an SOP / Workflow
-
-```
-1. mindos_read_file — Read the SOP doc under Workflows/
-2. Execute step by step, deposit results back into the knowledge base
-3. mindos_update_section — Update execution status
-4. If you discover the SOP has incorrect or suboptimal steps → reverse-update it (see Scenario B above)
-```
-
-### Record a New Product/Resource
-
-```
-1. mindos_read_file — Read the target CSV headers
-2. Gather necessary information
-3. mindos_append_csv — Append one row
-```
-
-### Update Profile
-
-```
-1. mindos_read_file — Read the current Profile file
-2. mindos_update_section or mindos_insert_after_heading — Precise modification
-```
-
-### Organize & Review
-
-```
-1. mindos_get_recent — Check recently modified files
-2. mindos_search_notes — Search for related content
-3. mindos_get_backlinks — Understand a file's position in the knowledge network
-```
-
----
-
-## Markdown Style Guide
-
-- Add emoji to section headings where appropriate
-- Use code formatting for commands: code blocks for standalone commands, `` `inline` `` for mentions
-- Keep content concise and execution-oriented, not explanatory
-- Prefer lists over paragraphs, tables over lists (when comparing multiple dimensions)
-
-## CSV Style Guide
-
-- First row is the header, comma-separated
-- Cells containing commas, quotes, or newlines must be double-quoted
-- Appended rows must match the header's field order and count
-
----
-
-## Extending the Knowledge Base
-
-### Adding a New Domain (Top-Level Directory)
-
-1. Create the directory
-2. Create a `README.md` inside it with: one-line description, directory structure, usage guide, update rules
-3. Update root `README.md`'s directory structure and responsibility map
-
-### Ingesting External Resources
-
-1. Read the target CSV's headers
-2. Gather necessary information
-3. Append one row to the CSV
-4. Don't create new files unless the CSV doesn't exist (in which case, create it with headers first)
+- Follow repository-local style.
+- Keep language concise and execution-oriented.
+- Preserve useful structure like headings, checklists, tables, and references.

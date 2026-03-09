@@ -1163,7 +1163,7 @@ server.registerTool(
     title: "Bootstrap Agent Context",
     description: `Load the MindOS startup context in one call (implements §1 Startup Protocol of INSTRUCTION.md).
 
-Returns the system rules (INSTRUCTION.md), root index (README.md), and optionally the target directory's README.md and local INSTRUCTION.md.
+Returns the system rules (INSTRUCTION.md), root index (README.md), root CONFIG pair (CONFIG.json + CONFIG.md), and optionally the target directory's README.md, local INSTRUCTION.md, and local CONFIG pair.
 
 This is the recommended first tool call for any Agent entering the knowledge base.
 
@@ -1174,8 +1174,12 @@ Returns:
   {
     instruction: root INSTRUCTION.md content,
     index: root README.md content,
+    config_json: root CONFIG.json content,
+    config_md: root CONFIG.md content,
     target_readme?: target directory README.md (if target_dir specified and file exists),
-    target_instruction?: target directory INSTRUCTION.md (if exists)
+    target_instruction?: target directory INSTRUCTION.md (if exists),
+    target_config_json?: target directory CONFIG.json (if exists),
+    target_config_md?: target directory CONFIG.md (if exists)
   }`,
     inputSchema: z.object({
       target_dir: z.string().optional().describe("Optional target directory to load context for"),
@@ -1188,13 +1192,24 @@ Returns:
       try { instruction = readFile("INSTRUCTION.md"); } catch { instruction = "[INSTRUCTION.md not found]"; }
       let index = "";
       try { index = readFile("README.md"); } catch { index = "[README.md not found]"; }
+      let configJson = "";
+      try { configJson = readFile("CONFIG.json"); } catch { configJson = "[CONFIG.json not found]"; }
+      let configMd = "";
+      try { configMd = readFile("CONFIG.md"); } catch { configMd = "[CONFIG.md not found]"; }
 
-      const result: Record<string, string> = { instruction, index };
+      const result: Record<string, string> = {
+        instruction,
+        index,
+        config_json: configJson,
+        config_md: configMd,
+      };
 
       if (target_dir) {
         const dir = target_dir.endsWith("/") ? target_dir.slice(0, -1) : target_dir;
         try { result.target_readme = readFile(`${dir}/README.md`); } catch { /* not found */ }
         try { result.target_instruction = readFile(`${dir}/INSTRUCTION.md`); } catch { /* not found */ }
+        try { result.target_config_json = readFile(`${dir}/CONFIG.json`); } catch { /* not found */ }
+        try { result.target_config_md = readFile(`${dir}/CONFIG.md`); } catch { /* not found */ }
       }
 
       const sections = Object.entries(result)
