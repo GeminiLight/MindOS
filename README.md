@@ -72,40 +72,6 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## ⚙️ How It Works
-
-A fleeting idea becomes shared intelligence through three interlocking loops:
-
-```mermaid
-graph LR
-    H["👤 Human<br/><sub>thinks · reviews · evolves</sub>"]
-    M[("📚 MindOS")]
-    A["🤖 Agent<br/><sub>executes · retrospects · extracts SOPs</sub>"]
-    EXT["🌐 All Agents"]
-
-    H -- "ideas & feedback" --> M
-    M -- "context & insights" --> H
-    M -- "instructions & context" --> A
-    A -- "results & SOPs" --> M
-    M -. "via MCP" .-> EXT
-
-    style H fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
-    style M fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px
-    style A fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
-    style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
-```
-
-> **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
-
-**Who is this for?**
-
-- **AI Independent Developer** — Store personal SOPs, tech stack preferences, and project context in MindOS. Any Agent instantly inherits your work habits.
-- **Knowledge Worker** — Manage research materials with bi-directional links. Your AI assistant answers questions grounded in your full context, not generic knowledge.
-- **Team Collaboration** — Share a MindOS knowledge base across team members as a single source of truth. Humans and Agents read from the same playbook, keeping everyone aligned.
-- **Automated Agent Operations** — Write standard workflows as Prompt-Driven documents. Agents execute directly, humans audit the results.
-
----
-
 ## 🚀 Getting Started
 
 ### 1. Install & Run
@@ -204,6 +170,40 @@ cd mcp && npm install && npm run build
 **MindOS Skills:**
 
 > Coming soon — Skills documentation will be added here.
+
+---
+
+## ⚙️ How It Works
+
+A fleeting idea becomes shared intelligence through three interlocking loops:
+
+```mermaid
+graph LR
+    H["👤 Human<br/><sub>thinks · reviews · evolves</sub>"]
+    M[("📚 MindOS")]
+    A["🤖 Agent<br/><sub>executes · retrospects · extracts SOPs</sub>"]
+    EXT["🌐 All Agents"]
+
+    H -- "ideas & feedback" --> M
+    M -- "context & insights" --> H
+    M -- "instructions & context" --> A
+    A -- "results & SOPs" --> M
+    M -. "via MCP" .-> EXT
+
+    style H fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
+    style M fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px
+    style A fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
+    style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
+```
+
+> **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
+
+**Who is this for?**
+
+- **AI Independent Developer** — Store personal SOPs, tech stack preferences, and project context in MindOS. Any Agent instantly inherits your work habits.
+- **Knowledge Worker** — Manage research materials with bi-directional links. Your AI assistant answers questions grounded in your full context, not generic knowledge.
+- **Team Collaboration** — Share a MindOS knowledge base across team members as a single source of truth. Humans and Agents read from the same playbook, keeping everyone aligned.
+- **Automated Agent Operations** — Write standard workflows as Prompt-Driven documents. Agents execute directly, humans audit the results.
 
 ---
 
