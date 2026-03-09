@@ -21,7 +21,7 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ---
 
-## Core Value: Human-AI Shared Mind
+## 🧠 Core Value: Human-AI Shared Mind
 
 MindOS refactors the human-AI collaboration paradigm through three core pillars, enabling humans and AI to co-evolve within a single Shared Mind.
 
@@ -41,7 +41,7 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## Features
+## ✨ Features
 
 ### For Humans
 
@@ -72,7 +72,7 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## How It Works
+## ⚙️ How It Works
 
 A fleeting idea becomes shared intelligence through three interlocking loops:
 
@@ -106,7 +106,7 @@ graph LR
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### 1. Install & Run
 
@@ -207,7 +207,7 @@ cd mcp && npm install && npm run build
 
 ---
 
-## Supported Agents
+## 🤝 Supported Agents
 
 | Agent | Status | Notes |
 |:------|:------:|:------|
@@ -224,7 +224,7 @@ cd mcp && npm install && npm run build
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```bash
 MindOS/
@@ -238,7 +238,7 @@ MindOS/
 
 ---
 
-## Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Function |
 | :--- | :--- |
@@ -250,6 +250,6 @@ MindOS/
 
 ---
 
-## License
+## 📄 License
 
 MIT © GeminiLight
