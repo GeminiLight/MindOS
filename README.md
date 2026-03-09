@@ -169,7 +169,21 @@ cd mcp && npm install && npm run build
 
 **MindOS Skills:**
 
-> Coming soon — Skills documentation will be added here.
+Install Skills via `npx skills add`:
+
+```bash
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-zh
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-mcp-skill-sync
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/app/.claude/skills/create-plugin
+```
+
+| Skill | Description |
+|-------|-------------|
+| `mindos` | Knowledge base operation guide (English) — read/write notes, search, manage SOPs, maintain Profiles |
+| `mindos-zh` | Knowledge base operation guide (Chinese) — same capabilities, Chinese interface |
+| `mindos-mcp-skill-sync` | Detect and fix drift between App, MCP Server, and knowledge base |
+| `create-plugin` | Guide for creating plugins (renderers and agent tools) in the MindOS app |
 
 ---
 
