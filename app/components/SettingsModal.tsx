@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { X, Settings, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle2, Puzzle, RotateCcw } from 'lucide-react';
+import { X, Settings, Save, Loader2, AlertCircle, CheckCircle2, Puzzle, RotateCcw } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { Locale } from '@/lib/i18n';
 import { getAllRenderers, loadDisabledState, setRendererEnabled, isRendererEnabled } from '@/lib/renderers/registry';
@@ -76,49 +76,24 @@ function EnvBadge({ overridden }: { overridden: boolean }) {
   );
 }
 
-function ResetEnvButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors ml-1.5 font-mono"
-      title={title}
-    >
-      <RotateCcw size={10} />
-      env
-    </button>
-  );
-}
-
 function ApiKeyInput({ value, onChange, placeholder, disabled }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
 }) {
-  const [show, setShow] = useState(false);
   const isMasked = value === '***set***';
 
   return (
-    <div className="relative">
-      <input
-        type={show ? 'text' : 'password'}
-        value={isMasked ? '••••••••••••••••' : value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder ?? 'sk-...'}
-        disabled={disabled}
-        className="w-full px-3 py-2 pr-9 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-        onFocus={() => { if (isMasked) onChange(''); }}
-      />
-      <button
-        type="button"
-        onClick={() => setShow(v => !v)}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-        tabIndex={-1}
-      >
-        {show ? <EyeOff size={14} /> : <Eye size={14} />}
-      </button>
-    </div>
+    <input
+      type="password"
+      value={isMasked ? '••••••••••••••••' : value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder ?? 'sk-...'}
+      disabled={disabled}
+      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+      onFocus={() => { if (isMasked) onChange(''); }}
+    />
   );
 }
 
@@ -206,6 +181,36 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     setData(d => d ? { ...d, ai: { ...d.ai, ...patch } } : d);
   }, []);
 
+  // Restore all AI fields to defaults (empty) so .env values take effect, then auto-save
+  const restoreFromEnv = useCallback(async () => {
+    if (!data) return;
+    const defaults: AiSettings = {
+      provider: '' as 'anthropic',
+      anthropicModel: '',
+      anthropicApiKey: '',
+      openaiModel: '',
+      openaiApiKey: '',
+      openaiBaseUrl: '',
+    };
+    setData(d => d ? { ...d, ai: defaults } : d);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai: defaults, mindRoot: data.mindRoot }),
+      });
+      setStatus(res.ok ? 'saved' : 'error');
+    } catch {
+      setStatus('error');
+    } finally {
+      setSaving(false);
+    }
+    // Re-fetch to get fresh envOverrides/envValues
+    fetch('/api/settings').then(r => r.json()).then(setData).catch(() => {});
+    setTimeout(() => setStatus('idle'), 2500);
+  }, [data]);
+
   if (!open) return null;
 
   const env = data?.envOverrides ?? {};
@@ -273,7 +278,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               {/* AI Tab */}
               {tab === 'ai' && data && (
                 <div className="space-y-5">
-                  <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} />{env.AI_PROVIDER && <ResetEnvButton onClick={() => updateAi({ provider: (envVal.AI_PROVIDER || 'anthropic') as 'anthropic' | 'openai' })} title={t.settings.ai.resetToEnv} />}</>}>
+                  <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} /></>}>
                     <Select
                       value={data.ai.provider}
                       onChange={e => updateAi({ provider: e.target.value as 'anthropic' | 'openai' })}
@@ -285,7 +290,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                   {data.ai.provider === 'anthropic' ? (
                     <>
-                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} />{env.ANTHROPIC_MODEL && <ResetEnvButton onClick={() => updateAi({ anthropicModel: '' })} title={t.settings.ai.resetToEnv} />}</>}>
+                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
                         <Input
                           value={data.ai.anthropicModel}
                           onChange={e => updateAi({ anthropicModel: e.target.value })}
@@ -293,7 +298,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} />{env.ANTHROPIC_API_KEY && <ResetEnvButton onClick={() => updateAi({ anthropicApiKey: '' })} title={t.settings.ai.resetToEnv} />}</>}
+                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} /></>}
                         hint={env.ANTHROPIC_API_KEY ? t.settings.ai.envFieldNote('ANTHROPIC_API_KEY') : t.settings.ai.keyHint}
                       >
                         <ApiKeyInput
@@ -304,7 +309,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </>
                   ) : (
                     <>
-                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} />{env.OPENAI_MODEL && <ResetEnvButton onClick={() => updateAi({ openaiModel: '' })} title={t.settings.ai.resetToEnv} />}</>}>
+                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
                         <Input
                           value={data.ai.openaiModel}
                           onChange={e => updateAi({ openaiModel: e.target.value })}
@@ -312,7 +317,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} />{env.OPENAI_API_KEY && <ResetEnvButton onClick={() => updateAi({ openaiApiKey: '' })} title={t.settings.ai.resetToEnv} />}</>}
+                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} /></>}
                         hint={env.OPENAI_API_KEY ? t.settings.ai.envFieldNote('OPENAI_API_KEY') : t.settings.ai.keyHint}
                       >
                         <ApiKeyInput
@@ -321,7 +326,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} />{env.OPENAI_BASE_URL && <ResetEnvButton onClick={() => updateAi({ openaiBaseUrl: '' })} title={t.settings.ai.resetToEnv} />}</>}
+                        label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}
                         hint={t.settings.ai.baseUrlHint}
                       >
                         <Input
@@ -492,11 +497,11 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                                 }}
                                 role="switch"
                                 aria-checked={enabled}
-                                className={`shrink-0 w-9 h-[20px] rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
+                                className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
                                 title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled}
                               >
                                 <span
-                                  className={`absolute top-[3px] w-[14px] h-[14px] rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/60'}`}
+                                  className={`absolute top-[3px] w-3.5 h-3.5 rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/50'}`}
                                 />
                               </button>
                             </div>
@@ -536,13 +541,25 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         {/* Footer */}
         {(tab === 'ai' || tab === 'knowledge') && (
           <div className="px-5 py-3 border-t border-border shrink-0 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs">
-              {status === 'saved' && (
-                <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{t.settings.saved}</span></>
+            <div className="flex items-center gap-3">
+              {tab === 'ai' && Object.values(env).some(Boolean) && (
+                <button
+                  onClick={restoreFromEnv}
+                  disabled={saving || !data}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <RotateCcw size={13} />
+                  {t.settings.ai.restoreFromEnv}
+                </button>
               )}
-              {status === 'error' && (
-                <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{t.settings.saveFailed}</span></>
-              )}
+              <div className="flex items-center gap-1.5 text-xs">
+                {status === 'saved' && (
+                  <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{t.settings.saved}</span></>
+                )}
+                {status === 'error' && (
+                  <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{t.settings.saveFailed}</span></>
+                )}
+              </div>
             </div>
             <button
               onClick={handleSave}

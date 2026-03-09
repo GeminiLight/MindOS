@@ -84,9 +84,10 @@ export const messages = {
         baseUrl: 'Base URL',
         baseUrlHint: 'Optional. Use for proxies or OpenAI-compatible APIs.',
         keyHint: 'Stored locally in .mindos-settings.json',
-        envHint: 'Fields marked env have a value from environment variables. You can override them here; click the reset button to revert to env.',
+        envHint: 'Fields marked env have a value from environment variables. You can override them here, or restore all to env defaults.',
         envFieldNote: (key: string) => `Env var ${key} is set. Clear this field to fall back to it.`,
         resetToEnv: 'Reset to env value',
+        restoreFromEnv: 'Restore from .env',
       },
       appearance: {
         readingFont: 'Reading font',
@@ -210,9 +211,10 @@ export const messages = {
         baseUrl: '接口地址',
         baseUrlHint: '可选。用于代理或 OpenAI 兼容 API。',
         keyHint: '本地存储于 .mindos-settings.json',
-        envHint: '标有 env 的字段存在环境变量值。你可以在此覆盖，点击重置按钮可恢复为环境变量。',
+        envHint: '标有 env 的字段存在环境变量值。你可以在此覆盖，或一键恢复为环境变量默认值。',
         envFieldNote: (key: string) => `环境变量 ${key} 已设置。清空此字段将回退到环境变量值。`,
         resetToEnv: '恢复为环境变量',
+        restoreFromEnv: '从 .env 恢复',
       },
       appearance: {
         readingFont: '正文字体',

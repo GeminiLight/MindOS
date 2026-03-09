@@ -196,6 +196,18 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           return updated;
         });
       }
+
+      // Empty stream usually means an API key or provider error was swallowed
+      if (!assistantContent.trim()) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: 'Error: No response from AI. Please check your API key and provider settings.',
+          };
+          return updated;
+        });
+      }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         // Stopped by user — leave partial content as-is
