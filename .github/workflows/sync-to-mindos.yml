@@ -28,28 +28,29 @@ jobs:
           git config --global user.name "GeminiLight"
           git config --global user.email "wtfly2018@163.com"
 
-          # Clone target repo (create if not exists)
+          # === 1. Deploy landing/ to mindos-dev gh-pages ===
+          git subtree split --prefix landing -b gh-pages-tmp
+          git push origin gh-pages-tmp:gh-pages --force
+          git branch -D gh-pages-tmp
+
+          # === 2. Sync to mindos main branch ===
           git clone --depth 1 https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos || {
             echo "Target repo not found. Please create GeminiLight/mindos first."
             exit 1
           }
 
-          # Sync app/, mcp/, skills/ directories
           rsync -av --delete --exclude='node_modules' --exclude='.next' app/ /tmp/mindos/app/
           rsync -av --delete --exclude='node_modules' mcp/ /tmp/mindos/mcp/
           [ -d skills/ ] && rsync -av --delete --exclude='node_modules' skills/ /tmp/mindos/skills/
           [ -d template/ ] && rsync -av --delete template/ /tmp/mindos/template/
           [ -d wiki/ ] && rsync -av --delete wiki/ /tmp/mindos/wiki/
 
-          # Copy root config files if they exist
-          # Copy .gitignore.prod as .gitignore for the public repo
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
 
           for f in package.json README.md README_zh.md LICENSE; do
             [ -f "$f" ] && cp "$f" /tmp/mindos/
           done
 
-          # Commit and push to main
           cd /tmp/mindos
           git add -A
           if git diff --cached --quiet; then
@@ -59,13 +60,7 @@ jobs:
             git push
           fi
 
-          # Deploy landing/ to mindos-dev gh-pages branch
-          cd $GITHUB_WORKSPACE
-          git subtree split --prefix landing -b gh-pages-tmp
-          git push origin gh-pages-tmp:gh-pages --force
-          git branch -D gh-pages-tmp
-
-          # Deploy landing/ to mindos gh-pages branch
+          # === 3. Deploy landing/ to mindos gh-pages ===
           cd $GITHUB_WORKSPACE
           git clone --depth 1 -b gh-pages https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages 2>/dev/null || {
             git clone --depth 1 https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages
