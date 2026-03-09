@@ -9,6 +9,8 @@ import {
   deleteLines,
   insertAfterHeading,
   updateSection,
+  deleteFile,
+  renameFile,
 } from '@/lib/fs';
 
 function err(msg: string, status = 400) {
@@ -70,6 +72,8 @@ export async function POST(req: NextRequest) {
         const { start, end, lines } = params as { start: number; end: number; lines: string[] };
         if (typeof start !== 'number' || typeof end !== 'number') return err('missing start/end');
         if (!Array.isArray(lines)) return err('lines must be array');
+        if (start < 0 || end < 0) return err('start/end must be >= 0');
+        if (start > end) return err('start must be <= end');
         updateLines(filePath, start, end, lines);
         return NextResponse.json({ ok: true });
       }
@@ -77,6 +81,8 @@ export async function POST(req: NextRequest) {
       case 'delete_lines': {
         const { start, end } = params as { start: number; end: number };
         if (typeof start !== 'number' || typeof end !== 'number') return err('missing start/end');
+        if (start < 0 || end < 0) return err('start/end must be >= 0');
+        if (start > end) return err('start must be <= end');
         deleteLines(filePath, start, end);
         return NextResponse.json({ ok: true });
       }
@@ -95,6 +101,18 @@ export async function POST(req: NextRequest) {
         if (typeof content !== 'string') return err('missing content');
         updateSection(filePath, heading, content);
         return NextResponse.json({ ok: true });
+      }
+
+      case 'delete_file': {
+        deleteFile(filePath);
+        return NextResponse.json({ ok: true });
+      }
+
+      case 'rename_file': {
+        const { new_name } = params as { new_name: string };
+        if (typeof new_name !== 'string' || !new_name) return err('missing new_name');
+        const newPath = renameFile(filePath, new_name);
+        return NextResponse.json({ ok: true, newPath });
       }
 
       default:

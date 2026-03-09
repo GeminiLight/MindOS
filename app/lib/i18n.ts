@@ -2,12 +2,20 @@ export type Locale = 'en' | 'zh';
 
 export const messages = {
   en: {
+    common: {
+      relatedFiles: 'Related Files',
+    },
     app: {
       tagline: 'Personal knowledge OS — browse, edit, and query your second brain.',
       footer: 'MindOS · personal knowledge OS',
     },
     home: {
       recentlyModified: 'Recently Modified',
+      continueEditing: 'Continue editing',
+      newNote: 'New note',
+      plugins: 'Plugins',
+      showMore: 'Show more',
+      showLess: 'Show less',
       shortcuts: {
         searchFiles: 'Search files',
         askAI: 'Ask AI',
@@ -76,8 +84,9 @@ export const messages = {
         baseUrl: 'Base URL',
         baseUrlHint: 'Optional. Use for proxies or OpenAI-compatible APIs.',
         keyHint: 'Stored locally in .mindos-settings.json',
-        envHint: 'Fields marked env are controlled by environment variables and cannot be changed here.',
-        envFieldNote: (key: string) => `Set via ${key} env var — takes precedence.`,
+        envHint: 'Fields marked env have a value from environment variables. You can override them here; click the reset button to revert to env.',
+        envFieldNote: (key: string) => `Env var ${key} is set. Clear this field to fall back to it.`,
+        resetToEnv: 'Reset to env value',
       },
       appearance: {
         readingFont: 'Reading font',
@@ -119,12 +128,20 @@ export const messages = {
     ],
   },
   zh: {
+    common: {
+      relatedFiles: '关联视图',
+    },
     app: {
       tagline: '个人知识操作系统 — 浏览、编辑并查询你的第二大脑。',
       footer: 'MindOS · 个人知识操作系统',
     },
     home: {
       recentlyModified: '最近修改',
+      continueEditing: '继续编辑',
+      newNote: '新建笔记',
+      plugins: '插件',
+      showMore: '查看更多',
+      showLess: '收起',
       shortcuts: {
         searchFiles: '搜索文件',
         askAI: '问 AI',
@@ -193,8 +210,9 @@ export const messages = {
         baseUrl: '接口地址',
         baseUrlHint: '可选。用于代理或 OpenAI 兼容 API。',
         keyHint: '本地存储于 .mindos-settings.json',
-        envHint: '标有 env 的字段由环境变量控制，无法在此修改。',
-        envFieldNote: (key: string) => `由 ${key} 环境变量设置，优先级更高。`,
+        envHint: '标有 env 的字段存在环境变量值。你可以在此覆盖，点击重置按钮可恢复为环境变量。',
+        envFieldNote: (key: string) => `环境变量 ${key} 已设置。清空此字段将回退到环境变量值。`,
+        resetToEnv: '恢复为环境变量',
       },
       appearance: {
         readingFont: '正文字体',

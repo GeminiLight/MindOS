@@ -1,21 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readSettings, writeSettings, effectiveAiConfig, effectiveSopRoot, ServerSettings } from '@/lib/settings';
+import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
+import { invalidateCache } from '@/lib/fs';
 
 export async function GET() {
   const settings = readSettings();
-  const effective = effectiveAiConfig();
 
-  // Use effective values (env overrides applied) so UI reflects what's actually active
+  const envValues = {
+    AI_PROVIDER: process.env.AI_PROVIDER || '',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? '***set***' : '',
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***set***' : '',
+    OPENAI_MODEL: process.env.OPENAI_MODEL || '',
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || '',
+    MIND_ROOT: process.env.MIND_ROOT || '',
+  };
+
+  // Return raw settings-file values so user can edit them.
+  // Mask API keys from the file (not env).
   const masked = {
     ai: {
-      provider: effective.provider,
-      anthropicModel: effective.anthropicModel,
-      anthropicApiKey: effective.anthropicApiKey ? '***set***' : '',
-      openaiModel: effective.openaiModel,
-      openaiApiKey: effective.openaiApiKey ? '***set***' : '',
-      openaiBaseUrl: effective.openaiBaseUrl,
+      provider: settings.ai.provider,
+      anthropicModel: settings.ai.anthropicModel,
+      anthropicApiKey: settings.ai.anthropicApiKey ? '***set***' : '',
+      openaiModel: settings.ai.openaiModel,
+      openaiApiKey: settings.ai.openaiApiKey ? '***set***' : '',
+      openaiBaseUrl: settings.ai.openaiBaseUrl,
     },
-    sopRoot: settings.sopRoot,
+    mindRoot: settings.mindRoot,
     envOverrides: {
       AI_PROVIDER: !!process.env.AI_PROVIDER,
       ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
@@ -25,6 +36,7 @@ export async function GET() {
       OPENAI_BASE_URL: !!process.env.OPENAI_BASE_URL,
       MIND_ROOT: !!process.env.MIND_ROOT,
     },
+    envValues,
   };
   return NextResponse.json(masked);
 }
@@ -38,7 +50,6 @@ export async function POST(req: NextRequest) {
       ai: {
         ...current.ai,
         ...(body.ai ?? {}),
-        // Don't overwrite key if client sends the masked placeholder
         anthropicApiKey:
           body.ai?.anthropicApiKey === '***set***'
             ? current.ai.anthropicApiKey
@@ -48,10 +59,14 @@ export async function POST(req: NextRequest) {
             ? current.ai.openaiApiKey
             : (body.ai?.openaiApiKey ?? current.ai.openaiApiKey),
       },
-      sopRoot: body.sopRoot ?? current.sopRoot,
+      mindRoot: body.mindRoot ?? current.mindRoot,
     };
 
     writeSettings(next);
+    // Invalidate file tree cache when MIND_ROOT changes
+    if (next.mindRoot !== current.mindRoot) {
+      invalidateCache();
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

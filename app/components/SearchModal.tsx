@@ -4,15 +4,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
+import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
 
 interface SearchModalProps {
   open: boolean;
   onClose: () => void;
-}
-
-function encodePath(filePath: string): string {
-  return filePath.split('/').map(encodeURIComponent).join('/');
 }
 
 export default function SearchModal({ open, onClose }: SearchModalProps) {
