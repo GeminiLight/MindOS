@@ -1,6 +1,6 @@
 # Resources
 
-External resource collections and structured catalogs.
+External resource collections and structured indexes.
 
 ## Structure
 
@@ -8,14 +8,14 @@ External resource collections and structured catalogs.
 📚 Resources/
 ├── README.md
 ├── INSTRUCTION.md
-├── 🧾 Products.csv
-├── 🧾 AI Scholars.csv
-├── 🌟 Github Projects.csv
-├── Github Projects/
-└── AI Products/
+├── 🧾 AI Products.csv
+├── 🧾 AI Influencers.csv
+├── 🧾 AI Tools.csv
+└── 🧾 AI Scholars.csv
 ```
 
 ## Usage
 
-- Keep summary data in CSV files.
-- Use subfolders for deep notes.
+- Use CSV as the primary index for resource tracking.
+- Validate headers and field semantics before appending rows.
+- Follow execution and sync rules in `INSTRUCTION.md`.

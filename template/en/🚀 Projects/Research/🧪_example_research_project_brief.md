@@ -1,12 +1,16 @@
-# 🧪 Research Project Brief Example
-
-## Project
-- Topic: Agent memory quality
+# 🧪 Research Project Brief Example: Reliability and Trust
 
 ## Hypothesis
-- Structured memory improves task completion.
+- Transparent memory references increase user trust and completion quality.
 
-## Plan
-- Baseline experiment
-- Evaluation criteria
-- Write-up milestones
+## Study Design
+- Compare baseline assistant vs trace-enabled assistant.
+- Measure trust score, correction frequency, and task completion.
+
+## Product Link
+- Findings directly inform marketing claims and onboarding explanations.
+
+## Deliverables
+- Experiment report
+- Messaging-safe evidence statements
+- Product requirements update

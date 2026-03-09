@@ -902,25 +902,77 @@
         </div>
     </section>
 
-    <!-- SECTION 6: QUICKSTART — Updated with README_zh -->
+    <!-- SECTION 6: QUICKSTART — Refined -->
     <section id="quickstart" class="section">
         <div class="container">
             <div class="section-header">
                 <span class="mono">05. QUICKSTART</span>
-                <h2 data-zh>快速开始（最新版）</h2><h2 data-en>Quickstart (Latest)</h2>
+                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start to Share Mind</h2>
+                <p class="section-sub" data-zh>默认面向首次安装：先在 For Human 完成本地初始化，再到 For Agent 启用 MCP + Skills。</p>
+                <p class="section-sub" data-en>Default for first-time users: finish local setup in For Human, then enable MCP + Skills in For Agent.</p>
             </div>
 
             <div class="qs-dual">
-                <!-- Path 1: Agent Enablement -->
-                <div class="qs-path animate-up">
+                <!-- Path 1: For Human (Default) -->
+                <div class="qs-path qs-path--default animate-up">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--human">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div class="qs-path-title-wrap">
+                            <h3><span data-zh>For Human</span><span data-en>For Human</span></h3>
+                            <p class="qs-path-sub" data-zh>默认流程（首次安装）：先初始化本地 Mind</p>
+                            <p class="qs-path-sub" data-en>Default first-time flow: initialize your local mind first</p>
+                        </div>
+                        <span class="qs-default-badge" data-zh>默认路径</span>
+                        <span class="qs-default-badge" data-en>Default</span>
+                    </div>
+                    <div class="qs-terminal">
+                        <div class="qs-terminal-bar">
+                            <div class="qs-dots"><span></span><span></span><span></span></div>
+                            <span class="qs-terminal-title">Terminal</span>
+                        </div>
+                        <div class="qs-terminal-body">
+                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 克隆并初始化模板</span><span data-en># Clone and initialize template</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/zh my-mind/</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 可选：cp -r template/en my-mind/</span><span data-en># optional: cp -r template/en my-mind/</span></span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置环境变量（绝对路径）</span><span data-en># Configure env (absolute path)</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cp app/.env.example app/.env.local</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind</span><span data-en># edit MIND_ROOT=/abs/path/to/MindOS/my-mind</span></span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 启动 GUI</span><span data-en># Launch GUI</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">4</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 默认 HTTP 模式启动 MCP</span><span data-en># Start MCP in default HTTP mode</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd ../mcp && npm install && npm run build</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">5</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置 Agent URL 并安装 Skills</span><span data-en># Configure agent URL and install Skills</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh</div>
+
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>完成：GUI 可用，所有 Agent 通过 MCP 共享同一份心智</span>
+                                <span data-en>Done: GUI is live, and all agents share one mind via MCP</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Path 2: For Agent -->
+                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
                     <div class="qs-path-header">
                         <div class="qs-path-icon qs-path-icon--agent">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                         </div>
-                        <div>
-                            <h3>For Agent Clients</h3>
-                            <p class="qs-path-sub" data-zh>如果你已有本地知识库，优先走这条（2 步）</p>
-                            <p class="qs-path-sub" data-en>If your local mind already exists, start here (2 steps)</p>
+                        <div class="qs-path-title-wrap">
+                            <h3><span data-zh>For Agent</span><span data-en>For Agent</span></h3>
+                            <p class="qs-path-sub" data-zh>在 For Human 完成后，3 步启用 Agent（默认 HTTP）</p>
+                            <p class="qs-path-sub" data-en>After For Human is done, enable your agent in 3 steps (HTTP by default)</p>
                         </div>
                     </div>
                     <div class="qs-prompt-card">
@@ -932,62 +984,18 @@
                             <button class="qs-copy-btn" id="copy-prompt-btn">Copy</button>
                         </div>
                         <div class="qs-prompt-body" id="agent-prompt-text">
-                            <p data-zh>请帮我启用 MindOS（默认使用 Streamable HTTP）：</p>
+                            <p data-zh>请帮我启用 MindOS（默认 Streamable HTTP）：</p>
                             <p data-en>Help me enable MindOS (default: Streamable HTTP):</p>
-                            <p data-zh>1. 在服务端启动 MCP（HTTP）：</p>
-                            <p data-en>1. Start MCP server in HTTP mode:</p>
-                            <p data-zh>cd mcp && npm install && npm run build</p>
-                            <p data-en>cd mcp && npm install && npm run build</p>
-                            <p data-zh>MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
-                            <p data-en>MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
-                            <p data-zh>2. 在 Agent 客户端配置 URL：http://&lt;服务器IP&gt;:8787/mcp（Authorization: Bearer your-strong-token）</p>
-                            <p data-en>2. Configure agent client URL: http://&lt;server-ip&gt;:8787/mcp (Authorization: Bearer your-strong-token)</p>
-                            <p data-zh>3. 安装 Skills：</p>
-                            <p data-en>3. Install Skills:</p>
+                            <p data-zh>1. 启动 MCP（HTTP）：cd mcp && npm install && npm run build</p>
+                            <p data-en>1. Start MCP (HTTP): cd mcp && npm install && npm run build</p>
+                            <p data-zh>2. 启动服务：MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
+                            <p data-en>2. Start server: MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
+                            <p data-zh>3. 配置 Agent URL（http://&lt;服务器IP&gt;:8787/mcp，Bearer Token）并安装 Skills：</p>
+                            <p data-en>3. Configure agent URL (http://&lt;server-ip&gt;:8787/mcp, Bearer token) and install Skills:</p>
                             <p data-zh>npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos</p>
                             <p data-en>npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos</p>
                             <p data-zh>npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh</p>
                             <p data-en>npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Path 2: Fresh Install -->
-                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
-                    <div class="qs-path-header">
-                        <div class="qs-path-icon qs-path-icon--human">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </div>
-                        <div>
-                            <h3>For First-time Setup</h3>
-                            <p class="qs-path-sub" data-zh>首次安装：先初始化本地 Mind，再启用 Agent</p>
-                            <p class="qs-path-sub" data-en>First-time setup: initialize local mind, then enable agents</p>
-                        </div>
-                    </div>
-                    <div class="qs-terminal">
-                        <div class="qs-terminal-bar">
-                            <div class="qs-dots"><span></span><span></span><span></span></div>
-                            <span class="qs-terminal-title">Terminal</span>
-                        </div>
-                        <div class="qs-terminal-body">
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># 1. Clone & initialize mind template</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/zh my-mind/</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># optional: cp -r template/en my-mind/</span></div>
-                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 2. Configure env (set absolute MIND_ROOT)</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cp app/.env.example app/.env.local</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># edit app/.env.local: MIND_ROOT=/abs/path/to/MindOS/my-mind</span></div>
-                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 3. Launch GUI</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
-                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 4. Enable MCP + Skills for your agent client</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd ../mcp && npm install && npm run build</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh</div>
-                            <div class="qs-line qs-line-result">
-                                <span class="qs-success-dot"></span>
-                                <span data-zh>完成后：GUI 可用 + Agent 通过 MCP 共享同一份心智</span>
-                                <span data-en>Done: GUI is live and agents share the same mind via MCP</span>
-                            </div>
                         </div>
                     </div>
                 </div>

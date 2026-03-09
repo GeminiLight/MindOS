@@ -1,25 +1,16 @@
 # Leo Chen
 
-## Name
-Leo Chen
-
 ## Relationship
-Graduate School Classmate
+- Graduate classmate
 
 ## Current Role
-ML Engineer
+- ML Engineer
 
-## Location
-Beijing
+## MindOS Relevance
+- Can evaluate technical credibility of agent architecture claims.
 
-## Communication Preference
-Prefers email and structured docs.
-
-## Last Interaction
-2026-02-20: discussed vector retrieval evaluation setup.
+## Collaboration Potential
+- Review technical positioning before public launch.
 
 ## Next Action
-Share a draft evaluation metrics template.
-
-## Notes
-Methodical in experiment design; good peer for technical reviews.
+- Schedule a 30-minute architecture + messaging review.

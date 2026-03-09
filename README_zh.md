@@ -269,6 +269,7 @@ graph LR
 
 | Agent | MCP | Skills |
 |:------|:---:|:------:|
+| MindOS Agent | ✅ | ✅ |
 | OpenClaw | ✅ | ✅ |
 | Claude Desktop | ✅ | ✅ |
 | Claude Code | ✅ | ✅ |

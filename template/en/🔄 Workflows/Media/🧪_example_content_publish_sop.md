@@ -1,10 +1,13 @@
-# 📰 Content Publish SOP Example
+# 📰 Content Publish SOP Example: Promise-to-Proof Distribution
 
 ## Goal
-- Publish one weekly insight post.
+- Turn product claims into believable public proof.
 
-## Steps
-1. Draft outline
-2. Write and edit
-3. Publish to selected channels
-4. Record metrics after 48h
+## Pipeline
+1. Pick one claim (for example: faster weekly execution).
+2. Attach one concrete case or metric.
+3. Publish in 3 formats: short post, visual card, long-form note.
+4. Track saves, replies, and demo requests.
+
+## Quality Gate
+- Every post must include: problem, mechanism, evidence, next action.

@@ -1,25 +1,16 @@
 # Lily Lin
 
-## Name
-Lily Lin
-
 ## Relationship
-College Friend
+- College friend
 
 ## Current Role
-Product Manager
+- Product Manager
 
-## Location
-Shanghai
+## MindOS Relevance
+- Strong product narrative sense and pricing intuition.
 
-## Communication Preference
-Prefers WeChat text; replies quickly around noon on weekdays.
-
-## Last Interaction
-2026-03-05: discussed AI product pricing strategy.
+## Collaboration Potential
+- Can stress-test landing page copy and onboarding message clarity.
 
 ## Next Action
-Schedule a 30-minute call next week on growth experiment design.
-
-## Notes
-Strong at B2B pricing and funnel design.
+- Request feedback on "promise-to-proof" homepage structure.

@@ -24,28 +24,38 @@ interface ChatSession {
   messages: Message[];
 }
 
-async function extractPdfText(file: File): Promise<string> {
-  const pdfjs = await import('pdfjs-dist');
-  const buffer = await file.arrayBuffer();
-  const loadingTask = pdfjs.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false });
-  const pdf = await loadingTask.promise;
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
-  const pages: string[] = [];
-  const maxPages = Math.min(pdf.numPages, 20);
-  for (let i = 1; i <= maxPages; i++) {
-    const page = await pdf.getPage(i);
-    const text = await page.getTextContent();
-    const pageText = text.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .filter(Boolean)
-      .join(' ')
-      .trim();
-    if (pageText) pages.push(`[Page ${i}]\n${pageText}`);
+async function extractPdfText(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const dataBase64 = uint8ToBase64(new Uint8Array(buffer));
+
+  const res = await fetch('/api/extract-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name, dataBase64 }),
+  });
+
+  let payload: { text?: string; extracted?: boolean; error?: string } = {};
+  try {
+    payload = await res.json();
+  } catch {
+    // ignore JSON parse error, handled by fallback below
   }
 
-  if (pages.length === 0) return '';
-  const merged = pages.join('\n\n');
-  return merged.length > 30000 ? `${merged.slice(0, 30000)}\n\n[...truncated from PDF]` : merged;
+  if (!res.ok) {
+    throw new Error(payload.error || `PDF extraction failed (${res.status})`);
+  }
+
+  return payload.extracted ? (payload.text || '') : '';
 }
 
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
@@ -235,7 +245,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   }, [open, currentFile]);
 
   useEffect(() => {
-    if (!activeSessionId) return;
+    if (!open || !activeSessionId) return;
     let sessionToPersist: ChatSession | null = null;
     setSessions((prev) => {
       const now = Date.now();
@@ -260,7 +270,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         persistTimerRef.current = null;
       }
     };
-  }, [messages, activeSessionId, currentFile]);
+  }, [open, messages, activeSessionId, currentFile]);
 
   // Scroll to bottom
   useEffect(() => {

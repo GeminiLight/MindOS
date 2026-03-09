@@ -1,22 +1,20 @@
 # Connections
 
-Reusable relationship context to help agents communicate and collaborate in your real-world context.
+Reusable relationship context to help agents collaborate in your real-world context.
 
 ## Structure
 
-- `📇 Connections.csv` (official index)
-- `🧪 Connections_examples.csv` (example index)
+- `Connections Overview.csv` (overview index)
 - `Family/`
 - `Friends/`
 - `Classmates/`
 - `Colleagues/`
-- `Mentors/`
 
 Example files are kept in each category folder and named `🧪_example_xxx.md`.
 
 ## Usage
 
-- For official data: read `📇 Connections.csv`, then open files from `MdPath`.
-- For examples: use `🧪 Connections_examples.csv` and `🧪_example_xxx.md` files; do not treat as user facts.
-- When adding a person, update both `📇 Connections.csv` and the person `*.md`.
+- Read `Connections Overview.csv` first, then open files by `MdPath`.
+- Category examples are demo-only and must not be treated as user facts.
+- When adding a person, create a person `*.md` and sync overview CSV.
 - Field standards and execution details are defined in `INSTRUCTION.md`.

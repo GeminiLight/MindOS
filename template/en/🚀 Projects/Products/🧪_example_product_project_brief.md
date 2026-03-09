@@ -1,13 +1,20 @@
-# 📌 Product Project Brief Example
+# 📌 Product Project Brief Example: MindOS Public Launch
 
-## Project
-- Name: Example Assistant
-- Stage: discovery
+## Vision
+- Build the most trusted personal operating system for AI-assisted execution.
 
-## Core Problem
-- Users lose context across tools.
+## Core Promise
+- "From scattered notes to consistent outcomes, every week."
 
-## Deliverables
-- PRD draft
-- Prototype
-- Validation notes
+## Target Users
+- Builders, creators, and operators who feel fragmented across tools.
+
+## Key Deliverables
+- Positioning-led landing page
+- 60-second product demo
+- Case-based onboarding template
+
+## Success Metrics
+- Activation rate
+- Week-2 retention
+- Demo-to-signup conversion

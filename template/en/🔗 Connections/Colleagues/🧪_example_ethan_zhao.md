@@ -1,25 +1,16 @@
 # Ethan Zhao
 
-## Name
-Ethan Zhao
-
 ## Relationship
-Former Colleague
+- Former colleague
 
 ## Current Role
-Engineering Lead
+- Engineering Lead
 
-## Location
-Shenzhen
+## MindOS Relevance
+- Experienced in scaling developer workflows and team adoption.
 
-## Communication Preference
-Prefers short calls with clear action lists.
-
-## Last Interaction
-2026-03-08: exchanged MCP deployment practices.
+## Collaboration Potential
+- Can advise adoption strategy for power users and teams.
 
 ## Next Action
-Send a deployment checklist.
-
-## Notes
-Has high standards for engineering quality and maintainability.
+- Ask for rollout playbook feedback (pilot -> expansion).

@@ -2,8 +2,11 @@ mcp/node_modules
 app/node_modules
 app/.next
 app/data
+
+app/.env.local
+app/.mindos-settings.json
+
 my-mind/
 my-mind-backup/
 review/
-!app/.env.local.example
 template/template-generation-skill.md
