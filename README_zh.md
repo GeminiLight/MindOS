@@ -171,7 +171,21 @@ cd mcp && npm install && npm run build
 
 **MindOS Skills：**
 
-> 即将推出 — Skills 使用说明将在此补充。
+通过 `npx skills add` 安装 Skills：
+
+```bash
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-zh
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-mcp-skill-sync
+npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/app/.claude/skills/create-plugin
+```
+
+| Skill | 说明 |
+|-------|------|
+| `mindos` | 知识库操作指南（英文）— 读写笔记、搜索、管理 SOP、维护 Profile |
+| `mindos-zh` | 知识库操作指南（中文）— 相同能力，中文交互 |
+| `mindos-mcp-skill-sync` | 检测并修复 App、MCP Server 与知识库之间的漂移 |
+| `create-plugin` | MindOS 应用插件（渲染器和 Agent 工具）创建指南 |
 
 ---
 
