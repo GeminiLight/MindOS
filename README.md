@@ -68,7 +68,49 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## Use Cases
+## How It Works
+
+A fleeting idea becomes shared intelligence through three interlocking loops:
+
+```mermaid
+graph TB
+    H(("👤<br/>Human<br/>Idea"))
+    A(("🤖<br/>Agent<br/>Executes"))
+    M[("📚 MindOS<br/>Knowledge Accumulates")]
+    R(("👁️<br/>Human<br/>Reviews"))
+
+    H -- "delegates" --> A
+    A -- "writes back" --> M
+    M -- "surfaces results" --> R
+    R -- "next task" --> H
+
+    S1["🔄 Agent Retrospects<br/>→ Extracts SOPs"]
+    M -. "periodic" .-> S1
+    S1 -. "enriches" .-> M
+
+    S2["💡 Human Inspired<br/>→ Upgrades Mental Model"]
+    M -. "sparks insight" .-> S2
+    S2 -. "higher-quality ideas" .-> H
+
+    EXT["🌐 All Agents Reuse"]
+    M -. "via MCP" .-> EXT
+    EXT -. "stronger execution" .-> A
+
+    style H fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
+    style A fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
+    style M fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px,font-weight:bold
+    style R fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px
+    style S1 fill:#818cf8,stroke:#6366f1,color:#fff,stroke-dasharray:5 5
+    style S2 fill:#fbbf24,stroke:#f59e0b,color:#333,stroke-dasharray:5 5
+    style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
+```
+
+> **Three loops, one shared mind:**
+> - **Execution loop** (solid lines) — spins on every interaction: human thinks → Agent acts → results saved → human reviews
+> - **Agent evolution loop** (dashed) — periodic: Agent retrospects, extracts SOPs, enriches MindOS
+> - **Human evolution loop** (dashed) — gradual: accumulated knowledge sparks new insights, upgrades mental models
+
+**Who is this for?**
 
 - **AI Independent Developer** — Store personal SOPs, tech stack preferences, and project context in MindOS. Any Agent instantly inherits your work habits.
 - **Knowledge Worker** — Manage research materials with bi-directional links. Your AI assistant answers questions grounded in your full context, not generic knowledge.
@@ -121,19 +163,6 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 ### 3. Connect Your Agent (MCP)
 
 Register the MindOS MCP Server in your Agent client to allow the Agent to directly access and operate your local knowledge base.
-
-**Tested Agents:**
-
-| Agent | Status | Notes |
-|:------|:------:|:------|
-| Claude Desktop | ✅ | Native MCP support |
-| Claude Code | ✅ | Via `claude mcp add` |
-| Cursor | ✅ | MCP config in settings |
-| Windsurf | ✅ | MCP config in settings |
-| Cline | ✅ | MCP config in settings |
-| Trae | ✅ | MCP config in settings |
-| Gemini CLI | 🔜 | Coming soon |
-| GitHub Copilot | 🔜 | Coming soon |
 
 **Configuration example (Claude Desktop):**
 
@@ -188,6 +217,23 @@ cd mcp && npm install && npm run build
 **MindOS Skills:**
 
 > Coming soon — Skills documentation will be added here.
+
+---
+
+## Supported Agents
+
+| Agent | Status | Notes |
+|:------|:------:|:------|
+| OpenClaw | ✅ | Native MCP support |
+| Claude Desktop | ✅ | Native MCP support |
+| Claude Code | ✅ | Via `claude mcp add` |
+| CodeBuddy | ✅ | MCP config in settings |
+| Cursor | ✅ | MCP config in settings |
+| Windsurf | ✅ | MCP config in settings |
+| Cline | ✅ | MCP config in settings |
+| Trae | ✅ | MCP config in settings |
+| Gemini CLI | 🔜 | Coming soon |
+| GitHub Copilot | 🔜 | Coming soon |
 
 ---
 
