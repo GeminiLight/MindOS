@@ -1,33 +1,28 @@
-# My Mind
+# template/
 
-个人知识操作系统，将工作流程、偏好和配置沉淀为可复用的文档，供 Agent 执行时直接引用。
+MindOS preset templates for initializing your personal knowledge base.
 
-## 📁 目录结构
+## Presets
 
+- `template/en/`: English preset
+- `template/zh/`: Chinese preset
+
+## Quick Start
+
+```bash
+# 1) Choose one preset and copy it to my-mind/
+cp -r template/en my-mind/
+# or
+# cp -r template/zh my-mind/
+
+# 2) Configure MIND_ROOT (point MCP and App to your knowledge base)
+echo "MIND_ROOT=$(pwd)/my-mind" >> app/.env.local
+
+# 3) Start filling content from Profile/
 ```
-my-mind/
-├── INSTRUCTION.md  # 系统规则（不可变内核）
-├── README.md       # 知识库总索引（本文件）
-├── TODO.md         # 待办事项
-├── CHANGELOG.md    # 完成记录（按日期倒序）
-├── Profile/        # 个人身份与上下文配置
-├── Configurations/ # 环境配置与工具 SOP
-├── Workflows/      # 工作流 SOP
-├── Growth/         # 个人成长
-├── Resources/      # 外部资源收藏
-└── Projects/       # 个人项目
-```
 
-## 🗂️ 目录职责
+## Notes
 
-| 目录 | 适用任务 |
-|------|----------|
-| `Profile/` | 个人身份、偏好、目标与全局上下文 |
-| `Configurations/` | 环境初始化、工具安装、Agent 配置 |
-| `Workflows/Research/` | 文献调研、idea 生成、实验、论文写作与投稿 |
-| `Workflows/Startup/` | 产品设计、技术开发、市场营销 |
-| `Workflows/Media/` | 媒体内容创作 |
-| `Workflows/Information/` | 信息获取与整理 |
-| `Growth/` | 个人成长、学习规划 |
-| `Resources/` | 外部资源收藏（GitHub 项目、工具、文章等）|
-| `Projects/` | 产品/科研项目文档 |
+- `my-mind/` is your private workspace and is git-ignored.
+- Keep preset structure stable so agents can locate files predictably.
+- If you add/rename folders in presets, update docs accordingly.

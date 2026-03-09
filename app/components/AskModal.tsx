@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Sparkles, Send, Loader2, Paperclip, FileText, Table, StopCircle } from 'lucide-react';
+import { X, Sparkles, Send, Loader2, Paperclip, FileText, Table, StopCircle, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useLocale } from '@/lib/LocaleContext';
@@ -66,6 +66,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<'thinking' | 'streaming'>('thinking');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
 
   // @-mention state
@@ -166,6 +167,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
     setInput('');
     setAttachedFiles([]);
     setIsLoading(true);
+    setLoadingPhase('thinking');
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -178,7 +180,17 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         signal: controller.signal,
       });
 
-      if (!res.ok || !res.body) throw new Error(`Request failed (${res.status})`);
+      if (!res.ok) {
+        // Try to extract error message from JSON response
+        let errorMsg = `Request failed (${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody.error) errorMsg = errBody.error;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      if (!res.body) throw new Error('No response body');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -189,7 +201,9 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        assistantContent += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk && loadingPhase === 'thinking') setLoadingPhase('streaming');
+        assistantContent += chunk;
         setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { role: 'assistant', content: assistantContent };
@@ -203,7 +217,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           const updated = [...prev];
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: 'Error: No response from AI. Please check your API key and provider settings.',
+            content: `__error__${t.ask.errorNoResponse}`,
           };
           return updated;
         });
@@ -212,16 +226,17 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       if ((err as Error).name === 'AbortError') {
         // Stopped by user — leave partial content as-is
       } else {
+        const errMsg = err instanceof Error ? err.message : 'Something went wrong';
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `Error: ${err instanceof Error ? err.message : 'Something went wrong'}`,
+          content: `__error__${errMsg}`,
         }]);
       }
     } finally {
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, messages, isLoading, currentFile, attachedFiles, mentionQuery]);
+  }, [input, messages, isLoading, currentFile, attachedFiles, mentionQuery, loadingPhase, t.ask.errorNoResponse]);
 
   if (!open) return null;
 
@@ -288,6 +303,13 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                 >
                   {m.content}
                 </div>
+              ) : m.content.startsWith('__error__') ? (
+                <div className="max-w-[85%] px-3 py-2.5 rounded-xl rounded-bl-sm border border-red-500/20 bg-red-500/8 text-sm">
+                  <div className="flex items-start gap-2 text-red-400">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{m.content.slice(9)}</span>
+                  </div>
+                </div>
               ) : (
                 <div className="max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm bg-muted text-foreground text-sm">
                   {m.content
@@ -296,7 +318,12 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                         isStreaming={isLoading && i === messages.length - 1}
                       />
                     : isLoading && i === messages.length - 1
-                      ? <Loader2 size={14} className="animate-spin" style={{ color: 'var(--amber)' }} />
+                      ? <div className="flex items-center gap-2 py-1">
+                          <Loader2 size={14} className="animate-spin" style={{ color: 'var(--amber)' }} />
+                          <span className="text-xs text-muted-foreground animate-pulse">
+                            {loadingPhase === 'thinking' ? t.ask.thinking : t.ask.generating}
+                          </span>
+                        </div>
                       : null
                   }
                 </div>

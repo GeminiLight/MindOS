@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/logo-square.svg" alt="MindOS" width="80" />
   <br />
-  <strong style="font-size: 1.5em;">MindOS</strong>
+  <strong style="font-size: 2em;">MindOS</strong>
 </p>
 
 <p align="center">
@@ -81,8 +81,10 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 
-# Initialize your knowledge base from the template
-cp -r template/ my-mind/
+# Initialize your knowledge base from a preset template
+cp -r template/en my-mind/
+# Or use the Chinese preset:
+# cp -r template/zh my-mind/
 
 # Configure environment variables
 cp app/.env.example app/.env.local
@@ -139,51 +141,33 @@ Register the MindOS MCP Server in your Agent client to allow the Agent to direct
 cd mcp && npm install && npm run build
 ```
 
-<details>
-<summary><strong>Full MCP Toolset for Agents</strong></summary>
-
-| Tool | Description |
-|------|-------------|
-| `mindos_bootstrap` | Load startup context (INSTRUCTION + README) in one call |
-| `mindos_list_files` | Full file tree of the knowledge base |
-| `mindos_read_file` | Read file content with pagination |
-| `mindos_write_file` | Overwrite file (protected files blocked) |
-| `mindos_create_file` | Create new .md/.csv file |
-| `mindos_delete_file` | Delete file (protected files blocked) |
-| `mindos_rename_file` | Rename file in-place |
-| `mindos_move_file` | Move file + report affected backlinks |
-| `mindos_search_notes` | Full-text search with scope/type/date filters |
-| `mindos_get_recent` | Recently modified files |
-| `mindos_get_backlinks` | Find all files referencing a given file |
-| `mindos_get_history` | Git commit history for a file |
-| `mindos_get_file_at_version` | Read file at a specific git commit |
-| `mindos_append_csv` | Append row to CSV file |
-| `mindos_read_lines` | Read file as numbered lines |
-| `mindos_insert_lines` | Insert lines at position |
-| `mindos_update_lines` | Replace line range |
-| `mindos_append_to_file` | Append content to file end |
-| `mindos_insert_after_heading` | Insert content after a heading |
-| `mindos_update_section` | Replace a markdown section |
-
-</details>
-
-**MindOS Skills:**
-
-Install Skills via `npx skills add`:
-
-```bash
-npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos
-npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-zh
-npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/.claude-internal/skills/mindos-mcp-skill-sync
-npx skills add https://github.com/GeminiLight/mindos-dev/tree/main/app/.claude/skills/create-plugin
-```
+### 4. Install MindOS Skills
 
 | Skill | Description |
 |-------|-------------|
 | `mindos` | Knowledge base operation guide (English) — read/write notes, search, manage SOPs, maintain Profiles |
 | `mindos-zh` | Knowledge base operation guide (Chinese) — same capabilities, Chinese interface |
-| `mindos-mcp-skill-sync` | Detect and fix drift between App, MCP Server, and knowledge base |
-| `create-plugin` | Guide for creating plugins (renderers and agent tools) in the MindOS app |
+
+Recommended install pattern:
+
+```bash
+npx skills add <owner/repo> --skill <skill-name>
+```
+
+Example (official community format):
+
+```bash
+npx skills add https://github.com/microsoft/skills --skill azure-diagnostics
+```
+
+Install MindOS skills:
+
+```bash
+npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos
+npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
+```
+
+
 
 ---
 
@@ -223,18 +207,18 @@ graph LR
 
 ## 🤝 Supported Agents
 
-| Agent | Status | Notes |
-|:------|:------:|:------|
-| OpenClaw | ✅ | Native MCP support |
-| Claude Desktop | ✅ | Native MCP support |
-| Claude Code | ✅ | Via `claude mcp add` |
-| CodeBuddy | ✅ | MCP config in settings |
-| Cursor | ✅ | MCP config in settings |
-| Windsurf | ✅ | MCP config in settings |
-| Cline | ✅ | MCP config in settings |
-| Trae | ✅ | MCP config in settings |
-| Gemini CLI | 🔜 | Coming soon |
-| GitHub Copilot | 🔜 | Coming soon |
+| Agent | MCP | Skills |
+|:------|:---:|:------:|
+| OpenClaw | ✅ | ✅ |
+| Claude Desktop | ✅ | ✅ |
+| Claude Code | ✅ | ✅ |
+| CodeBuddy | ✅ | ✅ |
+| Cursor | ✅ | ✅ |
+| Windsurf | ✅ | ✅ |
+| Cline | ✅ | ✅ |
+| Trae | ✅ | ✅ |
+| Gemini CLI | ✅ | ✅ |
+| GitHub Copilot | ✅ | ✅ |
 
 ---
 
@@ -244,7 +228,7 @@ graph LR
 MindOS/
 ├── app/              # Next.js 15 Frontend — Browse, edit, and interact with AI
 ├── mcp/              # MCP Server Core — Standardized toolset for Agents
-├── template/         # Knowledge base structure template — Copy to my-mind/
+├── template/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/
 ├── my-mind/          # Your private shared memory (Git-ignored for privacy)
 ├── SERVICES.md       # Technical and Service Architecture Overview
 └── README.md
