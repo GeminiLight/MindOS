@@ -35,6 +35,11 @@ function triggerSearch() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
 }
 
+function triggerAsk() {
+  // Dispatch ⌘/ to open the Sidebar's AskModal
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }));
+}
+
 export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
@@ -42,11 +47,6 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
   const renderers = getAllRenderers();
-
-  const shortcuts = [
-    { key: '⌘/', label: t.home.shortcuts.askAI },
-    { key: '⌘,', label: t.home.shortcuts.settings },
-  ];
 
   const lastFile = recent[0];
 
@@ -64,27 +64,46 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
           {t.app.tagline}
         </p>
 
-        {/* Search bar — prominent, clickable */}
-        <button
-          onClick={triggerSearch}
-          className="w-full max-w-[520px] flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 cursor-text hover:border-amber-500/40 group"
+        {/* Search bar — dual-mode: Search + Ask AI */}
+        <div
+          className="w-full max-w-[520px] flex items-center rounded-xl border transition-all duration-150 hover:border-amber-500/40 group"
           style={{
             background: 'var(--card)',
             borderColor: 'var(--border)',
             marginLeft: '1rem',
           }}
         >
-          <Search size={16} style={{ color: 'var(--muted-foreground)' }} className="shrink-0 group-hover:text-amber-500 transition-colors" />
-          <span className="text-sm flex-1 text-left" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            {t.search.placeholder}
-          </span>
-          <kbd
-            className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium"
-            style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+          {/* Search area */}
+          <button
+            onClick={triggerSearch}
+            className="flex-1 flex items-center gap-3 px-4 py-3 cursor-text"
           >
-            ⌘K
-          </kbd>
-        </button>
+            <Search size={16} style={{ color: 'var(--muted-foreground)' }} className="shrink-0 group-hover:text-amber-500 transition-colors" />
+            <span className="text-sm flex-1 text-left" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              {t.search.placeholder}
+            </span>
+            <kbd
+              className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium"
+              style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+            >
+              ⌘K
+            </kbd>
+          </button>
+
+          {/* Divider */}
+          <div className="w-px h-5 shrink-0" style={{ background: 'var(--border)' }} />
+
+          {/* Ask AI button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); triggerAsk(); }}
+            title="⌘/"
+            className="flex items-center gap-1.5 px-3 py-3 rounded-r-xl text-sm font-medium transition-colors hover:bg-amber-500/10 shrink-0"
+            style={{ color: 'var(--amber)', fontFamily: "'IBM Plex Sans', sans-serif" }}
+          >
+            <Sparkles size={14} />
+            <span className="hidden sm:inline">{t.home.shortcuts.askAI}</span>
+          </button>
+        </div>
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-2.5 mt-4" style={{ paddingLeft: '1rem' }}>
@@ -119,52 +138,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
           </Link>
         </div>
 
-        {/* Remaining shortcut hints (search removed — has its own bar now) */}
-        <div className="flex flex-wrap gap-2 mt-3" style={{ paddingLeft: '1rem' }}>
-          {shortcuts.map(({ key, label }) => (
-            <span key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
-              <kbd className="font-mono text-xs font-medium" style={{ color: 'var(--foreground)' }}>{key}</kbd>
-              <span>{label}</span>
-            </span>
-          ))}
-        </div>
       </div>
-
-      {/* Plugins — compact 3-column grid, always visible */}
-      {renderers.length > 0 && (
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <Puzzle size={13} style={{ color: 'var(--amber)' }} />
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
-              {t.home.plugins}
-            </h2>
-            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
-              {renderers.length}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {renderers.map((r) => {
-              const entryPath = deriveEntryPath(r.id);
-              return (
-                <Link
-                  key={r.id}
-                  href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
-                  className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-semibold truncate block" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                      {r.name}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Recently modified — timeline feed */}
       {recent.length > 0 && (() => {
@@ -240,6 +214,42 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
         </section>
         );
       })()}
+
+      {/* Plugins — compact 3-column grid */}
+      {renderers.length > 0 && (
+        <section className="mb-12">
+          <div className="flex items-center gap-2 mb-4">
+            <Puzzle size={13} style={{ color: 'var(--amber)' }} />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
+              {t.home.plugins}
+            </h2>
+            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
+              {renderers.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {renderers.map((r) => {
+              const entryPath = deriveEntryPath(r.id);
+              return (
+                <Link
+                  key={r.id}
+                  href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
+                  className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-semibold truncate block" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {r.name}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <div className="mt-16 flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4, fontFamily: "'IBM Plex Mono', monospace" }}>
