@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition, useCallback, useEffect } from 'react';
-import Link from 'next/link';
-import { ChevronRight, Edit3, Save, X, Loader2, Home, LayoutTemplate } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate } from 'lucide-react';
 import MarkdownView from '@/components/MarkdownView';
 import CsvView from '@/components/CsvView';
+import Backlinks from '@/components/Backlinks';
+import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import TableOfContents from '@/components/TableOfContents';
 import { resolveRenderer, loadDisabledState } from '@/lib/renderers/registry';
@@ -17,33 +18,6 @@ interface ViewPageClientProps {
   saveAction: (content: string) => Promise<void>;
   appendRowAction?: (newRow: string[]) => Promise<{ newContent: string }>;
   initialEditing?: boolean;
-}
-
-function Breadcrumb({ filePath }: { filePath: string }) {
-  const parts = filePath.split('/');
-  return (
-    <nav className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-      <Link href="/" className="hover:text-foreground transition-colors">
-        <Home size={14} />
-      </Link>
-      {parts.map((part, i) => {
-        const isLast = i === parts.length - 1;
-        const href = '/view/' + parts.slice(0, i + 1).map(encodeURIComponent).join('/');
-        return (
-          <span key={i} className="flex items-center gap-1">
-            <ChevronRight size={12} className="text-muted-foreground/50" />
-            {isLast ? (
-              <span className="text-foreground font-medium" suppressHydrationWarning>{part}</span>
-            ) : (
-              <Link href={href} className="hover:text-foreground transition-colors truncate max-w-[200px]" suppressHydrationWarning>
-                {part}
-              </Link>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
 }
 
 export default function ViewPageClient({
@@ -60,9 +34,30 @@ export default function ViewPageClient({
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [useRaw, setUseRaw] = useState(false);
+  const [useRaw, setUseRaw] = useState(true); // Default to true, will be overridden by useEffect
   const [rendererKey, setRendererKey] = useState(0);
   const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
+
+  // Load persistent renderer preference
+  useEffect(() => {
+    const saved = localStorage.getItem('mindos-use-raw');
+    if (saved !== null) {
+      setUseRaw(saved === 'true');
+    } else {
+      // Default: if it's an .md file, maybe we want the graph by default?
+      // But user said "Wiki Graph是否开启的状态应该是全局的", 
+      // let's default to false (show graph) if not set, to be "Agentic"
+      setUseRaw(false);
+    }
+  }, []);
+
+  const handleToggleRaw = useCallback(() => {
+    setUseRaw(prev => {
+      const next = !prev;
+      localStorage.setItem('mindos-use-raw', String(next));
+      return next;
+    });
+  }, []);
 
   // Load disabled state from localStorage on mount
   useEffect(() => {
@@ -154,7 +149,7 @@ export default function ViewPageClient({
             {/* Renderer toggle — only shown when a custom renderer exists */}
             {renderer && !editing && (
               <button
-                onClick={() => setUseRaw(v => !v)}
+                onClick={handleToggleRaw}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{
                   background: useRaw ? 'var(--muted)' : 'var(--amber)' + '22',
@@ -233,12 +228,15 @@ export default function ViewPageClient({
             )}
           </div>
         ) : showRenderer ? (
-          <renderer.component
-            filePath={filePath}
-            content={savedContent}
-            extension={extension}
-            saveAction={handleRendererSave}
-          />
+          <div className="max-w-[900px] mx-auto xl:mr-[220px]">
+            <renderer.component
+              filePath={filePath}
+              content={savedContent}
+              extension={extension}
+              saveAction={handleRendererSave}
+            />
+            <Backlinks filePath={filePath} />
+          </div>
         ) : (
           <div className="max-w-[900px] mx-auto xl:mr-[220px]">
             {extension === 'csv' ? (
@@ -252,6 +250,7 @@ export default function ViewPageClient({
                 <TableOfContents content={savedContent} />
               </>
             )}
+            <Backlinks filePath={filePath} />
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { X, Settings, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle2, Puzzle } from 'lucide-react';
+import { X, Settings, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle2, Puzzle, RotateCcw } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { Locale } from '@/lib/i18n';
 import { getAllRenderers, loadDisabledState, setRendererEnabled, isRendererEnabled } from '@/lib/renderers/registry';
@@ -18,8 +18,9 @@ interface AiSettings {
 
 interface SettingsData {
   ai: AiSettings;
-  sopRoot: string;
+  mindRoot: string;
   envOverrides?: Record<string, boolean>;
+  envValues?: Record<string, string>;
 }
 
 interface SettingsModalProps {
@@ -72,6 +73,20 @@ function EnvBadge({ overridden }: { overridden: boolean }) {
   if (!overridden) return null;
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono ml-1.5">env</span>
+  );
+}
+
+function ResetEnvButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors ml-1.5 font-mono"
+      title={title}
+    >
+      <RotateCcw size={10} />
+      env
+    </button>
   );
 }
 
@@ -175,7 +190,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai: data.ai, sopRoot: data.sopRoot }),
+        body: JSON.stringify({ ai: data.ai, mindRoot: data.mindRoot }),
       });
       setStatus(res.ok ? 'saved' : 'error');
       setTimeout(() => setStatus('idle'), 2500);
@@ -194,6 +209,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   if (!open) return null;
 
   const env = data?.envOverrides ?? {};
+  const envVal = data?.envValues ?? {};
 
   const FONTS = [
     { value: 'lora', label: 'Lora (serif)', style: { fontFamily: 'Lora, Georgia, serif' } },
@@ -257,11 +273,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               {/* AI Tab */}
               {tab === 'ai' && data && (
                 <div className="space-y-5">
-                  <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} /></>}>
+                  <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} />{env.AI_PROVIDER && <ResetEnvButton onClick={() => updateAi({ provider: (envVal.AI_PROVIDER || 'anthropic') as 'anthropic' | 'openai' })} title={t.settings.ai.resetToEnv} />}</>}>
                     <Select
                       value={data.ai.provider}
                       onChange={e => updateAi({ provider: e.target.value as 'anthropic' | 'openai' })}
-                      disabled={env.AI_PROVIDER}
                     >
                       <option value="anthropic">Anthropic (Claude)</option>
                       <option value="openai">OpenAI / compatible</option>
@@ -270,54 +285,49 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                   {data.ai.provider === 'anthropic' ? (
                     <>
-                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
+                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} />{env.ANTHROPIC_MODEL && <ResetEnvButton onClick={() => updateAi({ anthropicModel: '' })} title={t.settings.ai.resetToEnv} />}</>}>
                         <Input
                           value={data.ai.anthropicModel}
                           onChange={e => updateAi({ anthropicModel: e.target.value })}
-                          placeholder="claude-sonnet-4-6"
-                          disabled={env.ANTHROPIC_MODEL}
+                          placeholder={envVal.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} /></>}
+                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} />{env.ANTHROPIC_API_KEY && <ResetEnvButton onClick={() => updateAi({ anthropicApiKey: '' })} title={t.settings.ai.resetToEnv} />}</>}
                         hint={env.ANTHROPIC_API_KEY ? t.settings.ai.envFieldNote('ANTHROPIC_API_KEY') : t.settings.ai.keyHint}
                       >
                         <ApiKeyInput
                           value={data.ai.anthropicApiKey}
                           onChange={v => updateAi({ anthropicApiKey: v })}
-                          disabled={env.ANTHROPIC_API_KEY}
                         />
                       </Field>
                     </>
                   ) : (
                     <>
-                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
+                      <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} />{env.OPENAI_MODEL && <ResetEnvButton onClick={() => updateAi({ openaiModel: '' })} title={t.settings.ai.resetToEnv} />}</>}>
                         <Input
                           value={data.ai.openaiModel}
                           onChange={e => updateAi({ openaiModel: e.target.value })}
-                          placeholder="gpt-4o-mini"
-                          disabled={env.OPENAI_MODEL}
+                          placeholder={envVal.OPENAI_MODEL || 'gpt-4o-mini'}
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} /></>}
+                        label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} />{env.OPENAI_API_KEY && <ResetEnvButton onClick={() => updateAi({ openaiApiKey: '' })} title={t.settings.ai.resetToEnv} />}</>}
                         hint={env.OPENAI_API_KEY ? t.settings.ai.envFieldNote('OPENAI_API_KEY') : t.settings.ai.keyHint}
                       >
                         <ApiKeyInput
                           value={data.ai.openaiApiKey}
                           onChange={v => updateAi({ openaiApiKey: v })}
-                          disabled={env.OPENAI_API_KEY}
                         />
                       </Field>
                       <Field
-                        label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}
+                        label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} />{env.OPENAI_BASE_URL && <ResetEnvButton onClick={() => updateAi({ openaiBaseUrl: '' })} title={t.settings.ai.resetToEnv} />}</>}
                         hint={t.settings.ai.baseUrlHint}
                       >
                         <Input
                           value={data.ai.openaiBaseUrl}
                           onChange={e => updateAi({ openaiBaseUrl: e.target.value })}
-                          placeholder="https://api.openai.com/v1"
-                          disabled={env.OPENAI_BASE_URL}
+                          placeholder={envVal.OPENAI_BASE_URL || 'https://api.openai.com/v1'}
                         />
                       </Field>
                     </>
@@ -326,7 +336,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {Object.values(env).some(Boolean) && (
                     <div className="flex items-start gap-2 text-xs text-amber-500/80 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2.5">
                       <AlertCircle size={13} className="shrink-0 mt-0.5" />
-                      <span>{t.settings.ai.envHint.split('env')[0]}<span className="font-mono bg-amber-500/15 px-1 rounded">env</span>{t.settings.ai.envHint.split('env')[1]}</span>
+                      <span>{t.settings.ai.envHint}</span>
                     </div>
                   )}
                 </div>
@@ -423,8 +433,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                     hint={env.MIND_ROOT ? t.settings.knowledge.envNote : t.settings.knowledge.sopRootHint}
                   >
                     <Input
-                      value={data.sopRoot}
-                      onChange={e => setData(d => d ? { ...d, sopRoot: e.target.value } : d)}
+                      value={data.mindRoot}
+                      onChange={e => setData(d => d ? { ...d, mindRoot: e.target.value } : d)}
                       placeholder="/path/to/your/notes"
                     />
                   </Field>

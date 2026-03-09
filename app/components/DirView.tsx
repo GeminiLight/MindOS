@@ -1,45 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, ChevronRight, Home } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List } from 'lucide-react';
+import Breadcrumb from '@/components/Breadcrumb';
+import { encodePath } from '@/lib/utils';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
 
 interface DirViewProps {
   dirPath: string;
   entries: FileNode[];
-}
-
-function encodePath(p: string) {
-  return p.split('/').map(encodeURIComponent).join('/');
-}
-
-function Breadcrumb({ filePath }: { filePath: string }) {
-  const parts = filePath.split('/');
-  return (
-    <nav className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-      <Link href="/" className="hover:text-foreground transition-colors">
-        <Home size={14} />
-      </Link>
-      {parts.map((part, i) => {
-        const isLast = i === parts.length - 1;
-        const href = '/view/' + parts.slice(0, i + 1).map(encodeURIComponent).join('/');
-        return (
-          <span key={i} className="flex items-center gap-1">
-            <ChevronRight size={12} className="text-muted-foreground/50" />
-            {isLast ? (
-              <span className="text-foreground font-medium" suppressHydrationWarning>{part}</span>
-            ) : (
-              <Link href={href} className="hover:text-foreground transition-colors truncate max-w-[200px]" suppressHydrationWarning>
-                {part}
-              </Link>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
 }
 
 function FileIcon({ node }: { node: FileNode }) {
@@ -59,8 +30,26 @@ function countFiles(node: FileNode): number {
   return (node.children || []).reduce((acc, c) => acc + countFiles(c), 0);
 }
 
+const DIR_VIEW_KEY = 'mindos-dir-view';
+
+function useDirViewPref() {
+  const [view, setViewState] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    const saved = localStorage.getItem(DIR_VIEW_KEY);
+    if (saved === 'list' || saved === 'grid') setViewState(saved);
+  }, []);
+
+  const setView = (v: 'grid' | 'list') => {
+    setViewState(v);
+    localStorage.setItem(DIR_VIEW_KEY, v);
+  };
+
+  return [view, setView] as const;
+}
+
 export default function DirView({ dirPath, entries }: DirViewProps) {
-  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [view, setView] = useDirViewPref();
   const { t } = useLocale();
   const fileCounts = useMemo(() => {
     const map = new Map<string, number>();

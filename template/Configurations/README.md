@@ -1,4 +1,4 @@
-# 🧠 使用规范
+# Configurations
 
 本文件是 Configurations 目录的总览与使用约定，Agent 执行任务前应先读取此文件。
 
@@ -14,7 +14,7 @@
 
 ```
 Configurations/
-├── 🧠 使用规范.md          # 本文件，总览与约定
+├── README.md                   # 本文件，总览与约定
 ├── 🖥️ Server Setup.md     # 服务器初始化 SOP
 ├── 💻 MacBook Setup.md    # MacBook 初始化 SOP
 ├── 🤖 Agent 工具配置.md   # AI Agent CLI 工具安装与配置
@@ -60,7 +60,7 @@ Configurations/
 
 - 文件之间可通过相对路径互相引用
 - 当某文件的**内容或文件名发生变动**时，应同步更新所有引用该文件的地方
-- 本文件（使用规范.md）维护目录结构，是引用关系的总索引，每次新增、删除、重命名文件时必须同步更新
+- 本文件（README.md）维护目录结构，是引用关系的总索引，每次新增、删除、重命名文件时必须同步更新
 
 ## 📐 更新规则
 

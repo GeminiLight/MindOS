@@ -40,7 +40,23 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
+// Heading components with suppressHydrationWarning to prevent
+// rehype-slug + emoji hydration mismatches between server and client
+function makeHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') {
+  const HeadingComponent = ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <Tag {...props} suppressHydrationWarning>{children}</Tag>
+  );
+  HeadingComponent.displayName = Tag;
+  return HeadingComponent;
+}
+
 const components: Components = {
+  h1: makeHeading('h1'),
+  h2: makeHeading('h2'),
+  h3: makeHeading('h3'),
+  h4: makeHeading('h4'),
+  h5: makeHeading('h5'),
+  h6: makeHeading('h6'),
   pre({ children, ...props }) {
     // Extract code string from children
     let codeString = '';

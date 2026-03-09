@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Sparkles, Settings } from 'lucide-react';
+import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Settings } from 'lucide-react';
 import FileTree from './FileTree';
 import SearchModal from './SearchModal';
 import AskModal from './AskModal';
@@ -62,10 +63,10 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-4 border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo id="desktop" />
           <span className="font-semibold text-foreground text-sm tracking-wide" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>MindOS</span>
-        </div>
+        </Link>
         {/* Mobile close */}
         <button onClick={() => setMobileOpen(false)} className="md:hidden p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <X size={16} />
@@ -74,9 +75,6 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
         <div className="hidden md:flex items-center gap-1">
           <button onClick={() => setSearchOpen(true)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t.sidebar.searchTitle} aria-label={t.sidebar.searchTitle}>
             <Search size={15} />
-          </button>
-          <button onClick={() => setAskOpen(true)} className="p-1 rounded hover:bg-muted transition-colors" style={{ color: 'var(--amber)' }} title={t.sidebar.askTitle} aria-label={t.sidebar.askTitle}>
-            <Sparkles size={15} />
           </button>
           <button onClick={() => setSettingsOpen(true)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t.sidebar.settingsTitle} aria-label={t.sidebar.settingsTitle}>
             <Settings size={15} />
@@ -110,16 +108,13 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
         <button onClick={() => setMobileOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
           <Menu size={20} />
         </button>
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo id="mobile" />
           <span className="font-semibold text-foreground text-sm tracking-wide">MindOS</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-1">
           <button onClick={() => setSearchOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
             <Search size={20} />
-          </button>
-          <button onClick={() => setAskOpen(true)} className="p-1.5 rounded-lg transition-colors" style={{ color: 'var(--amber)' }}>
-            <Sparkles size={20} />
           </button>
           <button onClick={() => setSettingsOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
             <Settings size={20} />

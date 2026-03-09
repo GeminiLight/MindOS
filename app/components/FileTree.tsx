@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode } from '@/lib/types';
+import { encodePath } from '@/lib/utils';
 import { ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2, Trash2, Pencil } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
@@ -17,10 +19,6 @@ function getIcon(node: FileNode) {
   if (node.type === 'directory') return null;
   if (node.extension === '.csv') return <Table size={14} className="text-emerald-400 shrink-0" />;
   return <FileText size={14} className="text-zinc-400 shrink-0" />;
-}
-
-function encodePath(filePath: string): string {
-  return filePath.split('/').map(encodeURIComponent).join('/');
 }
 
 function getCurrentFilePath(pathname: string): string {
@@ -104,26 +102,33 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
 
   return (
     <div>
-      <div className="relative group/dir">
+      <div className="relative group/dir flex items-center">
         <button
           onClick={toggle}
-          className={`
-            w-full flex items-center gap-1.5 px-2 py-1 rounded text-left
-            text-sm transition-colors duration-100
-            hover:bg-muted text-muted-foreground
-            ${isActive ? 'text-foreground' : ''}
-          `}
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          className="shrink-0 p-1 rounded hover:bg-muted text-zinc-500 transition-colors"
+          style={{ marginLeft: `${depth * 12 + 4}px` }}
+          aria-label={open ? 'Collapse' : 'Expand'}
         >
-          <span className="shrink-0 transition-transform duration-150" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-            <ChevronDown size={13} className="text-zinc-500" />
+          <span className="block transition-transform duration-150" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+            <ChevronDown size={13} />
           </span>
+        </button>
+        <Link
+          href={`/view/${encodePath(node.path)}`}
+          onClick={onNavigate}
+          className={`
+            flex-1 flex items-center gap-1.5 px-1 py-1 rounded text-left min-w-0
+            text-sm transition-colors duration-100
+            hover:bg-muted
+            ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
+          `}
+        >
           {open
             ? <FolderOpen size={14} className="text-yellow-400 shrink-0" />
             : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
-          <span className="truncate leading-5 flex-1" suppressHydrationWarning>{node.name}</span>
-        </button>
+          <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
+        </Link>
         <button
           onClick={(e) => { e.stopPropagation(); setOpen(true); setShowNewFile(true); }}
           className="
