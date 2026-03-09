@@ -1194,8 +1194,6 @@
                 files.forEach(id => document.getElementById(id).classList.remove('mind-file--syncing'));
                 bridgeCenter.classList.remove('bridge-active');
                 protocolDot.classList.remove('bridge-protocol-dot--active');
-                if (bridgeStatusZh) bridgeStatusZh.textContent = '等待变更...';
-                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Awaiting changes...';
                 await wait(1500);
 
                 // Clear previous agent active/done states for agents in THIS round

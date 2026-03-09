@@ -377,7 +377,7 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 .bridge-center {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 1.5rem 1rem;
-    position: relative; min-width: 140px;
+    position: relative; min-width: 220px;
 }
 .bridge-hub {
     position: relative; width: 88px; height: 88px;
@@ -429,6 +429,7 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 .bridge-protocol {
     display: flex; align-items: center; gap: 0.4rem;
     margin-top: 0.5rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+    width: 100%; justify-content: center;
 }
 .bridge-protocol-tag {
     background: var(--accent-dim); color: var(--accent); padding: 0.15rem 0.5rem;
@@ -439,7 +440,13 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     background: var(--muted-fg); transition: all 0.4s;
 }
 .bridge-protocol-dot--active { background: var(--success); box-shadow: 0 0 8px rgba(122, 173, 128, 0.6); }
-.bridge-protocol-status { color: var(--muted-fg); }
+.bridge-protocol-status {
+    color: var(--muted-fg);
+    display: inline-block;
+    min-width: 15ch;
+    text-align: left;
+    white-space: nowrap;
+}
 
 /* Flow Particles */
 .bridge-flow {
