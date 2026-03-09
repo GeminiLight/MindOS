@@ -1,25 +1,16 @@
-# Leo Chen
+# 陈立欧
 
-## Name
-Leo Chen
+## 关系
+- 研究生同学
 
-## Relationship
-研究生同学
+## 当前角色
+- 算法工程师
 
-## Current Role
-算法工程师
+## 对 MindOS 的价值
+- 可评估技术叙事是否可信、是否易被专业用户认可。
 
-## Location
-北京
+## 可协作方向
+- 上线前评审技术说明与演示脚本。
 
-## Communication Preference
-邮件+文档，偏好结构化讨论。
-
-## Last Interaction
-2026-02-20：讨论向量检索评测方案。
-
-## Next Action
-共享一版评测指标模板。
-
-## Notes
-对实验设计严谨，适合共同 review 技术方案。
+## 下一步
+- 约 30 分钟进行架构与外部叙事一致性评审。

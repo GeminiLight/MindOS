@@ -1,25 +1,16 @@
-# Ethan Zhao
+# 赵一辰
 
-## Name
-Ethan Zhao
+## 关系
+- 前同事
 
-## Relationship
-前同事
+## 当前角色
+- 技术负责人
 
-## Current Role
-技术负责人
+## 对 MindOS 的价值
+- 擅长团队级工具落地与采用策略。
 
-## Location
-深圳
+## 可协作方向
+- 设计从个人试用到团队扩散的增长路径。
 
-## Communication Preference
-语音会议优先，结论需落到 action list。
-
-## Last Interaction
-2026-03-08：沟通 MCP 服务部署经验。
-
-## Next Action
-发送一份部署 checklist。
-
-## Notes
-对工程质量和可维护性要求高。
+## 下一步
+- 评审试点用户转化与留存方案。

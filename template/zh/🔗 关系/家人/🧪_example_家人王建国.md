@@ -1,25 +1,16 @@
-# James Wang
+# 王建国
 
-## Name
-James Wang
+## 关系
+- 家人（父亲）
 
-## Relationship
-父亲
+## 背景
+- 退休教师，重视长期主义与执行纪律。
 
-## Current Role
-退休教师
+## 对 MindOS 的价值
+- 能从生活与节奏角度给出稳定性建议。
 
-## Location
-杭州
+## 可协作方向
+- 协助复盘每周执行节律是否过载。
 
-## Communication Preference
-电话优先，晚间沟通更方便。
-
-## Last Interaction
-2026-03-01：讨论家庭出行安排。
-
-## Next Action
-周末确认清明节返乡计划。
-
-## Notes
-对长期职业选择建议务实，重视稳定性。
+## 下一步
+- 每月同步一次目标与节奏复盘摘要。

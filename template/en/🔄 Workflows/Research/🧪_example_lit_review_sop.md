@@ -1,10 +1,16 @@
-# 🔬 Literature Review SOP Example
+# 🔬 Literature Review SOP Example: Proof-Backed Product Claims
 
-## Scope
-- Weekly paper scan for one topic.
+## Goal
+- Strengthen product messaging with credible research evidence.
 
 ## Steps
-1. Search papers
-2. Read abstract and method
-3. Capture notes in template
-4. Summarize action points
+1. Search 10 recent papers on memory systems and agent reliability.
+2. Extract 3 claims that map to MindOS value propositions.
+3. Convert each claim into one user-facing sentence + citation note.
+4. Store reusable snippets for landing page and investor updates.
+
+## Output Template
+- Claim:
+- Evidence source:
+- Product implication:
+- Safe marketing phrasing:

@@ -58,8 +58,8 @@ These rules are directory naming semantics, documented in `CONFIG.md`:
 
 Current template convention (en):
 
-- First-level examples: `👤 Profile/`, `📝 Notes/`, `🔗 Connections/`, `⚙️ Configurations/`, `🔄 Workflows/`, `📚 Resources/`, `🚀 Projects/`
-- Second-level examples: `Family/`, `Friends/`, `Classmates/`, `Colleagues/`, `Mentors/` (no emoji)
+- First-level examples: `👤 Profile/`, `📝 Notes/`, `🔗 Connections/`, `🔄 Workflows/`, `📚 Resources/`, `🚀 Projects/`
+- Second-level examples: `Family/`, `Friends/`, `Classmates/`, `Colleagues/` (no emoji)
 
 When naming policy changes:
 

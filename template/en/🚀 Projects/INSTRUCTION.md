@@ -9,6 +9,7 @@
 - Read root `INSTRUCTION.md` first.
 - Then read this directory `README.md` for navigation.
 - Keep edits minimal, structured, and traceable.
+- Keep product projects in `Products/`, research projects in `Research/`, and inactive projects in `Archived/`.
 
 ## Execution Order
 
@@ -22,6 +23,7 @@
 
 ## Sync Rules (Projects)
 
-- On new product project: create one folder under `Products/` and maintain standard docs inside it.
+- On new product project: create one folder under `Products/`.
 - On new research project: create one folder under `Research/`.
+- On archive: move project to `Archived/` and sync affected references.
 - On rename/delete/move: update this directory `README.md` and all path references.

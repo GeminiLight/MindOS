@@ -204,10 +204,13 @@ cd mcp && npm install && npm run build
 | `mindos` | Knowledge base operation guide (English) — read/write notes, search, manage SOPs, maintain Profiles |
 | `mindos-zh` | Knowledge base operation guide (Chinese) — same capabilities, Chinese interface |
 
-Install commands:
+Install one skill only (choose based on your preferred language):
 
 ```bash
+# English
 npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos
+
+# Chinese (optional)
 npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
 ```
 
@@ -267,6 +270,7 @@ graph LR
 
 | Agent | MCP | Skills |
 |:------|:---:|:------:|
+| MindOS Agent | ✅ | ✅ |
 | OpenClaw | ✅ | ✅ |
 | Claude Desktop | ✅ | ✅ |
 | Claude Code | ✅ | ✅ |

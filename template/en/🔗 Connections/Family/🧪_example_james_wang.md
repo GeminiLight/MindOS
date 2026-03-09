@@ -1,25 +1,16 @@
 # James Wang
 
-## Name
-James Wang
-
 ## Relationship
-Father
+- Father
 
-## Current Role
-Retired Teacher
+## Context
+- Former teacher, values long-term discipline and clear routines.
 
-## Location
-Hangzhou
+## MindOS Relevance
+- Useful sounding board for habit consistency and weekly planning cadence.
 
-## Communication Preference
-Phone calls preferred; evenings are best.
-
-## Last Interaction
-2026-03-01: discussed family travel plans.
+## Collaboration Potential
+- Can review personal execution rhythm and suggest simplification.
 
 ## Next Action
-Confirm Qingming holiday schedule this weekend.
-
-## Notes
-Gives practical long-term career advice and values stability.
+- Share monthly reflection summary and ask for one improvement suggestion.

@@ -1,25 +1,16 @@
-# Lily Lin
+# 林小丽
 
-## Name
-Lily Lin
+## 关系
+- 大学好友
 
-## Relationship
-大学好友
+## 当前角色
+- 产品经理
 
-## Current Role
-产品经理
+## 对 MindOS 的价值
+- 擅长产品定位与商业化表达。
 
-## Location
-上海
+## 可协作方向
+- 帮忙评审落地页文案与价值主张清晰度。
 
-## Communication Preference
-微信文字优先，工作日中午回复快。
-
-## Last Interaction
-2026-03-05：交流 AI 产品定价策略。
-
-## Next Action
-下周约 30 分钟线上交流增长实验设计。
-
-## Notes
-擅长 B 端定价与销售漏斗梳理。
+## 下一步
+- 邀请其评审“承诺-证据”首屏结构。
