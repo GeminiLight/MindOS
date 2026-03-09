@@ -14,9 +14,17 @@
 3. 如果API报错，也应当及时提示用户
 
 
+
+LANDING page 节日祝福的例子
+
+别人share模版，或者md
+
+
+[Auth] Token for MCP
+
 <!--  -->
 
-Skill
+Skill Creator，我现在要给我们这个MindOS创建一个极其好的Skills，请你也关联起来MCP的能力，帮我写一个极其好的，你觉得叫 mindos-mcp 怎么样？
 
 
 Landing的
@@ -42,6 +50,7 @@ git subtree push --prefix landing origin gh-pages
 有一些零散的想法agent 就可以自主执行，然后人机literally 共享第二大脑了是吗
 
 如果再反问agent，它会有意识的帮人复盘，哪些可以SOP；然后通过mcp存到MindOS，所有agent都可以用了
+
 
 
 
