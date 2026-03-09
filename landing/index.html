@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +8,17 @@
     <!-- Original Google Fonts: IBM Plex Mono, IBM Plex Sans, Lora -->
     <link rel="icon" type="image/svg+xml" href="img/logo-square.svg">
     <link rel="stylesheet" href="style.css">
+    <script>
+        // Prevent FOUC: apply theme & lang before first paint
+        (function() {
+            var t = localStorage.getItem('mindos-theme');
+            if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            if (t === 'light') document.documentElement.classList.add('early-light');
+            var l = localStorage.getItem('mindos-lang');
+            if (!l) l = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+            document.documentElement.lang = l;
+        })();
+    </script>
 </head>
 <body>
     <div class="grain"></div>
@@ -268,7 +279,7 @@
         <div class="container">
             <div class="section-header">
                 <span class="mono">02. THE VISION</span>
-                <h2 data-zh>为什么需要 Shared Mind?</h2><h2 data-en>Why Shared Mind?</h2>
+                <h2 data-zh>人机共享心智</h2><h2 data-en>Human-AI Shared Mind</h2>
                 <p class="section-sub" data-zh>击破人机协作结构性鸿沟，让人与 AI 在同一个心智空间中共生演进。</p>
                 <p class="section-sub" data-en>Breaking the structural gaps in human-AI collaboration — co-evolving within a single Shared Mind.</p>
             </div>
@@ -638,42 +649,8 @@
             </div>
 
             <div class="qs-dual">
-                <!-- Path 1: For Humans -->
+                <!-- Path 1: For Agents -->
                 <div class="qs-path animate-up">
-                    <div class="qs-path-header">
-                        <div class="qs-path-icon qs-path-icon--human">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </div>
-                        <div>
-                            <h3>For Humans</h3>
-                            <p class="qs-path-sub" data-zh>3 步启动 GUI 工作台</p>
-                            <p class="qs-path-sub" data-en>3 steps to launch the GUI</p>
-                        </div>
-                    </div>
-                    <div class="qs-terminal">
-                        <div class="qs-terminal-bar">
-                            <div class="qs-dots"><span></span><span></span><span></span></div>
-                            <span class="qs-terminal-title">Terminal</span>
-                        </div>
-                        <div class="qs-terminal-body">
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># 1. Clone & init</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/ my-mind/</div>
-                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 2. Configure</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span data-zh>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span><span data-en>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span></div>
-                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 3. Launch</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
-                            <div class="qs-line qs-line-result">
-                                <span class="qs-success-dot"></span>
-                                <span data-zh>Ready on http://localhost:3000</span>
-                                <span data-en>Ready on http://localhost:3000</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Path 2: For Agents -->
-                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
                     <div class="qs-path-header">
                         <div class="qs-path-icon qs-path-icon--agent">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
@@ -708,6 +685,40 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Path 2: For Humans -->
+                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--human">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div>
+                            <h3>For Humans</h3>
+                            <p class="qs-path-sub" data-zh>3 步启动 GUI 工作台</p>
+                            <p class="qs-path-sub" data-en>3 steps to launch the GUI</p>
+                        </div>
+                    </div>
+                    <div class="qs-terminal">
+                        <div class="qs-terminal-bar">
+                            <div class="qs-dots"><span></span><span></span><span></span></div>
+                            <span class="qs-terminal-title">Terminal</span>
+                        </div>
+                        <div class="qs-terminal-body">
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"># 1. Clone & init</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/ my-mind/</div>
+                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 2. Configure</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span data-zh>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span><span data-en>echo "MIND_ROOT=/path/to/my-mind" > app/.env.local</span></div>
+                            <div class="qs-line qs-line-gap"><span class="qs-prompt">$</span> <span class="qs-comment"># 3. Launch</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>Ready on http://localhost:3000 — 亦可通过公网 IP 访问</span>
+                                <span data-en>Ready on http://localhost:3000 — also accessible via public IP</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -723,8 +734,10 @@
     </footer>
 
     <script>
-        const state = { theme: localStorage.getItem('mindos-theme') || 'dark', lang: localStorage.getItem('mindos-lang') || 'zh', loopStarted: false };
-        const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); };
+        const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        const systemLang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+        const state = { theme: localStorage.getItem('mindos-theme') || systemTheme, lang: localStorage.getItem('mindos-lang') || systemLang, loopStarted: false };
+        const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); document.documentElement.classList.remove('early-light'); localStorage.setItem('mindos-theme', t); };
         const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
         applyTheme(state.theme); applyLang(state.lang);
 
@@ -745,52 +758,186 @@
             const agents = ['as-1','as-2','as-3','as-4','as-5'];
             const statusEls = agents.map(id => document.getElementById(id + '-status'));
             const barEls = agents.map(id => document.getElementById(id + '-bar'));
-
-            // Phase 1: Highlight files one by one
-            for (let i = 0; i < files.length; i++) {
-                await new Promise(r => setTimeout(r, 350));
-                document.getElementById(files[i]).classList.add('mind-file--syncing');
-            }
-
-            // Phase 2: Bridge activates
-            await new Promise(r => setTimeout(r, 400));
-            document.querySelector('.bridge-center').classList.add('bridge-active');
+            const bridgeCenter = document.querySelector('.bridge-center');
+            const protocolDot = document.querySelector('.bridge-protocol-dot');
             const bridgeStatusZh = document.getElementById('bridge-status');
             const bridgeStatusEn = document.getElementById('bridge-status-en');
+
+            const wait = ms => new Promise(r => setTimeout(r, ms));
+
+            // Utility: reset all states
+            const resetAll = () => {
+                files.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('mind-file--syncing', 'mind-file--editing');
+                });
+                agents.forEach((id, i) => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('agent-slot--active', 'agent-slot--done');
+                    statusEls[i].classList.remove('agent-slot-status--running', 'agent-slot-status--done');
+                    if (barEls[i]) { barEls[i].style.transition = 'none'; barEls[i].style.width = '0'; }
+                });
+                bridgeCenter.classList.remove('bridge-active');
+                protocolDot.classList.remove('bridge-protocol-dot--active');
+            };
+
+            // Utility: run a sync round
+            // editFileIdx = which file the human edits
+            // syncFiles = which files get synced to agents
+            // activeAgents = which agent indices execute, with their durations
+            const runRound = async (editFileIdx, syncFileIndices, agentConfigs) => {
+                // Step 1: Human edits a file (blink effect)
+                const editEl = document.getElementById(files[editFileIdx]);
+                editEl.classList.add('mind-file--editing');
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '检测到变更...';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Change detected...';
+                await wait(800);
+                editEl.classList.remove('mind-file--editing');
+
+                // Step 2: Sync files light up
+                for (const idx of syncFileIndices) {
+                    await wait(200);
+                    document.getElementById(files[idx]).classList.add('mind-file--syncing');
+                }
+
+                // Step 3: Bridge activates
+                await wait(350);
+                bridgeCenter.classList.add('bridge-active');
+                protocolDot.classList.add('bridge-protocol-dot--active');
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '同步中...';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Syncing...';
+
+                // Step 4: Agents execute in parallel
+                await wait(250);
+                const completions = [];
+                agentConfigs.forEach(({ idx, duration, stagger }) => {
+                    const p = new Promise(resolve => {
+                        setTimeout(() => {
+                            const el = document.getElementById(agents[idx]);
+                            el.classList.remove('agent-slot--done');
+                            statusEls[idx].classList.remove('agent-slot-status--done');
+                            el.classList.add('agent-slot--active');
+                            statusEls[idx].classList.add('agent-slot-status--running');
+                            const bar = barEls[idx];
+                            if (bar) {
+                                bar.style.transition = 'none'; bar.style.width = '0';
+                                requestAnimationFrame(() => {
+                                    bar.style.transition = 'width ' + duration + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
+                                    requestAnimationFrame(() => { bar.style.width = '100%'; });
+                                });
+                            }
+                            setTimeout(() => {
+                                statusEls[idx].classList.remove('agent-slot-status--running');
+                                statusEls[idx].classList.add('agent-slot-status--done');
+                                el.classList.add('agent-slot--done');
+                                resolve();
+                            }, duration);
+                        }, stagger);
+                    });
+                    completions.push(p);
+                });
+
+                await Promise.all(completions);
+                await wait(200);
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '心智已同步';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Mind synced';
+            };
+
+            // === ROUND 1: Initial full sync — user has SOP, all agents launch ===
+            // Files sync one by one
+            for (let i = 0; i < files.length; i++) {
+                await wait(300);
+                document.getElementById(files[i]).classList.add('mind-file--syncing');
+            }
+            await wait(350);
+            bridgeCenter.classList.add('bridge-active');
+            protocolDot.classList.add('bridge-protocol-dot--active');
             if (bridgeStatusZh) bridgeStatusZh.textContent = '同步中...';
             if (bridgeStatusEn) bridgeStatusEn.textContent = 'Syncing...';
-            document.querySelector('.bridge-protocol-dot').classList.add('bridge-protocol-dot--active');
+            await wait(250);
 
-            // Phase 3: Agents start NEAR-SIMULTANEOUSLY (parallel launch)
-            await new Promise(r => setTimeout(r, 300));
-            const durations = [2800, 2200, 3400, 2600, 1800]; // independent durations
-            const stagger = [0, 120, 60, 180, 90]; // near-simultaneous stagger
-
+            // All 5 agents start in parallel
+            const r1Durations = [2600, 2000, 3200, 2400, 1600];
+            const r1Stagger = [0, 100, 50, 150, 80];
+            const r1Completions = [];
             agents.forEach((id, i) => {
-                setTimeout(() => {
-                    const el = document.getElementById(id);
-                    el.classList.add('agent-slot--active');
-                    statusEls[i].classList.add('agent-slot-status--running');
-                    // Animate progress bar
-                    const bar = barEls[i];
-                    if (bar) {
-                        bar.style.transition = 'width ' + durations[i] + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
-                        requestAnimationFrame(() => { bar.style.width = '100%'; });
-                    }
-                    // Complete independently
+                const p = new Promise(resolve => {
                     setTimeout(() => {
-                        statusEls[i].classList.remove('agent-slot-status--running');
-                        statusEls[i].classList.add('agent-slot-status--done');
-                        el.classList.add('agent-slot--done');
-                    }, durations[i]);
-                }, stagger[i]);
+                        const el = document.getElementById(id);
+                        el.classList.add('agent-slot--active');
+                        statusEls[i].classList.add('agent-slot-status--running');
+                        const bar = barEls[i];
+                        if (bar) {
+                            bar.style.transition = 'width ' + r1Durations[i] + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
+                            requestAnimationFrame(() => { bar.style.width = '100%'; });
+                        }
+                        setTimeout(() => {
+                            statusEls[i].classList.remove('agent-slot-status--running');
+                            statusEls[i].classList.add('agent-slot-status--done');
+                            el.classList.add('agent-slot--done');
+                            resolve();
+                        }, r1Durations[i]);
+                    }, r1Stagger[i]);
+                });
+                r1Completions.push(p);
             });
-
-            // Phase 4: After all agents done, update bridge status
-            const maxDuration = Math.max(...durations) + Math.max(...stagger);
-            await new Promise(r => setTimeout(r, maxDuration + 200));
+            await Promise.all(r1Completions);
+            await wait(200);
             if (bridgeStatusZh) bridgeStatusZh.textContent = '心智已同步';
             if (bridgeStatusEn) bridgeStatusEn.textContent = 'Mind synced';
+
+            // === Continuous loop starts ===
+            const rounds = [
+                // Round 2: User updates Profile → Cursor & Claude Code re-run
+                { edit: 1, sync: [1, 3], agents: [
+                    { idx: 0, duration: 2200, stagger: 0 },
+                    { idx: 1, duration: 1800, stagger: 80 },
+                ]},
+                // Round 3: User adds a new Idea → Codex, Gemini, OpenClaw pick it up
+                { edit: 2, sync: [2, 0, 4], agents: [
+                    { idx: 2, duration: 2600, stagger: 0 },
+                    { idx: 3, duration: 2000, stagger: 60 },
+                    { idx: 4, duration: 1500, stagger: 120 },
+                ]},
+                // Round 4: User edits Agent-Rules → all agents re-calibrate
+                { edit: 3, sync: [3, 0, 1, 2, 4], agents: [
+                    { idx: 0, duration: 1800, stagger: 0 },
+                    { idx: 1, duration: 2400, stagger: 50 },
+                    { idx: 2, duration: 2000, stagger: 100 },
+                    { idx: 3, duration: 1600, stagger: 70 },
+                    { idx: 4, duration: 2200, stagger: 30 },
+                ]},
+                // Round 5: User updates Products.csv → Gemini re-researches
+                { edit: 4, sync: [4, 2], agents: [
+                    { idx: 3, duration: 2800, stagger: 0 },
+                    { idx: 0, duration: 1400, stagger: 100 },
+                ]},
+            ];
+
+            let roundIdx = 0;
+            while (true) {
+                await wait(2500); // Pause — "calm" moment, user is reading/thinking
+                // Soft reset: clear syncing states, keep agent done states, deactivate bridge
+                files.forEach(id => document.getElementById(id).classList.remove('mind-file--syncing'));
+                bridgeCenter.classList.remove('bridge-active');
+                protocolDot.classList.remove('bridge-protocol-dot--active');
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '等待变更...';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Awaiting changes...';
+                await wait(1500);
+
+                // Clear previous agent active/done states for agents in THIS round
+                const round = rounds[roundIdx % rounds.length];
+                round.agents.forEach(({ idx }) => {
+                    const el = document.getElementById(agents[idx]);
+                    el.classList.remove('agent-slot--active', 'agent-slot--done');
+                    statusEls[idx].classList.remove('agent-slot-status--running', 'agent-slot-status--done');
+                    const bar = barEls[idx];
+                    if (bar) { bar.style.transition = 'none'; bar.style.width = '0'; }
+                });
+
+                await runRound(round.edit, round.sync, round.agents);
+                roundIdx++;
+            }
         };
 
         const observer = new IntersectionObserver((entries) => {
