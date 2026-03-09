@@ -51,8 +51,7 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ### For Agents
 
-*   **MCP Server** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
-*   **Skills** — Reusable, composable workflow modules that Agents can invoke on demand. Chain multiple MCP tools into higher-level operations like "weekly review" or "project kickoff".
+*   **MCP Server & Skills** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
 *   **Structured Templates** — Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
 *   **Prompt-Driven Document Management** — Organize documents with a prompt-first mindset, so everyday notes double as high-quality executable instructions for Agents.
 
@@ -185,6 +184,10 @@ cd mcp && npm install && npm run build
 | `mindos_update_section` | Replace a markdown section |
 
 </details>
+
+**MindOS Skills:**
+
+> Coming soon — Skills documentation will be added here.
 
 ---
 

@@ -166,6 +166,10 @@ cd mcp && npm install && npm run build
 
 </details>
 
+**MindOS Skills：**
+
+> 即将推出 — Skills 使用说明将在此补充。
+
 ---
 
 ## 项目架构
