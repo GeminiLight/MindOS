@@ -1,13 +1,10 @@
-1. 功能特性章节下 换行面添加一个**即将到来** 的部分，下面包括几个即将实现的features，比如 
-
-
-
-1. 这
-
-Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.
-
-
-
+ 开始构建
+  GitHub下面有个词，是MCP-native
+  ，这个应该更名成Agent-native。并且将移动
+  作为第一个，三个排序依次是Agent-native、L
+  ocal-first
+  、Open Source
+   
 
 
 

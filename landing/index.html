@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MindOS — Human-AI Collaborative Mind Platform</title>
+    <title>MindOS — Human-AI Collaborative Mind System</title>
     <!-- Fonts: using local system fallbacks for offline/intranet compatibility -->
     <!-- Original Google Fonts: IBM Plex Mono, IBM Plex Sans, Lora -->
+    <link rel="icon" type="image/svg+xml" href="img/logo-square.svg">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -53,7 +54,7 @@
     <header class="hero section">
         <div class="container hero-content">
             <div class="tagline-badge animate-up">
-                <span data-zh>人机协同心智平台</span><span data-en>Human-AI Collaborative Mind Platform</span>
+                <span data-zh>人机协同心智系统</span><span data-en>Human-AI Collaborative Mind System</span>
             </div>
             <h1 class="animate-up" style="animation-delay: 0.1s;">
                 <span data-zh>人类在此思考，</span><span data-en>Human Thinks Here,</span><br>
@@ -75,11 +76,11 @@
                     </a>
                 </div>
                 <div class="hero-trust-bar">
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Agent-native</span>
+                    <span class="trust-sep"></span>
                     <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Local-first</span>
                     <span class="trust-sep"></span>
                     <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Open Source</span>
-                    <span class="trust-sep"></span>
-                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> MCP-native</span>
                 </div>
             </div>
         </div>
@@ -87,53 +88,175 @@
 
     <!-- SECTION 1: THE SHARED MIND LOOP -->
     <section id="workflow" class="loop-section dark-bg">
-        <svg class="loop-bg-svg" viewBox="0 0 1000 500">
-            <path class="loop-path-bg" d="M500,250 C500,50 150,50 150,250 C150,450 500,450 500,250 C500,50 850,50 850,250 C850,450 500,450 500,250" />
-            <path class="loop-path-flow" d="M500,250 C500,50 150,50 150,250 C150,450 500,450 500,250 C500,50 850,50 850,250 C850,450 500,450 500,250" />
-        </svg>
-        <div class="flying-spark" id="spark-pulse"></div>
-
         <div class="container">
             <div class="section-header">
                 <span class="mono">01. THE SHARED MIND LOOP</span>
                 <h2 data-zh>交互式心智循环</h2><h2 data-en>Interactive Mind Loop</h2>
+                <p class="section-sub" data-zh>人类记录思考，MindOS 同步心智，Agents 依此行动。一个循环，无限协同。</p>
+                <p class="section-sub" data-en>Humans capture thoughts, MindOS syncs the mind, Agents act accordingly. One loop, infinite synergy.</p>
             </div>
 
-            <div class="vis-area">
-                <div class="loop-grid">
-                    <div class="panel gui-panel animate-up" id="gui-panel">
-                        <div class="panel-header">
-                            <span class="panel-title">MindOS GUI</span>
-                            <div style="display:flex; gap:4px;"><div class="mac-btn mac-close"></div><div class="mac-btn mac-min"></div><div class="mac-btn mac-max"></div></div>
+            <div class="mind-bridge">
+                <!-- LEFT: Human Mind -->
+                <div class="bridge-side bridge-human animate-up">
+                    <div class="bridge-side-header">
+                        <div class="bridge-avatar bridge-avatar--human">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         </div>
-                        <div class="gui-content">
-                            <nav class="gui-nav">
-                                <svg class="active" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-13.5 8.38 8.38 0 0 1 3.8.9L21 11.5z"/></svg>
-                            </nav>
-                            <div class="gui-main">
-                                <div class="gui-toolbar">
-                                    <div class="gui-breadcrumb">/mind/<span>Research.md</span></div>
-                                    <div class="gui-search"><span data-zh>搜索...</span><span data-en>Search...</span></div>
-                                </div>
-                                <div class="gui-editor">
-                                    <div style="display:flex;">
-                                        <div class="gui-line-num">1<br>2<br>3</div>
-                                        <div id="typewriter-human"></div>
-                                    </div>
-                                </div>
+                        <div>
+                            <h3 data-zh>人类心智</h3><h3 data-en>Human Mind</h3>
+                            <p class="bridge-side-sub" data-zh>你的笔记、想法与工作流</p>
+                            <p class="bridge-side-sub" data-en>Your notes, ideas & workflows</p>
+                        </div>
+                    </div>
+                    <div class="mind-files">
+                        <div class="mind-file mind-file--active" id="mf-1">
+                            <span class="mind-file-icon">📋</span>
+                            <div>
+                                <span class="mind-file-name">Startup SOP.md</span>
+                                <span class="mind-file-desc" data-zh>产品发布标准流程</span>
+                                <span class="mind-file-desc" data-en>Product launch standard procedure</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-2">
+                            <span class="mind-file-icon">👤</span>
+                            <div>
+                                <span class="mind-file-name">Profile/Identity.md</span>
+                                <span class="mind-file-desc" data-zh>技术栈、偏好与风格</span>
+                                <span class="mind-file-desc" data-en>Tech stack, preferences & style</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-3">
+                            <span class="mind-file-icon">💡</span>
+                            <div>
+                                <span class="mind-file-name">Ideas/Next-Product.md</span>
+                                <span class="mind-file-desc" data-zh>下一个产品的灵感碎片</span>
+                                <span class="mind-file-desc" data-en>Inspiration fragments for next product</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-4">
+                            <span class="mind-file-icon">⚙️</span>
+                            <div>
+                                <span class="mind-file-name">Configs/Agent-Rules.md</span>
+                                <span class="mind-file-desc" data-zh>Agent 行为规则与约束</span>
+                                <span class="mind-file-desc" data-en>Agent behavior rules & constraints</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-5">
+                            <span class="mind-file-icon">📊</span>
+                            <div>
+                                <span class="mind-file-name">Resources/Products.csv</span>
+                                <span class="mind-file-desc" data-zh>竞品追踪与产品库</span>
+                                <span class="mind-file-desc" data-en>Competitor tracking & product library</span>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="panel console-panel animate-up" id="agent-panel" style="animation-delay: 0.2s;">
-                        <div class="panel-header">
-                            <span class="panel-title">Agent Console</span>
-                            <div id="agent-status" style="font-size: 0.6rem; color: var(--muted-fg); display:flex; align-items:center; gap:6px;">
-                                <span style="width:6px; height:6px; background:var(--muted-fg); border-radius:50%;"></span> STANDBY
-                            </div>
+                <!-- CENTER: MindOS Bridge -->
+                <div class="bridge-center animate-up" style="animation-delay:0.15s;">
+                    <div class="bridge-hub">
+                        <div class="bridge-hub-ring"></div>
+                        <div class="bridge-hub-ring bridge-hub-ring--inner"></div>
+                        <svg class="bridge-hub-logo" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="bh-human" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                                    <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+                                </linearGradient>
+                                <linearGradient id="bh-agent" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                                    <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#bh-human)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+                            <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#bh-agent)" stroke-width="4.5" stroke-linecap="round"/>
+                            <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,23.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--spark-color)"/>
+                        </svg>
+                    </div>
+                    <div class="bridge-label">MindOS</div>
+                    <div class="bridge-protocol">
+                        <span class="bridge-protocol-tag">MCP</span>
+                        <span class="bridge-protocol-dot"></span>
+                        <span class="bridge-protocol-status" id="bridge-status" data-zh>等待同步...</span>
+                        <span class="bridge-protocol-status" id="bridge-status-en" data-en>Awaiting sync...</span>
+                    </div>
+                    <!-- Flow lines -->
+                    <div class="bridge-flow bridge-flow--left">
+                        <div class="bridge-particle"></div>
+                        <div class="bridge-particle" style="animation-delay:0.6s;"></div>
+                        <div class="bridge-particle" style="animation-delay:1.2s;"></div>
+                    </div>
+                    <div class="bridge-flow bridge-flow--right">
+                        <div class="bridge-particle"></div>
+                        <div class="bridge-particle" style="animation-delay:0.5s;"></div>
+                        <div class="bridge-particle" style="animation-delay:1s;"></div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Agent Fleet -->
+                <div class="bridge-side bridge-agents animate-up" style="animation-delay:0.3s;">
+                    <div class="bridge-side-header">
+                        <div class="bridge-avatar bridge-avatar--agent">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                         </div>
-                        <div class="console-body" id="agent-console"></div>
+                        <div>
+                            <h3 data-zh>Agent 舰队</h3><h3 data-en>Agent Fleet</h3>
+                            <p class="bridge-side-sub" data-zh>依此行动的 AI 协作者</p>
+                            <p class="bridge-side-sub" data-en>AI collaborators acting on your mind</p>
+                        </div>
+                    </div>
+                    <div class="agent-fleet">
+                        <div class="agent-slot" id="as-1">
+                            <img src="img/logos/claude-code.svg" alt="Claude Code" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Claude Code</span>
+                                <span class="agent-slot-action" data-zh>根据 SOP 搭建新项目骨架</span>
+                                <span class="agent-slot-action" data-en>Scaffold new project from SOP</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-1-bar"></div></div>
+                            <span class="agent-slot-status" id="as-1-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-2">
+                            <img src="img/logos/cursor.svg" alt="Cursor" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Cursor</span>
+                                <span class="agent-slot-action" data-zh>按偏好重构 Dashboard 页面</span>
+                                <span class="agent-slot-action" data-en>Refactor dashboard per preferences</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-2-bar"></div></div>
+                            <span class="agent-slot-status" id="as-2-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-3">
+                            <img src="img/logos/codex.svg" alt="Codex" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Codex</span>
+                                <span class="agent-slot-action" data-zh>为 API 模块补全单元测试</span>
+                                <span class="agent-slot-action" data-en>Generate unit tests for API module</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-3-bar"></div></div>
+                            <span class="agent-slot-status" id="as-3-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-4">
+                            <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Gemini CLI</span>
+                                <span class="agent-slot-action" data-zh>调研竞品功能并生成分析报告</span>
+                                <span class="agent-slot-action" data-en>Research competitors, write report</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-4-bar"></div></div>
+                            <span class="agent-slot-status" id="as-4-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-5">
+                            <img src="img/logos/openclaw.svg" alt="OpenClaw" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">OpenClaw</span>
+                                <span class="agent-slot-action" data-zh>执行 CI/CD 流水线并自动部署</span>
+                                <span class="agent-slot-action" data-en>Run CI/CD pipeline & auto-deploy</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-5-bar"></div></div>
+                            <span class="agent-slot-status" id="as-5-status"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -146,8 +269,8 @@
             <div class="section-header">
                 <span class="mono">02. THE VISION</span>
                 <h2 data-zh>为什么需要 Shared Mind?</h2><h2 data-en>Why Shared Mind?</h2>
-                <p class="section-sub" data-zh>人机协作正面临三道结构性鸿沟。MindOS 逐一击破，让人与 AI 在同一个心智空间中共生演进。</p>
-                <p class="section-sub" data-en>Human-AI collaboration faces three structural gaps. MindOS bridges each one, enabling co-evolution within a single Shared Mind.</p>
+                <p class="section-sub" data-zh>击破人机协作结构性鸿沟，让人与 AI 在同一个心智空间中共生演进。</p>
+                <p class="section-sub" data-en>Breaking the structural gaps in human-AI collaboration — co-evolving within a single Shared Mind.</p>
             </div>
 
             <div class="pillar-stack">
@@ -592,7 +715,7 @@
     <footer class="footer section" style="padding-top: 4rem; border-top: 1px solid var(--border);">
         <div class="container">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <p style="font-weight: 500;"><span data-zh>MindOS · 人机协同心智平台</span><span data-en>MindOS · Human-AI Collaborative Mind Platform</span></p>
+                <p style="font-weight: 500;"><span data-zh>MindOS · 人机协同心智系统</span><span data-en>MindOS · Human-AI Collaborative Mind System</span></p>
                 <a href="https://github.com/GeminiLight/MindOS" style="color: var(--muted-fg); text-decoration: none;">GitHub</a>
             </div>
             <p style="color: var(--muted-fg); font-size: 0.75rem; margin-top: 2rem; opacity: 0.5;">MIT © 2026 GeminiLight</p>
@@ -618,42 +741,67 @@
 
         const runMindLoop = async () => {
             if(state.loopStarted) return; state.loopStarted = true;
-            const humanEditor = document.getElementById('typewriter-human');
-            const spark = document.getElementById('spark-pulse');
-            const typingText = state.lang === 'zh' ? "Idea: 实现一个动态星芒脉冲效果。" : "Idea: Build a dynamic spark pulse effect.";
-            for(let char of typingText) { humanEditor.innerHTML += char; await new Promise(r => setTimeout(r, 50)); }
-            humanEditor.innerHTML += '<span class="type-cursor"></span>';
+            const files = ['mf-1','mf-2','mf-3','mf-4','mf-5'];
+            const agents = ['as-1','as-2','as-3','as-4','as-5'];
+            const statusEls = agents.map(id => document.getElementById(id + '-status'));
+            const barEls = agents.map(id => document.getElementById(id + '-bar'));
+
+            // Phase 1: Highlight files one by one
+            for (let i = 0; i < files.length; i++) {
+                await new Promise(r => setTimeout(r, 350));
+                document.getElementById(files[i]).classList.add('mind-file--syncing');
+            }
+
+            // Phase 2: Bridge activates
             await new Promise(r => setTimeout(r, 400));
-            spark.classList.add('animate');
-            setTimeout(async () => {
-                const status = document.getElementById('agent-status');
-                status.innerHTML = `<span style="width:6px; height:6px; background:var(--accent); border-radius:50%; box-shadow: 0 0 10px var(--accent);"></span> PROCESSING`;
-                status.style.color = "var(--accent)";
-                const consoleBody = document.getElementById('agent-console');
-                const logs = [
-                    { tag: 'MCP', msg: 'Context Bridge active.' },
-                    { tag: 'SYNC', msg: 'Synced: Research.md' },
-                    { tag: 'AI', msg: state.lang === 'zh' ? '意图识别：UI 反馈逻辑' : 'Intent: UI Feedback Logic' },
-                    { tag: 'EXEC', msg: 'Updated project wiki.', type: 'success' }
-                ];
-                for(let log of logs) {
-                    await new Promise(r => setTimeout(r, 600));
-                    const div = document.createElement('div');
-                    div.className = 'c-row visible';
-                    div.innerHTML = `<span class="c-tag">${log.tag}</span><span class="${log.type === 'success' ? 'c-success' : ''}">${log.msg}</span>`;
-                    consoleBody.appendChild(div);
-                }
-            }, 800);
+            document.querySelector('.bridge-center').classList.add('bridge-active');
+            const bridgeStatusZh = document.getElementById('bridge-status');
+            const bridgeStatusEn = document.getElementById('bridge-status-en');
+            if (bridgeStatusZh) bridgeStatusZh.textContent = '同步中...';
+            if (bridgeStatusEn) bridgeStatusEn.textContent = 'Syncing...';
+            document.querySelector('.bridge-protocol-dot').classList.add('bridge-protocol-dot--active');
+
+            // Phase 3: Agents start NEAR-SIMULTANEOUSLY (parallel launch)
+            await new Promise(r => setTimeout(r, 300));
+            const durations = [2800, 2200, 3400, 2600, 1800]; // independent durations
+            const stagger = [0, 120, 60, 180, 90]; // near-simultaneous stagger
+
+            agents.forEach((id, i) => {
+                setTimeout(() => {
+                    const el = document.getElementById(id);
+                    el.classList.add('agent-slot--active');
+                    statusEls[i].classList.add('agent-slot-status--running');
+                    // Animate progress bar
+                    const bar = barEls[i];
+                    if (bar) {
+                        bar.style.transition = 'width ' + durations[i] + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
+                        requestAnimationFrame(() => { bar.style.width = '100%'; });
+                    }
+                    // Complete independently
+                    setTimeout(() => {
+                        statusEls[i].classList.remove('agent-slot-status--running');
+                        statusEls[i].classList.add('agent-slot-status--done');
+                        el.classList.add('agent-slot--done');
+                    }, durations[i]);
+                }, stagger[i]);
+            });
+
+            // Phase 4: After all agents done, update bridge status
+            const maxDuration = Math.max(...durations) + Math.max(...stagger);
+            await new Promise(r => setTimeout(r, maxDuration + 200));
+            if (bridgeStatusZh) bridgeStatusZh.textContent = '心智已同步';
+            if (bridgeStatusEn) bridgeStatusEn.textContent = 'Mind synced';
         };
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('active');
+                    if(entry.target.closest && entry.target.closest('#workflow')) { setTimeout(runMindLoop, 800); }
                     if(entry.target.id === 'workflow') { setTimeout(runMindLoop, 800); }
                 }
             });
-        }, { threshold: 0.3 });
+        }, { threshold: 0.2 });
         document.querySelectorAll('.animate-up, .loop-section').forEach(el => observer.observe(el));
     </script>
 </body>

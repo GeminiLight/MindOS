@@ -59,7 +59,13 @@ jobs:
             git push
           fi
 
-          # Deploy landing/ to gh-pages branch
+          # Deploy landing/ to mindos-dev gh-pages branch
+          cd $GITHUB_WORKSPACE
+          git subtree split --prefix landing -b gh-pages-tmp
+          git push origin gh-pages-tmp:gh-pages --force
+          git branch -D gh-pages-tmp
+
+          # Deploy landing/ to mindos gh-pages branch
           cd $GITHUB_WORKSPACE
           git clone --depth 1 -b gh-pages https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages 2>/dev/null || {
             git clone --depth 1 https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git /tmp/mindos-pages

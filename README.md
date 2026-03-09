@@ -51,7 +51,8 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ### For Agents
 
-*   **MCP Server & Skills** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
+*   **MCP Server** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
+*   **Skills** — Reusable, composable workflow modules that Agents can invoke on demand. Chain multiple MCP tools into higher-level operations like "weekly review" or "project kickoff".
 *   **Structured Templates** — Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
 *   **Prompt-Driven Document Management** — Organize documents with a prompt-first mindset, so everyday notes double as high-quality executable instructions for Agents.
 
@@ -68,29 +69,57 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
-## Quick Start
+## Use Cases
+
+- **AI Independent Developer** — Store personal SOPs, tech stack preferences, and project context in MindOS. Any Agent instantly inherits your work habits.
+- **Knowledge Worker** — Manage research materials with bi-directional links. Your AI assistant answers questions grounded in your full context, not generic knowledge.
+- **Team Collaboration** — Share a MindOS knowledge base across team members as a single source of truth. Humans and Agents read from the same playbook, keeping everyone aligned.
+- **Automated Agent Operations** — Write standard workflows as Prompt-Driven documents. Agents execute directly, humans audit the results.
+
+---
+
+## Getting Started
+
+### 1. Install & Run
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 
-# 2. Initialize your knowledge base from the template
+# Initialize your knowledge base from the template
 cp -r template/ my-mind/
 
-# 3. Configure environment variables
+# Configure environment variables
 cp app/.env.example app/.env.local
 # Edit MIND_ROOT to point to the absolute path of your my-mind/ directory
 
-# 4. Start the application
+# Start the application
 cd app && npm install && npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to get started.
 
----
+### 2. Environment Variables
 
-## MCP Server Integration Guide
+Configure in `app/.env.local`:
+
+```env
+MIND_ROOT=/path/to/MindOS/my-mind
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-proj-...
+ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+```
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `MIND_ROOT` | — | **Required**. Absolute path to the knowledge base root. |
+| `AI_PROVIDER` | `anthropic` | Options: `anthropic` or `openai`. |
+| `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
+| `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
+
+### 3. Connect Your Agent (MCP)
 
 Register the MindOS MCP Server in your Agent client to allow the Agent to directly access and operate your local knowledge base.
 
@@ -124,7 +153,13 @@ Register the MindOS MCP Server in your Agent client to allow the Agent to direct
 }
 ```
 
-**Underlying Toolset for Agents:**
+**Build the MCP Server:**
+```bash
+cd mcp && npm install && npm run build
+```
+
+<details>
+<summary><strong>Full MCP Toolset for Agents</strong></summary>
 
 | Tool | Description |
 |------|-------------|
@@ -149,10 +184,7 @@ Register the MindOS MCP Server in your Agent client to allow the Agent to direct
 | `mindos_insert_after_heading` | Insert content after a heading |
 | `mindos_update_section` | Replace a markdown section |
 
-**Build the Server:**
-```bash
-cd mcp && npm install && npm run build
-```
+</details>
 
 ---
 
@@ -167,27 +199,6 @@ MindOS/
 ├── SERVICES.md       # Technical and Service Architecture Overview
 └── README.md
 ```
-
----
-
-## Environment Settings
-
-Configure in `app/.env.local`:
-
-```env
-MIND_ROOT=/path/to/MindOS/my-mind
-AI_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-proj-...
-ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
-```
-
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `MIND_ROOT` | — | **Required**. Absolute path to the knowledge base root. |
-| `AI_PROVIDER` | `anthropic` | Options: `anthropic` or `openai`. |
-| `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
-| `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
 
 ---
 
