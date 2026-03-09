@@ -94,7 +94,7 @@ claude mcp add mindos -- node /path/to/MindOS/mcp/dist/index.js
 
 | Tool | Description |
 |------|-------------|
-| `mindos_bootstrap` | Load startup context (INSTRUCTION + README) in one call |
+| `mindos_bootstrap` | Load startup context (INSTRUCTION + README + CONFIG) in one call |
 | `mindos_list_files` | Full file tree of the knowledge base |
 | `mindos_read_file` | Read file content with pagination |
 | `mindos_write_file` | Overwrite file (protected files blocked) |

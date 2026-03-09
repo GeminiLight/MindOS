@@ -5,4 +5,5 @@ app/data
 my-mind/
 my-mind-backup/
 review/
+!app/.env.local.example
 template/template-generation-skill.md

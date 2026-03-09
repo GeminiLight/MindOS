@@ -1,6 +1,22 @@
 {
   "schemaVersion": "1.1",
   "locale": "zh",
+  "languagePreference": {
+    "preferredLanguage": "zh",
+    "supportedLanguages": [
+      {
+        "value": "zh",
+        "label": "中文"
+      },
+      {
+        "value": "en",
+        "label": "英文"
+      }
+    ],
+    "folderNamingLanguage": "zh",
+    "contentWritingLanguage": "zh",
+    "enforceLocalizedNaming": true
+  },
   "filename": {
     "emojiPrefixDefault": true,
     "allowEmojiPrefix": true,
@@ -17,19 +33,6 @@
       "emojiEnabled": true,
       "defaultHeadingLevel": 2
     }
-  },
-  "connections": {
-    "requireRootCsv": true,
-    "rootCsvName": "Connections.csv",
-    "examplesCsvName": "Connections_examples.csv",
-    "onePersonOneMarkdown": true
-  },
-  "profile": {
-    "minimalFiles": [
-      "👤 Identity.md",
-      "⚙️ Preferences.md",
-      "🎯 Focus.md"
-    ]
   },
   "protocol": {
     "readMode": "config_and_doc",
@@ -73,22 +76,14 @@
         ]
       },
       {
-        "id": "connections",
-        "title": "Connections 规则",
-        "description": "控制关系数据索引与详情文件规范",
+        "id": "language_preference",
+        "title": "语言偏好",
+        "description": "控制生成时的目录命名语言与内容写作语言",
         "fields": [
-          "connections.requireRootCsv",
-          "connections.rootCsvName",
-          "connections.examplesCsvName",
-          "connections.onePersonOneMarkdown"
-        ]
-      },
-      {
-        "id": "profile",
-        "title": "Profile 最小集",
-        "description": "定义 Profile 的核心文件集合",
-        "fields": [
-          "profile.minimalFiles"
+          "languagePreference.preferredLanguage",
+          "languagePreference.folderNamingLanguage",
+          "languagePreference.contentWritingLanguage",
+          "languagePreference.enforceLocalizedNaming"
         ]
       }
     ]
@@ -152,35 +147,59 @@
         "max": 6
       }
     },
-    "connections.requireRootCsv": {
+    "languagePreference.preferredLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "首选语言",
+      "description": "总体语言偏好，用于默认生成策略"
+    },
+    "languagePreference.folderNamingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "目录与文件命名语言",
+      "description": "控制新建目录名与文件名使用的语言"
+    },
+    "languagePreference.contentWritingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "内容写作语言",
+      "description": "控制生成文档正文时使用的语言"
+    },
+    "languagePreference.enforceLocalizedNaming": {
       "type": "boolean",
       "control": "switch",
-      "label": "Connections 需要根 CSV",
-      "description": "Connections 根目录必须维护索引 CSV"
-    },
-    "connections.rootCsvName": {
-      "type": "string",
-      "control": "text",
-      "label": "正式索引 CSV 名称",
-      "description": "Connections 正式索引 CSV 文件名"
-    },
-    "connections.examplesCsvName": {
-      "type": "string",
-      "control": "text",
-      "label": "示例索引 CSV 名称",
-      "description": "Connections 示例索引 CSV 文件名"
-    },
-    "connections.onePersonOneMarkdown": {
-      "type": "boolean",
-      "control": "switch",
-      "label": "一人一份 Markdown",
-      "description": "每个人必须对应一个独立详情 Markdown 文件"
-    },
-    "profile.minimalFiles": {
-      "type": "array<string>",
-      "control": "tag-list",
-      "label": "Profile 最小文件集",
-      "description": "Profile 目录建议保留的核心文件列表"
+      "label": "强制本地化命名",
+      "description": "开启后，中文模板要求目录/文件名使用中文；英文模板要求使用英文"
     }
   }
 }

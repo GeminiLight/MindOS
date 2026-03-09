@@ -24,6 +24,7 @@ const RENDERER_ENTRY: Record<string, string> = {
   'agent-inspector': 'Agent-Audit.md',
   workflow: 'Workflow.md',
   'diff-viewer': 'Agent-Diff.md',
+  'config-panel': 'CONFIG.json',
 };
 
 function deriveEntryPath(id: string): string | null {

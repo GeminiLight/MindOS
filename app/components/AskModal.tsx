@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Sparkles, Send, Loader2, Paperclip, FileText, Table, StopCircle, AlertCircle } from 'lucide-react';
+import { X, Sparkles, Send, Loader2, AtSign, Paperclip, FileText, Table, StopCircle, AlertCircle, RotateCcw, History, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useLocale } from '@/lib/LocaleContext';
@@ -9,6 +9,108 @@ import { useLocale } from '@/lib/LocaleContext';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface LocalAttachment {
+  name: string;
+  content: string;
+}
+
+interface ChatSession {
+  id: string;
+  currentFile?: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+}
+
+async function extractPdfText(file: File): Promise<string> {
+  const pdfjs = await import('pdfjs-dist');
+  const buffer = await file.arrayBuffer();
+  const loadingTask = pdfjs.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false });
+  const pdf = await loadingTask.promise;
+
+  const pages: string[] = [];
+  const maxPages = Math.min(pdf.numPages, 20);
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i);
+    const text = await page.getTextContent();
+    const pageText = text.items
+      .map((item) => ('str' in item ? item.str : ''))
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (pageText) pages.push(`[Page ${i}]\n${pageText}`);
+  }
+
+  if (pages.length === 0) return '';
+  const merged = pages.join('\n\n');
+  return merged.length > 30000 ? `${merged.slice(0, 30000)}\n\n[...truncated from PDF]` : merged;
+}
+
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  '.txt', '.md', '.markdown', '.csv', '.json', '.yaml', '.yml', '.xml', '.html', '.htm', '.pdf',
+]);
+
+const MAX_SESSIONS = 30;
+
+function createSession(currentFile?: string): ChatSession {
+  const ts = Date.now();
+  return {
+    id: `${ts}-${Math.random().toString(36).slice(2, 8)}`,
+    currentFile,
+    createdAt: ts,
+    updatedAt: ts,
+    messages: [],
+  };
+}
+
+function sessionTitle(s: ChatSession): string {
+  const firstUser = s.messages.find((m) => m.role === 'user');
+  if (!firstUser) return '(empty session)';
+  const line = firstUser.content.replace(/\s+/g, ' ').trim();
+  return line.length > 42 ? `${line.slice(0, 42)}...` : line;
+}
+
+async function fetchSessions(): Promise<ChatSession[]> {
+  try {
+    const res = await fetch('/api/ask-sessions', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json() as ChatSession[];
+    if (!Array.isArray(data)) return [];
+    return data.slice(0, MAX_SESSIONS);
+  } catch {
+    return [];
+  }
+}
+
+async function upsertSession(session: ChatSession): Promise<void> {
+  try {
+    await fetch('/api/ask-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session }),
+    });
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+async function removeSession(id: string): Promise<void> {
+  try {
+    await fetch('/api/ask-sessions', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+function getExt(name: string): string {
+  const idx = name.lastIndexOf('.');
+  return idx >= 0 ? name.slice(idx).toLowerCase() : '';
 }
 
 interface AskModalProps {
@@ -61,6 +163,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -68,6 +171,13 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming'>('connecting');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+  const [maxSteps, setMaxSteps] = useState(20);
+  const [localAttachments, setLocalAttachments] = useState<LocalAttachment[]>([]);
+  const [uploadError, setUploadError] = useState('');
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // @-mention state
   const [allFiles, setAllFiles] = useState<string[]>([]);
@@ -82,17 +192,75 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
 
   // Focus and reset on open
   useEffect(() => {
+    let cancelled = false;
+
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
-      setMessages([]);
+
+      void (async () => {
+        const sorted = (await fetchSessions()).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
+        if (cancelled) return;
+        setSessions(sorted);
+
+        const matched = currentFile
+          ? sorted.find((sess) => sess.currentFile === currentFile)
+          : sorted[0];
+        if (matched) {
+          setActiveSessionId(matched.id);
+          setMessages(matched.messages);
+        } else {
+          const fresh = createSession(currentFile);
+          setActiveSessionId(fresh.id);
+          setMessages([]);
+          const next = [fresh, ...sorted].slice(0, MAX_SESSIONS);
+          setSessions(next);
+          await upsertSession(fresh);
+        }
+      })();
+
       setInput('');
-      setAttachedFiles([]);
+      setAttachedFiles(currentFile ? [currentFile] : []);
+      setLocalAttachments([]);
+      setUploadError('');
       setMentionQuery(null);
+      setShowHistory(false);
     } else {
       // Abort any in-flight request when modal closes
       abortRef.current?.abort();
     }
-  }, [open]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, currentFile]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    let sessionToPersist: ChatSession | null = null;
+    setSessions((prev) => {
+      const now = Date.now();
+      const existing = prev.find((s) => s.id === activeSessionId);
+      sessionToPersist = existing
+        ? { ...existing, currentFile, updatedAt: now, messages }
+        : { id: activeSessionId, currentFile, createdAt: now, updatedAt: now, messages };
+
+      const rest = prev.filter((s) => s.id !== activeSessionId);
+      const next = [sessionToPersist!, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
+      return next.slice(0, MAX_SESSIONS);
+    });
+
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      if (sessionToPersist) void upsertSession(sessionToPersist);
+    }, 600);
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
+  }, [messages, activeSessionId, currentFile]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -155,6 +323,60 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
     abortRef.current?.abort();
   }, []);
 
+  const handlePickLocalFiles = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const picked = Array.from(files).slice(0, 8);
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+
+    for (const f of picked) {
+      const ext = getExt(f.name);
+      if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+        rejected.push(f.name);
+        continue;
+      }
+      accepted.push(f);
+    }
+
+    if (rejected.length > 0) {
+      setUploadError(`Unsupported file type: ${rejected.join(', ')}`);
+    } else {
+      setUploadError('');
+    }
+
+    const loaded = await Promise.all(accepted.map(async (f) => {
+      const ext = getExt(f.name);
+      if (ext === '.pdf') {
+        try {
+          const extracted = await extractPdfText(f);
+          return {
+            name: f.name,
+            content: extracted || `[PDF: ${f.name}] Could not extract readable text (possibly scanned/image PDF).`,
+          };
+        } catch {
+          return {
+            name: f.name,
+            content: `[PDF: ${f.name}] Failed to extract text from this PDF.`,
+          };
+        }
+      }
+      return {
+        name: f.name,
+        content: await f.text(),
+      };
+    }));
+
+    setLocalAttachments(prev => {
+      const merged = [...prev];
+      for (const item of loaded) {
+        if (!merged.some(m => m.name === item.name && m.content === item.content)) merged.push(item);
+      }
+      return merged;
+    });
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (mentionQuery !== null) return;
@@ -165,7 +387,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
     const requestMessages = [...messages, userMsg];
     setMessages([...requestMessages, { role: 'assistant', content: '' }]);
     setInput('');
-    setAttachedFiles([]);
+    setAttachedFiles(currentFile ? [currentFile] : []);
     setIsLoading(true);
     setLoadingPhase('connecting');
 
@@ -176,7 +398,13 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: requestMessages, currentFile, attachedFiles }),
+        body: JSON.stringify({
+          messages: requestMessages,
+          currentFile,
+          attachedFiles,
+          uploadedFiles: localAttachments,
+          maxSteps,
+        }),
         signal: controller.signal,
       });
 
@@ -250,7 +478,60 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, messages, isLoading, currentFile, attachedFiles, mentionQuery, t.ask.errorNoResponse, t.ask.stopped]);
+  }, [input, messages, isLoading, currentFile, attachedFiles, localAttachments, mentionQuery, maxSteps, t.ask.errorNoResponse, t.ask.stopped]);
+
+  const handleResetSession = useCallback(() => {
+    if (isLoading) return;
+    const fresh = createSession(currentFile);
+    setActiveSessionId(fresh.id);
+    setMessages([]);
+    setInput('');
+    setAttachedFiles(currentFile ? [currentFile] : []);
+    setLocalAttachments([]);
+    setUploadError('');
+    setMentionQuery(null);
+    setMentionResults([]);
+    setMentionIndex(0);
+    setShowHistory(false);
+
+    setSessions((prev) => {
+      const next = [fresh, ...prev].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
+      void upsertSession(fresh);
+      return next;
+    });
+
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [isLoading, currentFile]);
+
+  const handleLoadSession = useCallback((id: string) => {
+    const target = sessions.find((s) => s.id === id);
+    if (!target) return;
+    setActiveSessionId(target.id);
+    setMessages(target.messages);
+    setShowHistory(false);
+    setInput('');
+    setAttachedFiles(currentFile ? [currentFile] : []);
+    setLocalAttachments([]);
+    setUploadError('');
+    setMentionQuery(null);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [sessions, currentFile]);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    void removeSession(id);
+
+    const remaining = sessions.filter((s) => s.id !== id);
+    setSessions(remaining);
+
+    if (activeSessionId === id) {
+      const fresh = createSession(currentFile);
+      setActiveSessionId(fresh.id);
+      setMessages([]);
+      const next = [fresh, ...remaining].slice(0, MAX_SESSIONS);
+      setSessions(next);
+      void upsertSession(fresh);
+    }
+  }, [activeSessionId, currentFile, sessions]);
 
   if (!open) return null;
 
@@ -277,10 +558,60 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
               </span>
             )}
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-            <X size={15} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Session history"
+            >
+              <History size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetSession}
+              disabled={isLoading}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              title="New session"
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+              <X size={15} />
+            </button>
+          </div>
         </div>
+
+        {showHistory && (
+          <div className="border-b border-border px-4 py-2.5 max-h-[190px] overflow-y-auto">
+            <div className="text-[11px] text-muted-foreground mb-2">Session History</div>
+            <div className="flex flex-col gap-1.5">
+              {sessions.length === 0 && (
+                <div className="text-xs text-muted-foreground/70">No saved sessions.</div>
+              )}
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSession(s.id)}
+                    className={`flex-1 text-left px-2 py-1.5 rounded text-xs transition-colors ${activeSessionId === s.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                  >
+                    <div className="truncate">{sessionTitle(s)}</div>
+                    <div className="text-[10px] opacity-60">{new Date(s.updatedAt).toLocaleString()}</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSession(s.id)}
+                    className="p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-muted"
+                    title="Delete session"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
@@ -355,7 +686,9 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         <div className="border-t border-border shrink-0">
           {/* Attached file chips */}
           {attachedFiles.length > 0 && (
-            <div className="px-4 pt-2.5 pb-1 flex flex-wrap gap-1.5">
+            <div className="px-4 pt-2.5 pb-1">
+              <div className="text-[11px] text-muted-foreground/70 mb-1.5">Knowledge Base Context</div>
+              <div className="flex flex-wrap gap-1.5">
               {attachedFiles.map(f => (
                 <FileChip
                   key={f}
@@ -363,7 +696,33 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                   onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))}
                 />
               ))}
+              </div>
             </div>
+          )}
+
+          {localAttachments.length > 0 && (
+            <div className="px-4 pb-1">
+              <div className="text-[11px] text-muted-foreground/70 mb-1.5">Uploaded Files</div>
+              <div className="flex flex-wrap gap-1.5">
+                {localAttachments.map((f, idx) => (
+                  <span key={`${f.name}-${idx}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs border border-border bg-muted text-foreground max-w-[220px]">
+                    <Paperclip size={11} className="text-zinc-400 shrink-0" />
+                    <span className="truncate" title={f.name}>{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setLocalAttachments(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-muted-foreground hover:text-foreground ml-0.5 shrink-0"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="px-4 pb-1 text-xs text-red-400">{uploadError}</div>
           )}
 
           {/* @-mention dropdown */}
@@ -395,7 +754,31 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           )}
 
           <form onSubmit={handleSubmit} className="flex items-center gap-2 px-3 py-3">
-            {/* Paperclip button */}
+            {/* Attachment picker button */}
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+              title="Attach local file"
+            >
+              <Paperclip size={15} />
+            </button>
+
+            <input
+              ref={uploadInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+              onChange={async (e) => {
+                const inputEl = e.currentTarget;
+                const files = inputEl.files;
+                await handlePickLocalFiles(files);
+                inputEl.value = '';
+              }}
+            />
+
+            {/* @-mention button */}
             <button
               type="button"
               onClick={() => {
@@ -407,9 +790,9 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                 setTimeout(() => { el.focus(); el.setSelectionRange(pos + 1, pos + 1); }, 0);
               }}
               className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-              title="Attach file (@)"
+              title="@ mention file"
             >
-              <Paperclip size={15} />
+              <AtSign size={15} />
             </button>
 
             <input
@@ -448,6 +831,19 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         <div className="px-4 pb-2 flex items-center gap-3 text-xs text-muted-foreground/50 shrink-0">
           <span><kbd className="font-mono">↵</kbd> {t.ask.send}</span>
           <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
+          <span className="inline-flex items-center gap-1">
+            <span>Agent steps</span>
+            <select
+              value={maxSteps}
+              onChange={(e) => setMaxSteps(Number(e.target.value))}
+              disabled={isLoading}
+              className="bg-transparent border border-border rounded px-1.5 py-0.5 text-[11px] text-foreground"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+            </select>
+          </span>
           <span><kbd className="font-mono">ESC</kbd> {t.search.close}</span>
         </div>
       </div>

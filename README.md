@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/logo-square.svg" alt="MindOS" width="80" />
   <br />
-  <strong style="font-size: 2em;">MindOS</strong>
+  <strong style="font-size: 4em;">MindOS</strong>
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
+  <a href="https://tianfuwang.tech/mindos"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -24,44 +24,38 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ## 🧠 Core Value: Human-AI Shared Mind
 
-MindOS refactors the human-AI collaboration paradigm through three core pillars, enabling humans and AI to co-evolve within a single Shared Mind.
+### 1. Global Mind Sync
+Traditional notes are scattered across tools and APIs, so agents miss your real context when it matters. MindOS turns your local knowledge into one MCP-ready source, so every agent can sync your Profile, SOPs, and live working memory.
 
-### 1. Global Mind Sync — Breaking Mind Silos
-*   **Pain Point:** Traditional cloud notes are cumbersome to manage, hindered by API barriers, and have high capture friction, making it hard for Agents to access deep human context and real-time epiphanies.
-*   **Shift:** Record once, empower everywhere. MindOS provides an ultra-lightweight web capture entry and a built-in standard MCP Server. Any compatible Agent can seamlessly sync your Profile, SOPs, and experiences, enabling "plug-and-play" personal context and real-time mind alignment.
+### 2. Transparent and Controllable
+Most assistant memory lives in black boxes, leaving humans unable to inspect or correct how decisions are made. MindOS writes retrieval and execution traces into local plain text, so you can audit, intervene, and improve continuously.
 
-### 2. Transparent & Controllable — Eliminating Agent Black Boxes
-*   **Pain Point:** Current AI assistant memories are locked in system black boxes. Humans cannot intuitively inspect or correct the Agent's intermediate reasoning, leading to uncontrolled hallucinations.
-*   **Shift:** Let Agents think in the light. Every Agent retrieval, reflection, and action is distilled directly into local plain text (Markdown/CSV) via MCP. Humans hold absolute audit, intervention, and mind-correction rights in the intuitive GUI workbench.
+### 3. Symbiotic Evolution
+Static documents are hard to synchronize and weak as execution systems in real human-agent collaboration. MindOS makes notes prompt-native and reference-linked, so daily writing naturally becomes executable workflows that evolve with you.
 
-### 3. Symbiotic Evolution — Dynamic Instruction Flow
-*   **Pain Point:** Traditional document management is deeply nested and hard to sync, failing to serve as an "execution engine" in complex human-AI collaborative tasks.
-*   **Shift:** Knowledge as Code. Through the Prompt-Native recording paradigm and reference-driven auto-sync, your daily notes naturally become high-quality Agent execution instructions. Humans and AI inspire each other and grow together in a single Shared Mind.
-
-> **Foundational Pillar:** MindOS adheres to the **Local-first** principle. All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.
-
----
+> **Foundation:** Local-first by default - all data stays in local plain text for privacy, ownership, and speed.
 
 ## ✨ Features
 
 ### For Humans
 
-*   **GUI Workbench** — Browse, edit, and search notes with a unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
-*   **Built-in Agent Assistant** — Converse with the knowledge base in context. Agents manage files while editing seamlessly captures human-curated knowledge.
-*   **Plugin Extensions** — Custom view plugins for specific scenarios (TODO lists, Kanban, Timeline, etc.) for elastic knowledge management.
+- **GUI Collaboration Workbench**: use one command entry to browse, edit, and search efficiently (`⌘K` / `⌘/`).
+- **Built-in Agent Assistant**: converse in context while edits are captured into managed knowledge.
+- **Plugin Views**: use scenario-focused views like TODO, Kanban, and Timeline.
 
 ### For Agents
 
-*   **MCP Server & Skills** — Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero configuration to read, write, search, and execute local workflows.
-*   **Structured Templates** — Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
-*   **Prompt-Driven Document Management** — Organize documents with a prompt-first mindset, so everyday notes double as high-quality executable instructions for Agents.
+- **MCP Server + Skills**: connect any compatible agent to read, write, search, and run workflows.
+- **Structured Templates**: start quickly with Profile, Workflows, and Configurations scaffolds.
+- **Experience Auto-Distillation**: automatically distill daily work into reusable, executable SOP experience.
 
 ### Infrastructure
 
-*   **Reference-Driven Sync** — @ references and bi-directional links between Markdown files for automatic cross-file synchronization of project status, tasks, and context.
-*   **Visual Knowledge Graph** — Dynamically parses and visualizes inter-file references and dependencies across the human-AI context network.
-*   **Time Machine & Git-backed** — Records every edit by both humans and Agents. One-click rollback and visual evolution of context and reasoning trajectories.
+- **Reference Sync**: keep cross-file status and context aligned via links/backlinks.
+- **Knowledge Graph**: visualize relationships and dependencies across notes.
+- **Git Time Machine**: track every edit, audit history, and roll back safely.
 
+> Full vision: see [wiki-zh/product-vision.md](wiki-zh/product-vision.md) and [wiki-zh/product-vision-zh.md](wiki-zh/product-vision-zh.md).
 **Coming Soon:**
 
 - [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
@@ -75,12 +69,12 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ## 🚀 Getting Started
 
-> ✅ If you have already set up your local knowledge base, skip installation and environment variable setup.
+> [!IMPORTANT]
+> If you have already set up your local knowledge base, skip installation and environment variable setup.
 > In each Agent client (OpenClaw/Claude Code/Cursor, etc.), you only need two steps:
 > 1) Configure MindOS MCP
 > 2) Install MindOS Skills
-> After that, your Agent can directly read/write your knowledge base and execute SOPs.
-
+> After setup, your Agent can sync your mind, manage your knowledge base, and execute SOPs.
 
 ### 1. Install & Run
 
@@ -110,6 +104,7 @@ Configure in `app/.env.local`:
 
 ```env
 MIND_ROOT=/path/to/MindOS/my-mind
+MINDOS_WEB_PORT=3000
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
@@ -119,13 +114,23 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `MIND_ROOT` | — | **Required**. Absolute path to the knowledge base root. |
+| `MINDOS_WEB_PORT` | `3000` | Optional. Web app port for MindOS frontend. |
 | `AI_PROVIDER` | `anthropic` | Options: `anthropic` or `openai`. |
 | `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
 | `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
 
-### 3. Make Any Agent Ready (MCP + Skills)
+> [!NOTE]
+> If you want the MindOS GUI to be reachable from other devices, make sure `MINDOS_WEB_PORT` is open in firewall/security-group settings and bound to an accessible host/network interface.
 
-#### 3.1 Configure MindOS MCP
+### 3. Inject Your Personal Mind (Quick Start)
+
+1. Open the built-in MindOS Agent chat panel in the GUI.
+2. Upload your resume or any personal/project material.
+3. Send this prompt: `Help me sync this information into my MindOS knowledge base.`
+
+### 4. Make Any Agent Ready (MCP + Skills)
+
+#### 4.1 Configure MindOS MCP
 
 Register the MindOS MCP Server in your Agent client:
 
@@ -153,7 +158,12 @@ MindOS now supports two transports:
 
 **Option B: Remote URL (Streamable HTTP)**
 
+> [!NOTE]
+> Ensure the server port is open in firewall/security-group settings and reachable from the public network (or target client network), otherwise remote MCP access will fail.
+
 Start MCP in HTTP mode on the host machine:
+
+> For long-running use, run MCP in background with `nohup`, `tmux`, `screen`, or a process manager like `systemd`/`pm2`, so it remains available after terminal disconnect.
 
 ```bash
 cd mcp && npm install && npm run build
@@ -187,7 +197,7 @@ Build the MCP Server:
 cd mcp && npm install && npm run build
 ```
 
-#### 3.2 Install MindOS Skills
+#### 4.2 Install MindOS Skills
 
 | Skill | Description |
 |-------|-------------|
@@ -203,7 +213,7 @@ npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
 
 MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
 
-#### 3.3 Common Pitfalls
+#### 4.3 Common Pitfalls
 
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
@@ -211,12 +221,13 @@ MCP = connection capability, Skills = workflow capability. Enabling both gives t
 - No `MCP_API_KEY` in HTTP mode: your server is exposed on the network and unsafe.
 - `MCP_HOST=127.0.0.1`: only localhost can access it; other devices cannot connect via URL.
 
-#### 4. Collaboration Loop (Human + Multi-Agent)
+#### 4.4 Collaboration Loop (Human + Multi-Agent)
 
 1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
 2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
 3. With Skills enabled, those Agents execute workflows and SOP tasks in a guided way.
 4. Execution results are written back to MindOS so humans can audit and refine continuously.
+
 
 ## ⚙️ How It Works
 

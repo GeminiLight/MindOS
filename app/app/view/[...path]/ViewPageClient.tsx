@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useTransition, useCallback, useEffect } from 'react';
+import { useState, useTransition, useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Edit3, Save, X, Loader2, LayoutTemplate } from 'lucide-react';
 import MarkdownView from '@/components/MarkdownView';
+import JsonView from '@/components/JsonView';
 import CsvView from '@/components/CsvView';
 import Backlinks from '@/components/Backlinks';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import TableOfContents from '@/components/TableOfContents';
-import { resolveRenderer, loadDisabledState } from '@/lib/renderers/registry';
+import { resolveRenderer } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
 import '@/lib/renderers/index'; // registers all renderers
 
@@ -36,6 +37,28 @@ export default function ViewPageClient({
   draftDirectories = [],
   createDraftAction,
 }: ViewPageClientProps) {
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
+  const useRaw = useSyncExternalStore(
+    (onStoreChange) => {
+      const listener = () => onStoreChange();
+      window.addEventListener('storage', listener);
+      window.addEventListener('mindos-use-raw-change', listener);
+      return () => {
+        window.removeEventListener('storage', listener);
+        window.removeEventListener('mindos-use-raw-change', listener);
+      };
+    },
+    () => {
+      const saved = localStorage.getItem('mindos-use-raw');
+      return saved !== null ? saved === 'true' : false;
+    },
+    () => false,
+  );
   const router = useRouter();
   const [editing, setEditing] = useState(initialEditing || content === '');
   const [editContent, setEditContent] = useState(content);
@@ -43,34 +66,25 @@ export default function ViewPageClient({
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [useRaw, setUseRaw] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('mindos-use-raw');
-    return saved !== null ? saved === 'true' : false;
-  });
   const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
-  const [renderersLoaded] = useState(() => {
-    if (typeof window !== 'undefined') loadDisabledState();
-    return true;
-  });
 
   const inferredName = filePath.split('/').pop() || 'Untitled.md';
   const [showSaveAs, setShowSaveAs] = useState(isDraft);
   const [saveDir, setSaveDir] = useState('');
   const [saveName, setSaveName] = useState(inferredName);
 
+  // Keep first paint deterministic between server and client to avoid hydration mismatch.
+  const effectiveUseRaw = hydrated ? useRaw : false;
+
   const handleToggleRaw = useCallback(() => {
-    setUseRaw((prev) => {
-      const next = !prev;
-      localStorage.setItem('mindos-use-raw', String(next));
-      return next;
-    });
-  }, []);
+    const next = !useRaw;
+    localStorage.setItem('mindos-use-raw', String(next));
+    window.dispatchEvent(new Event('mindos-use-raw-change'));
+  }, [useRaw]);
 
   const renderer = resolveRenderer(filePath, extension);
-  void renderersLoaded;
   const isCsv = extension === 'csv';
-  const showRenderer = !editing && !useRaw && !!renderer;
+  const showRenderer = !editing && !effectiveUseRaw && !!renderer;
 
   const handleEdit = useCallback(() => {
     setEditContent(savedContent);
@@ -193,14 +207,14 @@ export default function ViewPageClient({
                 onClick={handleToggleRaw}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{
-                  background: useRaw ? 'var(--muted)' : `${'var(--amber)'}22`,
-                  color: useRaw ? 'var(--muted-foreground)' : 'var(--amber)',
+                  background: effectiveUseRaw ? 'var(--muted)' : `${'var(--amber)'}22`,
+                  color: effectiveUseRaw ? 'var(--muted-foreground)' : 'var(--amber)',
                   fontFamily: "'IBM Plex Mono', monospace",
                 }}
-                title={useRaw ? `Switch to ${renderer.name}` : 'View raw'}
+                title={effectiveUseRaw ? `Switch to ${renderer.name}` : 'View raw'}
               >
                 <LayoutTemplate size={13} />
-                <span className="hidden sm:inline">{useRaw ? renderer.name : 'Raw'}</span>
+                <span className="hidden sm:inline">{effectiveUseRaw ? renderer.name : 'Raw'}</span>
               </button>
             )}
 
@@ -312,6 +326,8 @@ export default function ViewPageClient({
                 content={savedContent}
                 filePath={filePath}
               />
+            ) : extension === 'json' ? (
+              <JsonView content={savedContent} />
             ) : (
               <>
                 <MarkdownView content={savedContent} />

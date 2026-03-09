@@ -15,6 +15,14 @@ This file explains template config in human-readable form.
 
 ## Key Settings
 
+### `languagePreference`
+
+- `preferredLanguage`: global language preference
+- `supportedLanguages`: selectable language options
+- `folderNamingLanguage`: language used for folder/filename generation
+- `contentWritingLanguage`: language used for generated writing content
+- `enforceLocalizedNaming`: whether localized naming is enforced (en template defaults to English naming)
+
 ### `filename`
 
 - `emojiPrefixDefault`: whether new filenames default to emoji prefix
@@ -33,16 +41,30 @@ This file explains template config in human-readable form.
 - `emojiEnabled`: whether generated titles allow emoji by default
 - `defaultHeadingLevel`: default heading level for generated titles (currently `2`)
 
-### `connections`
+### `protocol`
 
-- `requireRootCsv`: whether `Connections/` requires a root CSV
-- `rootCsvName`: official index CSV filename
-- `examplesCsvName`: example index CSV filename
-- `onePersonOneMarkdown`: whether each person must have one markdown profile
+- `readMode`: config read mode
+- `priorityBetweenConfigAndDoc`: relationship between config values and docs (`none` means no priority)
+- `notes`: protocol notes
 
-### `profile`
+## Directory Naming and Level Rules (Semantic Layer in CONFIG.md)
 
-- `minimalFiles`: minimal core file set for Profile
+These rules are directory naming semantics, documented in `CONFIG.md`:
+
+- First-level directories (direct children of project root) default to `emoji + name`.
+- Second-level and deeper directories default to no emoji.
+- Directory naming language is controlled by `languagePreference.folderNamingLanguage`.
+- Whether content filenames use emoji prefix is controlled by `filename.*`.
+
+Current template convention (en):
+
+- First-level examples: `👤 Profile/`, `📝 Notes/`, `🔗 Connections/`, `⚙️ Configurations/`, `🔄 Workflows/`, `📚 Resources/`, `🚀 Projects/`
+- Second-level examples: `Family/`, `Friends/`, `Classmates/`, `Colleagues/`, `Mentors/` (no emoji)
+
+When naming policy changes:
+
+1. Update semantic rules in `CONFIG.md` first.
+2. Then sync `README.md`, `INSTRUCTION.md`, and actual directory structure.
 
 ## Change Rules
 

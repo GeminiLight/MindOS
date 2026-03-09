@@ -12,7 +12,7 @@ export function getMindRoot(): string {
 export const MIND_ROOT = process.env.MIND_ROOT || '/data/home/geminitwang/code/my-mind';
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store']);
-const ALLOWED_EXTENSIONS = new Set(['.md', '.csv']);
+const ALLOWED_EXTENSIONS = new Set(['.md', '.csv', '.json']);
 
 // ─── Security helpers ─────────────────────────────────────────────────────────
 

@@ -1,6 +1,22 @@
 {
   "schemaVersion": "1.1",
   "locale": "en",
+  "languagePreference": {
+    "preferredLanguage": "en",
+    "supportedLanguages": [
+      {
+        "value": "zh",
+        "label": "Chinese"
+      },
+      {
+        "value": "en",
+        "label": "English"
+      }
+    ],
+    "folderNamingLanguage": "en",
+    "contentWritingLanguage": "en",
+    "enforceLocalizedNaming": true
+  },
   "filename": {
     "emojiPrefixDefault": true,
     "allowEmojiPrefix": true,
@@ -17,19 +33,6 @@
       "emojiEnabled": true,
       "defaultHeadingLevel": 2
     }
-  },
-  "connections": {
-    "requireRootCsv": true,
-    "rootCsvName": "Connections.csv",
-    "examplesCsvName": "Connections_examples.csv",
-    "onePersonOneMarkdown": true
-  },
-  "profile": {
-    "minimalFiles": [
-      "👤 Identity.md",
-      "⚙️ Preferences.md",
-      "🎯 Focus.md"
-    ]
   },
   "protocol": {
     "readMode": "config_and_doc",
@@ -73,22 +76,14 @@
         ]
       },
       {
-        "id": "connections",
-        "title": "Connections",
-        "description": "Controls index/detail contract for relationship data",
+        "id": "language_preference",
+        "title": "Language Preference",
+        "description": "Controls language used for folder naming and generated content writing",
         "fields": [
-          "connections.requireRootCsv",
-          "connections.rootCsvName",
-          "connections.examplesCsvName",
-          "connections.onePersonOneMarkdown"
-        ]
-      },
-      {
-        "id": "profile",
-        "title": "Profile Minimal Set",
-        "description": "Defines the core file set for Profile",
-        "fields": [
-          "profile.minimalFiles"
+          "languagePreference.preferredLanguage",
+          "languagePreference.folderNamingLanguage",
+          "languagePreference.contentWritingLanguage",
+          "languagePreference.enforceLocalizedNaming"
         ]
       }
     ]
@@ -152,35 +147,59 @@
         "max": 6
       }
     },
-    "connections.requireRootCsv": {
+    "languagePreference.preferredLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "Chinese"
+        },
+        {
+          "value": "en",
+          "label": "English"
+        }
+      ],
+      "label": "Preferred Language",
+      "description": "Global language preference for default generation strategy"
+    },
+    "languagePreference.folderNamingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "Chinese"
+        },
+        {
+          "value": "en",
+          "label": "English"
+        }
+      ],
+      "label": "Folder/Filename Language",
+      "description": "Controls language for generated folder and filename naming"
+    },
+    "languagePreference.contentWritingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "Chinese"
+        },
+        {
+          "value": "en",
+          "label": "English"
+        }
+      ],
+      "label": "Content Writing Language",
+      "description": "Controls language used for generated document content"
+    },
+    "languagePreference.enforceLocalizedNaming": {
       "type": "boolean",
       "control": "switch",
-      "label": "Require Root CSV",
-      "description": "Connections root directory must keep an index CSV"
-    },
-    "connections.rootCsvName": {
-      "type": "string",
-      "control": "text",
-      "label": "Root CSV Name",
-      "description": "Filename of the official Connections index CSV"
-    },
-    "connections.examplesCsvName": {
-      "type": "string",
-      "control": "text",
-      "label": "Examples CSV Name",
-      "description": "Filename of the Connections examples index CSV"
-    },
-    "connections.onePersonOneMarkdown": {
-      "type": "boolean",
-      "control": "switch",
-      "label": "One Person One Markdown",
-      "description": "Each person must map to an individual markdown detail file"
-    },
-    "profile.minimalFiles": {
-      "type": "array<string>",
-      "control": "tag-list",
-      "label": "Profile Minimal Files",
-      "description": "Core file list recommended for Profile"
+      "label": "Enforce Localized Naming",
+      "description": "When enabled, zh template requires Chinese names and en template requires English names"
     }
   }
 }

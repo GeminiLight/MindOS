@@ -15,6 +15,14 @@
 
 ## 当前关键配置
 
+### `languagePreference`
+
+- `preferredLanguage`: 总体语言偏好
+- `supportedLanguages`: 可选语言列表（中文、英文）
+- `folderNamingLanguage`: 目录与文件命名语言
+- `contentWritingLanguage`: 内容写作语言
+- `enforceLocalizedNaming`: 是否强制本地化命名（中文模板默认中文命名）
+
 ### `filename`
 
 - `emojiPrefixDefault`: 新文件名是否默认使用 emoji 前缀
@@ -33,20 +41,27 @@
 - `emojiEnabled`: 生成标题是否默认允许 emoji
 - `defaultHeadingLevel`: 生成标题默认层级（当前为 `2`）
 
-### `connections`
+### `protocol`
 
-- `requireRootCsv`: `Connections/` 是否必须有根 CSV
-- `rootCsvName`: 正式索引 CSV 文件名
-- `examplesCsvName`: 示例索引 CSV 文件名
-- `onePersonOneMarkdown`: 是否要求一人一份 Markdown
+- `readMode`: 配置读取模式
+- `priorityBetweenConfigAndDoc`: 配置值与文档说明关系（当前 `none`，不分优先级）
+- `notes`: 配置协议说明
 
-### `profile`
+## 目录命名与层级规则（放在 CONFIG.md 的语义层）
 
-- `minimalFiles`: Profile 最小核心文件集
+以下规则作为目录命名语义协议，由 `CONFIG.md` 负责解释并约束执行：
 
-## 修改约定
+- 一级目录（项目根目录的子目录）默认使用 `emoji + 名称`。
+- 二级及以下目录默认不加 emoji。
+- 目录命名语言由 `languagePreference.folderNamingLanguage` 决定。
+- 内容文件是否使用 emoji 前缀由 `filename.*` 控制。
 
-1. 配置键变更时，同时更新 `template/en/CONFIG.json` 与 `template/zh/CONFIG.json`。
-2. 中英文配置语义保持一致。
-3. 配置键新增/删除/重命名后，同步更新两侧 `CONFIG.md`。
-4. `CONFIG.md` 中的默认值不得与 JSON 冲突。
+当前模板约定（zh）：
+
+- 一级目录示例：`👤 画像/`、`📝 笔记/`、`🔗 关系/`、`⚙️ 配置/`、`🔄 流程/`、`📚 资源/`、`🚀 项目/`
+- 二级目录示例：`家人/`、`朋友/`、`同学/`、`同事/`、`导师/`（不加 emoji）
+
+当目录命名策略有调整时：
+
+- 先更新 `CONFIG.md` 的语义规则。
+- 再同步更新 `README.md`、`INSTRUCTION.md` 与实际目录结构。

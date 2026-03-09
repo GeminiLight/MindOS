@@ -14,12 +14,13 @@ When entering a knowledge base, load context in this order:
 
 1. Read root `INSTRUCTION.md` (this file)
 2. Read root `README.md` (index and navigation)
-3. Route to the target directory
-4. If target directory has `INSTRUCTION.md`, read it first
-5. Then read target `README.md` and target files
-6. Execute
+3. Read `CONFIG.json` and `CONFIG.md` together (config values + semantic explanation)
+4. Route to the target directory
+5. If target directory has `INSTRUCTION.md`, read it first
+6. Then read target `README.md` and target files
+7. Execute
 
-Step 1 is **MUST**. Steps 2-5 are **SHOULD**, and must not be skipped for write/delete/rename operations.
+Step 1 is **MUST**. Steps 2-6 are **SHOULD**, and must not be skipped for write/delete/rename operations.
 
 ---
 
@@ -43,7 +44,7 @@ Step 1 is **MUST**. Steps 2-5 are **SHOULD**, and must not be skipped for write/
 
 ### 2.3 README.md Standard
 
-Each first-level directory (such as `Profile/`, `Configurations/`, `Workflows/`) should include a `README.md` with:
+Each first-level directory (such as `👤 Profile/`, `🔗 Connections/`, `🔄 Workflows/`) should include a `README.md` with:
 
 1. **One-line purpose** (directory responsibility)
 2. **📁 Structure** (file tree + short notes)
@@ -99,7 +100,7 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 ### 3.5 Recommendation for First-Level Directories (Project Root Children)
 
-- First-level directories are direct children of the project root, for example: `Connections/`, `Workflows/`, `Profile/`, `Configurations/`.
+- First-level directories are direct children of the project root, for example: `🔗 Connections/`, `🔄 Workflows/`, `👤 Profile/`, `📚 Resources/`.
 - It is recommended that these first-level directories provide a lightweight `INSTRUCTION.md` by default.
 - A lightweight version should include at least:
   - Directory goal
@@ -116,12 +117,13 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 - Documents: `.md`
 - Data: `.csv`
+- Config: `.json`
 
 ### 4.2 Naming
 
 - Content files: optional `emoji + name`
-- Directories: English, PascalCase-like naming
-- System files: `README.md`, `INSTRUCTION.md`, `TODO.md`, `CHANGELOG.md`
+- Directories: follow `languagePreference.folderNamingLanguage`; zh templates default to Chinese naming, en templates default to English naming.
+- System files: `README.md`, `INSTRUCTION.md`, `TODO.md`, `CHANGELOG.md`, `CONFIG.json`, `CONFIG.md`
 
 ### 4.3 Read-Before-Write
 
@@ -156,3 +158,20 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 - `TODO.md`: pending tasks
 - `CHANGELOG.md`: completed items (reverse chronological)
+
+---
+
+## 8. Example Data Isolation (Naming Convention)
+
+- Example files/directories must use `_example` or `_examples` in naming.
+- Do not use `.example` or `.examples` to avoid hidden-file semantic confusion.
+- Any content containing `_example` or `_examples` is example-only, not user production data.
+- Example content may demonstrate structure/style, but must not be treated as real facts for execution.
+
+---
+
+## 9. CONFIG Read Protocol
+
+- `CONFIG.json` and `CONFIG.md` must be read together.
+- They are complementary and have no priority relationship.
+- `CONFIG.json` provides structured config values; `CONFIG.md` provides semantic explanation and intent.
