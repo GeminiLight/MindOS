@@ -1,175 +1,148 @@
 # MindOS Instruction Set
 
-MindOS 的元操作规则。本文件定义 Agent 与人类在知识库中协作的底层协议。
+This file defines the base operating rules for collaboration between humans and agents inside the knowledge base.
 
-> **本文件只包含固定规则。** 所有可变内容（目录结构、用户偏好、具体 SOP）均在独立文件中维护，通过引用接入。
+> This file contains stable rules. Variable content (structure details, preferences, SOP specifics) should live in dedicated files.
 >
-> **措辞约定**：`MUST` = 违反会导致数据丢失或不可逆错误；`SHOULD` = 强烈建议遵守，偶尔跳过不会导致系统崩溃。
+> Terms: `MUST` = mandatory, `SHOULD` = strongly recommended.
 
 ---
 
-## 1. 启动协议
+## 1. Bootstrap Order
 
-Agent 进入知识库时，按以下顺序加载上下文：
+When entering a knowledge base, load context in this order:
 
-1. 读取 `INSTRUCTION.md`（本文件）— 加载系统规则
-2. 读取 `README.md` — 加载目录索引与职责表
-3. 根据任务类型，路由到目标目录，读取其 `README.md`
-4. 若目标目录含 `INSTRUCTION.md`，读取其局部规则
-5. 开始执行
+1. Read root `INSTRUCTION.md` (this file)
+2. Read root `README.md` (index and navigation)
+3. Route to the target directory
+4. If target directory has `INSTRUCTION.md`, read it first
+5. Then read target `README.md` and target files
+6. Execute
 
-步骤 1-2 为 **MUST**。缺少上下文的盲目执行会导致规则被绕过。步骤 3-4 为 **SHOULD**，简单任务可按需跳过。
-
----
-
-## 2. 层次化引用与渐进式披露
-
-### 2.1 三类文件，各司其职
-
-| 文件 | 职责 | 存在规则 | 可变性 |
-|------|------|----------|--------|
-| 根 `INSTRUCTION.md` | 系统内核——全局不可变规则 | 根目录必有，全局唯一 | 仅用户明确要求时修改 |
-| 子目录 `INSTRUCTION.md` | 局部规则——该域特有的约束与协议 | 可选，当目录需要定义规则时创建 | 自由更新，但不得与根规则冲突 |
-| `README.md` | 索引——目录结构、文件说明、使用指南 | 一级子目录必有；更深层按需 | 随内容变化自由更新 |
-
-**规则继承**：子目录 `INSTRUCTION.md` 的局部规则仅作用于本目录及其后代。与根 `INSTRUCTION.md` 冲突时，**根规则优先**。
-
-### 2.2 渐进式披露
-
-- Agent 不需要一次性读取所有文件。先读系统规则和根索引，按需深入。
-- 每个目录的 `README.md` 是该域的**唯一入口**，提供足够信息决定下一步读什么。
-- 优先扁平引用（`README.md` → 目标文件），避免 A → B → C 的链式跳转。必要的跨域引用不受此限。
-- 如果一个目录不含 `README.md`，说明它是叶子节点，直接读取其中的文件即可。
-
-### 2.3 README.md 规范
-
-每个一级子目录（`Profile/`、`Configurations/`、`Workflows/` 等）须包含 `README.md`，固定包含以下章节：
-
-1. **一句话说明** — 本目录的职责与定位
-2. **📁 目录结构** — 当前目录的文件树（含注释）
-3. **💡 使用说明** — 各文件/子目录的用途
-4. **📐 更新规则** — 新增、修改、删除时的同步要求
-
-二级及更深的子目录**不要求** README.md。按需创建即可。
+Step 1 is **MUST**. Steps 2-5 are **SHOULD**, and must not be skipped for write/delete/rename operations.
 
 ---
 
-## 3. 文件系统规则
+## 2. File Roles and Priority
 
-### 3.1 文件类型
+### 2.1 File Roles
 
-知识库内容以纯文本为主：
+| File | Role |
+|------|------|
+| Root `INSTRUCTION.md` | Global immutable rules and precedence |
+| Subdirectory `INSTRUCTION.md` | Local execution rules for that directory |
+| `README.md` | Navigation and usage guidance |
+| Regular content files | Business content (SOPs, profiles, records) |
 
-| 类型 | 扩展名 | 用途 |
-|------|--------|------|
-| 文档 | `.md` | 所有叙述性内容、SOP、Profile、规范 |
-| 数据 | `.csv` | 结构化记录（产品库、资源表、学者列表） |
+### 2.2 Priority (Strict)
 
-辅助文件（`.sh`、`.json`、图片等）允许存在于 `Scripts/`、`Assets/` 等明确的辅助目录中，但不作为知识库的索引或引用对象。
+`root INSTRUCTION.md` > `subdirectory INSTRUCTION.md` > `README.md` > `regular content files`
 
-### 3.2 命名规则
+- Resolve conflicts using this exact order.
+- `README.md` cannot override any `INSTRUCTION.md` rule.
 
-- **内容文件**：`emoji + 中文名`，英文专有名词保留原文。示例：`👤 Identity.md`
-- **目录名**：英文，首字母大写，体现领域或场景。示例：`Workflows/`
-- **系统文件**：全大写英文，不带 emoji。示例：`README.md`、`TODO.md`、`INSTRUCTION.md`
+### 2.3 README.md Standard
 
-### 3.3 读写优先级
+Each first-level directory (such as `Profile/`, `Configurations/`, `Workflows/`) should include a `README.md` with:
 
-- 写入前 **MUST** 先读取。不基于假设覆盖已有内容。
-- CSV 追加前 SHOULD 先读取表头，确保字段对齐。
+1. **One-line purpose** (directory responsibility)
+2. **📁 Structure** (file tree + short notes)
+3. **💡 Usage** (what each file/subdirectory is for)
+
+Rules like update policy, execution boundaries, and precedence belong to `INSTRUCTION.md`, not to README standards.
 
 ---
 
-## 4. 引用与同步协议
+## 3. How to Create Subdirectory INSTRUCTION.md
 
-### 4.1 引用语法
+Create it only when local rules are reusable and meaningful. Avoid creating them by default.
 
-文件间通过相对路径引用：
+### 3.1 Good Cases
+
+- Multiple files under one directory share execution constraints
+- The directory has its own schema or safety boundary
+- The directory is high-frequency and mistakes are costly
+
+### 3.2 Avoid Cases
+
+- Pure structural description (put in README)
+- One-off notes with no reuse
+- Highly unstable rules with no fixed boundary
+
+### 3.3 Standard Steps
+
+1. Create `INSTRUCTION.md` in the target directory
+2. Write only local rules; do not duplicate root rules
+3. Explicitly state: if conflict exists, root rules win
+4. Add one line in that directory README usage section: read local `INSTRUCTION.md` before execution
+
+### 3.4 Minimal Template
 
 ```markdown
-参见 `Profile/👤 Identity.md`
-详见 `Workflows/Research/README.md`
+# <Domain> Instruction Set
+
+## Goal
+- Local goal for this directory
+
+## Local Rules
+- Rule 1
+- Rule 2
+
+## Execution Order
+1. Root `INSTRUCTION.md`
+2. Local `INSTRUCTION.md`
+3. Local `README.md` and target files
+
+## Boundary
+- Root rules win on conflict
 ```
 
-### 4.2 同步触发规则
+---
 
-**必须同步**（结构变更，影响导航）：
+## 4. Filesystem Rules
 
-| 操作 | 同步目标 |
-|------|----------|
-| 新增/删除/重命名一级子目录 | 根 `README.md` 的目录结构与职责表 |
-| 删除/重命名文件 | 所有引用该文件的 `README.md` |
+### 4.1 File Types
 
-**建议同步**（内容变更，不影响导航，可批量补齐）：
+- Documents: `.md`
+- Data: `.csv`
 
-| 操作 | 同步目标 |
-|------|----------|
-| 新增文件 | 所属目录的 `README.md` 目录树 |
-| CSV 追加行 | 无需同步 |
+### 4.2 Naming
 
-### 4.3 变更验证（闭环）
+- Content files: optional `emoji + name`
+- Directories: English, PascalCase-like naming
+- System files: `README.md`, `INSTRUCTION.md`, `TODO.md`, `CHANGELOG.md`
 
-Agent 执行结构变更（§4.2 必须同步类操作）后，SHOULD 重新读取受影响的 `README.md`，确认变更已正确反映。
+### 4.3 Read-Before-Write
+
+- **MUST** read target file before writing
+- **SHOULD** verify CSV header before append
 
 ---
 
-## 5. 格式规范
+## 5. Sync and Change Rules
 
-### 5.1 Markdown 书写
+### 5.1 Must Sync
 
-- 章节标题适当添加 emoji
-- 命令用 code 格式：独立命令用 code block，行内提及用 `` `行内代码` ``
-- 内容精炼，面向执行而非解释
-- 列表优先于段落，表格优先于列表（当有多维度对比时）
+- Add/delete/rename first-level directory: update root `README.md`
+- Delete/rename files: update all references
 
-### 5.2 CSV 书写
+### 5.2 Should Sync
 
-- 首行为表头，字段间逗号分隔
-- 含逗号、引号、换行的单元格用双引号包裹
-- 追加行时字段顺序与数量必须与表头一致
+- Add new files: update that directory README tree
+- CSV row append: no README sync required
 
 ---
 
-## 6. 变更记录协议
+## 6. Safety Boundaries
 
-### 6.1 TODO.md
-
-- 待办事项的唯一入口
-- 格式：`- [ ] 任务描述`（未完成）/ `- [x] 任务描述`（已完成）
-- 完成的任务迁移到 `CHANGELOG.md` 后从 `TODO.md` 移除
-
-### 6.2 CHANGELOG.md
-
-- 按日期倒序记录已完成事项
-- 格式：`## YYYY-MM-DD` 下列出当日完成项
-- 仅记录事实，不记录计划
+- **MUST** not delete files unless user explicitly requests
+- **MUST** not store secrets (keys, tokens, passwords)
+- Confirm before bulk delete or structural reorganization
 
 ---
 
-## 7. 安全边界
+## 7. Tracking
 
-- **MUST** 不删除用户未明确指定的文件
-- **MUST** 不在知识库中存储密钥、Token、密码等敏感信息
-- SHOULD 修改根 `INSTRUCTION.md` 前获得用户明确确认
-- SHOULD 执行破坏性操作（批量删除、目录重组）前确认
+- `TODO.md`: pending tasks
+- `CHANGELOG.md`: completed items (reverse chronological)
 
----
-
-## 8. 扩展机制
-
-### 8.1 新增域
-
-添加新的一级子目录：
-
-1. 创建目录
-2. 在目录内创建 `README.md`（按 §2.3 规范）
-3. 更新根 `README.md` 的目录结构与职责表
-
-### 8.2 外部资源录入
-
-当用户提供产品/工具/资源时：
-
-1. 读取对应 CSV 的表头
-2. 抓取或收集必要信息
-3. 追加一行到对应 CSV
-4. 不创建新文件，除非 CSV 不存在（此时先创建含表头的 CSV）

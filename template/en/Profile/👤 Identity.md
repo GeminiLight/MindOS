@@ -1,16 +1,22 @@
 # 👤 Identity
 
-## 基本信息
+## Basic Info
 
-- **姓名**：
-- **职业**：
-- **所在地**：
-- **机构/公司**：
+- **Name**:
+- **Role**:
+- **Location**:
+- **Organization/Company**:
 
-## 专业背景
+## Professional Background
 
-<!-- 学历、研究方向、工作经历等 -->
+<!-- Education, research areas, work experience -->
 
-## 当前角色
+## Current Roles
 
-<!-- 主要身份：研究员 / 工程师 / 创始人 / 学生 等 -->
+<!-- Primary roles: researcher / engineer / founder / student -->
+
+## Key Achievements
+
+- Academic:
+- Product:
+- Other:

@@ -109,77 +109,135 @@
             </div>
 
             <div class="compare-tabs animate-up" style="animation-delay:0.1s">
-                <button class="compare-tab active" data-scene="collect">
+                <button class="compare-tab active" data-scene="switch">
+                    <span data-zh>切换对话</span><span data-en>Switch Conversations</span>
+                </button>
+                <button class="compare-tab" data-scene="collect">
                     <span data-zh>信息收集</span><span data-en>Info Collection</span>
                 </button>
+                <button class="compare-tab" data-scene="social">
+                    <span data-zh>社交关系</span><span data-en>Social Relationships</span>
+                </button>
                 <button class="compare-tab" data-scene="scaffold">
-                    <span data-zh>搭建新项目</span><span data-en>Scaffold Project</span>
+                    <span data-zh>代码开发</span><span data-en>Code Development</span>
+                </button>
+                <button class="compare-tab" data-scene="team">
+                    <span data-zh>团队协作</span><span data-en>Team Collaboration</span>
                 </button>
                 <button class="compare-tab" data-scene="review">
                     <span data-zh>代码审查</span><span data-en>Code Review</span>
                 </button>
-                <button class="compare-tab" data-scene="research">
-                    <span data-zh>竞品调研</span><span data-en>Competitor Research</span>
-                </button>
-                <button class="compare-tab" data-scene="switch">
-                    <span data-zh>切换 Agent</span><span data-en>Switch Agents</span>
-                </button>
             </div>
 
             <!-- Scene: Info Collection -->
-            <div class="compare-stage active animate-up" data-stage="collect" style="animation-delay:0.2s">
+            <div class="compare-stage animate-up" data-stage="collect" style="animation-delay:0.2s">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我联系这批 KOL 做产品推广"</div>
-                        <div class="compare-scenario" data-en>"Help me reach out to these influencers for product promotion"</div>
+                        <div class="compare-scenario" data-zh>周一 9:00，市场负责人说："下午 3 点前把这 30 位 KOL 的外联初稿发我"</div>
+                        <div class="compare-scenario" data-en>Monday 9:00 AM: "Send first-draft outreach for 30 influencers before 3 PM."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>手动把 KOL 名单从表格里复制到 Prompt 里</span><span data-en>Manually copy the influencer list from a spreadsheet into the prompt</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>解释每个 KOL 的领域、粉丝量、过往合作记录…</span><span data-en>Explain each influencer's niche, follower count, past collaborations…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>再描述你的外联流程：先 DM、再邮件、最后电话…</span><span data-en>Then describe your outreach workflow: DM first, then email, then call…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">4</span><span data-zh>Agent 输出的邮件模板缺乏个性化，得逐个修改</span><span data-en>Agent's email templates lack personalization — edit each one manually</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你把表格、历史合作记录、备注一条条复制进 Prompt</span><span data-en>You manually paste sheets, collaboration history, and notes into the prompt</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 先给通用模板，你再逐个补充语气、内容方向和禁用词</span><span data-en>Agent returns generic templates; you rewrite tone, content angle, and blocked terms one by one</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>第 19 封才发现用错人设，整批重改</span><span data-en>You catch a wrong persona at email #19 and rework the whole batch</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>~30 min</strong><strong data-en>~30 min</strong>&nbsp;<span data-zh>手动搬运数据 + 描述流程</span><span data-en>manual data transfer + process description</span></div>
+                        <div class="compare-verdict"><strong data-zh>~45 min</strong><strong data-en>~45 min</strong>&nbsp;<span data-zh>重复喂上下文，返工风险高</span><span data-en>context repetition + high rework risk</span></div>
                     </div>
                     <div class="compare-col compare-col--after">
                         <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我联系这批 KOL 做产品推广"</div>
-                        <div class="compare-scenario" data-en>"Help me reach out to these influencers for product promotion"</div>
+                        <div class="compare-scenario" data-zh>同一句话："下午 3 点前，把这 30 位 KOL 外联初稿发我"</div>
+                        <div class="compare-scenario" data-en>Same sentence: "Draft outreach for these 30 influencers before 3 PM."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 自动读取 Resources/Influencers.csv → 最新 KOL 名单与详情</span><span data-en>Agent reads Resources/Influencers.csv → latest influencer list & details</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 读取 Workflows/Outreach-SOP.md → 你的外联标准流程</span><span data-en>Agent reads Workflows/Outreach-SOP.md → your outreach SOP</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>按 SOP 自动生成个性化外联内容，匹配每个 KOL 的领域与风格</span><span data-en>Auto-generates personalized outreach per SOP, matching each influencer's niche & style</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 自动读取 Resources/Influencers.csv + 合作历史标签</span><span data-en>Agent auto-loads Resources/Influencers.csv and collaboration-history tags</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>按 Workflows/Outreach-SOP.md 生成分层外联：头部 / 腰部 / 长尾</span><span data-en>Follows Workflows/Outreach-SOP.md to generate tiered outreach: top/mid/long-tail</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一次产出可直接发送版本，你只做最终确认</span><span data-en>Produces send-ready drafts in one shot; you only do final approval</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>~3 min</strong><strong data-en>~3 min</strong>&nbsp;<span data-zh>数据 + 流程自动对齐，一键执行</span><span data-en>data + workflow auto-aligned, one-click execution</span></div>
+                        <div class="compare-verdict"><strong data-zh>~6 min</strong><strong data-en>~6 min</strong>&nbsp;<span data-zh>流程自动对齐，几乎零返工</span><span data-en>workflow auto-aligned, near-zero rework</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Scene: Scaffold -->
+            <!-- Scene: Code Development -->
             <div class="compare-stage animate-up" data-stage="scaffold" style="animation-delay:0.2s">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我搭建一个新的 Next.js 项目"</div>
-                        <div class="compare-scenario" data-en>"Help me scaffold a new Next.js project"</div>
+                        <div class="compare-scenario" data-zh>周三晚 10:30，老板说："明天评审要看到能跑的项目骨架"</div>
+                        <div class="compare-scenario" data-en>Wednesday 10:30 PM: "We need a runnable project skeleton for tomorrow's review."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>在 Prompt 里写明技术栈偏好：Next.js 15 + Tailwind + pnpm + App Router…</span><span data-en>Spell out tech preferences in prompt: Next.js 15 + Tailwind + pnpm + App Router…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>补充代码风格：ESLint 规则、目录结构、命名规范…</span><span data-en>Add code style: ESLint rules, directory structure, naming conventions…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>再补充项目规范：CI/CD 配置、Git 提交规范、部署流程…</span><span data-en>Then add project standards: CI/CD config, Git commit conventions, deploy flow…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">4</span><span data-zh>Agent 还是用了 npm，手动纠正后重新生成</span><span data-en>Agent still used npm — manually correct, regenerate</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你反复说明：Next.js 15、pnpm、目录规范、CI 要求</span><span data-en>You repeatedly explain: Next.js 15, pnpm, folder conventions, CI requirements</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>第一版用了 npm 且结构不符合团队约定</span><span data-en>First output uses npm and a structure that violates team conventions</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你二次纠偏后才能进入真正开发</span><span data-en>You spend another round correcting before real development can start</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>~20 min</strong><strong data-en>~20 min</strong>&nbsp;<span data-zh>反复描述上下文 + 纠偏</span><span data-en>repeating context + corrections</span></div>
+                        <div class="compare-verdict"><strong data-zh>~25 min</strong><strong data-en>~25 min</strong>&nbsp;<span data-zh>启动慢，首版不可用</span><span data-en>slow kickoff, first output not usable</span></div>
                     </div>
                     <div class="compare-col compare-col--after">
                         <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我搭建一个新的 Next.js 项目"</div>
-                        <div class="compare-scenario" data-en>"Help me scaffold a new Next.js project"</div>
+                        <div class="compare-scenario" data-zh>同一句话："帮我启动这个代码开发，明天评审要看"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Kick off this project build for tomorrow's review."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 自动读取 Profile/Identity.md → 获得技术栈偏好</span><span data-en>Agent reads Profile/Identity.md → gets your tech preferences</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 自动读取 Workflows/Startup-SOP.md → 获得项目规范</span><span data-en>Agent reads Workflows/Startup-SOP.md → gets project standards</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一次性生成：正确的技术栈 + 代码风格 + CI/CD，无需纠偏</span><span data-en>One-shot output: correct stack + style + CI/CD, zero corrections</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Profile/Identity.md → 默认技术栈与命令习惯</span><span data-en>Agent reads Profile/Identity.md for default stack and command preferences</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Workflows/Startup-SOP.md → 自动带上初始化、校验、CI 模板</span><span data-en>Reads Workflows/Startup-SOP.md and auto-applies setup, checks, and CI template</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>首版即可跑通，团队直接接力开发</span><span data-en>First output runs immediately; team can start building right away</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>~2 min</strong><strong data-en>~2 min</strong>&nbsp;<span data-zh>同一句 Prompt，完美输出</span><span data-en>same prompt, perfect output</span></div>
+                        <div class="compare-verdict"><strong data-zh>~4 min</strong><strong data-en>~4 min</strong>&nbsp;<span data-zh>首版可用，直接进入迭代</span><span data-en>usable first output, straight into iteration</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Relationship Context -->
+            <div class="compare-stage" data-stage="social">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>你说："我今天和他聊了这些"</div>
+                        <div class="compare-scenario" data-en>You say: "I talked with this person today."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你重新解释人物背景、历史合作、敏感话题边界</span><span data-en>You re-explain relationship background, collaboration history, and sensitive boundaries</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>本次会话记住了，但下次换 Agent 又要从头讲</span><span data-en>This session remembers, but switching agents means starting from zero again</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>重要承诺容易遗漏，跟进动作断档</span><span data-en>Important commitments slip through, follow-up actions break</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>易断档</strong><strong data-en>Fragile</strong>&nbsp;<span data-zh>关系信息分散在会话里</span><span data-en>relationship context scattered across chats</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>你只说："我今天和他聊了这些，帮我推进下一步"</div>
+                        <div class="compare-scenario" data-en>You only say: "We discussed this today, drive the next steps."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 从聊天里抽取关键事实与情绪变化，结构化记录</span><span data-en>Agent extracts key facts and sentiment shifts from the chat into structured notes</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不只更新 Connections/XXX.md，还自动生成跟进策略、待办和提醒时间</span><span data-en>Not just updates Connections/XXX.md, but also creates follow-up strategy, tasks, and reminder timing</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>后续任何 Agent / 新会话都可直接接手执行，不再从头梳理关系脉络</span><span data-en>Any future agent/session can continue execution directly without rebuilding relationship history</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>可执行</strong><strong data-en>Actionable</strong>&nbsp;<span data-zh>从聊天到行动，自动闭环</span><span data-en>from conversation to execution, closed-loop</span></div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Scene: Team Collaboration -->
+            <div class="compare-stage" data-stage="team">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>周会后，产品、研发、运营都在各自工具里记录了"下一步"</div>
+                        <div class="compare-scenario" data-en>After weekly sync, product, engineering, and ops all captured next steps in separate tools</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>产品在文档写优先级，研发在代码工具记实现，运营在群里补执行计划</span><span data-en>Product tracks priorities in docs, engineering logs implementation notes, ops writes plans in chat</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>信息分散且口径不一致，跨角色协作频繁二次确认</span><span data-en>Context is fragmented and inconsistent, forcing repeated cross-role confirmations</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一周后复盘才发现目标偏移，团队花时间补救对齐</span><span data-en>A week later, review reveals drift and the team spends time repairing alignment</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>团队失焦</strong><strong data-en>Team drift</strong>&nbsp;<span data-zh>每个人都在努力，但不在同一条线上</span><span data-en>everyone works hard, but not on one shared line</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同样的周会结论，统一沉淀到团队 MindOS 里</div>
+                        <div class="compare-scenario" data-en>The same meeting outcomes are captured into one team MindOS</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>会议纪要自动更新 Team/Decisions.md、Projects/Roadmap.md、Workflows/Handoff-SOP.md</span><span data-en>Meeting notes auto-update Team/Decisions.md, Projects/Roadmap.md, and Workflows/Handoff-SOP.md</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不同角色的 Agent 都读取同一份团队上下文，产出天然对齐</span><span data-en>Role-specific agents read the same team context, so outputs align by default</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>每次任务推进都能追溯到团队决策，协作像同一个大脑在思考</span><span data-en>Each task traces back to team decisions, making collaboration feel like one shared brain</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>团队同频</strong><strong data-en>Team sync</strong>&nbsp;<span data-zh>MindOS 成为团队共同思考层</span><span data-en>MindOS becomes the team's shared thinking layer</span></div>
                     </div>
                 </div>
             </div>
@@ -189,81 +247,53 @@
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"Review 这个 PR"</div>
-                        <div class="compare-scenario" data-en>"Review this PR"</div>
+                        <div class="compare-scenario" data-zh>发布前最后一小时，你说："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>One hour before release: "Review this payment-module PR."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 按通用最佳实践审查，与你团队的规范无关</span><span data-en>Agent reviews against generic best practices, ignoring your team norms</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>提了一堆你们项目根本不在意的"问题"</span><span data-en>Flags a pile of "issues" your project doesn't care about</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>真正重要的架构性问题反而没发现</span><span data-en>Misses the actual architecture issues that matter</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 给出大量通用建议，但忽略你们的支付容错标准</span><span data-en>Agent gives many generic tips but misses your payment fault-tolerance standards</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>你花时间筛噪音，真正高风险点被埋没</span><span data-en>You burn time filtering noise while real high-risk issues stay hidden</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>上线后才暴露异常链路，回滚成本高</span><span data-en>Failure path shows up after release, forcing expensive rollback</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>噪音多</strong><strong data-en>Noisy</strong>&nbsp;<span data-zh>通用审查 ≠ 你的标准</span><span data-en>generic review ≠ your standards</span></div>
+                        <div class="compare-verdict"><strong data-zh>高风险</strong><strong data-en>High risk</strong>&nbsp;<span data-zh>噪音多，关键点漏检</span><span data-en>high noise, critical misses</span></div>
                     </div>
                     <div class="compare-col compare-col--after">
                         <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"Review 这个 PR"</div>
-                        <div class="compare-scenario" data-en>"Review this PR"</div>
+                        <div class="compare-scenario" data-zh>同一句话："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Review this payment-module PR."</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md → 你团队的审查规范</span><span data-en>Agent reads Configs/Code-Standards.md → your team's review rules</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>精准定位：命名不符合约定、缺少错误处理、性能隐患</span><span data-en>Pinpoints: naming violations, missing error handling, perf risks</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出与你过去的审查风格一致，团队无缝采纳</span><span data-en>Output matches your past review style — team adopts instantly</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md + 历史缺陷模式</span><span data-en>Agent reads Configs/Code-Standards.md plus historical defect patterns</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>优先标出真正会导致事故的问题：幂等、回滚、超时兜底</span><span data-en>Prioritizes incident-prone issues: idempotency, rollback, timeout fallback</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出按风险等级排序，开发可直接照单修复</span><span data-en>Outputs risk-ranked findings so engineers can fix immediately</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>精准</strong><strong data-en>Precise</strong>&nbsp;<span data-zh>按你的标准审查，零噪音</span><span data-en>your standards, zero noise</span></div>
+                        <div class="compare-verdict"><strong data-zh>高命中</strong><strong data-en>High signal</strong>&nbsp;<span data-zh>按团队标准命中关键风险</span><span data-en>critical risks found under your own standards</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Scene: Competitor Research -->
-            <div class="compare-stage" data-stage="research">
+            <!-- Scene: Switch Conversations -->
+            <div class="compare-stage active" data-stage="switch">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我做一份竞品分析"</div>
-                        <div class="compare-scenario" data-en>"Do a competitor analysis for me"</div>
+                        <div class="compare-scenario" data-zh>同一个任务里，你在不同工具和新对话之间来回切换</div>
+                        <div class="compare-scenario" data-en>Inside one task, you keep switching across tools and fresh chats</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>先解释你的产品定位、目标用户、核心差异化…</span><span data-en>First explain your product positioning, target users, differentiation…</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 输出泛泛的对比表格，缺乏针对性</span><span data-en>Agent outputs a generic comparison table, lacks specificity</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你得手动补充"我们真正关注的维度是…"再重来</span><span data-en>You manually add "what we actually care about is…" and redo</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每次一换工具或开新对话，就要重讲背景、约定和当前进度</span><span data-en>Every time you switch tools or start a new chat, you must re-explain context, conventions, and progress</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>同一工具开新 session 也会丢记忆，回答风格和决策标准来回漂移</span><span data-en>Even a new session in the same tool loses memory, so style and decision criteria drift</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你在做"上下文搬运"，而不是推进结果交付</span><span data-en>You end up transporting context instead of shipping outcomes</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>2~3 轮</strong><strong data-en>2-3 rounds</strong>&nbsp;<span data-zh>才能得到有针对性的分析</span><span data-en>before getting a targeted analysis</span></div>
+                        <div class="compare-verdict"><strong data-zh>高频重讲</strong><strong data-en>Frequent rebriefs</strong>&nbsp;<span data-zh>每次一换工具/对话，就要重新对齐</span><span data-en>every tool/chat switch forces re-alignment</span></div>
                     </div>
                     <div class="compare-col compare-col--after">
                         <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我做一份竞品分析"</div>
-                        <div class="compare-scenario" data-en>"Do a competitor analysis for me"</div>
+                        <div class="compare-scenario" data-zh>同一个任务里，无论换工具还是开新对话，都从同一份 MindOS 上下文继续</div>
+                        <div class="compare-scenario" data-en>In the same task, tool switches and new chats both continue from one shared MindOS context</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Projects/PRD.md → 你的产品定位与核心差异化</span><span data-en>Agent reads Projects/PRD.md → your positioning & differentiation</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 读取 Resources/Products.csv → 你已跟踪的竞品列表</span><span data-en>Agent reads Resources/Products.csv → your tracked competitor list</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一次输出：基于你的维度，对比你关注的竞品，直击要害</span><span data-en>One-shot: compares your competitors on your dimensions, nails it</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每个 Agent 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Every agent reads the same MindOS knowledge base via MCP</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>偏好、标准、项目状态自动继承，新会话也保持一致判断</span><span data-en>Preferences, standards, and project state carry over automatically, even in fresh chats</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你只做决策与验收，协作链路持续不断流</span><span data-en>You stay on decisions and acceptance while collaboration flow remains continuous</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>1 轮</strong><strong data-en>1 round</strong>&nbsp;<span data-zh>精准分析，直接可用</span><span data-en>precise analysis, instantly actionable</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Switch Agents -->
-            <div class="compare-stage" data-stage="switch">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"把 Claude Code 的活交给 Cursor 继续"</div>
-                        <div class="compare-scenario" data-en>"Hand off work from Claude Code to Cursor"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>从 Claude Code 复制上下文、偏好、进度到 Cursor</span><span data-en>Copy context, preferences, progress from Claude Code to Cursor</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Cursor 不理解你在 Claude Code 里建立的约定</span><span data-en>Cursor doesn't understand conventions built in Claude Code</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出风格不一致，又得花时间对齐</span><span data-en>Output style differs — spend time aligning again</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>每次切换</strong><strong data-en>Every switch</strong>&nbsp;<span data-zh>都得重复传递上下文</span><span data-en>means repeating context transfer</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"把 Claude Code 的活交给 Cursor 继续"</div>
-                        <div class="compare-scenario" data-en>"Hand off work from Claude Code to Cursor"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Cursor 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Cursor reads the same MindOS knowledge base via MCP</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>自动继承你的偏好、代码风格、项目上下文</span><span data-en>Automatically inherits your preferences, code style, project context</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>无缝衔接，输出风格完全一致</span><span data-en>Seamless handoff, output style perfectly consistent</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>0 成本</strong><strong data-en>Zero cost</strong>&nbsp;<span data-zh>切换 Agent，心智同步</span><span data-en>switch Agent, mind stays synced</span></div>
+                        <div class="compare-verdict"><strong data-zh>0 重讲</strong><strong data-en>0 rebriefs</strong>&nbsp;<span data-zh>切换工具/对话，协作不断流</span><span data-en>switch tools/chats without breaking flow</span></div>
                     </div>
                 </div>
             </div>

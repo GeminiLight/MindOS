@@ -1,0 +1,6 @@
+Name,Category,Relationship,CurrentRole,Location,Status,LastInteraction,MdPath,UpdatedAt
+James Wang,Family,父亲,退休教师,Hangzhou,active,2026-03-01,_examples/Family/James_Wang_example.md,2026-03-10
+Lily Lin,Friends,大学好友,产品经理,Shanghai,active,2026-03-05,_examples/Friends/Lily_Lin_example.md,2026-03-10
+Leo Chen,Classmates,研究生同学,算法工程师,Beijing,warm,2026-02-20,_examples/Classmates/Leo_Chen_example.md,2026-03-10
+Ethan Zhao,Colleagues,前同事,技术负责人,Shenzhen,active,2026-03-08,_examples/Colleagues/Ethan_Zhao_example.md,2026-03-10
+Michael Zhou,Mentors,职业导师,创业顾问,Singapore,active,2026-02-28,_examples/Mentors/Michael_Zhou_example.md,2026-03-10

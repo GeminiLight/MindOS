@@ -72,6 +72,14 @@ MindOS refactors the human-AI collaboration paradigm through three core pillars,
 
 ---
 
+## ⏱️ 30-Second Summary
+
+> ✅ If you already have an Agent (Claude Code/Cursor/Cline/GitHub Copilot, etc.),
+> you only need two steps:
+> 1) Configure MindOS MCP
+> 2) Install MindOS Skills
+> After that, your Agent can directly read/write your knowledge base and execute SOPs.
+
 ## 🚀 Getting Started
 
 ### 1. Install & Run
@@ -115,11 +123,11 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 | `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
 | `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
 
-### 3. Connect Your Agent (MCP)
+### 3. Make Any Agent Ready (MCP + Skills)
 
-Register the MindOS MCP Server in your Agent client to allow the Agent to directly access and operate your local knowledge base.
+#### 3.1 Configure MindOS MCP
 
-**Configuration example (Claude Desktop):**
+Register the MindOS MCP Server in your Agent client:
 
 ```json
 {
@@ -136,40 +144,33 @@ Register the MindOS MCP Server in your Agent client to allow the Agent to direct
 }
 ```
 
-**Build the MCP Server:**
+Build the MCP Server:
+
 ```bash
 cd mcp && npm install && npm run build
 ```
 
-### 4. Install MindOS Skills
+#### 3.2 Install MindOS Skills
 
 | Skill | Description |
 |-------|-------------|
 | `mindos` | Knowledge base operation guide (English) — read/write notes, search, manage SOPs, maintain Profiles |
 | `mindos-zh` | Knowledge base operation guide (Chinese) — same capabilities, Chinese interface |
 
-Recommended install pattern:
-
-```bash
-npx skills add <owner/repo> --skill <skill-name>
-```
-
-Example (official community format):
-
-```bash
-npx skills add https://github.com/microsoft/skills --skill azure-diagnostics
-```
-
-Install MindOS skills:
+Install commands:
 
 ```bash
 npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos
 npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
 ```
 
+MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
 
+#### Common Pitfalls
 
----
+- Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
+- Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
+- `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
 
 ## ⚙️ How It Works
 

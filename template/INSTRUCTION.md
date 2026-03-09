@@ -124,9 +124,11 @@ for d in template/en/* template/zh/*; do [ -d "$d" ] && [ -f "$d/README.md" ] ||
 rg -n "Profile/Connections|🔗 Network\.md" template README.md README_zh.md
 ```
 
-## 13. 示例命名约定（`_example` / `_examples`）
+## 13. 示例命名约定（仅 `_example` / `_examples`）
 
 凡是名称中包含 `_example` 或 `_examples` 的文件/目录，统一视为**示例模板**，不是用户自己的正式数据。
+
+不使用 `.example` 或 `.examples` 作为示例命名，以避免与隐藏文件语义混淆。
 
 ### 语义规则
 

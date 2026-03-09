@@ -1,17 +1,21 @@
 # ⚙️ Preferences
 
-## 工作习惯
+## Work Style
 
-<!-- 工作时间、专注方式、休息节律 -->
+<!-- Working hours, focus style, rest rhythm -->
 
-## 工具偏好
+## Tool Preferences
 
-<!-- 编辑器、终端、浏览器、笔记工具等 -->
+<!-- Editor, terminal, browser, notes tooling -->
 
-## 沟通偏好
+## Communication Preferences
 
-<!-- 简洁/详细、中文/英文、正式/随意 -->
+<!-- concise/detailed, Chinese/English, formal/casual -->
 
-## AI 使用偏好
+## Writing Preferences
 
-<!-- 希望 Agent 的回复风格、长度、格式等 -->
+<!-- tone, structure preference, wording to avoid -->
+
+## AI Interaction Preferences
+
+<!-- preferred response style, length, and format -->
