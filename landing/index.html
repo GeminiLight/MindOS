@@ -938,8 +938,8 @@
                         <div class="qs-terminal-body">
                             <div class="qs-line"><span class="qs-step">1</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 克隆并初始化模板</span><span data-en># Clone and initialize template</span></span></div>
                             <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r template/zh my-mind/</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 可选：cp -r template/en my-mind/</span><span data-en># optional: cp -r template/en my-mind/</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r templates/zh my-mind/</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 可选：cp -r templates/en my-mind/</span><span data-en># optional: cp -r templates/en my-mind/</span></span></div>
 
                             <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置环境变量（绝对路径）</span><span data-en># Configure env (absolute path)</span></span></div>
                             <div class="qs-line"><span class="qs-prompt">$</span> cp app/.env.example app/.env.local</div>
@@ -955,7 +955,6 @@
                             <div class="qs-line qs-line-gap"><span class="qs-step">5</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置 Agent URL 并安装 Skills</span><span data-en># Configure agent URL and install Skills</span></span></div>
                             <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></span></div>
                             <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh</div>
 
                             <div class="qs-line qs-line-result">
                                 <span class="qs-success-dot"></span>
@@ -980,25 +979,29 @@
                     </div>
                     <div class="qs-prompt-card">
                         <div class="qs-prompt-bar">
+                            <div class="qs-terminal-meta">
                             <div class="qs-prompt-badge">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                 Prompt
                             </div>
-                            <button class="qs-copy-btn" id="copy-prompt-btn">Copy</button>
+                            </div>
+                            <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制命令</span><span data-en>Copy Commands</span></button>
                         </div>
                         <div class="qs-prompt-body" id="agent-prompt-text">
-                            <p data-zh>请帮我启用 MindOS（默认 Streamable HTTP）：</p>
-                            <p data-en>Help me enable MindOS (default: Streamable HTTP):</p>
-                            <p data-zh>1. 启动 MCP（HTTP）：cd mcp && npm install && npm run build</p>
-                            <p data-en>1. Start MCP (HTTP): cd mcp && npm install && npm run build</p>
-                            <p data-zh>2. 启动服务：MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
-                            <p data-en>2. Start server: MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</p>
-                            <p data-zh>3. 配置 Agent URL（http://&lt;服务器IP&gt;:8787/mcp，Bearer Token）并安装 Skills：</p>
-                            <p data-en>3. Configure agent URL (http://&lt;server-ip&gt;:8787/mcp, Bearer token) and install Skills:</p>
-                            <p data-zh>npx skills add https://github.com/GeminiLight/MindOS --skill mindos</p>
-                            <p data-en>npx skills add https://github.com/GeminiLight/MindOS --skill mindos</p>
-                            <p data-zh>npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh</p>
-                            <p data-en>npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh</p>
+                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-comment" data-zh># 启动 MCP（HTTP）</span><span class="qs-comment" data-en># Start MCP (HTTP)</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd mcp && npm install && npm run build</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-comment" data-zh># 配置 Agent URL（Bearer Token）</span><span class="qs-comment" data-en># Configure Agent URL (Bearer token)</span></div>
+                            <div class="qs-line"><span class="qs-comment" data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span class="qs-comment" data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-comment" data-zh># 安装 Skill 并验证连接</span><span class="qs-comment" data-en># Install skill and verify connectivity</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>完成：Agent 可通过 MCP 读取并写入同一份 MindOS</span>
+                                <span data-en>Done: Agent can read and write the same MindOS via MCP</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1038,22 +1041,14 @@
         document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
         document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
-        document.getElementById('copy-prompt-btn')?.addEventListener('click', (e) => {
-            const body = document.getElementById('agent-prompt-text');
-            const lines = Array.from(body.querySelectorAll(`p[data-${state.lang}]`)).map(p => p.textContent);
-            navigator.clipboard.writeText(lines.join('\n'));
-            e.target.textContent = 'Copied!';
-            setTimeout(() => e.target.textContent = 'Copy', 2000);
-        });
-
         const humanCopyBtn = document.getElementById('copy-human-btn');
         const humanCopyBtnLabel = '<span data-zh>复制安装命令</span><span data-en>Copy Install Commands</span>';
         humanCopyBtn?.addEventListener('click', (e) => {
             const zhLines = [
                 '# 1. 克隆并初始化模板',
                 'git clone https://github.com/GeminiLight/MindOS',
-                'cd MindOS && cp -r template/zh my-mind/',
-                '# 可选：cp -r template/en my-mind/',
+                'cd MindOS && cp -r templates/zh my-mind/',
+                '# 可选：cp -r templates/en my-mind/',
                 '# 2. 配置环境变量（绝对路径）',
                 'cp app/.env.example app/.env.local',
                 '# 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind',
@@ -1065,13 +1060,12 @@
                 '# 5. 配置 Agent URL 并安装 Skills',
                 '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
                 'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh'
             ];
             const enLines = [
                 '# 1. Clone and initialize template',
                 'git clone https://github.com/GeminiLight/MindOS',
-                'cd MindOS && cp -r template/zh my-mind/',
-                '# optional: cp -r template/en my-mind/',
+                'cd MindOS && cp -r templates/zh my-mind/',
+                '# optional: cp -r templates/en my-mind/',
                 '# 2. Configure env (absolute path)',
                 'cp app/.env.example app/.env.local',
                 '# edit MIND_ROOT=/abs/path/to/MindOS/my-mind',
@@ -1083,13 +1077,41 @@
                 '# 5. Configure agent URL and install Skills',
                 '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
                 'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh'
             ];
             const lines = state.lang === 'zh' ? zhLines : enLines;
             navigator.clipboard.writeText(lines.join('\n'));
             e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
             setTimeout(() => {
                 e.currentTarget.innerHTML = humanCopyBtnLabel;
+            }, 2000);
+        });
+
+        const agentCopyBtn = document.getElementById('copy-agent-btn');
+        const agentCopyBtnLabel = '<span data-zh>复制命令</span><span data-en>Copy Commands</span>';
+        agentCopyBtn?.addEventListener('click', (e) => {
+            const zhLines = [
+                '# 1. 启动 MCP（HTTP）',
+                'cd mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 2. 配置 Agent URL（Bearer Token）',
+                '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                '# 3. 安装 Skill 并验证连接',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
+            ];
+            const enLines = [
+                '# 1. Start MCP (HTTP)',
+                'cd mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 2. Configure Agent URL (Bearer token)',
+                '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                '# 3. Install skill and verify connectivity',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
+            ];
+            const lines = state.lang === 'zh' ? zhLines : enLines;
+            navigator.clipboard.writeText(lines.join('\n'));
+            e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
+            setTimeout(() => {
+                e.currentTarget.innerHTML = agentCopyBtnLabel;
             }, 2000);
         });
 
