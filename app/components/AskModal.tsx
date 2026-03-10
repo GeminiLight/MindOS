@@ -362,7 +362,9 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           const extracted = await extractPdfText(f);
           return {
             name: f.name,
-            content: extracted || `[PDF: ${f.name}] Could not extract readable text (possibly scanned/image PDF).`,
+            content: extracted
+              ? `[PDF TEXT EXTRACTED: ${f.name}]\n\n${extracted}`
+              : `[PDF: ${f.name}] Could not extract readable text (possibly scanned/image PDF).`,
           };
         } catch {
           return {
