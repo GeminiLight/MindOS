@@ -9,8 +9,7 @@ on:
       - 'app/**'
       - 'mcp/**'
       - 'skills/**'
-      - 'template/**'
-      - 'wiki/**'
+      - 'templates/**'
       - 'assets/**'
       - 'landing/**'
       - 'README.md'
@@ -62,8 +61,7 @@ jobs:
           rsync -av --delete --exclude='node_modules' --exclude='.next' app/ /tmp/mindos/app/
           rsync -av --delete --exclude='node_modules' mcp/ /tmp/mindos/mcp/
           [ -d skills/ ] && rsync -av --delete --exclude='node_modules' skills/ /tmp/mindos/skills/
-          [ -d template/ ] && rsync -av --delete template/ /tmp/mindos/template/
-          [ -d wiki/ ] && rsync -av --delete wiki/ /tmp/mindos/wiki/
+          [ -d templates/ ] && rsync -av --delete templates/ /tmp/mindos/templates/
           [ -d assets/ ] && rsync -av --delete assets/ /tmp/mindos/assets/
 
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
