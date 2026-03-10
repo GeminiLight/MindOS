@@ -110,7 +110,10 @@
 
             <div class="compare-tabs animate-up" style="animation-delay:0.1s">
                 <button class="compare-tab active" data-scene="switch">
-                    <span data-zh>切换对话</span><span data-en>Switch Conversations</span>
+                    <span data-zh>切换 Agent</span><span data-en>Switch Agent</span>
+                </button>
+                <button class="compare-tab" data-scene="idea">
+                    <span data-zh>灵感捕捉</span><span data-en>Capture Ideas</span>
                 </button>
                 <button class="compare-tab" data-scene="collect">
                     <span data-zh>信息收集</span><span data-en>Info Collection</span>
@@ -119,18 +122,80 @@
                     <span data-zh>社交关系</span><span data-en>Social Relationships</span>
                 </button>
                 <button class="compare-tab" data-scene="scaffold">
-                    <span data-zh>代码开发</span><span data-en>Code Development</span>
+                    <span data-zh>项目开发</span><span data-en>Project Dev</span>
+                </button>
+                <button class="compare-tab" data-scene="review">
+                    <span data-zh>内容审阅</span><span data-en>Content Review</span>
+                </button>
+                <button class="compare-tab" data-scene="research">
+                    <span data-zh>调研</span><span data-en>Research</span>
                 </button>
                 <button class="compare-tab" data-scene="team">
                     <span data-zh>团队协作</span><span data-en>Team Collaboration</span>
                 </button>
-                <button class="compare-tab" data-scene="review">
-                    <span data-zh>代码审查</span><span data-en>Code Review</span>
+                <button class="compare-tab" data-scene="distill">
+                    <span data-zh>经验沉淀</span><span data-en>Distill Experience</span>
                 </button>
             </div>
 
+            <!-- Scene: Switch Agent -->
+            <div class="compare-stage active" data-stage="switch">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一个任务里，你在不同工具和新对话之间来回切换</div>
+                        <div class="compare-scenario" data-en>Inside one task, you keep switching across tools and fresh chats</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每次一换工具或开新对话，就要重讲背景、约定和当前进度</span><span data-en>Every time you switch tools or start a new chat, you must re-explain context, conventions, and progress</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>同一工具开新 session 也会丢记忆，回答风格和决策标准来回漂移</span><span data-en>Even a new session in the same tool loses memory, so style and decision criteria drift</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你在做"上下文搬运"，而不是推进结果交付</span><span data-en>You end up transporting context instead of shipping outcomes</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高频重讲</strong><strong data-en>Frequent rebriefs</strong>&nbsp;<span data-zh>每次一换工具/对话，就要重新对齐</span><span data-en>every tool/chat switch forces re-alignment</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一个任务里，无论换工具还是开新对话，都从同一份 MindOS 上下文继续</div>
+                        <div class="compare-scenario" data-en>In the same task, tool switches and new chats both continue from one shared MindOS context</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每个 Agent 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Every agent reads the same MindOS knowledge base via MCP</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>偏好、标准、项目状态自动继承，新会话也保持一致判断</span><span data-en>Preferences, standards, and project state carry over automatically, even in fresh chats</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你只做决策与验收，协作链路持续不断流</span><span data-en>You stay on decisions and acceptance while collaboration flow remains continuous</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>0 重讲</strong><strong data-en>0 rebriefs</strong>&nbsp;<span data-zh>切换工具/对话，协作不断流</span><span data-en>switch tools/chats without breaking flow</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Capture Ideas -->
+            <div class="compare-stage" data-stage="idea">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>通勤路上突然想到一个功能点："帮我评估可行性并排进计划"</div>
+                        <div class="compare-scenario" data-en>A feature idea hits you while commuting: "Evaluate feasibility and slot it into the plan"</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>先打开备忘录 / Notion 手动整理灵感，写清前因后果</span><span data-en>Open notes app / Notion, manually organize the idea with full context</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>下次要用时翻找半天，再复制粘贴给 Agent</span><span data-en>When needed later, hunt through notes and paste into the Agent</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>Agent 缺产品背景，还得补目标用户、技术栈、路线图…</span><span data-en>Agent lacks product context — you must also fill in users, stack, roadmap…</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~15 min</strong><strong data-en>~15 min</strong>&nbsp;<span data-zh>手动整理 + 翻找 + 补上下文</span><span data-en>manual organizing + searching + filling context</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："帮我评估这个功能点的可行性"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Evaluate the feasibility of this feature idea"</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>手机随手记到 MindOS Ideas.md，一句话即可</span><span data-en>Jot it into MindOS Ideas.md on your phone — one sentence is enough</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 自动读取 Profile + Roadmap.md → 已知产品背景与优先级</span><span data-en>Agent auto-reads Profile + Roadmap.md — product context and priorities are already there</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>直接输出可行性评估并排入 TODO，任何 Agent 立即可执行</span><span data-en>Outputs feasibility assessment and adds to TODO — any agent can act immediately</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~2 min</strong><strong data-en>~2 min</strong>&nbsp;<span data-zh>记一句话，全链路自动对齐</span><span data-en>one sentence, full pipeline auto-aligned</span></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Scene: Info Collection -->
-            <div class="compare-stage animate-up" data-stage="collect" style="animation-delay:0.2s">
+            <div class="compare-stage" data-stage="collect">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
@@ -157,35 +222,7 @@
                 </div>
             </div>
 
-            <!-- Scene: Code Development -->
-            <div class="compare-stage animate-up" data-stage="scaffold" style="animation-delay:0.2s">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>周三晚 10:30，老板说："明天评审要看到能跑的项目骨架"</div>
-                        <div class="compare-scenario" data-en>Wednesday 10:30 PM: "We need a runnable project skeleton for tomorrow's review."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你反复说明：Next.js 15、pnpm、目录规范、CI 要求</span><span data-en>You repeatedly explain: Next.js 15, pnpm, folder conventions, CI requirements</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>第一版用了 npm 且结构不符合团队约定</span><span data-en>First output uses npm and a structure that violates team conventions</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你二次纠偏后才能进入真正开发</span><span data-en>You spend another round correcting before real development can start</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~25 min</strong><strong data-en>~25 min</strong>&nbsp;<span data-zh>启动慢，首版不可用</span><span data-en>slow kickoff, first output not usable</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："帮我启动这个代码开发，明天评审要看"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Kick off this project build for tomorrow's review."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Profile/Identity.md → 默认技术栈与命令习惯</span><span data-en>Agent reads Profile/Identity.md for default stack and command preferences</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Workflows/Startup-SOP.md → 自动带上初始化、校验、CI 模板</span><span data-en>Reads Workflows/Startup-SOP.md and auto-applies setup, checks, and CI template</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>首版即可跑通，团队直接接力开发</span><span data-en>First output runs immediately; team can start building right away</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~4 min</strong><strong data-en>~4 min</strong>&nbsp;<span data-zh>首版可用，直接进入迭代</span><span data-en>usable first output, straight into iteration</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Relationship Context -->
+            <!-- Scene: Social Relationships -->
             <div class="compare-stage" data-stage="social">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
@@ -213,6 +250,89 @@
                 </div>
             </div>
 
+            <!-- Scene: Project Dev -->
+            <div class="compare-stage" data-stage="scaffold">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>周三晚 10:30，老板说："明天评审要看到能跑的项目骨架"</div>
+                        <div class="compare-scenario" data-en>Wednesday 10:30 PM: "We need a runnable project skeleton for tomorrow's review."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你反复说明：Next.js 15、pnpm、目录规范、CI 要求</span><span data-en>You repeatedly explain: Next.js 15, pnpm, folder conventions, CI requirements</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>第一版用了 npm 且结构不符合团队约定</span><span data-en>First output uses npm and a structure that violates team conventions</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你二次纠偏后才能进入真正开发</span><span data-en>You spend another round correcting before real development can start</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~25 min</strong><strong data-en>~25 min</strong>&nbsp;<span data-zh>启动慢，首版不可用</span><span data-en>slow kickoff, first output not usable</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："帮我启动这个代码开发，明天评审要看"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Kick off this project build for tomorrow's review."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Profile/Identity.md → 默认技术栈与命令习惯</span><span data-en>Agent reads Profile/Identity.md for default stack and command preferences</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Workflows/Startup-SOP.md → 自动带上初始化、校验、CI 模板</span><span data-en>Reads Workflows/Startup-SOP.md and auto-applies setup, checks, and CI template</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>首版即可跑通，团队直接接力开发</span><span data-en>First output runs immediately; team can start building right away</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~4 min</strong><strong data-en>~4 min</strong>&nbsp;<span data-zh>首版可用，直接进入迭代</span><span data-en>usable first output, straight into iteration</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Content Review -->
+            <div class="compare-stage" data-stage="review">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>发布前最后一小时，你说："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>One hour before release: "Review this payment-module PR."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 给出大量通用建议，但忽略你们的支付容错标准</span><span data-en>Agent gives many generic tips but misses your payment fault-tolerance standards</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>你花时间筛噪音，真正高风险点被埋没</span><span data-en>You burn time filtering noise while real high-risk issues stay hidden</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>上线后才暴露异常链路，回滚成本高</span><span data-en>Failure path shows up after release, forcing expensive rollback</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高风险</strong><strong data-en>High risk</strong>&nbsp;<span data-zh>噪音多，关键点漏检</span><span data-en>high noise, critical misses</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Review this payment-module PR."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md + 历史缺陷模式</span><span data-en>Agent reads Configs/Code-Standards.md plus historical defect patterns</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>优先标出真正会导致事故的问题：幂等、回滚、超时兜底</span><span data-en>Prioritizes incident-prone issues: idempotency, rollback, timeout fallback</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出按风险等级排序，开发可直接照单修复</span><span data-en>Outputs risk-ranked findings so engineers can fix immediately</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高命中</strong><strong data-en>High signal</strong>&nbsp;<span data-zh>按团队标准命中关键风险</span><span data-en>critical risks found under your own standards</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Research -->
+            <div class="compare-stage" data-stage="research">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>你要写一份竞品分析报告："帮我调研这个赛道的竞品格局"</div>
+                        <div class="compare-scenario" data-en>You need a competitive landscape report: "Research the competitive landscape in this space"</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>先手动给 Agent 描述你的产品定位、目标用户、差异化方向</span><span data-en>First, manually describe your product positioning, target users, and differentiators to the agent</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 给出泛泛的行业总结，缺少针对你产品的对比维度</span><span data-en>Agent returns generic industry overviews, missing comparison dimensions specific to your product</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你手动补充已有的调研笔记和数据源，反复迭代才成型</span><span data-en>You manually supplement existing research notes and data sources, iterating repeatedly to shape the output</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~40 min</strong><strong data-en>~40 min</strong>&nbsp;<span data-zh>手动喂背景，输出缺针对性</span><span data-en>manual context feeding, output lacks focus</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："帮我调研这个赛道的竞品格局"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Research the competitive landscape in this space"</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Projects/Product-Spec.md → 你的定位与差异化</span><span data-en>Agent reads Projects/Product-Spec.md → your positioning and differentiators</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Resources/Competitors.csv → 已积累的竞品数据</span><span data-en>Reads Resources/Competitors.csv → your accumulated competitive data</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>基于你的视角输出针对性分析，补充新发现并回写知识库</span><span data-en>Outputs analysis grounded in your perspective, adding new findings back to the knowledge base</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~8 min</strong><strong data-en>~8 min</strong>&nbsp;<span data-zh>基于已有积累，输出即可用</span><span data-en>built on existing data, output is actionable</span></div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Scene: Team Collaboration -->
             <div class="compare-stage" data-stage="team">
@@ -242,58 +362,30 @@
                 </div>
             </div>
 
-            <!-- Scene: Code Review -->
-            <div class="compare-stage" data-stage="review">
+            <!-- Scene: Distill Experience -->
+            <div class="compare-stage" data-stage="distill">
                 <div class="compare-grid">
                     <div class="compare-col compare-col--before">
                         <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>发布前最后一小时，你说："Review 这个支付模块 PR"</div>
-                        <div class="compare-scenario" data-en>One hour before release: "Review this payment-module PR."</div>
+                        <div class="compare-scenario" data-zh>Claude Code 刚帮你搞定了一次复杂的数据库迁移</div>
+                        <div class="compare-scenario" data-en>Claude Code just helped you through a complex database migration</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 给出大量通用建议，但忽略你们的支付容错标准</span><span data-en>Agent gives many generic tips but misses your payment fault-tolerance standards</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>你花时间筛噪音，真正高风险点被埋没</span><span data-en>You burn time filtering noise while real high-risk issues stay hidden</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>上线后才暴露异常链路，回滚成本高</span><span data-en>Failure path shows up after release, forcing expensive rollback</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>对话关闭，踩坑经验随 session 一起消失</span><span data-en>Chat closes, hard-won lessons vanish with the session</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>下次遇到类似问题，重新摸索、重复踩坑</span><span data-en>Next time you hit a similar issue, you re-explore and re-stumble</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>换 Cursor / Cline 等其他 Agent，经验完全不互通</span><span data-en>Switch to Cursor / Cline — experience doesn't carry over at all</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>高风险</strong><strong data-en>High risk</strong>&nbsp;<span data-zh>噪音多，关键点漏检</span><span data-en>high noise, critical misses</span></div>
+                        <div class="compare-verdict"><strong data-zh>~0 min</strong><strong data-en>~0 min</strong>&nbsp;<span data-zh>做完就忘，经验归零</span><span data-en>done and forgotten, experience resets to zero</span></div>
                     </div>
                     <div class="compare-col compare-col--after">
                         <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："Review 这个支付模块 PR"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Review this payment-module PR."</div>
+                        <div class="compare-scenario" data-zh>"帮我复盘这次对话，把经验沉淀到 SOP"</div>
+                        <div class="compare-scenario" data-en>"Review this session and distill experience into the SOP"</div>
                         <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md + 历史缺陷模式</span><span data-en>Agent reads Configs/Code-Standards.md plus historical defect patterns</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>优先标出真正会导致事故的问题：幂等、回滚、超时兜底</span><span data-en>Prioritizes incident-prone issues: idempotency, rollback, timeout fallback</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出按风险等级排序，开发可直接照单修复</span><span data-en>Outputs risk-ranked findings so engineers can fix immediately</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取现有 Workflows/DB-Migration-SOP.md，对比本次经验</span><span data-en>Agent reads existing Workflows/DB-Migration-SOP.md and compares with this session</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>自动补充新的避坑步骤与最佳实践到 SOP</span><span data-en>Auto-appends new pitfall-avoidance steps and best practices to the SOP</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>所有 Agent 下次迁移都按更新后的 SOP 执行</span><span data-en>All agents follow the updated SOP for the next migration</span></li>
                         </ul>
-                        <div class="compare-verdict"><strong data-zh>高命中</strong><strong data-en>High signal</strong>&nbsp;<span data-zh>按团队标准命中关键风险</span><span data-en>critical risks found under your own standards</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Switch Conversations -->
-            <div class="compare-stage active" data-stage="switch">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一个任务里，你在不同工具和新对话之间来回切换</div>
-                        <div class="compare-scenario" data-en>Inside one task, you keep switching across tools and fresh chats</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每次一换工具或开新对话，就要重讲背景、约定和当前进度</span><span data-en>Every time you switch tools or start a new chat, you must re-explain context, conventions, and progress</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>同一工具开新 session 也会丢记忆，回答风格和决策标准来回漂移</span><span data-en>Even a new session in the same tool loses memory, so style and decision criteria drift</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你在做"上下文搬运"，而不是推进结果交付</span><span data-en>You end up transporting context instead of shipping outcomes</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>高频重讲</strong><strong data-en>Frequent rebriefs</strong>&nbsp;<span data-zh>每次一换工具/对话，就要重新对齐</span><span data-en>every tool/chat switch forces re-alignment</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一个任务里，无论换工具还是开新对话，都从同一份 MindOS 上下文继续</div>
-                        <div class="compare-scenario" data-en>In the same task, tool switches and new chats both continue from one shared MindOS context</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每个 Agent 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Every agent reads the same MindOS knowledge base via MCP</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>偏好、标准、项目状态自动继承，新会话也保持一致判断</span><span data-en>Preferences, standards, and project state carry over automatically, even in fresh chats</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你只做决策与验收，协作链路持续不断流</span><span data-en>You stay on decisions and acceptance while collaboration flow remains continuous</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>0 重讲</strong><strong data-en>0 rebriefs</strong>&nbsp;<span data-zh>切换工具/对话，协作不断流</span><span data-en>switch tools/chats without breaking flow</span></div>
+                        <div class="compare-verdict"><strong data-zh>~3 min</strong><strong data-en>~3 min</strong>&nbsp;<span data-zh>一句话触发，经验自动沉淀 + 全 Agent 同步</span><span data-en>one prompt, experience auto-distilled + synced to all agents</span></div>
                     </div>
                 </div>
             </div>
@@ -902,109 +994,47 @@
         </div>
     </section>
 
-    <!-- SECTION 6: QUICKSTART — Refined -->
+    <!-- SECTION 6: QUICKSTART — Agent First -->
     <section id="quickstart" class="section">
         <div class="container">
             <div class="section-header">
                 <span class="mono">05. QUICKSTART</span>
-                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start to Share Mind</h2>
-                <p class="section-sub" data-zh>默认面向首次安装：先在 For Human 完成本地初始化，再到 For Agent 启用 MCP + Skills。</p>
-                <p class="section-sub" data-en>Default for first-time users: finish local setup in For Human, then enable MCP + Skills in For Agent.</p>
+                <h2 data-zh>一句话，让 Agent 帮你装好一切</h2><h2 data-en>One Prompt. Agent Does the Rest.</h2>
+                <p class="section-sub" data-zh>将下面的 Prompt 发送给任意支持 MCP 的 Agent（Claude Code、Cursor、Cline…），自动完成克隆、配置、MCP 注册与 Skills 安装。</p>
+                <p class="section-sub" data-en>Paste the prompt below into any MCP-capable Agent (Claude Code, Cursor, Cline…). It auto-clones, configures, registers MCP, and installs Skills.</p>
             </div>
 
-            <div class="qs-dual">
-                <!-- Path 1: For Human (Default) -->
-                <div class="qs-path qs-path--default animate-up">
-                    <div class="qs-path-header">
-                        <div class="qs-path-icon qs-path-icon--human">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </div>
-                        <div class="qs-path-title-wrap">
-                            <h3><span data-zh>For Human</span><span data-en>For Human</span></h3>
-                            <p class="qs-path-sub" data-zh>默认流程（首次安装）：先初始化本地 Mind</p>
-                            <p class="qs-path-sub" data-en>Default first-time flow: initialize your local mind first</p>
-                        </div>
-                        <span class="qs-default-badge" data-zh>默认路径</span>
-                        <span class="qs-default-badge" data-en>Default</span>
-                    </div>
-                    <div class="qs-terminal">
-                        <div class="qs-terminal-bar">
-                            <div class="qs-terminal-meta">
-                                <div class="qs-dots"><span></span><span></span><span></span></div>
-                                <span class="qs-terminal-title">Terminal</span>
-                            </div>
-                            <button class="qs-copy-btn" id="copy-human-btn"><span data-zh>复制安装命令</span><span data-en>Copy Install Commands</span></button>
-                        </div>
-                        <div class="qs-terminal-body">
-                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 克隆并初始化模板</span><span data-en># Clone and initialize template</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r templates/zh my-mind/</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 可选：cp -r templates/en my-mind/</span><span data-en># optional: cp -r templates/en my-mind/</span></span></div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置环境变量（绝对路径）</span><span data-en># Configure env (absolute path)</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cp app/.env.example app/.env.local</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind</span><span data-en># edit MIND_ROOT=/abs/path/to/MindOS/my-mind</span></span></div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 启动 GUI</span><span data-en># Launch GUI</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">4</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 默认 HTTP 模式启动 MCP</span><span data-en># Start MCP in default HTTP mode</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd ../mcp && npm install && npm run build</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">5</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置 Agent URL 并安装 Skills</span><span data-en># Configure agent URL and install Skills</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
-
-                            <div class="qs-line qs-line-result">
-                                <span class="qs-success-dot"></span>
-                                <span data-zh>完成：GUI 可用，所有 Agent 通过 MCP 共享同一份心智</span>
-                                <span data-en>Done: GUI is live, and all agents share one mind via MCP</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Path 2: For Agent -->
-                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
-                    <div class="qs-path-header">
-                        <div class="qs-path-icon qs-path-icon--agent">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        </div>
-                        <div class="qs-path-title-wrap">
-                            <h3><span data-zh>For Agent</span><span data-en>For Agent</span></h3>
-                            <p class="qs-path-sub" data-zh>在 For Human 完成后，3 步启用 Agent（默认 HTTP）</p>
-                            <p class="qs-path-sub" data-en>After For Human is done, enable your agent in 3 steps (HTTP by default)</p>
-                        </div>
-                    </div>
-                    <div class="qs-prompt-card">
-                        <div class="qs-prompt-bar">
-                            <div class="qs-terminal-meta">
+            <div class="qs-agent-first animate-up">
+                <div class="qs-prompt-card" style="max-width: 760px; margin: 0 auto;">
+                    <div class="qs-prompt-bar">
+                        <div class="qs-terminal-meta">
                             <div class="qs-prompt-badge">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                 Prompt
                             </div>
-                            </div>
-                            <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制命令</span><span data-en>Copy Commands</span></button>
                         </div>
-                        <div class="qs-prompt-body" id="agent-prompt-text">
-                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-comment" data-zh># 启动 MCP（HTTP）</span><span class="qs-comment" data-en># Start MCP (HTTP)</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> cd mcp && npm install && npm run build</div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-comment" data-zh># 配置 Agent URL（Bearer Token）</span><span class="qs-comment" data-en># Configure Agent URL (Bearer token)</span></div>
-                            <div class="qs-line"><span class="qs-comment" data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span class="qs-comment" data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></div>
-
-                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-comment" data-zh># 安装 Skill 并验证连接</span><span class="qs-comment" data-en># Install skill and verify connectivity</span></div>
-                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
-                            <div class="qs-line qs-line-result">
-                                <span class="qs-success-dot"></span>
-                                <span data-zh>完成：Agent 可通过 MCP 读取并写入同一份 MindOS</span>
-                                <span data-en>Done: Agent can read and write the same MindOS via MCP</span>
-                            </div>
-                        </div>
+                        <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制 Prompt</span><span data-en>Copy Prompt</span></button>
+                    </div>
+                    <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1.05rem; line-height: 1.7; padding: 1.5rem 1.25rem;">
+                        <span data-zh>帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</span>
+                        <span data-en>Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.</span>
                     </div>
                 </div>
+
+                <div class="qs-agent-badges" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 1.5rem;">
+                    <span class="qs-badge">Claude Code</span>
+                    <span class="qs-badge">Cursor</span>
+                    <span class="qs-badge">Cline</span>
+                    <span class="qs-badge">Windsurf</span>
+                    <span class="qs-badge">CodeBuddy</span>
+                    <span class="qs-badge">Trae</span>
+                    <span class="qs-badge">Gemini CLI</span>
+                </div>
+
+                <p style="text-align: center; color: var(--muted-fg); font-size: 0.8rem; margin-top: 1rem;">
+                    <span data-zh>Agent 将自动完成：克隆仓库 → 初始化模板 → 配置环境变量 → 注册 MCP → 安装 Skills</span>
+                    <span data-en>Agent will auto-complete: clone repo → init template → configure env → register MCP → install Skills</span>
+                </p>
             </div>
         </div>
     </section>
@@ -1041,74 +1071,12 @@
         document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
         document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
-        const humanCopyBtn = document.getElementById('copy-human-btn');
-        const humanCopyBtnLabel = '<span data-zh>复制安装命令</span><span data-en>Copy Install Commands</span>';
-        humanCopyBtn?.addEventListener('click', (e) => {
-            const zhLines = [
-                '# 1. 克隆并初始化模板',
-                'git clone https://github.com/GeminiLight/MindOS',
-                'cd MindOS && cp -r templates/zh my-mind/',
-                '# 可选：cp -r templates/en my-mind/',
-                '# 2. 配置环境变量（绝对路径）',
-                'cp app/.env.example app/.env.local',
-                '# 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind',
-                '# 3. 启动 GUI',
-                'cd app && npm install && npm run dev',
-                '# 4. 默认 HTTP 模式启动 MCP',
-                'cd ../mcp && npm install && npm run build',
-                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
-                '# 5. 配置 Agent URL 并安装 Skills',
-                '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
-            ];
-            const enLines = [
-                '# 1. Clone and initialize template',
-                'git clone https://github.com/GeminiLight/MindOS',
-                'cd MindOS && cp -r templates/zh my-mind/',
-                '# optional: cp -r templates/en my-mind/',
-                '# 2. Configure env (absolute path)',
-                'cp app/.env.example app/.env.local',
-                '# edit MIND_ROOT=/abs/path/to/MindOS/my-mind',
-                '# 3. Launch GUI',
-                'cd app && npm install && npm run dev',
-                '# 4. Start MCP in default HTTP mode',
-                'cd ../mcp && npm install && npm run build',
-                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
-                '# 5. Configure agent URL and install Skills',
-                '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
-            ];
-            const lines = state.lang === 'zh' ? zhLines : enLines;
-            navigator.clipboard.writeText(lines.join('\n'));
-            e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
-            setTimeout(() => {
-                e.currentTarget.innerHTML = humanCopyBtnLabel;
-            }, 2000);
-        });
-
         const agentCopyBtn = document.getElementById('copy-agent-btn');
-        const agentCopyBtnLabel = '<span data-zh>复制命令</span><span data-en>Copy Commands</span>';
+        const agentCopyBtnLabel = '<span data-zh>复制 Prompt</span><span data-en>Copy Prompt</span>';
         agentCopyBtn?.addEventListener('click', (e) => {
-            const zhLines = [
-                '# 1. 启动 MCP（HTTP）',
-                'cd mcp && npm install && npm run build',
-                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
-                '# 2. 配置 Agent URL（Bearer Token）',
-                '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
-                '# 3. 安装 Skill 并验证连接',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
-            ];
-            const enLines = [
-                '# 1. Start MCP (HTTP)',
-                'cd mcp && npm install && npm run build',
-                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
-                '# 2. Configure Agent URL (Bearer token)',
-                '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
-                '# 3. Install skill and verify connectivity',
-                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
-            ];
-            const lines = state.lang === 'zh' ? zhLines : enLines;
-            navigator.clipboard.writeText(lines.join('\n'));
+            const zhText = '帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。';
+            const enText = 'Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.';
+            navigator.clipboard.writeText(state.lang === 'zh' ? zhText : enText);
             e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
             setTimeout(() => {
                 e.currentTarget.innerHTML = agentCopyBtnLabel;

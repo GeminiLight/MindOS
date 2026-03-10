@@ -766,6 +766,17 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     align-self: center;
 }
 
+.qs-badge {
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--muted-fg);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+}
+
 /* Terminal Card */
 .qs-terminal { margin: 0; }
 .qs-terminal-bar {
