@@ -18,10 +18,12 @@ export default function AskFab() {
         onClick={() => setOpen(true)}
         className="
           group
-          fixed bottom-5 right-5 z-40
+          fixed z-40
+          bottom-5 right-5
+          md:bottom-5 md:right-5
           flex items-center justify-center
           gap-0 hover:gap-2
-          p-[11px] rounded-xl
+          p-3 md:p-[11px] rounded-xl
           text-white font-medium text-[13px]
           shadow-md shadow-amber-900/15
           transition-all duration-200 ease-out
@@ -33,6 +35,7 @@ export default function AskFab() {
         style={{
           fontFamily: "'IBM Plex Mono', monospace",
           background: 'linear-gradient(135deg, #b07c2e 0%, #c8873a 50%, #d4943f 100%)',
+          marginBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         title="MindOS Agent (⌘/)"
         aria-label="MindOS Agent"

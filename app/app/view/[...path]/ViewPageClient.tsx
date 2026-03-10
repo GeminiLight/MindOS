@@ -55,7 +55,7 @@ export default function ViewPageClient({
     },
     () => {
       const saved = localStorage.getItem('mindos-use-raw');
-      return saved !== null ? saved === 'true' : false;
+      return saved !== null ? saved === 'true' : true;
     },
     () => false,
   );
@@ -190,7 +190,7 @@ export default function ViewPageClient({
             <Breadcrumb filePath={filePath} />
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             {saveSuccess && (
               <span className="text-xs flex items-center gap-1.5" style={{ color: '#7aad80', fontFamily: "'IBM Plex Mono', monospace" }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#7aad80' }} />
@@ -259,7 +259,7 @@ export default function ViewPageClient({
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-6 py-8">
+      <div className="flex-1 px-4 md:px-6 py-6 md:py-8">
         {editing ? (
           <div className="content-width xl:mr-[220px]">
             {isDraft && showSaveAs && (
