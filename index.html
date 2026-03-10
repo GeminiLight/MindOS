@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindOS — Human-AI Collaborative Mind System</title>
+    <!-- Fonts: using local system fallbacks for offline/intranet compatibility -->
+    <!-- Original Google Fonts: IBM Plex Mono, IBM Plex Sans, Lora -->
+    <link rel="icon" type="image/svg+xml" href="img/logo-square.svg">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Prevent FOUC: apply theme & lang before first paint
+        (function() {
+            var t = localStorage.getItem('mindos-theme');
+            if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            if (t === 'light') document.documentElement.classList.add('early-light');
+            var l = localStorage.getItem('mindos-lang');
+            if (!l) l = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+            document.documentElement.lang = l;
+        })();
+    </script>
+</head>
+<body>
+    <div class="grain"></div>
+    <div class="ambient-glow"></div>
+
+    <nav class="nav-container fade-in">
+        <div class="nav-content">
+            <a href="#" class="logo-group">
+                <svg class="logo-svg" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="grad-human" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+                        </linearGradient>
+                        <linearGradient id="grad-agent" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#grad-human)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+                    <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#grad-agent)" stroke-width="4.5" stroke-linecap="round"/>
+                    <path class="spark" d="M35,17.5 Q35,20 37.5,20 Q35,20 35,23.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--spark-color)"/>
+                </svg>
+                <span class="logo-text">MindOS</span>
+            </a>
+
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="#compare"><span data-zh>对比</span><span data-en>Compare</span></a>
+                    <a href="#workflow"><span data-zh>演示</span><span data-en>Workflow</span></a>
+                    <a href="#vision"><span data-zh>愿景</span><span data-en>Vision</span></a>
+                    <a href="#features"><span data-zh>特性</span><span data-en>Features</span></a>
+                    <a href="#quickstart"><span data-zh>开始</span><span data-en>Start</span></a>
+                </div>
+                <div class="controls">
+                    <button id="theme-toggle" class="control-btn" title="Toggle Theme">◐</button>
+                    <button id="lang-toggle" class="control-btn"><span data-zh>EN</span><span data-en>ZH</span></button>
+                    <a href="https://github.com/GeminiLight/MindOS" class="btn-primary">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <header class="hero section">
+        <div class="container hero-content">
+            <div class="tagline-badge animate-up">
+                <span data-zh>人机协同心智系统</span><span data-en>Human-AI Collaborative Mind System</span>
+            </div>
+            <h1 class="animate-up" style="animation-delay: 0.1s;">
+                <span data-zh>人类在此思考，</span><span data-en>Human Thinks Here,</span><br>
+                <span class="accent-text" data-zh>Agent 依此行动。</span><span class="accent-text" data-en>Agent Acts There.</span>
+            </h1>
+            <p class="hero-sub animate-up" style="animation-delay: 0.2s;">
+                <span data-zh>为所有 Agents 全局同步你的心智：透明可控，共生演进。</span>
+                <span data-en>Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.</span>
+            </p>
+            <div class="hero-actions animate-up" style="animation-delay: 0.3s;">
+                <div class="hero-cta-group">
+                    <a href="#quickstart" class="cta-primary">
+                        <span data-zh>开始构建</span><span data-en>Get Started</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="https://github.com/GeminiLight/MindOS" class="cta-secondary" target="_blank">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        GitHub
+                    </a>
+                </div>
+                <div class="hero-trust-bar">
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Agent-native</span>
+                    <span class="trust-sep"></span>
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Local-first</span>
+                    <span class="trust-sep"></span>
+                    <span class="trust-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Open Source</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- BEFORE × AFTER: Interactive Comparison -->
+    <section id="compare" class="section compare-section">
+        <div class="container">
+            <div class="section-header animate-up">
+                <span class="mono" data-zh>亲身体验</span><span class="mono" data-en>SEE THE DIFFERENCE</span>
+                <h2 data-zh>同一个任务，两种体验</h2><h2 data-en>Same Task, Two Realities</h2>
+                <p class="section-sub" data-zh>选择一个真实场景，看看有 MindOS 和没有 MindOS 的区别。</p>
+                <p class="section-sub" data-en>Pick a real scenario. See what changes when your Agents share your mind.</p>
+            </div>
+
+            <div class="compare-tabs animate-up" style="animation-delay:0.1s">
+                <button class="compare-tab active" data-scene="switch">
+                    <span data-zh>切换对话</span><span data-en>Switch Conversations</span>
+                </button>
+                <button class="compare-tab" data-scene="collect">
+                    <span data-zh>信息收集</span><span data-en>Info Collection</span>
+                </button>
+                <button class="compare-tab" data-scene="social">
+                    <span data-zh>社交关系</span><span data-en>Social Relationships</span>
+                </button>
+                <button class="compare-tab" data-scene="scaffold">
+                    <span data-zh>代码开发</span><span data-en>Code Development</span>
+                </button>
+                <button class="compare-tab" data-scene="team">
+                    <span data-zh>团队协作</span><span data-en>Team Collaboration</span>
+                </button>
+                <button class="compare-tab" data-scene="review">
+                    <span data-zh>代码审查</span><span data-en>Code Review</span>
+                </button>
+            </div>
+
+            <!-- Scene: Info Collection -->
+            <div class="compare-stage animate-up" data-stage="collect" style="animation-delay:0.2s">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>周一 9:00，市场负责人说："下午 3 点前把这 30 位 KOL 的外联初稿发我"</div>
+                        <div class="compare-scenario" data-en>Monday 9:00 AM: "Send first-draft outreach for 30 influencers before 3 PM."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你把表格、历史合作记录、备注一条条复制进 Prompt</span><span data-en>You manually paste sheets, collaboration history, and notes into the prompt</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 先给通用模板，你再逐个补充语气、内容方向和禁用词</span><span data-en>Agent returns generic templates; you rewrite tone, content angle, and blocked terms one by one</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>第 19 封才发现用错人设，整批重改</span><span data-en>You catch a wrong persona at email #19 and rework the whole batch</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~45 min</strong><strong data-en>~45 min</strong>&nbsp;<span data-zh>重复喂上下文，返工风险高</span><span data-en>context repetition + high rework risk</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："下午 3 点前，把这 30 位 KOL 外联初稿发我"</div>
+                        <div class="compare-scenario" data-en>Same sentence: "Draft outreach for these 30 influencers before 3 PM."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 自动读取 Resources/Influencers.csv + 合作历史标签</span><span data-en>Agent auto-loads Resources/Influencers.csv and collaboration-history tags</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>按 Workflows/Outreach-SOP.md 生成分层外联：头部 / 腰部 / 长尾</span><span data-en>Follows Workflows/Outreach-SOP.md to generate tiered outreach: top/mid/long-tail</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一次产出可直接发送版本，你只做最终确认</span><span data-en>Produces send-ready drafts in one shot; you only do final approval</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~6 min</strong><strong data-en>~6 min</strong>&nbsp;<span data-zh>流程自动对齐，几乎零返工</span><span data-en>workflow auto-aligned, near-zero rework</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Code Development -->
+            <div class="compare-stage animate-up" data-stage="scaffold" style="animation-delay:0.2s">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>周三晚 10:30，老板说："明天评审要看到能跑的项目骨架"</div>
+                        <div class="compare-scenario" data-en>Wednesday 10:30 PM: "We need a runnable project skeleton for tomorrow's review."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你反复说明：Next.js 15、pnpm、目录规范、CI 要求</span><span data-en>You repeatedly explain: Next.js 15, pnpm, folder conventions, CI requirements</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>第一版用了 npm 且结构不符合团队约定</span><span data-en>First output uses npm and a structure that violates team conventions</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你二次纠偏后才能进入真正开发</span><span data-en>You spend another round correcting before real development can start</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~25 min</strong><strong data-en>~25 min</strong>&nbsp;<span data-zh>启动慢，首版不可用</span><span data-en>slow kickoff, first output not usable</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："帮我启动这个代码开发，明天评审要看"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Kick off this project build for tomorrow's review."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Profile/Identity.md → 默认技术栈与命令习惯</span><span data-en>Agent reads Profile/Identity.md for default stack and command preferences</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Workflows/Startup-SOP.md → 自动带上初始化、校验、CI 模板</span><span data-en>Reads Workflows/Startup-SOP.md and auto-applies setup, checks, and CI template</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>首版即可跑通，团队直接接力开发</span><span data-en>First output runs immediately; team can start building right away</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>~4 min</strong><strong data-en>~4 min</strong>&nbsp;<span data-zh>首版可用，直接进入迭代</span><span data-en>usable first output, straight into iteration</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Relationship Context -->
+            <div class="compare-stage" data-stage="social">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>你说："我今天和他聊了这些"</div>
+                        <div class="compare-scenario" data-en>You say: "I talked with this person today."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你重新解释人物背景、历史合作、敏感话题边界</span><span data-en>You re-explain relationship background, collaboration history, and sensitive boundaries</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>本次会话记住了，但下次换 Agent 又要从头讲</span><span data-en>This session remembers, but switching agents means starting from zero again</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>重要承诺容易遗漏，跟进动作断档</span><span data-en>Important commitments slip through, follow-up actions break</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>易断档</strong><strong data-en>Fragile</strong>&nbsp;<span data-zh>关系信息分散在会话里</span><span data-en>relationship context scattered across chats</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>你只说："我今天和他聊了这些，帮我推进下一步"</div>
+                        <div class="compare-scenario" data-en>You only say: "We discussed this today, drive the next steps."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 从聊天里抽取关键事实与情绪变化，结构化记录</span><span data-en>Agent extracts key facts and sentiment shifts from the chat into structured notes</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不只更新 Connections/XXX.md，还自动生成跟进策略、待办和提醒时间</span><span data-en>Not just updates Connections/XXX.md, but also creates follow-up strategy, tasks, and reminder timing</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>后续任何 Agent / 新会话都可直接接手执行，不再从头梳理关系脉络</span><span data-en>Any future agent/session can continue execution directly without rebuilding relationship history</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>可执行</strong><strong data-en>Actionable</strong>&nbsp;<span data-zh>从聊天到行动，自动闭环</span><span data-en>from conversation to execution, closed-loop</span></div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Scene: Team Collaboration -->
+            <div class="compare-stage" data-stage="team">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>周会后，产品、研发、运营都在各自工具里记录了"下一步"</div>
+                        <div class="compare-scenario" data-en>After weekly sync, product, engineering, and ops all captured next steps in separate tools</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>产品在文档写优先级，研发在代码工具记实现，运营在群里补执行计划</span><span data-en>Product tracks priorities in docs, engineering logs implementation notes, ops writes plans in chat</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>信息分散且口径不一致，跨角色协作频繁二次确认</span><span data-en>Context is fragmented and inconsistent, forcing repeated cross-role confirmations</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一周后复盘才发现目标偏移，团队花时间补救对齐</span><span data-en>A week later, review reveals drift and the team spends time repairing alignment</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>团队失焦</strong><strong data-en>Team drift</strong>&nbsp;<span data-zh>每个人都在努力，但不在同一条线上</span><span data-en>everyone works hard, but not on one shared line</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同样的周会结论，统一沉淀到团队 MindOS 里</div>
+                        <div class="compare-scenario" data-en>The same meeting outcomes are captured into one team MindOS</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>会议纪要自动更新 Team/Decisions.md、Projects/Roadmap.md、Workflows/Handoff-SOP.md</span><span data-en>Meeting notes auto-update Team/Decisions.md, Projects/Roadmap.md, and Workflows/Handoff-SOP.md</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不同角色的 Agent 都读取同一份团队上下文，产出天然对齐</span><span data-en>Role-specific agents read the same team context, so outputs align by default</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>每次任务推进都能追溯到团队决策，协作像同一个大脑在思考</span><span data-en>Each task traces back to team decisions, making collaboration feel like one shared brain</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>团队同频</strong><strong data-en>Team sync</strong>&nbsp;<span data-zh>MindOS 成为团队共同思考层</span><span data-en>MindOS becomes the team's shared thinking layer</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Code Review -->
+            <div class="compare-stage" data-stage="review">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>发布前最后一小时，你说："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>One hour before release: "Review this payment-module PR."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 给出大量通用建议，但忽略你们的支付容错标准</span><span data-en>Agent gives many generic tips but misses your payment fault-tolerance standards</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>你花时间筛噪音，真正高风险点被埋没</span><span data-en>You burn time filtering noise while real high-risk issues stay hidden</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>上线后才暴露异常链路，回滚成本高</span><span data-en>Failure path shows up after release, forcing expensive rollback</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高风险</strong><strong data-en>High risk</strong>&nbsp;<span data-zh>噪音多，关键点漏检</span><span data-en>high noise, critical misses</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一句话："Review 这个支付模块 PR"</div>
+                        <div class="compare-scenario" data-en>Same ask: "Review this payment-module PR."</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md + 历史缺陷模式</span><span data-en>Agent reads Configs/Code-Standards.md plus historical defect patterns</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>优先标出真正会导致事故的问题：幂等、回滚、超时兜底</span><span data-en>Prioritizes incident-prone issues: idempotency, rollback, timeout fallback</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出按风险等级排序，开发可直接照单修复</span><span data-en>Outputs risk-ranked findings so engineers can fix immediately</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高命中</strong><strong data-en>High signal</strong>&nbsp;<span data-zh>按团队标准命中关键风险</span><span data-en>critical risks found under your own standards</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scene: Switch Conversations -->
+            <div class="compare-stage active" data-stage="switch">
+                <div class="compare-grid">
+                    <div class="compare-col compare-col--before">
+                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一个任务里，你在不同工具和新对话之间来回切换</div>
+                        <div class="compare-scenario" data-en>Inside one task, you keep switching across tools and fresh chats</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每次一换工具或开新对话，就要重讲背景、约定和当前进度</span><span data-en>Every time you switch tools or start a new chat, you must re-explain context, conventions, and progress</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>同一工具开新 session 也会丢记忆，回答风格和决策标准来回漂移</span><span data-en>Even a new session in the same tool loses memory, so style and decision criteria drift</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你在做"上下文搬运"，而不是推进结果交付</span><span data-en>You end up transporting context instead of shipping outcomes</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>高频重讲</strong><strong data-en>Frequent rebriefs</strong>&nbsp;<span data-zh>每次一换工具/对话，就要重新对齐</span><span data-en>every tool/chat switch forces re-alignment</span></div>
+                    </div>
+                    <div class="compare-col compare-col--after">
+                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
+                        <div class="compare-scenario" data-zh>同一个任务里，无论换工具还是开新对话，都从同一份 MindOS 上下文继续</div>
+                        <div class="compare-scenario" data-en>In the same task, tool switches and new chats both continue from one shared MindOS context</div>
+                        <ul class="compare-steps">
+                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每个 Agent 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Every agent reads the same MindOS knowledge base via MCP</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>偏好、标准、项目状态自动继承，新会话也保持一致判断</span><span data-en>Preferences, standards, and project state carry over automatically, even in fresh chats</span></li>
+                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你只做决策与验收，协作链路持续不断流</span><span data-en>You stay on decisions and acceptance while collaboration flow remains continuous</span></li>
+                        </ul>
+                        <div class="compare-verdict"><strong data-zh>0 重讲</strong><strong data-en>0 rebriefs</strong>&nbsp;<span data-zh>切换工具/对话，协作不断流</span><span data-en>switch tools/chats without breaking flow</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 1: THE SHARED MIND LOOP -->
+    <section id="workflow" class="loop-section dark-bg">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">01. THE SHARED MIND LOOP</span>
+                <h2 data-zh>交互式心智循环</h2><h2 data-en>Interactive Mind Loop</h2>
+                <p class="section-sub" data-zh>人类记录思考，MindOS 同步心智，Agents 依此行动。一个循环，无限协同。</p>
+                <p class="section-sub" data-en>Humans capture thoughts, MindOS syncs the mind, Agents act accordingly. One loop, infinite synergy.</p>
+            </div>
+
+            <div class="mind-bridge">
+                <!-- LEFT: Human Mind -->
+                <div class="bridge-side bridge-human animate-up">
+                    <div class="bridge-side-header">
+                        <div class="bridge-avatar bridge-avatar--human">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div>
+                            <h3 data-zh>人类心智</h3><h3 data-en>Human Mind</h3>
+                            <p class="bridge-side-sub" data-zh>你的笔记、想法与工作流</p>
+                            <p class="bridge-side-sub" data-en>Your notes, ideas & workflows</p>
+                        </div>
+                    </div>
+                    <div class="mind-files">
+                        <div class="mind-file mind-file--active" id="mf-1">
+                            <span class="mind-file-icon">📋</span>
+                            <div>
+                                <span class="mind-file-name">Startup SOP.md</span>
+                                <span class="mind-file-desc" data-zh>产品发布标准流程</span>
+                                <span class="mind-file-desc" data-en>Product launch standard procedure</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-2">
+                            <span class="mind-file-icon">👤</span>
+                            <div>
+                                <span class="mind-file-name">Profile/Identity.md</span>
+                                <span class="mind-file-desc" data-zh>技术栈、偏好与风格</span>
+                                <span class="mind-file-desc" data-en>Tech stack, preferences & style</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-3">
+                            <span class="mind-file-icon">💡</span>
+                            <div>
+                                <span class="mind-file-name">Ideas/Next-Product.md</span>
+                                <span class="mind-file-desc" data-zh>下一个产品的灵感碎片</span>
+                                <span class="mind-file-desc" data-en>Inspiration fragments for next product</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-4">
+                            <span class="mind-file-icon">⚙️</span>
+                            <div>
+                                <span class="mind-file-name">Configs/Agent-Rules.md</span>
+                                <span class="mind-file-desc" data-zh>Agent 行为规则与约束</span>
+                                <span class="mind-file-desc" data-en>Agent behavior rules & constraints</span>
+                            </div>
+                        </div>
+                        <div class="mind-file" id="mf-5">
+                            <span class="mind-file-icon">📊</span>
+                            <div>
+                                <span class="mind-file-name">Resources/Products.csv</span>
+                                <span class="mind-file-desc" data-zh>竞品追踪与产品库</span>
+                                <span class="mind-file-desc" data-en>Competitor tracking & product library</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CENTER: MindOS Bridge -->
+                <div class="bridge-center animate-up" style="animation-delay:0.15s;">
+                    <div class="bridge-hub">
+                        <div class="bridge-hub-ring"></div>
+                        <div class="bridge-hub-ring bridge-hub-ring--inner"></div>
+                        <svg class="bridge-hub-logo" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="bh-human" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                                    <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+                                </linearGradient>
+                                <linearGradient id="bh-agent" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                                    <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#bh-human)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+                            <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#bh-agent)" stroke-width="4.5" stroke-linecap="round"/>
+                            <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,23.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--spark-color)"/>
+                        </svg>
+                    </div>
+                    <div class="bridge-label">MindOS</div>
+                    <div class="bridge-protocol">
+                        <span class="bridge-protocol-tag">MCP</span>
+                        <span class="bridge-protocol-dot"></span>
+                        <span class="bridge-protocol-status" id="bridge-status" data-zh>等待同步...</span>
+                        <span class="bridge-protocol-status" id="bridge-status-en" data-en>Awaiting sync...</span>
+                    </div>
+                    <!-- Flow lines -->
+                    <div class="bridge-flow bridge-flow--left">
+                        <div class="bridge-particle"></div>
+                        <div class="bridge-particle" style="animation-delay:0.6s;"></div>
+                        <div class="bridge-particle" style="animation-delay:1.2s;"></div>
+                    </div>
+                    <div class="bridge-flow bridge-flow--right">
+                        <div class="bridge-particle"></div>
+                        <div class="bridge-particle" style="animation-delay:0.5s;"></div>
+                        <div class="bridge-particle" style="animation-delay:1s;"></div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Agent Fleet -->
+                <div class="bridge-side bridge-agents animate-up" style="animation-delay:0.3s;">
+                    <div class="bridge-side-header">
+                        <div class="bridge-avatar bridge-avatar--agent">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <div>
+                            <h3 data-zh>Agent 舰队</h3><h3 data-en>Agent Fleet</h3>
+                            <p class="bridge-side-sub" data-zh>依此行动的 AI 协作者</p>
+                            <p class="bridge-side-sub" data-en>AI collaborators acting on your mind</p>
+                        </div>
+                    </div>
+                    <div class="agent-fleet">
+                        <div class="agent-slot" id="as-1">
+                            <img src="img/logos/claude-code.svg" alt="Claude Code" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Claude Code</span>
+                                <span class="agent-slot-action" data-zh>根据 SOP 搭建新项目骨架</span>
+                                <span class="agent-slot-action" data-en>Scaffold new project from SOP</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-1-bar"></div></div>
+                            <span class="agent-slot-status" id="as-1-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-2">
+                            <img src="img/logos/cursor.svg" alt="Cursor" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Cursor</span>
+                                <span class="agent-slot-action" data-zh>按偏好重构 Dashboard 页面</span>
+                                <span class="agent-slot-action" data-en>Refactor dashboard per preferences</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-2-bar"></div></div>
+                            <span class="agent-slot-status" id="as-2-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-3">
+                            <img src="img/logos/codex.svg" alt="Codex" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Codex</span>
+                                <span class="agent-slot-action" data-zh>为 API 模块补全单元测试</span>
+                                <span class="agent-slot-action" data-en>Generate unit tests for API module</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-3-bar"></div></div>
+                            <span class="agent-slot-status" id="as-3-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-4">
+                            <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">Gemini CLI</span>
+                                <span class="agent-slot-action" data-zh>调研竞品功能并生成分析报告</span>
+                                <span class="agent-slot-action" data-en>Research competitors, write report</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-4-bar"></div></div>
+                            <span class="agent-slot-status" id="as-4-status"></span>
+                        </div>
+                        <div class="agent-slot" id="as-5">
+                            <img src="img/logos/openclaw.svg" alt="OpenClaw" class="agent-slot-logo" />
+                            <div class="agent-slot-info">
+                                <span class="agent-slot-name">OpenClaw</span>
+                                <span class="agent-slot-action" data-zh>执行 CI/CD 流水线并自动部署</span>
+                                <span class="agent-slot-action" data-en>Run CI/CD pipeline & auto-deploy</span>
+                            </div>
+                            <div class="agent-slot-bar"><div class="agent-slot-bar-fill" id="as-5-bar"></div></div>
+                            <span class="agent-slot-status" id="as-5-status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: VISION — Why Shared Mind? -->
+    <section id="vision" class="section vision-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">02. THE VISION</span>
+                <h2 data-zh>人机共享心智</h2><h2 data-en>Human-AI Shared Mind</h2>
+                <p class="section-sub" data-zh>击破人机协作结构性鸿沟，让人与 AI 在同一个心智空间中共生演进。</p>
+                <p class="section-sub" data-en>Breaking the structural gaps in human-AI collaboration — co-evolving within a single Shared Mind.</p>
+            </div>
+
+            <div class="pillar-stack">
+                <!-- Pillar 1: Global Sync -->
+                <div class="pillar-card animate-up">
+                    <div class="pillar-head">
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        </div>
+                        <div>
+                            <h3 data-zh>全局同步 — 打破心智孤岛</h3><h3 data-en>Global Mind Sync — Breaking Silos</h3>
+                            <p class="pillar-tagline" data-zh>一处记录，全量赋能所有 Agents</p>
+                            <p class="pillar-tagline" data-en>Record once, empower every Agent</p>
+                        </div>
+                        <span class="pillar-num">01</span>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>云端笔记 API 壁垒重重，Agent 无法直接读取人类上下文</li>
+                                <li>灵感捕获成本高，碎片化想法与瞬间顿悟难以实时沉淀</li>
+                                <li>个人深度背景散落多处，Agent 每次都缺乏完整 Context</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Cloud note APIs are walled off — Agents can't read human context</li>
+                                <li>High capture friction — fleeting ideas and epiphanies fail to land</li>
+                                <li>Deep personal context scattered — Agents always lack full picture</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>内置标准 MCP Server，任意 Agent 零配置直连知识库</li>
+                                <li>极致轻量的 Web 捕获入口，一键沉淀灵感与想法</li>
+                                <li>Profile、SOP 与经验一处记录，全量赋能所有 Agents</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Built-in MCP Server — any Agent connects with zero config</li>
+                                <li>Ultra-lightweight web capture for instant idea recording</li>
+                                <li>Profile, SOPs & experience: record once, empower all Agents</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pillar 2: Transparent & Controllable -->
+                <div class="pillar-card animate-up" style="animation-delay: 0.15s;">
+                    <div class="pillar-head">
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </div>
+                        <div>
+                            <h3 data-zh>透明可控 — 消除 Agent 黑箱</h3><h3 data-en>Transparent & Controllable — No Black Boxes</h3>
+                            <p class="pillar-tagline" data-zh>让 Agent 在阳光下思考</p>
+                            <p class="pillar-tagline" data-en>Let Agents think in the light</p>
+                        </div>
+                        <span class="pillar-num">02</span>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>Agent 的"记忆"锁在系统黑箱中，人类完全不可见</li>
+                                <li>中间推理过程无法审查，错误难以追溯和纠正</li>
+                                <li>幻觉不受控地累积，信任链随时间持续崩塌</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Agent memory locked in black boxes — fully invisible to humans</li>
+                                <li>Intermediate reasoning can't be audited or traced back</li>
+                                <li>Hallucinations compound unchecked, eroding trust over time</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>每次检索、反思与执行均通过 MCP 沉淀为本地纯文本</li>
+                                <li>GUI 工作台提供完整的审查、干预与心智修正界面</li>
+                                <li>人类拥有绝对的心智纠偏权，随时校准 Agent 行为</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Every retrieval, reflection & action saved as local plain text via MCP</li>
+                                <li>GUI workbench provides full audit, intervention & correction interface</li>
+                                <li>Humans hold absolute mind-correction rights — recalibrate Agents anytime</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pillar 3: Symbiotic Evolution -->
+                <div class="pillar-card animate-up" style="animation-delay: 0.3s;">
+                    <div class="pillar-head">
+                        <div class="pillar-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                        </div>
+                        <div>
+                            <h3 data-zh>共生演进 — 动态指令流转</h3><h3 data-en>Symbiotic Evolution — Dynamic Instruction Flow</h3>
+                            <p class="pillar-tagline" data-zh>知识库即代码，笔记即指令</p>
+                            <p class="pillar-tagline" data-en>Knowledge as Code, notes as instructions</p>
+                        </div>
+                        <span class="pillar-num">03</span>
+                    </div>
+                    <div class="pillar-body">
+                        <div class="pillar-col pillar-pain">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--pain"></span><span data-zh>痛点</span><span data-en>Pain</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>传统文档层级深、嵌套多，人工同步成本极高</li>
+                                <li>静态笔记只是记录，无法作为执行引擎流转</li>
+                                <li>人机协作断裂，Agent 每次都从零开始理解上下文</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Traditional docs deeply nested — manual sync cost is huge</li>
+                                <li>Static notes are dead records, not executable instructions</li>
+                                <li>Human-AI context breaks — Agents restart from zero each time</li>
+                            </ul>
+                        </div>
+                        <div class="pillar-arrow" aria-hidden="true">
+                            <div class="pillar-arrow-line"></div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <div class="pillar-col pillar-shift">
+                            <div class="pillar-label"><span class="pillar-dot pillar-dot--shift"></span><span data-zh>跃迁</span><span data-en>Shift</span></div>
+                            <ul class="pillar-list" data-zh>
+                                <li>Prompt-Native 记录范式，日常笔记天然就是 Agent 指令</li>
+                                <li>引用驱动的自动同步，跨文件状态与上下文实时流转</li>
+                                <li>人机在同一个 Shared Mind 中相互启发，共同迭代生长</li>
+                            </ul>
+                            <ul class="pillar-list" data-en>
+                                <li>Prompt-Native paradigm — daily notes naturally become Agent instructions</li>
+                                <li>Reference-driven auto-sync flows context across files in real-time</li>
+                                <li>Humans & AI co-inspire and co-evolve within a single Shared Mind</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Foundation Banner: Local-first -->
+            <div class="foundation-banner animate-up" style="animation-delay: 0.45s;">
+                <div class="foundation-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div class="foundation-content">
+                    <h4 data-zh>底层基石：本地优先</h4><h4 data-en>Foundational Pillar: Local-first</h4>
+                    <p data-zh>所有数据以纯文本形式存储在本地，彻底消除隐私顾虑，确保你拥有绝对的数据主权与极致的读写性能。</p>
+                    <p data-en>All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: FEATURES -->
+    <section id="features" class="section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">03. FEATURES</span>
+                <h2 data-zh>核心功能特性</h2><h2 data-en>Core Features</h2>
+            </div>
+
+            <!-- Row 1: For Humans -->
+            <div class="feat-row-label animate-up">
+                <span class="feat-row-tag" data-zh>人类侧</span><span class="feat-row-tag" data-en>For Humans</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <h3 data-zh>GUI 工作台</h3><h3 data-en>GUI Workbench</h3>
+                    <p data-zh>浏览、编辑、搜索笔记，统一搜索 + AI 入口（⌘K / ⌘/），专为人机共创设计。</p>
+                    <p data-en>Browse, edit, search notes with unified search + AI entry (⌘K / ⌘/), designed for human-AI co-creation.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <h3 data-zh>内置 Agent 助手</h3><h3 data-en>Built-in Agent Assistant</h3>
+                    <p data-zh>在上下文中与知识库对话，Agent 管理文件，编辑无缝沉淀人类主动管理的知识。</p>
+                    <p data-en>Converse with the knowledge base in context. Agents manage files while editing seamlessly captures human-curated knowledge.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    </div>
+                    <h3 data-zh>插件扩展</h3><h3 data-en>Plugin Extensions</h3>
+                    <p data-zh>针对特定场景的自定义视图插件 — TODO 列表、看板、时间线等，实现弹性知识管理。</p>
+                    <p data-en>Custom view plugins for specific scenarios — TODO lists, Kanban, Timeline, etc. for elastic knowledge management.</p>
+                </div>
+            </div>
+
+            <!-- Row 2: For Agents -->
+            <div class="feat-row-label animate-up" style="margin-top: 2.5rem;">
+                <span class="feat-row-tag" data-zh>Agent 侧</span><span class="feat-row-tag" data-en>For Agents</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    </div>
+                    <h3 data-zh>MCP Server & Skills</h3><h3 data-en>MCP Server & Skills</h3>
+                    <p data-zh>将知识库暴露为标准 MCP 工具集，任意 Agent 零配置接入，读写、搜索及执行本地工作流。</p>
+                    <p data-en>Exposes the knowledge base as a standard MCP toolset. Any Agent connects with zero config to read, write, search, and execute workflows.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </div>
+                    <h3 data-zh>结构化模板</h3><h3 data-en>Structured Templates</h3>
+                    <p data-zh>预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。</p>
+                    <p data-en>Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </div>
+                    <h3 data-zh>Prompt-Driven 文档管理</h3><h3 data-en>Prompt-Driven Docs</h3>
+                    <p data-zh>以 Prompt 思维组织文档结构与内容，人类的日常笔记即 Agent 可直接执行的高质量指令。</p>
+                    <p data-en>Organize documents with a prompt-first mindset — everyday notes double as high-quality executable instructions for Agents.</p>
+                </div>
+            </div>
+
+            <!-- Row 3: Infrastructure -->
+            <div class="feat-row-label animate-up" style="margin-top: 2.5rem;">
+                <span class="feat-row-tag" data-zh>基础设施</span><span class="feat-row-tag" data-en>Infrastructure</span>
+            </div>
+            <div class="feat-grid animate-up">
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                    </div>
+                    <h3 data-zh>引用驱动同步</h3><h3 data-en>Reference-Driven Sync</h3>
+                    <p data-zh>通过引用与双链关联，实现项目状态、任务进度与上下文的跨文件自动同步流转。</p>
+                    <p data-en>@ references and bi-directional links for automatic cross-file synchronization of project status, tasks, and context.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="6" y1="6" x2="9.5" y2="10"/><line x1="18" y1="6" x2="14.5" y2="10"/><line x1="6" y1="18" x2="9.5" y2="14"/><line x1="18" y1="18" x2="14.5" y2="14"/></svg>
+                    </div>
+                    <h3 data-zh>可视化知识图谱</h3><h3 data-en>Visual Knowledge Graph</h3>
+                    <p data-zh>动态解析并可视化文件间的引用与依赖关系，直观管理人机上下文网络。</p>
+                    <p data-en>Dynamically parses and visualizes inter-file references and dependencies across the human-AI context network.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <h3 data-zh>时光机 & 版本控制</h3><h3 data-en>Time Machine & Git-backed</h3>
+                    <p data-zh>自动记录人类与 Agent 的每次编辑历史，一键回滚，可视化 Context 演变与推理轨迹。</p>
+                    <p data-en>Records every edit by both humans and Agents. One-click rollback, visualize context evolution & reasoning trajectories.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: ECOSYSTEM — Infinite Marquee -->
+    <section class="section dark-bg">
+        <div class="container ecosystem-section">
+            <div class="section-header">
+                <span class="mono">04. AGENT ECOSYSTEM</span>
+                <h2 data-zh>无缝链接 Agents 生态</h2><h2 data-en>Seamless Agent Ecosystem</h2>
+            </div>
+        </div>
+        <div class="marquee-wrap">
+            <div class="marquee-track">
+                <!-- Set 1 -->
+                <div class="eco-item">
+                    <img src="img/logos/openclaw.svg" alt="OpenClaw" class="eco-logo" />
+                    <span class="eco-name">OpenClaw</span>
+                    <span class="eco-desc" data-zh>开源 Agent 框架</span><span class="eco-desc" data-en>Open-source Agent Framework</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/claude-code.svg" alt="Claude Code" class="eco-logo" />
+                    <span class="eco-name">Claude Code</span>
+                    <span class="eco-desc" data-zh>终端编程 Agent</span><span class="eco-desc" data-en>Terminal Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codex.svg" alt="Codex" class="eco-logo" />
+                    <span class="eco-name">Codex</span>
+                    <span class="eco-desc" data-zh>OpenAI 编程 Agent</span><span class="eco-desc" data-en>OpenAI Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="eco-logo" />
+                    <span class="eco-name">Gemini CLI</span>
+                    <span class="eco-desc" data-zh>Google 终端 Agent</span><span class="eco-desc" data-en>Google Terminal Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/github-copilot.svg" alt="GitHub Copilot" class="eco-logo" />
+                    <span class="eco-name">GitHub Copilot</span>
+                    <span class="eco-desc" data-zh>AI 编程副驾驶</span><span class="eco-desc" data-en>AI Pair Programmer</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/cursor.svg" alt="Cursor" class="eco-logo" />
+                    <span class="eco-name">Cursor</span>
+                    <span class="eco-desc" data-zh>AI 原生编辑器</span><span class="eco-desc" data-en>AI-native Code Editor</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/trae.svg" alt="Trae" class="eco-logo" />
+                    <span class="eco-name">Trae</span>
+                    <span class="eco-desc" data-zh>字节 AI IDE</span><span class="eco-desc" data-en>ByteDance AI IDE</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codebuddy.svg" alt="CodeBuddy" class="eco-logo" />
+                    <span class="eco-name">CodeBuddy</span>
+                    <span class="eco-desc" data-zh>腾讯 AI 编程助手</span><span class="eco-desc" data-en>Tencent AI Coding Assistant</span>
+                </div>
+                <!-- Set 2 (duplicate for seamless loop) -->
+                <div class="eco-item">
+                    <img src="img/logos/openclaw.svg" alt="OpenClaw" class="eco-logo" />
+                    <span class="eco-name">OpenClaw</span>
+                    <span class="eco-desc" data-zh>开源 Agent 框架</span><span class="eco-desc" data-en>Open-source Agent Framework</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/claude-code.svg" alt="Claude Code" class="eco-logo" />
+                    <span class="eco-name">Claude Code</span>
+                    <span class="eco-desc" data-zh>终端编程 Agent</span><span class="eco-desc" data-en>Terminal Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codex.svg" alt="Codex" class="eco-logo" />
+                    <span class="eco-name">Codex</span>
+                    <span class="eco-desc" data-zh>OpenAI 编程 Agent</span><span class="eco-desc" data-en>OpenAI Coding Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/gemini-cli.svg" alt="Gemini CLI" class="eco-logo" />
+                    <span class="eco-name">Gemini CLI</span>
+                    <span class="eco-desc" data-zh>Google 终端 Agent</span><span class="eco-desc" data-en>Google Terminal Agent</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/github-copilot.svg" alt="GitHub Copilot" class="eco-logo" />
+                    <span class="eco-name">GitHub Copilot</span>
+                    <span class="eco-desc" data-zh>AI 编程副驾驶</span><span class="eco-desc" data-en>AI Pair Programmer</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/cursor.svg" alt="Cursor" class="eco-logo" />
+                    <span class="eco-name">Cursor</span>
+                    <span class="eco-desc" data-zh>AI 原生编辑器</span><span class="eco-desc" data-en>AI-native Code Editor</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/trae.svg" alt="Trae" class="eco-logo" />
+                    <span class="eco-name">Trae</span>
+                    <span class="eco-desc" data-zh>字节 AI IDE</span><span class="eco-desc" data-en>ByteDance AI IDE</span>
+                </div>
+                <div class="eco-item">
+                    <img src="img/logos/codebuddy.svg" alt="CodeBuddy" class="eco-logo" />
+                    <span class="eco-name">CodeBuddy</span>
+                    <span class="eco-desc" data-zh>腾讯 AI 编程助手</span><span class="eco-desc" data-en>Tencent AI Coding Assistant</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- REAL STORY: Founder Experience -->
+    <section class="section story-section dark-bg" hidden>
+        <div class="container">
+            <div class="section-header animate-up">
+                <span class="mono" data-zh>真实体验</span><span class="mono" data-en>REAL STORY</span>
+                <h2 data-zh>创造者的第一手体验</h2><h2 data-en>The Builder's First-Hand Experience</h2>
+            </div>
+
+            <div class="story-card animate-up" style="animation-delay:0.15s">
+                <span class="story-quote-mark" aria-hidden="true">"</span>
+                <div class="story-body">
+                    <p data-zh>我同时使用 5 个 AI Agent——Claude Code 写代码、Cursor 做重构、Codex 补测试、Gemini CLI 做调研、Trae 写前端。每次切换工具，我都得重复说明：我的技术栈、代码风格、项目背景、命名约定……</p>
+                    <p data-en>I use 5 AI Agents daily — Claude Code for coding, Cursor for refactoring, Codex for tests, Gemini CLI for research, Trae for frontend. Every time I switch tools, I repeat the same context: my tech stack, code style, project background, naming conventions…</p>
+
+                    <p data-zh>一个周末我统计了一下——<span class="story-highlight">一周里，我在不同 Agent 里重复了 47 次相同的上下文。</span>每次都是复制粘贴同样的偏好，或者花 5 分钟解释"我们这个项目用 pnpm 不用 npm"。</p>
+                    <p data-en>One weekend I counted — <span class="story-highlight">in a single week, I repeated the same context 47 times across different Agents.</span> Copy-pasting the same preferences, or spending 5 minutes explaining "this project uses pnpm, not npm."</p>
+
+                    <p data-zh>于是我把所有偏好和工作流写进一个本地知识库，通过 MCP 协议让每个 Agent 自动读取。第一个 Agent 搭项目时自动用了 Next.js 15 + Tailwind + pnpm；第二个做审查时按我的规范提 PR；第三个写文档时用了我的语气风格。</p>
+                    <p data-en>So I wrote all my preferences and workflows into a local knowledge base, exposed via MCP for every Agent to read. The first Agent scaffolded with Next.js 15 + Tailwind + pnpm automatically; the second reviewed PRs against my standards; the third wrote docs in my voice.</p>
+
+                    <p data-zh><span class="story-highlight">47 次重复 → 0 次。</span>不是效率优化——是体验的质变。我终于不再当 Agent 的"人肉上下文复读机"了。</p>
+                    <p data-en><span class="story-highlight">47 repetitions → 0.</span> Not an optimization — a paradigm shift. I finally stopped being a "human context copy-paste machine" for my Agents.</p>
+                </div>
+
+                <div class="story-stat">
+                    <div class="story-stat-item">
+                        <span class="story-stat-num">47×</span>
+                        <span class="story-stat-label" data-zh>每周重复上下文</span>
+                        <span class="story-stat-label" data-en>weekly context repeats</span>
+                    </div>
+                    <span class="story-stat-arrow">→</span>
+                    <div class="story-stat-item">
+                        <span class="story-stat-num">0</span>
+                        <span class="story-stat-label" data-zh>使用 MindOS 后</span>
+                        <span class="story-stat-label" data-en>with MindOS</span>
+                    </div>
+                    <span class="story-stat-arrow">→</span>
+                    <div class="story-stat-item">
+                        <span class="story-stat-num">5+</span>
+                        <span class="story-stat-label" data-zh>Agent 共享同一心智</span>
+                        <span class="story-stat-label" data-en>Agents share one mind</span>
+                    </div>
+                </div>
+
+                <div class="story-author">
+                    <div class="story-author-avatar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div>
+                        <div class="story-author-name" data-zh>GeminiLight · MindOS 创造者</div>
+                        <div class="story-author-name" data-en>GeminiLight · Creator of MindOS</div>
+                        <div class="story-author-role" data-zh>AI 独立开发者 · 同时使用 5+ Agent 的重度用户</div>
+                        <div class="story-author-role" data-en>AI Indie Developer · Heavy user of 5+ Agents daily</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 6: QUICKSTART — Refined -->
+    <section id="quickstart" class="section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">05. QUICKSTART</span>
+                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start to Share Mind</h2>
+                <p class="section-sub" data-zh>默认面向首次安装：先在 For Human 完成本地初始化，再到 For Agent 启用 MCP + Skills。</p>
+                <p class="section-sub" data-en>Default for first-time users: finish local setup in For Human, then enable MCP + Skills in For Agent.</p>
+            </div>
+
+            <div class="qs-dual">
+                <!-- Path 1: For Human (Default) -->
+                <div class="qs-path qs-path--default animate-up">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--human">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div class="qs-path-title-wrap">
+                            <h3><span data-zh>For Human</span><span data-en>For Human</span></h3>
+                            <p class="qs-path-sub" data-zh>默认流程（首次安装）：先初始化本地 Mind</p>
+                            <p class="qs-path-sub" data-en>Default first-time flow: initialize your local mind first</p>
+                        </div>
+                        <span class="qs-default-badge" data-zh>默认路径</span>
+                        <span class="qs-default-badge" data-en>Default</span>
+                    </div>
+                    <div class="qs-terminal">
+                        <div class="qs-terminal-bar">
+                            <div class="qs-terminal-meta">
+                                <div class="qs-dots"><span></span><span></span><span></span></div>
+                                <span class="qs-terminal-title">Terminal</span>
+                            </div>
+                            <button class="qs-copy-btn" id="copy-human-btn"><span data-zh>复制安装命令</span><span data-en>Copy Install Commands</span></button>
+                        </div>
+                        <div class="qs-terminal-body">
+                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 克隆并初始化模板</span><span data-en># Clone and initialize template</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> git clone https://github.com/GeminiLight/MindOS</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd MindOS && cp -r templates/zh my-mind/</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 可选：cp -r templates/en my-mind/</span><span data-en># optional: cp -r templates/en my-mind/</span></span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置环境变量（绝对路径）</span><span data-en># Configure env (absolute path)</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cp app/.env.example app/.env.local</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind</span><span data-en># edit MIND_ROOT=/abs/path/to/MindOS/my-mind</span></span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 启动 GUI</span><span data-en># Launch GUI</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd app && npm install && npm run dev</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">4</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 默认 HTTP 模式启动 MCP</span><span data-en># Start MCP in default HTTP mode</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd ../mcp && npm install && npm run build</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">5</span><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># 配置 Agent URL 并安装 Skills</span><span data-en># Configure agent URL and install Skills</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> <span class="qs-comment"><span data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
+
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>完成：GUI 可用，所有 Agent 通过 MCP 共享同一份心智</span>
+                                <span data-en>Done: GUI is live, and all agents share one mind via MCP</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Path 2: For Agent -->
+                <div class="qs-path animate-up" style="animation-delay: 0.15s;">
+                    <div class="qs-path-header">
+                        <div class="qs-path-icon qs-path-icon--agent">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <div class="qs-path-title-wrap">
+                            <h3><span data-zh>For Agent</span><span data-en>For Agent</span></h3>
+                            <p class="qs-path-sub" data-zh>在 For Human 完成后，3 步启用 Agent（默认 HTTP）</p>
+                            <p class="qs-path-sub" data-en>After For Human is done, enable your agent in 3 steps (HTTP by default)</p>
+                        </div>
+                    </div>
+                    <div class="qs-prompt-card">
+                        <div class="qs-prompt-bar">
+                            <div class="qs-terminal-meta">
+                            <div class="qs-prompt-badge">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                Prompt
+                            </div>
+                            </div>
+                            <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制命令</span><span data-en>Copy Commands</span></button>
+                        </div>
+                        <div class="qs-prompt-body" id="agent-prompt-text">
+                            <div class="qs-line"><span class="qs-step">1</span><span class="qs-comment" data-zh># 启动 MCP（HTTP）</span><span class="qs-comment" data-en># Start MCP (HTTP)</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> cd mcp && npm install && npm run build</div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start</div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">2</span><span class="qs-comment" data-zh># 配置 Agent URL（Bearer Token）</span><span class="qs-comment" data-en># Configure Agent URL (Bearer token)</span></div>
+                            <div class="qs-line"><span class="qs-comment" data-zh># URL: http://&lt;服务器IP&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span><span class="qs-comment" data-en># URL: http://&lt;server-ip&gt;:8787/mcp  Header: Authorization: Bearer your-strong-token</span></div>
+
+                            <div class="qs-line qs-line-gap"><span class="qs-step">3</span><span class="qs-comment" data-zh># 安装 Skill 并验证连接</span><span class="qs-comment" data-en># Install skill and verify connectivity</span></div>
+                            <div class="qs-line"><span class="qs-prompt">$</span> npx skills add https://github.com/GeminiLight/MindOS --skill mindos</div>
+                            <div class="qs-line qs-line-result">
+                                <span class="qs-success-dot"></span>
+                                <span data-zh>完成：Agent 可通过 MCP 读取并写入同一份 MindOS</span>
+                                <span data-en>Done: Agent can read and write the same MindOS via MCP</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer section" style="padding-top: 4rem; border-top: 1px solid var(--border);">
+        <div class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <p style="font-weight: 500;"><span data-zh>MindOS · 人机协同心智系统</span><span data-en>MindOS · Human-AI Collaborative Mind System</span></p>
+                <a href="https://github.com/GeminiLight/MindOS" style="color: var(--muted-fg); text-decoration: none;">GitHub</a>
+            </div>
+            <p style="color: var(--muted-fg); font-size: 0.75rem; margin-top: 2rem; opacity: 0.5;">MIT © 2026 GeminiLight</p>
+        </div>
+    </footer>
+
+    <script>
+        const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        const systemLang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+        const state = { theme: localStorage.getItem('mindos-theme') || systemTheme, lang: localStorage.getItem('mindos-lang') || systemLang, loopStarted: false };
+        const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); document.documentElement.classList.remove('early-light'); localStorage.setItem('mindos-theme', t); };
+        const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
+        applyTheme(state.theme); applyLang(state.lang);
+
+        // Compare tabs
+        document.querySelectorAll('.compare-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.compare-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.compare-stage').forEach(s => s.classList.remove('active'));
+                tab.classList.add('active');
+                const stage = document.querySelector(`.compare-stage[data-stage="${tab.dataset.scene}"]`);
+                if (stage) stage.classList.add('active');
+            });
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
+        document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
+
+        const humanCopyBtn = document.getElementById('copy-human-btn');
+        const humanCopyBtnLabel = '<span data-zh>复制安装命令</span><span data-en>Copy Install Commands</span>';
+        humanCopyBtn?.addEventListener('click', (e) => {
+            const zhLines = [
+                '# 1. 克隆并初始化模板',
+                'git clone https://github.com/GeminiLight/MindOS',
+                'cd MindOS && cp -r templates/zh my-mind/',
+                '# 可选：cp -r templates/en my-mind/',
+                '# 2. 配置环境变量（绝对路径）',
+                'cp app/.env.example app/.env.local',
+                '# 编辑 MIND_ROOT=/abs/path/to/MindOS/my-mind',
+                '# 3. 启动 GUI',
+                'cd app && npm install && npm run dev',
+                '# 4. 默认 HTTP 模式启动 MCP',
+                'cd ../mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 5. 配置 Agent URL 并安装 Skills',
+                '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
+            ];
+            const enLines = [
+                '# 1. Clone and initialize template',
+                'git clone https://github.com/GeminiLight/MindOS',
+                'cd MindOS && cp -r templates/zh my-mind/',
+                '# optional: cp -r templates/en my-mind/',
+                '# 2. Configure env (absolute path)',
+                'cp app/.env.example app/.env.local',
+                '# edit MIND_ROOT=/abs/path/to/MindOS/my-mind',
+                '# 3. Launch GUI',
+                'cd app && npm install && npm run dev',
+                '# 4. Start MCP in default HTTP mode',
+                'cd ../mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 5. Configure agent URL and install Skills',
+                '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos',
+            ];
+            const lines = state.lang === 'zh' ? zhLines : enLines;
+            navigator.clipboard.writeText(lines.join('\n'));
+            e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
+            setTimeout(() => {
+                e.currentTarget.innerHTML = humanCopyBtnLabel;
+            }, 2000);
+        });
+
+        const agentCopyBtn = document.getElementById('copy-agent-btn');
+        const agentCopyBtnLabel = '<span data-zh>复制命令</span><span data-en>Copy Commands</span>';
+        agentCopyBtn?.addEventListener('click', (e) => {
+            const zhLines = [
+                '# 1. 启动 MCP（HTTP）',
+                'cd mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 2. 配置 Agent URL（Bearer Token）',
+                '# URL: http://<服务器IP>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                '# 3. 安装 Skill 并验证连接',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
+            ];
+            const enLines = [
+                '# 1. Start MCP (HTTP)',
+                'cd mcp && npm install && npm run build',
+                'MIND_ROOT=/path/to/MindOS/my-mind MCP_TRANSPORT=http MCP_HOST=0.0.0.0 MCP_PORT=8787 MCP_ENDPOINT=/mcp MCP_API_KEY=your-strong-token npm start',
+                '# 2. Configure Agent URL (Bearer token)',
+                '# URL: http://<server-ip>:8787/mcp  Header: Authorization: Bearer your-strong-token',
+                '# 3. Install skill and verify connectivity',
+                'npx skills add https://github.com/GeminiLight/MindOS --skill mindos'
+            ];
+            const lines = state.lang === 'zh' ? zhLines : enLines;
+            navigator.clipboard.writeText(lines.join('\n'));
+            e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
+            setTimeout(() => {
+                e.currentTarget.innerHTML = agentCopyBtnLabel;
+            }, 2000);
+        });
+
+        const runMindLoop = async () => {
+            if(state.loopStarted) return; state.loopStarted = true;
+            const files = ['mf-1','mf-2','mf-3','mf-4','mf-5'];
+            const agents = ['as-1','as-2','as-3','as-4','as-5'];
+            const statusEls = agents.map(id => document.getElementById(id + '-status'));
+            const barEls = agents.map(id => document.getElementById(id + '-bar'));
+            const bridgeCenter = document.querySelector('.bridge-center');
+            const protocolDot = document.querySelector('.bridge-protocol-dot');
+            const bridgeStatusZh = document.getElementById('bridge-status');
+            const bridgeStatusEn = document.getElementById('bridge-status-en');
+
+            const wait = ms => new Promise(r => setTimeout(r, ms));
+
+            // Utility: reset all states
+            const resetAll = () => {
+                files.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('mind-file--syncing', 'mind-file--editing');
+                });
+                agents.forEach((id, i) => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('agent-slot--active', 'agent-slot--done');
+                    statusEls[i].classList.remove('agent-slot-status--running', 'agent-slot-status--done');
+                    if (barEls[i]) { barEls[i].style.transition = 'none'; barEls[i].style.width = '0'; }
+                });
+                bridgeCenter.classList.remove('bridge-active');
+                protocolDot.classList.remove('bridge-protocol-dot--active');
+            };
+
+            // Utility: run a sync round
+            // editFileIdx = which file the human edits
+            // syncFiles = which files get synced to agents
+            // activeAgents = which agent indices execute, with their durations
+            const runRound = async (editFileIdx, syncFileIndices, agentConfigs) => {
+                // Step 1: Human edits a file (blink effect)
+                const editEl = document.getElementById(files[editFileIdx]);
+                editEl.classList.add('mind-file--editing');
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '检测到变更...';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Change detected...';
+                await wait(800);
+                editEl.classList.remove('mind-file--editing');
+
+                // Step 2: Sync files light up
+                for (const idx of syncFileIndices) {
+                    await wait(200);
+                    document.getElementById(files[idx]).classList.add('mind-file--syncing');
+                }
+
+                // Step 3: Bridge activates
+                await wait(350);
+                bridgeCenter.classList.add('bridge-active');
+                protocolDot.classList.add('bridge-protocol-dot--active');
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '同步中...';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Syncing...';
+
+                // Step 4: Agents execute in parallel
+                await wait(250);
+                const completions = [];
+                agentConfigs.forEach(({ idx, duration, stagger }) => {
+                    const p = new Promise(resolve => {
+                        setTimeout(() => {
+                            const el = document.getElementById(agents[idx]);
+                            el.classList.remove('agent-slot--done');
+                            statusEls[idx].classList.remove('agent-slot-status--done');
+                            el.classList.add('agent-slot--active');
+                            statusEls[idx].classList.add('agent-slot-status--running');
+                            const bar = barEls[idx];
+                            if (bar) {
+                                bar.style.transition = 'none'; bar.style.width = '0';
+                                requestAnimationFrame(() => {
+                                    bar.style.transition = 'width ' + duration + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
+                                    requestAnimationFrame(() => { bar.style.width = '100%'; });
+                                });
+                            }
+                            setTimeout(() => {
+                                statusEls[idx].classList.remove('agent-slot-status--running');
+                                statusEls[idx].classList.add('agent-slot-status--done');
+                                el.classList.add('agent-slot--done');
+                                resolve();
+                            }, duration);
+                        }, stagger);
+                    });
+                    completions.push(p);
+                });
+
+                await Promise.all(completions);
+                await wait(200);
+                if (bridgeStatusZh) bridgeStatusZh.textContent = '心智已同步';
+                if (bridgeStatusEn) bridgeStatusEn.textContent = 'Mind synced';
+            };
+
+            // === ROUND 1: Initial full sync — user has SOP, all agents launch ===
+            // Files sync one by one
+            for (let i = 0; i < files.length; i++) {
+                await wait(300);
+                document.getElementById(files[i]).classList.add('mind-file--syncing');
+            }
+            await wait(350);
+            bridgeCenter.classList.add('bridge-active');
+            protocolDot.classList.add('bridge-protocol-dot--active');
+            if (bridgeStatusZh) bridgeStatusZh.textContent = '同步中...';
+            if (bridgeStatusEn) bridgeStatusEn.textContent = 'Syncing...';
+            await wait(250);
+
+            // All 5 agents start in parallel
+            const r1Durations = [2600, 2000, 3200, 2400, 1600];
+            const r1Stagger = [0, 100, 50, 150, 80];
+            const r1Completions = [];
+            agents.forEach((id, i) => {
+                const p = new Promise(resolve => {
+                    setTimeout(() => {
+                        const el = document.getElementById(id);
+                        el.classList.add('agent-slot--active');
+                        statusEls[i].classList.add('agent-slot-status--running');
+                        const bar = barEls[i];
+                        if (bar) {
+                            bar.style.transition = 'width ' + r1Durations[i] + 'ms cubic-bezier(0.4, 0, 0.2, 1)';
+                            requestAnimationFrame(() => { bar.style.width = '100%'; });
+                        }
+                        setTimeout(() => {
+                            statusEls[i].classList.remove('agent-slot-status--running');
+                            statusEls[i].classList.add('agent-slot-status--done');
+                            el.classList.add('agent-slot--done');
+                            resolve();
+                        }, r1Durations[i]);
+                    }, r1Stagger[i]);
+                });
+                r1Completions.push(p);
+            });
+            await Promise.all(r1Completions);
+            await wait(200);
+            if (bridgeStatusZh) bridgeStatusZh.textContent = '心智已同步';
+            if (bridgeStatusEn) bridgeStatusEn.textContent = 'Mind synced';
+
+            // === Continuous loop starts ===
+            const rounds = [
+                // Round 2: User updates Profile → Cursor & Claude Code re-run
+                { edit: 1, sync: [1, 3], agents: [
+                    { idx: 0, duration: 2200, stagger: 0 },
+                    { idx: 1, duration: 1800, stagger: 80 },
+                ]},
+                // Round 3: User adds a new Idea → Codex, Gemini, OpenClaw pick it up
+                { edit: 2, sync: [2, 0, 4], agents: [
+                    { idx: 2, duration: 2600, stagger: 0 },
+                    { idx: 3, duration: 2000, stagger: 60 },
+                    { idx: 4, duration: 1500, stagger: 120 },
+                ]},
+                // Round 4: User edits Agent-Rules → all agents re-calibrate
+                { edit: 3, sync: [3, 0, 1, 2, 4], agents: [
+                    { idx: 0, duration: 1800, stagger: 0 },
+                    { idx: 1, duration: 2400, stagger: 50 },
+                    { idx: 2, duration: 2000, stagger: 100 },
+                    { idx: 3, duration: 1600, stagger: 70 },
+                    { idx: 4, duration: 2200, stagger: 30 },
+                ]},
+                // Round 5: User updates Products.csv → Gemini re-researches
+                { edit: 4, sync: [4, 2], agents: [
+                    { idx: 3, duration: 2800, stagger: 0 },
+                    { idx: 0, duration: 1400, stagger: 100 },
+                ]},
+            ];
+
+            let roundIdx = 0;
+            while (true) {
+                await wait(2500); // Pause — "calm" moment, user is reading/thinking
+                // Soft reset: clear syncing states, keep agent done states, deactivate bridge
+                files.forEach(id => document.getElementById(id).classList.remove('mind-file--syncing'));
+                bridgeCenter.classList.remove('bridge-active');
+                protocolDot.classList.remove('bridge-protocol-dot--active');
+                await wait(1500);
+
+                // Clear previous agent active/done states for agents in THIS round
+                const round = rounds[roundIdx % rounds.length];
+                round.agents.forEach(({ idx }) => {
+                    const el = document.getElementById(agents[idx]);
+                    el.classList.remove('agent-slot--active', 'agent-slot--done');
+                    statusEls[idx].classList.remove('agent-slot-status--running', 'agent-slot-status--done');
+                    const bar = barEls[idx];
+                    if (bar) { bar.style.transition = 'none'; bar.style.width = '0'; }
+                });
+
+                await runRound(round.edit, round.sync, round.agents);
+                roundIdx++;
+            }
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                    if(entry.target.closest && entry.target.closest('#workflow')) { setTimeout(runMindLoop, 800); }
+                    if(entry.target.id === 'workflow') { setTimeout(runMindLoop, 800); }
+                }
+            });
+        }, { threshold: 0.2 });
+        document.querySelectorAll('.animate-up, .loop-section').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>
