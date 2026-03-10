@@ -40,7 +40,7 @@ const MCP_HOST = process.env.MCP_HOST ?? "127.0.0.1";
 const MCP_PORT = Number(process.env.MCP_PORT ?? 8787);
 const MCP_ENDPOINT = process.env.MCP_ENDPOINT ?? "/mcp";
 const MCP_HTTP_STATEFUL = (process.env.MCP_HTTP_STATEFUL ?? "false").toLowerCase() === "true";
-const MCP_API_KEY = process.env.MCP_API_KEY;
+const MCP_API_KEY = process.env.AUTH_TOKEN ?? process.env.MCP_API_KEY;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

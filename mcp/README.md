@@ -39,7 +39,7 @@ MCP_TRANSPORT=http \
 MCP_HOST=0.0.0.0 \
 MCP_PORT=8787 \
 MCP_ENDPOINT=/mcp \
-MCP_API_KEY=your-strong-token \
+MCP_API_KEY=your-strong-token \      # or use AUTH_TOKEN (shared with App)
 npm start
 ```
 
@@ -125,7 +125,8 @@ claude mcp add mindos -- node /path/to/MindOS/mcp/dist/index.js
 | `MCP_PORT` | No | HTTP bind port (default: `8787`) |
 | `MCP_ENDPOINT` | No | HTTP MCP endpoint path (default: `/mcp`) |
 | `MCP_HTTP_STATEFUL` | No | `true` to enable stateful sessions, default `false` (stateless) |
-| `MCP_API_KEY` | No | Bearer token for HTTP auth. Strongly recommended in remote mode |
+| `AUTH_TOKEN` | No | Bearer token for HTTP auth. Shared with the App — set once in `app/.env.local`, pass to MCP via env. Strongly recommended in remote/public mode |
+| `MCP_API_KEY` | No | Legacy alias for `AUTH_TOKEN`. If both are set, `AUTH_TOKEN` takes precedence |
 
 ## Tech Stack
 

@@ -12,3 +12,26 @@ export interface SearchResult {
   snippet: string;
   score: number;
 }
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface LocalAttachment {
+  name: string;
+  content: string;
+}
+
+export interface ChatSession {
+  id: string;
+  currentFile?: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+}
+
+export interface BacklinkEntry {
+  filePath: string;
+  snippets: string[];
+}
