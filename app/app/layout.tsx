@@ -5,6 +5,7 @@ import { getFileTree } from '@/lib/fs';
 import SidebarLayout from '@/components/SidebarLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -46,7 +47,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const fileTree = getFileTree();
+  let fileTree: import('@/lib/types').FileNode[] = [];
+  try {
+    fileTree = getFileTree();
+  } catch (err) {
+    console.error('[RootLayout] Failed to load file tree:', err);
+  }
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -64,9 +70,11 @@ export default function RootLayout({
       >
         <LocaleProvider>
           <TooltipProvider delay={300}>
-            <SidebarLayout fileTree={fileTree}>
-              {children}
-            </SidebarLayout>
+            <ErrorBoundary>
+              <SidebarLayout fileTree={fileTree}>
+                {children}
+              </SidebarLayout>
+            </ErrorBoundary>
           </TooltipProvider>
         </LocaleProvider>
       </body>

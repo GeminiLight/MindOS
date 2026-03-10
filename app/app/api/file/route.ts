@@ -6,7 +6,6 @@ import {
   readLines,
   insertLines,
   updateLines,
-  deleteLines,
   insertAfterHeading,
   updateSection,
   deleteFile,
@@ -75,15 +74,6 @@ export async function POST(req: NextRequest) {
         if (start < 0 || end < 0) return err('start/end must be >= 0');
         if (start > end) return err('start must be <= end');
         updateLines(filePath, start, end, lines);
-        return NextResponse.json({ ok: true });
-      }
-
-      case 'delete_lines': {
-        const { start, end } = params as { start: number; end: number };
-        if (typeof start !== 'number' || typeof end !== 'number') return err('missing start/end');
-        if (start < 0 || end < 0) return err('start/end must be >= 0');
-        if (start > end) return err('start must be <= end');
-        deleteLines(filePath, start, end);
         return NextResponse.json({ ok: true });
       }
 

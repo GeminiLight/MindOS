@@ -107,6 +107,6 @@ export async function GET() {
     return NextResponse.json({ nodes, edges } satisfies GraphData);
   } catch (err) {
     console.error('[graph] Error building graph:', err);
-    return NextResponse.json({ nodes: [], edges: [] }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to build graph' }, { status: 500 });
   }
 }
