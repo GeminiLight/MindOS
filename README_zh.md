@@ -84,9 +84,9 @@ git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 
 # 从预设模板初始化你的知识库
-cp -r template/zh my-mind/
+cp -r templates/zh my-mind/
 # 或使用英文预设：
-# cp -r template/en my-mind/
+# cp -r templates/en my-mind/
 
 # 配置环境变量
 cp app/.env.example app/.env.local
@@ -209,8 +209,8 @@ cd mcp && npm install && npm run build
 安装命令：
 
 ```bash
-npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos
-npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh
 ```
 
 MCP = 连接能力，Skills = 工作流能力；两者都开启后体验完整。
@@ -289,7 +289,7 @@ graph LR
 MindOS/
 ├── app/              # Next.js 15 前端 — 浏览、编辑、与 AI 交互
 ├── mcp/              # MCP Server 核心 — 暴露给 Agent 的标准化工具集
-├── template/         # 预设模板（`en/`、`zh/`）— 选择其一复制到 my-mind/
+├── templates/         # 预设模板（`en/`、`zh/`）— 选择其一复制到 my-mind/
 ├── my-mind/          # 你的私有共享内存（已加入 .gitignore，确保隐私）
 ├── SERVICES.md       # 技术与服务架构总览
 └── README.md

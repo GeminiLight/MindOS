@@ -25,8 +25,7 @@
   },
   "structure": {
     "requireFirstLevelReadme": true,
-    "recommendFirstLevelInstruction": true,
-    "syncEnAndZhStructure": true
+    "recommendFirstLevelInstruction": true
   },
   "document": {
     "title": {
@@ -62,8 +61,7 @@
         "description": "控制目录结构与中英文同步要求",
         "fields": [
           "structure.requireFirstLevelReadme",
-          "structure.recommendFirstLevelInstruction",
-          "structure.syncEnAndZhStructure"
+          "structure.recommendFirstLevelInstruction"
         ]
       },
       {
@@ -124,12 +122,6 @@
       "control": "switch",
       "label": "建议一级目录有 INSTRUCTION",
       "description": "是否建议一级目录提供局部规则文件"
-    },
-    "structure.syncEnAndZhStructure": {
-      "type": "boolean",
-      "control": "switch",
-      "label": "中英文结构同构",
-      "description": "要求 template/en 与 template/zh 目录结构一致"
     },
     "document.title.emojiEnabled": {
       "type": "boolean",

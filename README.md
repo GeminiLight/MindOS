@@ -84,9 +84,9 @@ git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 
 # Initialize your knowledge base from a preset template
-cp -r template/en my-mind/
+cp -r templates/en my-mind/
 # Or use the Chinese preset:
-# cp -r template/zh my-mind/
+# cp -r templates/zh my-mind/
 
 # Configure environment variables
 cp app/.env.example app/.env.local
@@ -208,10 +208,10 @@ Install one skill only (choose based on your preferred language):
 
 ```bash
 # English
-npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos
 
 # Chinese (optional)
-npx skills add https://github.com/GeminiLight/mindos-dev --skill mindos-zh
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh
 ```
 
 MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
@@ -290,7 +290,7 @@ graph LR
 MindOS/
 ├── app/              # Next.js 15 Frontend — Browse, edit, and interact with AI
 ├── mcp/              # MCP Server Core — Standardized toolset for Agents
-├── template/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/
+├── templates/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/
 ├── my-mind/          # Your private shared memory (Git-ignored for privacy)
 ├── SERVICES.md       # Technical and Service Architecture Overview
 └── README.md

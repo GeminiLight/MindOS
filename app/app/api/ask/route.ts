@@ -112,10 +112,13 @@ export async function POST(req: NextRequest) {
     } catch {}
   }
 
+  // Uploaded files go into a SEPARATE top-level section so the Agent
+  // treats them with high priority and never tries to look them up via tools.
+  const uploadedParts: string[] = [];
   if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
     for (const f of uploadedFiles.slice(0, 8)) {
       if (!f || typeof f.name !== 'string' || typeof f.content !== 'string') continue;
-      contextParts.push(`## Uploaded file: ${f.name}\n\n${truncate(f.content)}`);
+      uploadedParts.push(`### ${f.name}\n\n${truncate(f.content)}`);
     }
   }
 
@@ -128,6 +131,16 @@ export async function POST(req: NextRequest) {
 
   if (contextParts.length > 0) {
     promptParts.push(`---\n\nThe user is currently viewing these files:\n\n${contextParts.join('\n\n---\n\n')}`);
+  }
+
+  if (uploadedParts.length > 0) {
+    promptParts.push(
+      `---\n\n## ⚠️ USER-UPLOADED FILES (ACTIVE ATTACHMENTS)\n\n` +
+      `The user has uploaded the following file(s) in this conversation. ` +
+      `Their FULL CONTENT is provided below. You MUST use this content directly when the user refers to these files. ` +
+      `Do NOT use read_file or search tools to find them — they exist only here, not in the knowledge base.\n\n` +
+      uploadedParts.join('\n\n---\n\n'),
+    );
   }
 
   const systemPrompt = promptParts.join('\n\n');

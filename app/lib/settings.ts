@@ -61,5 +61,5 @@ export function effectiveAiConfig() {
 /** Effective MIND_ROOT — settings file can override, env var is fallback */
 export function effectiveSopRoot(): string {
   const s = readSettings();
-  return s.mindRoot || process.env.MIND_ROOT || '/data/home/geminitwang/code/sop_note/my-mind';
+  return s.mindRoot || process.env.MIND_ROOT || '~/code/MindOS/my-mind';
 }

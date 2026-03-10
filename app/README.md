@@ -31,7 +31,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MIND_ROOT` | `/data/home/geminitwang/code/sop_note` | Absolute path to your knowledge base directory |
+| `MIND_ROOT` | `/data/home/geminitwang/code/MindOS/my-mind` | Absolute path to your knowledge base directory |
 | `AI_PROVIDER` | `anthropic` | `anthropic` or `openai` |
 | `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic` |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Anthropic model ID |
