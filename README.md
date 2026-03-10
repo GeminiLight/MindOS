@@ -290,9 +290,9 @@ graph LR
 MindOS/
 ├── app/              # Next.js 15 Frontend — Browse, edit, and interact with AI
 ├── mcp/              # MCP Server Core — Standardized toolset for Agents
+├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — Workflow guides for Agents
 ├── templates/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/
 ├── my-mind/          # Your private shared memory (Git-ignored for privacy)
-├── SERVICES.md       # Technical and Service Architecture Overview
 └── README.md
 ```
 
