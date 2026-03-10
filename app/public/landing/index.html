@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindOS — Human-AI Collaborative Mind Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="grain"></div>
+    <div class="ambient-glow"></div>
+
+    <nav class="nav-container fade-in">
+        <div class="nav-content">
+            <a href="#" class="logo-group">
+                <svg class="logo-svg" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="grad-human" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+                        </linearGradient>
+                        <linearGradient id="grad-agent" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#grad-human)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+                    <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#grad-agent)" stroke-width="4.5" stroke-linecap="round"/>
+                    <path class="spark" d="M35,17.5 Q35,20 37.5,20 Q35,20 35,23.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--spark-color)"/>
+                </svg>
+                <span class="logo-text">MindOS</span>
+            </a>
+            
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="#vision"><span data-zh>愿景</span><span data-en>Vision</span></a>
+                    <a href="#workflow"><span data-zh>演示</span><span data-en>Workflow</span></a>
+                    <a href="#features"><span data-zh>特性</span><span data-en>Features</span></a>
+                    <a href="#quickstart"><span data-zh>开始</span><span data-en>Start</span></a>
+                </div>
+                <div class="controls">
+                    <button id="theme-toggle" class="control-btn" title="Toggle Theme">◐</button>
+                    <button id="lang-toggle" class="control-btn">
+                        <span data-zh>EN</span><span data-en>中文</span>
+                    </button>
+                    <a href="https://github.com/geminilight/mind-os" class="btn-primary">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <header class="hero section">
+        <div class="container hero-content">
+            <div class="tagline-badge animate-up">
+                <span data-zh>人机协同心智平台</span><span data-en>Human-AI Collaborative Mind Platform</span>
+            </div>
+            <h1 class="animate-up" style="animation-delay: 0.1s;">
+                <span data-zh>人类在此思考，</span><span data-en>Human Thinks Here,</span><br>
+                <span class="accent-text" data-zh>Agent 依此行动。</span><span class="accent-text" data-en>Agent Acts There.</span>
+            </h1>
+            <p class="hero-sub animate-up" style="animation-delay: 0.2s;">
+                <span data-zh>为所有 Agents 全局同步你的心智：透明可控，共生演进。</span>
+                <span data-en>Globally sync your mind for all agents: transparent, controllable, and evolving symbiotically.</span>
+            </p>
+            <div class="hero-actions animate-up" style="animation-delay: 0.3s;">
+                <div class="cmd-box">
+                    <span class="cmd-text">git clone https://github.com/geminilight/mind-os</span>
+                    <button class="copy-btn" id="copy-btn">Copy</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- SECTION 1: THE SHARED MIND LOOP -->
+    <section id="workflow" class="loop-section dark-bg">
+        <svg class="loop-bg-svg" viewBox="0 0 1000 500">
+            <path class="loop-path-bg" d="M500,250 C500,50 150,50 150,250 C150,450 500,450 500,250 C500,50 850,50 850,250 C850,450 500,450 500,250" />
+            <path class="loop-path-flow" d="M500,250 C500,50 150,50 150,250 C150,450 500,450 500,250 C500,50 850,50 850,250 C850,450 500,450 500,250" />
+        </svg>
+        <div class="flying-spark" id="spark-pulse"></div>
+
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">01. THE SHARED MIND LOOP</span>
+                <h2 data-zh>交互式心智循环</h2><h2 data-en>Interactive Mind Loop</h2>
+            </div>
+
+            <div class="vis-area">
+                <div class="loop-grid">
+                    <div class="panel gui-panel animate-up" id="gui-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">MindOS GUI</span>
+                            <div style="display:flex; gap:4px;"><div class="mac-btn mac-close"></div><div class="mac-btn mac-min"></div><div class="mac-btn mac-max"></div></div>
+                        </div>
+                        <div class="gui-content">
+                            <nav class="gui-nav">
+                                <svg class="active" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-13.5 8.38 8.38 0 0 1 3.8.9L21 11.5z"/></svg>
+                            </nav>
+                            <div class="gui-main">
+                                <div class="gui-toolbar">
+                                    <div class="gui-breadcrumb">/mind/<span>Research.md</span></div>
+                                    <div class="gui-search"><span data-zh>搜索...</span><span data-en>Search...</span></div>
+                                </div>
+                                <div class="gui-editor">
+                                    <div style="display:flex;">
+                                        <div class="gui-line-num">1<br>2<br>3</div>
+                                        <div id="typewriter-human"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel console-panel animate-up" id="agent-panel" style="animation-delay: 0.2s;">
+                        <div class="panel-header">
+                            <span class="panel-title">Agent Console</span>
+                            <div id="agent-status" style="font-size: 0.6rem; color: var(--muted-fg); display:flex; align-items:center; gap:6px;">
+                                <span style="width:6px; height:6px; background:var(--muted-fg); border-radius:50%;"></span> STANDBY
+                            </div>
+                        </div>
+                        <div class="console-body" id="agent-console"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: VISION -->
+    <section id="vision" class="section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">02. THE VISION</span>
+                <h2 data-zh>为何需要 Shared Mind?</h2><h2 data-en>Why Shared Mind?</h2>
+            </div>
+            <div class="vision-grid">
+                <div class="v-card animate-up">
+                    <div class="v-icon">👁️</div>
+                    <h3 data-zh>透明上下文</h3><h3 data-en>Transparent Context</h3>
+                    <p data-zh>Agent 的推理与沉淀直接写入本地 Markdown。人类可直观审查并修正“记忆”，彻底消除幻觉。</p>
+                    <p data-en>Agent reflections and intermediate steps are written to local Markdown. Humans can intuitively review and correct AI "memory".</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.1s;">
+                    <div class="v-icon">🔓</div>
+                    <h3 data-zh>原生 Agent 访问</h3><h3 data-en>Native Agent Access</h3>
+                    <p data-zh>无需复杂的 API 鉴权。内置 MCP Server 让 Agent 像原生应用一样读写你的 Profile 和经验。</p>
+                    <p data-en>No complex cloud APIs. Built-in MCP Server lets Agents access your Profile and SOPs as if they were native apps.</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.2s;">
+                    <div class="v-icon">⚡</div>
+                    <h3 data-zh>解放文档管理</h3><h3 data-en>Liberating Doc Management</h3>
+                    <p data-zh>通过文件引用自动化管理。知识库不再是静态记录，而是 Agent 随时调用的动态指令集。</p>
+                    <p data-en>Automate management via prompt references. Your notes become executable instruction sets for Agents.</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.3s;">
+                    <div class="v-icon">🛡️</div>
+                    <h3 data-zh>极致本地掌控</h3><h3 data-en>Ultimate Local Control</h3>
+                    <p data-zh>无数据库、无云同步。所有数据以纯文本运行在本地，确保绝对隐私与极速响应。</p>
+                    <p data-en>Zero database, zero cloud sync. All data stays local as plain text, ensuring absolute privacy and speed.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: MANIFESTO -->
+    <section class="section dark-bg">
+        <div class="container">
+            <div class="section-header" style="text-align:center;">
+                <span class="mono">03. MANIFESTO</span>
+                <h2 data-zh>数据主权与透明性</h2><h2 data-en>Data Sovereignty & Transparency</h2>
+            </div>
+            <div class="manifesto-wrapper animate-up">
+                <div class="m-side m-legacy">
+                    <div class="m-title" style="color:var(--danger)">✕ <span data-zh="传统 AI 范式">Legacy AI Flow</span><span data-en="Legacy AI Flow">Legacy AI Flow</span></div>
+                    <ul class="m-list">
+                        <li class="m-item"><div><strong data-zh>封闭黑箱</strong><strong data-en>Black Box Memory</strong><span data-zh>Agent 记忆不可见</span><span data-en>Hidden agent memory</span></div></li>
+                        <li class="m-item"><div><strong data-zh>数据孤岛</strong><strong data-en>Data Silos</strong><span data-zh>笔记难以被模型原生访问</span><span data-en>Notes hard to access for LLMs</span></div></li>
+                    </ul>
+                </div>
+                <div class="m-side m-mindos">
+                    <div class="m-title" style="color:var(--accent)">✓ <span data-zh="MindOS 范式">The MindOS Way</span><span data-en="The MindOS Way">The MindOS Way</span></div>
+                    <ul class="m-list">
+                        <li class="m-item"><div><strong data-zh>透明上下文</strong><strong data-en>Transparent Context</strong><span data-zh>推理过程直接本地存储</span><span data-en>Reasoning saved locally</span></div></li>
+                        <li class="m-item"><div><strong data-zh>绝对掌控</strong><strong data-en>Absolute Control</strong><span data-zh>纯文本、零数据库、极速响应</span><span data-en>Plain text, zero DB, instant</span></div></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: FEATURES -->
+    <section id="features" class="section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">04. FEATURES</span>
+                <h2 data-zh>核心功能特性</h2><h2 data-en>Core Features</h2>
+            </div>
+            <div class="vision-grid">
+                <div class="v-card animate-up">
+                    <div class="v-icon">⌘/</div>
+                    <h3 data-zh>AI 对话 & 管理</h3><h3 data-en>AI Ask & Management</h3>
+                    <p data-zh>在上下文中与知识库对话。Agent 自动化管理文件，人机协同无缝沉淀。</p>
+                    <p data-en>Chat with your mind in context. Agents manage files while you curate knowledge effortlessly.</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.1s;">
+                    <div class="v-icon">🕸️</div>
+                    <h3 data-zh>Wiki Graph 图谱</h3><h3 data-en>Wiki Graph</h3>
+                    <p data-zh>动态解析引用关系，全景管理复杂的人机上下文语义网络。</p>
+                    <p data-en>Visualize inter-file relationships. Manage complex Human-AI semantic networks.</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.2s;">
+                    <div class="v-icon">🔗</div>
+                    <h3 data-zh="关联视图 Backlinks</h3><h3 data-en>Backlinks View</h3>
+                    <p data-zh>自动索引全库引用。每一篇笔记底部展示相关 Context，打通知识孤岛。</p>
+                    <p data-en>Auto-indexed references. Every note shows its surrounding context snippets.</p>
+                </div>
+                <div class="v-card animate-up" style="animation-delay: 0.3s;">
+                    <div class="v-icon">📊</div>
+                    <h3 data-zh>MCP 标准化工具</h3><h3 data-en>MCP Toolset</h3>
+                    <p data-zh>提供 15+ 种标准工具。让任意 Agent 获得读写本地工作流的专属技能。</p>
+                    <p data-en>15+ specialized tools for Agents to read, write, and execute local workflows.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: ECOSYSTEM -->
+    <section class="section dark-bg">
+        <div class="container ecosystem-section">
+            <div class="section-header">
+                <span class="mono">05. AGENT ECOSYSTEM</span>
+                <h2 data-zh>无缝链接 Agent 生态</h2><h2 data-en>Seamless Agent Integration</h2>
+            </div>
+            <div class="eco-grid animate-up">
+                <div class="eco-item">Claude Desktop</div>
+                <div class="eco-item">Claude Code</div>
+                <div class="eco-item">OpenClaw</div>
+                <div class="eco-item">CodeX</div>
+                <div class="eco-item">Gemini Agent</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 6: QUICKSTART -->
+    <section id="quickstart" class="section">
+        <div class="container">
+            <div class="section-header">
+                <span class="mono">06. QUICKSTART</span>
+                <h2 data-zh>即刻开启 Shared Mind</h2><h2 data-en>Start the Shared Mind</h2>
+            </div>
+            <div class="vision-grid">
+                <div class="v-card animate-up"><code style="color:var(--accent)">cp -r template/ my-mind/</code></div>
+                <div class="v-card animate-up" style="animation-delay: 0.1s;"><code style="color:var(--accent)">MIND_ROOT=/path/to/my-mind</code></div>
+                <div class="v-card animate-up" style="animation-delay: 0.2s;"><code style="color:var(--accent)">npm run dev</code></div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer section" style="padding-top: 4rem; border-top: 1px solid var(--border);">
+        <div class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <p style="font-weight: 500;"><span data-zh>MindOS · 人机协同心智平台</span><span data-en>MindOS · Human-AI Collaborative Mind Platform</span></p>
+                <a href="https://github.com/geminilight/mind-os" style="color: var(--muted-fg); text-decoration: none;">GitHub</a>
+            </div>
+            <p style="color: var(--muted-fg); font-size: 0.75rem; margin-top: 2rem; opacity: 0.5;">MIT © 2026 GeminiLight</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- State ---
+        const state = { 
+            theme: localStorage.getItem('mindos-theme') || 'dark', 
+            lang: localStorage.getItem('mindos-lang') || 'zh', 
+            loopStarted: false 
+        };
+
+        const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); };
+        const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
+        applyTheme(state.theme); applyLang(state.lang);
+
+        document.getElementById('theme-toggle').addEventListener('click', () => { 
+            state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); 
+        });
+        document.getElementById('lang-toggle').addEventListener('click', () => { 
+            state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang);
+            // Reload page or re-run dynamic text if needed, but here typewriter respects state.lang
+        });
+
+        // --- Copy Logic ---
+        document.getElementById('copy-btn')?.addEventListener('click', (e) => {
+            navigator.clipboard.writeText('git clone https://github.com/geminilight/mind-os');
+            e.target.textContent = 'Copied!';
+            setTimeout(() => e.target.textContent = 'Copy', 2000);
+        });
+
+        // --- Narrative Loop ---
+        const runMindLoop = async () => {
+            if(state.loopStarted) return; state.loopStarted = true;
+            const humanEditor = document.getElementById('typewriter-human');
+            const spark = document.getElementById('spark-pulse');
+            
+            const typingText = state.lang === 'zh' 
+                ? "Idea: 实现一个动态星芒脉冲效果。" 
+                : "Idea: Build a dynamic spark pulse effect.";
+            
+            for(let char of typingText) {
+                humanEditor.innerHTML += char;
+                await new Promise(r => setTimeout(r, 50));
+            }
+            humanEditor.innerHTML += '<span class="type-cursor"></span>';
+            
+            await new Promise(r => setTimeout(r, 400));
+            spark.classList.add('animate');
+            
+            setTimeout(async () => {
+                const status = document.getElementById('agent-status');
+                status.innerHTML = `<span style="width:6px; height:6px; background:var(--accent); border-radius:50%; box-shadow: 0 0 10px var(--accent);"></span> PROCESSING`;
+                status.style.color = "var(--accent)";
+
+                const consoleBody = document.getElementById('agent-console');
+                const logs = [
+                    { tag: 'MCP', msg: 'Context Bridge active.' },
+                    { tag: 'SYNC', msg: 'Synced: Research.md' },
+                    { tag: 'AI', msg: state.lang === 'zh' ? '意图识别：UI 反馈逻辑' : 'Intent: UI Feedback Logic' },
+                    { tag: 'EXEC', msg: 'Updated project wiki.', type: 'success' }
+                ];
+                
+                for(let log of logs) {
+                    await new Promise(r => setTimeout(r, 600));
+                    const div = document.createElement('div');
+                    div.className = 'c-row visible';
+                    div.innerHTML = `<span class="c-tag">${log.tag}</span><span class="${log.type === 'success' ? 'c-success' : ''}">${log.msg}</span>`;
+                    consoleBody.appendChild(div);
+                }
+            }, 800);
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => { 
+                if (entry.isIntersecting) { 
+                    entry.target.classList.add('active'); 
+                    if(entry.target.id === 'workflow') { setTimeout(runMindLoop, 800); }
+                } 
+            });
+        }, { threshold: 0.3 });
+        document.querySelectorAll('.animate-up, .loop-section').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>

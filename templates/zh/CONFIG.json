@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "1.1",
+  "locale": "zh",
+  "languagePreference": {
+    "preferredLanguage": "zh",
+    "supportedLanguages": [
+      {
+        "value": "zh",
+        "label": "中文"
+      },
+      {
+        "value": "en",
+        "label": "英文"
+      }
+    ],
+    "folderNamingLanguage": "zh",
+    "contentWritingLanguage": "zh",
+    "enforceLocalizedNaming": true
+  },
+  "filename": {
+    "emojiPrefixDefault": true,
+    "allowEmojiPrefix": true,
+    "exampleSuffixSingle": "_example",
+    "exampleSuffixCollection": "_examples"
+  },
+  "structure": {
+    "requireFirstLevelReadme": true,
+    "recommendFirstLevelInstruction": true
+  },
+  "document": {
+    "title": {
+      "emojiEnabled": true,
+      "defaultHeadingLevel": 2
+    }
+  },
+  "protocol": {
+    "readMode": "config_and_doc",
+    "priorityBetweenConfigAndDoc": "none",
+    "notes": [
+      "CONFIG.json 与 CONFIG.md 需同时读取",
+      "两者是互补关系，不分优先级"
+    ]
+  },
+  "uiSchema": {
+    "version": "1.0",
+    "sections": [
+      {
+        "id": "filename",
+        "title": "文件命名",
+        "description": "控制模板生成时的文件命名规则",
+        "fields": [
+          "filename.emojiPrefixDefault",
+          "filename.allowEmojiPrefix",
+          "filename.exampleSuffixSingle",
+          "filename.exampleSuffixCollection"
+        ]
+      },
+      {
+        "id": "structure",
+        "title": "结构约束",
+        "description": "控制目录结构与中英文同步要求",
+        "fields": [
+          "structure.requireFirstLevelReadme",
+          "structure.recommendFirstLevelInstruction"
+        ]
+      },
+      {
+        "id": "document_title",
+        "title": "标题生成",
+        "description": "控制文档标题的默认生成方式",
+        "fields": [
+          "document.title.emojiEnabled",
+          "document.title.defaultHeadingLevel"
+        ]
+      },
+      {
+        "id": "language_preference",
+        "title": "语言偏好",
+        "description": "控制生成时的目录命名语言与内容写作语言",
+        "fields": [
+          "languagePreference.preferredLanguage",
+          "languagePreference.folderNamingLanguage",
+          "languagePreference.contentWritingLanguage",
+          "languagePreference.enforceLocalizedNaming"
+        ]
+      }
+    ]
+  },
+  "keySpecs": {
+    "filename.emojiPrefixDefault": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "文件名默认 emoji 前缀",
+      "description": "新建文件时是否默认以 emoji 开头"
+    },
+    "filename.allowEmojiPrefix": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "允许 emoji 前缀",
+      "description": "是否允许文件名包含 emoji 前缀"
+    },
+    "filename.exampleSuffixSingle": {
+      "type": "string",
+      "control": "text",
+      "label": "单文件示例后缀",
+      "description": "单个示例文件命名后缀，默认 _example"
+    },
+    "filename.exampleSuffixCollection": {
+      "type": "string",
+      "control": "text",
+      "label": "示例集合后缀",
+      "description": "示例目录命名后缀，默认 _examples"
+    },
+    "structure.requireFirstLevelReadme": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "一级目录必须有 README",
+      "description": "项目根目录下每个一级目录都需包含 README.md"
+    },
+    "structure.recommendFirstLevelInstruction": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "建议一级目录有 INSTRUCTION",
+      "description": "是否建议一级目录提供局部规则文件"
+    },
+    "document.title.emojiEnabled": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "标题允许 emoji",
+      "description": "生成标题时是否默认允许 emoji"
+    },
+    "document.title.defaultHeadingLevel": {
+      "type": "integer",
+      "control": "number",
+      "label": "默认标题层级",
+      "description": "生成文档标题时的默认 Markdown 标题层级",
+      "constraints": {
+        "min": 1,
+        "max": 6
+      }
+    },
+    "languagePreference.preferredLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "首选语言",
+      "description": "总体语言偏好，用于默认生成策略"
+    },
+    "languagePreference.folderNamingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "目录与文件命名语言",
+      "description": "控制新建目录名与文件名使用的语言"
+    },
+    "languagePreference.contentWritingLanguage": {
+      "type": "enum",
+      "control": "select",
+      "options": [
+        {
+          "value": "zh",
+          "label": "中文"
+        },
+        {
+          "value": "en",
+          "label": "英文"
+        }
+      ],
+      "label": "内容写作语言",
+      "description": "控制生成文档正文时使用的语言"
+    },
+    "languagePreference.enforceLocalizedNaming": {
+      "type": "boolean",
+      "control": "switch",
+      "label": "强制本地化命名",
+      "description": "开启后，中文模板要求目录/文件名使用中文；英文模板要求使用英文"
+    }
+  }
+}

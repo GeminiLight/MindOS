@@ -1,0 +1,21 @@
+# 资源
+
+外部资源收藏与结构化索引目录。
+
+## 📁 目录结构
+
+```bash
+📚 资源/
+├── README.md
+├── INSTRUCTION.md
+├── 🧾 AI 产品.csv
+├── 🧾 AI Inferencers.csv
+├── 🧾 AI 工具清单.csv
+└── 🧾 AI 学者清单.csv
+```
+
+## 💡 使用说明
+
+- 以 CSV 作为主索引，按主题维护资源清单。
+- 新增条目前先确认字段语义与表头一致。
+- 执行与同步规则以 `INSTRUCTION.md` 为准。

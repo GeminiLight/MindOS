@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="g-human" x1="14" y1="16" x2="2" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8873a" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#c8873a" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="g-agent" x1="14" y1="16" x2="30" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8873a" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#c8873a" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Human Loop (Left) — dashed, lighter -->
+  <path
+    d="M14,16 C10,23 3.2,23 3.2,16 C3.2,9 10,9 14,16"
+    stroke="url(#g-human)"
+    stroke-width="1.8"
+    stroke-dasharray="1.2 2.4"
+    stroke-linecap="round"
+  />
+
+  <!-- Agent Loop (Right) — solid, bolder -->
+  <path
+    d="M14,16 C18,7 28.8,7 28.8,16 C28.8,25 18,25 14,16"
+    stroke="url(#g-agent)"
+    stroke-width="2.6"
+    stroke-linecap="round"
+  />
+
+  <!-- Spark center -->
+  <path
+    d="M14,14.5 Q14,16 15.5,16 Q14,16 14,17.5 Q14,16 12.5,16 Q14,16 14,14.5 Z"
+    fill="#FEF3C7"
+  />
+</svg>
