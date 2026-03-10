@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo-square.svg" alt="MindOS" width="80" />
-  <br />
-  <strong style="font-size: 4em;">MindOS</strong>
+  <img src="assets/logo-square.svg" alt="MindOS" width="100" />
 </p>
+
+<h1 align="center">MindOS</h1>
 
 <p align="center">
   <strong>Human Thinks Here, Agent Acts There.</strong>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://tianfuwang.tech/mindos"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
+  <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -24,13 +24,16 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ## 🧠 Core Value: Human-AI Shared Mind
 
-### 1. Global Mind Sync
+**1. Global Sync — Break Mind Silos**
+
 Traditional notes are scattered across tools and APIs, so agents miss your real context when it matters. MindOS turns your local knowledge into one MCP-ready source, so every agent can sync your Profile, SOPs, and live working memory.
 
-### 2. Transparent and Controllable
+**2. Transparent and Controllable — Eliminate Memory Black Boxes**
+
 Most assistant memory lives in black boxes, leaving humans unable to inspect or correct how decisions are made. MindOS writes retrieval and execution traces into local plain text, so you can audit, intervene, and improve continuously.
 
-### 3. Symbiotic Evolution
+**3. Symbiotic Evolution — Dynamic Instruction Flow**
+
 Static documents are hard to synchronize and weak as execution systems in real human-agent collaboration. MindOS makes notes prompt-native and reference-linked, so daily writing naturally becomes executable workflows that evolve with you.
 
 > **Foundation:** Local-first by default - all data stays in local plain text for privacy, ownership, and speed.
@@ -55,15 +58,12 @@ Static documents are hard to synchronize and weak as execution systems in real h
 - **Knowledge Graph**: visualize relationships and dependencies across notes.
 - **Git Time Machine**: track every edit, audit history, and roll back safely.
 
-> Full vision: see [wiki-zh/product-vision.md](wiki-zh/product-vision.md) and [wiki-zh/product-vision-zh.md](wiki-zh/product-vision-zh.md).
 **Coming Soon:**
 
 - [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
 - [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
 - [ ] Backlinks View: display all files that reference the current file, helping you understand how a note fits into the knowledge network
 - [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
-- [ ] Workflow Runner: render SOP/Workflow documents as an interactive step-by-step execution panel, letting AI execute each step with one click
-- [ ] Agent Diff Reviewer: render Agent file modifications as a line-by-line diff view with one-click approve or rollback
 
 ---
 
@@ -71,9 +71,8 @@ Static documents are hard to synchronize and weak as execution systems in real h
 
 > [!IMPORTANT]
 > If you have already set up your local knowledge base, skip installation and environment variable setup.
-> In each Agent client (OpenClaw/Claude Code/Cursor, etc.), you only need two steps:
-> 1) Configure MindOS MCP
-> 2) Install MindOS Skills
+> In each Agent client (OpenClaw/Claude Code/Cursor, etc.), you only need one step:
+> Configure MindOS MCP + Skills (see Section 4).
 > After setup, your Agent can sync your mind, manage your knowledge base, and execute SOPs.
 
 ### 1. Install & Run
@@ -108,7 +107,8 @@ MINDOS_WEB_PORT=3000
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
-ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+# OPENAI_BASE_URL=https://api.openai.com/v1
+ANTHROPIC_MODEL=claude-opus-4-6
 ```
 
 | Variable | Default | Description |
@@ -118,15 +118,21 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 | `AI_PROVIDER` | `anthropic` | Options: `anthropic` or `openai`. |
 | `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
 | `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
+| `OPENAI_BASE_URL` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
+| `ANTHROPIC_MODEL` | `claude-opus-4-6` | Optional. Anthropic model ID for the built-in Agent. |
 
 > [!NOTE]
 > If you want the MindOS GUI to be reachable from other devices, make sure `MINDOS_WEB_PORT` is open in firewall/security-group settings and bound to an accessible host/network interface.
 
-### 3. Inject Your Personal Mind (Quick Start)
+### 3. Inject Your Personal Mind with MindOS Agent
 
 1. Open the built-in MindOS Agent chat panel in the GUI.
 2. Upload your resume or any personal/project material.
 3. Send this prompt: `Help me sync this information into my MindOS knowledge base.`
+
+<p align="center">
+  <img src="assets/images/gui-sync-cv.png" alt="Sync CV Example" width="800" />
+</p>
 
 ### 4. Make Any Agent Ready (MCP + Skills)
 
@@ -189,12 +195,6 @@ Then configure URL access on another device's Agent client (field names vary by 
     }
   }
 }
-```
-
-Build the MCP Server:
-
-```bash
-cd mcp && npm install && npm run build
 ```
 
 #### 4.2 Install MindOS Skills

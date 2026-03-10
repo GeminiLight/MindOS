@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo-square.svg" alt="MindOS" width="80" />
-  <br />
-  <strong style="font-size: 4em;">MindOS</strong>
+  <img src="assets/logo-square.svg" alt="MindOS" width="100" />
 </p>
+
+<h1 align="center">MindOS</h1>
 
 <p align="center">
   <strong>人类在此思考，Agent 依此行动。</strong>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
+  <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -24,13 +24,16 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ## 🧠 核心价值：人机共享心智
 
-### 1. 全局心智同步
+**1. 全局同步 — 打破心智孤岛**
+
 传统笔记分散在不同工具和接口中，Agent 在关键时刻拿不到你的真实上下文。MindOS 把本地知识统一为 MCP 可读的单一来源，让所有 Agent 同步你的 Profile、SOP 与实时记忆。
 
-### 2. 透明可控
+**2. 透明可控 — 消除记忆黑箱**
+
 多数助手记忆封闭在黑箱里，人类难以审查和纠正决策过程。MindOS 将检索与执行轨迹沉淀为本地纯文本，让你可以持续审计、干预与优化。
 
-### 3. 共生演进
+**3. 共生演进 — 动态指令流转**
+
 静态文档难同步，也难在真实人机协作中承担执行系统角色。MindOS 以 Prompt-Native 与引用链接组织知识，让日常记录自然变成可执行工作流并持续进化。
 
 > **底层原则：** 默认本地优先，全部数据以本地纯文本保存，兼顾隐私、主权与性能。
@@ -55,15 +58,12 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 - **知识图谱**：可视化笔记间关系与依赖。
 - **Git 时光机**：记录修改历史，支持审计与安全回滚。
 
-> 完整愿景文档见：[wiki-zh/product-vision.md](wiki-zh/product-vision.md) 与 [wiki-zh/product-vision-zh.md](wiki-zh/product-vision-zh.md)。
 **即将到来：**
 
 - [ ] ACP（Agent Communication Protocol）：连接外部 Agent（如 Claude Code、Cursor），让知识库成为多 Agent 协作的中枢
 - [ ] RAG 深度集成：基于知识库内容的检索增强生成，让 AI 回答更精准、更有上下文
 - [ ] 反向链接视图（Backlinks）：展示所有引用当前文件的反向链接，理解笔记在知识网络中的位置
 - [ ] Agent 审计面板（Agent Inspector）：将 Agent 操作日志渲染为可筛选的时间线，审查每次工具调用的详情
-- [ ] 工作流执行器（Workflow Runner）：将 SOP/Workflow 文档渲染为可交互的分步执行面板，一键让 AI 执行每个步骤
-- [ ] Agent Diff 审阅器：将 Agent 的文件修改渲染为逐行对比视图，支持一键批准或回滚
 
 ---
 
@@ -71,9 +71,8 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 > [!IMPORTANT]
 > 如果你已经配置好了本地的知识库，请跳过安装与环境变量配置环节。
-> 你只在各类 Agent（OpenClaw/ Claude Code/Cursor 等）工具中需要完成两步：
-> 1) 配置 MindOS MCP
-> 2) 安装 MindOS Skills
+> 你只需在各类 Agent 客户端（OpenClaw/Claude Code/Cursor 等）中完成一步：
+> 配置 MindOS MCP + Skills（见第 4 节）。
 > 完成后，Agent 就可以同步你的心智，管理你的知识库和执行 SOP。
 
 ### 1. 安装与启动
@@ -109,7 +108,7 @@ AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
 # OPENAI_BASE_URL=https://api.openai.com/v1
-ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+ANTHROPIC_MODEL=claude-opus-4-6
 ```
 
 | 变量 | 默认值 | 说明 |
@@ -120,15 +119,20 @@ ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
 | `ANTHROPIC_API_KEY` | — | 当 Provider 为 `anthropic` 时必填 |
 | `OPENAI_API_KEY` | — | 当 Provider 为 `openai` 时必填 |
 | `OPENAI_BASE_URL` | — | 可选。用于代理或 OpenAI 兼容 API 的自定义接口地址 |
+| `ANTHROPIC_MODEL` | `claude-opus-4-6` | 可选。内置 Agent 使用的 Anthropic 模型 ID |
 
 > [!NOTE]
 > 如果你希望其他设备也能访问 MindOS GUI，请确保 `MINDOS_WEB_PORT` 已在防火墙/安全组中放行，并绑定到可访问的主机地址/网卡。
 
-### 3. 注入你的个人心智（快速方式）
+### 3. 通过 MindOS Agent 注入你的个人心智
 
 1. 打开 MindOS GUI 中内置的 Agent 对话面板。
 2. 上传你的简历或任意个人/项目资料。
 3. 发送指令：`帮我把这些信息同步到我的 MindOS 知识库。`
+
+<p align="center">
+  <img src="assets/images/gui-sync-cv.png" alt="同步简历示例" width="800" />
+</p>
 
 ### 4. 让任意 Agent 可用（MCP + Skills）
 
@@ -193,12 +197,6 @@ npm start
 }
 ```
 
-构建 MCP Server：
-
-```bash
-cd mcp && npm install && npm run build
-```
-
 #### 4.2 安装 MindOS Skills
 
 | Skill | 说明 |
@@ -206,10 +204,13 @@ cd mcp && npm install && npm run build
 | `mindos` | 知识库操作指南（英文）— 读写笔记、搜索、管理 SOP、维护 Profile |
 | `mindos-zh` | 知识库操作指南（中文）— 相同能力，中文交互 |
 
-安装命令：
+根据你的语言偏好选择其一安装即可：
 
 ```bash
+# 英文
 npx skills add https://github.com/GeminiLight/MindOS --skill mindos
+
+# 中文（可选）
 npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh
 ```
 
