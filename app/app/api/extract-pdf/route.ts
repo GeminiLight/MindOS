@@ -1,12 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { execFileSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+
+export const runtime = 'nodejs';
 
 const MAX_TEXT_CHARS = 30_000;
-const MAX_PAGES = 20;
 const MAX_BYTES = 12 * 1024 * 1024; // 12MB
 
 function truncateText(text: string): string {
   if (text.length <= MAX_TEXT_CHARS) return text;
   return `${text.slice(0, MAX_TEXT_CHARS)}\n\n[...truncated from PDF]`;
+}
+
+/**
+ * Extract PDF text by spawning a Node child process.
+ *
+ * pdfjs-dist requires a web-worker file. Turbopack rewrites the ESM
+ * `import.meta.url` references inside the bundle, breaking the worker
+ * resolution at runtime. Running the extraction in a plain Node process
+ * avoids the bundler entirely.
+ */
+function extractPdf(buf: Buffer): { text: string; pages: number } {
+  // Write PDF to a temp file so the child script can read it.
+  const tmpDir = os.tmpdir();
+  const tmpPdf = path.join(tmpDir, `pdf-extract-${Date.now()}.pdf`);
+  const scriptPath = path.resolve(process.cwd(), 'scripts/extract-pdf.cjs');
+
+  fs.writeFileSync(tmpPdf, buf);
+  try {
+    const stdout = execFileSync('node', [scriptPath, tmpPdf], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return JSON.parse(stdout);
+  } finally {
+    try { fs.unlinkSync(tmpPdf); } catch { /* ignore */ }
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -29,43 +61,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'PDF is too large (max 12MB)' }, { status: 400 });
     }
 
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(raw),
-      disableWorker: true,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    });
+    const { text: rawText, pages } = extractPdf(raw);
+    const text = rawText.replace(/\u0000/g, '').trim();
 
-    const pdf = await loadingTask.promise;
-    const pages: string[] = [];
-    const pageCount = Math.min(pdf.numPages, MAX_PAGES);
-
-    for (let i = 1; i <= pageCount; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: unknown) => {
-          if (item && typeof item === 'object' && 'str' in item) {
-            return String((item as { str: unknown }).str ?? '');
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-
-      if (pageText) pages.push(`[Page ${i}]\n${pageText}`);
-    }
-
-    const text = pages.join('\n\n');
     return NextResponse.json({
       name,
       text: truncateText(text),
       extracted: text.length > 0,
-      pagesParsed: pageCount,
+      pagesParsed: pages,
     });
   } catch (err) {
+    console.error('[extract-pdf] Error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to extract PDF text' },
       { status: 500 },

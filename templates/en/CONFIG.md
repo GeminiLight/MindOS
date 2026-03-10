@@ -4,8 +4,8 @@ This file explains template config in human-readable form.
 
 ## Scope
 
-- Locale scope: `template/en/`.
-- Related machine-readable file: `template/en/CONFIG.json`.
+- Locale scope: `templates/en/`.
+- Related machine-readable file: `templates/en/CONFIG.json`.
 
 ## Read Rule
 
@@ -34,7 +34,6 @@ This file explains template config in human-readable form.
 
 - `requireFirstLevelReadme`: whether first-level directories must include `README.md`
 - `recommendFirstLevelInstruction`: whether first-level directories are recommended to include `INSTRUCTION.md`
-- `syncEnAndZhStructure`: whether `en` and `zh` structures must remain isomorphic
 
 ### `document.title`
 
@@ -68,7 +67,7 @@ When naming policy changes:
 
 ## Change Rules
 
-1. Update `template/en/CONFIG.json` and `template/zh/CONFIG.json` together when keys change.
+1. Update `templates/en/CONFIG.json` and `templates/zh/CONFIG.json` together when keys change.
 2. Keep semantic parity across both locales.
 3. Update both locale `CONFIG.md` files when keys are added/removed/renamed.
 4. Do not document defaults here that conflict with JSON values.

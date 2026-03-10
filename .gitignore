@@ -2,6 +2,7 @@ mcp/node_modules
 app/node_modules
 app/.next
 app/data
+!app/data/skills
 
 app/.env.local
 app/.mindos-settings.json

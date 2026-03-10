@@ -1,6 +1,6 @@
 # Template Generation Skill
 
-用于在 `template/` 下持续生成与重构中英文模板（`zh/`、`en/`）的执行技能。
+用于在 `templates/` 下持续生成与重构中英文模板（`zh/`、`en/`）的执行技能。
 
 ## 1. 目标
 
@@ -21,7 +21,7 @@
 - 规则优先级：`根 INSTRUCTION.md` > `子目录 INSTRUCTION.md` > `README.md` > 内容文件。
 - `README.md` 只做导航与使用说明，不定义规则优先级与执行边界。
 - 中英文模板保持语义一致，文风可以不同。
-- 结构改动必须同步到 `template/zh` 与 `template/en`。
+- 结构改动必须同步到 `templates/zh` 与 `templates/en`。
 - 一级目录结构变更后，必须同步检查根 `README.md`、`SETUP.md` 及相关目录 `README.md` 的路径示例是否有效。
 - 一级目录应默认同时提供 `README.md` 与轻量 `INSTRUCTION.md`。
 - 二级目录至少提供 `README.md`；仅在出现可复用局部规则时再新增 `INSTRUCTION.md`。
@@ -70,7 +70,7 @@
 
 ## 8. 交付检查清单
 
-- `template/zh` 与 `template/en` 是否同构。
+- `templates/zh` 与 `templates/en` 是否同构。
 - 一级目录是否带 emoji，二级目录是否不带 emoji。
 - 一级目录 `README.md` 是否移除了“更新规则”类内容（已迁移至 `INSTRUCTION.md`）。
 - 示例命名是否符合 `_example` / `_examples` 约束。

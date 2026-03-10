@@ -4,8 +4,8 @@
 
 ## 范围
 
-- 语言范围：`template/zh/`。
-- 对应机器可读文件：`template/zh/CONFIG.json`。
+- 语言范围：`templates/zh/`。
+- 对应机器可读文件：`templates/zh/CONFIG.json`。
 
 ## 读取规则
 
@@ -34,7 +34,6 @@
 
 - `requireFirstLevelReadme`: 一级目录是否必须有 `README.md`
 - `recommendFirstLevelInstruction`: 是否建议一级目录提供 `INSTRUCTION.md`
-- `syncEnAndZhStructure`: 是否要求中英文目录结构同构
 
 ### `document.title`
 
