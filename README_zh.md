@@ -22,9 +22,20 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ---
 
-> **⭐ 一键体验：** 将以下 Prompt 发送给任意 Agent（Claude Code、Cursor 等），自动完成安装：
+> **⭐ 一键安装：** 把这句话发给你的 Agent（Claude Code、Cursor 等），自动完成全部安装：
 > ```
 > 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
+> ```
+>
+> **✨ 立即体验：** 安装完成后，不妨试试：
+> ```
+> 读一下我的 MindOS 知识库，看看里面有什么，然后帮我把自我介绍写进 Profile。
+> ```
+> ```
+> 帮我把这次对话的经验沉淀到 MindOS，形成一个可复用的工作流。
+> ```
+> ```
+> 帮我执行 MindOS 里的 XXX 工作流。
 > ```
 
 ## 🧠 核心价值：人机共享心智
