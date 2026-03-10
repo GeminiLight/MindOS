@@ -90,10 +90,14 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] modal-backdrop"
+      className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div role="dialog" aria-modal="true" aria-label="Search" className="w-full max-w-xl mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Search" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
+        {/* Mobile drag indicator */}
+        <div className="flex justify-center pt-2 pb-0 md:hidden">
+          <div className="w-8 h-1 rounded-full bg-muted-foreground/20" />
+        </div>
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           <Search size={16} className="text-muted-foreground shrink-0" />
@@ -113,11 +117,11 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
               <X size={14} className="text-muted-foreground hover:text-foreground" />
             </button>
           )}
-          <kbd className="text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">ESC</kbd>
+          <kbd className="hidden md:inline text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">ESC</kbd>
         </div>
 
         {/* Results */}
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-[50vh] md:max-h-80 overflow-y-auto flex-1">
           {results.length === 0 && query && !loading && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t.search.noResults}</div>
           )}
@@ -162,9 +166,9 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
           })}
         </div>
 
-        {/* Footer */}
+        {/* Footer — desktop only */}
         {results.length > 0 && (
-          <div className="px-4 py-2 border-t border-border flex items-center gap-3 text-xs text-muted-foreground/60">
+          <div className="hidden md:flex px-4 py-2 border-t border-border items-center gap-3 text-xs text-muted-foreground/60">
             <span><kbd className="font-mono">↑↓</kbd> {t.search.navigate}</span>
             <span><kbd className="font-mono">↵</kbd> {t.search.open}</span>
             <span><kbd className="font-mono">ESC</kbd> {t.search.close}</span>

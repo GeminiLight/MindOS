@@ -40,7 +40,7 @@ const MCP_HOST = process.env.MCP_HOST ?? "127.0.0.1";
 const MCP_PORT = Number(process.env.MCP_PORT ?? 8787);
 const MCP_ENDPOINT = process.env.MCP_ENDPOINT ?? "/mcp";
 const MCP_HTTP_STATEFUL = (process.env.MCP_HTTP_STATEFUL ?? "false").toLowerCase() === "true";
-const MCP_API_KEY = process.env.AUTH_TOKEN ?? process.env.MCP_API_KEY;
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1407,8 +1407,8 @@ function getAuthToken(authorizationHeader: string | undefined): string | undefin
 }
 
 function isAuthorized(authorizationHeader: string | undefined): boolean {
-  if (!MCP_API_KEY) return true;
-  return getAuthToken(authorizationHeader) === MCP_API_KEY;
+  if (!AUTH_TOKEN) return true;
+  return getAuthToken(authorizationHeader) === AUTH_TOKEN;
 }
 
 function sendJsonRpcError(
@@ -1449,7 +1449,7 @@ async function startHttpServer(): Promise<void> {
       : req.headers.authorization;
 
     if (!isAuthorized(authHeader)) {
-      sendJsonRpcError(res, 401, -32001, "Unauthorized: invalid MCP_API_KEY bearer token");
+      sendJsonRpcError(res, 401, -32001, "Unauthorized: invalid AUTH_TOKEN bearer token");
       return;
     }
 

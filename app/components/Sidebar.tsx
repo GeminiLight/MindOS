@@ -104,19 +104,19 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
       )}
 
       {/* Mobile navbar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border flex items-center justify-between px-4 py-3">
-        <button onClick={() => setMobileOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border flex items-center justify-between px-3 py-2" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <button onClick={() => setMobileOpen(true)} className="p-2.5 -ml-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label="Open menu">
           <Menu size={20} />
         </button>
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo id="mobile" />
           <span className="font-semibold text-foreground text-sm tracking-wide">MindOS</span>
         </Link>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setSearchOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setSearchOpen(true)} className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.searchTitle}>
             <Search size={20} />
           </button>
-          <button onClick={() => setSettingsOpen(true)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => setSettingsOpen(true)} className="p-2.5 -mr-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.settingsTitle}>
             <Settings size={20} />
           </button>
         </div>
@@ -124,7 +124,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
       {mobileOpen && <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />}
 
-      <aside className={`md:hidden fixed top-0 left-0 h-screen w-[280px] z-50 bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`md:hidden fixed top-0 left-0 h-screen w-[85vw] max-w-[320px] z-50 bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {sidebarContent}
       </aside>
 

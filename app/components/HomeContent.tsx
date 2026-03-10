@@ -52,7 +52,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const lastFile = recent[0];
 
   return (
-    <div className="content-width px-6 py-12">
+    <div className="content-width px-4 md:px-6 py-8 md:py-12">
       {/* Hero */}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-3">
@@ -67,7 +67,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
 
         {/* AI-first command bar */}
         <div
-          className="w-full max-w-[620px] flex items-center gap-2"
+          className="w-full max-w-[620px] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
           style={{
             marginLeft: '1rem',
           }}

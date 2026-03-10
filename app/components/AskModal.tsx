@@ -229,17 +229,19 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] modal-backdrop"
+      className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={t.ask.title}
-        className="w-full max-w-2xl mx-4 bg-card border border-border rounded-xl shadow-2xl flex flex-col max-h-[75vh]"
+        className="w-full md:max-w-2xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col h-[92vh] md:h-auto md:max-h-[75vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          {/* Mobile drag indicator */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/20 md:hidden" />
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Sparkles size={15} style={{ color: 'var(--amber)' }} />
             <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{t.ask.title}</span>
@@ -376,8 +378,8 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           </form>
         </div>
 
-        {/* Footer hint */}
-        <div className="px-4 pb-2 flex items-center gap-3 text-xs text-muted-foreground/50 shrink-0">
+        {/* Footer hint — desktop only */}
+        <div className="hidden md:flex px-4 pb-2 items-center gap-3 text-xs text-muted-foreground/50 shrink-0">
           <span><kbd className="font-mono">↵</kbd> {t.ask.send}</span>
           <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
           <span className="inline-flex items-center gap-1">

@@ -147,16 +147,25 @@ body {
   font-family: var(--prose-font-override, 'Lora', Georgia, serif);
   color: var(--prose-body);
   line-height: 1.85;
-  font-size: 1rem;
+  font-size: 0.95rem;
+}
+@media (min-width: 640px) {
+  .prose { font-size: 1rem; }
 }
 .prose h1, .prose h2, .prose h3, .prose h4 {
   font-family: 'IBM Plex Sans', sans-serif;
   color: var(--prose-heading);
   font-weight: 600;
   line-height: 1.3;
-  margin-top: 2em;
-  margin-bottom: 0.75em;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
   letter-spacing: -0.01em;
+}
+@media (min-width: 640px) {
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    margin-top: 2em;
+    margin-bottom: 0.75em;
+  }
 }
 .prose h1 { font-size: 1.85rem; margin-top: 0; }
 .prose h2 { font-size: 1.35rem; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
@@ -173,9 +182,18 @@ body {
 .prose li { margin-bottom: 0.3em; }
 .prose blockquote { border-left: 2px solid var(--amber); padding-left: 1.1em; margin: 1.2em 0; color: var(--prose-subtle); font-style: italic; }
 .prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: 'IBM Plex Mono', monospace; }
-.prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 1.1em 1.3em; overflow-x: auto; margin: 1.2em 0; color: var(--prose-pre-color); }
-.prose pre code { background: transparent; color: inherit; padding: 0; font-size: 0.855em; font-family: 'IBM Plex Mono', monospace; }
-.prose table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.9em; font-family: 'IBM Plex Sans', sans-serif; }
+.prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1.2em 0; color: var(--prose-pre-color); max-width: 100%; }
+@media (min-width: 640px) {
+  .prose pre { padding: 1.1em 1.3em; }
+}
+.prose pre code { background: transparent; color: inherit; padding: 0; font-size: 0.82em; font-family: 'IBM Plex Mono', monospace; word-break: break-all; }
+@media (min-width: 640px) {
+  .prose pre code { font-size: 0.855em; word-break: normal; }
+}
+.prose table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.85em; font-family: 'IBM Plex Sans', sans-serif; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (min-width: 640px) {
+  .prose table { font-size: 0.9em; display: table; overflow-x: visible; }
+}
 .prose thead th { background: var(--prose-th-bg); color: var(--prose-heading); font-weight: 600; padding: 0.6em 0.9em; border: 1px solid var(--prose-border); text-align: left; font-size: 0.78em; letter-spacing: 0.05em; text-transform: uppercase; }
 .prose tbody td { padding: 0.55em 0.9em; border: 1px solid var(--prose-code-border); color: var(--prose-muted); }
 .prose tbody tr:nth-child(even) { background: var(--prose-th-bg); }
@@ -238,10 +256,35 @@ body {
 }
 .animate-in { animation: fadeSlideUp 0.22s ease both; }
 
+/* Mobile bottom-sheet modal entrance */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@media (max-width: 767px) {
+  .modal-backdrop > [role="dialog"] {
+    animation: slideUp 0.3s ease-out both;
+  }
+}
+
 .modal-backdrop {
   background: rgba(10, 9, 6, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* iOS safe areas */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Tap highlight removal for mobile */
+@media (hover: none) {
+  button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ─── Tiptap WYSIWYG editor ─────────────────────────────────────────── */
