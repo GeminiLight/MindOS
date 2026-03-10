@@ -81,15 +81,19 @@ jobs:
 
           # === 3. Deploy landing/ to mindos gh-pages ===
           cd "$GITHUB_WORKSPACE"
-          git clone --depth 1 -b gh-pages "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git" /tmp/mindos-pages 2>/dev/null || {
-            git clone --depth 1 "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git" /tmp/mindos-pages
+          if git clone --depth 1 -b gh-pages "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git" /tmp/mindos-pages 2>/dev/null; then
+            echo "Cloned existing gh-pages branch."
+          else
+            # gh-pages branch doesn't exist yet — create an orphan branch
+            mkdir -p /tmp/mindos-pages
             cd /tmp/mindos-pages
+            git init
+            git remote add origin "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git"
             git checkout --orphan gh-pages
-            git rm -rf .
-          }
+          fi
 
           cd "$GITHUB_WORKSPACE"
-          rsync -av --delete landing/ /tmp/mindos-pages/
+          rsync -av --delete --exclude='.git' landing/ /tmp/mindos-pages/
 
           cd /tmp/mindos-pages
           git add -A
