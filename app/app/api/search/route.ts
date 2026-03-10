@@ -11,6 +11,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(results);
   } catch (err) {
     console.error('Search error:', err);
-    return NextResponse.json([], { status: 500 });
+    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
   }
 }

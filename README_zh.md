@@ -22,6 +22,11 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ---
 
+> **⭐ 一键体验：** 将以下 Prompt 发送给任意 Agent（Claude Code、Cursor 等），自动完成安装：
+> ```
+> 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
+> ```
+
 ## 🧠 核心价值：人机共享心智
 
 **1. 全局同步 — 打破心智孤岛**
@@ -70,12 +75,14 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 ## 🚀 快速开始
 
 > [!IMPORTANT]
-> 如果你已经配置好了本地的知识库，请跳过安装与环境变量配置环节。
-> 你只需在各类 Agent 客户端（OpenClaw/Claude Code/Cursor 等）中完成一步：
-> 配置 MindOS MCP + Skills（见第 4 节）。
-> 完成后，Agent 就可以同步你的心智，管理你的知识库和执行 SOP。
+> **用 Agent 一键安装：** 将以下指令粘贴到任意支持 MCP 的 Agent（Claude Code、Cursor 等），即可自动完成安装，然后跳到[第 4 步](#4-通过-mindos-agent-注入你的个人心智)：
+> ```
+> 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
+> ```
 
-### 1. 安装与启动
+> 已有知识库？直接跳到[第 5 步](#5-让任意-agent-可用mcp--skills)配置 MCP + Skills。
+
+### 1. 克隆与安装
 
 ```bash
 # 克隆项目
@@ -87,19 +94,28 @@ cp -r templates/zh my-mind/
 # 或使用英文预设：
 # cp -r templates/en my-mind/
 
-# 配置环境变量
-cp app/.env.example app/.env.local
-# 编辑 MIND_ROOT，指向你的 my-mind/ 绝对路径
+# 安装并构建 Web App
+cd app && npm install
 
-# 启动应用
-cd app && npm install && npm run dev
+# 安装并构建 MCP Server
+cd ../mcp && npm install && npm run build
 ```
 
-打开 [http://localhost:3000](http://localhost:3000) 即可开始使用。
+### 2. 配置
 
-### 2. 环境变量
+> [!TIP]
+> **For Agents：** 编辑 `.env.local` 前，如果用户未提供 LLM 配置，请询问：
+> 1. AI Provider — `anthropic` 还是 `openai`（兼容）？
+> 2. API Key — 对应 Provider 的密钥
+> 3. 自定义 Base URL？— 仅代理或 OpenAI 兼容端点需要；使用官方 API 则跳过
+> 4. Model ID — 或使用默认值
 
-在 `app/.env.local` 中配置：
+```bash
+cp app/.env.local.example app/.env.local
+# 编辑 MIND_ROOT，指向你的 my-mind/ 绝对路径
+```
+
+编辑 `app/.env.local`：
 
 ```env
 MIND_ROOT=/path/to/MindOS/my-mind
@@ -109,6 +125,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
 # OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_MODEL=claude-opus-4-6
+# AUTH_TOKEN=your-secret-token    # 可选，同时保护 App 和 MCP HTTP
 ```
 
 | 变量 | 默认值 | 说明 |
@@ -120,11 +137,27 @@ ANTHROPIC_MODEL=claude-opus-4-6
 | `OPENAI_API_KEY` | — | 当 Provider 为 `openai` 时必填 |
 | `OPENAI_BASE_URL` | — | 可选。用于代理或 OpenAI 兼容 API 的自定义接口地址 |
 | `ANTHROPIC_MODEL` | `claude-opus-4-6` | 可选。内置 Agent 使用的 Anthropic 模型 ID |
+| `AUTH_TOKEN` | — | 可选。同时保护 App `/api/*` 和 MCP HTTP `/mcp` 端点的 Bearer Token 认证。暴露到网络时强烈建议设置 |
 
 > [!NOTE]
 > 如果你希望其他设备也能访问 MindOS GUI，请确保 `MINDOS_WEB_PORT` 已在防火墙/安全组中放行，并绑定到可访问的主机地址/网卡。
 
-### 3. 通过 MindOS Agent 注入你的个人心智
+### 3. 启动
+
+```bash
+cd app && npm run dev
+```
+
+打开 [http://localhost:3000](http://localhost:3000) 即可开始使用。
+
+> [!TIP]
+> 如果 3000 端口被占用，可指定其他端口：
+> ```bash
+> MINDOS_WEB_PORT=3002 npm run dev
+> # 或修改 app/.env.local 中的 MINDOS_WEB_PORT
+> ```
+
+### 4. 通过 MindOS Agent 注入你的个人心智
 
 1. 打开 MindOS GUI 中内置的 Agent 对话面板。
 2. 上传你的简历或任意个人/项目资料。
@@ -134,9 +167,12 @@ ANTHROPIC_MODEL=claude-opus-4-6
   <img src="assets/images/gui-sync-cv.png" alt="同步简历示例" width="800" />
 </p>
 
-### 4. 让任意 Agent 可用（MCP + Skills）
+### 5. 让任意 Agent 可用（MCP + Skills）
 
-#### 4.1 配置 MindOS MCP
+#### 5.1 配置 MindOS MCP
+
+> [!TIP]
+> **For Agents：** MindOS MCP 默认注册为全局（user-level）配置，使所有项目共享同一知识库。
 
 将 MindOS MCP Server 注册到你的 Agent 客户端：
 
@@ -178,7 +214,7 @@ MCP_TRANSPORT=http \
 MCP_HOST=0.0.0.0 \
 MCP_PORT=8787 \
 MCP_ENDPOINT=/mcp \
-MCP_API_KEY=your-strong-token \
+MCP_API_KEY=your-strong-token \      # 或使用 AUTH_TOKEN（与 App 共享）
 npm start
 ```
 
@@ -197,7 +233,7 @@ npm start
 }
 ```
 
-#### 4.2 安装 MindOS Skills
+#### 5.2 安装 MindOS Skills
 
 | Skill | 说明 |
 |-------|------|
@@ -208,23 +244,23 @@ npm start
 
 ```bash
 # 英文
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y
 
 # 中文（可选）
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y
 ```
 
 MCP = 连接能力，Skills = 工作流能力；两者都开启后体验完整。
 
-#### 4.3 常见误区
+#### 5.3 常见误区
 
 - 只配 MCP，不装 Skills：能调用工具，但缺少最佳实践指引。
 - 只装 Skills，不配 MCP：有流程提示，但无法操作本地知识库。
 - `MIND_ROOT` 不是绝对路径：MCP 工具调用会失败。
-- HTTP 远程模式未设置 `MCP_API_KEY`：服务会暴露在网络上，存在高风险。
+- HTTP 远程模式未设置 `AUTH_TOKEN` 或 `MCP_API_KEY`：服务会暴露在网络上，存在高风险。
 - `MCP_HOST=127.0.0.1`：只允许本机访问，其他设备无法通过 URL 连接。
 
-#### 4.4 协作闭环（人类 + 多 Agent）
+#### 5.4 协作闭环（人类 + 多 Agent）
 
 1. 人类在 MindOS GUI 中审阅并更新笔记/SOP（单一事实来源）。
 2. 其他 Agent 客户端（OpenClaw、Claude Code、Cursor 等）通过 MCP 读取同一份记忆与上下文。
@@ -288,7 +324,7 @@ graph LR
 
 ```bash
 MindOS/
-├── app/              # Next.js 15 前端 — 浏览、编辑、与 AI 交互
+├── app/              # Next.js 16 前端 — 浏览、编辑、与 AI 交互
 ├── mcp/              # MCP Server 核心 — 暴露给 Agent 的标准化工具集
 ├── skills/           # MindOS Skills（`mindos`、`mindos-zh`）— Agent 工作流指南
 ├── templates/         # 预设模板（`en/`、`zh/`）— 选择其一复制到 my-mind/

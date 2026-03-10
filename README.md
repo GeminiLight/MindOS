@@ -22,6 +22,11 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ---
 
+> **⭐ One-click setup:** Send this prompt to any Agent (Claude Code, Cursor, etc.) to install automatically:
+> ```
+> Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
+> ```
+
 ## 🧠 Core Value: Human-AI Shared Mind
 
 **1. Global Sync — Break Mind Silos**
@@ -70,12 +75,14 @@ Static documents are hard to synchronize and weak as execution systems in real h
 ## 🚀 Getting Started
 
 > [!IMPORTANT]
-> If you have already set up your local knowledge base, skip installation and environment variable setup.
-> In each Agent client (OpenClaw/Claude Code/Cursor, etc.), you only need one step:
-> Configure MindOS MCP + Skills (see Section 4).
-> After setup, your Agent can sync your mind, manage your knowledge base, and execute SOPs.
+> **Quick Start with Agent:** Paste this prompt into any MCP-capable Agent (Claude Code, Cursor, etc.) to install automatically, then skip to [Step 4](#4-inject-your-personal-mind-with-mindos-agent):
+> ```
+> Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
+> ```
 
-### 1. Install & Run
+> Already have a knowledge base? Skip to [Step 5](#5-make-any-agent-ready-mcp--skills) to configure MCP + Skills.
+
+### 1. Clone & Install
 
 ```bash
 # Clone the repository
@@ -87,19 +94,28 @@ cp -r templates/en my-mind/
 # Or use the Chinese preset:
 # cp -r templates/zh my-mind/
 
-# Configure environment variables
-cp app/.env.example app/.env.local
-# Edit MIND_ROOT to point to the absolute path of your my-mind/ directory
+# Install and build Web App
+cd app && npm install
 
-# Start the application
-cd app && npm install && npm run dev
+# Install and build MCP Server
+cd ../mcp && npm install && npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to get started.
+### 2. Configure
 
-### 2. Environment Variables
+> [!TIP]
+> **For Agents:** Before editing `.env.local`, if the user has not provided LLM configuration, ask them:
+> 1. AI Provider — `anthropic` or `openai` (compatible)?
+> 2. API Key — the key for the chosen provider
+> 3. Custom Base URL? — only needed for proxies or OpenAI-compatible endpoints; skip if using official API
+> 4. Model ID — or use the default
 
-Configure in `app/.env.local`:
+```bash
+cp app/.env.local.example app/.env.local
+# Edit MIND_ROOT to point to the absolute path of your my-mind/ directory
+```
+
+Edit `app/.env.local`:
 
 ```env
 MIND_ROOT=/path/to/MindOS/my-mind
@@ -109,6 +125,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-proj-...
 # OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_MODEL=claude-opus-4-6
+# AUTH_TOKEN=your-secret-token    # optional, protects App + MCP HTTP
 ```
 
 | Variable | Default | Description |
@@ -120,11 +137,27 @@ ANTHROPIC_MODEL=claude-opus-4-6
 | `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
 | `OPENAI_BASE_URL` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
 | `ANTHROPIC_MODEL` | `claude-opus-4-6` | Optional. Anthropic model ID for the built-in Agent. |
+| `AUTH_TOKEN` | — | Optional. Protects both App `/api/*` and MCP HTTP `/mcp` with bearer token auth. Strongly recommended when exposed to a network. |
 
 > [!NOTE]
 > If you want the MindOS GUI to be reachable from other devices, make sure `MINDOS_WEB_PORT` is open in firewall/security-group settings and bound to an accessible host/network interface.
 
-### 3. Inject Your Personal Mind with MindOS Agent
+### 3. Run
+
+```bash
+cd app && npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to get started.
+
+> [!TIP]
+> If port 3000 is already in use, specify another port:
+> ```bash
+> MINDOS_WEB_PORT=3002 npm run dev
+> # Or edit MINDOS_WEB_PORT in app/.env.local
+> ```
+
+### 4. Inject Your Personal Mind with MindOS Agent
 
 1. Open the built-in MindOS Agent chat panel in the GUI.
 2. Upload your resume or any personal/project material.
@@ -134,9 +167,12 @@ ANTHROPIC_MODEL=claude-opus-4-6
   <img src="assets/images/gui-sync-cv.png" alt="Sync CV Example" width="800" />
 </p>
 
-### 4. Make Any Agent Ready (MCP + Skills)
+### 5. Make Any Agent Ready (MCP + Skills)
 
-#### 4.1 Configure MindOS MCP
+#### 5.1 Configure MindOS MCP
+
+> [!TIP]
+> **For Agents:** Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base.
 
 Register the MindOS MCP Server in your Agent client:
 
@@ -178,7 +214,7 @@ MCP_TRANSPORT=http \
 MCP_HOST=0.0.0.0 \
 MCP_PORT=8787 \
 MCP_ENDPOINT=/mcp \
-MCP_API_KEY=your-strong-token \
+MCP_API_KEY=your-strong-token \      # or use AUTH_TOKEN (shared with App)
 npm start
 ```
 
@@ -197,7 +233,7 @@ Then configure URL access on another device's Agent client (field names vary by 
 }
 ```
 
-#### 4.2 Install MindOS Skills
+#### 5.2 Install MindOS Skills
 
 | Skill | Description |
 |-------|-------------|
@@ -208,23 +244,23 @@ Install one skill only (choose based on your preferred language):
 
 ```bash
 # English
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y
 
 # Chinese (optional)
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y
 ```
 
 MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
 
-#### 4.3 Common Pitfalls
+#### 5.3 Common Pitfalls
 
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
 - `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
-- No `MCP_API_KEY` in HTTP mode: your server is exposed on the network and unsafe.
+- No `AUTH_TOKEN` or `MCP_API_KEY` in HTTP mode: your server is exposed on the network and unsafe.
 - `MCP_HOST=127.0.0.1`: only localhost can access it; other devices cannot connect via URL.
 
-#### 4.4 Collaboration Loop (Human + Multi-Agent)
+#### 5.4 Collaboration Loop (Human + Multi-Agent)
 
 1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
 2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
@@ -288,7 +324,7 @@ graph LR
 
 ```bash
 MindOS/
-├── app/              # Next.js 15 Frontend — Browse, edit, and interact with AI
+├── app/              # Next.js 16 Frontend — Browse, edit, and interact with AI
 ├── mcp/              # MCP Server Core — Standardized toolset for Agents
 ├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — Workflow guides for Agents
 ├── templates/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/

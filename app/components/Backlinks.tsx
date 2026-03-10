@@ -4,11 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Link as LinkIcon, FileText } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
-
-interface BacklinkEntry {
-  filePath: string;
-  snippets: string[];
-}
+import { apiFetch } from '@/lib/api';
+import type { BacklinkEntry } from '@/lib/types';
 
 export default function Backlinks({ filePath }: { filePath: string }) {
   const [backlinks, setBacklinks] = useState<BacklinkEntry[]>([]);
@@ -17,14 +14,13 @@ export default function Backlinks({ filePath }: { filePath: string }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
-      .then(res => res.json())
+    apiFetch<BacklinkEntry[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
       .then(data => {
-        setBacklinks(data);
+        setBacklinks(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(err => {
-        console.error('Failed to fetch backlinks:', err);
+      .catch(() => {
+        setBacklinks([]);
         setLoading(false);
       });
   }, [filePath]);
