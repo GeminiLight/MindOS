@@ -225,7 +225,7 @@ MCP_TRANSPORT=http \
 MCP_HOST=0.0.0.0 \
 MCP_PORT=8787 \
 MCP_ENDPOINT=/mcp \
-MCP_API_KEY=your-strong-token \      # or use AUTH_TOKEN (shared with App)
+AUTH_TOKEN=your-strong-token \
 npm start
 ```
 
@@ -268,7 +268,7 @@ MCP = connection capability, Skills = workflow capability. Enabling both gives t
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
 - `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
-- No `AUTH_TOKEN` or `MCP_API_KEY` in HTTP mode: your server is exposed on the network and unsafe.
+- No `AUTH_TOKEN` in HTTP mode: your server is exposed on the network and unsafe.
 - `MCP_HOST=127.0.0.1`: only localhost can access it; other devices cannot connect via URL.
 
 #### 5.4 Collaboration Loop (Human + Multi-Agent)
