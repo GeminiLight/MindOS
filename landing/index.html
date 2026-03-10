@@ -999,29 +999,46 @@
         <div class="container">
             <div class="section-header">
                 <span class="mono">05. QUICKSTART</span>
-                <h2 data-zh>一句话，让 Agent 帮你装好一切</h2><h2 data-en>One Prompt. Agent Does the Rest.</h2>
-                <p class="section-sub" data-zh>将下面的 Prompt 发送给任意支持 MCP 的 Agent（Claude Code、Cursor、Cline…），自动完成克隆、配置、MCP 注册与 Skills 安装。</p>
-                <p class="section-sub" data-en>Paste the prompt below into any MCP-capable Agent (Claude Code, Cursor, Cline…). It auto-clones, configures, registers MCP, and installs Skills.</p>
+                <h2 data-zh>一句话安装，一句话上手</h2><h2 data-en>One Prompt to Install. One Prompt to Start.</h2>
             </div>
 
-            <div class="qs-agent-first animate-up">
-                <div class="qs-prompt-card" style="max-width: 760px; margin: 0 auto;">
+            <!-- Phase 1: Install -->
+            <div class="qs-phase animate-up">
+                <div class="qs-phase-header">
+                    <span class="qs-phase-num">1</span>
+                    <div>
+                        <h3 data-zh>发给你的 Agent，自动安装一切</h3><h3 data-en>Send to Your Agent — Auto-Install Everything</h3>
+                        <p class="qs-phase-sub" data-zh>适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…</p>
+                        <p class="qs-phase-sub" data-en>Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…</p>
+                    </div>
+                </div>
+                <div class="qs-prompt-card">
                     <div class="qs-prompt-bar">
                         <div class="qs-terminal-meta">
                             <div class="qs-prompt-badge">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                                Prompt
+                                <span data-zh>安装 Prompt</span><span data-en>Install Prompt</span>
                             </div>
                         </div>
-                        <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制 Prompt</span><span data-en>Copy Prompt</span></button>
+                        <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
                     </div>
-                    <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1.05rem; line-height: 1.7; padding: 1.5rem 1.25rem;">
+                    <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1rem; line-height: 1.7; padding: 1.25rem;">
                         <span data-zh>帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</span>
                         <span data-en>Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.</span>
                     </div>
                 </div>
-
-                <div class="qs-agent-badges" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 1.5rem;">
+                <div class="qs-auto-steps">
+                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>克隆仓库</span><span data-en>Clone repo</span></span>
+                    <span class="qs-auto-arrow">→</span>
+                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>初始化模板</span><span data-en>Init template</span></span>
+                    <span class="qs-auto-arrow">→</span>
+                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>配置环境</span><span data-en>Configure env</span></span>
+                    <span class="qs-auto-arrow">→</span>
+                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>注册 MCP</span><span data-en>Register MCP</span></span>
+                    <span class="qs-auto-arrow">→</span>
+                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>安装 Skills</span><span data-en>Install Skills</span></span>
+                </div>
+                <div class="qs-agent-badges">
                     <span class="qs-badge">Claude Code</span>
                     <span class="qs-badge">Cursor</span>
                     <span class="qs-badge">Cline</span>
@@ -1030,11 +1047,44 @@
                     <span class="qs-badge">Trae</span>
                     <span class="qs-badge">Gemini CLI</span>
                 </div>
+            </div>
 
-                <p style="text-align: center; color: var(--muted-fg); font-size: 0.8rem; margin-top: 1rem;">
-                    <span data-zh>Agent 将自动完成：克隆仓库 → 初始化模板 → 配置环境变量 → 注册 MCP → 安装 Skills</span>
-                    <span data-en>Agent will auto-complete: clone repo → init template → configure env → register MCP → install Skills</span>
-                </p>
+            <!-- Phase 2: Try It Now -->
+            <div class="qs-phase animate-up" style="animation-delay: 0.15s;">
+                <div class="qs-phase-header">
+                    <span class="qs-phase-num">2</span>
+                    <div>
+                        <h3 data-zh>安装完成？试试这些</h3><h3 data-en>Installed? Try These</h3>
+                        <p class="qs-phase-sub" data-zh>直接粘贴给 Agent，立即体验 MindOS 的核心能力。</p>
+                        <p class="qs-phase-sub" data-en>Paste any of these to your Agent and experience MindOS instantly.</p>
+                    </div>
+                </div>
+                <div class="qs-try-grid">
+                    <div class="qs-try-card" data-copy-zh="读一下我的 MindOS 知识库，看看里面有什么，然后帮我把自我介绍写进 Profile。" data-copy-en="Read my MindOS knowledge base, see what's inside, then help me write my self-introduction into Profile.">
+                        <div class="qs-try-icon">👤</div>
+                        <div class="qs-try-label" data-zh>注入身份</div>
+                        <div class="qs-try-label" data-en>Inject Profile</div>
+                        <div class="qs-try-prompt" data-zh>读一下我的 MindOS 知识库，看看里面有什么，然后帮我把自我介绍写进 Profile。</div>
+                        <div class="qs-try-prompt" data-en>Read my MindOS knowledge base, see what's inside, then help me write my self-introduction into Profile.</div>
+                        <button class="qs-try-copy"><span data-zh>复制</span><span data-en>Copy</span></button>
+                    </div>
+                    <div class="qs-try-card" data-copy-zh="帮我把这次对话的经验沉淀到 MindOS，形成一个可复用的工作流。" data-copy-en="Help me distill the experience from this conversation into MindOS as a reusable SOP.">
+                        <div class="qs-try-icon">🔄</div>
+                        <div class="qs-try-label" data-zh>沉淀经验</div>
+                        <div class="qs-try-label" data-en>Distill SOP</div>
+                        <div class="qs-try-prompt" data-zh>帮我把这次对话的经验沉淀到 MindOS，形成一个可复用的工作流。</div>
+                        <div class="qs-try-prompt" data-en>Help me distill the experience from this conversation into MindOS as a reusable SOP.</div>
+                        <button class="qs-try-copy"><span data-zh>复制</span><span data-en>Copy</span></button>
+                    </div>
+                    <div class="qs-try-card" data-copy-zh="帮我执行 MindOS 里的 XXX 工作流。" data-copy-en="Help me execute the XXX SOP from MindOS.">
+                        <div class="qs-try-icon">▶️</div>
+                        <div class="qs-try-label" data-zh>执行工作流</div>
+                        <div class="qs-try-label" data-en>Run Workflow</div>
+                        <div class="qs-try-prompt" data-zh>帮我执行 MindOS 里的 XXX 工作流。</div>
+                        <div class="qs-try-prompt" data-en>Help me execute the XXX SOP from MindOS.</div>
+                        <button class="qs-try-copy"><span data-zh>复制</span><span data-en>Copy</span></button>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1072,7 +1122,7 @@
         document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
         const agentCopyBtn = document.getElementById('copy-agent-btn');
-        const agentCopyBtnLabel = '<span data-zh>复制 Prompt</span><span data-en>Copy Prompt</span>';
+        const agentCopyBtnLabel = '<span data-zh>复制</span><span data-en>Copy</span>';
         agentCopyBtn?.addEventListener('click', (e) => {
             const zhText = '帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。';
             const enText = 'Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.';
@@ -1081,6 +1131,21 @@
             setTimeout(() => {
                 e.currentTarget.innerHTML = agentCopyBtnLabel;
             }, 2000);
+        });
+
+        // Try-it card copy buttons
+        document.querySelectorAll('.qs-try-card').forEach(card => {
+            const copyBtn = card.querySelector('.qs-try-copy');
+            if (!copyBtn) return;
+            const handler = (e) => {
+                e.stopPropagation();
+                const text = state.lang === 'zh' ? card.dataset.copyZh : card.dataset.copyEn;
+                navigator.clipboard.writeText(text);
+                copyBtn.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
+                setTimeout(() => { copyBtn.innerHTML = '<span data-zh>复制</span><span data-en>Copy</span>'; }, 2000);
+            };
+            copyBtn.addEventListener('click', handler);
+            card.addEventListener('click', handler);
         });
 
         const runMindLoop = async () => {
