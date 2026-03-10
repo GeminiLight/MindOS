@@ -221,7 +221,7 @@ export default function HomeContent({ recent }: { recent: RecentFile[] }) {
                       }
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium truncate block" style={{ color: 'var(--foreground)' }} suppressHydrationWarning>{name}</span>
-                        {dir && <span className="text-xs truncate block" style={{ color: 'var(--muted-foreground)', opacity: 0.6 }}>{dir}</span>}
+                        {dir && <span className="text-xs truncate block" style={{ color: 'var(--muted-foreground)', opacity: 0.6 }} suppressHydrationWarning>{dir}</span>}
                       </div>
                       <span className="text-xs shrink-0 tabular-nums" style={{ color: 'var(--muted-foreground)', opacity: 0.5, fontFamily: "'IBM Plex Mono', monospace" }} suppressHydrationWarning>
                         {formatTime(mtime)}

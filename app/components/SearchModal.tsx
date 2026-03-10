@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
 
 interface SearchModalProps {
@@ -43,9 +44,8 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     setLoading(true);
     debounceTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        const data: SearchResult[] = await res.json();
-        setResults(data);
+        const data = await apiFetch<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`);
+        setResults(Array.isArray(data) ? data : []);
         setSelectedIndex(0);
       } catch {
         setResults([]);
