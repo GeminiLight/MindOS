@@ -12,6 +12,7 @@ on:
       - 'templates/**'
       - 'assets/**'
       - 'landing/**'
+      - '.github/workflows/**'
       - 'README.md'
       - 'README_zh.md'
 
