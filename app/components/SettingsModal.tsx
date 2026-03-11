@@ -26,19 +26,20 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'load-error'>('idle');
   const { t, locale, setLocale } = useLocale();
 
-  // Appearance state (localStorage-based) — read directly on mount; this component is client-only
-  const [font, setFont] = useState(() => localStorage.getItem('prose-font') ?? 'lora');
-  const [contentWidth, setContentWidth] = useState(() => localStorage.getItem('content-width') ?? '780px');
-  const [dark, setDark] = useState(() => {
-    const stored = localStorage.getItem('theme');
-    return stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  // Appearance state (localStorage-based)
+  const [font, setFont] = useState('lora');
+  const [contentWidth, setContentWidth] = useState('780px');
+  const [dark, setDark] = useState(true);
   // Plugin enabled state
   const [pluginStates, setPluginStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
     apiFetch<SettingsData>('/api/settings').then(setData).catch(() => setStatus('load-error'));
+    setFont(localStorage.getItem('prose-font') ?? 'lora');
+    setContentWidth(localStorage.getItem('content-width') ?? '780px');
+    const stored = localStorage.getItem('theme');
+    setDark(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
     loadDisabledState();
     const initial: Record<string, boolean> = {};
     for (const r of getAllRenderers()) initial[r.id] = isRendererEnabled(r.id);
