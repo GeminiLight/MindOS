@@ -17,10 +17,10 @@ export interface ServerSettings {
 
 const DEFAULTS: ServerSettings = {
   ai: {
-    provider: 'anthropic',
-    anthropicModel: 'claude-sonnet-4-6',
+    provider: '' as 'anthropic' | 'openai',
+    anthropicModel: '',
     anthropicApiKey: '',
-    openaiModel: 'gpt-4o-mini',
+    openaiModel: '',
     openaiApiKey: '',
     openaiBaseUrl: '',
   },
