@@ -1,11 +1,5 @@
-export interface FileNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-  extension?: string;
-  mtime?: number;
-}
+// Re-export core types as single source of truth
+export type { FileNode, SearchResult, BacklinkEntry } from './core/types';
 
 export interface SearchMatch {
   indices: [number, number][];
@@ -13,11 +7,10 @@ export interface SearchMatch {
   key: string;
 }
 
-export interface SearchResult {
-  path: string;
-  snippet: string;
-  score: number;
-  matches?: SearchMatch[];
+/** Frontend-facing backlink shape returned by /api/backlinks (transformed from core BacklinkEntry) */
+export interface BacklinkItem {
+  filePath: string;
+  snippets: string[];
 }
 
 export interface Message {
@@ -36,9 +29,4 @@ export interface ChatSession {
   createdAt: number;
   updatedAt: number;
   messages: Message[];
-}
-
-export interface BacklinkEntry {
-  filePath: string;
-  snippets: string[];
 }

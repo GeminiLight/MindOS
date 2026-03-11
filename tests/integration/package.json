@@ -1,0 +1,8 @@
+{
+  "name": "mindos-integration-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}

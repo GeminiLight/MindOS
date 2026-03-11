@@ -6,7 +6,8 @@
     "dev": "next dev -p ${MINDOS_WEB_PORT:-3000}",
     "build": "next build",
     "start": "next start -p ${MINDOS_WEB_PORT:-3000}",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -49,7 +50,8 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.5.0",
     "tiptap-markdown": "^0.9.0",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -62,6 +64,8 @@
     "playwright": "^1.58.2",
     "shadcn": "^4.0.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18",
+    "wait-on": "^8.0.1"
   }
 }

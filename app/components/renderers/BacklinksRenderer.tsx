@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { FileText, ExternalLink } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import type { RendererContext } from '@/lib/renderers/registry';
-interface BacklinkEntry {
+import { apiFetch } from '@/lib/api';
+
+interface BacklinkItem {
   filePath: string;
   snippets: string[];
 }
@@ -37,14 +39,13 @@ function SnippetLine({ text }: { text: string }) {
 
 export function BacklinksRenderer({ filePath }: RendererContext) {
   const router = useRouter();
-  const [backlinks, setBacklinks] = useState<BacklinkEntry[] | null>(null);
+  const [backlinks, setBacklinks] = useState<BacklinkItem[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
-      .then(r => r.json())
-      .then((data: BacklinkEntry[]) => { setBacklinks(data); setLoading(false); })
+    apiFetch<BacklinkItem[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
+      .then((data) => { setBacklinks(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [filePath]);
 

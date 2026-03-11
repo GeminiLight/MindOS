@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, IBM_Plex_Mono, IBM_Plex_Sans, Lora } from 'next/font/google';
+import { headers } from 'next/headers';
 import './globals.css';
 import { getFileTree } from '@/lib/fs';
 import SidebarLayout from '@/components/SidebarLayout';
@@ -48,7 +49,7 @@ export const viewport = {
   viewportFit: 'cover' as const,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -59,6 +60,9 @@ export default function RootLayout({
   } catch (err) {
     console.error('[RootLayout] Failed to load file tree:', err);
   }
+
+  const headersList = await headers();
+  const isLoginPage = headersList.get('x-pathname') === '/login';
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -85,9 +89,11 @@ export default function RootLayout({
         <LocaleProvider>
           <TooltipProvider delay={300}>
             <ErrorBoundary>
-              <SidebarLayout fileTree={fileTree}>
-                {children}
-              </SidebarLayout>
+              {isLoginPage ? children : (
+                <SidebarLayout fileTree={fileTree}>
+                  {children}
+                </SidebarLayout>
+              )}
             </ErrorBoundary>
           </TooltipProvider>
         </LocaleProvider>

@@ -1,7 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getFileContent,
   saveFileContent,
+  createFile,
   appendToFile,
   readLines,
   insertLines,
@@ -10,6 +12,8 @@ import {
   updateSection,
   deleteFile,
   renameFile,
+  moveFile,
+  appendCsvRow,
 } from '@/lib/fs';
 
 function err(msg: string, status = 400) {
@@ -103,6 +107,26 @@ export async function POST(req: NextRequest) {
         if (typeof new_name !== 'string' || !new_name) return err('missing new_name');
         const newPath = renameFile(filePath, new_name);
         return NextResponse.json({ ok: true, newPath });
+      }
+
+      case 'create_file': {
+        const { content } = params as { content?: string };
+        createFile(filePath, typeof content === 'string' ? content : '');
+        return NextResponse.json({ ok: true });
+      }
+
+      case 'move_file': {
+        const { to_path } = params as { to_path: string };
+        if (typeof to_path !== 'string' || !to_path) return err('missing to_path');
+        const result = moveFile(filePath, to_path);
+        return NextResponse.json({ ok: true, ...result });
+      }
+
+      case 'append_csv': {
+        const { row } = params as { row: string[] };
+        if (!Array.isArray(row) || row.length === 0) return err('row must be non-empty array');
+        const result = appendCsvRow(filePath, row);
+        return NextResponse.json({ ok: true, ...result });
       }
 
       default:

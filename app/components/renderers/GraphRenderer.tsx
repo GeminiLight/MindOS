@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { RendererContext } from '@/lib/renderers/registry';
 import type { GraphData, GraphNode, GraphEdge } from '@/app/api/graph/route';
+import { apiFetch } from '@/lib/api';
 
 // ─── Force Layout ──────────────────────────────────────────────────────────────
 
@@ -190,9 +191,8 @@ export function GraphRenderer({ filePath }: RendererContext) {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    fetch('/api/graph')
-      .then(r => r.json())
-      .then((data: GraphData) => { setGraphData(data); setLoading(false); })
+    apiFetch<GraphData>('/api/graph')
+      .then((data) => { setGraphData(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 

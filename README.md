@@ -102,79 +102,101 @@ Static documents are hard to synchronize and weak as execution systems in real h
 
 > Already have a knowledge base? Skip to [Step 5](#5-make-any-agent-ready-mcp--skills) to configure MCP + Skills.
 
-### 1. Clone & Install
+### 1. Install
+
+**Option A: npm (recommended)**
 
 ```bash
-# Clone the repository
-git clone https://github.com/GeminiLight/MindOS
-cd MindOS
-
-# Initialize your knowledge base from a preset template
-cp -r templates/en my-mind/
-# Or use the Chinese preset:
-# cp -r templates/zh my-mind/
-
-# Install and build Web App
-cd app && npm install
-
-# Install and build MCP Server
-cd ../mcp && npm install && npm run build
+npm install -g mindos@latest
 ```
 
-### 2. Configure
+**Option B: Clone from source**
+
+```bash
+git clone https://github.com/GeminiLight/MindOS
+cd MindOS
+npm install
+npm link   # registers the `mindos` command globally
+```
+
+### 2. Interactive Setup
+
+```bash
+mindos onboard --install-daemon  # setup + install & start as background OS service
+```
+
+The setup wizard will guide you through:
+1. Knowledge base path → default `~/.mindos/my-mind`
+2. Choose template language (en / zh)
+3. Optional Auth token to protect your API
+4. Configure AI Provider (Anthropic / OpenAI) + API Key — or choose **skip** to configure later via `mindos config set`
+5. Config saved to `~/.mindos/config.json` automatically
 
 > [!TIP]
-> **For Agents:** Before editing `.env.local`, if the user has not provided LLM configuration, ask them:
+> **For Agents:** Before running setup, if the user has not provided LLM configuration, ask them:
 > 1. AI Provider — `anthropic` or `openai` (compatible)?
 > 2. API Key — the key for the chosen provider
 > 3. Custom Base URL? — only needed for proxies or OpenAI-compatible endpoints; skip if using official API
 > 4. Model ID — or use the default
+>
+> Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Reference below).
 
-```bash
-cp app/.env.local.example app/.env.local
-# Edit MIND_ROOT to point to the absolute path of your my-mind/ directory
+<details>
+<summary>Config Reference (~/.mindos/config.json)</summary>
+
+```json
+{
+  "mindRoot": "~/.mindos/my-mind",
+  "port": 3000,
+  "mcpPort": 8787,
+  "authToken": "",
+  "webPassword": "",
+  "ai": {
+    "provider": "anthropic",
+    "providers": {
+      "anthropic": { "apiKey": "sk-ant-...", "model": "claude-sonnet-4-6" },
+      "openai":    { "apiKey": "sk-...",     "model": "gpt-5.4", "baseUrl": "" }
+    }
+  }
+}
 ```
 
-Edit `app/.env.local`:
-
-```env
-MIND_ROOT=/path/to/MindOS/my-mind
-MINDOS_WEB_PORT=3000
-AI_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-proj-...
-# OPENAI_BASE_URL=https://api.openai.com/v1
-ANTHROPIC_MODEL=claude-opus-4-6
-# AUTH_TOKEN=your-secret-token    # optional, protects App + MCP HTTP
-```
-
-| Variable | Default | Description |
+| Field | Default | Description |
 | :--- | :--- | :--- |
-| `MIND_ROOT` | — | **Required**. Absolute path to the knowledge base root. |
-| `MINDOS_WEB_PORT` | `3000` | Optional. Web app port for MindOS frontend. |
-| `AI_PROVIDER` | `anthropic` | Options: `anthropic` or `openai`. |
-| `ANTHROPIC_API_KEY` | — | Required when Provider is `anthropic`. |
-| `OPENAI_API_KEY` | — | Required when Provider is `openai`. |
-| `OPENAI_BASE_URL` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
-| `ANTHROPIC_MODEL` | `claude-opus-4-6` | Optional. Anthropic model ID for the built-in Agent. |
-| `AUTH_TOKEN` | — | Optional. Protects both App `/api/*` and MCP HTTP `/mcp` with bearer token auth. Strongly recommended when exposed to a network. |
+| `mindRoot` | `~/.mindos/my-mind` | **Required**. Absolute path to the knowledge base root. |
+| `port` | `3000` | Optional. Web app port. |
+| `mcpPort` | `8787` | Optional. MCP server port. |
+| `authToken` | — | Optional. Protects App `/api/*` and MCP `/mcp` with bearer token auth. For Agent / MCP clients. Recommended when exposed to a network. |
+| `webPassword` | — | Optional. Protects the web UI with a login page. For browser access. Independent from `authToken`. |
+| `ai.provider` | `anthropic` | Active provider: `anthropic` or `openai`. |
+| `ai.providers.anthropic.apiKey` | — | Anthropic API key. |
+| `ai.providers.anthropic.model` | `claude-sonnet-4-6` | Anthropic model ID. |
+| `ai.providers.openai.apiKey` | — | OpenAI API key. |
+| `ai.providers.openai.model` | `gpt-5.4` | OpenAI model ID. |
+| `ai.providers.openai.baseUrl` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
+
+Multiple providers can be configured simultaneously — switch between them by changing `ai.provider`. Shell env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) take precedence over config file values.
+
+</details>
 
 > [!NOTE]
-> If you want the MindOS GUI to be reachable from other devices, make sure `MINDOS_WEB_PORT` is open in firewall/security-group settings and bound to an accessible host/network interface.
+> If you want the MindOS GUI to be reachable from other devices, make sure the port is open in firewall/security-group settings and bound to an accessible host/network interface.
 
 ### 3. Run
 
 ```bash
-cd app && npm run dev
+mindos start    # start app + MCP server (production, auto-rebuilds when a new version is detected)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to get started.
+On startup, MindOS prints your Web UI URL, MCP config snippet, and auth token — ready to copy into your Agent.
 
 > [!TIP]
-> If port 3000 is already in use, specify another port:
+> **Upgrading?** Run `mindos update` — it installs the latest version and triggers a rebuild automatically on next start.
+
+> [!TIP]
+> If the port is already in use, set a different port during `mindos onboard` or update `~/.mindos/config.json`:
 > ```bash
-> MINDOS_WEB_PORT=3002 npm run dev
-> # Or edit MINDOS_WEB_PORT in app/.env.local
+> MINDOS_WEB_PORT=3002 mindos
 > ```
 
 ### 4. Inject Your Personal Mind with MindOS Agent
@@ -193,62 +215,55 @@ Open [http://localhost:3000](http://localhost:3000) to get started.
 
 > [!TIP]
 > **For Agents:** Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base.
-> Each Agent stores MCP config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table above for exact paths.
+> Each Agent stores MCP config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table below for exact paths.
 
 Register the MindOS MCP Server in your Agent client:
 
-MindOS now supports two transports:
+The MCP server starts automatically when you run `mindos start` or `mindos dev`. The MCP URL, auth token, and a ready-to-paste config snippet are printed on every startup.
 
-- `stdio` (default): for local agents that spawn the MCP process directly.
-- `Streamable HTTP`: for remote agents/devices calling over a URL.
+> The MCP port defaults to `8787`. To use a different port, set `mcpPort` in `~/.mindos/config.json` via `mindos onboard`.
 
-**Option A: Local stdio (default)**
+**Option A: Local (same machine)**
+
+Via stdio — no server process needed:
 
 ```json
 {
   "mcpServers": {
     "mindos": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/path/to/MindOS/mcp/dist/index.js"],
-      "env": {
-        "MIND_ROOT": "/path/to/MindOS/my-mind"
-      }
+      "command": "mindos",
+      "args": ["mcp"],
+      "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
 }
 ```
 
-**Option B: Remote URL (Streamable HTTP)**
-
-> [!NOTE]
-> Ensure the server port is open in firewall/security-group settings and reachable from the public network (or target client network), otherwise remote MCP access will fail.
-
-Start MCP in HTTP mode on the host machine:
-
-> For long-running use, run MCP in background with `nohup`, `tmux`, `screen`, or a process manager like `systemd`/`pm2`, so it remains available after terminal disconnect.
-
-```bash
-cd mcp && npm install && npm run build
-MIND_ROOT=/path/to/MindOS/my-mind \
-MCP_TRANSPORT=http \
-MCP_HOST=0.0.0.0 \
-MCP_PORT=8787 \
-MCP_ENDPOINT=/mcp \
-AUTH_TOKEN=your-strong-token \
-npm start
-```
-
-Then configure URL access on another device's Agent client (field names vary by client):
+Or via URL:
 
 ```json
 {
   "mcpServers": {
-    "mindos-remote": {
+    "mindos": {
+      "url": "http://localhost:8787/mcp",
+      "headers": { "Authorization": "Bearer your-token" }
+    }
+  }
+}
+```
+
+**Option B: Remote URL (another device)**
+
+> [!NOTE]
+> Ensure port `8787` is open in your firewall/security-group so remote clients can reach the server.
+
+```json
+{
+  "mcpServers": {
+    "mindos": {
       "url": "http://<server-ip>:8787/mcp",
-      "headers": {
-        "Authorization": "Bearer your-strong-token"
-      }
+      "headers": { "Authorization": "Bearer your-token" }
     }
   }
 }
@@ -278,16 +293,8 @@ MCP = connection capability, Skills = workflow capability. Enabling both gives t
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
 - `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
-- No `AUTH_TOKEN` in HTTP mode: your server is exposed on the network and unsafe.
-- `MCP_HOST=127.0.0.1`: only localhost can access it; other devices cannot connect via URL.
-
-#### 5.4 Collaboration Loop (Human + Multi-Agent)
-
-1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
-2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
-3. With Skills enabled, those Agents execute workflows and SOP tasks in a guided way.
-4. Execution results are written back to MindOS so humans can audit and refine continuously.
-
+- No `authToken` set: your API and MCP server are exposed on the network without protection.
+- No `webPassword` set: anyone who can reach your server can access the web UI.
 
 ## ⚙️ How It Works
 
@@ -313,6 +320,13 @@ graph LR
 ```
 
 > **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
+
+**Collaboration Loop (Human + Multi-Agent)**
+
+1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
+2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
+3. With Skills enabled, those Agents execute workflows and SOP tasks in a guided way.
+4. Execution results are written back to MindOS so humans can audit and refine continuously.
 
 **Who is this for?**
 
@@ -347,12 +361,48 @@ graph LR
 ```bash
 MindOS/
 ├── app/              # Next.js 16 Frontend — Browse, edit, and interact with AI
-├── mcp/              # MCP Server Core — Standardized toolset for Agents
+├── mcp/              # MCP Server — HTTP adapter that maps tools to App API
 ├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — Workflow guides for Agents
-├── templates/         # Preset templates (`en/`, `zh/`) — copy one to my-mind/
-├── my-mind/          # Your private shared memory (Git-ignored for privacy)
+├── templates/        # Preset templates (`en/`, `zh/`, `empty/`) — copied to knowledge base on onboard
+├── bin/              # CLI entry point (`mindos onboard`, `mindos start`, `mindos dev`, `mindos token`)
+├── scripts/          # Setup wizard and helper scripts
 └── README.md
+
+~/.mindos/            # User data directory (outside project, never committed)
+├── config.json       # All configuration (AI keys, port, auth token, knowledge base path)
+└── my-mind/          # Your private knowledge base (default path, customizable on onboard)
 ```
+
+---
+
+## ⌨️ CLI Commands
+
+| Command | Description |
+| :--- | :--- |
+| `mindos onboard` | Interactive setup (config, template selection) |
+| `mindos onboard --install-daemon` | Setup + install & start as background OS service |
+| `mindos start` | Start app + MCP server (foreground, production mode) |
+| `mindos start --daemon` | Install + start as a background OS service (survives terminal close, auto-restarts on crash) |
+| `mindos dev` | Start app + MCP server (dev mode, hot reload) |
+| `mindos dev --turbopack` | Dev mode with Turbopack (faster HMR) |
+| `mindos stop` | Stop running MindOS processes |
+| `mindos restart` | Stop then start again |
+| `mindos build` | Manually build for production |
+| `mindos mcp` | Start MCP server only |
+| `mindos token` | Show current auth token and MCP config snippet |
+| `mindos gateway install` | Install background service (systemd on Linux, LaunchAgent on macOS) |
+| `mindos gateway uninstall` | Remove background service |
+| `mindos gateway start` | Start the background service |
+| `mindos gateway stop` | Stop the background service |
+| `mindos gateway status` | Show background service status |
+| `mindos gateway logs` | Tail background service logs |
+| `mindos doctor` | Health check (config, ports, build, daemon status) |
+| `mindos update` | Update MindOS to the latest version |
+| `mindos logs` | Tail service logs (`~/.mindos/mindos.log`) |
+| `mindos config show` | Print current config (API keys masked) |
+| `mindos config validate` | Validate config file |
+| `mindos config set <key> <val>` | Update a single config field |
+| `mindos` | Start using the mode saved in `~/.mindos/config.json` |
 
 ---
 
