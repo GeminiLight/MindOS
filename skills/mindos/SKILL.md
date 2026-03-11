@@ -51,6 +51,7 @@ If required context is missing, continue with best effort and state assumptions 
 - For new files, follow sibling style rather than inventing a new standard.
 - **Never create files or directories in the root directory unless the user explicitly requests it.** The root is reserved for top-level governance files (README, INSTRUCTION, CONFIG). New content should be placed under the most semantically appropriate existing subdirectory. Reason from the directory tree in context to find the right home.
 - When creating a new file or directory, always determine the best parent directory first by reviewing the existing structure. If no existing directory is a clear fit, propose 1-2 candidate locations and ask the user before creating.
+- **After any file create/delete/move/rename, always sync affected README files.** READMEs serve as directory indexes and navigation entry points. Any operation that changes a directory's contents (creating, deleting, moving, or renaming files or subdirectories) must trigger an automatic check and update of the README in that directory and its parent directory, so they accurately reflect the current structure. This requires no user prompting — it is basic structural consistency discipline.
 
 ## Pre-Write Checklist
 
@@ -262,6 +263,18 @@ When renaming or moving files/directories:
 4. Execute the rename/move.
 5. Update all broken references in affected files.
 6. Verify no orphaned links remain.
+
+### Auto-sync READMEs after directory changes
+
+After any operation that affects directory structure (creating, deleting, moving, or renaming files or subdirectories):
+
+1. Identify affected directories: the directory where the file was (source), the directory where it now is (destination), and their parent directories.
+2. Read the README in each affected directory (if one exists).
+3. Update file listings, indexes, and navigation in each README to accurately reflect the current directory contents.
+4. If the README contains file descriptions or links, update paths and names accordingly.
+5. If a directory has no README but sibling directories generally do, consider creating one for the new directory.
+
+This step is an automatic follow-up to all structural change operations — it does not require a separate user request.
 
 ## Interaction Rules
 
