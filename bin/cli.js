@@ -240,6 +240,7 @@ const systemd = {
   install() {
     if (!existsSync(SYSTEMD_DIR)) mkdirSync(SYSTEMD_DIR, { recursive: true });
     ensureMindosDir();
+    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const unit = [
       '[Unit]',
       'Description=MindOS app + MCP server',
@@ -251,6 +252,7 @@ const systemd = {
       'Restart=on-failure',
       'RestartSec=3',
       `Environment=HOME=${homedir()}`,
+      `Environment=PATH=${currentPath}`,
       `EnvironmentFile=-${resolve(MINDOS_DIR, 'env')}`,
       `StandardOutput=append:${LOG_PATH}`,
       `StandardError=append:${LOG_PATH}`,
@@ -324,6 +326,9 @@ const launchd = {
   install() {
     if (!existsSync(LAUNCHD_DIR)) mkdirSync(LAUNCHD_DIR, { recursive: true });
     ensureMindosDir();
+    // Capture current PATH so the daemon can find npm/node even when launched by
+    // launchd (which only sets a minimal PATH and doesn't source shell profiles).
+    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -342,6 +347,7 @@ const launchd = {
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${homedir()}</string>
+    <key>PATH</key><string>${currentPath}</string>
   </dict>
 </dict>
 </plist>
@@ -349,8 +355,15 @@ const launchd = {
     writeFileSync(LAUNCHD_PLIST, plist, 'utf-8');
     console.log(green(`✔ Wrote ${LAUNCHD_PLIST}`));
     try {
-      execSync(`launchctl bootstrap gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
-    } catch { /* already bootstrapped */ }
+      execSync(`launchctl bootstrap gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'pipe' });
+    } catch (e) {
+      const msg = e.stderr?.toString() ?? e.message ?? '';
+      // Error 5 (ENOENT / already loaded) is benign — service is already bootstrapped
+      if (!msg.includes('5:') && !msg.includes('already')) {
+        console.error(yellow(`  ⚠ launchctl bootstrap: ${msg.trim()}`));
+        console.error(dim('  If this persists, try: launchctl bootout gui/$(id -u)/com.mindos.app'));
+      }
+    }
     console.log(green('✔ Service installed'));
   },
 
