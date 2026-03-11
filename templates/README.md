@@ -9,14 +9,17 @@ MindOS preset templates for initializing your personal knowledge base.
 
 ## Quick Start
 
-```bash
-# 1) Choose one preset and copy it to my-mind/
-cp -r templates/en my-mind/
-# or
-# cp -r templates/zh my-mind/
+Templates are initialized automatically by `mindos onboard` — no manual copy needed.
 
-# 2) Configure MIND_ROOT (point MCP and App to your knowledge base)
-echo "MIND_ROOT=$(pwd)/my-mind" >> app/.env.local
+If you need to manually initialize:
+
+```bash
+# 1) Run the setup wizard (recommended)
+mindos onboard
+
+# 2) Or copy a preset manually to your knowledge base directory
+cp -r templates/en ~/.mindos/my-mind
+# then set mindRoot in ~/.mindos/config.json
 
 # 3) Start filling content from 👤 Profile (en) or 👤 画像 (zh)
 ```

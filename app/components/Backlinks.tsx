@@ -5,16 +5,16 @@ import Link from 'next/link';
 import { Link as LinkIcon, FileText } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { apiFetch } from '@/lib/api';
-import type { BacklinkEntry } from '@/lib/types';
+import type { BacklinkItem } from '@/lib/types';
 
 export default function Backlinks({ filePath }: { filePath: string }) {
-  const [backlinks, setBacklinks] = useState<BacklinkEntry[]>([]);
+  const [backlinks, setBacklinks] = useState<BacklinkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { t } = useLocale();
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<BacklinkEntry[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
+    apiFetch<BacklinkItem[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
       .then(data => {
         setBacklinks(Array.isArray(data) ? data : []);
         setLoading(false);

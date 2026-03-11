@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table } from 'lucide-react';
-import { SearchResult, SearchMatch } from '@/lib/types';
+import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { streamText, stepCountIs, type ModelMessage } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';

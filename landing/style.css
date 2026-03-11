@@ -1103,4 +1103,308 @@ html[lang="zh"] #quickstart .qs-path-sub { letter-spacing: 0.005em; }
     .story-stat { gap: 1.5rem; flex-wrap: wrap; }
     .story-stat-num { font-size: 1.8rem; }
     .story-quote-mark { font-size: 3.5rem; top: 0.5rem; left: 1.5rem; }
+    /* Demo flow mobile */
+    .df-grid { grid-template-columns: 1fr !important; gap: 1.5rem !important; }
+    .df-arrow-gap { display: none !important; }
+    .df-arrows-svg { display: none !important; }
+    .df-canvas { padding: 1.5rem !important; }
+    .df-desktop-layout { flex-direction: column !important; }
+    .df-sidebar { flex-direction: row !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; overflow-x: auto !important; padding: 0.5rem 0.5rem !important; gap: 0.25rem !important; }
+    .df-sidebar-item { padding: 0.3rem 0.6rem !important; font-size: 0.65rem !important; white-space: nowrap !important; }
 }
+
+/* ============================
+   Demo Flow Section
+   ============================ */
+.demo-flow-section { padding: 8rem 0; }
+
+.df-canvas {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    position: relative;
+    overflow: visible;
+}
+
+.df-grid {
+    display: grid;
+    grid-template-columns: 240px 100px 1fr 100px 280px;
+    align-items: start;
+    gap: 0;
+}
+
+/* Step labels */
+.df-step-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+.df-step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700; color: var(--bg);
+    font-family: 'IBM Plex Mono', monospace;
+}
+.df-step-1 .df-step-num { background: var(--accent); }
+.df-step-2 .df-step-num { background: var(--success); }
+.df-step-3 .df-step-num { background: #7a9ec4; }
+.df-step-text { font-size: 0.85rem; font-weight: 600; color: var(--fg); }
+.df-step-sub { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--muted-fg); margin-left: auto; }
+
+/* === Mobile Frame === */
+.df-mobile {
+    background: var(--muted);
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+}
+.df-mobile-status {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.4rem 1rem;
+    font-size: 0.65rem; font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted-fg); background: var(--bg);
+}
+.df-mobile-nav {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    font-size: 0.8rem; font-weight: 600;
+}
+.df-back { color: var(--accent); font-size: 1.1rem; }
+.df-mobile-body { padding: 0.6rem; min-height: 180px; }
+
+.df-note {
+    background: var(--bg); border-radius: 8px; padding: 0.6rem 0.65rem;
+    margin-bottom: 0.4rem; border-left: 3px solid transparent;
+}
+.df-note--accent { border-left-color: var(--accent); }
+.df-note--muted { border-left-color: var(--muted-fg); }
+.df-note-time {
+    font-size: 0.6rem; font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted-fg); margin-bottom: 0.2rem;
+}
+.df-note-text { font-size: 0.7rem; color: var(--fg); line-height: 1.5; opacity: 0.9; }
+.df-tag {
+    display: inline-block; margin-top: 0.3rem; padding: 0.1rem 0.4rem;
+    border-radius: 3px; font-size: 0.6rem; font-family: 'IBM Plex Mono', monospace;
+}
+.df-tag--accent { background: var(--accent-dim); color: var(--accent); }
+.df-tag--muted { background: rgba(138,130,117,0.1); color: var(--muted-fg); }
+
+.df-mobile-input {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--bg); border-top: 1px solid var(--border);
+}
+.df-input-placeholder {
+    flex: 1; background: var(--muted); border: 1px solid var(--border);
+    border-radius: 14px; padding: 0.3rem 0.65rem;
+    font-size: 0.65rem; color: var(--muted-fg);
+}
+.df-send {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; color: var(--bg); font-weight: 700;
+}
+
+/* === Arrow gaps (grid columns 2 & 4) === */
+.df-arrow-gap {
+    align-self: stretch;
+}
+
+/* === SVG Arrow Overlay === */
+.df-arrows-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    overflow: visible;
+}
+
+/* === Desktop Frame === */
+.df-desktop {
+    background: var(--muted);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+}
+.df-desktop-bar {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.df-dot { width: 8px; height: 8px; border-radius: 50%; }
+.df-dot--r { background: #e06c6c; }
+.df-dot--y { background: var(--accent); }
+.df-dot--g { background: var(--success); }
+.df-desktop-title {
+    margin-left: 0.5rem;
+    font-size: 0.65rem; font-family: 'IBM Plex Mono', monospace; color: var(--muted-fg);
+}
+.df-desktop-layout { display: flex; min-height: 260px; }
+.df-sidebar {
+    width: 110px; background: var(--bg); opacity: 0.85;
+    border-right: 1px solid var(--border);
+    padding: 0.5rem 0;
+    display: flex; flex-direction: column; gap: 0;
+}
+.df-sidebar-item {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem; color: var(--muted-fg); cursor: default;
+}
+.df-sidebar-item--active {
+    background: var(--accent-dim); color: var(--accent);
+    border-right: 2px solid var(--accent);
+}
+.df-si-icon {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.55rem; font-family: 'IBM Plex Mono', monospace;
+    border-radius: 2px; background: rgba(232,228,220,0.04);
+    color: var(--muted-fg); font-weight: 600;
+}
+.df-sidebar-item--active .df-si-icon { background: rgba(212,149,74,0.15); color: var(--accent); }
+.df-main { flex: 1; padding: 0.75rem 1rem; overflow: hidden; }
+.df-filepath {
+    font-size: 0.6rem; color: var(--muted-fg);
+    font-family: 'IBM Plex Mono', monospace; margin-bottom: 0.4rem;
+}
+.df-updated-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.6rem; font-family: 'IBM Plex Mono', monospace;
+    background: var(--accent-dim); color: var(--accent);
+    border: 1px solid rgba(212,149,74,0.12);
+    margin-bottom: 0.5rem;
+}
+.df-updated-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+    animation: df-pulse 1.5s ease-in-out infinite;
+}
+@keyframes df-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+.df-content-title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95rem; font-weight: 500; color: var(--fg);
+    margin-bottom: 0.5rem;
+}
+.df-content-section { margin-bottom: 0.6rem; }
+.df-content-section h4 {
+    font-size: 0.7rem; font-weight: 600; color: var(--accent);
+    margin-bottom: 0.2rem; letter-spacing: 0.02em;
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+.df-content-section ul { list-style: none; padding: 0; }
+.df-content-section li {
+    font-size: 0.7rem; color: var(--fg); opacity: 0.8; line-height: 1.6;
+}
+.df-content-section li::before { content: '•'; color: var(--accent); margin-right: 0.35rem; opacity: 0.5; }
+.df-badge-row { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.2rem; }
+.df-file-badge {
+    padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    background: rgba(232,228,220,0.04); color: var(--muted-fg);
+    border: 1px solid var(--border);
+}
+
+/* === Agent Group === */
+.df-agent-group {
+    border: 1.5px solid rgba(122,158,196,0.2);
+    border-radius: 12px;
+    padding: 1rem 0.65rem 0.65rem;
+    background: rgba(122,158,196,0.03);
+    position: relative;
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+.df-agent-group-label {
+    position: absolute; top: -0.55rem; left: 0.75rem;
+    padding: 0 0.5rem;
+    font-size: 0.6rem; font-family: 'IBM Plex Mono', monospace;
+    color: #7a9ec4; background: var(--muted);
+    border-radius: 3px; letter-spacing: 0.04em;
+}
+
+/* CLI terminal cards */
+.df-cli {
+    background: var(--bg); border-radius: 7px;
+    border: 1px solid var(--border); overflow: hidden;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+.df-cli-bar {
+    display: flex; align-items: center; gap: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    background: var(--muted); border-bottom: 1px solid var(--border);
+}
+.df-cli-bar .df-dot { width: 6px; height: 6px; }
+.df-cli-name {
+    margin-left: 0.3rem;
+    font-size: 0.6rem; font-family: 'IBM Plex Mono', monospace; color: var(--muted-fg);
+}
+.df-cli-body {
+    padding: 0.4rem 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem; line-height: 1.6;
+}
+.df-cli-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-prompt { color: var(--accent); opacity: 0.8; }
+.df-cli-reading { color: #7a9ec4; }
+.df-cli-output { color: var(--muted-fg); }
+
+/* Telegram-style card */
+.df-tg {
+    background: var(--bg); border-radius: 7px;
+    border: 1px solid var(--accent-glow); overflow: hidden;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+.df-tg-header {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    background: var(--accent-dim); border-bottom: 1px solid rgba(212,149,74,0.1);
+}
+.df-tg-avatar {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 700; color: var(--bg);
+}
+.df-tg-name { font-size: 0.65rem; font-weight: 600; color: var(--accent); }
+.df-tg-badge {
+    margin-left: auto; font-size: 0.55rem; padding: 0.05rem 0.35rem;
+    border-radius: 2px; background: var(--accent); color: var(--bg);
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+}
+.df-tg-body { padding: 0.4rem 0.6rem; }
+.df-tg-bubble {
+    padding: 0.35rem 0.5rem; border-radius: 6px;
+    font-size: 0.65rem; line-height: 1.5; margin-bottom: 0.3rem;
+}
+.df-tg-user {
+    background: var(--accent-dim); color: var(--fg);
+    border-radius: 6px 6px 2px 6px; margin-left: 1.5rem;
+}
+.df-tg-bot {
+    background: var(--muted); color: var(--fg); margin-right: 1.5rem;
+    border-radius: 6px 6px 6px 2px;
+}
+.df-tg-hl { color: var(--accent); }
+
+/* Tagline */
+.df-tagline {
+    text-align: center;
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+.df-tagline p { font-size: 0.9rem; color: var(--muted-fg); }
+.df-tagline span { color: var(--accent); font-weight: 600; }

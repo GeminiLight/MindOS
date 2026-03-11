@@ -47,6 +47,7 @@
 
             <div class="nav-right">
                 <div class="nav-links">
+                    <a href="#demo-flow"><span data-zh>流程</span><span data-en>Flow</span></a>
                     <a href="#compare"><span data-zh>对比</span><span data-en>Compare</span></a>
                     <a href="#workflow"><span data-zh>演示</span><span data-en>Workflow</span></a>
                     <a href="#vision"><span data-zh>愿景</span><span data-en>Vision</span></a>
@@ -98,299 +99,164 @@
         </div>
     </header>
 
-    <!-- BEFORE × AFTER: Interactive Comparison -->
-    <section id="compare" class="section compare-section">
+    <!-- DEMO FLOW: Visual Aha Moment -->
+    <section id="demo-flow" class="section demo-flow-section dark-bg">
         <div class="container">
             <div class="section-header animate-up">
-                <span class="mono" data-zh>亲身体验</span><span class="mono" data-en>SEE THE DIFFERENCE</span>
-                <h2 data-zh>同一个任务，两种体验</h2><h2 data-en>Same Task, Two Realities</h2>
-                <p class="section-sub" data-zh>选择一个真实场景，看看有 MindOS 和没有 MindOS 的区别。</p>
-                <p class="section-sub" data-en>Pick a real scenario. See what changes when your Agents share your mind.</p>
+                <span class="mono" data-zh>一图看懂</span><span class="mono" data-en>SEE IT IN ACTION</span>
+                <h2 data-zh>从灵感到执行，一条线贯穿</h2><h2 data-en>From Idea to Execution, One Thread</h2>
+                <p class="section-sub" data-zh>随手记录 → MindOS 自动整理 → 所有 Agent 同步执行 → 经验回流</p>
+                <p class="section-sub" data-en>Capture anywhere → MindOS auto-organizes → All Agents execute → Experience flows back</p>
             </div>
+        </div>
 
-            <div class="compare-tabs animate-up" style="animation-delay:0.1s">
-                <button class="compare-tab active" data-scene="switch">
-                    <span data-zh>切换 Agent</span><span data-en>Switch Agent</span>
-                </button>
-                <button class="compare-tab" data-scene="idea">
-                    <span data-zh>灵感捕捉</span><span data-en>Capture Ideas</span>
-                </button>
-                <button class="compare-tab" data-scene="collect">
-                    <span data-zh>信息收集</span><span data-en>Info Collection</span>
-                </button>
-                <button class="compare-tab" data-scene="social">
-                    <span data-zh>社交关系</span><span data-en>Social Relationships</span>
-                </button>
-                <button class="compare-tab" data-scene="scaffold">
-                    <span data-zh>项目开发</span><span data-en>Project Dev</span>
-                </button>
-                <button class="compare-tab" data-scene="review">
-                    <span data-zh>内容审阅</span><span data-en>Content Review</span>
-                </button>
-                <button class="compare-tab" data-scene="research">
-                    <span data-zh>调研</span><span data-en>Research</span>
-                </button>
-                <button class="compare-tab" data-scene="team">
-                    <span data-zh>团队协作</span><span data-en>Team Collaboration</span>
-                </button>
-                <button class="compare-tab" data-scene="distill">
-                    <span data-zh>经验沉淀</span><span data-en>Distill Experience</span>
-                </button>
-            </div>
-
-            <!-- Scene: Switch Agent -->
-            <div class="compare-stage active" data-stage="switch">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一个任务里，你在不同工具和新对话之间来回切换</div>
-                        <div class="compare-scenario" data-en>Inside one task, you keep switching across tools and fresh chats</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每次一换工具或开新对话，就要重讲背景、约定和当前进度</span><span data-en>Every time you switch tools or start a new chat, you must re-explain context, conventions, and progress</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>同一工具开新 session 也会丢记忆，回答风格和决策标准来回漂移</span><span data-en>Even a new session in the same tool loses memory, so style and decision criteria drift</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你在做"上下文搬运"，而不是推进结果交付</span><span data-en>You end up transporting context instead of shipping outcomes</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>高频重讲</strong><strong data-en>Frequent rebriefs</strong>&nbsp;<span data-zh>每次一换工具/对话，就要重新对齐</span><span data-en>every tool/chat switch forces re-alignment</span></div>
+        <div class="df-canvas animate-up" style="animation-delay:0.1s">
+            <!-- Step Labels Row -->
+            <div class="df-grid">
+                <!-- COL 1: Mobile Capture -->
+                <div class="df-col">
+                    <div class="df-step-label df-step-1">
+                        <span class="df-step-num">1</span>
+                        <span class="df-step-text" data-zh>随手记录</span><span class="df-step-text" data-en>Capture</span>
+                        <span class="df-step-sub" data-zh>手机 / 任意设备</span><span class="df-step-sub" data-en>Phone / Any Device</span>
                     </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一个任务里，无论换工具还是开新对话，都从同一份 MindOS 上下文继续</div>
-                        <div class="compare-scenario" data-en>In the same task, tool switches and new chats both continue from one shared MindOS context</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>每个 Agent 通过 MCP 读取同一份 MindOS 知识库</span><span data-en>Every agent reads the same MindOS knowledge base via MCP</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>偏好、标准、项目状态自动继承，新会话也保持一致判断</span><span data-en>Preferences, standards, and project state carry over automatically, even in fresh chats</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你只做决策与验收，协作链路持续不断流</span><span data-en>You stay on decisions and acceptance while collaboration flow remains continuous</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>0 重讲</strong><strong data-en>0 rebriefs</strong>&nbsp;<span data-zh>切换工具/对话，协作不断流</span><span data-en>switch tools/chats without breaking flow</span></div>
+                    <div class="df-mobile">
+                        <div class="df-mobile-status"><span>9:41</span><span>MindOS</span><span>●●●</span></div>
+                        <div class="df-mobile-nav"><span class="df-back">‹</span><span data-zh>快速记录</span><span data-en>Quick Capture</span></div>
+                        <div class="df-mobile-body">
+                            <div class="df-note df-note--accent">
+                                <div class="df-note-time" data-zh>今天 09:41</div><div class="df-note-time" data-en>Today 09:41</div>
+                                <div class="df-note-text" data-zh>用户反馈：新手引导太长，50% 在第 3 步放弃。简化到 1 步，参考 Linear。</div>
+                                <div class="df-note-text" data-en>User feedback: onboarding too long, 50% drop at step 3. Simplify to 1 step. Reference Linear.</div>
+                                <span class="df-tag df-tag--accent">#user-feedback</span>
+                            </div>
+                            <div class="df-note df-note--muted">
+                                <div class="df-note-time" data-zh>昨天 23:20</div><div class="df-note-time" data-en>Yesterday 23:20</div>
+                                <div class="df-note-text" data-zh>灵感：把安装流程做成"一句话发给 Agent"，零摩擦。</div>
+                                <div class="df-note-text" data-en>Idea: make install "one sentence to Agent" — zero friction.</div>
+                                <span class="df-tag df-tag--muted">#product-idea</span>
+                            </div>
+                        </div>
+                        <div class="df-mobile-input">
+                            <span class="df-input-placeholder" data-zh>写个增长方案...</span><span class="df-input-placeholder" data-en>Draft a growth plan...</span>
+                            <span class="df-send">↑</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow gap 1 -->
+                <div class="df-arrow-gap" id="df-gap1"></div>
+
+                <!-- COL 2: MindOS GUI -->
+                <div class="df-col df-col--wide">
+                    <div class="df-step-label df-step-2">
+                        <span class="df-step-num">2</span>
+                        <span class="df-step-text" data-zh>自动整理</span><span class="df-step-text" data-en>Auto-Organize</span>
+                        <span class="df-step-sub">MindOS GUI</span>
+                    </div>
+                    <div class="df-desktop">
+                        <div class="df-desktop-bar">
+                            <span class="df-dot df-dot--r"></span><span class="df-dot df-dot--y"></span><span class="df-dot df-dot--g"></span>
+                            <span class="df-desktop-title">MindOS — localhost:3000</span>
+                        </div>
+                        <div class="df-desktop-layout">
+                            <div class="df-sidebar">
+                                <div class="df-sidebar-item"><span class="df-si-icon">P</span> Profile</div>
+                                <div class="df-sidebar-item df-sidebar-item--active"><span class="df-si-icon">W</span> Workflows</div>
+                                <div class="df-sidebar-item"><span class="df-si-icon">J</span> Projects</div>
+                                <div class="df-sidebar-item"><span class="df-si-icon">C</span> Configs</div>
+                                <div class="df-sidebar-item"><span class="df-si-icon">R</span> Resources</div>
+                            </div>
+                            <div class="df-main">
+                                <div class="df-filepath">Workflows/Growth-Strategy.md</div>
+                                <div class="df-updated-badge">
+                                    <span class="df-updated-dot"></span>
+                                    <span data-zh>Agent 已自动更新 3 个文件</span><span data-en>Agent auto-updated 3 files</span>
+                                </div>
+                                <div class="df-content-title" data-zh>用户增长策略</div><div class="df-content-title" data-en>User Growth Strategy</div>
+                                <div class="df-content-section">
+                                    <h4 data-zh>核心行动项</h4><h4 data-en>Key Actions</h4>
+                                    <ul>
+                                        <li data-zh>简化新手引导：3 步 → 1 步</li><li data-en>Simplify onboarding: 3 steps → 1</li>
+                                        <li data-zh>一句话安装作为核心传播点</li><li data-en>One-sentence install as core hook</li>
+                                        <li data-zh>制作 Before/After 对比视频</li><li data-en>Create Before/After comparison video</li>
+                                    </ul>
+                                </div>
+                                <div class="df-content-section">
+                                    <h4 data-zh>关联更新</h4><h4 data-en>Related Updates</h4>
+                                    <div class="df-badge-row">
+                                        <span class="df-file-badge">Projects/Growth-Experiments.md</span>
+                                        <span class="df-file-badge">Profile/Product-Philosophy.md</span>
+                                        <span class="df-file-badge">Workflows/Launch-SOP.md</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow gap 2 -->
+                <div class="df-arrow-gap" id="df-gap2"></div>
+
+                <!-- COL 3: Agent Fleet -->
+                <div class="df-col">
+                    <div class="df-step-label df-step-3">
+                        <span class="df-step-num">3</span>
+                        <span class="df-step-text" data-zh>所有 Agent 执行</span><span class="df-step-text" data-en>All Agents Execute</span>
+                        <span class="df-step-sub">via MCP</span>
+                    </div>
+                    <div class="df-agent-group">
+                        <span class="df-agent-group-label">ALL AGENTS via MCP</span>
+                        <!-- Claude Code -->
+                        <div class="df-cli">
+                            <div class="df-cli-bar"><span class="df-dot df-dot--r"></span><span class="df-dot df-dot--y"></span><span class="df-dot df-dot--g"></span><span class="df-cli-name">Claude Code</span></div>
+                            <div class="df-cli-body">
+                                <div class="df-cli-line"><span class="df-prompt">› </span><span data-zh>写一篇产品推广文案</span><span data-en>Write a product launch post</span></div>
+                                <div class="df-cli-line df-cli-reading"><span>  Reading MindOS → Growth-Strategy.md</span></div>
+                                <div class="df-cli-line df-cli-output"><span data-zh>  Done. 已基于增长策略生成推广文案</span><span data-en>  Done. Generated launch copy from strategy</span></div>
+                            </div>
+                        </div>
+                        <!-- Cursor -->
+                        <div class="df-cli">
+                            <div class="df-cli-bar"><span class="df-dot df-dot--r"></span><span class="df-dot df-dot--y"></span><span class="df-dot df-dot--g"></span><span class="df-cli-name">Cursor</span></div>
+                            <div class="df-cli-body">
+                                <div class="df-cli-line"><span class="df-prompt">› </span><span data-zh>简化新手引导到 1 步完成</span><span data-en>Simplify onboarding to 1 step</span></div>
+                                <div class="df-cli-line df-cli-reading"><span>  Reading MindOS → Product-Philosophy.md</span></div>
+                                <div class="df-cli-line df-cli-output"><span data-zh>  Done. 已重构 onboarding 组件</span><span data-en>  Done. Refactored onboarding component</span></div>
+                            </div>
+                        </div>
+                        <!-- OpenClaw / Feedback -->
+                        <div class="df-tg" id="df-feedback">
+                            <div class="df-tg-header">
+                                <span class="df-tg-avatar">O</span>
+                                <span class="df-tg-name">OpenClaw</span>
+                                <span class="df-tg-badge">BOT</span>
+                            </div>
+                            <div class="df-tg-body">
+                                <div class="df-tg-bubble df-tg-user" data-zh>帮我把这轮增长实验的经验沉淀下来</div>
+                                <div class="df-tg-bubble df-tg-user" data-en>Distill this growth experiment into reusable SOP</div>
+                                <div class="df-tg-bubble df-tg-bot"><span class="df-tg-hl">Writing → Workflows/Growth-Review.md</span><br><span data-zh>Done. 已沉淀为可复用 SOP</span><span data-en>Done. Saved as reusable SOP</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Scene: Capture Ideas -->
-            <div class="compare-stage" data-stage="idea">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>通勤路上突然想到一个功能点："帮我评估可行性并排进计划"</div>
-                        <div class="compare-scenario" data-en>A feature idea hits you while commuting: "Evaluate feasibility and slot it into the plan"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>先打开备忘录 / Notion 手动整理灵感，写清前因后果</span><span data-en>Open notes app / Notion, manually organize the idea with full context</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>下次要用时翻找半天，再复制粘贴给 Agent</span><span data-en>When needed later, hunt through notes and paste into the Agent</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>Agent 缺产品背景，还得补目标用户、技术栈、路线图…</span><span data-en>Agent lacks product context — you must also fill in users, stack, roadmap…</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~15 min</strong><strong data-en>~15 min</strong>&nbsp;<span data-zh>手动整理 + 翻找 + 补上下文</span><span data-en>manual organizing + searching + filling context</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："帮我评估这个功能点的可行性"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Evaluate the feasibility of this feature idea"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>手机随手记到 MindOS Ideas.md，一句话即可</span><span data-en>Jot it into MindOS Ideas.md on your phone — one sentence is enough</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 自动读取 Profile + Roadmap.md → 已知产品背景与优先级</span><span data-en>Agent auto-reads Profile + Roadmap.md — product context and priorities are already there</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>直接输出可行性评估并排入 TODO，任何 Agent 立即可执行</span><span data-en>Outputs feasibility assessment and adds to TODO — any agent can act immediately</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~2 min</strong><strong data-en>~2 min</strong>&nbsp;<span data-zh>记一句话，全链路自动对齐</span><span data-en>one sentence, full pipeline auto-aligned</span></div>
-                    </div>
-                </div>
-            </div>
+            <!-- SVG Arrow Overlay -->
+            <svg class="df-arrows-svg" id="df-arrows-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
 
-            <!-- Scene: Info Collection -->
-            <div class="compare-stage" data-stage="collect">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>周一 9:00，市场负责人说："下午 3 点前把这 30 位 KOL 的外联初稿发我"</div>
-                        <div class="compare-scenario" data-en>Monday 9:00 AM: "Send first-draft outreach for 30 influencers before 3 PM."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你把表格、历史合作记录、备注一条条复制进 Prompt</span><span data-en>You manually paste sheets, collaboration history, and notes into the prompt</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 先给通用模板，你再逐个补充语气、内容方向和禁用词</span><span data-en>Agent returns generic templates; you rewrite tone, content angle, and blocked terms one by one</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>第 19 封才发现用错人设，整批重改</span><span data-en>You catch a wrong persona at email #19 and rework the whole batch</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~45 min</strong><strong data-en>~45 min</strong>&nbsp;<span data-zh>重复喂上下文，返工风险高</span><span data-en>context repetition + high rework risk</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："下午 3 点前，把这 30 位 KOL 外联初稿发我"</div>
-                        <div class="compare-scenario" data-en>Same sentence: "Draft outreach for these 30 influencers before 3 PM."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 自动读取 Resources/Influencers.csv + 合作历史标签</span><span data-en>Agent auto-loads Resources/Influencers.csv and collaboration-history tags</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>按 Workflows/Outreach-SOP.md 生成分层外联：头部 / 腰部 / 长尾</span><span data-en>Follows Workflows/Outreach-SOP.md to generate tiered outreach: top/mid/long-tail</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一次产出可直接发送版本，你只做最终确认</span><span data-en>Produces send-ready drafts in one shot; you only do final approval</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~6 min</strong><strong data-en>~6 min</strong>&nbsp;<span data-zh>流程自动对齐，几乎零返工</span><span data-en>workflow auto-aligned, near-zero rework</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Social Relationships -->
-            <div class="compare-stage" data-stage="social">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>你说："我今天和他聊了这些"</div>
-                        <div class="compare-scenario" data-en>You say: "I talked with this person today."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你重新解释人物背景、历史合作、敏感话题边界</span><span data-en>You re-explain relationship background, collaboration history, and sensitive boundaries</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>本次会话记住了，但下次换 Agent 又要从头讲</span><span data-en>This session remembers, but switching agents means starting from zero again</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>重要承诺容易遗漏，跟进动作断档</span><span data-en>Important commitments slip through, follow-up actions break</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>易断档</strong><strong data-en>Fragile</strong>&nbsp;<span data-zh>关系信息分散在会话里</span><span data-en>relationship context scattered across chats</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>你只说："我今天和他聊了这些，帮我推进下一步"</div>
-                        <div class="compare-scenario" data-en>You only say: "We discussed this today, drive the next steps."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 从聊天里抽取关键事实与情绪变化，结构化记录</span><span data-en>Agent extracts key facts and sentiment shifts from the chat into structured notes</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不只更新 Connections/XXX.md，还自动生成跟进策略、待办和提醒时间</span><span data-en>Not just updates Connections/XXX.md, but also creates follow-up strategy, tasks, and reminder timing</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>后续任何 Agent / 新会话都可直接接手执行，不再从头梳理关系脉络</span><span data-en>Any future agent/session can continue execution directly without rebuilding relationship history</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>可执行</strong><strong data-en>Actionable</strong>&nbsp;<span data-zh>从聊天到行动，自动闭环</span><span data-en>from conversation to execution, closed-loop</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Project Dev -->
-            <div class="compare-stage" data-stage="scaffold">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>周三晚 10:30，老板说："明天评审要看到能跑的项目骨架"</div>
-                        <div class="compare-scenario" data-en>Wednesday 10:30 PM: "We need a runnable project skeleton for tomorrow's review."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>你反复说明：Next.js 15、pnpm、目录规范、CI 要求</span><span data-en>You repeatedly explain: Next.js 15, pnpm, folder conventions, CI requirements</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>第一版用了 npm 且结构不符合团队约定</span><span data-en>First output uses npm and a structure that violates team conventions</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你二次纠偏后才能进入真正开发</span><span data-en>You spend another round correcting before real development can start</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~25 min</strong><strong data-en>~25 min</strong>&nbsp;<span data-zh>启动慢，首版不可用</span><span data-en>slow kickoff, first output not usable</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："帮我启动这个代码开发，明天评审要看"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Kick off this project build for tomorrow's review."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Profile/Identity.md → 默认技术栈与命令习惯</span><span data-en>Agent reads Profile/Identity.md for default stack and command preferences</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Workflows/Startup-SOP.md → 自动带上初始化、校验、CI 模板</span><span data-en>Reads Workflows/Startup-SOP.md and auto-applies setup, checks, and CI template</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>首版即可跑通，团队直接接力开发</span><span data-en>First output runs immediately; team can start building right away</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~4 min</strong><strong data-en>~4 min</strong>&nbsp;<span data-zh>首版可用，直接进入迭代</span><span data-en>usable first output, straight into iteration</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Content Review -->
-            <div class="compare-stage" data-stage="review">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>发布前最后一小时，你说："Review 这个支付模块 PR"</div>
-                        <div class="compare-scenario" data-en>One hour before release: "Review this payment-module PR."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 给出大量通用建议，但忽略你们的支付容错标准</span><span data-en>Agent gives many generic tips but misses your payment fault-tolerance standards</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>你花时间筛噪音，真正高风险点被埋没</span><span data-en>You burn time filtering noise while real high-risk issues stay hidden</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>上线后才暴露异常链路，回滚成本高</span><span data-en>Failure path shows up after release, forcing expensive rollback</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>高风险</strong><strong data-en>High risk</strong>&nbsp;<span data-zh>噪音多，关键点漏检</span><span data-en>high noise, critical misses</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："Review 这个支付模块 PR"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Review this payment-module PR."</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Configs/Code-Standards.md + 历史缺陷模式</span><span data-en>Agent reads Configs/Code-Standards.md plus historical defect patterns</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>优先标出真正会导致事故的问题：幂等、回滚、超时兜底</span><span data-en>Prioritizes incident-prone issues: idempotency, rollback, timeout fallback</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>输出按风险等级排序，开发可直接照单修复</span><span data-en>Outputs risk-ranked findings so engineers can fix immediately</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>高命中</strong><strong data-en>High signal</strong>&nbsp;<span data-zh>按团队标准命中关键风险</span><span data-en>critical risks found under your own standards</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Research -->
-            <div class="compare-stage" data-stage="research">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>你要写一份竞品分析报告："帮我调研这个赛道的竞品格局"</div>
-                        <div class="compare-scenario" data-en>You need a competitive landscape report: "Research the competitive landscape in this space"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>先手动给 Agent 描述你的产品定位、目标用户、差异化方向</span><span data-en>First, manually describe your product positioning, target users, and differentiators to the agent</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>Agent 给出泛泛的行业总结，缺少针对你产品的对比维度</span><span data-en>Agent returns generic industry overviews, missing comparison dimensions specific to your product</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>你手动补充已有的调研笔记和数据源，反复迭代才成型</span><span data-en>You manually supplement existing research notes and data sources, iterating repeatedly to shape the output</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~40 min</strong><strong data-en>~40 min</strong>&nbsp;<span data-zh>手动喂背景，输出缺针对性</span><span data-en>manual context feeding, output lacks focus</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同一句话："帮我调研这个赛道的竞品格局"</div>
-                        <div class="compare-scenario" data-en>Same ask: "Research the competitive landscape in this space"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取 Projects/Product-Spec.md → 你的定位与差异化</span><span data-en>Agent reads Projects/Product-Spec.md → your positioning and differentiators</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>读取 Resources/Competitors.csv → 已积累的竞品数据</span><span data-en>Reads Resources/Competitors.csv → your accumulated competitive data</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>基于你的视角输出针对性分析，补充新发现并回写知识库</span><span data-en>Outputs analysis grounded in your perspective, adding new findings back to the knowledge base</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~8 min</strong><strong data-en>~8 min</strong>&nbsp;<span data-zh>基于已有积累，输出即可用</span><span data-en>built on existing data, output is actionable</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Team Collaboration -->
-            <div class="compare-stage" data-stage="team">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>周会后，产品、研发、运营都在各自工具里记录了"下一步"</div>
-                        <div class="compare-scenario" data-en>After weekly sync, product, engineering, and ops all captured next steps in separate tools</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>产品在文档写优先级，研发在代码工具记实现，运营在群里补执行计划</span><span data-en>Product tracks priorities in docs, engineering logs implementation notes, ops writes plans in chat</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>信息分散且口径不一致，跨角色协作频繁二次确认</span><span data-en>Context is fragmented and inconsistent, forcing repeated cross-role confirmations</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>一周后复盘才发现目标偏移，团队花时间补救对齐</span><span data-en>A week later, review reveals drift and the team spends time repairing alignment</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>团队失焦</strong><strong data-en>Team drift</strong>&nbsp;<span data-zh>每个人都在努力，但不在同一条线上</span><span data-en>everyone works hard, but not on one shared line</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>同样的周会结论，统一沉淀到团队 MindOS 里</div>
-                        <div class="compare-scenario" data-en>The same meeting outcomes are captured into one team MindOS</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>会议纪要自动更新 Team/Decisions.md、Projects/Roadmap.md、Workflows/Handoff-SOP.md</span><span data-en>Meeting notes auto-update Team/Decisions.md, Projects/Roadmap.md, and Workflows/Handoff-SOP.md</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>不同角色的 Agent 都读取同一份团队上下文，产出天然对齐</span><span data-en>Role-specific agents read the same team context, so outputs align by default</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>每次任务推进都能追溯到团队决策，协作像同一个大脑在思考</span><span data-en>Each task traces back to team decisions, making collaboration feel like one shared brain</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>团队同频</strong><strong data-en>Team sync</strong>&nbsp;<span data-zh>MindOS 成为团队共同思考层</span><span data-en>MindOS becomes the team's shared thinking layer</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scene: Distill Experience -->
-            <div class="compare-stage" data-stage="distill">
-                <div class="compare-grid">
-                    <div class="compare-col compare-col--before">
-                        <div class="compare-col-badge"><span>✕</span> <span data-zh>没有 MindOS</span><span data-en>Without MindOS</span></div>
-                        <div class="compare-scenario" data-zh>Claude Code 刚帮你搞定了一次复杂的数据库迁移</div>
-                        <div class="compare-scenario" data-en>Claude Code just helped you through a complex database migration</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>对话关闭，踩坑经验随 session 一起消失</span><span data-en>Chat closes, hard-won lessons vanish with the session</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>下次遇到类似问题，重新摸索、重复踩坑</span><span data-en>Next time you hit a similar issue, you re-explore and re-stumble</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>换 Cursor / Cline 等其他 Agent，经验完全不互通</span><span data-en>Switch to Cursor / Cline — experience doesn't carry over at all</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~0 min</strong><strong data-en>~0 min</strong>&nbsp;<span data-zh>做完就忘，经验归零</span><span data-en>done and forgotten, experience resets to zero</span></div>
-                    </div>
-                    <div class="compare-col compare-col--after">
-                        <div class="compare-col-badge"><span>✓</span> <span data-zh>使用 MindOS</span><span data-en>With MindOS</span></div>
-                        <div class="compare-scenario" data-zh>"帮我复盘这次对话，把经验沉淀到 SOP"</div>
-                        <div class="compare-scenario" data-en>"Review this session and distill experience into the SOP"</div>
-                        <ul class="compare-steps">
-                            <li class="compare-step"><span class="compare-step-icon">1</span><span data-zh>Agent 读取现有 Workflows/DB-Migration-SOP.md，对比本次经验</span><span data-en>Agent reads existing Workflows/DB-Migration-SOP.md and compares with this session</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">2</span><span data-zh>自动补充新的避坑步骤与最佳实践到 SOP</span><span data-en>Auto-appends new pitfall-avoidance steps and best practices to the SOP</span></li>
-                            <li class="compare-step"><span class="compare-step-icon">3</span><span data-zh>所有 Agent 下次迁移都按更新后的 SOP 执行</span><span data-en>All agents follow the updated SOP for the next migration</span></li>
-                        </ul>
-                        <div class="compare-verdict"><strong data-zh>~3 min</strong><strong data-en>~3 min</strong>&nbsp;<span data-zh>一句话触发，经验自动沉淀 + 全 Agent 同步</span><span data-en>one prompt, experience auto-distilled + synced to all agents</span></div>
-                    </div>
-                </div>
+        <!-- Bottom tagline -->
+        <div class="container">
+            <div class="df-tagline animate-up" style="animation-delay:0.2s">
+                <p data-zh>你 → <span>MindOS</span> → 所有 Agent → <span>经验回流</span> → 持续进化的共享心智</p>
+                <p data-en>You → <span>MindOS</span> → All Agents → <span>Feedback Loop</span> → Ever-evolving shared mind</p>
             </div>
         </div>
     </section>
+
+    <!-- BEFORE × AFTER: Interactive Comparison -->
+    <section id="compare" class="section compare-section">
 
     <!-- SECTION 1: THE SHARED MIND LOOP -->
     <section id="workflow" class="loop-section dark-bg">
@@ -1344,6 +1210,120 @@
             });
         }, { threshold: 0.2 });
         document.querySelectorAll('.animate-up, .loop-section').forEach(el => observer.observe(el));
+
+        /* ============================
+           Demo Flow: SVG Arrow Drawing
+           ============================ */
+        function drawDfArrows() {
+            const canvas = document.querySelector('.df-canvas');
+            const svg = document.getElementById('df-arrows-svg');
+            if (!canvas || !svg) return;
+
+            const cr = canvas.getBoundingClientRect();
+            function rel(el) {
+                const r = el.getBoundingClientRect();
+                return {
+                    left: r.left - cr.left, right: r.right - cr.left,
+                    top: r.top - cr.top, bottom: r.bottom - cr.top,
+                    cx: (r.left + r.right) / 2 - cr.left,
+                    cy: (r.top + r.bottom) / 2 - cr.top,
+                };
+            }
+
+            const mobile = rel(document.querySelector('.df-mobile'));
+            const desktop = rel(document.querySelector('.df-desktop'));
+            const agentGroup = rel(document.querySelector('.df-agent-group'));
+            const feedback = rel(document.getElementById('df-feedback'));
+            const gap1 = rel(document.getElementById('df-gap1'));
+            const gap2 = rel(document.getElementById('df-gap2'));
+
+            svg.setAttribute('width', cr.width);
+            svg.setAttribute('height', cr.height);
+            svg.setAttribute('viewBox', `0 0 ${cr.width} ${cr.height}`);
+
+            const cs = getComputedStyle(document.body);
+            const accent = cs.getPropertyValue('--accent').trim() || '#d4954a';
+            const info = '#7a9ec4';
+            const isZh = document.documentElement.lang === 'zh';
+
+            // Arrow 1: Mobile -> Desktop (Sync / 同步)
+            const a1y = mobile.cy;
+            const a1x1 = mobile.right + 2;
+            const a1x2 = desktop.left - 2;
+            const a1mx = gap1.cx;
+            const a1label = isZh ? '同步' : 'Sync';
+
+            // Arrow 2: Desktop -> Agent Group (MCP Read / MCP 读取)
+            const a2y = agentGroup.cy;
+            const a2x1 = desktop.right + 2;
+            const a2x2 = agentGroup.left - 2;
+            const a2mx = gap2.cx;
+            const a2label = isZh ? 'MCP 读取' : 'MCP Read';
+
+            // Arrow 3: Feedback loop - OpenClaw -> under -> Desktop (U-shape)
+            const a3sx = feedback.cx;
+            const a3sy = feedback.bottom + 2;
+            const a3ex = desktop.cx;
+            const a3ey = desktop.bottom + 2;
+            const a3by = Math.max(feedback.bottom, desktop.bottom) + 36;
+            const r = 10;
+            const a3labelX = a3sx - (a3sx - a3ex) * 0.25;
+            const a3label = isZh ? '经验回流' : 'Feedback';
+            const a3lw = isZh ? 72 : 64;
+
+            svg.innerHTML = `
+                <defs>
+                    <marker id="df-ah-a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                        <path d="M0,0.5 L7,3 L0,5.5" fill="none" stroke="${accent}" stroke-width="1.2"/>
+                    </marker>
+                    <marker id="df-ah-i" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                        <path d="M0,0.5 L7,3 L0,5.5" fill="none" stroke="${info}" stroke-width="1.2"/>
+                    </marker>
+                </defs>
+
+                <!-- Arrow 1: Sync -->
+                <line x1="${a1x1}" y1="${a1y}" x2="${a1mx - 32}" y2="${a1y}"
+                      stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"/>
+                <line x1="${a1mx + 32}" y1="${a1y}" x2="${a1x2}" y2="${a1y}"
+                      stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"
+                      marker-end="url(#df-ah-a)"/>
+                <rect x="${a1mx - 28}" y="${a1y - 11}" width="56" height="20" rx="10"
+                      fill="var(--bg)" stroke="${accent}" stroke-width="0.7" opacity="0.85"/>
+                <text x="${a1mx}" y="${a1y + 3.5}" text-anchor="middle" fill="${accent}"
+                      font-size="10" font-weight="500" font-family="'IBM Plex Mono',monospace">${a1label}</text>
+
+                <!-- Arrow 2: MCP Read -->
+                <line x1="${a2x1}" y1="${a2y}" x2="${a2mx - 38}" y2="${a2y}"
+                      stroke="${info}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"/>
+                <line x1="${a2mx + 38}" y1="${a2y}" x2="${a2x2}" y2="${a2y}"
+                      stroke="${info}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"
+                      marker-end="url(#df-ah-i)"/>
+                <rect x="${a2mx - 34}" y="${a2y - 11}" width="68" height="20" rx="10"
+                      fill="var(--bg)" stroke="${info}" stroke-width="0.7" opacity="0.85"/>
+                <text x="${a2mx}" y="${a2y + 3.5}" text-anchor="middle" fill="${info}"
+                      font-size="10" font-weight="500" font-family="'IBM Plex Mono',monospace">${a2label}</text>
+
+                <!-- Arrow 3: Feedback U-shape -->
+                <path d="M ${a3sx} ${a3sy}
+                         L ${a3sx} ${a3by - r}
+                         Q ${a3sx} ${a3by} ${a3sx - r} ${a3by}
+                         L ${a3labelX + a3lw/2 + 4} ${a3by}"
+                      fill="none" stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"/>
+                <path d="M ${a3labelX - a3lw/2 - 4} ${a3by}
+                         L ${a3ex + r} ${a3by}
+                         Q ${a3ex} ${a3by} ${a3ex} ${a3by - r}
+                         L ${a3ex} ${a3ey}"
+                      fill="none" stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.6"
+                      marker-end="url(#df-ah-a)"/>
+                <rect x="${a3labelX - a3lw/2}" y="${a3by - 11}" width="${a3lw}" height="20" rx="10"
+                      fill="var(--bg)" stroke="${accent}" stroke-width="0.7" opacity="0.85"/>
+                <text x="${a3labelX}" y="${a3by + 3.5}" text-anchor="middle" fill="${accent}"
+                      font-size="10" font-weight="500" font-family="'IBM Plex Mono',monospace">${a3label}</text>
+            `;
+        }
+
+        drawDfArrows();
+        window.addEventListener('resize', drawDfArrows);
     </script>
 </body>
 </html>

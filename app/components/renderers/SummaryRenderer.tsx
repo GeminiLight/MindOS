@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, RefreshCw, Clock, FileText } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
 import type { RendererContext } from '@/lib/renderers/registry';
 
 interface RecentFile {
@@ -52,9 +53,8 @@ export function SummaryRenderer({ filePath }: RendererContext) {
 
   // Fetch recent files once
   useEffect(() => {
-    fetch(`/api/recent-files?limit=${LIMIT}`)
-      .then(r => r.json())
-      .then((data: RecentFile[]) => setRecentFiles(data.filter(f => f.path.endsWith('.md'))))
+    apiFetch<RecentFile[]>(`/api/recent-files?limit=${LIMIT}`)
+      .then((data) => setRecentFiles(data.filter(f => f.path.endsWith('.md'))))
       .catch(() => {});
   }, [filePath]);
 

@@ -1,146 +1,113 @@
 # MindOS MCP Server
 
-MCP (Model Context Protocol) server for MindOS — exposes your local knowledge base as a standardized toolset that any compatible Agent can use.
+Pure HTTP client wrapper that maps 20 MCP tools to the App REST API via `fetch`. Zero business logic — all operations are delegated to the App.
 
-## Quick Start
+## Architecture
 
-```bash
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Run (requires MIND_ROOT env var)
-MIND_ROOT=/path/to/your/my-mind npm start
-
-# Development mode (auto-reload)
-MIND_ROOT=/path/to/your/my-mind npm run dev
+```
+Claude Code / Agent  ──HTTP/stdio──▶  MCP Server  ──fetch──▶  App REST API (/api/*)
 ```
 
-## Transports
+The MCP server is a **protocol adapter** (~500 lines):
+- Receives MCP tool calls via Streamable HTTP (default) or stdio transport
+- Translates each call to the corresponding App API endpoint
+- Returns the result back to the agent
 
-MindOS MCP supports:
+No filesystem access, no business logic, no dependencies on `lib/core/`.
 
-- `stdio` (default): local process transport.
-- `Streamable HTTP`: URL-based transport for remote clients.
+## Running
 
-### Run with stdio (default)
-
-```bash
-MIND_ROOT=/path/to/your/my-mind npm start
-```
-
-### Run with Streamable HTTP
+The MCP server starts automatically alongside the app:
 
 ```bash
-MIND_ROOT=/path/to/your/my-mind \
-MCP_TRANSPORT=http \
-MCP_HOST=0.0.0.0 \
-MCP_PORT=8787 \
-MCP_ENDPOINT=/mcp \
-AUTH_TOKEN=your-strong-token \
-npm start
+mindos start   # starts app + MCP server together
 ```
 
-Health check:
+Or run MCP server only:
 
 ```bash
-curl http://127.0.0.1:8787/healthz
+mindos mcp     # HTTP mode (default, port 8787)
+MCP_TRANSPORT=stdio mindos mcp   # stdio mode
 ```
 
-## Agent Configuration
+## Environment Variables
 
-Register in your Agent client's MCP config:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MINDOS_URL` | `http://localhost:3000` | App server base URL |
+| `AUTH_TOKEN` | — | Optional: bearer token (must match App's `AUTH_TOKEN`) |
+| `MCP_TRANSPORT` | `http` | Transport mode: `http` or `stdio` |
+| `MCP_HOST` | `127.0.0.1` | HTTP bind address (`0.0.0.0` for remote access) |
+| `MCP_PORT` | `8787` | HTTP listen port (configurable via `mindos onboard`) |
+| `MCP_ENDPOINT` | `/mcp` | HTTP endpoint path |
 
-### Local stdio
+## MCP Tools (20)
 
+| Tool | App API | Description |
+|------|---------|-------------|
+| `mindos_list_files` | `GET /api/files` | List all files in the knowledge base |
+| `mindos_read_file` | `GET /api/file?path=...` | Read file content (with offset/limit pagination) |
+| `mindos_write_file` | `POST /api/file` op=save_file | Overwrite file content |
+| `mindos_create_file` | `POST /api/file` op=create_file | Create a new .md or .csv file |
+| `mindos_delete_file` | `POST /api/file` op=delete_file | Delete a file |
+| `mindos_rename_file` | `POST /api/file` op=rename_file | Rename a file (same directory) |
+| `mindos_move_file` | `POST /api/file` op=move_file | Move a file to a new path |
+| `mindos_search_notes` | `GET /api/search?q=...` | Full-text search across all files |
+| `mindos_get_recent` | `GET /api/recent-files` | Get recently modified files |
+| `mindos_read_lines` | `GET /api/file?op=read_lines` | Read file as numbered line array |
+| `mindos_insert_lines` | `POST /api/file` op=insert_lines | Insert lines at a position |
+| `mindos_update_lines` | `POST /api/file` op=update_lines | Replace a range of lines |
+| `mindos_append_to_file` | `POST /api/file` op=append_to_file | Append content to end of file |
+| `mindos_insert_after_heading` | `POST /api/file` op=insert_after_heading | Insert after a Markdown heading |
+| `mindos_update_section` | `POST /api/file` op=update_section | Replace a Markdown section |
+| `mindos_append_csv` | `POST /api/file` op=append_csv | Append a row to a CSV file |
+| `mindos_get_backlinks` | `GET /api/backlinks?path=...` | Find files referencing a given path |
+| `mindos_bootstrap` | `GET /api/bootstrap` | Load startup context (INSTRUCTION, CONFIG, etc.) |
+| `mindos_get_history` | `GET /api/git?op=history` | Get git commit history for a file |
+| `mindos_get_file_at_version` | `GET /api/git?op=show` | Read file content at a specific commit |
+
+## Agent Integration
+
+Add to your Agent's MCP config (field names vary by client):
+
+**Local (HTTP):**
+```json
+{
+  "mcpServers": {
+    "mindos": {
+      "url": "http://localhost:8787/mcp",
+      "headers": { "Authorization": "Bearer your-token" }
+    }
+  }
+}
+```
+
+**Local (stdio):**
 ```json
 {
   "mcpServers": {
     "mindos": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/path/to/MindOS/mcp/dist/index.js"],
-      "env": {
-        "MIND_ROOT": "/path/to/MindOS/my-mind"
-      }
+      "command": "mindos",
+      "args": ["mcp"],
+      "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
 }
 ```
 
-### Remote URL (Streamable HTTP)
-
+**Remote:**
 ```json
 {
   "mcpServers": {
-    "mindos-remote": {
+    "mindos": {
       "url": "http://<server-ip>:8787/mcp",
-      "headers": {
-        "Authorization": "Bearer your-strong-token"
-      }
+      "headers": { "Authorization": "Bearer your-token" }
     }
   }
 }
 ```
 
-**Claude Code:**
-```bash
-claude mcp add mindos -- node /path/to/MindOS/mcp/dist/index.js
-```
-
-## Tools (20)
-
-| Tool | Description |
-|------|-------------|
-| `mindos_bootstrap` | Load startup context (INSTRUCTION + README + CONFIG) in one call |
-| `mindos_list_files` | Full file tree of the knowledge base |
-| `mindos_read_file` | Read file content with pagination |
-| `mindos_write_file` | Overwrite file (protected files blocked) |
-| `mindos_create_file` | Create new .md/.csv file |
-| `mindos_delete_file` | Delete file (protected files blocked) |
-| `mindos_rename_file` | Rename file in-place |
-| `mindos_move_file` | Move file + report affected backlinks |
-| `mindos_search_notes` | Full-text search with scope/type/date filters |
-| `mindos_get_recent` | Recently modified files |
-| `mindos_get_backlinks` | Find all files referencing a given file |
-| `mindos_get_history` | Git commit history for a file |
-| `mindos_get_file_at_version` | Read file at a specific git commit |
-| `mindos_append_csv` | Append row to CSV file |
-| `mindos_read_lines` | Read file as numbered lines |
-| `mindos_insert_lines` | Insert lines at position |
-| `mindos_update_lines` | Replace line range |
-| `mindos_append_to_file` | Append content to file end |
-| `mindos_insert_after_heading` | Insert content after a heading |
-| `mindos_update_section` | Replace a markdown section |
-
-## Environment Variables
-
-| Variable | Required | Description |
-|:---------|:--------:|:------------|
-| `MIND_ROOT` | Yes | Absolute path to the knowledge base root directory |
-| `MCP_TRANSPORT` | No | `stdio` (default) or `http` (`streamable-http` also accepted) |
-| `MCP_HOST` | No | HTTP bind host (default: `127.0.0.1`) |
-| `MCP_PORT` | No | HTTP bind port (default: `8787`) |
-| `MCP_ENDPOINT` | No | HTTP MCP endpoint path (default: `/mcp`) |
-| `MCP_HTTP_STATEFUL` | No | `true` to enable stateful sessions, default `false` (stateless) |
-| `AUTH_TOKEN` | No | Bearer token for HTTP auth. Strongly recommended in remote/public mode |
-
 ## Tech Stack
 
-- **Runtime:** Node.js ≥ 18
-- **Protocol:** [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/sdk) v1.6+
-- **Validation:** Zod
-- **Language:** TypeScript
-
-## Project Structure
-
-```
-mcp/
-├── src/
-│   └── index.ts      # All tool definitions and handlers
-├── dist/              # Compiled output
-├── package.json
-└── tsconfig.json
-```
+TypeScript · @modelcontextprotocol/sdk · zod
