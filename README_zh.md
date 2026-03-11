@@ -122,8 +122,10 @@ npm link   # 将 mindos 命令注册为全局命令
 ### 2. 交互式配置
 
 ```bash
-mindos onboard --install-daemon  # 初始化 + 安装并启动后台服务
+mindos onboard --install-daemon
 ```
+
+> `--install-daemon`：配置完成后，自动将 MindOS 安装为后台 OS 服务（关闭终端仍运行，崩溃自动重启）。
 
 配置向导将引导你完成：
 1. 知识库路径 → 默认 `~/.mindos/my-mind`

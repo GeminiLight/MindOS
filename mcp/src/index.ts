@@ -470,7 +470,8 @@ async function main() {
     }
 
     expressApp.all(MCP_ENDPOINT, async (req, res) => {
-      await transport.handleRequest(req, res);
+      // Pass pre-parsed body: express.json() already parsed it, SDK >= 1.7 expects it as 3rd arg
+      await transport.handleRequest(req, res, req.body);
     });
 
     await server.connect(transport);
