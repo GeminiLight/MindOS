@@ -642,7 +642,8 @@ async function main() {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
 
-  finish(mindDir, config.startMode, config.mcpPort, config.authToken);
+  const installDaemon = process.argv.includes('--install-daemon');
+  finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon);
 }
 
 function getLocalIP() {
@@ -654,8 +655,8 @@ function getLocalIP() {
   return null;
 }
 
-async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = '') {
-  const startCmd = startMode === 'dev' ? 'mindos dev' : 'mindos start';
+async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = '', installDaemon = false) {
+  const startCmd = installDaemon ? 'mindos start --daemon' : (startMode === 'dev' ? 'mindos dev' : 'mindos start');
   const lines = T.nextSteps[uiLang](startCmd);
   console.log('');
   lines.forEach((l) => console.log(l));
@@ -664,7 +665,12 @@ async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = 
   if (doStart) {
     const { execSync } = await import('node:child_process');
     const cliPath = resolve(__dirname, '../bin/cli.js');
-    execSync(`node "${cliPath}" ${startMode}`, { stdio: 'inherit' });
+    if (installDaemon) {
+      // Install and start as background service — returns immediately
+      execSync(`node "${cliPath}" start --daemon`, { stdio: 'inherit' });
+    } else {
+      execSync(`node "${cliPath}" ${startMode}`, { stdio: 'inherit' });
+    }
   }
 }
 

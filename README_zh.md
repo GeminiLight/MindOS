@@ -132,14 +132,13 @@ mindos onboard --install-daemon  # 初始化 + 安装并启动后台服务
 4. 配置 AI Provider（Anthropic / OpenAI）+ API Key — 或选择 **skip**，稍后通过 `mindos config set` 补填
 5. 配置自动保存到 `~/.mindos/config.json`
 
-> [!TIP]
-> **For Agents：** 运行 onboard 前，如果用户未提供 LLM 配置，请询问：
-> 1. AI Provider — `anthropic` 还是 `openai`（兼容）？
-> 2. API Key — 对应 Provider 的密钥
-> 3. 自定义 Base URL？— 仅代理或 OpenAI 兼容端点需要；使用官方 API 则跳过
-> 4. Model ID — 或使用默认值
->
-> 或跳过向导，手动编辑 `~/.mindos/config.json`（参考下方配置参考）。
+<!-- For Agents: 运行 onboard 前，如果用户未提供 LLM 配置，请询问：
+1. AI Provider — `anthropic` 还是 `openai`（兼容）？
+2. API Key — 对应 Provider 的密钥
+3. 自定义 Base URL？— 仅代理或 OpenAI 兼容端点需要；使用官方 API 则跳过
+4. Model ID — 或使用默认值
+或跳过向导，手动编辑 `~/.mindos/config.json`（参考下方配置参考）。
+-->
 
 <details>
 <summary>配置参考（~/.mindos/config.json）</summary>
@@ -191,7 +190,7 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
 启动后，MindOS 会自动打印 Web UI 地址、MCP 配置片段和 Auth token，直接复制到你的 Agent 即可。
 
 > [!TIP]
-> **升级？** 运行 `mindos update` — 自动安装最新版本，下次 start 时触发重建。
+> **升级？** 运行 `mindos update` 安装最新版本。
 
 > [!TIP]
 > 如果端口被占用，在 `mindos onboard` 时指定其他端口，或更新 `~/.mindos/config.json`，也可通过环境变量临时覆盖：
@@ -213,8 +212,9 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
 
 #### 5.1 配置 MindOS MCP
 
+<!-- For Agents: MindOS MCP 默认注册为全局（user-level）配置，使所有项目共享同一知识库。-->
+
 > [!TIP]
-> **For Agents：** MindOS MCP 默认注册为全局（user-level）配置，使所有项目共享同一知识库。
 > 每个 Agent 的 MCP 配置文件路径不同——详见下方 [支持的 Agent](#-支持的-agent) 表格中的 **MCP 配置文件路径** 列。
 
 将 MindOS MCP Server 注册到你的 Agent 客户端：
