@@ -3,6 +3,7 @@ app/node_modules
 app/.next
 app/data
 !app/data/skills
+*.tsbuildinfo
 
 app/.env.local
 app/.mindos-settings.json
@@ -20,3 +21,10 @@ skills/mindos/evals
 skills/mindos-zh/evals
 
 */skills-lock.json
+
+
+assets/node_modules
+assets/capture-demo.mjs
+assets/package-lock.json
+assets/package.json
+assets/demo-flow.html

@@ -153,6 +153,9 @@ export async function POST(req: NextRequest) {
       messages,
       tools: knowledgeBaseTools,
       stopWhen: stepCountIs(stepLimit),
+      onError: ({ error }) => {
+        console.error('[ask] Stream error:', error);
+      },
     });
 
     return result.toTextStreamResponse();

@@ -22,6 +22,14 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ---
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/images/demo-flow-zh-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/images/demo-flow-zh-light.png" />
+    <img src="assets/images/demo-flow-zh-light.png" alt="MindOS：从灵感到执行到复盘" width="960" />
+  </picture>
+</p>
+
 > [!IMPORTANT]
 > **⭐ 一键安装：** 把这句话发给你的 Agent（Claude Code、Cursor 等），自动完成全部安装：
 > ```
