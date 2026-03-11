@@ -185,6 +185,7 @@ cd app && npm run dev
 
 > [!TIP]
 > **For Agents：** MindOS MCP 默认注册为全局（user-level）配置，使所有项目共享同一知识库。
+> 每个 Agent 的 MCP 配置文件路径不同——详见上方 [支持的 Agent](#-支持的-agent) 表格中的 **MCP 配置文件路径** 列。
 
 将 MindOS MCP Server 注册到你的 Agent 客户端：
 
@@ -316,19 +317,20 @@ graph LR
 
 ## 🤝 支持的 Agent
 
-| Agent | MCP | Skills |
-|:------|:---:|:------:|
-| MindOS Agent | ✅ | ✅ |
-| OpenClaw | ✅ | ✅ |
-| Claude Desktop | ✅ | ✅ |
-| Claude Code | ✅ | ✅ |
-| CodeBuddy | ✅ | ✅ |
-| Cursor | ✅ | ✅ |
-| Windsurf | ✅ | ✅ |
-| Cline | ✅ | ✅ |
-| Trae | ✅ | ✅ |
-| Gemini CLI | ✅ | ✅ |
-| GitHub Copilot | ✅ | ✅ |
+| Agent | MCP | Skills | MCP 配置文件路径 |
+|:------|:---:|:------:|:-----------------|
+| MindOS Agent | ✅ | ✅ | 内置（无需配置） |
+| OpenClaw | ✅ | ✅ | `~/.openclaw/openclaw.json` 或 `~/.openclaw/mcp.json` |
+| Claude Desktop | ✅ | ✅ | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Code | ✅ | ✅ | `~/.claude.json`（全局）或 `.mcp.json`（项目级） |
+| CodeBuddy | ✅ | ✅ | `~/.claude-internal/.claude.json`（全局） |
+| Cursor | ✅ | ✅ | `~/.cursor/mcp.json`（全局）或 `.cursor/mcp.json`（项目级） |
+| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Trae | ✅ | ✅ | `~/.trae/mcp.json`（全局）或 `.trae/mcp.json`（项目级） |
+| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json`（全局）或 `.gemini/settings.json`（项目级） |
+| GitHub Copilot | ✅ | ✅ | `.vscode/mcp.json`（项目级）或 VS Code 用户 `settings.json`（全局） |
+| iFlow | ✅ | ✅ | iFlow 平台 MCP 配置面板 |
 
 ---
 

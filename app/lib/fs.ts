@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import Fuse, { FuseResultMatch } from 'fuse.js';
 import { FileNode, SearchResult } from './types';
 import { effectiveSopRoot } from './settings';
 
@@ -47,6 +48,7 @@ function isCacheValid(): boolean {
 /** Invalidate cache — call after any write/create/delete/rename operation */
 export function invalidateCache(): void {
   _cache = null;
+  _searchIndex = null;
 }
 
 function ensureCache(): FileTreeCache {
@@ -263,13 +265,30 @@ export function getRecentlyModified(limit = 10): Array<{ path: string; mtime: nu
   return withMtime.slice(0, limit);
 }
 
-/** Full-text search across all files. Returns matching files with snippet context. */
-export function searchFiles(query: string): SearchResult[] {
-  if (!query.trim()) return [];
+// ─── Search index cache ──────────────────────────────────────────────────────
+
+const MAX_CONTENT_LENGTH = 50_000; // Truncate large files for indexing
+
+interface SearchIndex {
+  fuse: InstanceType<typeof Fuse<SearchDocument>>;
+  documents: SearchDocument[];
+  timestamp: number;
+}
+
+interface SearchDocument {
+  path: string;
+  fileName: string;
+  content: string;
+}
+
+let _searchIndex: SearchIndex | null = null;
+
+function getSearchIndex(): SearchIndex {
+  // Reuse index if file-tree cache is still valid (same TTL)
+  if (_searchIndex && isCacheValid()) return _searchIndex;
 
   const allFiles = collectAllFiles();
-  const results: SearchResult[] = [];
-  const lowerQuery = query.toLowerCase();
+  const documents: SearchDocument[] = [];
 
   for (const filePath of allFiles) {
     let content: string;
@@ -278,25 +297,112 @@ export function searchFiles(query: string): SearchResult[] {
     } catch {
       continue;
     }
-
-    const lowerContent = content.toLowerCase();
-    const index = lowerContent.indexOf(lowerQuery);
-    if (index === -1) continue;
-
-    const snippetStart = Math.max(0, index - 60);
-    const snippetEnd = Math.min(content.length, index + query.length + 60);
-    let snippet = content.slice(snippetStart, snippetEnd).replace(/\n/g, ' ').trim();
-    if (snippetStart > 0) snippet = '...' + snippet;
-    if (snippetEnd < content.length) snippet = snippet + '...';
-
-    const occurrences = (lowerContent.match(new RegExp(lowerQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-    const score = occurrences / content.length;
-
-    results.push({ path: filePath, snippet, score });
+    // Truncate very large files to keep index fast
+    if (content.length > MAX_CONTENT_LENGTH) {
+      content = content.slice(0, MAX_CONTENT_LENGTH);
+    }
+    documents.push({
+      path: filePath,
+      fileName: path.basename(filePath),
+      content,
+    });
   }
 
-  results.sort((a, b) => b.score - a.score);
-  return results.slice(0, 20);
+  const fuse = new Fuse(documents, {
+    keys: [
+      { name: 'fileName', weight: 0.3 },
+      { name: 'path', weight: 0.2 },
+      { name: 'content', weight: 0.5 },
+    ],
+    includeScore: true,
+    includeMatches: true,
+    threshold: 0.4,
+    ignoreLocation: true,
+    minMatchCharLength: 2,
+    useExtendedSearch: true, // Support exact match with = and other operators
+  });
+
+  _searchIndex = { fuse, documents, timestamp: Date.now() };
+  return _searchIndex;
+}
+
+/** Clear search index when files change */
+function invalidateSearchIndex(): void {
+  _searchIndex = null;
+}
+
+/** Full-text search across all files using Fuse.js fuzzy matching. */
+export function searchFiles(query: string): SearchResult[] {
+  if (!query.trim()) return [];
+
+  const { fuse, documents } = getSearchIndex();
+
+  // For CJK characters, use extended search with exact-match for better results
+  const hasCJK = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(query);
+  const searchQuery = hasCJK ? `'${query}` : query; // prefix ' = include-match in extended search
+
+  const fuseResults = fuse.search(searchQuery, { limit: 20 });
+
+  return fuseResults.map((r) => {
+    const filePath = r.item.path;
+    const content = r.item.content;
+    const score = 1 - (r.score ?? 1); // Fuse score is 0=perfect, invert for our ranking
+
+    const snippet = generateSnippet(content, r.matches);
+
+    // Pass along matches for frontend highlighting
+    const matches = r.matches?.map((m) => ({
+      indices: m.indices as [number, number][],
+      value: m.value ?? '',
+      key: m.key ?? '',
+    }));
+
+    return { path: filePath, snippet, score, matches };
+  });
+}
+
+/** Pick the best (longest) content match and build a context snippet around it. */
+function generateSnippet(
+  content: string,
+  matches?: readonly FuseResultMatch[],
+): string {
+  const contentMatch = matches?.find((m) => m.key === 'content');
+  if (!contentMatch || contentMatch.indices.length === 0) {
+    // Fallback: use beginning of content
+    const s = content.slice(0, 120).replace(/\n/g, ' ').trim();
+    return content.length > 120 ? s + '...' : s;
+  }
+
+  // Pick the longest match span for the best snippet
+  let bestStart = 0, bestEnd = 0, bestLen = 0;
+  for (const [ms, me] of contentMatch.indices) {
+    const len = me - ms;
+    if (len > bestLen) {
+      bestStart = ms;
+      bestEnd = me;
+      bestLen = len;
+    }
+  }
+
+  const snippetStart = Math.max(0, bestStart - 60);
+  const snippetEnd = Math.min(content.length, bestEnd + 61);
+
+  // Snap to word boundaries
+  let start = snippetStart;
+  if (start > 0) {
+    const spaceIdx = content.indexOf(' ', start);
+    if (spaceIdx !== -1 && spaceIdx < bestStart) start = spaceIdx + 1;
+  }
+  let end = snippetEnd;
+  if (end < content.length) {
+    const spaceIdx = content.lastIndexOf(' ', end);
+    if (spaceIdx > bestEnd) end = spaceIdx;
+  }
+
+  let snippet = content.slice(start, end).replace(/\n/g, ' ').trim();
+  if (start > 0) snippet = '...' + snippet;
+  if (end < content.length) snippet = snippet + '...';
+  return snippet;
 }
 
 /** Finds files that reference the given filePath. */
