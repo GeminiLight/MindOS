@@ -185,6 +185,7 @@ Open [http://localhost:3000](http://localhost:3000) to get started.
 
 > [!TIP]
 > **For Agents:** Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base.
+> Each Agent stores MCP config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table above for exact paths.
 
 Register the MindOS MCP Server in your Agent client:
 
@@ -316,19 +317,20 @@ graph LR
 
 ## 🤝 Supported Agents
 
-| Agent | MCP | Skills |
-|:------|:---:|:------:|
-| MindOS Agent | ✅ | ✅ |
-| OpenClaw | ✅ | ✅ |
-| Claude Desktop | ✅ | ✅ |
-| Claude Code | ✅ | ✅ |
-| CodeBuddy | ✅ | ✅ |
-| Cursor | ✅ | ✅ |
-| Windsurf | ✅ | ✅ |
-| Cline | ✅ | ✅ |
-| Trae | ✅ | ✅ |
-| Gemini CLI | ✅ | ✅ |
-| GitHub Copilot | ✅ | ✅ |
+| Agent | MCP | Skills | MCP Config Path |
+|:------|:---:|:------:|:----------------|
+| MindOS Agent | ✅ | ✅ | Built-in (no config needed) |
+| OpenClaw | ✅ | ✅ | `~/.openclaw/openclaw.json` or `~/.openclaw/mcp.json` |
+| Claude Desktop | ✅ | ✅ | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Code | ✅ | ✅ | `~/.claude.json` (global) or `.mcp.json` (project) |
+| CodeBuddy | ✅ | ✅ | `~/.claude-internal/.claude.json` (global) |
+| Cursor | ✅ | ✅ | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) |
+| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Trae | ✅ | ✅ | `~/.trae/mcp.json` (global) or `.trae/mcp.json` (project) |
+| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) |
+| GitHub Copilot | ✅ | ✅ | `.vscode/mcp.json` (project) or VS Code User `settings.json` (global) |
+| iFlow | ✅ | ✅ | iFlow platform MCP configuration panel |
 
 ---
 

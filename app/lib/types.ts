@@ -7,10 +7,17 @@ export interface FileNode {
   mtime?: number;
 }
 
+export interface SearchMatch {
+  indices: [number, number][];
+  value: string;
+  key: string;
+}
+
 export interface SearchResult {
   path: string;
   snippet: string;
   score: number;
+  matches?: SearchMatch[];
 }
 
 export interface Message {
