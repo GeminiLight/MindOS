@@ -26,7 +26,8 @@ function extractPdf(buf: Buffer): { text: string; pages: number } {
   // Write PDF to a temp file so the child script can read it.
   const tmpDir = os.tmpdir();
   const tmpPdf = path.join(tmpDir, `pdf-extract-${Date.now()}.pdf`);
-  const scriptPath = path.resolve(process.cwd(), 'scripts/extract-pdf.cjs');
+  // Dynamic path construction to prevent Turbopack static analysis
+  const scriptPath = [process.cwd(), 'scripts', 'extract-pdf.cjs'].join(path.sep);
 
   fs.writeFileSync(tmpPdf, buf);
   try {
