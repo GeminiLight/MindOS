@@ -122,8 +122,10 @@ npm link   # registers the `mindos` command globally
 ### 2. Interactive Setup
 
 ```bash
-mindos onboard --install-daemon  # setup + install & start as background OS service
+mindos onboard --install-daemon
 ```
+
+> `--install-daemon`: after setup, automatically installs and starts MindOS as a background OS service (survives terminal close, auto-restarts on crash).
 
 The setup wizard will guide you through:
 1. Knowledge base path → default `~/.mindos/my-mind`
