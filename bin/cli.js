@@ -126,6 +126,19 @@ function clearBuildLock() {
   }
 }
 
+function ensureAppDeps() {
+  // When installed as a global npm package, app/node_modules may not exist.
+  // next (and other deps) must be resolvable from app/ for Turbopack to work.
+  const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
+  if (!existsSync(appNext)) {
+    console.log(yellow('Installing app dependencies (first run)...\n'));
+    // --no-workspaces: prevent npm from hoisting deps to monorepo root.
+    // When globally installed, deps must live in app/node_modules/ so that
+    // Turbopack can resolve next/package.json from the app/ project directory.
+    run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
+  }
+}
+
 // ── Port check ────────────────────────────────────────────────────────────────
 
 function isPortInUse(port) {
@@ -237,8 +250,20 @@ const systemd = {
     console.log(green('✔ Service installed and enabled'));
   },
 
-  start() {
+  async start() {
     execSync('systemctl --user start mindos', { stdio: 'inherit' });
+    // Wait up to 10s for the service to become active
+    const ok = await waitForService(() => {
+      try {
+        const out = execSync('systemctl --user is-active mindos', { encoding: 'utf-8' }).trim();
+        return out === 'active';
+      } catch { return false; }
+    });
+    if (!ok) {
+      console.error(red('\n✘ Service failed to start. Last log output:'));
+      try { execSync(`journalctl --user -u mindos -n 30 --no-pager`, { stdio: 'inherit' }); } catch {}
+      process.exit(1);
+    }
     console.log(green('✔ Service started'));
   },
 
@@ -314,8 +339,20 @@ const launchd = {
     console.log(green('✔ Service installed'));
   },
 
-  start() {
+  async start() {
     execSync(`launchctl kickstart -k gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
+    // Wait up to 10s for the service to become active
+    const ok = await waitForService(() => {
+      try {
+        const out = execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { encoding: 'utf-8' });
+        return out.includes('state = running');
+      } catch { return false; }
+    });
+    if (!ok) {
+      console.error(red('\n✘ Service failed to start. Last log output:'));
+      try { execSync(`tail -n 30 ${LOG_PATH}`, { stdio: 'inherit' }); } catch {}
+      process.exit(1);
+    }
     console.log(green('✔ Service started'));
   },
 
@@ -351,6 +388,14 @@ const launchd = {
 };
 
 // ── gateway dispatcher ────────────────────────────────────────────────────────
+
+async function waitForService(check, { retries = 10, intervalMs = 1000 } = {}) {
+  for (let i = 0; i < retries; i++) {
+    if (check()) return true;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return check();
+}
 
 async function runGatewayCommand(sub) {
   const platform = getPlatform();
@@ -396,7 +441,11 @@ function printStartupInfo(webPort, mcpPort) {
   console.log(`\n${'─'.repeat(53)}`);
   console.log(`${bold('🧠 MindOS is starting')}\n`);
   console.log(`  ${green('●')} Web UI   ${cyan(`http://localhost:${webPort}`)}`);
-  console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}\n`);
+  if (localIP) console.log(`             ${cyan(`http://${localIP}:${webPort}`)}`);
+  console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
+  if (localIP) console.log(`             ${cyan(`http://${localIP}:${mcpPort}/mcp`)}`);
+  if (localIP) console.log(dim(`\n  💡 Running on a remote server? Open the Network URL (${localIP}) in your browser,\n     or use SSH port forwarding: ssh -L ${webPort}:localhost:${webPort} user@${localIP}`));
+  console.log();
   console.log(bold('Configure MCP in your Agent:'));
   console.log(dim('  Local (same machine):'));
   console.log(block('localhost'));
@@ -481,6 +530,7 @@ const commands = {
     const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
     await assertPortFree(Number(webPort), 'web');
     await assertPortFree(Number(mcpPort), 'mcp');
+    ensureAppDeps();
     const mcp = spawnMcp(isVerbose);
     savePids(process.pid, mcp.pid);
     process.on('exit', clearPids);
@@ -514,6 +564,7 @@ const commands = {
     const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
     await assertPortFree(Number(webPort), 'web');
     await assertPortFree(Number(mcpPort), 'mcp');
+    ensureAppDeps();
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
       clearBuildLock();
@@ -529,6 +580,7 @@ const commands = {
 
   // ── build ──────────────────────────────────────────────────────────────────
   build: () => {
+    ensureAppDeps();
     clearBuildLock();
     run(`npx next build ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
