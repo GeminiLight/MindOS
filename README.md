@@ -22,6 +22,7 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ---
 
+> [!IMPORTANT]
 > **⭐ One-click install:** Send this to your Agent (Claude Code, Cursor, etc.) to set up everything automatically:
 > ```
 > Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
