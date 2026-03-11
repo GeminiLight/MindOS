@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, IBM_Plex_Mono, IBM_Plex_Sans, Lora } from 'next/font/google';
-import { headers } from 'next/headers';
 import './globals.css';
 import { getFileTree } from '@/lib/fs';
-import SidebarLayout from '@/components/SidebarLayout';
+import ShellLayout from '@/components/ShellLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -49,7 +48,7 @@ export const viewport = {
   viewportFit: 'cover' as const,
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -60,9 +59,6 @@ export default async function RootLayout({
   } catch (err) {
     console.error('[RootLayout] Failed to load file tree:', err);
   }
-
-  const headersList = await headers();
-  const isLoginPage = headersList.get('x-pathname') === '/login';
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -89,11 +85,9 @@ export default async function RootLayout({
         <LocaleProvider>
           <TooltipProvider delay={300}>
             <ErrorBoundary>
-              {isLoginPage ? children : (
-                <SidebarLayout fileTree={fileTree}>
-                  {children}
-                </SidebarLayout>
-              )}
+              <ShellLayout fileTree={fileTree}>
+                {children}
+              </ShellLayout>
             </ErrorBoundary>
           </TooltipProvider>
         </LocaleProvider>

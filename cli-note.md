@@ -149,6 +149,65 @@ openclaw skills                      插件管理
 
 ---
 
+### 4. `npm not found` 友好错误提示
+
+**背景：** 用户通过 nvm/fnm/volta 安装 Node.js 时，npm 只在交互式 shell 中可用，`/bin/sh` 找不到，导致 `ensureAppDeps()` 报 `npm: command not found` 并反复循环，没有任何指引。
+
+**改动：**
+- `ensureAppDeps()`：执行 `npm install` 前先 `npm --version` 探测，找不到则立即退出并打印原因 + 修复方式（将 Node bin 路径加入 `~/.profile`）
+- `mindos doctor`：新增第 4b 项检查 npm 可达性，提前发现问题
+
+**关键文件：** `bin/cli.js` `ensureAppDeps()`、`doctor`
+
+---
+
+### 5. `mindos onboard --install-daemon` 启动等待体验
+
+**背景：** `systemctl start` 返回后 `is-active` 立刻变为 active（进程存在），但服务进程内部还要跑 `npm install` + `next build`（可能几分钟）。之前打印 `✔ Service started` 就结束，用户去浏览器开页面什么都没有，完全无感知。
+
+**根本问题：** `is-active` ≠ HTTP 服务 ready。
+
+**改动：**
+- 新增 `waitForHttp(port)` 函数：轮询 `HTTP HEAD 127.0.0.1:<port>/`，最多 120 次（每次 2s，共 4 分钟），每次打一个点显示进度
+- `start --daemon` 流程：`runGatewayCommand('start')` 之后调用 `waitForHttp`，HTTP 200 才算真正 ready
+- 等待期间提示用户可用 `mindos logs` 跟踪进度
+- 超时则打印错误并 `process.exit(1)`，不无声失败
+
+**新流程：**
+```
+systemctl start
+  → 提示"第一次启动可能需要几分钟..."
+  → 提示"可用 mindos logs 跟踪进度"
+  → Waiting for Web UI to be ready..........✔
+  → 打印 MCP 配置 + ✔ MindOS is running as a background service
+```
+
+**关键文件：** `bin/cli.js` `waitForHttp()`、`start --daemon` 分支
+
+---
+
+---
+
+### 6. `mindos update` 自动重启 daemon
+
+**背景：** `mindos update` 只做 `npm install -g mindos@latest` + 清除 build stamp，然后提示用户手动 `mindos start`。daemon 场景下服务还在用旧版本跑，需要用户自己重启，体验差。
+
+**改动：** 版本升级后检测 daemon 是否在跑，在跑则自动 stop + start + 等待 HTTP ready：
+
+```
+mindos update
+  → npm install -g mindos@latest
+  → 版本没变 → "Already on latest" 退出
+  → 版本升了 → ✔ Updated x.x.x → x.x.x
+      → 检测 daemon
+        → 没跑：提示 "run mindos start"
+        → 在跑：stop → start → waitForHttp → ✔ MindOS restarted and ready.
+```
+
+**关键文件：** `bin/cli.js` `update`（改为 async）
+
+---
+
 ### 不适合 MindOS 的
 
 - in-chat commands（`/status`、`/think`）：MindOS 用标准 MCP 协议，不是自己的消息通道
