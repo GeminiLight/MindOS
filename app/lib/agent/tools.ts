@@ -4,6 +4,7 @@ import {
   searchFiles, getFileContent, getFileTree, getRecentlyModified,
   saveFileContent, createFile, appendToFile, insertAfterHeading, updateSection,
 } from '@/lib/fs';
+import { assertNotProtected } from '@/lib/core';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -13,15 +14,9 @@ export function truncate(content: string): string {
   return content.slice(0, MAX_FILE_CHARS) + `\n\n[...truncated — file is ${content.length} chars, showing first ${MAX_FILE_CHARS}]`;
 }
 
-// ─── INSTRUCTION.md write-protection ──────────────────────────────────────────
-
-const ROOT_PROTECTED_FILES = new Set(['INSTRUCTION.md']);
-
+/** Checks write-protection using core's assertNotProtected */
 export function assertWritable(filePath: string): void {
-  const normalized = filePath.replace(/^\/+/, '');
-  if (ROOT_PROTECTED_FILES.has(normalized)) {
-    throw new Error('INSTRUCTION.md is a read-only system kernel file. Edit it manually.');
-  }
+  assertNotProtected(filePath, 'modified by AI agent');
 }
 
 // ─── Knowledge base tools ─────────────────────────────────────────────────────

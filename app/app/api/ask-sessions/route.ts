@@ -1,5 +1,7 @@
+export const dynamic = 'force-dynamic';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface Message {
@@ -15,7 +17,7 @@ interface ChatSession {
   messages: Message[];
 }
 
-const STORE_PATH = path.resolve(process.cwd(), 'data/ask-sessions.json');
+const STORE_PATH = path.resolve(os.homedir(), '.mindos', 'sessions.json');
 const MAX_SESSIONS = 30;
 
 function ensureStoreDir() {

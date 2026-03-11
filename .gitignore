@@ -1,9 +1,7 @@
-mcp/node_modules
-app/node_modules
+**/node_modules/
+**/dist/
 app/.next
 app/data
-app/.env.local
-app/.mindos-settings.json
 !app/data/skills
 
 my-mind/

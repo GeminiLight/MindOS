@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GitCompare, CheckCircle2, XCircle, FileEdit, ChevronDown } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 import type { RendererContext } from '@/lib/renderers/registry';
 
 // ─── Diff entry format ────────────────────────────────────────────────────────
@@ -163,7 +164,7 @@ function DiffCard({ entry, saveAction, fullContent }: {
   async function handleReject() {
     setApproved(false);
     // Revert: write the "before" content back to the target file
-    await fetch('/api/file', {
+    await apiFetch('/api/file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ op: 'save_file', path: entry.path, content: entry.before }),
