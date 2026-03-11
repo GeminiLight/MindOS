@@ -107,7 +107,7 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 **方式 A：npm 安装（推荐）**
 
 ```bash
-npm install -g mindos@latest
+npm install -g @geminilight/mindos@latest
 ```
 
 **方式 B：克隆源码**
