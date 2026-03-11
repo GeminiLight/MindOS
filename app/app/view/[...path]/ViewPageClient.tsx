@@ -55,7 +55,7 @@ export default function ViewPageClient({
     },
     () => {
       const saved = localStorage.getItem('mindos-use-raw');
-      return saved !== null ? saved === 'true' : true;
+      return saved !== null ? saved === 'true' : false;
     },
     () => false,
   );
