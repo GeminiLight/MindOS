@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useSyncExternalStore, ReactNode } from 'react';
 import { Locale, messages, Messages } from './i18n';
 
 interface LocaleContextValue {
@@ -15,17 +15,25 @@ const LocaleContext = createContext<LocaleContextValue>({
   t: messages['en'],
 });
 
-export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('en');
+function getLocaleSnapshot(): Locale {
+  const saved = localStorage.getItem('locale');
+  return saved === 'zh' ? 'zh' : 'en';
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem('locale') as Locale | null;
-    if (saved === 'zh' || saved === 'en') setLocaleState(saved);
-  }, []);
+export function LocaleProvider({ children }: { children: ReactNode }) {
+  const locale = useSyncExternalStore(
+    (onStoreChange) => {
+      const listener = () => onStoreChange();
+      window.addEventListener('mindos-locale-change', listener);
+      return () => window.removeEventListener('mindos-locale-change', listener);
+    },
+    getLocaleSnapshot,
+    () => 'en' as Locale,
+  );
 
   const setLocale = (l: Locale) => {
-    setLocaleState(l);
     localStorage.setItem('locale', l);
+    window.dispatchEvent(new Event('mindos-locale-change'));
   };
 
   return (

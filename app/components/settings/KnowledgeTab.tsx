@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Copy, Check, RefreshCw, Trash2 } from 'lucide-react';
 import type { SettingsData } from './types';
 import { Field, Input, EnvBadge, SectionLabel } from './Primitives';
@@ -15,6 +15,12 @@ interface KnowledgeTabProps {
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
   const k = t.settings.knowledge;
+
+  const origin = useSyncExternalStore(
+    () => () => {},
+    () => `${window.location.protocol}//${window.location.hostname}`,
+    () => 'http://localhost',
+  );
 
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordMasked = data.webPassword === '***set***';
@@ -118,7 +124,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
               {k.authTokenMcpPort}: <code className="font-mono">{data.mcpPort}</code>
               {displayToken && (
                 <> &nbsp;·&nbsp; MCP URL: <code className="font-mono select-all">
-                  {typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:${data.mcpPort}/mcp` : `http://localhost:${data.mcpPort}/mcp`}
+                  {`${origin}:${data.mcpPort}/mcp`}
                 </code></>
               )}
             </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useSyncExternalStore, useMemo } from 'react';
 import Link from 'next/link';
 import { FileText, Table, Folder, FolderOpen, LayoutGrid, List } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -33,16 +33,22 @@ function countFiles(node: FileNode): number {
 const DIR_VIEW_KEY = 'mindos-dir-view';
 
 function useDirViewPref() {
-  const [view, setViewState] = useState<'grid' | 'list'>('grid');
-
-  useEffect(() => {
-    const saved = localStorage.getItem(DIR_VIEW_KEY);
-    if (saved === 'list' || saved === 'grid') setViewState(saved);
-  }, []);
+  const view = useSyncExternalStore(
+    (onStoreChange) => {
+      const listener = () => onStoreChange();
+      window.addEventListener('mindos-dir-view-change', listener);
+      return () => window.removeEventListener('mindos-dir-view-change', listener);
+    },
+    () => {
+      const saved = localStorage.getItem(DIR_VIEW_KEY);
+      return (saved === 'list' || saved === 'grid') ? saved : 'grid';
+    },
+    () => 'grid' as const,
+  );
 
   const setView = (v: 'grid' | 'list') => {
-    setViewState(v);
     localStorage.setItem(DIR_VIEW_KEY, v);
+    window.dispatchEvent(new Event('mindos-dir-view-change'));
   };
 
   return [view, setView] as const;
