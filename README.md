@@ -107,7 +107,7 @@ Static documents are hard to synchronize and weak as execution systems in real h
 **Option A: npm (recommended)**
 
 ```bash
-npm install -g mindos@latest
+npm install -g @geminilight/mindos@latest
 ```
 
 **Option B: Clone from source**
