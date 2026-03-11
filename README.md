@@ -132,14 +132,13 @@ The setup wizard will guide you through:
 4. Configure AI Provider (Anthropic / OpenAI) + API Key — or choose **skip** to configure later via `mindos config set`
 5. Config saved to `~/.mindos/config.json` automatically
 
-> [!TIP]
-> **For Agents:** Before running setup, if the user has not provided LLM configuration, ask them:
-> 1. AI Provider — `anthropic` or `openai` (compatible)?
-> 2. API Key — the key for the chosen provider
-> 3. Custom Base URL? — only needed for proxies or OpenAI-compatible endpoints; skip if using official API
-> 4. Model ID — or use the default
->
-> Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Reference below).
+<!-- For Agents: Before running setup, if the user has not provided LLM configuration, ask them:
+1. AI Provider — `anthropic` or `openai` (compatible)?
+2. API Key — the key for the chosen provider
+3. Custom Base URL? — only needed for proxies or OpenAI-compatible endpoints; skip if using official API
+4. Model ID — or use the default
+Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Reference below).
+-->
 
 <details>
 <summary>Config Reference (~/.mindos/config.json)</summary>
@@ -191,7 +190,7 @@ mindos start    # start app + MCP server (production, auto-rebuilds when a new v
 On startup, MindOS prints your Web UI URL, MCP config snippet, and auth token — ready to copy into your Agent.
 
 > [!TIP]
-> **Upgrading?** Run `mindos update` — it installs the latest version and triggers a rebuild automatically on next start.
+> **Upgrading?** Run `mindos update` to install the latest version.
 
 > [!TIP]
 > If the port is already in use, set a different port during `mindos onboard` or update `~/.mindos/config.json`:
@@ -213,8 +212,9 @@ On startup, MindOS prints your Web UI URL, MCP config snippet, and auth token �
 
 #### 5.1 Configure MindOS MCP
 
+<!-- For Agents: Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base. -->
+
 > [!TIP]
-> **For Agents:** Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base.
 > Each Agent stores MCP config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table below for exact paths.
 
 Register the MindOS MCP Server in your Agent client:
