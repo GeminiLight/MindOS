@@ -131,6 +131,21 @@ function ensureAppDeps() {
   // next (and other deps) must be resolvable from app/ for Turbopack to work.
   const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
   if (!existsSync(appNext)) {
+    // Check npm is accessible before trying to run it.
+    try {
+      execSync('npm --version', { stdio: 'pipe' });
+    } catch {
+      console.error(red('\n✘ npm not found in PATH.\n'));
+      console.error('  MindOS needs npm to install its app dependencies on first run.');
+      console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
+      console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
+      console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
+      console.error('  Example:');
+      console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
+      console.error(dim('    source ~/.profile\n'));
+      console.error('  Then run `mindos start` again.\n');
+      process.exit(1);
+    }
     console.log(yellow('Installing app dependencies (first run)...\n'));
     // --no-workspaces: prevent npm from hoisting deps to monorepo root.
     // When globally installed, deps must live in app/node_modules/ so that
@@ -397,6 +412,27 @@ async function waitForService(check, { retries = 10, intervalMs = 1000 } = {}) {
   return check();
 }
 
+async function waitForHttp(port, { retries = 120, intervalMs = 2000, label = 'service' } = {}) {
+  process.stdout.write(cyan(`  Waiting for ${label} to be ready`));
+  for (let i = 0; i < retries; i++) {
+    try {
+      const { request } = await import('node:http');
+      const ok = await new Promise((resolve) => {
+        const req = request({ hostname: '127.0.0.1', port, path: '/', method: 'HEAD', timeout: 1500 },
+          (res) => { res.resume(); resolve(res.statusCode < 500); });
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => { req.destroy(); resolve(false); });
+        req.end();
+      });
+      if (ok) { process.stdout.write(` ${green('✔')}\n`); return true; }
+    } catch { /* not ready yet */ }
+    process.stdout.write('.');
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  process.stdout.write(` ${red('✘')}\n`);
+  return false;
+}
+
 async function runGatewayCommand(sub) {
   const platform = getPlatform();
   if (!platform) {
@@ -551,6 +587,14 @@ const commands = {
         console.log(cyan(`Installing MindOS as a background service (${platform})...`));
         await runGatewayCommand('install');
         await runGatewayCommand('start');
+        console.log(dim('  (First run may take a few minutes to install dependencies and build the app.)'));
+        console.log(dim('  Follow live progress with:  mindos logs\n'));
+        const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
+        if (!ready) {
+          console.error(red('\n✘ Service started but Web UI did not become ready in time.'));
+          console.error(dim('  Check logs with: mindos logs\n'));
+          process.exit(1);
+        }
         printStartupInfo(webPort, mcpPort);
         console.log(`${green('✔ MindOS is running as a background service')}`);
         console.log(dim('  View logs:    mindos logs'));
@@ -686,6 +730,17 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       ok(`Node.js ${nodeVersion}`);
     }
 
+    // 4b. npm reachable from /bin/sh
+    try {
+      const npmVersion = execSync('npm --version', { stdio: 'pipe' }).toString().trim();
+      ok(`npm ${npmVersion} reachable`);
+    } catch {
+      err('npm not found in PATH — app dependencies cannot be installed');
+      console.log(dim('     Node.js may be installed via nvm/fnm/volta and not visible to /bin/sh.'));
+      console.log(dim('     Fix: add your Node.js bin path to ~/.profile so non-interactive shells can find it.'));
+      hasError = true;
+    }
+
     // 5. Build
     if (!existsSync(resolve(ROOT, 'app', '.next'))) {
       warn(`App not built yet — will build automatically on next ${dim('mindos start')}`);
@@ -736,7 +791,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
   },
 
   // ── update ─────────────────────────────────────────────────────────────────
-  update: () => {
+  update: async () => {
     const currentVersion = (() => {
       try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; }
     })();
@@ -754,9 +809,35 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     })();
     if (newVersion !== currentVersion) {
       console.log(`\n${green(`✔ Updated ${currentVersion} → ${newVersion}`)}`);
-      console.log(dim('  Run `mindos start` — it will rebuild automatically.\n'));
     } else {
       console.log(`\n${green('✔ Already on the latest version')} ${dim(`(${currentVersion})`)}\n`);
+      return;
+    }
+
+    // If daemon is running, restart it so the new version takes effect immediately
+    const platform = getPlatform();
+    let daemonRunning = false;
+    if (platform === 'systemd') {
+      try { execSync('systemctl --user is-active mindos', { stdio: 'pipe' }); daemonRunning = true; } catch {}
+    } else if (platform === 'launchd') {
+      try { execSync(`launchctl print gui/${launchctlUid()}/com.mindos.app`, { stdio: 'pipe' }); daemonRunning = true; } catch {}
+    }
+
+    if (daemonRunning) {
+      console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
+      await runGatewayCommand('stop');
+      await runGatewayCommand('start');
+      const webPort = process.env.MINDOS_WEB_PORT || '3000';
+      console.log(dim('  (Waiting for Web UI to come back up...)'));
+      const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
+      if (ready) {
+        console.log(green('✔ MindOS restarted and ready.\n'));
+      } else {
+        console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
+        process.exit(1);
+      }
+    } else {
+      console.log(dim('  Run `mindos start` — it will rebuild automatically.\n'));
     }
   },
 

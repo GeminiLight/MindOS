@@ -1,25 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
-  const [dark, setDark] = useState(true);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const isDark = stored
-      ? stored === 'dark'
-      : window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setDark(isDark);
-    document.documentElement.classList.toggle('dark', isDark);
-  }, []);
+  const dark = useSyncExternalStore(
+    (onStoreChange) => {
+      const listener = () => onStoreChange();
+      window.addEventListener('mindos-theme-change', listener);
+      return () => window.removeEventListener('mindos-theme-change', listener);
+    },
+    () => {
+      const stored = localStorage.getItem('theme');
+      return stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    },
+    () => true,
+  );
 
   const toggle = () => {
     const next = !dark;
-    setDark(next);
     document.documentElement.classList.toggle('dark', next);
     localStorage.setItem('theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new Event('mindos-theme-change'));
   };
 
   return (
