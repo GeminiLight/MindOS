@@ -119,6 +119,13 @@ function writeBuildStamp() {
   writeFileSync(BUILD_STAMP, version, 'utf-8');
 }
 
+function clearBuildLock() {
+  const lockFile = resolve(ROOT, 'app', '.next', 'lock');
+  if (existsSync(lockFile)) {
+    rmSync(lockFile, { force: true });
+  }
+}
+
 // ── Port check ────────────────────────────────────────────────────────────────
 
 function isPortInUse(port) {
@@ -443,21 +450,8 @@ const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '-
 const commands = {
   // ── onboard ────────────────────────────────────────────────────────────────
   onboard: async () => {
-    run(`node ${resolve(ROOT, 'scripts/setup.js')}`);
-    if (process.argv.includes('--install-daemon')) {
-      const platform = getPlatform();
-      if (!platform) {
-        console.warn(yellow('Warning: daemon mode not supported on this platform. Skipping service install.'));
-        return;
-      }
-      console.log(cyan(`\nInstalling MindOS as a background service (${platform})...`));
-      await runGatewayCommand('install');
-      await runGatewayCommand('start');
-      console.log(`\n${green('✔ MindOS is running as a background service')}`);
-      console.log(dim('  View logs:    mindos logs'));
-      console.log(dim('  Stop:         mindos gateway stop'));
-      console.log(dim('  Uninstall:    mindos gateway uninstall\n'));
-    }
+    const daemonFlag = process.argv.includes('--install-daemon') ? ' --install-daemon' : '';
+    run(`node ${resolve(ROOT, 'scripts/setup.js')}${daemonFlag}`);
   },
   init:  () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
   setup: () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
@@ -501,10 +495,14 @@ const commands = {
       if (!platform) {
         console.warn(yellow('Warning: daemon mode not supported on this platform. Falling back to foreground.'));
       } else {
+        loadConfig();
+        const webPort = process.env.MINDOS_WEB_PORT || '3000';
+        const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
         console.log(cyan(`Installing MindOS as a background service (${platform})...`));
         await runGatewayCommand('install');
         await runGatewayCommand('start');
-        console.log(`\n${green('✔ MindOS is running as a background service')}`);
+        printStartupInfo(webPort, mcpPort);
+        console.log(`${green('✔ MindOS is running as a background service')}`);
         console.log(dim('  View logs:    mindos logs'));
         console.log(dim('  Stop:         mindos gateway stop'));
         console.log(dim('  Uninstall:    mindos gateway uninstall\n'));
@@ -518,6 +516,7 @@ const commands = {
     await assertPortFree(Number(mcpPort), 'mcp');
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
+      clearBuildLock();
       run('npx next build', resolve(ROOT, 'app'));
       writeBuildStamp();
     }
@@ -530,6 +529,7 @@ const commands = {
 
   // ── build ──────────────────────────────────────────────────────────────────
   build: () => {
+    clearBuildLock();
     run(`npx next build ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
   },

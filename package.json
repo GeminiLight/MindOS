@@ -1,8 +1,15 @@
 {
   "name": "@geminilight/mindos",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
-  "keywords": ["mindos", "mcp", "knowledge-base", "ai-agent", "local-first", "second-brain"],
+  "keywords": [
+    "mindos",
+    "mcp",
+    "knowledge-base",
+    "ai-agent",
+    "local-first",
+    "second-brain"
+  ],
   "type": "module",
   "license": "MIT",
   "author": "GeminiLight",
@@ -13,7 +20,10 @@
   "bin": {
     "mindos": "bin/cli.js"
   },
-  "workspaces": ["app", "mcp"],
+  "workspaces": [
+    "app",
+    "mcp"
+  ],
   "files": [
     "app/",
     "mcp/",
