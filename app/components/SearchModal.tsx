@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table } from 'lucide-react';
-import { SearchResult } from '@/lib/types';
+import { SearchResult, SearchMatch } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
@@ -11,6 +11,19 @@ import { useLocale } from '@/lib/LocaleContext';
 interface SearchModalProps {
   open: boolean;
   onClose: () => void;
+}
+
+/** Highlight matched text fragments in a snippet based on the query */
+function highlightSnippet(snippet: string, query: string): React.ReactNode {
+  if (!query.trim()) return snippet;
+  // Split query into words and escape for regex
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = snippet.split(pattern);
+  return parts.map((part, i) =>
+    pattern.test(part) ? <mark key={i} className="bg-yellow-300/40 text-foreground rounded-sm px-0.5">{part}</mark> : part
+  );
 }
 
 export default function SearchModal({ open, onClose }: SearchModalProps) {
@@ -157,7 +170,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                   </div>
                   {result.snippet && (
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-                      {result.snippet}
+                      {highlightSnippet(result.snippet, query)}
                     </p>
                   )}
                 </div>
