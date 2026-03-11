@@ -22,6 +22,14 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 
 ---
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/images/demo-flow-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/images/demo-flow-light.png" />
+    <img src="assets/images/demo-flow-light.png" alt="MindOS: From Idea to Execution to Review" width="960" />
+  </picture>
+</p>
+
 > [!IMPORTANT]
 > **⭐ One-click install:** Send this to your Agent (Claude Code, Cursor, etc.) to set up everything automatically:
 > ```
