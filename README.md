@@ -65,42 +65,45 @@ Static documents are hard to synchronize and weak as execution systems in real h
 
 ## ✨ Features
 
-### For Humans
+**For Humans**
 
 - **GUI Collaboration Workbench**: use one command entry to browse, edit, and search efficiently (`⌘K` / `⌘/`).
 - **Built-in Agent Assistant**: converse in context while edits are captured into managed knowledge.
 - **Plugin Views**: use scenario-focused views like TODO, Kanban, and Timeline.
 
-### For Agents
+**For Agents**
 
 - **MCP Server + Skills**: connect any compatible agent to read, write, search, and run workflows.
 - **Structured Templates**: start quickly with Profile, Workflows, and Configurations scaffolds.
 - **Experience Auto-Distillation**: automatically distill daily work into reusable, executable SOP experience.
 
-### Infrastructure
+**Infrastructure**
 
 - **Reference Sync**: keep cross-file status and context aligned via links/backlinks.
 - **Knowledge Graph**: visualize relationships and dependencies across notes.
 - **Git Time Machine**: track every edit, audit history, and roll back safely.
 
-**Coming Soon:**
+<details>
+<summary><strong>Coming Soon</strong></summary>
 
 - [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
 - [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
 - [ ] Backlinks View: display all files that reference the current file, helping you understand how a note fits into the knowledge network
 - [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
 
+</details>
+
 ---
 
 ## 🚀 Getting Started
 
 > [!IMPORTANT]
-> **Quick Start with Agent:** Paste this prompt into any MCP-capable Agent (Claude Code, Cursor, etc.) to install automatically, then skip to [Step 4](#4-inject-your-personal-mind-with-mindos-agent):
+> **Quick Start with Agent:** Paste this prompt into any MCP-capable Agent (Claude Code, Cursor, etc.) to install automatically, then skip to [Step 3](#3-inject-your-personal-mind-with-mindos-agent):
 > ```
 > Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
 > ```
 
-> Already have a knowledge base? Skip to [Step 5](#5-make-any-agent-ready-mcp--skills) to configure MCP + Skills.
+> Already have a knowledge base? Skip to [Step 4](#4-make-any-agent-ready-mcp--skills) to configure MCP + Skills.
 
 ### 1. Install
 
@@ -129,10 +132,13 @@ mindos onboard --install-daemon
 
 The setup wizard will guide you through:
 1. Knowledge base path → default `~/.mindos/my-mind`
-2. Choose template language (en / zh)
-3. Optional Auth token to protect your API
-4. Configure AI Provider (Anthropic / OpenAI) + API Key — or choose **skip** to configure later via `mindos config set`
-5. Config saved to `~/.mindos/config.json` automatically
+2. Choose template (en / zh / empty / custom)
+3. Ports (Web UI + MCP)
+4. Auth token (auto-generated or passphrase-seeded)
+5. Web UI password (optional)
+6. AI Provider (Anthropic / OpenAI) + API Key — or **skip** to configure later via `mindos config set`
+
+Config is saved to `~/.mindos/config.json` automatically.
 
 <!-- For Agents: Before running setup, if the user has not provided LLM configuration, ask them:
 1. AI Provider — `anthropic` or `openai` (compatible)?
@@ -183,24 +189,10 @@ Multiple providers can be configured simultaneously — switch between them by c
 > [!NOTE]
 > If you want the MindOS GUI to be reachable from other devices, make sure the port is open in firewall/security-group settings and bound to an accessible host/network interface.
 
-### 3. Run
-
-```bash
-mindos start    # start app + MCP server (production, auto-rebuilds when a new version is detected)
-```
-
-On startup, MindOS prints your Web UI URL, MCP config snippet, and auth token — ready to copy into your Agent.
-
 > [!TIP]
-> **Upgrading?** Run `mindos update` to install the latest version.
+> With `--install-daemon`, MindOS is installed as a background OS service and starts automatically — no need to run `mindos start` manually. If you skipped the flag, run `mindos start` to start manually, or `mindos update` to upgrade to the latest version.
 
-> [!TIP]
-> If the port is already in use, set a different port during `mindos onboard` or update `~/.mindos/config.json`:
-> ```bash
-> MINDOS_WEB_PORT=3002 mindos
-> ```
-
-### 4. Inject Your Personal Mind with MindOS Agent
+### 3. Inject Your Personal Mind with MindOS Agent
 
 1. Open the built-in MindOS Agent chat panel in the GUI.
 2. Upload your resume or any personal/project material.
@@ -210,24 +202,51 @@ On startup, MindOS prints your Web UI URL, MCP config snippet, and auth token �
   <img src="assets/images/gui-sync-cv.png" alt="Sync CV Example" width="800" />
 </p>
 
-### 5. Make Any Agent Ready (MCP + Skills)
+### 4. Make Any Agent Ready (MCP + Skills)
 
-#### 5.1 Configure MindOS MCP
+#### 4.1 Configure MindOS MCP
 
 <!-- For Agents: Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base. -->
 
-> [!TIP]
-> Each Agent stores MCP config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table below for exact paths.
+Run one command to auto-install MCP config into your Agent:
 
-Register the MindOS MCP Server in your Agent client:
+```bash
+mindos mcp install
+```
 
-The MCP server starts automatically when you run `mindos start` or `mindos dev`. The MCP URL, auth token, and a ready-to-paste config snippet are printed on every startup.
+Supports Claude Code, Cursor, Windsurf, Cline, Trae, Gemini CLI, and more — interactively guides you through agent, scope, transport, and token.
 
-> The MCP port defaults to `8787`. To use a different port, set `mcpPort` in `~/.mindos/config.json` via `mindos onboard`.
+**Local (Agent and MindOS on the same machine)**
 
-**Option A: Local (same machine)**
+Use `stdio` transport — no server process needed, most reliable:
 
-Via stdio — no server process needed:
+```bash
+# Interactive
+mindos mcp install
+
+# One-shot, global scope (shared across all projects)
+mindos mcp install claude-code -g -y
+```
+
+**Remote (Agent on a different machine)**
+
+Use `http` transport — MindOS must be running (`mindos start`) on the remote machine:
+
+```bash
+mindos mcp install codex --transport http --url http://<server-ip>:8787/mcp --token your-token -g
+```
+
+> [!NOTE]
+> For remote access, ensure port `8787` is open in your firewall/security-group.
+
+> Add `-g` to install globally — MCP config is shared across all projects instead of the current directory only.
+
+> The MCP port defaults to `8787`. To use a different port, run `mindos onboard` and set `mcpPort`.
+
+<details>
+<summary>Manual config (JSON snippets)</summary>
+
+**Local via stdio** (no server process needed):
 
 ```json
 {
@@ -242,7 +261,7 @@ Via stdio — no server process needed:
 }
 ```
 
-Or via URL:
+**Local via URL:**
 
 ```json
 {
@@ -255,10 +274,7 @@ Or via URL:
 }
 ```
 
-**Option B: Remote URL (another device)**
-
-> [!NOTE]
-> Ensure port `8787` is open in your firewall/security-group so remote clients can reach the server.
+**Remote:**
 
 ```json
 {
@@ -271,7 +287,11 @@ Or via URL:
 }
 ```
 
-#### 5.2 Install MindOS Skills
+Each Agent stores config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table for exact paths.
+
+</details>
+
+#### 4.2 Install MindOS Skills
 
 | Skill | Description |
 |-------|-------------|
@@ -290,7 +310,7 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y
 
 MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
 
-#### 5.3 Common Pitfalls
+#### 4.3 Common Pitfalls
 
 - Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
 - Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
