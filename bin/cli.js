@@ -354,15 +354,16 @@ const launchd = {
 `;
     writeFileSync(LAUNCHD_PLIST, plist, 'utf-8');
     console.log(green(`✔ Wrote ${LAUNCHD_PLIST}`));
+    // Bootout first to ensure the new plist (with updated PATH) takes effect.
+    // Safe to ignore errors here — service may not be loaded yet.
+    try { execSync(`launchctl bootout gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'pipe' }); } catch {}
     try {
       execSync(`launchctl bootstrap gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'pipe' });
     } catch (e) {
-      const msg = e.stderr?.toString() ?? e.message ?? '';
-      // Error 5 (ENOENT / already loaded) is benign — service is already bootstrapped
-      if (!msg.includes('5:') && !msg.includes('already')) {
-        console.error(yellow(`  ⚠ launchctl bootstrap: ${msg.trim()}`));
-        console.error(dim('  If this persists, try: launchctl bootout gui/$(id -u)/com.mindos.app'));
-      }
+      const msg = (e.stderr?.toString() ?? e.message ?? '').trim();
+      console.error(red(`\n✘ launchctl bootstrap failed: ${msg}`));
+      console.error(dim('  Try running: launchctl bootout gui/$(id -u)/com.mindos.app  then retry.\n'));
+      process.exit(1);
     }
     console.log(green('✔ Service installed'));
   },
@@ -839,6 +840,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     if (daemonRunning) {
       console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
       await runGatewayCommand('stop');
+      await runGatewayCommand('install'); // regenerate plist/unit with updated PATH and binary
       await runGatewayCommand('start');
       const webPort = process.env.MINDOS_WEB_PORT || '3000';
       console.log(dim('  (Waiting for Web UI to come back up...)'));
