@@ -358,8 +358,8 @@
 <body>
 <div class="canvas" id="canvas">
   <div class="header">
-    <h1>MindOS：从灵感到执行到复盘</h1>
-    <p>随手记录 &rarr; 自动整理 &rarr; 所有 Agent 同步 &rarr; 经验回流</p>
+    <h1>MindOS：想法、执行到复盘，一条线贯穿</h1>
+    <p>记一句想法，剩下的全自动</p>
   </div>
 
   <div class="flow" id="flow">
@@ -375,18 +375,18 @@
         <div class="mobile-nav"><span class="back">&lsaquo;</span><span class="title">Quick Capture</span></div>
         <div class="mobile-body">
           <div class="mobile-note">
-            <div class="note-time">今天 09:41</div>
-            <div class="note-text">用户反馈：新手引导太长，50% 的人<br/>在第 3 步就放弃了。要简化到 2 步内<br/>完成首次体验，参考 Linear 的做法。</div>
-            <div class="note-tag">#用户反馈</div>
+            <div class="note-time">今天 11:30</div>
+            <div class="note-text">想好了新项目：先理清思路，<br/>代码开搞，顺便发个帖宣传下</div>
+            <div class="note-tag">#想法</div>
           </div>
           <div class="mobile-note" style="border-left-color: var(--muted-fg);">
-            <div class="note-time">昨天 23:20</div>
-            <div class="note-text">灵感：把安装流程做成"一句话发给<br/>Agent"，零摩擦。方便用户直接上手。</div>
-            <div class="note-tag" style="background:rgba(138,130,117,0.1);color:var(--muted-fg);">#产品灵感</div>
+            <div class="note-time">昨天 16:00</div>
+            <div class="note-text">之前调研过竞品，用 React + Tailwind 方案</div>
+            <div class="note-tag" style="background:rgba(138,130,117,0.1);color:var(--muted-fg);">#技术选型</div>
           </div>
         </div>
         <div class="mobile-input">
-          <input type="text" value="写个用户增长方案..." readonly />
+          <input type="text" value="记一下新项目的想法..." readonly />
           <div class="send-btn">&uarr;</div>
         </div>
       </div>
@@ -410,30 +410,30 @@
         <div class="desktop-layout">
           <div class="sidebar">
             <div class="sidebar-item"><span class="icon">P</span> Profile</div>
-            <div class="sidebar-item active"><span class="icon">W</span> Workflows</div>
-            <div class="sidebar-item"><span class="icon">J</span> Projects</div>
+            <div class="sidebar-item"><span class="icon">W</span> Workflows</div>
+            <div class="sidebar-item active"><span class="icon">J</span> Projects</div>
             <div class="sidebar-item"><span class="icon">C</span> Configs</div>
             <div class="sidebar-item"><span class="icon">R</span> Resources</div>
             <div class="sidebar-item"><span class="icon">G</span> Graph</div>
           </div>
           <div class="main-content">
-            <div class="file-path">Workflows/用户增长策略.md</div>
+            <div class="file-path">Projects/新项目计划.md</div>
             <div class="updated-tag">* Agent 已自动更新 3 个文件</div>
-            <div class="content-title">用户增长策略</div>
+            <div class="content-title">新项目计划</div>
             <div class="content-section">
-              <h3>核心行动项</h3>
+              <h3>核心思路</h3>
               <ul>
-                <li>简化新手引导：3 步压缩为 1 步</li>
-                <li>一句话安装作为核心传播点</li>
-                <li>制作 Before/After 对比视频</li>
+                <li>先理清项目方案和架构</li>
+                <li>搭建代码骨架，快速出原型</li>
+                <li>发帖宣传，收集早期反馈</li>
               </ul>
             </div>
             <div class="content-section">
               <h3>关联更新</h3>
               <div class="badge-row">
-                <span class="badge">Projects/增长实验.md</span>
-                <span class="badge">Profile/产品理念.md</span>
-                <span class="badge">Workflows/发布SOP.md</span>
+                <span class="badge">Projects/Project-Plan.md</span>
+                <span class="badge">Workflows/Launch-SOP.md</span>
+                <span class="badge">TODO.md</span>
               </div>
             </div>
           </div>
@@ -458,12 +458,12 @@
           <div class="cli-frame">
             <div class="cli-titlebar">
               <div class="dots"><span class="dot-r-sm"></span><span class="dot-y-sm"></span><span class="dot-g-sm"></span></div>
-              <span class="name">Claude Code</span>
+              <span class="name">Gemini</span>
             </div>
             <div class="cli-body">
-              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">写一篇产品推广文案</span></div>
-              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; 用户增长策略.md</span></div>
-              <div class="cli-line"><span class="cli-output">  Done. 已基于增长策略生成推广文案</span></div>
+              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">梳理项目方案和架构</span></div>
+              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; Project-Plan.md</span></div>
+              <div class="cli-line"><span class="cli-output">  Done. 已整理项目方案 + 技术架构文档</span></div>
             </div>
           </div>
           <!-- Cursor -->
@@ -473,9 +473,9 @@
               <span class="name">Cursor</span>
             </div>
             <div class="cli-body">
-              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">简化新手引导到 1 步完成</span></div>
-              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; 产品理念.md</span></div>
-              <div class="cli-line"><span class="cli-output">  Done. 已重构 onboarding 组件</span></div>
+              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">搭建项目骨架</span></div>
+              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; Project-Plan.md</span></div>
+              <div class="cli-line"><span class="cli-output">  Done. 已初始化项目结构 + 基础配置</span></div>
             </div>
           </div>
           <!-- OpenClaw (Telegram style) -->
@@ -486,8 +486,8 @@
               <span class="tg-badge">BOT</span>
             </div>
             <div class="tg-body">
-              <div class="tg-bubble user">帮我把这轮增长实验的经验沉淀下来</div>
-              <div class="tg-bubble bot"><span class="tg-hl">Writing &rarr; Workflows/增长复盘.md</span><br/>Done. 已沉淀为可复用 SOP</div>
+              <div class="tg-bubble user">发帖宣传项目，收集大家反馈</div>
+              <div class="tg-bubble bot"><span class="tg-hl">Writing &rarr; Workflows/Launch-SOP.md</span><br/>Done. 已发布宣传帖 + 汇总反馈沉淀到 SOP</div>
             </div>
           </div>
         </div>
@@ -498,7 +498,7 @@
   <svg class="arrows-svg" id="arrows-svg" xmlns="http://www.w3.org/2000/svg"></svg>
 
   <div class="tagline">
-    <p>你 &rarr; <span>MindOS</span> &rarr; 所有 Agent &rarr; <span>经验回流</span> &rarr; 持续进化的共享心智</p>
+    <p>一句想法 &rarr; <span>MindOS</span> 归档 + 关联 &rarr; 所有 Agent 各就各位 &rarr; <span>经验自动沉淀</span></p>
   </div>
 
   <div class="cta-card">

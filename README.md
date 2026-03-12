@@ -225,7 +225,7 @@ Use `stdio` transport — no server process needed, most reliable:
 mindos mcp install
 
 # One-shot, global scope (shared across all projects)
-mindos mcp install claude-code -g -y
+mindos mcp install -g -y
 ```
 
 **Remote (Agent on a different machine)**
@@ -233,7 +233,7 @@ mindos mcp install claude-code -g -y
 Use `http` transport — MindOS must be running (`mindos start`) on the remote machine:
 
 ```bash
-mindos mcp install codex --transport http --url http://<server-ip>:8787/mcp --token your-token -g
+mindos mcp install--transport http --url http://<server-ip>:8787/mcp --token your-token -g
 ```
 
 > [!NOTE]

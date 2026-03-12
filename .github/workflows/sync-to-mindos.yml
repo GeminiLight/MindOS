@@ -81,6 +81,25 @@ jobs:
           # Get the latest commit message from mindos-dev
           DEV_MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --format='%s')
 
+          # If commit message is a bare version number (e.g. "0.1.8"),
+          # append changelog from previous version tag.
+          if echo "$DEV_MSG" | grep -qxE '[0-9]+\.[0-9]+\.[0-9]+'; then
+            cd "$GITHUB_WORKSPACE"
+            # Find the tag on HEAD, then get the one before it
+            CUR_TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            if [ -n "$CUR_TAG" ]; then
+              PREV_TAG=$(git describe --tags --abbrev=0 "${CUR_TAG}^" 2>/dev/null || true)
+            else
+              PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || true)
+            fi
+            if [ -n "$PREV_TAG" ]; then
+              CHANGELOG=$(git log "${PREV_TAG}..HEAD~1" --format='- %s' | head -20)
+              if [ -n "$CHANGELOG" ]; then
+                DEV_MSG=$(printf '%s\n\n%s' "$DEV_MSG" "$CHANGELOG")
+              fi
+            fi
+          fi
+
           cd /tmp/mindos
           git add -A
           if git diff --cached --quiet; then
