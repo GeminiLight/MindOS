@@ -65,42 +65,45 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ## ✨ 功能特性
 
-### 人类侧
+**人类侧**
 
 - **GUI 协作工作台**：以统一入口高效浏览、编辑与搜索（`⌘K` / `⌘/`）。
 - **内置 Agent 助手**：在上下文中对话，编辑内容可持续沉淀为可管理知识。
 - **插件视图**：按场景使用 TODO、看板、时间线等视图。
 
-### Agent 侧
+**Agent 侧**
 
 - **MCP Server + Skills**：让兼容 Agent 统一接入读写、搜索与工作流执行。
 - **结构化模板**：通过 Profile、Workflows、Configurations 快速冷启动。
 - **经验自动沉淀**：将日常记录自动化沉淀为可执行 SOP 经验。
 
-### 基础设施
+**基础设施**
 
 - **引用同步**：通过引用与反向链接保持跨文件状态一致。
 - **知识图谱**：可视化笔记间关系与依赖。
 - **Git 时光机**：记录修改历史，支持审计与安全回滚。
 
-**即将到来：**
+<details>
+<summary><strong>即将到来</strong></summary>
 
 - [ ] ACP（Agent Communication Protocol）：连接外部 Agent（如 Claude Code、Cursor），让知识库成为多 Agent 协作的中枢
 - [ ] RAG 深度集成：基于知识库内容的检索增强生成，让 AI 回答更精准、更有上下文
 - [ ] 反向链接视图（Backlinks）：展示所有引用当前文件的反向链接，理解笔记在知识网络中的位置
 - [ ] Agent 审计面板（Agent Inspector）：将 Agent 操作日志渲染为可筛选的时间线，审查每次工具调用的详情
 
+</details>
+
 ---
 
 ## 🚀 快速开始
 
 > [!IMPORTANT]
-> **用 Agent 一键安装：** 将以下指令粘贴到任意支持 MCP 的 Agent（Claude Code、Cursor 等），即可自动完成安装，然后跳到[第 4 步](#4-通过-mindos-agent-注入你的个人心智)：
+> **用 Agent 一键安装：** 将以下指令粘贴到任意支持 MCP 的 Agent（Claude Code、Cursor 等），即可自动完成安装，然后跳到[第 3 步](#3-通过-mindos-agent-注入你的个人心智)：
 > ```
 > 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
 > ```
 
-> 已有知识库？直接跳到[第 5 步](#5-让任意-agent-可用mcp--skills)配置 MCP + Skills。
+> 已有知识库？直接跳到[第 4 步](#4-让任意-agent-可用mcp--skills)配置 MCP + Skills。
 
 ### 1. 安装
 
@@ -129,10 +132,13 @@ mindos onboard --install-daemon
 
 配置向导将引导你完成：
 1. 知识库路径 → 默认 `~/.mindos/my-mind`
-2. 选择模板语言（en / zh / empty）
-3. 可选 Auth token，保护你的 API
-4. 配置 AI Provider（Anthropic / OpenAI）+ API Key — 或选择 **skip**，稍后通过 `mindos config set` 补填
-5. 配置自动保存到 `~/.mindos/config.json`
+2. 选择模板（en / zh / empty / custom）
+3. 端口配置（Web UI + MCP）
+4. Auth token（自动生成或口令派生）
+5. Web UI 访问密码（可选）
+6. 配置 AI Provider（Anthropic / OpenAI）+ API Key — 或选择 **skip**，稍后通过 `mindos config set` 补填
+
+配置自动保存到 `~/.mindos/config.json`。
 
 <!-- For Agents: 运行 onboard 前，如果用户未提供 LLM 配置，请询问：
 1. AI Provider — `anthropic` 还是 `openai`（兼容）？
@@ -183,24 +189,10 @@ mindos onboard --install-daemon
 > [!NOTE]
 > 如果你希望其他设备也能访问 MindOS GUI，请确保端口已在防火墙/安全组中放行，并绑定到可访问的主机地址/网卡。
 
-### 3. 启动
-
-```bash
-mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时自动重新构建）
-```
-
-启动后，MindOS 会自动打印 Web UI 地址、MCP 配置片段和 Auth token，直接复制到你的 Agent 即可。
-
 > [!TIP]
-> **升级？** 运行 `mindos update` 安装最新版本。
+> 使用 `--install-daemon` 时，MindOS 会作为后台 OS 服务安装并自动启动，无需手动执行 `mindos start`。如果跳过了该参数，运行 `mindos start` 手动启动，或运行 `mindos update` 升级到最新版本。
 
-> [!TIP]
-> 如果端口被占用，在 `mindos onboard` 时指定其他端口，或更新 `~/.mindos/config.json`，也可通过环境变量临时覆盖：
-> ```bash
-> MINDOS_WEB_PORT=3002 mindos
-> ```
-
-### 4. 通过 MindOS Agent 注入你的个人心智
+### 3. 通过 MindOS Agent 注入你的个人心智
 
 1. 打开 MindOS GUI 中内置的 Agent 对话面板。
 2. 上传你的简历或任意个人/项目资料。
@@ -210,24 +202,54 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
   <img src="assets/images/gui-sync-cv.png" alt="同步简历示例" width="800" />
 </p>
 
-### 5. 让任意 Agent 可用（MCP + Skills）
+### 4. 让任意 Agent 可用（MCP + Skills）
 
-#### 5.1 配置 MindOS MCP
+#### 4.1 配置 MindOS MCP
 
 <!-- For Agents: MindOS MCP 默认注册为全局（user-level）配置，使所有项目共享同一知识库。-->
 
-> [!TIP]
-> 每个 Agent 的 MCP 配置文件路径不同——详见下方 [支持的 Agent](#-支持的-agent) 表格中的 **MCP 配置文件路径** 列。
+一条命令自动将 MCP 配置写入 Agent：
 
-将 MindOS MCP Server 注册到你的 Agent 客户端：
+```bash
+mindos mcp install
+```
 
-运行 `mindos start` 或 `mindos dev` 时，MCP 服务自动随之启动。每次启动都会打印 MCP URL、Auth token 及可直接粘贴的配置片段。
+支持 Claude Code、Cursor、Windsurf、Cline、Trae、Gemini CLI 等主流 Agent，交互式引导完成 agent、scope、transport 和 token 的配置。
 
-> MCP 端口默认为 `8787`。如需修改，通过 `mindos onboard` 设置 `~/.mindos/config.json` 中的 `mcpPort`。
+**本机访问（Agent 和 MindOS 在同一台机器）**
 
-**方式 A：本机（同一台机器）**
+使用 `stdio` transport — 无需启动服务进程，最稳定：
 
-通过 stdio — 无需启动服务进程：
+```bash
+# 交互式
+mindos mcp install claude-code
+
+# 一键安装，无需交互（stdio + 项目级）
+mindos mcp install claude-code -y
+
+# 一键安装，全局（所有项目共享）
+mindos mcp install claude-code -g -y
+```
+
+**远程访问（Agent 在另一台机器）**
+
+使用 `http` transport — 远程机器上需先运行 `mindos start`：
+
+```bash
+mindos mcp install claude-code --transport http --url http://<服务器IP>:8787/mcp --token your-token
+```
+
+> [!NOTE]
+> 远程访问时，请确保端口 `8787` 已在防火墙/安全组中放行。
+
+> 加 `-g` 表示全局安装 — MCP 配置写入用户级配置文件，所有项目共享，而非仅当前目录。
+
+> MCP 端口默认为 `8787`。如需修改，运行 `mindos onboard` 设置 `mcpPort`。
+
+<details>
+<summary>手动配置（JSON 片段）</summary>
+
+**本机 stdio**（无需启动服务进程）：
 
 ```json
 {
@@ -242,7 +264,7 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
 }
 ```
 
-或通过 URL：
+**本机 URL：**
 
 ```json
 {
@@ -255,10 +277,7 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
 }
 ```
 
-**方式 B：远程 URL（其他设备）**
-
-> [!NOTE]
-> 请确保端口 `8787` 已在防火墙/安全组中放行，远程客户端才能连接。
+**远程：**
 
 ```json
 {
@@ -271,7 +290,11 @@ mindos start    # 启动 app + MCP 服务（生产模式，检测到新版本时
 }
 ```
 
-#### 5.2 安装 MindOS Skills
+各 Agent 的配置文件路径不同，详见下方 [支持的 Agent](#-支持的-agent) 表格中的 **MCP 配置文件路径** 列。
+
+</details>
+
+#### 4.2 安装 MindOS Skills
 
 | Skill | 说明 |
 |-------|------|
@@ -290,7 +313,7 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y
 
 MCP = 连接能力，Skills = 工作流能力；两者都开启后体验完整。
 
-#### 5.3 常见误区
+#### 4.3 常见误区
 
 - 只配 MCP，不装 Skills：能调用工具，但缺少最佳实践指引。
 - 只装 Skills，不配 MCP：有流程提示，但无法操作本地知识库。
