@@ -30,666 +30,23 @@
  *   mindos config validate          — validate config file
  */
 
-import { execSync, spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { homedir, networkInterfaces } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { createConnection } from 'node:net';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..');
-const CONFIG_PATH = resolve(homedir(), '.mindos', 'config.json');
-const PID_PATH    = resolve(homedir(), '.mindos', 'mindos.pid');
-const BUILD_STAMP = resolve(ROOT, 'app', '.next', '.mindos-build-version');
-
-// ── Colors ────────────────────────────────────────────────────────────────────
-
-const isTTY = process.stdout.isTTY;
-const bold  = (s) => isTTY ? `\x1b[1m${s}\x1b[0m`  : s;
-const dim   = (s) => isTTY ? `\x1b[2m${s}\x1b[0m`  : s;
-const cyan  = (s) => isTTY ? `\x1b[36m${s}\x1b[0m` : s;
-const green = (s) => isTTY ? `\x1b[32m${s}\x1b[0m` : s;
-const red   = (s) => isTTY ? `\x1b[31m${s}\x1b[0m` : s;
-const yellow= (s) => isTTY ? `\x1b[33m${s}\x1b[0m` : s;
-
-// ── Config ────────────────────────────────────────────────────────────────────
-
-function loadConfig() {
-  if (!existsSync(CONFIG_PATH)) return;
-  let config;
-  try {
-    config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-  } catch {
-    console.error(`Warning: failed to parse ${CONFIG_PATH}`);
-    return;
-  }
-
-  const set = (key, val) => {
-    if (val && !process.env[key]) process.env[key] = String(val);
-  };
-
-  set('MIND_ROOT',          config.mindRoot);
-  set('MINDOS_WEB_PORT',    config.port);
-  set('MINDOS_MCP_PORT',    config.mcpPort);
-  set('AUTH_TOKEN',         config.authToken);
-  set('WEB_PASSWORD',       config.webPassword);
-  set('AI_PROVIDER',        config.ai?.provider);
-
-  const providers = config.ai?.providers;
-  if (providers) {
-    set('ANTHROPIC_API_KEY', providers.anthropic?.apiKey);
-    set('ANTHROPIC_MODEL',   providers.anthropic?.model);
-    set('OPENAI_API_KEY',    providers.openai?.apiKey);
-    set('OPENAI_MODEL',      providers.openai?.model);
-    set('OPENAI_BASE_URL',   providers.openai?.baseUrl);
-  } else {
-    set('ANTHROPIC_API_KEY', config.ai?.anthropicApiKey);
-    set('ANTHROPIC_MODEL',   config.ai?.anthropicModel);
-    set('OPENAI_API_KEY',    config.ai?.openaiApiKey);
-    set('OPENAI_MODEL',      config.ai?.openaiModel);
-    set('OPENAI_BASE_URL',   config.ai?.openaiBaseUrl);
-  }
-}
-
-function getStartMode() {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode || 'start';
-  } catch {
-    return 'start';
-  }
-}
-
-// ── Build helpers ─────────────────────────────────────────────────────────────
-
-function needsBuild() {
-  const nextDir = resolve(ROOT, 'app', '.next');
-  if (!existsSync(nextDir)) return true;
-  try {
-    const builtVersion = readFileSync(BUILD_STAMP, 'utf-8').trim();
-    const currentVersion = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version;
-    return builtVersion !== currentVersion;
-  } catch {
-    return true;
-  }
-}
-
-function writeBuildStamp() {
-  const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version;
-  writeFileSync(BUILD_STAMP, version, 'utf-8');
-}
-
-function clearBuildLock() {
-  const lockFile = resolve(ROOT, 'app', '.next', 'lock');
-  if (existsSync(lockFile)) {
-    rmSync(lockFile, { force: true });
-  }
-}
-
-function ensureAppDeps() {
-  // When installed as a global npm package, app/node_modules may not exist.
-  // next (and other deps) must be resolvable from app/ for Turbopack to work.
-  const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
-  if (!existsSync(appNext)) {
-    // Check npm is accessible before trying to run it.
-    try {
-      execSync('npm --version', { stdio: 'pipe' });
-    } catch {
-      console.error(red('\n✘ npm not found in PATH.\n'));
-      console.error('  MindOS needs npm to install its app dependencies on first run.');
-      console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
-      console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
-      console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
-      console.error('  Example:');
-      console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
-      console.error(dim('    source ~/.profile\n'));
-      console.error('  Then run `mindos start` again.\n');
-      process.exit(1);
-    }
-    console.log(yellow('Installing app dependencies (first run)...\n'));
-    // --no-workspaces: prevent npm from hoisting deps to monorepo root.
-    // When globally installed, deps must live in app/node_modules/ so that
-    // Turbopack can resolve next/package.json from the app/ project directory.
-    run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
-  }
-}
-
-// ── Port check ────────────────────────────────────────────────────────────────
-
-function isPortInUse(port) {
-  return new Promise((resolve) => {
-    const sock = createConnection({ port, host: '127.0.0.1' });
-    sock.once('connect', () => { sock.destroy(); resolve(true); });
-    sock.once('error',   () => { sock.destroy(); resolve(false); });
-  });
-}
-
-async function assertPortFree(port, name) {
-  if (await isPortInUse(port)) {
-    console.error(`\n${red('✘')} ${bold(`Port ${port} is already in use`)} ${dim(`(${name})`)}`);
-    console.error(`\n  ${dim('Stop MindOS:')}       mindos stop`);
-    console.error(`  ${dim('Find the process:')}  lsof -i :${port}\n`);
-    process.exit(1);
-  }
-}
-
-// ── PID file ──────────────────────────────────────────────────────────────────
-
-function savePids(...pids) {
-  writeFileSync(PID_PATH, pids.filter(Boolean).join('\n'), 'utf-8');
-}
-
-function loadPids() {
-  if (!existsSync(PID_PATH)) return [];
-  return readFileSync(PID_PATH, 'utf-8').split('\n').map(Number).filter(Boolean);
-}
-
-function clearPids() {
-  if (existsSync(PID_PATH)) rmSync(PID_PATH);
-}
-
-// ── Stop ──────────────────────────────────────────────────────────────────────
-
-function stopMindos() {
-  const pids = loadPids();
-  if (!pids.length) {
-    console.log(yellow('No PID file found, trying pattern-based stop...'));
-    try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: 'inherit' }); } catch {}
-    try { execSync('pkill -f "mcp/src/index"       2>/dev/null || true', { stdio: 'inherit' }); } catch {}
-    console.log(green('✔ Done'));
-    return;
-  }
-  let stopped = 0;
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM');
-      stopped++;
-    } catch {
-      // process already gone — ignore
-    }
-  }
-  clearPids();
-  console.log(stopped
-    ? green(`✔ Stopped ${stopped} process${stopped > 1 ? 'es' : ''}`)
-    : dim('No running processes found'));
-}
-
-// ── Daemon / gateway helpers ───────────────────────────────────────────────────
-
-const MINDOS_DIR = resolve(homedir(), '.mindos');
-const LOG_PATH   = resolve(MINDOS_DIR, 'mindos.log');
-const CLI_PATH   = resolve(__dirname, 'cli.js');
-const NODE_BIN   = process.execPath;
-
-function getPlatform() {
-  if (process.platform === 'darwin') return 'launchd';
-  if (process.platform === 'linux')  return 'systemd';
-  return null;
-}
-
-function ensureMindosDir() {
-  if (!existsSync(MINDOS_DIR)) mkdirSync(MINDOS_DIR, { recursive: true });
-}
-
-// ── systemd (Linux) ───────────────────────────────────────────────────────────
-
-const SYSTEMD_DIR  = resolve(homedir(), '.config', 'systemd', 'user');
-const SYSTEMD_UNIT = resolve(SYSTEMD_DIR, 'mindos.service');
-
-const systemd = {
-  install() {
-    if (!existsSync(SYSTEMD_DIR)) mkdirSync(SYSTEMD_DIR, { recursive: true });
-    ensureMindosDir();
-    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
-    const unit = [
-      '[Unit]',
-      'Description=MindOS app + MCP server',
-      'After=network.target',
-      '',
-      '[Service]',
-      'Type=simple',
-      `ExecStart=${NODE_BIN} ${CLI_PATH} start`,
-      'Restart=on-failure',
-      'RestartSec=3',
-      `Environment=HOME=${homedir()}`,
-      `Environment=PATH=${currentPath}`,
-      `EnvironmentFile=-${resolve(MINDOS_DIR, 'env')}`,
-      `StandardOutput=append:${LOG_PATH}`,
-      `StandardError=append:${LOG_PATH}`,
-      '',
-      '[Install]',
-      'WantedBy=default.target',
-    ].join('\n');
-    writeFileSync(SYSTEMD_UNIT, unit, 'utf-8');
-    console.log(green(`✔ Wrote ${SYSTEMD_UNIT}`));
-    execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
-    execSync('systemctl --user enable mindos', { stdio: 'inherit' });
-    console.log(green('✔ Service installed and enabled'));
-  },
-
-  async start() {
-    execSync('systemctl --user start mindos', { stdio: 'inherit' });
-    // Wait up to 10s for the service to become active
-    const ok = await waitForService(() => {
-      try {
-        const out = execSync('systemctl --user is-active mindos', { encoding: 'utf-8' }).trim();
-        return out === 'active';
-      } catch { return false; }
-    });
-    if (!ok) {
-      console.error(red('\n✘ Service failed to start. Last log output:'));
-      try { execSync(`journalctl --user -u mindos -n 30 --no-pager`, { stdio: 'inherit' }); } catch {}
-      process.exit(1);
-    }
-    console.log(green('✔ Service started'));
-  },
-
-  stop() {
-    execSync('systemctl --user stop mindos', { stdio: 'inherit' });
-    console.log(green('✔ Service stopped'));
-  },
-
-  status() {
-    try {
-      execSync('systemctl --user status mindos', { stdio: 'inherit' });
-    } catch { /* status exits non-zero when stopped */ }
-  },
-
-  logs() {
-    execSync(`journalctl --user -u mindos -f`, { stdio: 'inherit' });
-  },
-
-  uninstall() {
-    try {
-      execSync('systemctl --user disable --now mindos', { stdio: 'inherit' });
-    } catch { /* may already be stopped */ }
-    if (existsSync(SYSTEMD_UNIT)) {
-      rmSync(SYSTEMD_UNIT);
-      console.log(green(`✔ Removed ${SYSTEMD_UNIT}`));
-    }
-    execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
-    console.log(green('✔ Service uninstalled'));
-  },
-};
-
-// ── launchd (macOS) ───────────────────────────────────────────────────────────
-
-const LAUNCHD_DIR   = resolve(homedir(), 'Library', 'LaunchAgents');
-const LAUNCHD_PLIST = resolve(LAUNCHD_DIR, 'com.mindos.app.plist');
-const LAUNCHD_LABEL = 'com.mindos.app';
-
-function launchctlUid() {
-  return execSync('id -u').toString().trim();
-}
-
-const launchd = {
-  install() {
-    if (!existsSync(LAUNCHD_DIR)) mkdirSync(LAUNCHD_DIR, { recursive: true });
-    ensureMindosDir();
-    // Capture current PATH so the daemon can find npm/node even when launched by
-    // launchd (which only sets a minimal PATH and doesn't source shell profiles).
-    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
-    const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>${LAUNCHD_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${NODE_BIN}</string>
-    <string>${CLI_PATH}</string>
-    <string>start</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${LOG_PATH}</string>
-  <key>StandardErrorPath</key><string>${LOG_PATH}</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>HOME</key><string>${homedir()}</string>
-    <key>PATH</key><string>${currentPath}</string>
-  </dict>
-</dict>
-</plist>
-`;
-    writeFileSync(LAUNCHD_PLIST, plist, 'utf-8');
-    console.log(green(`✔ Wrote ${LAUNCHD_PLIST}`));
-    // Bootout first to ensure the new plist (with updated PATH) takes effect.
-    // Safe to ignore errors here — service may not be loaded yet.
-    try { execSync(`launchctl bootout gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'pipe' }); } catch {}
-    try {
-      execSync(`launchctl bootstrap gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'pipe' });
-    } catch (e) {
-      const msg = (e.stderr?.toString() ?? e.message ?? '').trim();
-      console.error(red(`\n✘ launchctl bootstrap failed: ${msg}`));
-      console.error(dim('  Try running: launchctl bootout gui/$(id -u)/com.mindos.app  then retry.\n'));
-      process.exit(1);
-    }
-    console.log(green('✔ Service installed'));
-  },
-
-  async start() {
-    execSync(`launchctl kickstart -k gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
-    // Wait up to 10s for the service to become active
-    const ok = await waitForService(() => {
-      try {
-        const out = execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { encoding: 'utf-8' });
-        return out.includes('state = running');
-      } catch { return false; }
-    });
-    if (!ok) {
-      console.error(red('\n✘ Service failed to start. Last log output:'));
-      try { execSync(`tail -n 30 ${LOG_PATH}`, { stdio: 'inherit' }); } catch {}
-      process.exit(1);
-    }
-    console.log(green('✔ Service started'));
-  },
-
-  stop() {
-    try {
-      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
-    } catch { /* may not be running */ }
-    console.log(green('✔ Service stopped'));
-  },
-
-  status() {
-    try {
-      execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
-    } catch {
-      console.log(dim('Service is not running'));
-    }
-  },
-
-  logs() {
-    execSync(`tail -f ${LOG_PATH}`, { stdio: 'inherit' });
-  },
-
-  uninstall() {
-    try {
-      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
-    } catch { /* may not be running */ }
-    if (existsSync(LAUNCHD_PLIST)) {
-      rmSync(LAUNCHD_PLIST);
-      console.log(green(`✔ Removed ${LAUNCHD_PLIST}`));
-    }
-    console.log(green('✔ Service uninstalled'));
-  },
-};
-
-// ── gateway dispatcher ────────────────────────────────────────────────────────
-
-async function waitForService(check, { retries = 10, intervalMs = 1000 } = {}) {
-  for (let i = 0; i < retries; i++) {
-    if (check()) return true;
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
-  return check();
-}
-
-async function waitForHttp(port, { retries = 120, intervalMs = 2000, label = 'service' } = {}) {
-  process.stdout.write(cyan(`  Waiting for ${label} to be ready`));
-  for (let i = 0; i < retries; i++) {
-    try {
-      const { request } = await import('node:http');
-      const ok = await new Promise((resolve) => {
-        const req = request({ hostname: '127.0.0.1', port, path: '/', method: 'HEAD', timeout: 1500 },
-          (res) => { res.resume(); resolve(res.statusCode < 500); });
-        req.on('error', () => resolve(false));
-        req.on('timeout', () => { req.destroy(); resolve(false); });
-        req.end();
-      });
-      if (ok) { process.stdout.write(` ${green('✔')}\n`); return true; }
-    } catch { /* not ready yet */ }
-    process.stdout.write('.');
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
-  process.stdout.write(` ${red('✘')}\n`);
-  return false;
-}
-
-async function runGatewayCommand(sub) {
-  const platform = getPlatform();
-  if (!platform) {
-    console.error(red('Daemon mode is not supported on this platform (requires Linux/systemd or macOS/launchd)'));
-    process.exit(1);
-  }
-  const impl = platform === 'systemd' ? systemd : launchd;
-  const fn = impl[sub];
-  if (!fn) {
-    console.error(red(`Unknown gateway subcommand: ${sub}`));
-    console.error(dim('Available: install | uninstall | start | stop | status | logs'));
-    process.exit(1);
-  }
-  await fn();
-}
-
-// ── Startup info ──────────────────────────────────────────────────────────────
-
-function getLocalIP() {
-  try {
-    for (const ifaces of Object.values(networkInterfaces())) {
-      for (const iface of ifaces) {
-        if (iface.family === 'IPv4' && !iface.internal) return iface.address;
-      }
-    }
-  } catch { /* ignore */ }
-  return null;
-}
-
-function printStartupInfo(webPort, mcpPort) {
-  let config = {};
-  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
-  const authToken = config.authToken || '';
-  const localIP   = getLocalIP();
-
-  const auth = authToken
-    ? `,\n        "headers": { "Authorization": "Bearer ${authToken}" }`
-    : '';
-  const block = (host) =>
-    `  {\n    "mcpServers": {\n      "mindos": {\n        "url": "http://${host}:${mcpPort}/mcp"${auth}\n      }\n    }\n  }`;
-
-  console.log(`\n${'─'.repeat(53)}`);
-  console.log(`${bold('🧠 MindOS is starting')}\n`);
-  console.log(`  ${green('●')} Web UI   ${cyan(`http://localhost:${webPort}`)}`);
-  if (localIP) console.log(`             ${cyan(`http://${localIP}:${webPort}`)}`);
-  console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
-  if (localIP) console.log(`             ${cyan(`http://${localIP}:${mcpPort}/mcp`)}`);
-  if (localIP) console.log(dim(`\n  💡 Running on a remote server? Open the Network URL (${localIP}) in your browser,\n     or use SSH port forwarding: ssh -L ${webPort}:localhost:${webPort} user@${localIP}`));
-  console.log();
-  console.log(bold('Configure MCP in your Agent:'));
-  console.log(dim('  Local (same machine):'));
-  console.log(block('localhost'));
-  if (localIP) {
-    console.log(dim('\n  Remote (other device):'));
-    console.log(block(localIP));
-  }
-  if (authToken) {
-    console.log(`\n  🔑 ${bold('Auth token:')} ${cyan(authToken)}`);
-    console.log(dim('  Run `mindos token` anytime to view it again'));
-  }
-  console.log(dim('\n  Install Skills (optional):'));
-  console.log(dim('  npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y'));
-  console.log(`${'─'.repeat(53)}\n`);
-}
-
-// ── MCP spawn ─────────────────────────────────────────────────────────────────
-
-function spawnMcp(verbose = false) {
-  const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
-  const webPort = process.env.MINDOS_WEB_PORT || '3000';
-  const env = {
-    ...process.env,
-    MCP_PORT: mcpPort,
-    MINDOS_URL: `http://localhost:${webPort}`,
-    ...(verbose ? { MCP_VERBOSE: '1' } : {}),
-  };
-  const child = spawn('npx', ['tsx', 'src/index.ts'], {
-    cwd: resolve(ROOT, 'mcp'),
-    stdio: 'inherit',
-    env,
-  });
-  child.on('error', (err) => {
-    if (err.message.includes('EADDRINUSE')) {
-      console.error(`\n${red('✘')} ${bold(`MCP port ${mcpPort} is already in use`)}`);
-      console.error(`  ${dim('Run:')} mindos stop\n`);
-    } else {
-      console.error(red('MCP server error:'), err.message);
-    }
-  });
-  return child;
-}
-
-// ── mcp install ───────────────────────────────────────────────────────────────
-
-const MCP_AGENTS = {
-  'claude-code':     { name: 'Claude Code',     project: '.mcp.json',                       global: '~/.claude.json',                                                                         key: 'mcpServers' },
-  'claude-desktop':  { name: 'Claude Desktop',  project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Claude/claude_desktop_config.json' : '~/.config/Claude/claude_desktop_config.json', key: 'mcpServers' },
-  'cursor':          { name: 'Cursor',           project: '.cursor/mcp.json',                global: '~/.cursor/mcp.json',                                                                     key: 'mcpServers' },
-  'windsurf':        { name: 'Windsurf',         project: null,                               global: '~/.codeium/windsurf/mcp_config.json',                                                   key: 'mcpServers' },
-  'cline':           { name: 'Cline',            project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json' : '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json', key: 'mcpServers' },
-  'trae':            { name: 'Trae',             project: '.trae/mcp.json',                  global: '~/.trae/mcp.json',                                                                       key: 'mcpServers' },
-  'gemini-cli':      { name: 'Gemini CLI',       project: '.gemini/settings.json',           global: '~/.gemini/settings.json',                                                                key: 'mcpServers' },
-  'openclaw':        { name: 'OpenClaw',         project: null,                               global: '~/.openclaw/mcp.json',                                                                   key: 'mcpServers' },
-  'codebuddy':       { name: 'CodeBuddy',        project: null,                               global: '~/.claude-internal/.claude.json',                                                        key: 'mcpServers' },
-};
-
-function expandHome(p) {
-  return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
-}
-
-async function mcpInstall() {
-  const args = process.argv.slice(4);
-
-  // parse flags
-  const hasGlobalFlag    = args.includes('-g') || args.includes('--global');
-  const hasYesFlag       = args.includes('-y') || args.includes('--yes');
-  const transportIdx     = args.findIndex(a => a === '--transport');
-  const urlIdx           = args.findIndex(a => a === '--url');
-  const tokenIdx         = args.findIndex(a => a === '--token');
-  const transportArg     = transportIdx >= 0 ? args[transportIdx + 1] : null;
-  const urlArg           = urlIdx     >= 0 ? args[urlIdx + 1]     : null;
-  const tokenArg         = tokenIdx   >= 0 ? args[tokenIdx + 1]   : null;
-
-  // agent positional arg: first non-flag arg after "mcp install"
-  const agentArg = args.find(a => !a.startsWith('-')) ?? null;
-
-  const readline = await import('node:readline');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q) => new Promise(r => rl.question(q, r));
-  const choose = async (prompt, options, defaultIdx = 0) => {
-    if (hasYesFlag) return options[defaultIdx];
-    console.log(`\n${bold(prompt)}\n`);
-    options.forEach((o, i) => console.log(`  ${dim(`${i + 1}.`)} ${o.label} ${o.hint ? dim(`(${o.hint})`) : ''}`));
-    const ans = await ask(`\n${bold(`Enter number`)} ${dim(`[${defaultIdx + 1}]:`)} `);
-    const idx = ans.trim() === '' ? defaultIdx : parseInt(ans.trim(), 10) - 1;
-    return options[idx >= 0 && idx < options.length ? idx : defaultIdx];
-  };
-
-  console.log(`\n${bold('🔌 MindOS MCP Install')}\n`);
-
-  // ── 1. agent ────────────────────────────────────────────────────────────────
-  let agentKey = agentArg;
-  if (!agentKey) {
-    const keys = Object.keys(MCP_AGENTS);
-    const picked = await choose('Which Agent would you like to configure?',
-      keys.map(k => ({ label: MCP_AGENTS[k].name, hint: k, value: k })));
-    agentKey = picked.value;
-  }
-
-  const agent = MCP_AGENTS[agentKey];
-  if (!agent) {
-    rl.close();
-    console.error(red(`\nUnknown agent: ${agentKey}`));
-    console.error(dim(`Supported: ${Object.keys(MCP_AGENTS).join(', ')}`));
-    process.exit(1);
-  }
-
-  // ── 2. scope (only ask if agent supports both) ───────────────────────────────
-  let isGlobal = hasGlobalFlag;
-  if (!hasGlobalFlag) {
-    if (agent.project && agent.global) {
-      const picked = await choose('Install scope?', [
-        { label: 'Project',  hint: agent.project, value: 'project' },
-        { label: 'Global',   hint: agent.global,  value: 'global'  },
-      ]);
-      isGlobal = picked.value === 'global';
-    } else {
-      // agent only supports one scope, no need to ask
-      isGlobal = !agent.project;
-    }
-  }
-
-  const configPath = isGlobal ? agent.global : agent.project;
-  if (!configPath) {
-    rl.close();
-    console.error(red(`${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope.`));
-    process.exit(1);
-  }
-
-  // ── 3. transport ─────────────────────────────────────────────────────────────
-  let transport = transportArg;
-  if (!transport) {
-    const picked = await choose('Transport type?', [
-      { label: 'stdio', hint: 'local, no server process needed (recommended)' },
-      { label: 'http',  hint: 'URL-based, use when server is running separately or remotely' },
-    ]);
-    transport = picked.label;
-  }
-
-  // ── 4. url + token (only for http) ───────────────────────────────────────────
-  let url = urlArg;
-  let token = tokenArg;
-
-  if (transport === 'http') {
-    if (!url) {
-      url = hasYesFlag ? 'http://localhost:8787/mcp' : (await ask(`${bold('MCP URL')} ${dim('[http://localhost:8787/mcp]:')} `)).trim() || 'http://localhost:8787/mcp';
-    }
-
-    if (!token) {
-      // try reading from config.json first
-      try { token = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).authToken || ''; } catch {}
-      if (!token && !hasYesFlag) {
-        token = (await ask(`${bold('Auth token')} ${dim('(leave blank to skip):')} `)).trim();
-      } else if (token) {
-        console.log(dim(`  Using auth token from ~/.mindos/config.json`));
-      }
-    }
-  }
-
-  rl.close();
-
-  // ── build entry ──────────────────────────────────────────────────────────────
-  const entry = transport === 'stdio'
-    ? { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } }
-    : token
-      ? { url, headers: { Authorization: `Bearer ${token}` } }
-      : { url };
-
-  // ── read + merge existing config ─────────────────────────────────────────────
-  const absPath = expandHome(configPath);
-  let config = {};
-  if (existsSync(absPath)) {
-    try { config = JSON.parse(readFileSync(absPath, 'utf-8')); } catch {
-      console.error(red(`\nFailed to parse existing config: ${absPath}`));
-      process.exit(1);
-    }
-  }
-
-  if (!config[agent.key]) config[agent.key] = {};
-  const existed = !!config[agent.key].mindos;
-  config[agent.key].mindos = entry;
-
-  // ── preview + write ──────────────────────────────────────────────────────────
-  console.log(`\n${bold('Preview:')} ${dim(absPath)}\n`);
-  console.log(dim(JSON.stringify({ [agent.key]: { mindos: entry } }, null, 2)));
-
-  const dir = resolve(absPath, '..');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-
-  console.log(`\n${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)}`);
-  console.log(dim(`  Config: ${absPath}\n`));
-}
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+
+import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH } from './lib/constants.js';
+import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
+import { run } from './lib/utils.js';
+import { loadConfig, getStartMode } from './lib/config.js';
+import { needsBuild, writeBuildStamp, clearBuildLock, ensureAppDeps } from './lib/build.js';
+import { isPortInUse, assertPortFree } from './lib/port.js';
+import { savePids, clearPids } from './lib/pid.js';
+import { stopMindos } from './lib/stop.js';
+import { getPlatform, ensureMindosDir, waitForHttp, runGatewayCommand } from './lib/gateway.js';
+import { printStartupInfo } from './lib/startup.js';
+import { spawnMcp } from './lib/mcp-spawn.js';
+import { mcpInstall } from './lib/mcp-install.js';
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
@@ -798,8 +155,20 @@ const commands = {
 
   mcp: async () => {
     const sub = process.argv[3];
-    if (sub === 'install') { await mcpInstall(); return; }
+    const restArgs = process.argv.slice(3);
+    const hasInstallFlags = restArgs.some(a => ['-g', '--global', '-y', '--yes'].includes(a));
+    if (sub === 'install' || hasInstallFlags) { await mcpInstall(); return; }
     loadConfig();
+    const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
+    if (!existsSync(mcpSdk)) {
+      console.log(yellow('Installing MCP dependencies (first run)...\n'));
+      run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'mcp'));
+    }
+    // Map config env vars to what the MCP server expects
+    const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
+    const webPort = process.env.MINDOS_WEB_PORT || '3000';
+    process.env.MCP_PORT   = mcpPort;
+    process.env.MINDOS_URL = `http://localhost:${webPort}`;
     run(`npx tsx src/index.ts`, resolve(ROOT, 'mcp'));
   },
 
@@ -948,7 +317,8 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       }
     } else if (platform === 'launchd') {
       try {
-        execSync(`launchctl print gui/${launchctlUid()}/com.mindos.app`, { stdio: 'pipe' });
+        const uid = execSync('id -u').toString().trim();
+        execSync(`launchctl print gui/${uid}/com.mindos.app`, { stdio: 'pipe' });
         ok('LaunchAgent com.mindos.app is loaded');
       } catch {
         warn('LaunchAgent com.mindos.app is not loaded  (run `mindos gateway start` to start)');
@@ -973,7 +343,6 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.error(red('Update failed. Try: npm install -g @geminilight/mindos@latest'));
       process.exit(1);
     }
-    // Clear build stamp so next `mindos start` rebuilds if version changed
     if (existsSync(BUILD_STAMP)) rmSync(BUILD_STAMP);
     const newVersion = (() => {
       try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; }
@@ -985,19 +354,22 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       return;
     }
 
-    // If daemon is running, restart it so the new version takes effect immediately
-    const platform = getPlatform();
+    const updatePlatform = getPlatform();
     let daemonRunning = false;
-    if (platform === 'systemd') {
+    if (updatePlatform === 'systemd') {
       try { execSync('systemctl --user is-active mindos', { stdio: 'pipe' }); daemonRunning = true; } catch {}
-    } else if (platform === 'launchd') {
-      try { execSync(`launchctl print gui/${launchctlUid()}/com.mindos.app`, { stdio: 'pipe' }); daemonRunning = true; } catch {}
+    } else if (updatePlatform === 'launchd') {
+      try {
+        const uid = execSync('id -u').toString().trim();
+        execSync(`launchctl print gui/${uid}/com.mindos.app`, { stdio: 'pipe' });
+        daemonRunning = true;
+      } catch {}
     }
 
     if (daemonRunning) {
       console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
       await runGatewayCommand('stop');
-      await runGatewayCommand('install'); // regenerate plist/unit with updated PATH and binary
+      await runGatewayCommand('install');
       await runGatewayCommand('start');
       const webPort = process.env.MINDOS_WEB_PORT || '3000';
       console.log(dim('  (Waiting for Web UI to come back up...)'));
@@ -1049,7 +421,6 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.error(red('Failed to parse config file.'));
         process.exit(1);
       }
-      // Mask API keys for display
       const display = JSON.parse(JSON.stringify(config));
       if (display.ai?.providers?.anthropic?.apiKey)
         display.ai.providers.anthropic.apiKey = maskKey(display.ai.providers.anthropic.apiKey);
@@ -1122,14 +493,12 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.error(red('Failed to parse config file.'));
         process.exit(1);
       }
-      // Support dot-notation for nested keys (e.g. ai.provider)
       const parts = key.split('.');
       let obj = config;
       for (let i = 0; i < parts.length - 1; i++) {
         if (typeof obj[parts[i]] !== 'object' || !obj[parts[i]]) obj[parts[i]] = {};
         obj = obj[parts[i]];
       }
-      // Coerce numbers
       const coerced = isNaN(Number(val)) ? val : Number(val);
       obj[parts[parts.length - 1]] = coerced;
       writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
@@ -1188,13 +557,3 @@ ${row('mindos',                            'Start using mode saved in ~/.mindos/
 }
 
 commands[resolvedCmd]();
-
-// ── run helper ────────────────────────────────────────────────────────────────
-
-function run(command, cwd = ROOT) {
-  try {
-    execSync(command, { cwd, stdio: 'inherit', env: process.env });
-  } catch {
-    process.exit(1);
-  }
-}
