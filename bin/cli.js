@@ -39,7 +39,7 @@ import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH } from './lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
 import { run } from './lib/utils.js';
 import { loadConfig, getStartMode } from './lib/config.js';
-import { needsBuild, writeBuildStamp, clearBuildLock, ensureAppDeps } from './lib/build.js';
+import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
@@ -134,7 +134,7 @@ const commands = {
     ensureAppDeps();
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
-      clearBuildLock();
+      cleanNextDir();
       run('npx next build', resolve(ROOT, 'app'));
       writeBuildStamp();
     }
@@ -148,7 +148,7 @@ const commands = {
   // ── build ──────────────────────────────────────────────────────────────────
   build: () => {
     ensureAppDeps();
-    clearBuildLock();
+    cleanNextDir();
     run(`npx next build ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
   },
