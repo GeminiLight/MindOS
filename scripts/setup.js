@@ -490,6 +490,42 @@ async function applyTemplate(tpl, mindDir) {
 async function main() {
   console.log(`\n${c.bold(t('title'))}\n\n${c.dim(t('langHint'))}\n`);
 
+  // ── Early overwrite check ─────────────────────────────────────────────────
+  if (existsSync(CONFIG_PATH)) {
+    let existing = {};
+    try { existing = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+
+    const mask = (s) => s ? s.slice(0, 4) + '••••••••' + s.slice(-2) : c.dim('(not set)');
+    const row  = (label, val) => `  ${c.dim(label.padEnd(18))} ${val}`;
+    const providers = existing.ai?.providers;
+    const anthropicKey = providers?.anthropic?.apiKey || existing.ai?.anthropicApiKey || '';
+    const openaiKey    = providers?.openai?.apiKey    || existing.ai?.openaiApiKey    || '';
+
+    console.log(c.bold('\nExisting config:'));
+    console.log(row('Knowledge base:', c.cyan(existing.mindRoot || '(not set)')));
+    console.log(row('Web port:',       c.cyan(String(existing.port || '3000'))));
+    console.log(row('MCP port:',       c.cyan(String(existing.mcpPort || '8787'))));
+    console.log(row('Auth token:',     existing.authToken ? mask(existing.authToken) : c.dim('(not set)')));
+    console.log(row('Web password:',   existing.webPassword ? '••••••••' : c.dim('(none)')));
+    console.log(row('AI provider:',    c.cyan(existing.ai?.provider || '(not set)')));
+    if (anthropicKey) console.log(row('Anthropic key:', mask(anthropicKey)));
+    if (openaiKey)    console.log(row('OpenAI key:',    mask(openaiKey)));
+    write('\n');
+
+    const overwrite = await askYesNo('cfgExists', CONFIG_PATH);
+    if (!overwrite) {
+      const existingMode     = existing.startMode || 'start';
+      const existingMcpPort  = existing.mcpPort   || 8787;
+      const existingAuth     = existing.authToken || '';
+      const existingMindRoot = existing.mindRoot  || resolve(MINDOS_DIR, 'my-mind');
+      console.log(`\n${c.green(t('cfgKept'))}  ${c.dim(CONFIG_PATH)}`);
+      write(c.dim(t('cfgKeptNote') + '\n'));
+      const installDaemon = process.argv.includes('--install-daemon');
+      finish(existingMindRoot, existingMode, existingMcpPort, existingAuth, installDaemon);
+      return;
+    }
+  }
+
   // ── Step 1: Knowledge base path ───────────────────────────────────────────
   stepHeader(1);
 
@@ -558,28 +594,6 @@ async function main() {
   // ── Step 6: AI Provider + API Key ─────────────────────────────────────────
   write('\n');
   stepHeader(6);
-
-  // if config exists, ask about overwrite first
-  if (existsSync(CONFIG_PATH)) {
-    const overwrite = await askYesNo('cfgExists', CONFIG_PATH);
-    if (!overwrite) {
-      let existingMode = 'start';
-      let existingMcpPort = 8787;
-      let existingAuth = '';
-      let existingMindRoot = mindDir;
-      try {
-        const existing = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-        existingMode     = existing.startMode  || 'start';
-        existingMcpPort  = existing.mcpPort    || 8787;
-        existingAuth     = existing.authToken  || '';
-        existingMindRoot = existing.mindRoot   || mindDir;
-      } catch { /* ignore */ }
-      console.log(`\n${c.green(t('cfgKept'))}  ${c.dim(CONFIG_PATH)}`);
-      write(c.dim(t('cfgKeptNote') + '\n'));
-      finish(existingMindRoot, existingMode, existingMcpPort, existingAuth);
-      return;
-    }
-  }
 
   const provider = await select('providerPrompt', 'providerOpts', 'providerVals');
   const isSkip = provider === 'skip';
