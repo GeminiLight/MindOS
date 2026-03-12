@@ -29,6 +29,13 @@ export function clearBuildLock() {
   }
 }
 
+export function cleanNextDir() {
+  const nextDir = resolve(ROOT, 'app', '.next');
+  if (existsSync(nextDir)) {
+    rmSync(nextDir, { recursive: true, force: true });
+  }
+}
+
 export function ensureAppDeps() {
   const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
   if (!existsSync(appNext)) {
