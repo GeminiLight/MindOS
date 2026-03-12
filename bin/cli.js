@@ -811,9 +811,9 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     })();
     console.log(`\n${bold('⬆  Updating MindOS...')}  ${dim(`(current: ${currentVersion})`)}\n`);
     try {
-      execSync('npm install -g mindos@latest', { stdio: 'inherit' });
+      execSync('npm install -g @geminilight/mindos@latest', { stdio: 'inherit' });
     } catch {
-      console.error(red('Update failed. Try: npm install -g mindos@latest'));
+      console.error(red('Update failed. Try: npm install -g @geminilight/mindos@latest'));
       process.exit(1);
     }
     // Clear build stamp so next `mindos start` rebuilds if version changed
