@@ -222,13 +222,10 @@ mindos mcp install
 
 ```bash
 # 交互式
-mindos mcp install claude-code
-
-# 一键安装，无需交互（stdio + 项目级）
-mindos mcp install claude-code -y
+mindos mcp install
 
 # 一键安装，全局（所有项目共享）
-mindos mcp install claude-code -g -y
+mindos mcp install -g -y
 ```
 
 **远程访问（Agent 在另一台机器）**
@@ -236,7 +233,7 @@ mindos mcp install claude-code -g -y
 使用 `http` transport — 远程机器上需先运行 `mindos start`：
 
 ```bash
-mindos mcp install claude-code --transport http --url http://<服务器IP>:8787/mcp --token your-token
+mindos mcp install --transport http --url http://<服务器IP>:8787/mcp --token your-token -g
 ```
 
 > [!NOTE]
