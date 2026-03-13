@@ -1,0 +1,26 @@
+{
+  "name": "MindOS",
+  "short_name": "MindOS",
+  "description": "Personal knowledge OS — browse, edit, and query your second brain.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c8871e",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-square.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

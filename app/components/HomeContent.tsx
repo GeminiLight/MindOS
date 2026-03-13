@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
+import OnboardingView from './OnboardingView';
 
 interface RecentFile {
   path: string;
@@ -21,7 +22,7 @@ const RENDERER_ENTRY: Record<string, string> = {
   timeline: 'CHANGELOG.md',
   backlinks: 'BACKLINKS.md',
   summary: 'DAILY.md',
-  'agent-inspector': 'Agent-Audit.md',
+  'agent-inspector': '.agent-log.json',
   workflow: 'Workflow.md',
   'diff-viewer': 'Agent-Diff.md',
   'config-panel': 'CONFIG.json',
@@ -44,6 +45,11 @@ function triggerAsk() {
 export default function HomeContent({ recent }: { recent: RecentFile[] }) {
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
+
+  // Empty knowledge base → show onboarding
+  if (recent.length === 0) {
+    return <OnboardingView />;
+  }
 
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 

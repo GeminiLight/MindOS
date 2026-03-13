@@ -1,6 +1,21 @@
 ## 项目规则
 
-1. `app/data/skills/mindos/SKILL.md` 必须和 `skills/mindos/SKILL.md` 保持一致。如果不一致，直接 copy `skills/mindos/SKILL.md`。
+1. `app/data/skills/mindos/SKILL.md` 必须和 `skills/mindos/SKILL.md` 保持一致。如果不一致，直接 copy `skills/mindos/SKILL.md`，直接用命令行的方式对比。
+
+你再review下，找些建议和可提升的地方
+
+有任务，先spec，review spec 再执行，再review code 和结果
+REAMDE.md和REAMDE-zh.md必须保持一致
+
+项目写wiki和tests
+
+roadmap 到 spec 到 review （human + ai）
+
+
+更新代码需要判断是否增加tests、最后更新wiki
+
+不要
+再估算工时
 
 ## Git 提交流程
 
