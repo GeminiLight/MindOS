@@ -24,7 +24,7 @@ export interface SettingsData {
   envValues?: Record<string, string>;
 }
 
-export type Tab = 'ai' | 'appearance' | 'knowledge' | 'plugins' | 'shortcuts';
+export type Tab = 'ai' | 'appearance' | 'knowledge' | 'plugins' | 'shortcuts' | 'sync';
 
 export const CONTENT_WIDTHS = [
   { value: '680px', label: 'Narrow (680px)' },

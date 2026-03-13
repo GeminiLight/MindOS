@@ -51,9 +51,13 @@
     "build": "mindos build",
     "start": "mindos start",
     "mcp": "mindos mcp",
-    "test": "cd app && npx vitest run"
+    "test": "cd app && npx vitest run",
+    "release": "bash scripts/release.sh"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0"
   }
 }

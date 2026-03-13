@@ -82,6 +82,7 @@ Static documents are hard to synchronize and weak as execution systems in real h
 - **Reference Sync**: keep cross-file status and context aligned via links/backlinks.
 - **Knowledge Graph**: visualize relationships and dependencies across notes.
 - **Git Time Machine**: track every edit, audit history, and roll back safely.
+- **Cross-Device Sync**: auto-commit, push, and pull via Git — edits on one device appear on all others within minutes.
 
 <details>
 <summary><strong>Coming Soon</strong></summary>
@@ -125,10 +126,8 @@ npm link   # registers the `mindos` command globally
 ### 2. Interactive Setup
 
 ```bash
-mindos onboard --install-daemon
+mindos onboard
 ```
-
-> `--install-daemon`: after setup, automatically installs and starts MindOS as a background OS service (survives terminal close, auto-restarts on crash).
 
 The setup wizard will guide you through:
 1. Knowledge base path → default `~/.mindos/my-mind`
@@ -137,6 +136,7 @@ The setup wizard will guide you through:
 4. Auth token (auto-generated or passphrase-seeded)
 5. Web UI password (optional)
 6. AI Provider (Anthropic / OpenAI) + API Key — or **skip** to configure later via `mindos config set`
+7. Start mode — **Background service** (recommended, auto-starts on boot) or Foreground
 
 Config is saved to `~/.mindos/config.json` automatically.
 
@@ -158,12 +158,21 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
   "mcpPort": 8787,
   "authToken": "",
   "webPassword": "",
+  "startMode": "daemon",
   "ai": {
     "provider": "anthropic",
     "providers": {
       "anthropic": { "apiKey": "sk-ant-...", "model": "claude-sonnet-4-6" },
       "openai":    { "apiKey": "sk-...",     "model": "gpt-5.4", "baseUrl": "" }
     }
+  },
+  "sync": {
+    "enabled": true,
+    "provider": "git",
+    "remote": "origin",
+    "branch": "main",
+    "autoCommitInterval": 30,
+    "autoPullInterval": 300
   }
 }
 ```
@@ -175,12 +184,19 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
 | `mcpPort` | `8787` | Optional. MCP server port. |
 | `authToken` | — | Optional. Protects App `/api/*` and MCP `/mcp` with bearer token auth. For Agent / MCP clients. Recommended when exposed to a network. |
 | `webPassword` | — | Optional. Protects the web UI with a login page. For browser access. Independent from `authToken`. |
+| `startMode` | `start` | Start mode: `daemon` (background service, auto-starts on boot), `start` (foreground), or `dev`. |
 | `ai.provider` | `anthropic` | Active provider: `anthropic` or `openai`. |
 | `ai.providers.anthropic.apiKey` | — | Anthropic API key. |
 | `ai.providers.anthropic.model` | `claude-sonnet-4-6` | Anthropic model ID. |
 | `ai.providers.openai.apiKey` | — | OpenAI API key. |
 | `ai.providers.openai.model` | `gpt-5.4` | OpenAI model ID. |
 | `ai.providers.openai.baseUrl` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
+| `sync.enabled` | `false` | Enable/disable automatic Git sync. |
+| `sync.provider` | `git` | Sync provider (currently only `git`). |
+| `sync.remote` | `origin` | Git remote name. |
+| `sync.branch` | `main` | Git branch to sync. |
+| `sync.autoCommitInterval` | `30` | Seconds after file change to auto-commit+push. |
+| `sync.autoPullInterval` | `300` | Seconds between auto-pull from remote. |
 
 Multiple providers can be configured simultaneously — switch between them by changing `ai.provider`. Shell env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) take precedence over config file values.
 
@@ -190,7 +206,13 @@ Multiple providers can be configured simultaneously — switch between them by c
 > If you want the MindOS GUI to be reachable from other devices, make sure the port is open in firewall/security-group settings and bound to an accessible host/network interface.
 
 > [!TIP]
-> With `--install-daemon`, MindOS is installed as a background OS service and starts automatically — no need to run `mindos start` manually. If you skipped the flag, run `mindos start` to start manually, or `mindos update` to upgrade to the latest version.
+> If you chose "Background service" during onboard, MindOS is installed as a background OS service and starts automatically — no need to run `mindos start` manually. Run `mindos update` to upgrade to the latest version.
+
+Open the Web UI in your browser:
+
+```bash
+mindos open
+```
 
 ### 3. Inject Your Personal Mind with MindOS Agent
 
@@ -386,12 +408,13 @@ MindOS/
 ├── mcp/              # MCP Server — HTTP adapter that maps tools to App API
 ├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — Workflow guides for Agents
 ├── templates/        # Preset templates (`en/`, `zh/`, `empty/`) — copied to knowledge base on onboard
-├── bin/              # CLI entry point (`mindos onboard`, `mindos start`, `mindos dev`, `mindos token`)
+├── bin/              # CLI entry point (`mindos onboard`, `mindos start`, `mindos open`, `mindos sync`, `mindos token`)
 ├── scripts/          # Setup wizard and helper scripts
 └── README.md
 
 ~/.mindos/            # User data directory (outside project, never committed)
-├── config.json       # All configuration (AI keys, port, auth token, knowledge base path)
+├── config.json       # All configuration (AI keys, port, auth token, sync settings)
+├── sync-state.json   # Sync state (last sync time, conflicts)
 └── my-mind/          # Your private knowledge base (default path, customizable on onboard)
 ```
 
@@ -401,17 +424,24 @@ MindOS/
 
 | Command | Description |
 | :--- | :--- |
-| `mindos onboard` | Interactive setup (config, template selection) |
-| `mindos onboard --install-daemon` | Setup + install & start as background OS service |
+| `mindos onboard` | Interactive setup (config, template, start mode) |
 | `mindos start` | Start app + MCP server (foreground, production mode) |
 | `mindos start --daemon` | Install + start as a background OS service (survives terminal close, auto-restarts on crash) |
 | `mindos dev` | Start app + MCP server (dev mode, hot reload) |
 | `mindos dev --turbopack` | Dev mode with Turbopack (faster HMR) |
+| `mindos open` | Open the Web UI in the default browser |
 | `mindos stop` | Stop running MindOS processes |
 | `mindos restart` | Stop then start again |
 | `mindos build` | Manually build for production |
 | `mindos mcp` | Start MCP server only |
-| `mindos token` | Show current auth token and MCP config snippet |
+| `mindos token` | Show auth token and per-agent MCP config snippets |
+| `mindos sync` | Show sync status (alias for `sync status`) |
+| `mindos sync init` | Interactive setup for Git remote sync |
+| `mindos sync status` | Show sync status: last sync, unpushed commits, conflicts |
+| `mindos sync now` | Manually trigger a full sync (commit + push + pull) |
+| `mindos sync on` | Enable automatic sync |
+| `mindos sync off` | Disable automatic sync |
+| `mindos sync conflicts` | List unresolved conflict files |
 | `mindos gateway install` | Install background service (systemd on Linux, LaunchAgent on macOS) |
 | `mindos gateway uninstall` | Remove background service |
 | `mindos gateway start` | Start the background service |

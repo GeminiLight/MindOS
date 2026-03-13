@@ -83,7 +83,7 @@ export const messages = {
     },
     settings: {
       title: 'Settings',
-      tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'Knowledge Base', plugins: 'Plugins', shortcuts: 'Shortcuts' },
+      tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'Knowledge Base', sync: 'Sync', plugins: 'Plugins', shortcuts: 'Shortcuts' },
       ai: {
         provider: 'Provider',
         model: 'Model',
@@ -230,7 +230,7 @@ export const messages = {
     },
     settings: {
       title: '设置',
-      tabs: { ai: 'AI', appearance: '外观', knowledge: '知识库', plugins: '插件', shortcuts: '快捷键' },
+      tabs: { ai: 'AI', appearance: '外观', knowledge: '知识库', sync: '同步', plugins: '插件', shortcuts: '快捷键' },
       ai: {
         provider: '服务商',
         model: '模型',
