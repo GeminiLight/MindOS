@@ -15,10 +15,10 @@ on:
       - 'bin/**'
       - 'scripts/**'
       - 'tests/**'
-      - '.github/workflows/**'
       - 'README.md'
       - 'README_zh.md'
       - '.env.local.example'
+      - 'package-lock.json'
 
 permissions:
   contents: write
@@ -74,7 +74,7 @@ jobs:
 
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
 
-          for f in package.json README.md README_zh.md LICENSE .env.local.example; do
+          for f in package.json package-lock.json README.md README_zh.md LICENSE .env.local.example; do
             [ -f "$f" ] && cp "$f" /tmp/mindos/
           done
 
