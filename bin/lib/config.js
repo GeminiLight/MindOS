@@ -40,8 +40,19 @@ export function loadConfig() {
 
 export function getStartMode() {
   try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode || 'start';
+    const mode = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode || 'start';
+    // 'daemon' is stored in config when user chose background service;
+    // CLI maps it to the 'start' command with --daemon flag
+    return mode === 'daemon' ? 'start' : mode;
   } catch {
     return 'start';
+  }
+}
+
+export function isDaemonMode() {
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode === 'daemon';
+  } catch {
+    return false;
   }
 }

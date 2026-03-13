@@ -26,7 +26,7 @@ export interface ServerSettings {
   mcpPort?: number;
   authToken?: string;
   webPassword?: string;
-  startMode?: 'dev' | 'start';
+  startMode?: 'dev' | 'start' | 'daemon';
 }
 
 const DEFAULTS: ServerSettings = {

@@ -13,6 +13,7 @@ import { AppearanceTab } from './settings/AppearanceTab';
 import { KnowledgeTab } from './settings/KnowledgeTab';
 import { PluginsTab } from './settings/PluginsTab';
 import { ShortcutsTab } from './settings/ShortcutsTab';
+import { SyncTab } from './settings/SyncTab';
 
 interface SettingsModalProps {
   open: boolean;
@@ -131,6 +132,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: 'ai', label: t.settings.tabs.ai },
     { id: 'appearance', label: t.settings.tabs.appearance },
     { id: 'knowledge', label: t.settings.tabs.knowledge },
+    { id: 'sync', label: t.settings.tabs.sync ?? 'Sync' },
     { id: 'plugins', label: t.settings.tabs.plugins },
     { id: 'shortcuts', label: t.settings.tabs.shortcuts },
   ];
@@ -193,6 +195,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
               {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} />}
               {tab === 'shortcuts' && <ShortcutsTab t={t} />}
+              {tab === 'sync' && <SyncTab t={t} />}
             </>
           )}
         </div>

@@ -44,8 +44,8 @@ const T = {
   // step labels
   step:           { en: (n, total) => `Step ${n}/${total}`, zh: (n, total) => `步骤 ${n}/${total}` },
   stepTitles:     {
-    en: ['Knowledge Base', 'Template', 'Ports', 'Auth Token', 'Web Password', 'AI Provider'],
-    zh: ['知识库',         '模板',     '端口',   'Auth Token', 'Web 密码',     'AI 服务商'],
+    en: ['Knowledge Base', 'Template', 'Ports', 'Auth Token', 'Web Password', 'AI Provider', 'Start Mode'],
+    zh: ['知识库',         '模板',     '端口',   'Auth Token', 'Web 密码',     'AI 服务商',    '启动方式'],
   },
 
   // path
@@ -97,6 +97,12 @@ const T = {
 
   // config
   cfgExists:      { en: (p) => `${p} already exists. Overwrite?`, zh: (p) => `${p} 已存在，是否覆盖？` },
+
+  // start mode
+  startModePrompt: { en: 'Start Mode', zh: '启动方式' },
+  startModeOpts:   { en: ['Background service (recommended, auto-start on boot)', 'Foreground (manual start each time)'], zh: ['后台服务（推荐，开机自启）', '前台运行（每次手动启动）'] },
+  startModeVals:   ['daemon', 'start'],
+  startModeSkip:   { en: '  → Daemon not supported on this platform, using foreground mode', zh: '  → 当前平台不支持后台服务，使用前台模式' },
   cfgKept:        { en: '✔ Keeping existing config', zh: '✔ 保留现有配置' },
   cfgKeptNote:    { en: '  Settings from this session were not saved', zh: '  本次填写的设置未保存' },
   cfgSaved:       { en: '✔ Config saved', zh: '✔ 配置已保存' },
@@ -153,7 +159,7 @@ const tf = (key, ...args) => {
 
 // ── Step header ───────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 function stepHeader(n) {
   const title = T.stepTitles[uiLang][n - 1] ?? T.stepTitles.en[n - 1];
   const stepLabel = tf('step', n, TOTAL_STEPS);
@@ -639,13 +645,25 @@ async function main() {
     }
   }
 
+  // ── Step 7: Start Mode ──────────────────────────────────────────────────
+  write('\n');
+  stepHeader(7);
+
+  let startMode = 'start';
+  const daemonPlatform = process.platform === 'darwin' || process.platform === 'linux';
+  if (daemonPlatform) {
+    startMode = await select('startModePrompt', 'startModeOpts', 'startModeVals');
+  } else {
+    write(c.dim(t('startModeSkip') + '\n'));
+  }
+
   const config = {
     mindRoot:    mindDir,
     port:        webPort,
     mcpPort:     mcpPort,
     authToken:   authToken,
     webPassword: webPassword || '',
-    startMode:   'start',
+    startMode:   startMode,
     ai: {
       provider:  isSkip ? existingAiProvider : (isAnthropic ? 'anthropic' : 'openai'),
       providers: existingProviders,
@@ -656,7 +674,7 @@ async function main() {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
 
-  const installDaemon = process.argv.includes('--install-daemon');
+  const installDaemon = startMode === 'daemon' || process.argv.includes('--install-daemon');
   finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon);
 }
 

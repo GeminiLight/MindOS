@@ -15,7 +15,13 @@
  *   mindos mcp                      — start MCP server only
  *   mindos stop                     — stop running MindOS processes
  *   mindos restart                  — stop then start
+ *   mindos open                     — open Web UI in the default browser
  *   mindos token                    — show current auth token and MCP config snippet
+ *   mindos sync                     — show sync status
+ *   mindos sync init                — configure remote git repo for sync
+ *   mindos sync now                 — manual trigger sync
+ *   mindos sync conflicts           — list conflict files
+ *   mindos sync on|off              — enable/disable auto-sync
  *   mindos gateway install          — install background service (systemd/launchd)
  *   mindos gateway uninstall        — remove background service
  *   mindos gateway start            — start the background service
@@ -38,20 +44,21 @@ import { homedir } from 'node:os';
 import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH } from './lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
 import { run } from './lib/utils.js';
-import { loadConfig, getStartMode } from './lib/config.js';
+import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
 import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
 import { getPlatform, ensureMindosDir, waitForHttp, runGatewayCommand } from './lib/gateway.js';
-import { printStartupInfo } from './lib/startup.js';
+import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
 import { mcpInstall } from './lib/mcp-install.js';
+import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
 const cmd       = process.argv[2];
-const isDaemon  = process.argv.includes('--daemon');
+const isDaemon  = process.argv.includes('--daemon') || (!cmd && isDaemonMode());
 const isVerbose = process.argv.includes('--verbose');
 const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '--verbose').join(' ');
 
@@ -64,22 +71,117 @@ const commands = {
   init:  () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
   setup: () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
 
+  // ── open ───────────────────────────────────────────────────────────────────
+  open: () => {
+    loadConfig();
+    const webPort = process.env.MINDOS_WEB_PORT || '3000';
+    const url = `http://localhost:${webPort}`;
+    let cmd;
+    if (process.platform === 'darwin') {
+      cmd = 'open';
+    } else if (process.platform === 'linux') {
+      // WSL detection
+      try {
+        const uname = execSync('uname -r', { encoding: 'utf-8' });
+        cmd = uname.toLowerCase().includes('microsoft') ? 'wslview' : 'xdg-open';
+      } catch {
+        cmd = 'xdg-open';
+      }
+    } else {
+      cmd = 'start';
+    }
+    try {
+      execSync(`${cmd} ${url}`, { stdio: 'ignore' });
+      console.log(`${green('✔')} Opening ${cyan(url)}`);
+    } catch {
+      console.log(dim(`Could not open browser automatically. Visit: ${cyan(url)}`));
+    }
+  },
+
   // ── token ──────────────────────────────────────────────────────────────────
   token: () => {
     if (!existsSync(CONFIG_PATH)) {
       console.error(red('No config found. Run `mindos onboard` first.'));
       process.exit(1);
     }
-    let token = '';
-    try { token = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).authToken || ''; } catch {}
+    let config = {};
+    try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+    const token = config.authToken || '';
     if (!token) {
       console.log(dim('No auth token set. Run `mindos onboard` to configure one.'));
       process.exit(0);
     }
+    const mcpPort = config.mcpPort || 8787;
+    const localIP = getLocalIP();
+
+    const localUrl = `http://localhost:${mcpPort}/mcp`;
+    const sep = '━'.repeat(40);
+
     console.log(`\n${bold('🔑 Auth token:')} ${cyan(token)}\n`);
-    console.log(dim('Add to your Agent MCP config:'));
-    console.log(`  "headers": { "Authorization": "Bearer ${cyan(token)}" }\n`);
-    console.log(dim('Run `mindos onboard` to regenerate.\n'));
+
+    // Claude Code
+    console.log(`${sep}`);
+    console.log(`${bold('Claude Code')}`);
+    console.log(`${sep}`);
+    console.log(dim('一键安装:') + ` mindos mcp install claude-code -g -y`);
+    console.log(dim('\n手动配置 (~/.claude.json):'));
+    console.log(JSON.stringify({
+      mcpServers: {
+        mindos: {
+          url: localUrl,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    }, null, 2));
+
+    // CodeBuddy (Claude Code Internal)
+    console.log(`\n${sep}`);
+    console.log(`${bold('CodeBuddy (Claude Code Internal)')}`);
+    console.log(`${sep}`);
+    console.log(dim('一键安装:') + ` mindos mcp install codebuddy -g -y`);
+    console.log(dim('\n手动配置 (~/.claude-internal/.claude.json):'));
+    console.log(JSON.stringify({
+      mcpServers: {
+        mindos: {
+          url: localUrl,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    }, null, 2));
+
+    // Cursor
+    console.log(`\n${sep}`);
+    console.log(`${bold('Cursor')}`);
+    console.log(`${sep}`);
+    console.log(dim('一键安装:') + ` mindos mcp install cursor -g -y`);
+    console.log(dim('\n手动配置 (~/.cursor/mcp.json):'));
+    console.log(JSON.stringify({
+      mcpServers: {
+        mindos: {
+          url: localUrl,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    }, null, 2));
+
+    // Remote
+    if (localIP) {
+      const remoteUrl = `http://${localIP}:${mcpPort}/mcp`;
+      console.log(`\n${sep}`);
+      console.log(`${bold('Remote (其他设备)')}`);
+      console.log(`${sep}`);
+      console.log(`URL: ${cyan(remoteUrl)}`);
+      console.log(JSON.stringify({
+        mcpServers: {
+          mindos: {
+            url: remoteUrl,
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        },
+      }, null, 2));
+    }
+
+    console.log(dim('\nRun `mindos onboard` to regenerate.\n'));
   },
 
   // ── dev ────────────────────────────────────────────────────────────────────
@@ -92,7 +194,12 @@ const commands = {
     ensureAppDeps();
     const mcp = spawnMcp(isVerbose);
     savePids(process.pid, mcp.pid);
-    process.on('exit', clearPids);
+    process.on('exit', () => { stopSyncDaemon(); clearPids(); });
+    // Start sync daemon if enabled
+    const devMindRoot = process.env.MIND_ROOT;
+    if (devMindRoot) {
+      startSyncDaemon(devMindRoot).catch(() => {});
+    }
     printStartupInfo(webPort, mcpPort);
     run(`npx next dev -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
@@ -119,6 +226,14 @@ const commands = {
           process.exit(1);
         }
         printStartupInfo(webPort, mcpPort);
+        // System notification
+        try {
+          if (process.platform === 'darwin') {
+            execSync(`osascript -e 'display notification "http://localhost:${webPort}" with title "MindOS 已就绪"'`, { stdio: 'ignore' });
+          } else if (process.platform === 'linux') {
+            execSync(`notify-send "MindOS 已就绪" "http://localhost:${webPort}"`, { stdio: 'ignore' });
+          }
+        } catch { /* notification is best-effort */ }
         console.log(`${green('✔ MindOS is running as a background service')}`);
         console.log(dim('  View logs:    mindos logs'));
         console.log(dim('  Stop:         mindos gateway stop'));
@@ -140,7 +255,12 @@ const commands = {
     }
     const mcp = spawnMcp(isVerbose);
     savePids(process.pid, mcp.pid);
-    process.on('exit', clearPids);
+    process.on('exit', () => { stopSyncDaemon(); clearPids(); });
+    // Start sync daemon if enabled
+    const mindRoot = process.env.MIND_ROOT;
+    if (mindRoot) {
+      startSyncDaemon(mindRoot).catch(() => {});
+    }
     printStartupInfo(webPort, mcpPort);
     run(`npx next start -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
@@ -521,6 +641,67 @@ ${bold('Examples:')}
   ${dim('mindos config set ai.provider openai')}
 `);
   },
+
+  // ── sync ──────────────────────────────────────────────────────────────────
+  sync: async () => {
+    const sub = process.argv[3];
+    loadConfig();
+    const mindRoot = process.env.MIND_ROOT;
+
+    if (sub === 'init') {
+      await initSync(mindRoot);
+      return;
+    }
+
+    if (sub === 'now') {
+      manualSync(mindRoot);
+      return;
+    }
+
+    if (sub === 'conflicts') {
+      listConflicts(mindRoot);
+      return;
+    }
+
+    if (sub === 'on') {
+      setSyncEnabled(true);
+      return;
+    }
+
+    if (sub === 'off') {
+      setSyncEnabled(false);
+      stopSyncDaemon();
+      return;
+    }
+
+    // default: sync status
+    const status = getSyncStatus(mindRoot);
+    if (!status.enabled) {
+      console.log(`\n${bold('🔄 Sync Status')}`);
+      console.log(dim('  Not configured. Run `mindos sync init` to set up.\n'));
+      return;
+    }
+    const ago = status.lastSync
+      ? (() => {
+          const diff = Date.now() - new Date(status.lastSync).getTime();
+          if (diff < 60000) return 'just now';
+          if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`;
+          return `${Math.floor(diff / 3600000)} hours ago`;
+        })()
+      : 'never';
+
+    console.log(`\n${bold('🔄 Sync Status')}`);
+    console.log(`  ${dim('Provider:')}    ${cyan(`${status.provider} (${status.remote})`)}`);
+    console.log(`  ${dim('Branch:')}      ${cyan(status.branch)}`);
+    console.log(`  ${dim('Last sync:')}   ${ago}`);
+    console.log(`  ${dim('Unpushed:')}    ${status.unpushed} commits`);
+    console.log(`  ${dim('Conflicts:')}   ${status.conflicts.length ? yellow(`${status.conflicts.length} file(s)`) : green('none')}`);
+    console.log(`  ${dim('Auto-sync:')}   ${green('● enabled')} ${dim(`(commit: ${status.autoCommitInterval}s, pull: ${status.autoPullInterval / 60}min)`)}`);
+    if (status.lastError) {
+      console.log(`  ${dim('Last error:')}  ${red(status.lastError)}`);
+    }
+    console.log();
+  },
 };
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
@@ -545,7 +726,9 @@ ${row('mindos restart',                    'Stop then start again')}
 ${row('mindos build',                      'Build the app for production')}
 ${row('mindos mcp',                        'Start MCP server only')}
 ${row('mindos mcp install [agent]',        'Install MindOS MCP config into Agent (claude-code/cursor/windsurf/…) [-g]')}
+${row('mindos open',                       'Open Web UI in the default browser')}
 ${row('mindos token',                      'Show current auth token and MCP config snippet')}
+${row('mindos sync',                       'Show sync status (init/now/conflicts/on/off)')}
 ${row('mindos gateway <subcommand>',       'Manage background service (install/uninstall/start/stop/status/logs)')}
 ${row('mindos doctor',                     'Health check (config, ports, build, daemon)')}
 ${row('mindos update',                     'Update MindOS to the latest version')}
