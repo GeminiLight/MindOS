@@ -18,9 +18,10 @@ import { SyncTab } from './settings/SyncTab';
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  initialTab?: Tab;
 }
 
-export default function SettingsModal({ open, onClose }: SettingsModalProps) {
+export default function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
   const [tab, setTab] = useState<Tab>('ai');
   const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -47,6 +48,11 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     setPluginStates(initial);
     setStatus('idle');
   }, [open]);
+
+  // Switch to requested tab when opening with initialTab
+  useEffect(() => {
+    if (open && initialTab) setTab(initialTab);
+  }, [open, initialTab]);
 
   // Apply font immediately
   useEffect(() => {

@@ -5,6 +5,7 @@ import { GraphRenderer } from '@/components/renderers/GraphRenderer';
 import { TimelineRenderer } from '@/components/renderers/TimelineRenderer';
 import { SummaryRenderer } from '@/components/renderers/SummaryRenderer';
 import { ConfigRenderer } from '@/components/renderers/ConfigRenderer';
+import { AgentInspectorRenderer } from '@/components/renderers/AgentInspectorRenderer';
 
 registerRenderer({
   id: 'todo',
@@ -76,4 +77,16 @@ registerRenderer({
   builtin: true,
   match: ({ filePath }) => /\b(SUMMARY|summary|Summary|BRIEFING|briefing|Briefing|DAILY|daily|Daily)\b.*\.md$/i.test(filePath),
   component: SummaryRenderer,
+});
+
+registerRenderer({
+  id: 'agent-inspector',
+  name: 'Agent Inspector',
+  description: 'Visualizes agent tool-call logs as a filterable timeline. Auto-activates on .agent-log.json (JSON Lines format).',
+  author: 'MindOS',
+  icon: '🔍',
+  tags: ['agent', 'inspector', 'log', 'mcp', 'tools'],
+  builtin: true,
+  match: ({ filePath }) => /\.agent-log\.json$/i.test(filePath),
+  component: AgentInspectorRenderer,
 });

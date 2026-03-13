@@ -16,6 +16,141 @@ export const MCP_AGENTS = {
   'codebuddy':       { name: 'CodeBuddy',        project: null,                               global: '~/.claude-internal/.claude.json',                                                        key: 'mcpServers' },
 };
 
+// ─── Interactive select (arrow keys) ──────────────────────────────────────────
+
+/**
+ * Single select with arrow keys.
+ * ↑/↓ to move, Enter to confirm.
+ */
+async function interactiveSelect(title, options) {
+  return new Promise((resolve) => {
+    let cursor = 0;
+    const { stdin, stdout } = process;
+
+    function render() {
+      // Move up to clear previous render (except first time)
+      stdout.write(`\x1b[${options.length + 1}A\x1b[J`);
+      draw();
+    }
+
+    function draw() {
+      stdout.write(`${bold(title)}\n`);
+      for (let i = 0; i < options.length; i++) {
+        const o = options[i];
+        const prefix = i === cursor ? cyan('❯') : ' ';
+        const label = i === cursor ? cyan(o.label) : o.label;
+        const hint = o.hint ? ` ${dim(`(${o.hint})`)}` : '';
+        stdout.write(`  ${prefix} ${label}${hint}\n`);
+      }
+    }
+
+    // Initial draw
+    stdout.write('\n');
+    draw();
+
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf-8');
+
+    function onKey(key) {
+      if (key === '\x1b[A') { // up
+        cursor = (cursor - 1 + options.length) % options.length;
+        render();
+      } else if (key === '\x1b[B') { // down
+        cursor = (cursor + 1) % options.length;
+        render();
+      } else if (key === '\r' || key === '\n') { // enter
+        cleanup();
+        resolve(options[cursor]);
+      } else if (key === '\x03') { // ctrl+c
+        cleanup();
+        process.exit(0);
+      }
+    }
+
+    function cleanup() {
+      stdin.removeListener('data', onKey);
+      stdin.setRawMode(false);
+      stdin.pause();
+    }
+
+    stdin.on('data', onKey);
+  });
+}
+
+/**
+ * Multi select with arrow keys.
+ * ↑/↓ to move, Space to toggle, A to toggle all, Enter to confirm.
+ */
+async function interactiveMultiSelect(title, options) {
+  return new Promise((resolve) => {
+    let cursor = 0;
+    const selected = new Set();
+    const { stdin, stdout } = process;
+
+    function render() {
+      stdout.write(`\x1b[${options.length + 2}A\x1b[J`);
+      draw();
+    }
+
+    function draw() {
+      stdout.write(`${bold(title)}  ${dim('(↑↓ move, Space select, A all, Enter confirm)')}\n`);
+      for (let i = 0; i < options.length; i++) {
+        const o = options[i];
+        const check = selected.has(i) ? green('✔') : dim('○');
+        const pointer = i === cursor ? cyan('❯') : ' ';
+        const label = i === cursor ? (selected.has(i) ? green(o.label) : cyan(o.label)) : (selected.has(i) ? green(o.label) : o.label);
+        const hint = o.hint ? ` ${dim(`(${o.hint})`)}` : '';
+        stdout.write(`  ${pointer} ${check} ${label}${hint}\n`);
+      }
+      const count = selected.size;
+      stdout.write(dim(`  ${count} selected\n`));
+    }
+
+    stdout.write('\n');
+    draw();
+
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf-8');
+
+    function onKey(key) {
+      if (key === '\x1b[A') { // up
+        cursor = (cursor - 1 + options.length) % options.length;
+        render();
+      } else if (key === '\x1b[B') { // down
+        cursor = (cursor + 1) % options.length;
+        render();
+      } else if (key === ' ') { // space
+        if (selected.has(cursor)) selected.delete(cursor);
+        else selected.add(cursor);
+        render();
+      } else if (key === 'a' || key === 'A') { // toggle all
+        if (selected.size === options.length) selected.clear();
+        else options.forEach((_, i) => selected.add(i));
+        render();
+      } else if (key === '\r' || key === '\n') { // enter
+        cleanup();
+        const result = [...selected].sort().map(i => options[i]);
+        resolve(result);
+      } else if (key === '\x03') { // ctrl+c
+        cleanup();
+        process.exit(0);
+      }
+    }
+
+    function cleanup() {
+      stdin.removeListener('data', onKey);
+      stdin.setRawMode(false);
+      stdin.pause();
+    }
+
+    stdin.on('data', onKey);
+  });
+}
+
+// ─── Main install flow ────────────────────────────────────────────────────────
+
 export async function mcpInstall() {
   // Support both `mindos mcp install [agent] [flags]` and `mindos mcp [flags]`
   const sub = process.argv[3];
@@ -39,72 +174,65 @@ export async function mcpInstall() {
   const readline = await import('node:readline');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q) => new Promise(r => rl.question(q, r));
-  const choose = async (prompt, options, { defaultIdx = 0, forcePrompt = false } = {}) => {
-    if (hasYesFlag && !forcePrompt) return options[defaultIdx];
-    console.log(`\n${bold(prompt)}\n`);
-    options.forEach((o, i) => console.log(`  ${dim(`${i + 1}.`)} ${o.label} ${o.hint ? dim(`(${o.hint})`) : ''}`));
-    const ans = await ask(`\n${bold(`Enter number`)} ${dim(`[${defaultIdx + 1}]:`)} `);
-    const idx = ans.trim() === '' ? defaultIdx : parseInt(ans.trim(), 10) - 1;
-    return options[idx >= 0 && idx < options.length ? idx : defaultIdx];
-  };
 
   console.log(`\n${bold('🔌 MindOS MCP Install')}\n`);
 
-  // ── 1. agent ────────────────────────────────────────────────────────────────
-  let agentKey = agentArg;
-  if (!agentKey) {
+  // ── 1. agent(s) ──────────────────────────────────────────────────────────────
+  let agentKeys = agentArg ? [agentArg] : [];
+
+  if (agentKeys.length === 0) {
     const keys = Object.keys(MCP_AGENTS);
-    const picked = await choose('Which Agent would you like to configure?',
-      keys.map(k => ({ label: MCP_AGENTS[k].name, hint: k, value: k })), { forcePrompt: true });
-    agentKey = picked.value;
-  }
-
-  const agent = MCP_AGENTS[agentKey];
-  if (!agent) {
-    rl.close();
-    console.error(red(`\nUnknown agent: ${agentKey}`));
-    console.error(dim(`Supported: ${Object.keys(MCP_AGENTS).join(', ')}`));
-    process.exit(1);
-  }
-
-  // ── 2. scope (only ask if agent supports both) ───────────────────────────────
-  let isGlobal = hasGlobalFlag;
-  if (!hasGlobalFlag) {
-    if (agent.project && agent.global) {
-      const picked = await choose('Install scope?', [
-        { label: 'Project',  hint: agent.project, value: 'project' },
-        { label: 'Global',   hint: agent.global,  value: 'global'  },
-      ]);
-      isGlobal = picked.value === 'global';
+    if (hasYesFlag) {
+      // -y mode: install all
+      agentKeys = keys;
     } else {
-      isGlobal = !agent.project;
+      rl.close(); // close readline so raw mode works
+      const picked = await interactiveMultiSelect(
+        'Which Agents to configure?',
+        keys.map(k => ({ label: MCP_AGENTS[k].name, hint: k, value: k })),
+      );
+      if (picked.length === 0) {
+        console.log(dim('\nNo agents selected. Exiting.\n'));
+        process.exit(0);
+      }
+      agentKeys = picked.map(p => p.value);
     }
   }
 
-  const configPath = isGlobal ? agent.global : agent.project;
-  if (!configPath) {
-    rl.close();
-    console.error(red(`${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope.`));
-    process.exit(1);
+  // Validate all keys first
+  for (const key of agentKeys) {
+    if (!MCP_AGENTS[key]) {
+      console.error(red(`\nUnknown agent: ${key}`));
+      console.error(dim(`Supported: ${Object.keys(MCP_AGENTS).join(', ')}`));
+      process.exit(1);
+    }
   }
 
-  // ── 3. transport ─────────────────────────────────────────────────────────────
+  // ── 2. shared transport (ask once, apply to all) ───────────────────────────
   let transport = transportArg;
   if (!transport) {
-    const picked = await choose('Transport type?', [
-      { label: 'stdio', hint: 'local, no server process needed (recommended)' },
-      { label: 'http',  hint: 'URL-based, use when server is running separately or remotely' },
-    ]);
-    transport = picked.label;
+    if (hasYesFlag) {
+      transport = 'stdio';
+    } else {
+      const picked = await interactiveSelect('Transport type?', [
+        { label: 'stdio', hint: 'local, no server process needed (recommended)' },
+        { label: 'http',  hint: 'URL-based, use when server is running separately or remotely' },
+      ]);
+      transport = picked.label;
+    }
   }
 
-  // ── 4. url + token (only for http) ───────────────────────────────────────────
+  // ── 3. url + token (only for http) ─────────────────────────────────────────
   let url = urlArg;
   let token = tokenArg;
 
   if (transport === 'http') {
+    // Re-open readline for text input
+    const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const ask2 = (q) => new Promise(r => rl2.question(q, r));
+
     if (!url) {
-      url = hasYesFlag ? 'http://localhost:8787/mcp' : (await ask(`${bold('MCP URL')} ${dim('[http://localhost:8787/mcp]:')} `)).trim() || 'http://localhost:8787/mcp';
+      url = hasYesFlag ? 'http://localhost:8787/mcp' : (await ask2(`${bold('MCP URL')} ${dim('[http://localhost:8787/mcp]:')} `)).trim() || 'http://localhost:8787/mcp';
     }
 
     if (!token) {
@@ -112,45 +240,72 @@ export async function mcpInstall() {
       if (token) {
         console.log(dim(`  Using auth token from ~/.mindos/config.json`));
       } else if (!hasYesFlag) {
-        token = (await ask(`${bold('Auth token')} ${dim('(leave blank to skip):')} `)).trim();
+        token = (await ask2(`${bold('Auth token')} ${dim('(leave blank to skip):')} `)).trim();
       } else {
         console.log(yellow(`  Warning: no auth token found in ~/.mindos/config.json — config will have no auth.`));
         console.log(dim(`  Run \`mindos onboard\` to set one, or pass --token <token>.`));
       }
     }
+
+    rl2.close();
   }
 
-  rl.close();
-
-  // ── build entry ──────────────────────────────────────────────────────────────
+  // ── 4. build entry ─────────────────────────────────────────────────────────
   const entry = transport === 'stdio'
     ? { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } }
     : token
       ? { url, headers: { Authorization: `Bearer ${token}` } }
       : { url };
 
-  // ── read + merge existing config ─────────────────────────────────────────────
-  const absPath = expandHome(configPath);
-  let config = {};
-  if (existsSync(absPath)) {
-    try { config = JSON.parse(readFileSync(absPath, 'utf-8')); } catch {
-      console.error(red(`\nFailed to parse existing config: ${absPath}`));
-      process.exit(1);
+  // ── 5. install for each selected agent ─────────────────────────────────────
+  for (const agentKey of agentKeys) {
+    const agent = MCP_AGENTS[agentKey];
+
+    // scope
+    let isGlobal = hasGlobalFlag;
+    if (!hasGlobalFlag) {
+      if (agent.project && agent.global) {
+        if (hasYesFlag) {
+          isGlobal = false; // default to project
+        } else {
+          const picked = await interactiveSelect(`[${agent.name}] Install scope?`, [
+            { label: 'Project',  hint: agent.project, value: 'project' },
+            { label: 'Global',   hint: agent.global,  value: 'global'  },
+          ]);
+          isGlobal = picked.value === 'global';
+        }
+      } else {
+        isGlobal = !agent.project;
+      }
     }
+
+    const configPath = isGlobal ? agent.global : agent.project;
+    if (!configPath) {
+      console.error(red(`  ${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope — skipping.`));
+      continue;
+    }
+
+    // read + merge
+    const absPath = expandHome(configPath);
+    let config = {};
+    if (existsSync(absPath)) {
+      try { config = JSON.parse(readFileSync(absPath, 'utf-8')); } catch {
+        console.error(red(`  Failed to parse existing config: ${absPath} — skipping.`));
+        continue;
+      }
+    }
+
+    if (!config[agent.key]) config[agent.key] = {};
+    const existed = !!config[agent.key].mindos;
+    config[agent.key].mindos = entry;
+
+    // write
+    const dir = resolve(absPath, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+
+    console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);
   }
 
-  if (!config[agent.key]) config[agent.key] = {};
-  const existed = !!config[agent.key].mindos;
-  config[agent.key].mindos = entry;
-
-  // ── preview + write ──────────────────────────────────────────────────────────
-  console.log(`\n${bold('Preview:')} ${dim(absPath)}\n`);
-  console.log(dim(JSON.stringify({ [agent.key]: { mindos: entry } }, null, 2)));
-
-  const dir = resolve(absPath, '..');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-
-  console.log(`\n${green('\u2714')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)}`);
-  console.log(dim(`  Config: ${absPath}\n`));
+  console.log(`\n${green('Done!')} ${agentKeys.length} agent(s) configured.\n`);
 }

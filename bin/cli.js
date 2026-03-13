@@ -445,6 +445,27 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       }
     }
 
+    // 8. Sync status
+    if (config?.mindRoot) {
+      try {
+        const syncStatus = getSyncStatus(config.mindRoot);
+        if (!syncStatus.enabled) {
+          warn(`Cross-device sync is not configured  ${dim('(run `mindos sync init` to set up)')}`);
+        } else if (syncStatus.lastError) {
+          err(`Sync error: ${syncStatus.lastError}`);
+          hasError = true;
+        } else if (syncStatus.conflicts && syncStatus.conflicts.length > 0) {
+          warn(`Sync has ${syncStatus.conflicts.length} unresolved conflict(s)  ${dim('(run `mindos sync conflicts` to view)')}`);
+        } else {
+          const unpushed = parseInt(syncStatus.unpushed || '0', 10);
+          const extra = unpushed > 0 ? `  ${dim(`(${unpushed} unpushed commit(s))`)}` : '';
+          ok(`Sync enabled  ${dim(syncStatus.remote || 'origin')}${extra}`);
+        }
+      } catch {
+        warn('Could not check sync status');
+      }
+    }
+
     console.log(hasError
       ? `\n${red('Some checks failed.')} Run ${cyan('mindos onboard')} to reconfigure.\n`
       : `\n${green('All checks passed.')}\n`);

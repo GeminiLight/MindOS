@@ -26,14 +26,17 @@ interface AgentOp {
 
 function parseOps(content: string): AgentOp[] {
   const ops: AgentOp[] = [];
-  const re = /```agent-op\n([\s\S]*?)```/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+
+  // JSON Lines format: each line is a JSON object
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
     try {
-      const op = JSON.parse(m[1].trim()) as AgentOp;
+      const op = JSON.parse(trimmed) as AgentOp;
       if (op.tool && op.ts) ops.push(op);
-    } catch { /* skip malformed */ }
+    } catch { /* skip non-JSON lines */ }
   }
+
   // newest first
   return ops.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 }

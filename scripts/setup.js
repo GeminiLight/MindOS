@@ -6,7 +6,7 @@
  * Usage: npm run setup  OR  mindos onboard
  *
  * Steps:
- *   1. Choose knowledge base path → default ~/.mindos/my-mind
+ *   1. Choose knowledge base path → default ~/MindOS
  *   2. Choose template (en / zh / empty / custom) → copy to knowledge base path
  *   3. Choose ports (web + mcp) — checked for conflicts upfront
  *   4. Auth token (auto-generated or passphrase-seeded)
@@ -109,6 +109,8 @@ const T = {
   yesNo:          { en: '[y/N]', zh: '[y/N]' },
   yesNoDefault:   { en: '[Y/n]', zh: '[Y/n]' },
   startNow:       { en: 'Start MindOS now?', zh: '现在启动 MindOS？' },
+  syncSetup:      { en: 'Set up cross-device sync via Git?', zh: '是否配置 Git 跨设备同步？' },
+  syncLater:      { en: '  → Run `mindos sync init` anytime to set up sync later.', zh: '  → 随时运行 `mindos sync init` 配置同步。' },
 
   // next steps (onboard — keep it minimal, details shown on `mindos start`)
   nextSteps: {
@@ -673,6 +675,15 @@ async function main() {
   mkdirSync(MINDOS_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
+
+  // ── Sync setup (optional) ──────────────────────────────────────────────────
+  const wantSync = await askYesNo('syncSetup');
+  if (wantSync) {
+    const { initSync } = await import('../bin/lib/sync.js');
+    await initSync(mindDir);
+  } else {
+    console.log(c.dim(t('syncLater')));
+  }
 
   const installDaemon = startMode === 'daemon' || process.argv.includes('--install-daemon');
   finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon);

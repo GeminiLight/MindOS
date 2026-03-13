@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { CONFIG_PATH } from './constants.js';
-import { bold, dim, cyan, green } from './colors.js';
+import { bold, dim, cyan, green, yellow } from './colors.js';
+import { getSyncStatus } from './sync.js';
 
 export function getLocalIP() {
   try {
@@ -47,5 +48,27 @@ export function printStartupInfo(webPort, mcpPort) {
   }
   console.log(dim('\n  Install Skills (optional):'));
   console.log(dim('  npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y'));
+
+  // Sync status
+  const mindRoot = config.mindRoot;
+  if (mindRoot) {
+    try {
+      const syncStatus = getSyncStatus(mindRoot);
+      if (syncStatus.enabled) {
+        if (syncStatus.lastError) {
+          console.log(`\n  ${yellow('!')} Sync   ${yellow('error')}: ${syncStatus.lastError}`);
+        } else if (syncStatus.conflicts && syncStatus.conflicts.length > 0) {
+          console.log(`\n  ${yellow('!')} Sync   ${yellow(`${syncStatus.conflicts.length} conflict(s)`)}  ${dim('run `mindos sync conflicts` to view')}`);
+        } else {
+          const unpushed = parseInt(syncStatus.unpushed || '0', 10);
+          const extra = unpushed > 0 ? `  ${dim(`(${unpushed} unpushed)`)}` : '';
+          console.log(`\n  ${green('●')} Sync   ${green('enabled')}  ${dim(syncStatus.remote || 'origin')}${extra}`);
+        }
+      } else {
+        console.log(`\n  ${dim('○')} Sync   ${dim('not configured')}  ${dim('run `mindos sync init` to set up')}`);
+      }
+    } catch { /* sync check is best-effort */ }
+  }
+
   console.log(`${'─'.repeat(53)}\n`);
 }

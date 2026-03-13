@@ -130,7 +130,7 @@ mindos onboard
 ```
 
 The setup wizard will guide you through:
-1. Knowledge base path → default `~/.mindos/my-mind`
+1. Knowledge base path → default `~/MindOS`
 2. Choose template (en / zh / empty / custom)
 3. Ports (Web UI + MCP)
 4. Auth token (auto-generated or passphrase-seeded)
@@ -153,7 +153,7 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
 
 ```json
 {
-  "mindRoot": "~/.mindos/my-mind",
+  "mindRoot": "~/MindOS",
   "port": 3000,
   "mcpPort": 8787,
   "authToken": "",
@@ -179,7 +179,7 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
 
 | Field | Default | Description |
 | :--- | :--- | :--- |
-| `mindRoot` | `~/.mindos/my-mind` | **Required**. Absolute path to the knowledge base root. |
+| `mindRoot` | `~/MindOS` | **Required**. Absolute path to the knowledge base root. |
 | `port` | `3000` | Optional. Web app port. |
 | `mcpPort` | `8787` | Optional. MCP server port. |
 | `authToken` | — | Optional. Protects App `/api/*` and MCP `/mcp` with bearer token auth. For Agent / MCP clients. Recommended when exposed to a network. |
