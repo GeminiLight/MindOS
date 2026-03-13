@@ -82,6 +82,7 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 - **引用同步**：通过引用与反向链接保持跨文件状态一致。
 - **知识图谱**：可视化笔记间关系与依赖。
 - **Git 时光机**：记录修改历史，支持审计与安全回滚。
+- **跨设备同步**：通过 Git 自动 commit、push、pull —— 一台设备的编辑几分钟内同步到所有设备。
 
 <details>
 <summary><strong>即将到来</strong></summary>
@@ -131,12 +132,13 @@ mindos onboard --install-daemon
 > `--install-daemon`：配置完成后，自动将 MindOS 安装为后台 OS 服务（关闭终端仍运行，崩溃自动重启）。
 
 配置向导将引导你完成：
-1. 知识库路径 → 默认 `~/.mindos/my-mind`
+1. 知识库路径 → 默认 `~/MindOS`
 2. 选择模板（en / zh / empty / custom）
 3. 端口配置（Web UI + MCP）
 4. Auth token（自动生成或口令派生）
 5. Web UI 访问密码（可选）
 6. 配置 AI Provider（Anthropic / OpenAI）+ API Key — 或选择 **skip**，稍后通过 `mindos config set` 补填
+7. 启动模式 — **后台服务**（推荐，开机自启）或前台运行
 
 配置自动保存到 `~/.mindos/config.json`。
 
@@ -153,34 +155,50 @@ mindos onboard --install-daemon
 
 ```json
 {
-  "mindRoot": "~/.mindos/my-mind",
+  "mindRoot": "~/MindOS",
   "port": 3000,
   "mcpPort": 8787,
   "authToken": "",
   "webPassword": "",
+  "startMode": "daemon",
   "ai": {
     "provider": "anthropic",
     "providers": {
       "anthropic": { "apiKey": "sk-ant-...", "model": "claude-sonnet-4-6" },
       "openai":    { "apiKey": "sk-...",     "model": "gpt-5.4", "baseUrl": "" }
     }
+  },
+  "sync": {
+    "enabled": true,
+    "provider": "git",
+    "remote": "origin",
+    "branch": "main",
+    "autoCommitInterval": 30,
+    "autoPullInterval": 300
   }
 }
 ```
 
 | 字段 | 默认值 | 说明 |
 | :--- | :--- | :--- |
-| `mindRoot` | `~/.mindos/my-mind` | **必填**。知识库根目录的绝对路径 |
+| `mindRoot` | `~/MindOS` | **必填**。知识库根目录的绝对路径 |
 | `port` | `3000` | 可选。Web 服务端口 |
 | `mcpPort` | `8787` | 可选。MCP 服务端口 |
 | `authToken` | — | 可选。保护 App `/api/*` 和 MCP `/mcp` 的 Bearer Token 认证。供 Agent / MCP 客户端使用，暴露到网络时建议设置 |
 | `webPassword` | — | 可选。为 Web UI 添加登录密码保护。供浏览器访问，与 `authToken` 相互独立 |
+| `startMode` | `start` | 启动模式：`daemon`（后台服务，开机自启）、`start`（前台）或 `dev` |
 | `ai.provider` | `anthropic` | 当前使用的 provider：`anthropic` 或 `openai` |
 | `ai.providers.anthropic.apiKey` | — | Anthropic API Key |
 | `ai.providers.anthropic.model` | `claude-sonnet-4-6` | Anthropic 模型 ID |
 | `ai.providers.openai.apiKey` | — | OpenAI API Key |
 | `ai.providers.openai.model` | `gpt-5.4` | OpenAI 模型 ID |
 | `ai.providers.openai.baseUrl` | — | 可选。用于代理或 OpenAI 兼容 API 的自定义接口地址 |
+| `sync.enabled` | `false` | 启用/禁用 Git 自动同步 |
+| `sync.provider` | `git` | 同步方式（目前仅支持 `git`） |
+| `sync.remote` | `origin` | Git 远程仓库名 |
+| `sync.branch` | `main` | 同步分支 |
+| `sync.autoCommitInterval` | `30` | 文件变更后自动 commit+push 的延迟秒数 |
+| `sync.autoPullInterval` | `300` | 自动从远程 pull 的间隔秒数 |
 
 多个 provider 可以同时配置，切换时只需修改 `ai.provider` 字段，无需重新填写 API Key。Shell 环境变量（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY` 等）优先级高于配置文件。
 
@@ -191,6 +209,12 @@ mindos onboard --install-daemon
 
 > [!TIP]
 > 使用 `--install-daemon` 时，MindOS 会作为后台 OS 服务安装并自动启动，无需手动执行 `mindos start`。如果跳过了该参数，运行 `mindos start` 手动启动，或运行 `mindos update` 升级到最新版本。
+
+在浏览器中打开 Web UI：
+
+```bash
+mindos open
+```
 
 ### 3. 通过 MindOS Agent 注入你的个人心智
 
@@ -386,12 +410,13 @@ MindOS/
 ├── mcp/              # MCP Server — 将工具映射到 App API 的 HTTP 适配器
 ├── skills/           # MindOS Skills（`mindos`、`mindos-zh`）— Agent 工作流指南
 ├── templates/        # 预设模板（`en/`、`zh/`、`empty/`）— onboard 时复制到知识库目录
-├── bin/              # CLI 入口（`mindos onboard`、`mindos start`、`mindos dev`、`mindos token`）
+├── bin/              # CLI 入口（`mindos onboard`、`mindos start`、`mindos open`、`mindos sync`、`mindos token`）
 ├── scripts/          # 配置向导与辅助脚本
 └── README.md
 
 ~/.mindos/            # 用户数据目录（项目外，不会被提交）
-├── config.json       # 所有配置（AI 密钥、端口、Auth token、知识库路径）
+├── config.json       # 所有配置（AI 密钥、端口、Auth token、同步设置）
+├── sync-state.json   # 同步状态（最后同步时间、冲突文件）
 └── my-mind/          # 你的私有知识库（默认路径，onboard 时可自定义）
 ```
 
@@ -407,11 +432,19 @@ MindOS/
 | `mindos start --daemon` | 安装并以后台 OS 服务方式启动（关闭终端仍运行，崩溃自动重启） |
 | `mindos dev` | 启动 app + MCP 服务（开发模式，热更新） |
 | `mindos dev --turbopack` | 开发模式 + Turbopack（更快的 HMR） |
+| `mindos open` | 在默认浏览器中打开 Web UI |
 | `mindos stop` | 停止正在运行的 MindOS 进程 |
 | `mindos restart` | 停止后重新启动 |
 | `mindos build` | 手动构建生产版本 |
 | `mindos mcp` | 仅启动 MCP 服务 |
 | `mindos token` | 查看当前 Auth token 及 MCP 配置片段 |
+| `mindos sync` | 查看同步状态（`sync status` 的别名） |
+| `mindos sync init` | 交互式配置 Git 远程同步 |
+| `mindos sync status` | 查看同步状态：最后同步时间、未推送提交、冲突 |
+| `mindos sync now` | 手动触发完整同步（commit + push + pull） |
+| `mindos sync on` | 启用自动同步 |
+| `mindos sync off` | 禁用自动同步 |
+| `mindos sync conflicts` | 列出未解决的冲突文件 |
 | `mindos gateway install` | 安装后台服务（Linux 用 systemd，macOS 用 LaunchAgent） |
 | `mindos gateway uninstall` | 卸载后台服务 |
 | `mindos gateway start` | 启动后台服务 |

@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, Copy, Check, ExternalLink } from 'lucide-react';
 import { SectionLabel } from './Primitives';
 import { apiFetch } from '@/lib/api';
 
-interface SyncStatus {
+export interface SyncStatus {
   enabled: boolean;
   provider?: string;
   remote?: string;
@@ -23,7 +23,7 @@ interface SyncTabProps {
   t: any;
 }
 
-function timeAgo(iso: string | null | undefined): string {
+export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return 'never';
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60000) return 'just now';
@@ -31,6 +31,95 @@ function timeAgo(iso: string | null | undefined): string {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
 }
+
+/* ── Copy-to-clipboard button ──────────────────────────────────── */
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+      title="Copy command"
+    >
+      {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+    </button>
+  );
+}
+
+/* ── Empty state (Task D) ──────────────────────────────────────── */
+
+function SyncEmptyState({ t }: { t: any }) {
+  const syncT = t.settings?.sync;
+  const cmd = 'mindos sync init';
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+          <GitBranch size={18} className="text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-foreground">
+            {syncT?.emptyTitle ?? 'Cross-device Sync'}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {syncT?.emptyDesc ?? 'Automatically sync your knowledge base across devices via Git.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-3">
+        <SectionLabel>{syncT?.emptyStepsTitle ?? 'Setup'}</SectionLabel>
+        <ol className="space-y-2.5 text-xs text-muted-foreground">
+          <li className="flex items-start gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">1</span>
+            <span>{syncT?.emptyStep1 ?? 'Create a private Git repo (GitHub, GitLab, etc.) or use an existing one.'}</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">2</span>
+            <div className="flex-1">
+              <span>{syncT?.emptyStep2 ?? 'Run this command in your terminal:'}</span>
+              <div className="flex items-center gap-1.5 mt-1.5 px-3 py-2 bg-muted rounded-lg font-mono text-xs text-foreground">
+                <code className="flex-1 select-all">{cmd}</code>
+                <CopyButton text={cmd} />
+              </div>
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">3</span>
+            <span>{syncT?.emptyStep3 ?? 'Follow the prompts to connect your repo. Sync starts automatically.'}</span>
+          </li>
+        </ol>
+      </div>
+
+      {/* Features */}
+      <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+        {[
+          syncT?.featureAutoCommit ?? 'Auto-commit on save',
+          syncT?.featureAutoPull ?? 'Auto-pull from remote',
+          syncT?.featureConflict ?? 'Conflict detection',
+          syncT?.featureMultiDevice ?? 'Works across devices',
+        ].map((f, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <CheckCircle2 size={11} className="text-green-500/60 shrink-0" />
+            <span>{f}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main SyncTab ──────────────────────────────────────────────── */
 
 export function SyncTab({ t }: SyncTabProps) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
@@ -101,17 +190,7 @@ export function SyncTab({ t }: SyncTabProps) {
   }
 
   if (!status || !status.enabled) {
-    return (
-      <div className="space-y-5">
-        <SectionLabel>Sync</SectionLabel>
-        <div className="text-sm text-muted-foreground space-y-2">
-          <p>Git sync is not configured.</p>
-          <p className="text-xs">
-            Run <code className="font-mono px-1 py-0.5 bg-muted rounded">mindos sync init</code> in the terminal to set up.
-          </p>
-        </div>
-      </div>
-    );
+    return <SyncEmptyState t={t} />;
   }
 
   const conflicts = status.conflicts || [];
@@ -186,21 +265,34 @@ export function SyncTab({ t }: SyncTabProps) {
         </div>
       )}
 
-      {/* Conflicts */}
+      {/* Conflicts (Task H — enhanced with links) */}
       {conflicts.length > 0 && (
         <div className="pt-2 border-t border-border">
           <SectionLabel>Conflicts ({conflicts.length})</SectionLabel>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {conflicts.map((c, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <AlertCircle size={12} className="text-amber-500 shrink-0" />
-                <span className="font-mono truncate">{c.file}</span>
-                <span className="text-muted-foreground shrink-0">{timeAgo(c.time)}</span>
+              <div key={i} className="flex items-center gap-2 text-xs group">
+                <AlertCircle size={12} className="text-red-500 shrink-0" />
+                <a
+                  href={`/view/${encodeURIComponent(c.file)}`}
+                  className="font-mono truncate hover:text-foreground hover:underline transition-colors"
+                  title={`Open ${c.file}`}
+                >
+                  {c.file}
+                </a>
+                <a
+                  href={`/view/${encodeURIComponent(c.file + '.sync-conflict')}`}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground"
+                  title="View remote version (.sync-conflict)"
+                >
+                  <ExternalLink size={11} />
+                </a>
+                <span className="text-muted-foreground shrink-0 ml-auto">{timeAgo(c.time)}</span>
               </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Remote versions saved as <code className="font-mono">.sync-conflict</code> files.
+            Click a file to view your version. Hover and click <ExternalLink size={10} className="inline" /> to see the remote version.
           </p>
         </div>
       )}

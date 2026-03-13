@@ -75,6 +75,23 @@ function truncate(text: string, limit = CHARACTER_LIMIT): string {
   return text.slice(0, limit) + `\n\n[... truncated at ${limit} characters. Use offset/limit params for paginated access.]`;
 }
 
+// ─── Agent operation logging ────────────────────────────────────────────────
+
+async function logOp(tool: string, params: Record<string, unknown>, result: 'ok' | 'error', message: string) {
+  try {
+    const entry = { ts: new Date().toISOString(), tool, params, result, message: message.slice(0, 200) };
+    const line = JSON.stringify(entry) + '\n';
+    // Append to .agent-log.json via the app API
+    await fetch(new URL("/api/file", BASE_URL).toString(), {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ op: "append_to_file", path: ".agent-log.json", content: line }),
+    }).catch(() => {});
+  } catch {
+    // Logging should never break tool execution
+  }
+}
+
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 
 const server = new McpServer({ name: "mindos-mcp-server", version: "1.0.0" });
@@ -91,8 +108,10 @@ server.registerTool("mindos_list_files", {
 }, async ({ response_format }) => {
   try {
     const json = await get("/api/files", { format: response_format });
-    return ok(typeof json.tree === "string" ? json.tree : JSON.stringify(json.tree ?? json, null, 2));
-  } catch (e) { return error(String(e)); }
+    const result = typeof json.tree === "string" ? json.tree : JSON.stringify(json.tree ?? json, null, 2);
+    logOp("mindos_list_files", { response_format }, "ok", `${result.length} chars`);
+    return ok(result);
+  } catch (e) { logOp("mindos_list_files", { response_format }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_read_file ────────────────────────────────────────────────────────
@@ -115,8 +134,9 @@ server.registerTool("mindos_read_file", {
     const header = hasMore
       ? `[Showing characters ${offset}–${offset + slice.length} of ${content.length}. Use offset=${offset + limit} for next page.]\n\n`
       : offset > 0 ? `[Showing characters ${offset}–${offset + slice.length} of ${content.length}]\n\n` : "";
+    logOp("mindos_read_file", { path }, "ok", `${content.length} chars`);
     return ok(header + slice);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_read_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_write_file ───────────────────────────────────────────────────────
@@ -131,8 +151,9 @@ server.registerTool("mindos_write_file", {
 }, async ({ path, content }) => {
   try {
     await post("/api/file", { op: "save_file", path, content });
+    logOp("mindos_write_file", { path }, "ok", `Wrote ${content.length} chars`);
     return ok(`Successfully wrote ${content.length} characters to "${path}"`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_write_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_create_file ──────────────────────────────────────────────────────
@@ -147,8 +168,9 @@ server.registerTool("mindos_create_file", {
 }, async ({ path, content }) => {
   try {
     await post("/api/file", { op: "create_file", path, content });
+    logOp("mindos_create_file", { path }, "ok", `Created ${content.length} chars`);
     return ok(`Created "${path}" (${content.length} characters)`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_delete_file ──────────────────────────────────────────────────────
@@ -163,8 +185,9 @@ server.registerTool("mindos_delete_file", {
 }, async ({ path }) => {
   try {
     await post("/api/file", { op: "delete_file", path });
+    logOp("mindos_delete_file", { path }, "ok", `Deleted "${path}"`);
     return ok(`Deleted "${path}"`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_delete_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_rename_file ──────────────────────────────────────────────────────
@@ -227,8 +250,9 @@ server.registerTool("mindos_search_notes", {
     if (modified_after) params.modified_after = modified_after;
     if (response_format) params.format = response_format;
     const json = await get("/api/search", params);
+    logOp("mindos_search_notes", { query, limit }, "ok", `Search completed`);
     return ok(truncate(JSON.stringify(json, null, 2)));
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_search_notes", { query }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_get_recent ───────────────────────────────────────────────────────
@@ -313,8 +337,9 @@ server.registerTool("mindos_append_to_file", {
 }, async ({ path, content }) => {
   try {
     await post("/api/file", { op: "append_to_file", path, content });
+    logOp("mindos_append_to_file", { path }, "ok", `Appended ${content.length} chars`);
     return ok(`Appended ${content.length} character(s) to "${path}"`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_append_to_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_insert_after_heading ─────────────────────────────────────────────
@@ -330,8 +355,9 @@ server.registerTool("mindos_insert_after_heading", {
 }, async ({ path, heading, content }) => {
   try {
     await post("/api/file", { op: "insert_after_heading", path, heading, content });
+    logOp("mindos_insert_after_heading", { path, heading }, "ok", `Inserted after "${heading}"`);
     return ok(`Inserted content after heading "${heading}" in "${path}"`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_insert_after_heading", { path, heading }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_update_section ───────────────────────────────────────────────────
@@ -347,8 +373,9 @@ server.registerTool("mindos_update_section", {
 }, async ({ path, heading, content }) => {
   try {
     await post("/api/file", { op: "update_section", path, heading, content });
+    logOp("mindos_update_section", { path, heading }, "ok", `Updated section "${heading}"`);
     return ok(`Updated section "${heading}" in "${path}"`);
-  } catch (e) { return error(String(e)); }
+  } catch (e) { logOp("mindos_update_section", { path, heading }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_append_csv ───────────────────────────────────────────────────────
