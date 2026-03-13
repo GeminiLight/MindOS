@@ -8,7 +8,9 @@ import FileTree from './FileTree';
 import SearchModal from './SearchModal';
 import AskModal from './AskModal';
 import SettingsModal from './SettingsModal';
+import SyncStatusBar, { SyncDot, MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
+import type { Tab } from './settings/types';
 import { useLocale } from '@/lib/LocaleContext';
 
 interface SidebarProps {
@@ -40,8 +42,12 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   const [searchOpen, setSearchOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<Tab | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useLocale();
+
+  // Shared sync status for collapsed dot & mobile dot
+  const { status: syncStatus } = useSyncStatus();
 
   const pathname = usePathname();
   const currentFile = pathname.startsWith('/view/')
@@ -59,6 +65,8 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   }, []);
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  const openSyncSettings = () => { setSettingsTab('sync'); setSettingsOpen(true); };
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -88,6 +96,10 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
       <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
         <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} />
       </div>
+      <SyncStatusBar
+        collapsed={collapsed}
+        onOpenSyncSettings={openSyncSettings}
+      />
     </div>
   );
 
@@ -97,10 +109,14 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
         {sidebarContent}
       </aside>
 
+      {/* #7 — Collapsed sidebar: expand button with sync health dot */}
       {collapsed && (
-        <button onClick={onExpand} className="hidden md:flex fixed top-4 left-0 z-30 items-center justify-center w-6 h-10 bg-card border border-border rounded-r-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t.sidebar.expandTitle}>
-          <PanelLeftOpen size={14} />
-        </button>
+        <div className="hidden md:flex fixed top-4 left-0 z-30 flex-col items-center gap-2">
+          <button onClick={onExpand} className="relative flex items-center justify-center w-6 h-10 bg-card border border-border rounded-r-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t.sidebar.expandTitle}>
+            <PanelLeftOpen size={14} />
+            <SyncDot status={syncStatus} />
+          </button>
+        </div>
       )}
 
       {/* Mobile navbar */}
@@ -113,6 +129,14 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
           <span className="font-semibold text-foreground text-sm tracking-wide">MindOS</span>
         </Link>
         <div className="flex items-center gap-0.5">
+          {/* #8 — Mobile sync dot: visible when there's a problem */}
+          <button
+            onClick={openSyncSettings}
+            className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent flex items-center justify-center"
+            aria-label="Sync status"
+          >
+            <MobileSyncDot status={syncStatus} />
+          </button>
           <button onClick={() => setSearchOpen(true)} className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.searchTitle}>
             <Search size={20} />
           </button>
@@ -130,7 +154,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       <AskModal open={askOpen} onClose={() => setAskOpen(false)} currentFile={currentFile} />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); setSettingsTab(undefined); }} initialTab={settingsTab} />
     </>
   );
 }

@@ -18,7 +18,7 @@ If you need to manually initialize:
 mindos onboard
 
 # 2) Or copy a preset manually to your knowledge base directory
-cp -r templates/en ~/.mindos/my-mind
+cp -r templates/en ~/MindOS
 # then set mindRoot in ~/.mindos/config.json
 
 # 3) Start filling content from 👤 Profile (en) or 👤 画像 (zh)

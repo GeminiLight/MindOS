@@ -6,6 +6,7 @@ import ShellLayout from '@/components/ShellLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import RegisterSW from './register-sw';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -39,7 +40,13 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: 'MindOS',
   description: 'Personal knowledge base',
-  icons: { icon: '/logo-square.svg' },
+  icons: { icon: '/logo-square.svg', apple: '/icons/icon-192.png' },
+  manifest: '/manifest.json',
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+  },
 };
 
 export const viewport = {
@@ -63,6 +70,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="theme-color" content="#c8871e" />
         {/* Patch Node.removeChild/insertBefore to swallow errors caused by browser
             extensions (translators, Grammarly, etc.) that mutate the DOM between SSR
             and hydration. See: https://github.com/facebook/react/issues/17256 */}
@@ -90,6 +98,7 @@ export default function RootLayout({
               </ShellLayout>
             </ErrorBoundary>
           </TooltipProvider>
+          <RegisterSW />
         </LocaleProvider>
       </body>
     </html>

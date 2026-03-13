@@ -16,7 +16,7 @@ mindos dev      # or: mindos start
 
 ```bash
 npm install
-MIND_ROOT=~/.mindos/my-mind ANTHROPIC_API_KEY=sk-ant-... npm run dev
+MIND_ROOT=~/MindOS ANTHROPIC_API_KEY=sk-ant-... npm run dev
 # Or copy .env.local.example to app/.env.local and fill in values
 ```
 
