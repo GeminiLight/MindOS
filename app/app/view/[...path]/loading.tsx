@@ -6,7 +6,7 @@ export default function Loading() {
           className="w-6 h-6 border-2 rounded-full animate-spin"
           style={{ borderColor: 'var(--border)', borderTopColor: 'var(--amber)' }}
         />
-        <span className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <span className="text-xs text-muted-foreground font-display">
           Loading...
         </span>
       </div>

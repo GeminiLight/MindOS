@@ -11,3 +11,5 @@ export const MINDOS_DIR  = resolve(homedir(), '.mindos');
 export const LOG_PATH    = resolve(MINDOS_DIR, 'mindos.log');
 export const CLI_PATH    = resolve(__dirname, '..', 'cli.js');
 export const NODE_BIN    = process.execPath;
+export const UPDATE_CHECK_PATH = resolve(MINDOS_DIR, 'update-check.json');
+export const DEPS_STAMP  = resolve(MINDOS_DIR, 'deps-hash');

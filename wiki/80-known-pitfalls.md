@@ -24,6 +24,21 @@
 - **现象：** barrel export 后其他文件 import 路径需要更新
 - **解决：** 拆分后全局 grep 旧 import 路径并替换
 
+### encodePath vs encodeURIComponent
+- **现象：** `not-found.tsx` 用 `encodeURIComponent()` 编码文件路径，导致 `/` 被编码为 `%2F`，路由 404
+- **解决：** 使用 `encodePath()`（按 `/` 分割后逐段编码），不要用 `encodeURIComponent`
+- **规则：** 凡是文件路径拼接到 URL 的场景，一律用 `encodePath()`
+
+### inline fontFamily 反模式
+- **现象：** 8+ 组件用 `style={{ fontFamily: "IBM Plex Mono..." }}`，绕过 Next.js 字体优化
+- **解决：** 统一用 `.font-display` 工具类（定义在 `globals.css`）
+- **规则：** 新组件禁止 inline fontFamily，全部走 CSS class
+
+### Google Fonts 不要随意删除
+- **现象：** 以为 5 个字体太多想精简到 3 个，实际审计发现 15+ 文件引用了全部 5 个
+- **解决：** 只删除未使用的 weight（如 IBM Plex Sans 的 300、IBM Plex Mono 的 500），不删整个字体
+- **教训：** 精简前先全局 grep 确认引用
+
 ## MCP
 
 ### INSTRUCTION.md 写保护

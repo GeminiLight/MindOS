@@ -119,6 +119,9 @@ body {
   body { @apply bg-background text-foreground; }
 }
 
+/* Utility: IBM Plex Mono display heading font */
+.font-display { font-family: 'IBM Plex Mono', var(--font-ibm-plex-mono), monospace; }
+
 /* Content width — controlled by Settings > Appearance */
 :root { --content-width: 780px; }
 .content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; }
@@ -285,6 +288,15 @@ body {
 /* Tap highlight removal for mobile */
 @media (hover: none) {
   button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Global focus-visible ring for interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ─── Tiptap WYSIWYG editor ─────────────────────────────────────────── */

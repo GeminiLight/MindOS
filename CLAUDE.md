@@ -11,11 +11,17 @@ REAMDE.md和REAMDE-zh.md必须保持一致
 
 roadmap 到 spec 到 review （human + ai）
 
+并行任务可能导致有些任务已经被完成了，记得先对比查看下
 
 更新代码需要判断是否增加tests、最后更新wiki
 
 不要
 再估算工时
+
+记录我的每一次对话，分类，记录我期望的workflow是否完成
+
+backlog更新下，是需要添加chan  
+  gelog还是这里打勾      
 
 ## Git 提交流程
 

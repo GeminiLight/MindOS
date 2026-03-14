@@ -2,6 +2,34 @@
 
 # 变更日志 (CHANGELOG)
 
+## Unreleased — CLI UX 全面优化
+
+### 新增
+- **CLI 更新检查** — `start`/`dev`/`doctor` 启动时非阻塞检查 npm 最新版本，24h 缓存（双源 npmmirror + npmjs），`MINDOS_NO_UPDATE_CHECK=1` 可禁用
+- **`--version` / `-v`** — 输出 `mindos/0.3.0 node/v22 linux-x64` 格式
+- **`--help` / `-h`** — 全局帮助（exit 0）
+- **`config unset <key>`** — 删除配置字段，支持 dot-notation
+- **`config set` 类型推断** — `true`/`false`/`null`/空字符串/数字自动转换
+- **`config show` 版本号** — 标题行显示 MindOS 版本
+- **`mindos sync` 子命令校验** — 未知子命令报错 + 显示可用列表
+- **setup 配置确认** — `mindos onboard` 写入前展示配置摘要，Y/n 确认
+- **setupPending 检测** — `mindos start` 检测未完成的 setup 并提示
+- **统一 debug 模块** — `bin/lib/debug.js`，`MINDOS_DEBUG=1` 或 `--verbose` 启用，输出到 stderr
+- **deps 增量检测** — `ensureAppDeps` 基于 `package-lock.json` hash 判断是否需要重新安装
+
+### 变更
+- **启动信息精简** — 移除冗长的 MCP JSON block，改为 Quick connect + `mindos token` 引导
+- **SSH 端口转发提示** — 同时包含 Web 和 MCP 两个端口
+- **pkill 精确化** — 无 PID 文件时优先用 `lsof -ti :PORT` 按端口查找，lsof 不可用时 fallback pkill
+- **`run()` exit code 透传** — `err.status` 代替固定 `1`
+- **NO_COLOR / FORCE_COLOR** — 遵循 CLI 颜色标准
+- **auth token 全面脱敏** — 启动横幅 + MCP 配置中的 token 均 mask
+- **config 加载 lazy singleton** — `loadConfig()` 多次调用只执行一次
+- **别名文档化** — help 标注 `init`/`setup` 为 `onboard` 别名，别名委托到 `onboard`
+- 启动横幅措辞 i18n（中文→英文）
+
+---
+
 ## v0.2.1 — Sync 可见性增强 + PWA + Wiki 重组 (2026-03-14)
 
 ### 新增

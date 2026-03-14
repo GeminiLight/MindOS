@@ -19,15 +19,15 @@ export function GalleryView({ headers, rows, cfg }: { headers: string[]; rows: s
             style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
           >
             {tag && tc && <span className="self-start text-[11px] px-2 py-0.5 rounded-full font-medium"
-              style={{ background: tc.bg, color: tc.text, fontFamily: "'IBM Plex Mono',monospace" }}>{tag}</span>}
-            <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans',sans-serif" }}>{title}</p>
+              style={{ background: tc.bg, color: tc.text }}>{tag}</span>}
+            <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--foreground)' }}>{title}</p>
             {desc && <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--muted-foreground)' }}>{desc}</p>}
             <div className="mt-1 flex flex-col gap-0.5">
               {headers.map((h, ci) => {
                 if (ci === titleIdx || ci === descIdx || ci === tagIdx) return null;
                 const v = row[ci]; if (!v) return null;
                 return <div key={ci} className="flex items-baseline gap-1.5 text-xs">
-                  <span style={{ color: 'var(--muted-foreground)', opacity: 0.6, fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem' }}>{h}</span>
+                  <span className="font-display" style={{ color: 'var(--muted-foreground)', opacity: 0.6, fontSize: '0.68rem' }}>{h}</span>
                   <span className="truncate" style={{ color: 'var(--muted-foreground)' }}>{v}</span>
                 </div>;
               })}

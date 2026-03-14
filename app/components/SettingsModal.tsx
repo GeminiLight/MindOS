@@ -14,6 +14,7 @@ import { KnowledgeTab } from './settings/KnowledgeTab';
 import { PluginsTab } from './settings/PluginsTab';
 import { ShortcutsTab } from './settings/ShortcutsTab';
 import { SyncTab } from './settings/SyncTab';
+import { McpTab } from './settings/McpTab';
 
 interface SettingsModalProps {
   open: boolean;
@@ -139,6 +140,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
     { id: 'appearance', label: t.settings.tabs.appearance },
     { id: 'knowledge', label: t.settings.tabs.knowledge },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync' },
+    { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP' },
     { id: 'plugins', label: t.settings.tabs.plugins },
     { id: 'shortcuts', label: t.settings.tabs.shortcuts },
   ];
@@ -158,7 +160,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Settings size={15} className="text-muted-foreground" />
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{t.settings.title}</span>
+            <span className="font-display">{t.settings.title}</span>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
             <X size={15} />
@@ -190,7 +192,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               <p className="text-sm text-destructive font-medium">Failed to load settings</p>
               <p className="text-xs text-muted-foreground">Check that the server is running and AUTH_TOKEN is configured correctly.</p>
             </div>
-          ) : !data && tab !== 'shortcuts' && tab !== 'appearance' ? (
+          ) : !data && tab !== 'shortcuts' && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' ? (
             <div className="flex justify-center py-8">
               <Loader2 size={18} className="animate-spin text-muted-foreground" />
             </div>
@@ -202,6 +204,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} />}
               {tab === 'shortcuts' && <ShortcutsTab t={t} />}
               {tab === 'sync' && <SyncTab t={t} />}
+              {tab === 'mcp' && <McpTab t={t} />}
             </>
           )}
         </div>

@@ -3,12 +3,12 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { LayoutGrid, Columns, Table2, Settings2 } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
-import type { ViewType, CsvConfig } from './csv/types';
-import { defaultConfig, loadConfig, saveConfig, parseCSV } from './csv/types';
-import { TableView } from './csv/TableView';
-import { GalleryView } from './csv/GalleryView';
-import { BoardView } from './csv/BoardView';
-import { ConfigPanel } from './csv/ConfigPanel';
+import type { ViewType, CsvConfig } from './types';
+import { defaultConfig, loadConfig, saveConfig, parseCSV } from './types';
+import { TableView } from './TableView';
+import { GalleryView } from './GalleryView';
+import { BoardView } from './BoardView';
+import { ConfigPanel } from './ConfigPanel';
 
 const VIEW_TABS: { id: ViewType; icon: React.ReactNode; label: string }[] = [
   { id: 'table',   icon: <Table2 size={13} />,    label: 'Table' },
@@ -42,9 +42,8 @@ export function CsvRenderer({ filePath, content, saveAction }: RendererContext) 
         <div className="flex items-center gap-0.5 p-1 rounded-lg" style={{ background: 'var(--muted)' }}>
           {VIEW_TABS.map(tab => (
             <button key={tab.id} onClick={() => updateConfig({ ...cfg, activeView: tab.id })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors font-display"
               style={{
-                fontFamily: "'IBM Plex Mono',monospace",
                 background: view === tab.id ? 'var(--card)' : 'transparent',
                 color: view === tab.id ? 'var(--foreground)' : 'var(--muted-foreground)',
                 boxShadow: view === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -53,7 +52,7 @@ export function CsvRenderer({ filePath, content, saveAction }: RendererContext) 
           ))}
         </div>
         <div className="flex-1" />
-        <span className="text-xs" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", opacity: 0.5 }}>
+        <span className="text-xs font-display" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
           {rows.length} rows
         </span>
         <div className="relative">

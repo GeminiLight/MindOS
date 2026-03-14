@@ -128,10 +128,10 @@ function OpCard({ op }: { op: AgentOp }) {
         onClick={() => setExpanded(v => !v)}
       >
         {/* kind badge */}
-        <span style={{
+        <span className="font-display" style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem',
-          fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600,
+          fontWeight: 600,
           background: style.bg, color: style.text, border: `1px solid ${style.border}`,
           flexShrink: 0,
         }}>
@@ -140,16 +140,17 @@ function OpCard({ op }: { op: AgentOp }) {
         </span>
 
         {/* tool name */}
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.78rem', color: 'var(--foreground)', fontWeight: 600, flexShrink: 0 }}>
+        <span className="font-display" style={{ fontSize: '0.78rem', color: 'var(--foreground)', fontWeight: 600, flexShrink: 0 }}>
           {toolShort}
         </span>
 
         {/* file path */}
         {filePath && (
           <span
-            style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+            style={{ fontSize: '0.72rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); router.push('/view/' + filePath.split('/').map(encodeURIComponent).join('/')); }}
             title={filePath}
+            className="font-display"
           >
             {filePath}
           </span>
@@ -162,7 +163,7 @@ function OpCard({ op }: { op: AgentOp }) {
             : <AlertCircle size={13} style={{ color: '#c85050' }} />
           }
           {/* timestamp */}
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: 'var(--muted-foreground)', opacity: 0.6 }} title={formatTs(op.ts)}>
+          <span className="font-display" style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', opacity: 0.6 }} title={formatTs(op.ts)}>
             {relativeTs(op.ts)}
           </span>
           {/* chevron */}
@@ -177,10 +178,10 @@ function OpCard({ op }: { op: AgentOp }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: op.message ? 8 : 0 }}>
             {Object.entries(op.params).map(([k, v]) => (
               <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: 'var(--muted-foreground)', opacity: 0.7, flexShrink: 0, minWidth: 80 }}>
+                <span className="font-display" style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', opacity: 0.7, flexShrink: 0, minWidth: 80 }}>
                   {k}
                 </span>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: 'var(--foreground)', wordBreak: 'break-all', lineHeight: 1.5 }}>
+                <span className="font-display" style={{ fontSize: '0.72rem', color: 'var(--foreground)', wordBreak: 'break-all', lineHeight: 1.5 }}>
                   {truncateContent(v)}
                 </span>
               </div>
@@ -188,7 +189,7 @@ function OpCard({ op }: { op: AgentOp }) {
           </div>
           {/* result message */}
           {op.message && (
-            <div style={{ marginTop: 6, padding: '5px 9px', borderRadius: 5, fontSize: '0.72rem', fontFamily: "'IBM Plex Mono',monospace",
+            <div className="font-display" style={{ marginTop: 6, padding: '5px 9px', borderRadius: 5, fontSize: '0.72rem',
               background: op.result === 'error' ? 'rgba(200,80,80,0.08)' : 'rgba(122,173,128,0.08)',
               color: op.result === 'error' ? '#c85050' : '#7aad80',
               border: `1px solid ${op.result === 'error' ? 'rgba(200,80,80,0.2)' : 'rgba(122,173,128,0.2)'}`,
@@ -197,7 +198,7 @@ function OpCard({ op }: { op: AgentOp }) {
             </div>
           )}
           {/* absolute timestamp */}
-          <div style={{ marginTop: 6, fontSize: '0.65rem', fontFamily: "'IBM Plex Mono',monospace", color: 'var(--muted-foreground)', opacity: 0.5 }}>
+          <div className="font-display" style={{ marginTop: 6, fontSize: '0.65rem', color: 'var(--muted-foreground)', opacity: 0.5 }}>
             {formatTs(op.ts)}
           </div>
         </div>
@@ -231,7 +232,7 @@ export function AgentInspectorRenderer({ content }: RendererContext) {
 
   if (ops.length === 0) {
     return (
-      <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>
+      <div className="font-display" style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 12 }}>
         <Terminal size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
         <p>No agent operations logged yet.</p>
         <p style={{ marginTop: 6, opacity: 0.6, fontSize: 11 }}>
@@ -254,10 +255,11 @@ export function AgentInspectorRenderer({ content }: RendererContext) {
             <button
               key={k}
               onClick={() => setFilter(k)}
+              className="font-display"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 padding: '3px 10px', borderRadius: 999, fontSize: '0.7rem',
-                fontFamily: "'IBM Plex Mono',monospace", cursor: 'pointer', border: 'none',
+                cursor: 'pointer', border: 'none',
                 background: active ? (style?.bg ?? 'var(--accent)') : 'var(--muted)',
                 color: active ? (style?.text ?? 'var(--foreground)') : 'var(--muted-foreground)',
                 outline: active ? `1px solid ${style?.border ?? 'var(--border)'}` : 'none',

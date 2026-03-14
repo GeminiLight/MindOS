@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, Copy, Check, ExternalLink } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { SectionLabel } from './Primitives';
 import { apiFetch } from '@/lib/api';
 
@@ -32,35 +32,53 @@ export function timeAgo(iso: string | null | undefined): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-/* ── Copy-to-clipboard button ──────────────────────────────────── */
+/* ── Empty state — GUI sync init form ─────────────────────────── */
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-      title="Copy command"
-    >
-      {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-    </button>
-  );
+function isValidGitUrl(url: string): 'https' | 'ssh' | false {
+  if (/^https:\/\/.+/.test(url)) return 'https';
+  if (/^git@[\w.-]+:.+/.test(url)) return 'ssh';
+  return false;
 }
 
-/* ── Empty state (Task D) ──────────────────────────────────────── */
-
-function SyncEmptyState({ t }: { t: any }) {
+function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => void }) {
   const syncT = t.settings?.sync;
-  const cmd = 'mindos sync init';
+
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [branch, setBranch] = useState('main');
+  const [showToken, setShowToken] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState('');
+
+  const urlType = remoteUrl.trim() ? isValidGitUrl(remoteUrl.trim()) : null;
+  const isValid = urlType === 'https' || urlType === 'ssh';
+  const showTokenField = urlType === 'https';
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setError('');
+    try {
+      await apiFetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'init',
+          remote: remoteUrl.trim(),
+          token: token.trim() || undefined,
+          branch: branch.trim() || 'main',
+        }),
+      });
+      onInitComplete();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Connection failed';
+      setError(msg);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -76,33 +94,104 @@ function SyncEmptyState({ t }: { t: any }) {
         </div>
       </div>
 
-      {/* Steps */}
-      <div className="space-y-3">
-        <SectionLabel>{syncT?.emptyStepsTitle ?? 'Setup'}</SectionLabel>
-        <ol className="space-y-2.5 text-xs text-muted-foreground">
-          <li className="flex items-start gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">1</span>
-            <span>{syncT?.emptyStep1 ?? 'Create a private Git repo (GitHub, GitLab, etc.) or use an existing one.'}</span>
-          </li>
-          <li className="flex items-start gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">2</span>
-            <div className="flex-1">
-              <span>{syncT?.emptyStep2 ?? 'Run this command in your terminal:'}</span>
-              <div className="flex items-center gap-1.5 mt-1.5 px-3 py-2 bg-muted rounded-lg font-mono text-xs text-foreground">
-                <code className="flex-1 select-all">{cmd}</code>
-                <CopyButton text={cmd} />
-              </div>
-            </div>
-          </li>
-          <li className="flex items-start gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 text-[10px] font-medium text-foreground mt-0.5">3</span>
-            <span>{syncT?.emptyStep3 ?? 'Follow the prompts to connect your repo. Sync starts automatically.'}</span>
-          </li>
-        </ol>
+      {/* Git Remote URL */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-foreground block">
+          {syncT?.remoteUrl ?? 'Git Remote URL'}
+        </label>
+        <input
+          type="text"
+          value={remoteUrl}
+          onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
+          placeholder="https://github.com/user/my-mind.git"
+          className="w-full px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+          style={{
+            borderColor: remoteUrl.trim() && !isValid ? 'var(--destructive, red)' : 'var(--border)',
+            color: 'var(--foreground)',
+          }}
+        />
+        {remoteUrl.trim() && !isValid && (
+          <p className="text-[11px]" style={{ color: 'var(--destructive, red)' }}>
+            {syncT?.invalidUrl ?? 'Invalid Git URL — use HTTPS (https://...) or SSH (git@...)'}
+          </p>
+        )}
+        {urlType === 'ssh' && (
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <AlertCircle size={11} className="shrink-0" />
+            {syncT?.sshHint ?? 'SSH URLs require SSH key configured on this machine. HTTPS with token recommended.'}
+          </p>
+        )}
       </div>
 
+      {/* Access Token (HTTPS only) */}
+      {showTokenField && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-foreground block">
+            {syncT?.accessToken ?? 'Access Token'}{' '}
+            <span className="text-muted-foreground font-normal">{syncT?.optional ?? '(optional, for private repos)'}</span>
+          </label>
+          <div className="relative">
+            <input
+              type={showToken ? 'text' : 'password'}
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="ghp_xxxxxxxxxxxx"
+              className="w-full px-3 py-2 pr-9 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowToken(!showToken)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground transition-colors"
+            >
+              {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {syncT?.tokenHint ?? 'GitHub: Settings → Developer settings → Personal access tokens → repo scope'}
+          </p>
+        </div>
+      )}
+
+      {/* Branch */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-foreground block">
+          {syncT?.branchLabel ?? 'Branch'}
+        </label>
+        <input
+          type="text"
+          value={branch}
+          onChange={e => setBranch(e.target.value)}
+          placeholder="main"
+          className="w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+          style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+        />
+      </div>
+
+      {/* Connect button */}
+      <button
+        type="button"
+        onClick={handleConnect}
+        disabled={!isValid || connecting}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ background: 'var(--amber)', color: '#131210' }}
+      >
+        {connecting && <Loader2 size={14} className="animate-spin" />}
+        {connecting
+          ? (syncT?.connecting ?? 'Connecting...')
+          : (syncT?.connectButton ?? 'Connect & Start Sync')}
+      </button>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-2 text-xs p-3 rounded-lg" role="alert" aria-live="polite" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--destructive, red)' }}>
+          <AlertCircle size={13} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Features */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+      <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground pt-2">
         {[
           syncT?.featureAutoCommit ?? 'Auto-commit on save',
           syncT?.featureAutoPull ?? 'Auto-pull from remote',
@@ -190,7 +279,7 @@ export function SyncTab({ t }: SyncTabProps) {
   }
 
   if (!status || !status.enabled) {
-    return <SyncEmptyState t={t} />;
+    return <SyncEmptyState t={t} onInitComplete={fetchStatus} />;
   }
 
   const conflicts = status.conflicts || [];
@@ -256,7 +345,7 @@ export function SyncTab({ t }: SyncTabProps) {
 
       {/* Message */}
       {message && (
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex items-center gap-1.5 text-xs" role="status" aria-live="polite">
           {message.type === 'success' ? (
             <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{message.text}</span></>
           ) : (

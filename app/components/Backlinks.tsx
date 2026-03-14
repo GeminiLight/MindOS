@@ -31,7 +31,7 @@ export default function Backlinks({ filePath }: { filePath: string }) {
     <div className="mt-12 pt-8 border-t border-border">
       <div className="flex items-center gap-2 mb-6 text-muted-foreground">
         <LinkIcon size={16} className="text-amber-500/70" />
-        <h3 className="text-sm font-semibold tracking-wider uppercase" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <h3 className="text-sm font-semibold tracking-wider uppercase font-display">
           {t.common?.relatedFiles || 'Related Files'}
         </h3>
         <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full font-mono">

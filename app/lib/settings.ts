@@ -27,6 +27,7 @@ export interface ServerSettings {
   webPassword?: string;
   startMode?: 'dev' | 'start' | 'daemon';
   setupPending?: boolean;  // true → / redirects to /setup
+  disabledSkills?: string[];
 }
 
 const DEFAULTS: ServerSettings = {
@@ -111,6 +112,7 @@ export function readSettings(): ServerSettings {
       port:        typeof parsed.port        === 'number' ? parsed.port        : undefined,
       startMode:   typeof parsed.startMode   === 'string' ? parsed.startMode as ServerSettings['startMode'] : undefined,
       setupPending: parsed.setupPending === true ? true : undefined,
+      disabledSkills: Array.isArray(parsed.disabledSkills) ? parsed.disabledSkills as string[] : undefined,
     };
   } catch {
     return { ...DEFAULTS, ai: { ...DEFAULTS.ai, providers: { ...DEFAULTS.ai.providers } } };
@@ -129,6 +131,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.port        !== undefined) merged.port        = settings.port;
   if (settings.mcpPort     !== undefined) merged.mcpPort     = settings.mcpPort;
   if (settings.startMode   !== undefined) merged.startMode   = settings.startMode;
+  if (settings.disabledSkills !== undefined) merged.disabledSkills = settings.disabledSkills;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;

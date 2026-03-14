@@ -33,6 +33,7 @@
  *   mindos logs                     — tail service logs (~/.mindos/mindos.log)
  *   mindos config show              — print current config (API keys masked)
  *   mindos config set <key> <val>   — update a single config field
+ *   mindos config unset <key>       — remove a config field
  *   mindos config validate          — validate config file
  */
 
@@ -58,6 +59,15 @@ import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, l
 // ── Commands ──────────────────────────────────────────────────────────────────
 
 const cmd       = process.argv[2];
+
+// ── --version / -v ──────────────────────────────────────────────────────────
+// --help / -h is handled at entry section (resolvedCmd = null → help block)
+if (cmd === '--version' || cmd === '-v') {
+  const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version;
+  console.log(`mindos/${version} node/${process.version} ${process.platform}-${process.arch}`);
+  process.exit(0);
+}
+
 const isDaemon  = process.argv.includes('--daemon') || (!cmd && isDaemonMode());
 const isVerbose = process.argv.includes('--verbose');
 const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '--verbose').join(' ');
@@ -68,8 +78,8 @@ const commands = {
     const daemonFlag = process.argv.includes('--install-daemon') ? ' --install-daemon' : '';
     run(`node ${resolve(ROOT, 'scripts/setup.js')}${daemonFlag}`);
   },
-  init:  () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
-  setup: () => run(`node ${resolve(ROOT, 'scripts/setup.js')}`),
+  init:  async () => commands.onboard(),
+  setup: async () => commands.onboard(),
 
   // ── open ───────────────────────────────────────────────────────────────────
   open: () => {
@@ -123,8 +133,8 @@ const commands = {
     console.log(`${sep}`);
     console.log(`${bold('Claude Code')}`);
     console.log(`${sep}`);
-    console.log(dim('一键安装:') + ` mindos mcp install claude-code -g -y`);
-    console.log(dim('\n手动配置 (~/.claude.json):'));
+    console.log(dim('Quick install:') + ` mindos mcp install claude-code -g -y`);
+    console.log(dim('\nManual config (~/.claude.json):'));
     console.log(JSON.stringify({
       mcpServers: {
         mindos: {
@@ -138,8 +148,8 @@ const commands = {
     console.log(`\n${sep}`);
     console.log(`${bold('CodeBuddy (Claude Code Internal)')}`);
     console.log(`${sep}`);
-    console.log(dim('一键安装:') + ` mindos mcp install codebuddy -g -y`);
-    console.log(dim('\n手动配置 (~/.claude-internal/.claude.json):'));
+    console.log(dim('Quick install:') + ` mindos mcp install codebuddy -g -y`);
+    console.log(dim('\nManual config (~/.claude-internal/.claude.json):'));
     console.log(JSON.stringify({
       mcpServers: {
         mindos: {
@@ -153,8 +163,8 @@ const commands = {
     console.log(`\n${sep}`);
     console.log(`${bold('Cursor')}`);
     console.log(`${sep}`);
-    console.log(dim('一键安装:') + ` mindos mcp install cursor -g -y`);
-    console.log(dim('\n手动配置 (~/.cursor/mcp.json):'));
+    console.log(dim('Quick install:') + ` mindos mcp install cursor -g -y`);
+    console.log(dim('\nManual config (~/.cursor/mcp.json):'));
     console.log(JSON.stringify({
       mcpServers: {
         mindos: {
@@ -168,7 +178,7 @@ const commands = {
     if (localIP) {
       const remoteUrl = `http://${localIP}:${mcpPort}/mcp`;
       console.log(`\n${sep}`);
-      console.log(`${bold('Remote (其他设备)')}`);
+      console.log(`${bold('Remote (other devices)')}`);
       console.log(`${sep}`);
       console.log(`URL: ${cyan(remoteUrl)}`);
       console.log(JSON.stringify({
@@ -200,12 +210,21 @@ const commands = {
     if (devMindRoot) {
       startSyncDaemon(devMindRoot).catch(() => {});
     }
-    printStartupInfo(webPort, mcpPort);
+    await printStartupInfo(webPort, mcpPort);
     run(`npx next dev -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
 
   // ── start ──────────────────────────────────────────────────────────────────
   start: async () => {
+    // Check for incomplete setup
+    if (existsSync(CONFIG_PATH)) {
+      try {
+        const cfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+        if (cfg.setupPending === true) {
+          console.log(`\n  ${yellow('⚠ Setup was not completed.')} Run ${cyan('mindos onboard')} to finish, or ${cyan('mindos config set setupPending false')} to dismiss.\n`);
+        }
+      } catch {}
+    }
     if (isDaemon) {
       const platform = getPlatform();
       if (!platform) {
@@ -225,13 +244,13 @@ const commands = {
           console.error(dim('  Check logs with: mindos logs\n'));
           process.exit(1);
         }
-        printStartupInfo(webPort, mcpPort);
+        await printStartupInfo(webPort, mcpPort);
         // System notification
         try {
           if (process.platform === 'darwin') {
-            execSync(`osascript -e 'display notification "http://localhost:${webPort}" with title "MindOS 已就绪"'`, { stdio: 'ignore' });
+            execSync(`osascript -e 'display notification "http://localhost:${webPort}" with title "MindOS Ready"'`, { stdio: 'ignore' });
           } else if (process.platform === 'linux') {
-            execSync(`notify-send "MindOS 已就绪" "http://localhost:${webPort}"`, { stdio: 'ignore' });
+            execSync(`notify-send "MindOS Ready" "http://localhost:${webPort}"`, { stdio: 'ignore' });
           }
         } catch { /* notification is best-effort */ }
         console.log(`${green('✔ MindOS is running as a background service')}`);
@@ -250,6 +269,7 @@ const commands = {
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
       cleanNextDir();
+      run('node scripts/gen-renderer-index.js', ROOT);
       run('npx next build', resolve(ROOT, 'app'));
       writeBuildStamp();
     }
@@ -261,7 +281,7 @@ const commands = {
     if (mindRoot) {
       startSyncDaemon(mindRoot).catch(() => {});
     }
-    printStartupInfo(webPort, mcpPort);
+    await printStartupInfo(webPort, mcpPort);
     run(`npx next start -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
 
@@ -269,6 +289,7 @@ const commands = {
   build: () => {
     ensureAppDeps();
     cleanNextDir();
+    run('node scripts/gen-renderer-index.js', ROOT);
     run(`npx next build ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
   },
@@ -466,6 +487,23 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       }
     }
 
+    // 9. Update check
+    try {
+      const { checkForUpdate } = await import('./lib/update-check.js');
+      const latestVersion = await Promise.race([
+        checkForUpdate(),
+        new Promise(r => setTimeout(() => r(null), 4000)),
+      ]);
+      if (latestVersion) {
+        const currentVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
+        warn(`Update available: v${currentVersion} → ${bold(`v${latestVersion}`)}  ${dim('run `mindos update`')}`);
+      } else {
+        ok('MindOS is up to date');
+      }
+    } catch {
+      warn('Could not check for updates');
+    }
+
     console.log(hasError
       ? `\n${red('Some checks failed.')} Run ${cyan('mindos onboard')} to reconfigure.\n`
       : `\n${green('All checks passed.')}\n`);
@@ -575,7 +613,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         display.authToken = maskKey(display.authToken);
       if (display.webPassword)
         display.webPassword = maskKey(display.webPassword);
-      console.log(`\n${bold('📋 MindOS Config')}  ${dim(CONFIG_PATH)}\n`);
+      console.log(`\n${bold('📋 MindOS Config')}  ${dim(`v${(() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })()}`)}  ${dim(CONFIG_PATH)}\n`);
       console.log(JSON.stringify(display, null, 2));
       console.log();
       return;
@@ -640,10 +678,47 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         if (typeof obj[parts[i]] !== 'object' || !obj[parts[i]]) obj[parts[i]] = {};
         obj = obj[parts[i]];
       }
-      const coerced = isNaN(Number(val)) ? val : Number(val);
+      // Coerce string values to appropriate types
+      function coerceValue(v) {
+        if (v === 'true') return true;
+        if (v === 'false') return false;
+        if (v === 'null') return null;
+        if (v === '""' || v === "''") return '';
+        if (v.trim() !== '' && !isNaN(Number(v))) return Number(v);
+        return v;
+      }
+      const coerced = coerceValue(val);
       obj[parts[parts.length - 1]] = coerced;
       writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
       console.log(`${green('✔')} Set ${cyan(key)} = ${bold(String(coerced))}`);
+      return;
+    }
+
+    if (sub === 'unset') {
+      const key = process.argv[4];
+      if (!key) {
+        console.error(red('Usage: mindos config unset <key>'));
+        process.exit(1);
+      }
+      if (!existsSync(CONFIG_PATH)) {
+        console.error(red('No config found. Run `mindos onboard` first.'));
+        process.exit(1);
+      }
+      let config;
+      try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {
+        console.error(red('Failed to parse config file.'));
+        process.exit(1);
+      }
+      const parts = key.split('.');
+      let obj = config;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!obj[parts[i]]) { console.log(dim(`Key "${key}" not found`)); return; }
+        obj = obj[parts[i]];
+      }
+      if (!(parts[parts.length - 1] in obj)) { console.log(dim(`Key "${key}" not found`)); return; }
+      delete obj[parts[parts.length - 1]];
+      writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+      console.log(`${green('✔')} Removed ${cyan(key)}`);
       return;
     }
 
@@ -656,10 +731,13 @@ ${bold('Subcommands:')}
 ${row('mindos config show',          'Print current config (API keys masked)')}
 ${row('mindos config validate',      'Validate config file')}
 ${row('mindos config set <key> <v>', 'Update a single field (dot-notation supported)')}
+${row('mindos config unset <key>',   'Remove a config field')}
 
 ${bold('Examples:')}
   ${dim('mindos config set port 3002')}
   ${dim('mindos config set ai.provider openai')}
+  ${dim('mindos config set setupPending false')}
+  ${dim('mindos config unset webPassword')}
 `);
   },
 
@@ -670,7 +748,22 @@ ${bold('Examples:')}
     const mindRoot = process.env.MIND_ROOT;
 
     if (sub === 'init') {
-      await initSync(mindRoot);
+      // Parse --non-interactive --remote <url> --branch <branch> --token <token>
+      const args = process.argv.slice(4);
+      const flagIdx = (flag) => args.indexOf(flag);
+      const flagVal = (flag) => { const i = flagIdx(flag); return i >= 0 && i + 1 < args.length ? args[i + 1] : ''; };
+      const nonInteractive = args.includes('--non-interactive');
+
+      if (nonInteractive) {
+        await initSync(mindRoot, {
+          nonInteractive: true,
+          remote: flagVal('--remote'),
+          token: flagVal('--token'),
+          branch: flagVal('--branch') || 'main',
+        });
+      } else {
+        await initSync(mindRoot);
+      }
       return;
     }
 
@@ -693,6 +786,16 @@ ${bold('Examples:')}
       setSyncEnabled(false);
       stopSyncDaemon();
       return;
+    }
+
+    // Unknown subcommand check
+    if (sub) {
+      const validSubs = ['init', 'now', 'conflicts', 'on', 'off'];
+      if (!validSubs.includes(sub)) {
+        console.error(red(`Unknown sync subcommand: ${sub}`));
+        console.error(dim(`Available: ${validSubs.join(' | ')}`));
+        process.exit(1);
+      }
     }
 
     // default: sync status
@@ -727,15 +830,16 @@ ${bold('Examples:')}
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
-const resolvedCmd = cmd || (existsSync(CONFIG_PATH) ? getStartMode() : null);
+const resolvedCmd = (cmd === '--help' || cmd === '-h') ? null : (cmd || (existsSync(CONFIG_PATH) ? getStartMode() : null));
 
 if (!resolvedCmd || !commands[resolvedCmd]) {
+  const pkgVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
   const row = (c, d) => `  ${cyan(c.padEnd(36))}${dim(d)}`;
   console.log(`
-${bold('🧠 MindOS CLI')}
+${bold('🧠 MindOS CLI')} ${dim(`v${pkgVersion}`)}
 
-${bold('Usage:')}
-${row('mindos onboard',                    'Interactive setup (writes ~/.mindos/config.json)')}
+${bold('Core:')}
+${row('mindos onboard',                    'Interactive setup (aliases: init, setup)')}
 ${row('mindos onboard --install-daemon',   'Setup + install & start as background OS service')}
 ${row('mindos start',                      'Start app + MCP server (production, auto-rebuilds if needed)')}
 ${row('mindos start --daemon',             'Install + start as background OS service (survives terminal close)')}
@@ -745,19 +849,28 @@ ${row('mindos dev --turbopack',            'Start with Turbopack (faster HMR)')}
 ${row('mindos stop',                       'Stop running MindOS processes')}
 ${row('mindos restart',                    'Stop then start again')}
 ${row('mindos build',                      'Build the app for production')}
+${row('mindos open',                       'Open Web UI in the default browser')}
+
+${bold('MCP:')}
 ${row('mindos mcp',                        'Start MCP server only')}
 ${row('mindos mcp install [agent]',        'Install MindOS MCP config into Agent (claude-code/cursor/windsurf/…) [-g]')}
-${row('mindos open',                       'Open Web UI in the default browser')}
 ${row('mindos token',                      'Show current auth token and MCP config snippet')}
+
+${bold('Sync:')}
 ${row('mindos sync',                       'Show sync status (init/now/conflicts/on/off)')}
+
+${bold('Gateway (Background Service):')}
 ${row('mindos gateway <subcommand>',       'Manage background service (install/uninstall/start/stop/status/logs)')}
+
+${bold('Config & Diagnostics:')}
+${row('mindos config <subcommand>',        'View/update config (show/validate/set/unset)')}
 ${row('mindos doctor',                     'Health check (config, ports, build, daemon)')}
 ${row('mindos update',                     'Update MindOS to the latest version')}
 ${row('mindos logs',                       'Tail service logs (~/.mindos/mindos.log)')}
-${row('mindos config <subcommand>',        'View/update config (show/validate/set)')}
 ${row('mindos',                            'Start using mode saved in ~/.mindos/config.json')}
 `);
-  process.exit(cmd ? 1 : 0);
+  const isHelp = (cmd === '--help' || cmd === '-h');
+  process.exit((cmd && !isHelp) ? 1 : 0);
 }
 
 commands[resolvedCmd]();

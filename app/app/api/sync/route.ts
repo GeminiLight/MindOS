@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 
 const MINDOS_DIR = join(homedir(), '.mindos');
@@ -68,7 +68,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { action: string };
+    const body = await req.json() as { action: string; remote?: string; branch?: string; token?: string };
     const config = loadConfig();
     const mindRoot = config.mindRoot;
 
@@ -77,6 +77,57 @@ export async function POST(req: NextRequest) {
     }
 
     switch (body.action) {
+      case 'init': {
+        const remote = body.remote?.trim();
+        if (!remote) {
+          return NextResponse.json({ error: 'Remote URL is required' }, { status: 400 });
+        }
+
+        // Validate URL format
+        const isHTTPS = remote.startsWith('https://');
+        const isSSH = /^git@[\w.-]+:.+/.test(remote);
+        if (!isHTTPS && !isSSH) {
+          return NextResponse.json({ error: 'Invalid remote URL — must be HTTPS or SSH format' }, { status: 400 });
+        }
+
+        // Check if sync is already configured
+        if (config.sync?.enabled && isGitRepo(mindRoot) && getRemoteUrl(mindRoot)) {
+          return NextResponse.json({ error: 'Sync already configured' }, { status: 400 });
+        }
+
+        // Build the effective remote URL (inject token for HTTPS)
+        let effectiveRemote = remote;
+        if (isHTTPS && body.token) {
+          try {
+            const urlObj = new URL(remote);
+            urlObj.username = 'oauth2';
+            urlObj.password = body.token;
+            effectiveRemote = urlObj.toString();
+          } catch {
+            return NextResponse.json({ error: 'Invalid remote URL' }, { status: 400 });
+          }
+        }
+
+        const branch = body.branch?.trim() || 'main';
+
+        // Call CLI's sync init via execFile (avoids module resolution issues with Turbopack)
+        try {
+          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
+          const args = ['sync', 'init', '--non-interactive', '--remote', effectiveRemote, '--branch', branch];
+
+          await new Promise<void>((res, rej) => {
+            execFile('node', [cliPath, ...args], { timeout: 30000 }, (err, stdout, stderr) => {
+              if (err) rej(new Error(stderr?.trim() || err.message));
+              else res();
+            });
+          });
+          return NextResponse.json({ success: true, message: 'Sync initialized' });
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          return NextResponse.json({ error: errMsg }, { status: 400 });
+        }
+      }
+
       case 'now': {
         if (!isGitRepo(mindRoot)) {
           return NextResponse.json({ error: 'Not a git repository' }, { status: 400 });

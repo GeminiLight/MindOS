@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import RegisterSW from './register-sw';
+import UpdateBanner from '@/components/UpdateBanner';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -20,13 +21,13 @@ const geistMono = Geist_Mono({
 
 const ibmPlexMono = IBM_Plex_Mono({
   variable: '--font-ibm-plex-mono',
-  weight: ['400', '500', '600'],
+  weight: ['400', '600'],
   subsets: ['latin'],
 });
 
 const ibmPlexSans = IBM_Plex_Sans({
   variable: '--font-ibm-plex-sans',
-  weight: ['300', '400', '500', '600'],
+  weight: ['400', '500', '600'],
   subsets: ['latin'],
 });
 
@@ -91,6 +92,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <LocaleProvider>
+          <UpdateBanner />
           <TooltipProvider delay={300}>
             <ErrorBoundary>
               <ShellLayout fileTree={fileTree}>

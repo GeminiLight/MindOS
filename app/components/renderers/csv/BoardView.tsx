@@ -50,7 +50,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
       <div className="flex-shrink-0 w-64 flex flex-col gap-2">
         <div className="flex items-center gap-2 px-1 py-1.5">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: tc.text }} />
-          <span className="text-xs font-semibold uppercase tracking-wider truncate" style={{ color: tc.text, fontFamily: "'IBM Plex Mono',monospace" }}>{group}</span>
+          <span className="text-xs font-semibold uppercase tracking-wider truncate font-display" style={{ color: tc.text }}>{group}</span>
           <span className="text-xs ml-auto shrink-0" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{cards.length}</span>
         </div>
         <div
@@ -74,14 +74,14 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
                 className="rounded-lg border p-3 flex flex-col gap-1.5 cursor-grab active:cursor-grabbing hover:bg-muted/50 transition-colors"
                 style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
               >
-                <p className="text-sm font-medium leading-snug" style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans',sans-serif" }}>{title}</p>
+                <p className="text-sm font-medium leading-snug" style={{ color: 'var(--foreground)' }}>{title}</p>
                 {desc && <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>{desc}</p>}
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {headers.map((h, ci) => {
                     if (ci === groupIdx || ci === titleIdx || ci === descIdx) return null;
                     const v = row[ci]; if (!v) return null;
-                    return <span key={ci} className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}
+                    return <span key={ci} className="text-[10px] px-1.5 py-0.5 rounded font-display"
+                      style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                     >{h}: {v}</span>;
                   })}
                 </div>
@@ -115,27 +115,27 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
                 if (e.key === 'Escape') { setNewColInput(''); setShowNewCol(false); }
               }}
               placeholder="Column name…"
-              className="text-xs bg-transparent outline-none w-full"
-              style={{ color: 'var(--foreground)', borderBottom: '1px solid var(--amber)', fontFamily: "'IBM Plex Mono',monospace" }}
+              className="text-xs bg-transparent outline-none w-full font-display"
+              style={{ color: 'var(--foreground)', borderBottom: '1px solid var(--amber)' }}
             />
             <div className="flex gap-2">
               <button onClick={() => {
                 setNewColInput('');
                 setShowNewCol(false);
               }}
-                className="text-xs px-2 py-1 rounded"
-                style={{ background: 'var(--amber)', color: '#131210', fontFamily: "'IBM Plex Mono',monospace" }}
+                className="text-xs px-2 py-1 rounded font-display"
+                style={{ background: 'var(--amber)', color: '#131210' }}
               >Create</button>
               <button onClick={() => { setNewColInput(''); setShowNewCol(false); }}
-                className="text-xs px-2 py-1 rounded"
-                style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}
+                className="text-xs px-2 py-1 rounded font-display"
+                style={{ color: 'var(--muted-foreground)' }}
               >Cancel</button>
             </div>
           </div>
         ) : (
           <button onClick={() => setShowNewCol(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl border border-dashed w-full transition-colors hover:bg-muted"
-            style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}
+            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl border border-dashed w-full transition-colors hover:bg-muted font-display"
+            style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}
           >
             <Plus size={12} /> Add column
           </button>

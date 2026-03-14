@@ -2,9 +2,9 @@
 
 import { useState, useSyncExternalStore, useMemo } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
-import { encodePath } from '@/lib/utils';
+import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
 
@@ -57,6 +57,7 @@ function useDirViewPref() {
 export default function DirView({ dirPath, entries }: DirViewProps) {
   const [view, setView] = useDirViewPref();
   const { t } = useLocale();
+  const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
   const fileCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of entries) map.set(e.path, countFiles(e));
@@ -71,22 +72,31 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={dirPath} />
           </div>
-          {/* View toggle */}
-          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg shrink-0">
-            <button
-              onClick={() => setView('grid')}
-              className={`p-1.5 rounded transition-colors ${view === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title={t.dirView.gridView}
+          {/* New file + View toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href={`/view/${encodePath(dirPath ? `${dirPath}/Untitled.md` : 'Untitled.md')}`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
             >
-              <LayoutGrid size={14} />
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`p-1.5 rounded transition-colors ${view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              title={t.dirView.listView}
-            >
-              <List size={14} />
-            </button>
+              <FilePlus size={13} />
+              <span className="hidden sm:inline">{t.dirView.newFile}</span>
+            </Link>
+            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+              <button
+                onClick={() => setView('grid')}
+                className={`p-1.5 rounded transition-colors ${view === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                title={t.dirView.gridView}
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                onClick={() => setView('list')}
+                className={`p-1.5 rounded transition-colors ${view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                title={t.dirView.listView}
+              >
+                <List size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -102,14 +112,25 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
                 <Link
                   key={entry.path}
                   href={`/view/${encodePath(entry.path)}`}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-100 text-center"
+                  className={
+                    entry.type === 'directory'
+                      ? 'flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-100 text-center'
+                      : 'flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-100 text-center'
+                  }
                 >
-                  <FileIconLarge node={entry} />
+                  {entry.type === 'directory'
+                    ? <FolderOpen size={22} className="text-yellow-400" />
+                    : <FileIconLarge node={entry} />}
                   <span className="text-xs text-foreground leading-snug line-clamp-2 w-full" suppressHydrationWarning>
                     {entry.name}
                   </span>
                   {entry.type === 'directory' && (
                     <span className="text-[10px] text-muted-foreground">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
+                  )}
+                  {entry.type === 'file' && entry.mtime && (
+                    <span className="text-[10px] text-muted-foreground font-display" suppressHydrationWarning>
+                      {formatTime(entry.mtime)}
+                    </span>
                   )}
                 </Link>
               ))}
@@ -129,8 +150,8 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
                   {entry.type === 'directory' ? (
                     <span className="text-xs text-muted-foreground shrink-0">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
                   ) : entry.mtime ? (
-                    <span className="text-xs text-muted-foreground shrink-0 tabular-nums" style={{ fontFamily: "'IBM Plex Mono', monospace" }} suppressHydrationWarning>
-                      {new Date(entry.mtime).toLocaleDateString()}
+                    <span className="text-xs text-muted-foreground shrink-0 tabular-nums font-display" suppressHydrationWarning>
+                      {formatTime(entry.mtime)}
                     </span>
                   ) : null}
                 </Link>
