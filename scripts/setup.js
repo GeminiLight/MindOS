@@ -114,6 +114,8 @@ const T = {
   cfgKept:        { en: '✔ Keeping existing config', zh: '✔ 保留现有配置' },
   cfgKeptNote:    { en: '  Settings from this session were not saved', zh: '  本次填写的设置未保存' },
   cfgSaved:       { en: '✔ Config saved', zh: '✔ 配置已保存' },
+  cfgConfirm:     { en: 'Save this configuration?', zh: '保存此配置？' },
+  cfgAborted:     { en: '✘ Setup cancelled. Run `mindos onboard` to try again.', zh: '✘ 设置已取消。运行 `mindos onboard` 重新开始。' },
   yesNo:          { en: '[y/N]', zh: '[y/N]' },
   yesNoDefault:   { en: '[Y/n]', zh: '[Y/n]' },
   startNow:       { en: 'Start MindOS now?', zh: '现在启动 MindOS？' },
@@ -763,6 +765,28 @@ async function main() {
       providers: existingProviders,
     },
   };
+
+  // ── Configuration Summary & Confirmation ──────────────────────────────────
+  const maskPw = (s) => s ? '•'.repeat(Math.min(s.length, 8)) : '';
+  const maskTk = (s) => s && s.length > 8 ? s.slice(0, 8) + '····' : (s ? s.slice(0, 4) + '····' : '');
+  const sep = '━'.repeat(40);
+  write(`\n${sep}\n`);
+  write(`${c.bold(uiLang === 'zh' ? '配置摘要' : 'Configuration Summary')}\n`);
+  write(`${sep}\n`);
+  write(`  ${c.dim('Knowledge base:')}  ${mindDir}\n`);
+  write(`  ${c.dim('Web port:')}        ${webPort}\n`);
+  write(`  ${c.dim('MCP port:')}        ${mcpPort}\n`);
+  write(`  ${c.dim('Auth token:')}      ${maskTk(authToken)}\n`);
+  if (webPassword) write(`  ${c.dim('Web password:')}    ${maskPw(webPassword)}\n`);
+  write(`  ${c.dim('AI provider:')}     ${config.ai.provider}\n`);
+  write(`  ${c.dim('Start mode:')}      ${startMode}\n`);
+  write(`${sep}\n`);
+
+  const confirmSave = await askYesNoDefault('cfgConfirm');
+  if (!confirmSave) {
+    console.log(c.red(t('cfgAborted')));
+    process.exit(0);
+  }
 
   mkdirSync(MINDOS_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');

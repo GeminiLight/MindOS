@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { CONFIG_PATH } from './constants.js';
 
+let loaded = false;
+
 export function loadConfig() {
+  if (loaded) return;
+  loaded = true;
   if (!existsSync(CONFIG_PATH)) return;
   let config;
   try {

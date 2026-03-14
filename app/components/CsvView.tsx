@@ -218,7 +218,6 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
                   style={{
                     color: 'var(--foreground)',
                     borderBottom: '1px solid var(--border)',
-                    fontFamily: "'IBM Plex Sans', sans-serif",
                     fontSize: '0.75rem',
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
@@ -296,15 +295,15 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
         className="px-4 py-2 flex items-center justify-between"
         style={{ background: 'var(--muted)', borderTop: '1px solid var(--border)' }}
       >
-        <span className="text-xs" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}>
+        <span className="text-xs font-display" style={{ color: 'var(--muted-foreground)' }}>
           {rows.length} rows · {headers.length} cols
         </span>
 
         {canEdit && !showAdd && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md transition-colors"
-            style={{ color: 'var(--amber)', background: 'var(--amber-dim)', fontFamily: "'IBM Plex Mono', monospace" }}
+            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md transition-colors font-display"
+            style={{ color: 'var(--amber)', background: 'var(--amber-dim)' }}
           >
             <Plus size={12} />
             Add row
@@ -313,8 +312,8 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
         {showAdd && (
           <button
             onClick={() => setShowAdd(false)}
-            className="text-xs px-2.5 py-1 rounded-md transition-colors"
-            style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace" }}
+            className="text-xs px-2.5 py-1 rounded-md transition-colors font-display"
+            style={{ color: 'var(--muted-foreground)' }}
           >
             Cancel
           </button>

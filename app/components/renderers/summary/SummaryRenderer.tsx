@@ -34,7 +34,7 @@ function renderMarkdown(md: string): string {
     .replace(/^# (.+)$/gm, '<h1 style="font-size:1rem;font-weight:700;color:var(--foreground);margin:1.2em 0 .4em">$1</h1>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="font-family:\'IBM Plex Mono\',monospace;font-size:.82em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="font-display" style="font-size:.82em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>')
     .replace(/^[-*] (.+)$/gm, '<li style="margin:.2em 0;padding-left:.3em">$1</li>')
     .replace(/(<li[^>]*>.*<\/li>\n?)+/g, s => `<ul style="margin:.4em 0;padding-left:1.4em;list-style:disc">${s}</ul>`)
     .replace(/\n{2,}/g, '</p><p style="margin:.5em 0;font-size:.85rem;line-height:1.7;color:var(--foreground)">')
@@ -136,7 +136,7 @@ Be specific. Reference actual content from the files. Keep the total response un
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 0' }}>
       {/* header row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: 'var(--muted-foreground)' }}>
+        <span className="font-display" style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>
           {recentFiles.length > 0
             ? `${recentFiles.length} recently modified files`
             : 'Loading recent files…'}
@@ -144,6 +144,7 @@ Be specific. Reference actual content from the files. Keep the total response un
         <button
           onClick={generate}
           disabled={streaming || recentFiles.length === 0}
+          className="font-display"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -151,7 +152,6 @@ Be specific. Reference actual content from the files. Keep the total response un
             padding: '5px 14px',
             borderRadius: 7,
             fontSize: 12,
-            fontFamily: "'IBM Plex Mono',monospace",
             cursor: streaming || recentFiles.length === 0 ? 'not-allowed' : 'pointer',
             border: 'none',
             background: streaming ? 'var(--muted)' : 'var(--amber)',
@@ -176,6 +176,7 @@ Be specific. Reference actual content from the files. Keep the total response un
             <a
               key={f.path}
               href={`/view/${encodePath(f.path)}`}
+              className="font-display"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -183,7 +184,6 @@ Be specific. Reference actual content from the files. Keep the total response un
                 padding: '3px 10px',
                 borderRadius: 999,
                 fontSize: '0.7rem',
-                fontFamily: "'IBM Plex Mono',monospace",
                 background: 'var(--muted)',
                 color: 'var(--muted-foreground)',
                 textDecoration: 'none',
@@ -207,7 +207,7 @@ Be specific. Reference actual content from the files. Keep the total response un
 
       {/* error */}
       {error && (
-        <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(200,60,60,0.1)', border: '1px solid rgba(200,60,60,0.3)', color: '#c83c3c', fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, marginBottom: '1rem' }}>
+        <div className="font-display" style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(200,60,60,0.1)', border: '1px solid rgba(200,60,60,0.3)', color: '#c83c3c', fontSize: 12, marginBottom: '1rem' }}>
           {error}
         </div>
       )}
@@ -235,7 +235,7 @@ Be specific. Reference actual content from the files. Keep the total response un
           color: 'var(--muted-foreground)',
         }}>
           <Sparkles size={28} style={{ margin: '0 auto 10px', opacity: 0.3, color: 'var(--amber)' }} />
-          <p style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>
+          <p className="font-display" style={{ fontSize: 12 }}>
             Click <strong style={{ color: 'var(--foreground)' }}>Generate briefing</strong> to summarize recent changes with AI.
           </p>
         </div>

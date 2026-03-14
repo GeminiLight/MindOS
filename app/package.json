@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p ${MINDOS_WEB_PORT:-3000}",
+    "prebuild": "node ../scripts/gen-renderer-index.js",
     "build": "next build",
     "start": "next start -p ${MINDOS_WEB_PORT:-3000}",
     "lint": "eslint",

@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, yellow } from './colors.js';
 import { getSyncStatus } from './sync.js';
+import { checkForUpdate, printUpdateHint } from './update-check.js';
 
 export function getLocalIP() {
   try {
@@ -15,17 +16,14 @@ export function getLocalIP() {
   return null;
 }
 
-export function printStartupInfo(webPort, mcpPort) {
+export async function printStartupInfo(webPort, mcpPort) {
+  // Fire update check immediately (non-blocking)
+  const updatePromise = checkForUpdate().catch(() => null);
+
   let config = {};
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
   const authToken = config.authToken || '';
   const localIP   = getLocalIP();
-
-  const auth = authToken
-    ? `,\n        "headers": { "Authorization": "Bearer ${authToken}" }`
-    : '';
-  const block = (host) =>
-    `  {\n    "mcpServers": {\n      "mindos": {\n        "url": "http://${host}:${mcpPort}/mcp"${auth}\n      }\n    }\n  }`;
 
   console.log(`\n${'─'.repeat(53)}`);
   console.log(`${bold('🧠 MindOS is starting')}\n`);
@@ -33,21 +31,17 @@ export function printStartupInfo(webPort, mcpPort) {
   if (localIP) console.log(`             ${cyan(`http://${localIP}:${webPort}`)}`);
   console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
   if (localIP) console.log(`             ${cyan(`http://${localIP}:${mcpPort}/mcp`)}`);
-  if (localIP) console.log(dim(`\n  💡 Running on a remote server? Open the Network URL (${localIP}) in your browser,\n     or use SSH port forwarding: ssh -L ${webPort}:localhost:${webPort} user@${localIP}`));
-  console.log();
-  console.log(bold('Configure MCP in your Agent:'));
-  console.log(dim('  Local (same machine):'));
-  console.log(block('localhost'));
-  if (localIP) {
-    console.log(dim('\n  Remote (other device):'));
-    console.log(block(localIP));
-  }
+
   if (authToken) {
-    console.log(`\n  🔑 ${bold('Auth token:')} ${cyan(authToken)}`);
-    console.log(dim('  Run `mindos token` anytime to view it again'));
+    const maskedToken = authToken.length > 8 ? authToken.slice(0, 8) + '····' : (authToken.length > 4 ? authToken.slice(0, 4) + '····' : '····');
+    console.log(`  ${green('●')} Auth     ${cyan(maskedToken)}  ${dim('(run `mindos token` for full config)')}`);
   }
-  console.log(dim('\n  Install Skills (optional):'));
-  console.log(dim('  npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y'));
+
+  // MCP quick-connect hint
+  console.log(`\n  ${dim('Quick connect:')}  ${cyan('mindos mcp install claude-code -g -y')}`);
+  console.log(`  ${dim('Full config:')}    ${cyan('mindos token')}`);
+
+  if (localIP) console.log(dim(`\n  💡 Remote? SSH port forwarding: ssh -L ${webPort}:localhost:${webPort} -L ${mcpPort}:localhost:${mcpPort} user@${localIP}`));
 
   // Sync status
   const mindRoot = config.mindRoot;
@@ -69,6 +63,13 @@ export function printStartupInfo(webPort, mcpPort) {
       }
     } catch { /* sync check is best-effort */ }
   }
+
+  // Wait for update check result (max 4s, then give up)
+  const latestVersion = await Promise.race([
+    updatePromise,
+    new Promise(r => setTimeout(() => r(null), 4000)),
+  ]);
+  if (latestVersion) printUpdateHint(latestVersion);
 
   console.log(`${'─'.repeat(53)}\n`);
 }

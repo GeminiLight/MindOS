@@ -10,15 +10,15 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
   onClose: () => void;
   onChange: (cfg: CsvConfig) => void;
 }) {
-  const labelStyle: React.CSSProperties = { color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem' };
-  const selectStyle: React.CSSProperties = { background: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)', fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem' };
+  const labelStyle: React.CSSProperties = { color: 'var(--muted-foreground)', fontSize: '0.72rem' };
+  const selectStyle: React.CSSProperties = { background: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)', fontSize: '0.72rem' };
 
   function FieldSelect({ label, value, onChange: onCh }: { label: string; value: string; onChange: (v: string) => void }) {
     return (
       <div className="flex items-center justify-between gap-2">
-        <span style={labelStyle}>{label}</span>
+        <span className="font-display" style={labelStyle}>{label}</span>
         <select value={value} onChange={e => onCh(e.target.value)}
-          className="rounded px-2 py-1 outline-none border" style={selectStyle}
+          className="rounded px-2 py-1 outline-none border font-display" style={selectStyle}
         >
           <option value="">— none —</option>
           {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -47,9 +47,9 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
             <div className="flex rounded overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
               {(['asc', 'desc'] as const).map(d => (
                 <button key={d} onClick={() => onChange({ ...cfg, table: { ...cfg.table, sortDir: d } })}
-                  className="px-3 py-1 text-xs transition-colors"
+                  className="px-3 py-1 text-xs transition-colors font-display"
                   style={{
-                    fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem',
+                    fontSize: '0.72rem',
                     background: cfg.table.sortDir === d ? 'var(--amber)' : 'var(--background)',
                     color: cfg.table.sortDir === d ? '#131210' : 'var(--muted-foreground)',
                   }}
@@ -77,9 +77,8 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
                       : [...cfg.table.hiddenFields, h];
                     onChange({ ...cfg, table: { ...cfg.table, hiddenFields: next } });
                   }}
-                    className="text-[11px] px-2 py-0.5 rounded transition-colors"
+                    className="text-[11px] px-2 py-0.5 rounded transition-colors font-display"
                     style={{
-                      fontFamily: "'IBM Plex Mono',monospace",
                       background: hidden ? 'var(--muted)' : 'var(--amber-dim)',
                       color: hidden ? 'var(--muted-foreground)' : 'var(--amber)',
                     }}

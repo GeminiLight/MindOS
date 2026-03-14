@@ -182,7 +182,8 @@ function DiffCard({ entry, saveAction, fullContent }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderBottom: expanded ? '1px solid var(--border)' : 'none' }}>
         <FileEdit size={13} style={{ color: 'var(--amber)', flexShrink: 0 }} />
         <span
-          style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.78rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+          className="font-display"
+          style={{ fontSize: '0.78rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
           onClick={() => router.push('/view/' + entry.path.split('/').map(encodeURIComponent).join('/'))}
           title={entry.path}
         >
@@ -190,16 +191,16 @@ function DiffCard({ entry, saveAction, fullContent }: {
         </span>
 
         {/* diff stats */}
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: '#7aad80', flexShrink: 0 }}>+{added}</span>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: '#c85050', flexShrink: 0 }}>−{removed}</span>
+        <span className="font-display" style={{ fontSize: '0.7rem', color: '#7aad80', flexShrink: 0 }}>+{added}</span>
+        <span className="font-display" style={{ fontSize: '0.7rem', color: '#c85050', flexShrink: 0 }}>−{removed}</span>
 
         {/* tool badge */}
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.65rem', padding: '1px 7px', borderRadius: 999, background: 'var(--muted)', color: 'var(--muted-foreground)', flexShrink: 0 }}>
+        <span className="font-display" style={{ fontSize: '0.65rem', padding: '1px 7px', borderRadius: 999, background: 'var(--muted)', color: 'var(--muted-foreground)', flexShrink: 0 }}>
           {toolShort}
         </span>
 
         {/* timestamp */}
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.65rem', color: 'var(--muted-foreground)', opacity: 0.6, flexShrink: 0 }}>
+        <span className="font-display" style={{ fontSize: '0.65rem', color: 'var(--muted-foreground)', opacity: 0.6, flexShrink: 0 }}>
           {relativeTs(entry.ts)}
         </span>
 
@@ -222,7 +223,7 @@ function DiffCard({ entry, saveAction, fullContent }: {
             </button>
           </>
         ) : (
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: approved ? '#7aad80' : '#c85050' }}>
+          <span className="font-display" style={{ fontSize: '0.68rem', color: approved ? '#7aad80' : '#c85050' }}>
             {approved ? '✓ approved' : '✕ reverted'}
           </span>
         )}
@@ -237,7 +238,7 @@ function DiffCard({ entry, saveAction, fullContent }: {
 
       {/* diff view */}
       {expanded && (
-        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', lineHeight: 1.5, overflowX: 'auto' }}>
+        <div className="font-display" style={{ fontSize: '0.72rem', lineHeight: 1.5, overflowX: 'auto' }}>
           {collapsed.map((line, i) => {
             if (line.type === 'collapse') {
               return (
@@ -280,7 +281,7 @@ export function DiffRenderer({ content, saveAction }: RendererContext) {
 
   if (entries.length === 0) {
     return (
-      <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>
+      <div className="font-display" style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 12 }}>
         <GitCompare size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
         <p>No agent diffs logged yet.</p>
         <p style={{ marginTop: 6, opacity: 0.6, fontSize: 11 }}>
@@ -296,7 +297,7 @@ export function DiffRenderer({ content, saveAction }: RendererContext) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '1.5rem 0' }}>
       {/* stats bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.2rem', fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: 'var(--muted-foreground)' }}>
+      <div className="font-display" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.2rem', fontSize: 11, color: 'var(--muted-foreground)' }}>
         <span>{entries.length} change{entries.length !== 1 ? 's' : ''}</span>
         <span style={{ color: '#7aad80' }}>+{totalAdded}</span>
         <span style={{ color: '#c85050' }}>−{totalRemoved}</span>

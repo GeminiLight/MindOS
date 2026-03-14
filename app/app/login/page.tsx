@@ -3,13 +3,17 @@
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Lock } from 'lucide-react';
+import { useLocale } from '@/lib/LocaleContext';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLocale();
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const loginT = t.login;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,11 +33,11 @@ function LoginForm() {
           : '/';
         router.replace(safe);
       } else {
-        setError('Incorrect password. Please try again.');
+        setError(loginT?.incorrectPassword ?? 'Incorrect password. Please try again.');
         setPassword('');
       }
     } catch {
-      setError('Connection error. Please try again.');
+      setError(loginT?.connectionError ?? 'Connection error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -61,26 +65,28 @@ function LoginForm() {
               <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="#FEF3C7"/>
             </g>
           </svg>
-          <h1
-            className="text-xl font-semibold text-foreground tracking-tight"
-            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-          >
+          <h1 className="text-xl font-semibold text-foreground tracking-tight font-display">
             MindOS
           </h1>
-          <p className="text-sm text-muted-foreground">Enter your password to continue</p>
+          <p className="text-xs text-muted-foreground/70 italic">
+            {loginT?.tagline ?? 'You think here, Agents act there.'}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {loginT?.subtitle ?? 'Enter your password to continue'}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground" htmlFor="password">
-              Password
+              {loginT?.passwordLabel ?? 'Password'}
             </label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder={loginT?.passwordPlaceholder ?? 'Enter password'}
               autoFocus
               autoComplete="current-password"
               required
@@ -89,21 +95,22 @@ function LoginForm() {
           </div>
 
           {error && (
-            <p className="text-xs text-destructive">{error}</p>
+            <p className="text-xs text-destructive" role="alert" aria-live="polite">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-            style={{ background: 'var(--amber)', color: '#131210' }}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2 bg-[var(--amber)] text-[#131210]"
           >
             {loading ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <Lock size={14} />
             )}
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading
+              ? (loginT?.signingIn ?? 'Signing in…')
+              : (loginT?.signIn ?? 'Sign in')}
           </button>
         </form>
       </div>

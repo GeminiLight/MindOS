@@ -6,8 +6,8 @@ import { ROOT } from './constants.js';
 export function run(command, cwd = ROOT) {
   try {
     execSync(command, { cwd, stdio: 'inherit', env: process.env });
-  } catch {
-    process.exit(1);
+  } catch (err) {
+    process.exit(err.status || 1);
   }
 }
 

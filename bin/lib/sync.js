@@ -139,52 +139,66 @@ let activePullInterval = null;
 /**
  * Interactive sync init — configure remote git repo
  */
-export async function initSync(mindRoot) {
+export async function initSync(mindRoot, opts = {}) {
   if (!mindRoot) { console.error(red('No mindRoot configured.')); process.exit(1); }
 
-  const readline = await import('node:readline');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q) => new Promise(r => rl.question(q, r));
+  const nonInteractive = opts.nonInteractive || false;
+  let remoteUrl = opts.remote || '';
+  let token = opts.token || '';
+  let branch = opts.branch || 'main';
+
+  if (nonInteractive) {
+    // Non-interactive mode: all params from opts
+    if (!remoteUrl) {
+      throw new Error('Remote URL is required in non-interactive mode');
+    }
+  } else {
+    // Interactive mode: prompt user
+    const readline = await import('node:readline');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const ask = (q) => new Promise(r => rl.question(q, r));
+
+    // 2. Remote URL
+    const currentRemote = getRemoteUrl(mindRoot);
+    const defaultUrl = currentRemote || '';
+    const urlPrompt = currentRemote
+      ? `${bold('Remote URL')} ${dim(`[${currentRemote}]`)}: `
+      : `${bold('Remote URL')} ${dim('(HTTPS or SSH)')}: `;
+    remoteUrl = (await ask(urlPrompt)).trim() || defaultUrl;
+
+    if (!remoteUrl) {
+      console.error(red('Remote URL is required.'));
+      rl.close();
+      process.exit(1);
+    }
+
+    // 3. Token for HTTPS
+    if (remoteUrl.startsWith('https://')) {
+      token = (await ask(`${bold('Access Token')} ${dim('(GitHub PAT / GitLab PAT, leave empty if SSH)')}: `)).trim();
+    }
+
+    rl.close();
+  }
 
   // 1. Ensure git repo
   if (!isGitRepo(mindRoot)) {
-    console.log(dim('Initializing git repository...'));
-    execSync('git init', { cwd: mindRoot, stdio: 'inherit' });
-    execSync('git checkout -b main', { cwd: mindRoot, stdio: 'pipe' }).toString();
+    if (!nonInteractive) console.log(dim('Initializing git repository...'));
+    execSync('git init', { cwd: mindRoot, stdio: 'pipe' });
+    try { execSync('git checkout -b main', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
   }
 
-  // 2. Remote URL
-  const currentRemote = getRemoteUrl(mindRoot);
-  const defaultUrl = currentRemote || '';
-  const urlPrompt = currentRemote
-    ? `${bold('Remote URL')} ${dim(`[${currentRemote}]`)}: `
-    : `${bold('Remote URL')} ${dim('(HTTPS or SSH)')}: `;
-  let remoteUrl = (await ask(urlPrompt)).trim() || defaultUrl;
-
-  if (!remoteUrl) {
-    console.error(red('Remote URL is required.'));
-    rl.close();
-    process.exit(1);
-  }
-
-  // 3. Token for HTTPS
-  let token = '';
-  if (remoteUrl.startsWith('https://')) {
-    token = (await ask(`${bold('Access Token')} ${dim('(GitHub PAT / GitLab PAT, leave empty if SSH)')}: `)).trim();
-    if (token) {
-      // Inject token into URL for credential storage
-      const urlObj = new URL(remoteUrl);
-      urlObj.username = 'oauth2';
-      urlObj.password = token;
-      const authUrl = urlObj.toString();
-      // Configure credential helper
-      try { execSync(`git config credential.helper store`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
-      // Store the credential
-      try {
-        const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
-        execSync('git credential approve', { cwd: mindRoot, input: credInput, stdio: 'pipe' });
-      } catch {}
-    }
+  // Handle token for HTTPS
+  if (token && remoteUrl.startsWith('https://')) {
+    const urlObj = new URL(remoteUrl);
+    urlObj.username = 'oauth2';
+    urlObj.password = token;
+    // Configure credential helper
+    try { execSync(`git config credential.helper store`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    // Store the credential
+    try {
+      const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
+      execSync('git credential approve', { cwd: mindRoot, input: credInput, stdio: 'pipe' });
+    } catch {}
   }
 
   // 4. Set remote
@@ -195,50 +209,48 @@ export async function initSync(mindRoot) {
   }
 
   // 5. Test connection
-  console.log(dim('Testing connection...'));
+  if (!nonInteractive) console.log(dim('Testing connection...'));
   try {
-    execSync('git ls-remote --exit-code origin', { cwd: mindRoot, stdio: 'pipe' });
-    console.log(green('✔ Connection successful'));
+    execSync('git ls-remote --exit-code origin', { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+    if (!nonInteractive) console.log(green('✔ Connection successful'));
   } catch {
+    const errMsg = 'Remote not reachable — check URL and credentials';
+    if (nonInteractive) throw new Error(errMsg);
     console.error(red('✘ Could not connect to remote. Check your URL and credentials.'));
-    rl.close();
     process.exit(1);
   }
-
-  rl.close();
 
   // 6. Save sync config
   const syncConfig = {
     enabled: true,
     provider: 'git',
     remote: 'origin',
-    branch: getBranch(mindRoot),
+    branch: branch || getBranch(mindRoot),
     autoCommitInterval: 30,
     autoPullInterval: 300,
   };
   saveSyncConfig(syncConfig);
-  console.log(green('✔ Sync configured'));
+  if (!nonInteractive) console.log(green('✔ Sync configured'));
 
   // 7. First sync: pull if remote has content, push otherwise
   try {
     const refs = gitExec('git ls-remote --heads origin', mindRoot);
     if (refs) {
-      console.log(dim('Pulling from remote...'));
+      if (!nonInteractive) console.log(dim('Pulling from remote...'));
       try {
-        execSync(`git pull origin ${syncConfig.branch} --allow-unrelated-histories`, { cwd: mindRoot, stdio: 'inherit' });
+        execSync(`git pull origin ${syncConfig.branch} --allow-unrelated-histories`, { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit' });
       } catch {
-        // Might fail if empty or conflicts — that's fine for initial setup
-        console.log(yellow('Pull completed with warnings. Check for conflicts.'));
+        if (!nonInteractive) console.log(yellow('Pull completed with warnings. Check for conflicts.'));
       }
     } else {
-      console.log(dim('Pushing to remote...'));
+      if (!nonInteractive) console.log(dim('Pushing to remote...'));
       autoCommitAndPush(mindRoot);
     }
   } catch {
-    console.log(dim('Performing initial push...'));
+    if (!nonInteractive) console.log(dim('Performing initial push...'));
     autoCommitAndPush(mindRoot);
   }
-  console.log(green('✔ Initial sync complete\n'));
+  if (!nonInteractive) console.log(green('✔ Initial sync complete\n'));
 }
 
 /**

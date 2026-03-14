@@ -62,8 +62,8 @@ export default function OnboardingView() {
         <div className="inline-flex items-center gap-2 mb-4">
           <Sparkles size={18} style={{ color: 'var(--amber)' }} />
           <h1
-            className="text-2xl font-semibold tracking-tight"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: 'var(--foreground)' }}
+            className="text-2xl font-semibold tracking-tight font-display"
+            style={{ color: 'var(--foreground)' }}
           >
             MindOS
           </h1>
@@ -94,7 +94,7 @@ export default function OnboardingView() {
                 <span style={{ color: 'var(--amber)' }}>{tpl.icon}</span>
                 <span
                   className="text-sm font-semibold"
-                  style={{ color: 'var(--foreground)', fontFamily: "'IBM Plex Sans', sans-serif" }}
+                  style={{ color: 'var(--foreground)' }}
                 >
                   {ob.templates[tpl.id].title}
                 </span>
@@ -110,10 +110,9 @@ export default function OnboardingView() {
 
               {/* Directory preview */}
               <div
-                className="w-full rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+                className="w-full rounded-lg px-3 py-2 text-[11px] leading-relaxed font-display"
                 style={{
                   background: 'var(--muted)',
-                  fontFamily: "'IBM Plex Mono', monospace",
                   color: 'var(--muted-foreground)',
                   opacity: 0.8,
                 }}
@@ -129,8 +128,8 @@ export default function OnboardingView() {
 
       {/* Import hint */}
       <p
-        className="text-center text-xs leading-relaxed max-w-sm mx-auto"
-        style={{ color: 'var(--muted-foreground)', opacity: 0.6, fontFamily: "'IBM Plex Mono', monospace" }}
+        className="text-center text-xs leading-relaxed max-w-sm mx-auto font-display"
+        style={{ color: 'var(--muted-foreground)', opacity: 0.6 }}
       >
         {ob.importHint}
       </p>

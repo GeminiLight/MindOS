@@ -71,7 +71,7 @@ function renderInline(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="font-family:\'IBM Plex Mono\',monospace;font-size:0.85em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="font-display" style="font-size:0.85em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>')
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) =>
       `<span style="color:var(--amber);cursor:pointer" title="${target}">${alias ?? target}</span>`)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:var(--amber)">$1</a>');
@@ -131,7 +131,7 @@ export function TimelineRenderer({ content }: RendererContext) {
 
   if (entries.length === 0) {
     return (
-      <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", fontSize: 13 }}>
+      <div className="font-display" style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
         No timeline entries found. Add <code style={{ background: 'var(--muted)', padding: '1px 6px', borderRadius: 4 }}>## 2025-01-15</code> headings to create entries.
       </div>
     );
@@ -141,7 +141,7 @@ export function TimelineRenderer({ content }: RendererContext) {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 0' }}>
       {/* count pill */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: 'var(--muted-foreground)' }}>
+        <span className="font-display" style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>
           {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
@@ -176,11 +176,11 @@ export function TimelineRenderer({ content }: RendererContext) {
             }}>
               {/* header */}
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                <span style={{ fontFamily: "'IBM Plex Sans',sans-serif", fontWeight: 600, fontSize: '0.9rem', color: 'var(--foreground)' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--foreground)' }}>
                   {entry.heading}
                 </span>
                 {entry.date && (
-                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: 'var(--muted-foreground)', opacity: 0.7, flexShrink: 0 }}>
+                  <span className="font-display" style={{ fontSize: '0.7rem', color: 'var(--muted-foreground)', opacity: 0.7, flexShrink: 0 }}>
                     {formatDate(entry.date)}
                   </span>
                 )}
@@ -197,7 +197,7 @@ export function TimelineRenderer({ content }: RendererContext) {
                   {entry.tags.map(tag => {
                     const c = tagColor(tag);
                     return (
-                      <span key={tag} style={{ fontSize: '0.68rem', padding: '1px 8px', borderRadius: 999, fontFamily: "'IBM Plex Mono',monospace", background: c.bg, color: c.text }}>
+                      <span key={tag} className="font-display" style={{ fontSize: '0.68rem', padding: '1px 8px', borderRadius: 999, background: c.bg, color: c.text }}>
                         #{tag}
                       </span>
                     );

@@ -202,8 +202,8 @@ export default function SetupWizard() {
                 </span>
               </div>
               <div
-                className="w-full rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed"
-                style={{ background: 'var(--muted)', fontFamily: "'IBM Plex Mono', monospace", color: 'var(--muted-foreground)' }}
+                className="w-full rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed font-display"
+                style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
               >
                 {tpl.dirs.map(d => <div key={d}>{d}</div>)}
               </div>
@@ -418,8 +418,8 @@ export default function SetupWizard() {
           <div className="inline-flex items-center gap-2 mb-2">
             <Sparkles size={18} style={{ color: 'var(--amber)' }} />
             <h1
-              className="text-2xl font-semibold tracking-tight"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: 'var(--foreground)' }}
+              className="text-2xl font-semibold tracking-tight font-display"
+              style={{ color: 'var(--foreground)' }}
             >
               MindOS
             </h1>

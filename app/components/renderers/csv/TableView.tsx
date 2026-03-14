@@ -71,7 +71,6 @@ export function TableView({ headers, rows, cfg, saveAction }: {
 
   const thStyle: React.CSSProperties = {
     borderBottom: '1px solid var(--border)',
-    fontFamily: "'IBM Plex Sans',sans-serif",
     fontSize: '0.72rem',
     letterSpacing: '0.05em',
     textTransform: 'uppercase',
@@ -110,7 +109,7 @@ export function TableView({ headers, rows, cfg, saveAction }: {
                     <td colSpan={visibleIndices.length + 1} className="px-4 py-1.5"
                       style={{ background: 'var(--accent)', borderBottom: '1px solid var(--border)', borderTop: '1px solid var(--border)' }}
                     >
-                      <span className="text-xs font-semibold" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}>
+                      <span className="text-xs font-semibold font-display" style={{ color: 'var(--muted-foreground)' }}>
                         {section.key} · {section.rows.length}
                       </span>
                     </td>
@@ -147,15 +146,15 @@ export function TableView({ headers, rows, cfg, saveAction }: {
         </table>
       </div>
       <div className="px-4 py-2 flex items-center justify-between" style={{ background: 'var(--muted)', borderTop: '1px solid var(--border)' }}>
-        <span className="text-xs" style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}>
+        <span className="text-xs font-display" style={{ color: 'var(--muted-foreground)' }}>
           {localRows.length} rows · {headers.length} cols
         </span>
         {!showAdd
           ? <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md"
-              style={{ color: 'var(--amber)', background: 'var(--amber-dim)', fontFamily: "'IBM Plex Mono',monospace" }}
+              style={{ color: 'var(--amber)', background: 'var(--amber-dim)' }}
             ><Plus size={12} /> Add row</button>
           : <button onClick={() => setShowAdd(false)} className="text-xs px-2.5 py-1 rounded-md"
-              style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace" }}
+              style={{ color: 'var(--muted-foreground)' }}
             >Cancel</button>
         }
       </div>

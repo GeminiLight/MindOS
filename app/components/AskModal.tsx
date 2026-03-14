@@ -244,7 +244,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/20 md:hidden" />
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Sparkles size={15} style={{ color: 'var(--amber)' }} />
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{t.ask.title}</span>
+            <span className="font-display">{t.ask.title}</span>
             {currentFile && (
               <span className="text-xs text-muted-foreground font-normal truncate max-w-[200px]">
                 — {currentFile.split('/').pop()}

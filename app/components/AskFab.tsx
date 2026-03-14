@@ -31,9 +31,9 @@ export default function AskFab() {
           active:scale-95
           cursor-pointer
           overflow-hidden
+          font-display
         "
         style={{
-          fontFamily: "'IBM Plex Mono', monospace",
           background: 'linear-gradient(135deg, #b07c2e 0%, #c8873a 50%, #d4943f 100%)',
           marginBottom: 'env(safe-area-inset-bottom, 0px)',
         }}

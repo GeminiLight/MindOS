@@ -358,7 +358,7 @@ function SectionCard({
       >
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
-          <span className={`text-xs font-semibold uppercase tracking-wider ${style.label}`} style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <span className={`text-xs font-semibold uppercase tracking-wider ${style.label} font-display`}>
             {name}
           </span>
           <span className="text-xs text-muted-foreground">{done}/{total}</span>
@@ -441,7 +441,7 @@ export function TodoRenderer({ content, saveAction }: RendererContext) {
     <div className="max-w-[900px] mx-auto xl:mr-[220px] px-0 py-2">
       {/* Summary header */}
       <div className="mb-6">
-        <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <p className="text-xs text-muted-foreground font-display">
           {totalDone} / {totalItems} completed
         </p>
         <div className="mt-1.5 w-48 h-1.5 bg-muted rounded-full overflow-hidden">

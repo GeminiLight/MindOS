@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { ROOT, BUILD_STAMP } from './constants.js';
+import { ROOT, BUILD_STAMP, DEPS_STAMP } from './constants.js';
 import { red, dim, yellow } from './colors.js';
 import { run } from './utils.js';
 
@@ -36,24 +37,58 @@ export function cleanNextDir() {
   }
 }
 
+function depsHash() {
+  const lockPath = resolve(ROOT, 'app', 'package-lock.json');
+  try {
+    const content = readFileSync(lockPath);
+    return createHash('sha256').update(content).digest('hex').slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+
+function depsChanged() {
+  const currentHash = depsHash();
+  if (!currentHash) return true;
+  try {
+    const savedHash = readFileSync(DEPS_STAMP, 'utf-8').trim();
+    return savedHash !== currentHash;
+  } catch {
+    return true;
+  }
+}
+
+function writeDepsStamp() {
+  const hash = depsHash();
+  if (hash) {
+    try { writeFileSync(DEPS_STAMP, hash, 'utf-8'); } catch {}
+  }
+}
+
 export function ensureAppDeps() {
   const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
-  if (!existsSync(appNext)) {
-    try {
-      execSync('npm --version', { stdio: 'pipe' });
-    } catch {
-      console.error(red('\n\u2718 npm not found in PATH.\n'));
-      console.error('  MindOS needs npm to install its app dependencies on first run.');
-      console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
-      console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
-      console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
-      console.error('  Example:');
-      console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
-      console.error(dim('    source ~/.profile\n'));
-      console.error('  Then run `mindos start` again.\n');
-      process.exit(1);
-    }
-    console.log(yellow('Installing app dependencies (first run)...\n'));
-    run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
+  const needsInstall = !existsSync(appNext) || depsChanged();
+  if (!needsInstall) return;
+
+  try {
+    execSync('npm --version', { stdio: 'pipe' });
+  } catch {
+    console.error(red('\n\u2718 npm not found in PATH.\n'));
+    console.error('  MindOS needs npm to install its app dependencies on first run.');
+    console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
+    console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
+    console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
+    console.error('  Example:');
+    console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
+    console.error(dim('    source ~/.profile\n'));
+    console.error('  Then run `mindos start` again.\n');
+    process.exit(1);
   }
+
+  const label = existsSync(appNext)
+    ? 'Updating app dependencies (package-lock.json changed)...\n'
+    : 'Installing app dependencies (first run)...\n';
+  console.log(yellow(label));
+  run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
+  writeDepsStamp();
 }

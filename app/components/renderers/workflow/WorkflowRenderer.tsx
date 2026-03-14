@@ -75,7 +75,7 @@ function parseWorkflow(content: string): { meta: WorkflowMeta; steps: WorkflowSt
 function renderInline(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, `<code style="font-family:'IBM Plex Mono',monospace;font-size:.82em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>`)
+    .replace(/`(.+?)`/g, `<code class="font-display" style="font-size:.82em;padding:1px 5px;border-radius:4px;background:var(--muted)">$1</code>`)
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
@@ -188,7 +188,7 @@ function StepCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px' }}>
         <StatusIcon status={step.status} />
         <span
-          style={{ flex: 1, fontFamily: "'IBM Plex Sans',sans-serif", fontWeight: 600, fontSize: '.88rem', color: 'var(--foreground)', cursor: hasBody || hasOutput ? 'pointer' : 'default' }}
+          style={{ flex: 1, fontWeight: 600, fontSize: '.88rem', color: 'var(--foreground)', cursor: hasBody || hasOutput ? 'pointer' : 'default' }}
           onClick={() => (hasBody || hasOutput) && setExpanded(v => !v)}
         >
           {step.heading}
@@ -204,7 +204,7 @@ function StepCard({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
-                  fontFamily: "'IBM Plex Mono',monospace", cursor: canRun ? 'pointer' : 'not-allowed',
+                  cursor: canRun ? 'pointer' : 'not-allowed',
                   border: 'none', background: canRun ? 'var(--amber)' : 'var(--muted)',
                   color: canRun ? '#131210' : 'var(--muted-foreground)',
                   opacity: canRun ? 1 : 0.5,
@@ -216,7 +216,7 @@ function StepCard({
                 onClick={onSkip}
                 style={{
                   padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem',
-                  fontFamily: "'IBM Plex Mono',monospace", cursor: 'pointer',
+                  cursor: 'pointer',
                   border: '1px solid var(--border)', background: 'transparent',
                   color: 'var(--muted-foreground)',
                 }}
@@ -226,12 +226,12 @@ function StepCard({
             </>
           )}
           {step.status === 'running' && (
-            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: 'var(--amber)' }}>executing…</span>
+            <span className="font-display" style={{ fontSize: '0.7rem', color: 'var(--amber)' }}>executing…</span>
           )}
           {(step.status === 'done' || step.status === 'error') && (
             <button
               onClick={() => setExpanded(v => !v)}
-              style={{ padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem', fontFamily: "'IBM Plex Mono',monospace", cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted-foreground)' }}
+              style={{ padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem', cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted-foreground)' }}
             >
               <ChevronDown size={11} style={{ display: 'inline', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
             </button>
@@ -251,10 +251,10 @@ function StepCard({
             <div style={{ padding: '10px 14px', background: 'var(--background)', position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
                 <Sparkles size={11} style={{ color: 'var(--amber)' }} />
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.06em' }}>AI Output</span>
+                <span className="font-display" style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.06em' }}>AI Output</span>
                 {step.status === 'running' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--amber)', animation: 'pulse 1.2s ease-in-out infinite', marginLeft: 4 }} />}
               </div>
-              <div style={{ fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '.82rem', lineHeight: 1.7, color: 'var(--foreground)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              <div style={{ fontSize: '.82rem', lineHeight: 1.7, color: 'var(--foreground)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {step.output}
               </div>
             </div>
@@ -326,7 +326,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
 
   if (steps.length === 0) {
     return (
-      <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>
+      <div className="font-display" style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 12 }}>
         No steps found. Add <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>## Step N: …</code> headings to define workflow steps.
       </div>
     );
@@ -337,7 +337,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
       {/* header */}
       <div style={{ marginBottom: '1.2rem' }}>
         {parsed.meta.description && (
-          <p style={{ fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '.82rem', color: 'var(--muted-foreground)', lineHeight: 1.6, marginBottom: 12 }}>
+          <p style={{ fontSize: '.82rem', color: 'var(--muted-foreground)', lineHeight: 1.6, marginBottom: 12 }}>
             {parsed.meta.description}
           </p>
         )}
@@ -348,7 +348,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
           <div style={{ flex: 1, minWidth: 120, height: 4, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progress}%`, background: 'var(--amber)', borderRadius: 999, transition: 'width .3s' }} />
           </div>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: 'var(--muted-foreground)', flexShrink: 0 }}>
+          <span className="font-display" style={{ fontSize: '0.7rem', color: 'var(--muted-foreground)', flexShrink: 0 }}>
             {doneCount}/{steps.length} done
           </span>
 
@@ -360,7 +360,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '4px 12px', borderRadius: 7, fontSize: '0.75rem',
-                fontFamily: "'IBM Plex Mono',monospace", cursor: running ? 'not-allowed' : 'pointer',
+                cursor: running ? 'not-allowed' : 'pointer',
                 border: 'none', background: running ? 'var(--muted)' : 'var(--amber)',
                 color: running ? 'var(--muted-foreground)' : '#131210',
                 opacity: running ? 0.7 : 1,
@@ -374,7 +374,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
           {/* reset */}
           <button
             onClick={reset}
-            style={{ padding: '4px 10px', borderRadius: 7, fontSize: '0.75rem', fontFamily: "'IBM Plex Mono',monospace", cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: 4 }}
+            style={{ padding: '4px 10px', borderRadius: 7, fontSize: '0.75rem', cursor: 'pointer', border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: 4 }}
           >
             <RotateCcw size={11} /> Reset
           </button>

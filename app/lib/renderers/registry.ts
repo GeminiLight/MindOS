@@ -15,8 +15,11 @@ export interface RendererDefinition {
   icon: string;          // emoji or short string
   tags: string[];
   builtin: boolean;      // true = ships with MindOS; false = user-installed (future)
+  entryPath?: string;    // canonical entry file shown on home page (e.g. 'TODO.md')
   match: (ctx: Pick<RendererContext, 'filePath' | 'extension'>) => boolean;
-  component: ComponentType<RendererContext>;
+  // Provide either `component` (eager) or `load` (lazy). Prefer `load` for code-splitting.
+  component?: ComponentType<RendererContext>;
+  load?: () => Promise<{ default: ComponentType<RendererContext> }>;
 }
 
 const registry: RendererDefinition[] = [];

@@ -136,9 +136,8 @@ const WikiNode = memo(function WikiNode({ data }: NodeProps) {
     <div
       onClick={handleClick}
       title={id as string}
-      className="group"
+      className="group font-display"
       style={{
-        fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 10 * scale,
         padding: `${4 * scale}px ${12 * scale}px`,
         borderRadius: 999, // Pill shape
@@ -326,7 +325,7 @@ export function GraphRenderer({ filePath }: RendererContext) {
           justifyContent: 'center',
         }}
       >
-        <span style={{ color: 'var(--muted-foreground)', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
+        <span className="font-display" style={{ color: 'var(--muted-foreground)', fontSize: 12 }}>
           {loading ? 'Building graph…' : 'Loading…'}
         </span>
       </div>
@@ -346,8 +345,8 @@ export function GraphRenderer({ filePath }: RendererContext) {
         }}
       >
         <span
+          className="font-display"
           style={{
-            fontFamily: "'IBM Plex Mono', monospace",
             fontSize: 11,
             color: 'var(--muted-foreground)',
           }}
@@ -368,11 +367,11 @@ export function GraphRenderer({ filePath }: RendererContext) {
             <button
               key={btn.id}
               onClick={() => setScope(btn.id)}
+              className="font-display"
               style={{
                 padding: '3px 12px',
                 borderRadius: 5,
                 fontSize: 11,
-                fontFamily: "'IBM Plex Mono', monospace",
                 cursor: 'pointer',
                 border: 'none',
                 outline: 'none',
