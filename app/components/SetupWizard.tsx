@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sparkles, Globe, BookOpen, FileText, Copy, Check, RefreshCw,
   Loader2, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
@@ -29,6 +29,7 @@ interface SetupState {
 interface PortStatus {
   checking: boolean;
   available: boolean | null;
+  isSelf: boolean;
   suggestion: number | null;
 }
 
@@ -69,13 +70,15 @@ function Step4Inner({
   webPassword: string;
   onPasswordChange: (v: string) => void;
   s: {
-    authToken: string; authTokenHint: string; authTokenSeed: string; authTokenSeedHint: string;
+    authToken: string; authTokenHint: string; authTokenUsage: string; authTokenUsageWhat: string;
+    authTokenSeed: string; authTokenSeedHint: string;
     generateToken: string; copyToken: string; copiedToken: string;
     webPassword: string; webPasswordHint: string;
   };
 }) {
   const [seed, setSeed] = useState('');
   const [showSeed, setShowSeed] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
   return (
     <div className="space-y-5">
       <Field label={s.authToken} hint={s.authTokenHint}>
@@ -94,6 +97,18 @@ function Step4Inner({
           </button>
         </div>
       </Field>
+      <div className="space-y-1.5">
+        <button onClick={() => setShowUsage(!showUsage)} className="text-xs underline"
+          style={{ color: 'var(--muted-foreground)' }}>
+          {s.authTokenUsageWhat}
+        </button>
+        {showUsage && (
+          <p className="text-xs leading-relaxed px-3 py-2 rounded-lg"
+            style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+            {s.authTokenUsage}
+          </p>
+        )}
+      </div>
       <div>
         <button onClick={() => setShowSeed(!showSeed)} className="text-xs underline"
           style={{ color: 'var(--muted-foreground)' }}>
@@ -125,7 +140,7 @@ function PortField({
   onChange: (v: number) => void;
   status: PortStatus;
   onCheckPort: (port: number) => void;
-  s: { portChecking: string; portInUse: (p: number) => string; portSuggest: (p: number) => string; portAvailable: string };
+  s: { portChecking: string; portInUse: (p: number) => string; portSuggest: (p: number) => string; portAvailable: string; portSelf: string };
 }) {
   return (
     <Field label={label} hint={hint}>
@@ -160,7 +175,7 @@ function PortField({
         )}
         {!status.checking && status.available === true && (
           <p className="text-xs flex items-center gap-1" style={{ color: '#22c55e' }}>
-            <CheckCircle2 size={11} /> {s.portAvailable}
+            <CheckCircle2 size={11} /> {status.isSelf ? s.portSelf : s.portAvailable}
           </p>
         )}
       </div>
@@ -168,19 +183,161 @@ function PortField({
   );
 }
 
+// Derive parent dir from current input for ls — supports both / and \ separators
+function getParentDir(p: string): string {
+  if (!p.trim()) return '';
+  const trimmed = p.trim();
+  // Already a directory (ends with separator)
+  if (trimmed.endsWith('/') || trimmed.endsWith('\\')) return trimmed;
+  // Find last separator (/ or \)
+  const lastSlash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSlash >= 0 ? trimmed.slice(0, lastSlash + 1) : '';
+}
+
 // ─── Step 1: Knowledge Base ───────────────────────────────────────────────────
 function Step1({
-  state, update, t,
+  state, update, t, homeDir,
 }: {
   state: SetupState;
   update: <K extends keyof SetupState>(key: K, val: SetupState[K]) => void;
   t: ReturnType<typeof useLocale>['t'];
+  homeDir: string;
 }) {
   const s = t.setup;
+  // Build platform-aware placeholder, e.g. /Users/alice/MindOS/mind or C:\Users\alice\MindOS\mind
+  // Windows homedir always contains \, e.g. C:\Users\Alice — safe to detect by separator
+  const sep = homeDir.includes('\\') ? '\\' : '/';
+  const placeholder = homeDir !== '~' ? [homeDir, 'MindOS', 'mind'].join(sep) : s.kbPathDefault;
+  const [pathInfo, setPathInfo] = useState<{ exists: boolean; empty: boolean; count: number } | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Debounced autocomplete
+  useEffect(() => {
+    if (!state.mindRoot.trim()) { setSuggestions([]); return; }
+    const timer = setTimeout(() => {
+      const parent = getParentDir(state.mindRoot) || homeDir;
+      fetch('/api/setup/ls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: parent }),
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (!d.dirs?.length) { setSuggestions([]); return; }
+          // Normalize parent to end with a separator (preserve existing / or \)
+          const endsWithSep = parent.endsWith('/') || parent.endsWith('\\');
+          const localSep = parent.includes('\\') ? '\\' : '/';
+          const parentNorm = endsWithSep ? parent : parent + localSep;
+          const typed = state.mindRoot.trim();
+          const full: string[] = (d.dirs as string[]).map((dir: string) => parentNorm + dir);
+          const endsWithAnySep = typed.endsWith('/') || typed.endsWith('\\');
+          const filtered = endsWithAnySep ? full : full.filter(f => f.startsWith(typed));
+          setSuggestions(filtered.slice(0, 8));
+          setShowSuggestions(filtered.length > 0);
+          setActiveSuggestion(-1);
+        })
+        .catch(() => setSuggestions([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [state.mindRoot, homeDir]);
+
+  // Debounced path check
+  useEffect(() => {
+    if (!state.mindRoot.trim()) { setPathInfo(null); return; }
+    const timer = setTimeout(() => {
+      fetch('/api/setup/check-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: state.mindRoot }),
+      })
+        .then(r => r.json())
+        .then(d => setPathInfo(d))
+        .catch(() => setPathInfo(null));
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [state.mindRoot]);
+
+  const hideSuggestions = () => {
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setActiveSuggestion(-1);
+  };
+
+  const selectSuggestion = (val: string) => {
+    update('mindRoot', val);
+    hideSuggestions();
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestion(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestion(i => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && activeSuggestion >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeSuggestion]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Field label={s.kbPath} hint={s.kbPathHint}>
-        <Input value={state.mindRoot} onChange={e => update('mindRoot', e.target.value)} placeholder={s.kbPathDefault} />
+        <div className="relative">
+          <input
+            ref={inputRef}
+            value={state.mindRoot}
+            onChange={e => { update('mindRoot', e.target.value); setShowSuggestions(true); }}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setTimeout(() => hideSuggestions(), 150)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors"
+            style={{
+              background: 'var(--input, var(--card))',
+              borderColor: 'var(--border)',
+              color: 'var(--foreground)',
+            }}
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border overflow-auto"
+              style={{
+                background: 'var(--card)',
+                borderColor: 'var(--border)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                maxHeight: '220px',
+              }}>
+              {suggestions.map((suggestion, i) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onMouseDown={() => selectSuggestion(suggestion)}
+                  className="w-full text-left px-3 py-2 text-sm font-mono transition-colors"
+                  style={{
+                    background: i === activeSuggestion ? 'var(--muted)' : 'transparent',
+                    color: 'var(--foreground)',
+                    borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+                  }}>
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {pathInfo?.exists && !pathInfo.empty && (
+          <p className="text-xs flex items-center gap-1 mt-1.5" style={{ color: 'var(--amber)' }}>
+            <AlertTriangle size={11} /> {s.kbPathExists(pathInfo.count)}
+          </p>
+        )}
       </Field>
       <div>
         <label className="text-sm text-foreground font-medium mb-3 block">{s.template}</label>
@@ -291,14 +448,14 @@ function Step3({
     <div className="space-y-5">
       <PortField
         label={s.webPort} hint={s.portHint} value={state.webPort}
-        onChange={v => { update('webPort', v); setWebPortStatus({ checking: false, available: null, suggestion: null }); }}
+        onChange={v => { update('webPort', v); setWebPortStatus({ checking: false, available: null, isSelf: false, suggestion: null }); }}
         status={webPortStatus}
         onCheckPort={port => checkPort(port, 'web')}
         s={s}
       />
       <PortField
         label={s.mcpPort} hint={s.portHint} value={state.mcpPort}
-        onChange={v => { update('mcpPort', v); setMcpPortStatus({ checking: false, available: null, suggestion: null }); }}
+        onChange={v => { update('mcpPort', v); setMcpPortStatus({ checking: false, available: null, isSelf: false, suggestion: null }); }}
         status={mcpPortStatus}
         onCheckPort={port => checkPort(port, 'mcp')}
         s={s}
@@ -428,23 +585,89 @@ function Step5({
               </Select>
             </Field>
           </div>
-          {selectedAgents.size === 0 && (
-            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentNoneSelected}</p>
-          )}
+          <button
+            type="button"
+            onClick={() => setSelectedAgents(new Set())}
+            className="text-xs underline mt-1"
+            style={{ color: 'var(--muted-foreground)' }}>
+            {s.agentSkipLater}
+          </button>
         </>
       )}
     </div>
   );
 }
 
+// ─── Restart Block ────────────────────────────────────────────────────────────
+function RestartBlock({ s, newPort }: { s: ReturnType<typeof useLocale>['t']['setup']; newPort: number }) {
+  const [restarting, setRestarting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    try {
+      await fetch('/api/restart', { method: 'POST' });
+      setDone(true);
+      const redirect = () => { window.location.href = `http://localhost:${newPort}/?welcome=1`; };
+      // Poll the new port until ready, then redirect
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch(`http://localhost:${newPort}/api/health`);
+          const d = await r.json();
+          if (d.service === 'mindos') { clearInterval(poll); redirect(); return; }
+        } catch { /* not ready yet */ }
+        if (attempts >= 10) { clearInterval(poll); redirect(); }
+      }, 800);
+    } catch {
+      setRestarting(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="p-3 rounded-lg text-sm flex items-center gap-2"
+        style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>
+        <CheckCircle2 size={14} /> {s.restartDone}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="p-3 rounded-lg text-sm flex items-center gap-2"
+        style={{ background: 'rgba(200,135,30,0.1)', color: 'var(--amber)' }}>
+        <AlertTriangle size={14} /> {s.restartRequired}
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleRestart}
+          disabled={restarting}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors disabled:opacity-50"
+          style={{ background: 'var(--amber)', color: 'white' }}>
+          {restarting ? <Loader2 size={13} className="animate-spin" /> : null}
+          {restarting ? s.restarting : s.restartNow}
+        </button>
+        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+          {s.restartManual} <code className="font-mono">mindos start</code>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Step 6: Review ───────────────────────────────────────────────────────────
 function Step6({
-  state, selectedAgents, error, portChanged, maskKey, s,
+  state, selectedAgents, agentStatuses, onRetryAgent, error, needsRestart, maskKey, s,
 }: {
   state: SetupState;
   selectedAgents: Set<string>;
+  agentStatuses: Record<string, AgentInstallStatus>;
+  onRetryAgent: (key: string) => void;
   error: string;
-  portChanged: boolean;
+  needsRestart: boolean;
   maskKey: (key: string) => string;
   s: ReturnType<typeof useLocale>['t']['setup'];
 }) {
@@ -463,6 +686,8 @@ function Step6({
     [s.agentToolsTitle, selectedAgents.size > 0 ? Array.from(selectedAgents).join(', ') : '—'],
   ];
 
+  const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
+
   return (
     <div className="space-y-5">
       <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
@@ -478,23 +703,33 @@ function Step6({
           </div>
         ))}
       </div>
+      {failedAgents.length > 0 && (
+        <div className="p-3 rounded-lg space-y-2" style={{ background: 'rgba(239,68,68,0.08)' }}>
+          <p className="text-xs font-medium" style={{ color: '#ef4444' }}>{s.reviewInstallResults}</p>
+          {failedAgents.map(([key, st]) => (
+            <div key={key} className="flex items-center justify-between gap-2">
+              <span className="text-xs flex items-center gap-1" style={{ color: '#ef4444' }}>
+                <XCircle size={11} /> {key}{st.message ? ` — ${st.message}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRetryAgent(key)}
+                disabled={st.state === 'installing'}
+                className="text-xs px-2 py-0.5 rounded border transition-colors disabled:opacity-40"
+                style={{ borderColor: '#ef4444', color: '#ef4444' }}>
+                {st.state === 'installing' ? <Loader2 size={10} className="animate-spin inline" /> : s.retryAgent}
+              </button>
+            </div>
+          ))}
+          <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentFailureNote}</p>
+        </div>
+      )}
       {error && (
         <div className="p-3 rounded-lg text-sm text-red-500" style={{ background: 'rgba(239,68,68,0.1)' }}>
           {s.completeFailed}: {error}
         </div>
       )}
-      {portChanged && (
-        <div className="space-y-3">
-          <div className="p-3 rounded-lg text-sm flex items-center gap-2"
-            style={{ background: 'rgba(200,135,30,0.1)', color: 'var(--amber)' }}>
-            <AlertTriangle size={14} /> {s.portChanged}
-          </div>
-          <a href="/" className="inline-flex items-center gap-1 px-4 py-2 text-sm rounded-lg transition-colors"
-            style={{ background: 'var(--amber)', color: 'white' }}>
-            {s.completeDone} &rarr;
-          </a>
-        </div>
-      )}
+      {needsRestart && <RestartBlock s={s} newPort={state.webPort} />}
     </div>
   );
 }
@@ -538,7 +773,7 @@ export default function SetupWizard() {
 
   const [step, setStep] = useState(0);
   const [state, setState] = useState<SetupState>({
-    mindRoot: '~/MindOS',
+    mindRoot: '~/MindOS/mind',
     template: 'en',
     provider: 'anthropic',
     anthropicKey: '',
@@ -551,13 +786,15 @@ export default function SetupWizard() {
     authToken: '',
     webPassword: '',
   });
+  const [homeDir, setHomeDir] = useState('~');
   const [tokenCopied, setTokenCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const [error, setError] = useState('');
-  const [portChanged, setPortChanged] = useState(false);
+  const [needsRestart, setNeedsRestart] = useState(false);
 
-  const [webPortStatus, setWebPortStatus] = useState<PortStatus>({ checking: false, available: null, suggestion: null });
-  const [mcpPortStatus, setMcpPortStatus] = useState<PortStatus>({ checking: false, available: null, suggestion: null });
+  const [webPortStatus, setWebPortStatus] = useState<PortStatus>({ checking: false, available: null, isSelf: false, suggestion: null });
+  const [mcpPortStatus, setMcpPortStatus] = useState<PortStatus>({ checking: false, available: null, isSelf: false, suggestion: null });
 
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
@@ -566,12 +803,39 @@ export default function SetupWizard() {
   const [agentScope, setAgentScope] = useState<'global' | 'project'>('global');
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentInstallStatus>>({});
 
-  // Generate token on mount
+  // Load existing config as defaults on mount, generate token if none exists
   useEffect(() => {
-    fetch('/api/setup/generate-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    fetch('/api/setup')
       .then(r => r.json())
-      .then(data => { if (data.token) setState(prev => ({ ...prev, authToken: data.token })); })
-      .catch(() => {});
+      .then(data => {
+        if (data.homeDir) setHomeDir(data.homeDir);
+        setState(prev => ({
+          ...prev,
+          mindRoot: data.mindRoot || prev.mindRoot,
+          webPort: typeof data.port === 'number' ? data.port : prev.webPort,
+          mcpPort: typeof data.mcpPort === 'number' ? data.mcpPort : prev.mcpPort,
+          authToken: data.authToken || prev.authToken,
+          webPassword: data.webPassword || prev.webPassword,
+          provider: (data.provider === 'anthropic' || data.provider === 'openai') ? data.provider : prev.provider,
+          anthropicModel: data.anthropicModel || prev.anthropicModel,
+          openaiModel: data.openaiModel || prev.openaiModel,
+          openaiBaseUrl: data.openaiBaseUrl ?? prev.openaiBaseUrl,
+        }));
+        // Generate a new token only if none exists yet
+        if (!data.authToken) {
+          fetch('/api/setup/generate-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json())
+            .then(tokenData => { if (tokenData.token) setState(p => ({ ...p, authToken: tokenData.token })); })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        // Fallback: generate token on failure
+        fetch('/api/setup/generate-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+          .then(r => r.json())
+          .then(data => { if (data.token) setState(prev => ({ ...prev, authToken: data.token })); })
+          .catch(() => {});
+      });
   }, []);
 
   // Auto-check ports when entering Step 3
@@ -627,7 +891,7 @@ export default function SetupWizard() {
   const checkPort = useCallback(async (port: number, which: 'web' | 'mcp') => {
     if (port < 1024 || port > 65535) return;
     const setStatus = which === 'web' ? setWebPortStatus : setMcpPortStatus;
-    setStatus({ checking: true, available: null, suggestion: null });
+    setStatus({ checking: true, available: null, isSelf: false, suggestion: null });
     try {
       const res = await fetch('/api/setup/check-port', {
         method: 'POST',
@@ -635,9 +899,9 @@ export default function SetupWizard() {
         body: JSON.stringify({ port }),
       });
       const data = await res.json();
-      setStatus({ checking: false, available: data.available ?? null, suggestion: data.suggestion ?? null });
+      setStatus({ checking: false, available: data.available ?? null, isSelf: !!data.isSelf, suggestion: data.suggestion ?? null });
     } catch {
-      setStatus({ checking: false, available: null, suggestion: null });
+      setStatus({ checking: false, available: null, isSelf: false, suggestion: null });
     }
   }, []);
 
@@ -666,7 +930,7 @@ export default function SetupWizard() {
   const handleComplete = async () => {
     setSubmitting(true);
     setError('');
-    let didPortChange = false;
+    let restartNeeded = false;
 
     // 1. Save setup config
     try {
@@ -692,8 +956,8 @@ export default function SetupWizard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      didPortChange = !!data.portChanged;
-      if (didPortChange) setPortChanged(true);
+      restartNeeded = !!data.needsRestart;
+      if (restartNeeded) setNeedsRestart(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
@@ -734,13 +998,37 @@ export default function SetupWizard() {
     }
 
     setSubmitting(false);
+    setCompleted(true);
 
-    if (didPortChange) {
-      // Port changed — stay on page, show restart hint
+    if (restartNeeded) {
+      // Config changed requiring restart — stay on page, show restart block
       return;
     }
-    window.location.href = '/';
+    window.location.href = '/?welcome=1';
   };
+
+  const retryAgent = useCallback(async (key: string) => {
+    setAgentStatuses(prev => ({ ...prev, [key]: { state: 'installing' } }));
+    try {
+      const res = await fetch('/api/mcp/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agents: [{ key, scope: agentScope }],
+          transport: agentTransport,
+          url: `http://localhost:${state.mcpPort}/mcp`,
+          token: state.authToken || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.results?.[0]) {
+        const r = data.results[0] as { agent: string; status: string; message?: string };
+        setAgentStatuses(prev => ({ ...prev, [key]: { state: r.status === 'ok' ? 'ok' : 'error', message: r.message } }));
+      }
+    } catch {
+      setAgentStatuses(prev => ({ ...prev, [key]: { state: 'error' } }));
+    }
+  }, [agentScope, agentTransport, state.mcpPort, state.authToken]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
@@ -763,7 +1051,7 @@ export default function SetupWizard() {
           {s.stepTitles[step]}
         </h2>
 
-        {step === 0 && <Step1 state={state} update={update} t={t} />}
+        {step === 0 && <Step1 state={state} update={update} t={t} homeDir={homeDir} />}
         {step === 1 && <Step2 state={state} update={update} s={s} />}
         {step === 2 && (
           <Step3
@@ -793,7 +1081,8 @@ export default function SetupWizard() {
         {step === 5 && (
           <Step6
             state={state} selectedAgents={selectedAgents}
-            error={error} portChanged={portChanged}
+            agentStatuses={agentStatuses} onRetryAgent={retryAgent}
+            error={error} needsRestart={needsRestart}
             maskKey={maskKey} s={s}
           />
         )}
@@ -816,14 +1105,23 @@ export default function SetupWizard() {
               style={{ background: 'var(--amber)', color: 'white' }}>
               {s.next} <ChevronRight size={14} />
             </button>
+          ) : completed ? (
+            // After completing: show Done link (no restart needed) or nothing (RestartBlock handles it)
+            !needsRestart ? (
+              <a href="/?welcome=1"
+                className="flex items-center gap-1 px-5 py-2 text-sm font-medium rounded-lg transition-colors"
+                style={{ background: 'var(--amber)', color: 'white' }}>
+                {s.completeDone} &rarr;
+              </a>
+            ) : null
           ) : (
             <button
               onClick={handleComplete}
-              disabled={submitting || portChanged}
+              disabled={submitting}
               className="flex items-center gap-1 px-5 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
               style={{ background: 'var(--amber)', color: 'white' }}>
               {submitting && <Loader2 size={14} className="animate-spin" />}
-              {submitting ? s.completing : portChanged ? s.completeDone : s.complete}
+              {submitting ? s.completing : s.complete}
             </button>
           )}
         </div>

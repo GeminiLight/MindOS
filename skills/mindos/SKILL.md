@@ -1,14 +1,15 @@
 ---
 name: mindos
 description: >
-  MindOS knowledge base operation guide for agent tasks on local markdown/csv knowledge bases.
-  Use proactively whenever work touches note files, SOP/workflow docs, profile/context docs,
-  CSV tables, knowledge-base organization, cross-agent handoff, or decision sync through MindOS MCP tools.
-  Trigger on requests like "update notes", "search knowledge base", "organize files", "execute SOP",
+  MindOS knowledge base operation guide, only for agent tasks on files inside the MindOS knowledge base (mindRoot path).
+  Trigger only when the target files are inside the MindOS knowledge base directory.
+  Typical requests: "update notes", "search knowledge base", "organize files", "execute SOP",
   "review with our standards", "handoff to another agent", "sync decisions", "append CSV",
   "retrospective", "distill this conversation", "capture key learnings", "update related docs adaptively",
-  "route this to the right files", "update everything related", "sync this across my knowledge base",
-  and generally any local knowledge-maintenance workflow even if the user does not explicitly mention MindOS.
+  "route this to the right files", "update everything related", "sync this across my knowledge base".
+  Do NOT trigger when: the target is a local code repository file (e.g. /code/xxx/wiki/*.md),
+  the user provides an absolute path that is not under MindOS mindRoot,
+  or the task involves modifying project source code or project documentation.
 ---
 
 # MindOS Knowledge Base Operation Guide

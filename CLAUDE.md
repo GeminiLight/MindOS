@@ -1,29 +1,61 @@
 ## 项目规则
 
-1. `app/data/skills/mindos/SKILL.md` 必须和 `skills/mindos/SKILL.md` 保持一致。如果不一致，直接 copy `skills/mindos/SKILL.md`，直接用命令行的方式对比。
+### 任务执行流程
 
-你再review下，找些建议和可提升的地方
+1. 从 **roadmap / backlog** 取任务，确认阶段匹配
+2. 写 **stage / spec**，明确边界和验收标准
+3. **human review + AI review** spec
+4. **执行**
+5. **code review**
+6. **结果验证**
 
-有任务，先spec，review spec 再执行，再review code 和结果
-REAMDE.md和REAMDE-zh.md必须保持一致
+- 不要估算工时
 
-项目写wiki和tests
+### 并行任务防重复
 
-roadmap 到 spec 到 review （human + ai）
+执行前先检查任务状态，避免重复执行已完成的任务。并行任务可能导致某些任务已被完成，记得先对比查看。
 
-并行任务可能导致有些任务已经被完成了，记得先对比查看下
+### 代码更新后置流程
 
-更新代码需要判断是否增加tests、最后更新wiki
+开发中实时做，提交前 checklist 最后确认：
 
-不要
-再估算工时
+```
+改代码 → tests（新功能写上，修 bug 视情况补）→ 更新 wiki
+```
 
-记录我的每一次对话，分类，记录我期望的workflow是否完成
+### 文档一致性规则
 
-backlog更新下，是需要添加chan  
-  gelog还是这里打勾      
+- `README.md` 和 `README-zh.md` 必须保持一致
+- `skills/mindos/SKILL.md` 和 `app/data/skills/mindos/SKILL.md` 必须保持一致（不一致时以 `skills/` 为准）
+
+### 对话记录规则
+
+记录每次对话，分类存入 MindOS 笔记，标注期望的 workflow 是否完成。
+
+<!-- TODO: 补充对话分类方式（如：需求讨论 / bug fix / 流程优化 / ...） -->
+
+### Backlog 与 Changelog 维护规则
+
+- **Backlog**（`wiki/85-backlog.md`）：追踪待办 / 进行中 / 已完成任务，完成后打勾
+- **Changelog**（`wiki/90-changelog.md`）：发版时从已完成的 backlog 条目批量整理写入，面向用户描述变更
 
 ## Git 提交流程
+
+### Commit 前 Checklist
+
+提交前确认以下事项：
+
+- [ ] tests 通过（新功能已写 tests，修 bug 视情况补）
+- [ ] code review 完成
+- [ ] wiki 已更新（架构变更、API 变更、新坑等）
+- [ ] backlog 已打勾（完成的任务标记为完成）
+- [ ] changelog 已更新（发版时从 backlog 整理写入 `wiki/90-changelog.md`）
+- [ ] 文档一致性检查（README 双语、SKILL.md 副本）
+- [ ] 无 debug 代码 / console.log 遗留
+- [ ] 无敏感信息混入（API key、密码等）
+- [ ] 无不相关的临时文件混入
+
+### 提交步骤
 
 当用户让我 commit 时，按以下流程执行：
 
@@ -33,7 +65,7 @@ backlog更新下，是需要添加chan
 4. **提交并 push**：`git add <files> && git commit && git push origin main`
 5. **确认发版**：提交后主动询问用户：
    - "是否需要发布新版本到 npm？"
-   - 如果是，确认 bump 级别：`patch`（bug fix）/ `minor`（新功能）/ `major`（破坏性变更）
+   - 如果是，默认使用 `patch`，除非用户指定 `minor`（新功能）或 `major`（破坏性变更）
    - 然后执行 `npm run release [patch|minor|major]`
 
 ### 发版说明
@@ -41,3 +73,16 @@ backlog更新下，是需要添加chan
 - push 到 main 会触发 `sync-to-mindos` workflow（同步到公开仓 + 部署 landing page）
 - 只有打 `v*.*.*` tag 才会触发 `publish-npm` workflow（发布到 npm）
 - `npm run release` 会自动：检查工作区干净 → 跑测试 → bump 版本 → 打 tag → push → 等待 CI
+
+## Skill 优化流程
+
+1. **收集 Bad Case**：用户描述或提供 `BAD_CASES.md`，记录具体的错误行为
+2. **读取 Skill**：读取 `skills/<name>/SKILL.md`，理解当前 description 和执行逻辑
+3. **定位根因**：判断问题出在 trigger 描述、执行模式、工具选型，还是边界条件缺失
+4. **提出修复方案**：给出具体的改动建议，说明改了什么、为什么
+5. **用户确认**：等用户确认方向后再动手
+6. **同步更新所有副本**：
+   - `skills/<name>/SKILL.md`（中文版同步修改英文版，反之亦然）
+   - `app/data/skills/<name>/SKILL.md`（按 CLAUDE.md 规则与 skills/ 保持一致）
+   - `.claude-internal/skills/<name>/SKILL.md`（若存在）
+7. **验证一致性**：用命令行 diff 确认所有副本内容相同

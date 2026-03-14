@@ -6,7 +6,7 @@
  * Usage: npm run setup  OR  mindos onboard
  *
  * Steps:
- *   1. Choose knowledge base path → default ~/MindOS
+ *   1. Choose knowledge base path → default ~/MindOS/mind (same as GUI)
  *   2. Choose template (en / zh / empty / custom) → copy to knowledge base path
  *   3. Choose ports (web + mcp) — checked for conflicts upfront
  *   4. Auth token (auto-generated or passphrase-seeded)
@@ -29,6 +29,8 @@ import { pipeline } from 'node:stream/promises';
 import { execSync, spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { createConnection } from 'node:net';
+import http from 'node:http';
+import { MCP_AGENTS } from '../bin/lib/mcp-agents.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -39,21 +41,21 @@ const CONFIG_PATH = resolve(MINDOS_DIR, 'config.json');
 
 const T = {
   title:          { en: '🧠 MindOS Setup', zh: '🧠 MindOS 初始化' },
-  langHint:       { en: '  ← → switch language / 切换语言    ↑ ↓ navigate    Enter confirm', zh: '  ← → switch language / 切换语言    ↑ ↓ 上下切换    Enter 确认' },
+  langHint:       { en: '  ← → 切换中文    ↑ ↓ navigate    Enter confirm', zh: '  ← → switch to English    ↑ ↓ 上下切换    Enter 确认' },
 
   // mode selection
-  modePrompt:     { en: 'Setup mode', zh: '配置方式' },
-  modeOpts:       { en: ['CLI — terminal wizard', 'GUI — browser wizard (recommended)'], zh: ['CLI — 终端向导', 'GUI — 浏览器向导（推荐）'] },
+  modePrompt:     { en: 'How would you like to set up?', zh: '选择配置方式' },
+  modeOpts:       { en: ['Continue here in terminal (CLI)', 'Open browser to set up (recommended)'], zh: ['在终端继续配置（CLI）', '打开浏览器配置（推荐）'] },
   modeVals:       ['cli', 'gui'],
-  guiStarting:    { en: '⏳ Starting server for GUI setup...', zh: '⏳ 正在启动服务...' },
-  guiReady:       { en: (url) => `🌐 Complete setup in browser: ${url}`, zh: (url) => `🌐 在浏览器中完成配置: ${url}` },
+  guiStarting:    { en: '⏳ Starting MindOS, please wait...', zh: '⏳ 正在启动 MindOS，请稍候...' },
+  guiReady:       { en: (url) => `🌐 Opening setup in browser: ${url}`, zh: (url) => `🌐 在浏览器中打开配置页面: ${url}` },
   guiOpenFailed:  { en: (url) => `  Could not open browser automatically. Open this URL manually:\n  ${url}`, zh: (url) => `  无法自动打开浏览器，请手动访问：\n  ${url}` },
 
   // step labels
   step:           { en: (n, total) => `Step ${n}/${total}`, zh: (n, total) => `步骤 ${n}/${total}` },
   stepTitles:     {
-    en: ['Knowledge Base', 'Template', 'Ports', 'Auth Token', 'Web Password', 'AI Provider', 'Start Mode', 'Agent Tools'],
-    zh: ['知识库',         '模板',     '端口',   'Auth Token', 'Web 密码',     'AI 服务商',    '启动方式',    'Agent 工具'],
+    en: ['Knowledge Base', 'AI Provider', 'Ports', 'Auth Token', 'Web Password', 'Start Mode', 'Agent Tools'],
+    zh: ['知识库',         'AI 服务商',    '端口',   'Auth Token', 'Web 密码',     '启动方式',    'Agent 工具'],
   },
 
   // path
@@ -131,6 +133,11 @@ const T = {
   mcpInstallDone: { en: (n) => `✔ ${n} agent(s) configured`, zh: (n) => `✔ 已配置 ${n} 个 Agent` },
   mcpSkipped:     { en: '  → Skipped. Run `mindos mcp install` anytime to configure agents.', zh: '  → 已跳过。随时运行 `mindos mcp install` 配置 Agent。' },
 
+  // restart prompts (re-onboard with config changes)
+  restartRequired:   { en: 'Config changed. Service restart required.', zh: '配置已变更，需要重启服务。' },
+  restartNow:        { en: 'Restart now?', zh: '立即重启？' },
+  changesOnNextStart: { en: 'Changes will take effect on next start.', zh: '变更将在下次启动时生效。' },
+
   // next steps (onboard — keep it minimal, details shown on `mindos start`)
   nextSteps: {
     en: (cmd) => [
@@ -171,7 +178,26 @@ function write(s) { process.stdout.write(s); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let uiLang = 'en';
+function detectSystemLang() {
+  // Check env vars first (Linux / macOS / WSL)
+  const vars = [
+    process.env.LANG,
+    process.env.LC_ALL,
+    process.env.LC_MESSAGES,
+    process.env.LANGUAGE,
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (vars.includes('zh')) return 'zh';
+
+  // Fallback: Intl API (works on Windows where LANG is often unset)
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+    if (locale.toLowerCase().startsWith('zh')) return 'zh';
+  } catch {}
+
+  return 'en';
+}
+
+let uiLang = detectSystemLang();
 const t = (key) => T[key]?.[uiLang] ?? T[key]?.en ?? '';
 const tf = (key, ...args) => {
   const v = T[key]?.[uiLang] ?? T[key]?.en;
@@ -180,7 +206,7 @@ const tf = (key, ...args) => {
 
 // ── Step header ───────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 function stepHeader(n) {
   const title = T.stepTitles[uiLang][n - 1] ?? T.stepTitles.en[n - 1];
   const stepLabel = tf('step', n, TOTAL_STEPS);
@@ -397,13 +423,32 @@ function isPortInUse(port) {
   return new Promise((resolve) => {
     const sock = createConnection({ port, host: '127.0.0.1' });
     const cleanup = (result) => { sock.destroy(); resolve(result); };
-    sock.setTimeout(500, () => cleanup(false));
+    sock.setTimeout(500, () => cleanup(true));
     sock.once('connect', () => cleanup(true));
     sock.once('error', (err) => {
       // ECONNREFUSED = nothing listening → free; other errors = treat as in-use
       cleanup(err.code !== 'ECONNREFUSED');
     });
   });
+}
+
+async function isSelfPort(port) {
+  try {
+    return await new Promise((resolve) => {
+      const req = http.get(`http://127.0.0.1:${port}/api/health`, { timeout: 800 }, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            resolve(data.service === 'mindos');
+          } catch { resolve(false); }
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+  } catch { return false; }
 }
 
 async function findFreePort(from) {
@@ -414,7 +459,15 @@ async function findFreePort(from) {
 }
 
 async function askPort(labelKey, defaultPort) {
-  let port = await findFreePort(defaultPort);
+  let port = defaultPort;
+  // If the default port is in use, check if it's our own service (self = ok to keep)
+  if (await isPortInUse(port)) {
+    if (await isSelfPort(port)) {
+      // Already running on this port — keep it as default
+    } else {
+      port = await findFreePort(port + 1);
+    }
+  }
   while (true) {
     const input = (await askText(labelKey, String(port))).trim();
     const parsed = parseInt(input, 10);
@@ -423,6 +476,10 @@ async function askPort(labelKey, defaultPort) {
       continue;
     }
     if (await isPortInUse(parsed)) {
+      // Check if it's our own service — acceptable to keep
+      if (await isSelfPort(parsed)) {
+        return parsed;
+      }
       const next = await findFreePort(parsed + 1);
       write(c.yellow(tf('portInUse', parsed) + '\n'));
       port = next;
@@ -518,19 +575,7 @@ async function applyTemplate(tpl, mindDir) {
   }
 }
 
-// ── MCP Agent definitions (mirrors bin/lib/mcp-install.js) ───────────────────
-
-const MCP_AGENTS_SETUP = {
-  'claude-code':    { name: 'Claude Code',    project: '.mcp.json',                       global: '~/.claude.json',                                                                         key: 'mcpServers' },
-  'claude-desktop': { name: 'Claude Desktop', project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Claude/claude_desktop_config.json' : '~/.config/Claude/claude_desktop_config.json', key: 'mcpServers' },
-  'cursor':         { name: 'Cursor',          project: '.cursor/mcp.json',                global: '~/.cursor/mcp.json',                                                                     key: 'mcpServers' },
-  'windsurf':       { name: 'Windsurf',        project: null,                               global: '~/.codeium/windsurf/mcp_config.json',                                                   key: 'mcpServers' },
-  'cline':          { name: 'Cline',           project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json' : '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json', key: 'mcpServers' },
-  'trae':           { name: 'Trae',            project: '.trae/mcp.json',                  global: '~/.trae/mcp.json',                                                                       key: 'mcpServers' },
-  'gemini-cli':     { name: 'Gemini CLI',      project: '.gemini/settings.json',           global: '~/.gemini/settings.json',                                                                key: 'mcpServers' },
-  'openclaw':       { name: 'OpenClaw',        project: null,                               global: '~/.openclaw/mcp.json',                                                                   key: 'mcpServers' },
-  'codebuddy':      { name: 'CodeBuddy',       project: null,                               global: '~/.claude-internal/.claude.json',                                                        key: 'mcpServers' },
-};
+// MCP_AGENTS imported from bin/lib/mcp-agents.js
 
 function expandHomePath(p) {
   return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
@@ -538,7 +583,7 @@ function expandHomePath(p) {
 
 /** Detect if an agent already has mindos configured (for pre-selection). */
 function isAgentInstalled(agentKey) {
-  const agent = MCP_AGENTS_SETUP[agentKey];
+  const agent = MCP_AGENTS[agentKey];
   if (!agent) return false;
   for (const cfgPath of [agent.global, agent.project]) {
     if (!cfgPath) continue;
@@ -558,13 +603,13 @@ function isAgentInstalled(agentKey) {
  * because this script uses its own raw-mode helpers).
  */
 async function runMcpInstallStep(mcpPort, authToken) {
-  const keys = Object.keys(MCP_AGENTS_SETUP);
+  const keys = Object.keys(MCP_AGENTS);
 
   // Build options with installed status shown as hint
   const options = keys.map(k => {
     const installed = isAgentInstalled(k);
     return {
-      label: MCP_AGENTS_SETUP[k].name,
+      label: MCP_AGENTS[k].name,
       hint:  installed ? (uiLang === 'zh' ? '已安装' : 'installed') : (uiLang === 'zh' ? '未安装' : 'not installed'),
       value: k,
       preselect: installed,
@@ -636,7 +681,7 @@ async function runMcpInstallStep(mcpPort, authToken) {
   let okCount = 0;
 
   for (const agentKey of selected) {
-    const agent = MCP_AGENTS_SETUP[agentKey];
+    const agent = MCP_AGENTS[agentKey];
     // prefer global scope; fall back to project
     const cfgPath = agent.global || agent.project;
     if (!cfgPath) {
@@ -778,7 +823,7 @@ async function main() {
       const existingMode     = existing.startMode || 'start';
       const existingMcpPort  = existing.mcpPort   || 8787;
       const existingAuth     = existing.authToken || '';
-      const existingMindRoot = existing.mindRoot  || resolve(MINDOS_DIR, 'my-mind');
+      const existingMindRoot = existing.mindRoot  || resolve(homedir(), 'MindOS', 'mind');
       console.log(`\n${c.green(t('cfgKept'))}  ${c.dim(CONFIG_PATH)}`);
       write(c.dim(t('cfgKeptNote') + '\n'));
       const installDaemon = process.argv.includes('--install-daemon');
@@ -790,12 +835,23 @@ async function main() {
   // ── Step 1: Knowledge base path ───────────────────────────────────────────
   stepHeader(1);
 
+  // Resume: read existing config to offer current values as defaults
+  let resumeCfg = {};
+  try { resumeCfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* first run */ }
+
   const { readdirSync } = await import('node:fs');
   let mindDir;
 
+  // Default KB path: existing mindRoot if set, otherwise ~/MindOS (same as GUI default)
+  const HOME = homedir();
+  const kbDefault = resumeCfg.mindRoot || resolve(HOME, 'MindOS', 'mind');
+
   while (true) {
-    const input = (await askText('pathPrompt', 'my-mind', 'pathHintInline', MINDOS_DIR)).trim();
-    const resolved = input.startsWith('/') ? input : resolve(MINDOS_DIR, input);
+    const input = (await askText('pathPrompt', kbDefault)).trim();
+    // If absolute path entered, use as-is; if relative (no leading /), resolve from home
+    const resolved = input.startsWith('/') || input.startsWith('~/')
+      ? (input.startsWith('~/') ? resolve(HOME, input.slice(2)) : input)
+      : resolve(HOME, input);
     write(tf('pathResolved', resolved) + '\n');
     mindDir = resolved;
 
@@ -817,9 +873,8 @@ async function main() {
       if (choice === 'reselect') { write('\n'); continue; }
       break;
     } else {
-      // ── Step 2: Template ────────────────────────────────────────────────
+      // ── Template selection (part of Step 1) ─────────────────────────────
       write('\n');
-      stepHeader(2);
       const tpl = await select('tplPrompt', 'tplOptions', 'tplValues');
       mkdirSync(mindDir, { recursive: true });
       await applyTemplate(tpl, mindDir);
@@ -827,60 +882,27 @@ async function main() {
     }
   }
 
-  // ── Step 3: Ports ─────────────────────────────────────────────────────────
+  // ── Step 2: AI Provider + API Key ─────────────────────────────────────────
   write('\n');
-  stepHeader(3);
-  let webPort, mcpPort;
-  while (true) {
-    webPort = await askPort('webPortPrompt', 3000);
-    mcpPort = await askPort('mcpPortPrompt', webPort === 8787 ? 8788 : 8787);
-    if (webPort !== mcpPort) break;
-    write(c.yellow(`  ⚠ ${uiLang === 'zh' ? 'Web 端口和 MCP 端口不能相同，请重新选择' : 'Web port and MCP port must be different — please choose again'}\n`));
-  }
-
-  // ── Step 4: Auth token ────────────────────────────────────────────────────
-  write('\n');
-  stepHeader(4);
-  const authSeed = await askText('authPrompt');
-  const authToken = generateToken(authSeed);
-  console.log(`${c.green(t('tokenGenerated'))}: ${c.cyan(authToken)}`);
-
-  // ── Step 5: Web UI password ───────────────────────────────────────────────
-  write('\n');
-  stepHeader(5);
-  let webPassword = '';
-  while (true) {
-    webPassword = await askText('webPassPrompt');
-    if (webPassword) break;
-    write(c.yellow(t('webPassWarn') + '\n'));
-    const confirmed = await askYesNo('webPassSkip');
-    if (confirmed) break;
-  }
-
-  // ── Step 6: AI Provider + API Key ─────────────────────────────────────────
-  write('\n');
-  stepHeader(6);
+  stepHeader(2);
 
   const provider = await select('providerPrompt', 'providerOpts', 'providerVals');
   const isSkip = provider === 'skip';
   const isAnthropic = provider === 'anthropic';
 
-  // preserve existing provider configs
+  // preserve existing provider configs (use resumeCfg already read at top of main)
   let existingProviders = {
     anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
     openai:    { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
   };
   let existingAiProvider = 'anthropic';
-  try {
-    const existing = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-    if (existing.ai?.providers) {
-      existingProviders = { ...existingProviders, ...existing.ai.providers };
-    } else if (existing.ai?.anthropicApiKey) {
-      existingProviders.anthropic = { apiKey: existing.ai.anthropicApiKey || '', model: existing.ai.anthropicModel || 'claude-sonnet-4-6' };
-      existingProviders.openai    = { apiKey: existing.ai.openaiApiKey || '', model: existing.ai.openaiModel || 'gpt-5.4', baseUrl: existing.ai.openaiBaseUrl || '' };
-    }
-    if (existing.ai?.provider) existingAiProvider = existing.ai.provider;
-  } catch { /* ignore */ }
+  if (resumeCfg.ai?.providers) {
+    existingProviders = { ...existingProviders, ...resumeCfg.ai.providers };
+  } else if (resumeCfg.ai?.anthropicApiKey) {
+    existingProviders.anthropic = { apiKey: resumeCfg.ai.anthropicApiKey || '', model: resumeCfg.ai.anthropicModel || 'claude-sonnet-4-6' };
+    existingProviders.openai    = { apiKey: resumeCfg.ai.openaiApiKey || '', model: resumeCfg.ai.openaiModel || 'gpt-5.4', baseUrl: resumeCfg.ai.openaiBaseUrl || '' };
+  }
+  if (resumeCfg.ai?.provider) existingAiProvider = resumeCfg.ai.provider;
 
   if (isSkip) {
     write(c.dim(t('providerSkip') + '\n'));
@@ -905,9 +927,69 @@ async function main() {
     }
   }
 
-  // ── Step 7: Start Mode ──────────────────────────────────────────────────
+  // ── Step 3: Ports ─────────────────────────────────────────────────────────
   write('\n');
-  stepHeader(7);
+  stepHeader(3);
+  const existingCfg = resumeCfg;
+  const defaultWebPort = typeof existingCfg.port === 'number' ? existingCfg.port : 3000;
+  const defaultMcpPort = typeof existingCfg.mcpPort === 'number' ? existingCfg.mcpPort : (defaultWebPort === 8787 ? 8788 : 8787);
+  let webPort, mcpPort;
+  while (true) {
+    webPort = await askPort('webPortPrompt', defaultWebPort);
+    mcpPort = await askPort('mcpPortPrompt', defaultMcpPort);
+    if (webPort !== mcpPort) break;
+    write(c.yellow(`  ⚠ ${uiLang === 'zh' ? 'Web 端口和 MCP 端口不能相同，请重新选择' : 'Web port and MCP port must be different — please choose again'}\n`));
+  }
+
+  // ── Step 4: Auth token ────────────────────────────────────────────────────
+  write('\n');
+  stepHeader(4);
+  // Resume: if config already has a token, offer it as the default (Enter = keep)
+  const existingToken = existingCfg.authToken || '';
+  let authToken;
+  if (existingToken) {
+    const masked = existingToken.length > 8 ? existingToken.slice(0, 8) + '····' : existingToken;
+    write(c.dim(`  ${uiLang === 'zh' ? '现有 token：' : 'Current token:'} ${c.cyan(masked)}\n`));
+    const keepToken = await askYesNoDefault('cfgConfirm');
+    if (keepToken) {
+      authToken = existingToken;
+      console.log(`${c.green(t('tokenGenerated'))}: ${c.cyan(existingToken.slice(0, 8) + '····')}`);
+    } else {
+      const authSeed = await askText('authPrompt');
+      authToken = generateToken(authSeed);
+      console.log(`${c.green(t('tokenGenerated'))}: ${c.cyan(authToken)}`);
+    }
+  } else {
+    const authSeed = await askText('authPrompt');
+    authToken = generateToken(authSeed);
+    console.log(`${c.green(t('tokenGenerated'))}: ${c.cyan(authToken)}`);
+  }
+
+  // ── Step 5: Web UI password ───────────────────────────────────────────────
+  write('\n');
+  stepHeader(5);
+  let webPassword = '';
+  const existingPassword = existingCfg.webPassword || '';
+  if (existingPassword) {
+    write(c.dim(`  ${uiLang === 'zh' ? '已设置密码（Enter 保留）' : 'Password is set (Enter to keep)'}\n`));
+    const keepPass = await askYesNoDefault('cfgConfirm');
+    if (keepPass) {
+      webPassword = existingPassword;
+    }
+  }
+  if (!webPassword) {
+    while (true) {
+      webPassword = await askText('webPassPrompt');
+      if (webPassword) break;
+      write(c.yellow(t('webPassWarn') + '\n'));
+      const confirmed = await askYesNo('webPassSkip');
+      if (confirmed) break;
+    }
+  }
+
+  // ── Step 6: Start Mode ──────────────────────────────────────────────────
+  write('\n');
+  stepHeader(6);
 
   let startMode = 'start';
   const daemonPlatform = process.platform === 'darwin' || process.platform === 'linux';
@@ -952,13 +1034,22 @@ async function main() {
     process.exit(0);
   }
 
+  const isResuming = Object.keys(resumeCfg).length > 0;
+  const needsRestart = isResuming && (
+    config.port        !== (resumeCfg.port        ?? 3000) ||
+    config.mcpPort     !== (resumeCfg.mcpPort     ?? 8787) ||
+    config.mindRoot    !== (resumeCfg.mindRoot     ?? '')   ||
+    config.authToken   !== (resumeCfg.authToken   ?? '')   ||
+    config.webPassword !== (resumeCfg.webPassword ?? '')
+  );
+
   mkdirSync(MINDOS_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
 
-  // ── Step 8: MCP Agent Install ──────────────────────────────────────────────
+  // ── Step 7: MCP Agent Install ──────────────────────────────────────────────
   write('\n');
-  stepHeader(8);
+  stepHeader(7);
   write(c.dim(tf('mcpStepHint') + '\n\n'));
 
   await runMcpInstallStep(mcpPort, authToken);
@@ -973,7 +1064,7 @@ async function main() {
   }
 
   const installDaemon = startMode === 'daemon' || process.argv.includes('--install-daemon');
-  finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon);
+  finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon, needsRestart, resumeCfg.port ?? 3000);
 }
 
 function getLocalIP() {
@@ -985,7 +1076,25 @@ function getLocalIP() {
   return null;
 }
 
-async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = '', installDaemon = false) {
+async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = '', installDaemon = false, needsRestart = false, oldPort = 3000) {
+  if (needsRestart) {
+    const isRunning = await isSelfPort(oldPort);
+    if (isRunning) {
+      write(c.yellow(t('restartRequired') + '\n'));
+      const doRestart = await askYesNoDefault('restartNow');
+      if (doRestart) {
+        const cliPath = resolve(__dirname, '../bin/cli.js');
+        execSync(`node "${cliPath}" start`, { stdio: 'inherit' });
+      } else {
+        write(c.dim(t('restartManual') + '\n'));
+      }
+      return;
+    } else {
+      write(c.dim(t('changesOnNextStart') + '\n'));
+      // fall through to normal Start now? prompt
+    }
+  }
+
   const startCmd = installDaemon ? 'mindos start --daemon' : (startMode === 'dev' ? 'mindos dev' : 'mindos start');
   const lines = T.nextSteps[uiLang](startCmd);
   console.log('');
@@ -993,13 +1102,13 @@ async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = 
 
   const doStart = await askYesNoDefault('startNow');
   if (doStart) {
-    const { execSync } = await import('node:child_process');
+    const { execSync: exec } = await import('node:child_process');
     const cliPath = resolve(__dirname, '../bin/cli.js');
     if (installDaemon) {
       // Install and start as background service — returns immediately
-      execSync(`node "${cliPath}" start --daemon`, { stdio: 'inherit' });
+      exec(`node "${cliPath}" start --daemon`, { stdio: 'inherit' });
     } else {
-      execSync(`node "${cliPath}" ${startMode}`, { stdio: 'inherit' });
+      exec(`node "${cliPath}" ${startMode}`, { stdio: 'inherit' });
     }
   }
 }
