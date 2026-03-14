@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono, IBM_Plex_Mono, IBM_Plex_Sans, Lora } from 'next/font/google';
+import { Inter, IBM_Plex_Mono, IBM_Plex_Sans, Lora } from 'next/font/google';
 import './globals.css';
 import { getFileTree } from '@/lib/fs';
 import ShellLayout from '@/components/ShellLayout';
@@ -9,13 +9,14 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import RegisterSW from './register-sw';
 import UpdateBanner from '@/components/UpdateBanner';
 
-const geistSans = Geist({
+const geistSans = Inter({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
+const geistMono = IBM_Plex_Mono({
   variable: '--font-geist-mono',
+  weight: ['400', '600'],
   subsets: ['latin'],
 });
 
