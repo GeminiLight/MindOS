@@ -615,8 +615,7 @@ function RestartBlock({ s, newPort }: { s: ReturnType<typeof useLocale>['t']['se
         attempts++;
         try {
           const r = await fetch(`http://localhost:${newPort}/api/health`);
-          const d = await r.json();
-          if (d.service === 'mindos') { clearInterval(poll); redirect(); return; }
+          if (r.status < 500) { clearInterval(poll); redirect(); return; }
         } catch { /* not ready yet */ }
         if (attempts >= 10) { clearInterval(poll); redirect(); }
       }, 800);

@@ -31,7 +31,7 @@ export async function waitForHttp(port, { retries = 120, intervalMs = 2000, labe
     try {
       const { request } = await import('node:http');
       const ok = await new Promise((resolve) => {
-        const req = request({ hostname: '127.0.0.1', port, path: '/', method: 'HEAD', timeout: 1500 },
+        const req = request({ hostname: '127.0.0.1', port, path: '/api/health', method: 'GET', timeout: 1500 },
           (res) => { res.resume(); resolve(res.statusCode < 500); });
         req.on('error', () => resolve(false));
         req.on('timeout', () => { req.destroy(); resolve(false); });
