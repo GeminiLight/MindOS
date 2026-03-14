@@ -271,7 +271,7 @@ export const messages = {
       releaseNotes: 'view release notes',
     },
     setup: {
-      stepTitles: ['Knowledge Base', 'AI Provider', 'Ports', 'Security', 'Review'],
+      stepTitles: ['Knowledge Base', 'AI Provider', 'Ports', 'Security', 'Agent Tools', 'Review'],
       // Step 1
       kbPath: 'Knowledge base path',
       kbPathHint: 'Absolute path to your notes directory.',
@@ -291,6 +291,11 @@ export const messages = {
       mcpPort: 'MCP server port',
       portHint: 'Valid range: 1024–65535',
       portRestartWarning: 'Port changes take effect after server restart.',
+      portInUse: (p: number) => `Port ${p} is already in use.`,
+      portSuggest: (p: number) => `Use ${p}`,
+      portChecking: 'Checking…',
+      portConflict: 'Web UI and MCP ports must be different.',
+      portVerifyHint: 'Click outside each field to verify, or wait for auto-check.',
       // Step 4
       authToken: 'Auth Token',
       authTokenHint: 'Bearer token for MCP / API clients. Auto-generated.',
@@ -301,16 +306,30 @@ export const messages = {
       copiedToken: 'Copied!',
       webPassword: 'Web UI Password',
       webPasswordHint: 'Optional. Protect browser access with a password.',
-      // Step 5
-      reviewTitle: 'Review Configuration',
+      // Step 5 — Agent Tools
+      agentToolsTitle: 'Agent Tools',
+      agentToolsHint: 'Select AI agents to configure with MindOS MCP. Agents marked "not installed" can be configured now — they will work once you install the app.',
+      agentTransport: 'Transport',
+      agentScope: 'Scope',
+      agentToolsLoading: 'Loading agents…',
+      agentToolsEmpty: 'No supported agents detected.',
+      agentNoneSelected: 'No agents selected — you can configure later in Settings → MCP.',
+      agentNotInstalled: 'not installed',
+      agentStatusOk: 'configured',
+      agentStatusError: 'failed',
+      agentInstalling: 'Configuring…',
+      // Step 2 — AI skip card
+      aiSkipTitle: 'Skip for now',
+      aiSkipDesc: 'You can add an API key later in Settings → AI.',
+      // Step 6 — Review
       reviewHint: 'Verify your settings before completing setup.',
-      keyMasked: (key: string) => key.slice(0, 6) + '•••' + key.slice(-3),
+      reviewInstallResults: 'Agent configuration results:',
+      portAvailable: 'Available',
       portChanged: 'Port changed — please restart the server for it to take effect.',
       // Buttons
       back: 'Back',
       next: 'Next',
       complete: 'Complete Setup',
-      skip: 'Skip',
       // Status
       completing: 'Saving...',
       completeDone: 'Setup complete!',
@@ -587,7 +606,7 @@ export const messages = {
       releaseNotes: '查看更新说明',
     },
     setup: {
-      stepTitles: ['知识库', 'AI 服务商', '端口', '安全', '确认'],
+      stepTitles: ['知识库', 'AI 服务商', '端口', '安全', 'Agent 工具', '确认'],
       // Step 1
       kbPath: '知识库路径',
       kbPathHint: '笔记目录的绝对路径。',
@@ -607,6 +626,11 @@ export const messages = {
       mcpPort: 'MCP 服务端口',
       portHint: '有效范围：1024–65535',
       portRestartWarning: '端口修改需重启服务后生效。',
+      portInUse: (p: number) => `端口 ${p} 已被占用。`,
+      portSuggest: (p: number) => `使用 ${p}`,
+      portChecking: '检测中…',
+      portConflict: 'Web UI 端口和 MCP 端口不能相同。',
+      portVerifyHint: '点击输入框外部验证，或等待自动检测。',
       // Step 4
       authToken: 'Auth Token',
       authTokenHint: 'MCP / API 客户端使用的 Bearer Token，自动生成。',
@@ -617,10 +641,25 @@ export const messages = {
       copiedToken: '已复制！',
       webPassword: '网页访问密码',
       webPasswordHint: '可选。设置后浏览器访问需要登录。',
-      // Step 5
-      reviewTitle: '确认配置',
+      // Step 5 — Agent Tools
+      agentToolsTitle: 'Agent 工具',
+      agentToolsHint: '选择要与 MindOS MCP 配置的 AI Agent。标注「未安装」的 agent 可以先行配置，安装应用后即可生效。',
+      agentTransport: '传输方式',
+      agentScope: '范围',
+      agentToolsLoading: '正在加载 Agent…',
+      agentToolsEmpty: '未检测到受支持的 Agent。',
+      agentNoneSelected: '未选择 agent — 可稍后在 设置 → MCP 中配置。',
+      agentNotInstalled: '未安装',
+      agentStatusOk: '已配置',
+      agentStatusError: '失败',
+      agentInstalling: '配置中…',
+      // Step 2 — AI skip card
+      aiSkipTitle: '暂时跳过',
+      aiSkipDesc: '稍后可在 设置 → AI 中添加 API 密钥。',
+      // Step 6 — Review
       reviewHint: '完成设置前请确认以下信息。',
-      keyMasked: (key: string) => key.slice(0, 6) + '•••' + key.slice(-3),
+      reviewInstallResults: 'Agent 配置结果：',
+      portAvailable: '可用',
       portChanged: '端口已变更 — 请重启服务以使其生效。',
       // Buttons
       back: '上一步',

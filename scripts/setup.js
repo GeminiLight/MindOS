@@ -52,8 +52,8 @@ const T = {
   // step labels
   step:           { en: (n, total) => `Step ${n}/${total}`, zh: (n, total) => `步骤 ${n}/${total}` },
   stepTitles:     {
-    en: ['Knowledge Base', 'Template', 'Ports', 'Auth Token', 'Web Password', 'AI Provider', 'Start Mode'],
-    zh: ['知识库',         '模板',     '端口',   'Auth Token', 'Web 密码',     'AI 服务商',    '启动方式'],
+    en: ['Knowledge Base', 'Template', 'Ports', 'Auth Token', 'Web Password', 'AI Provider', 'Start Mode', 'Agent Tools'],
+    zh: ['知识库',         '模板',     '端口',   'Auth Token', 'Web 密码',     'AI 服务商',    '启动方式',    'Agent 工具'],
   },
 
   // path
@@ -122,6 +122,15 @@ const T = {
   syncSetup:      { en: 'Set up cross-device sync via Git?', zh: '是否配置 Git 跨设备同步？' },
   syncLater:      { en: '  → Run `mindos sync init` anytime to set up sync later.', zh: '  → 随时运行 `mindos sync init` 配置同步。' },
 
+  // mcp install step
+  mcpStepTitle:   { en: 'Agent Tools (MCP)', zh: 'Agent 工具 (MCP)' },
+  mcpStepHint:    { en: 'Select AI agents to configure with MindOS MCP (Space to toggle, A for all, Enter to confirm).\nAgents not yet installed can be pre-configured — they will work once you install the app.', zh: '选择要配置 MindOS MCP 的 AI Agent（空格切换，A 全选，Enter 确认）。\n未安装的 Agent 可以预先配置，安装应用后即可生效。' },
+  mcpInstalling:  { en: (n) => `⏳ Configuring ${n} agent(s)...`, zh: (n) => `⏳ 正在配置 ${n} 个 Agent...` },
+  mcpInstallOk:   { en: (name, path) => `  ${c.green('✔')} ${name}  ${c.dim('→ ' + path)}`, zh: (name, path) => `  ${c.green('✔')} ${name}  ${c.dim('→ ' + path)}` },
+  mcpInstallFail: { en: (name, msg) => `  ${c.red('✘')} ${name}  ${c.dim(msg)}`, zh: (name, msg) => `  ${c.red('✘')} ${name}  ${c.dim(msg)}` },
+  mcpInstallDone: { en: (n) => `✔ ${n} agent(s) configured`, zh: (n) => `✔ 已配置 ${n} 个 Agent` },
+  mcpSkipped:     { en: '  → Skipped. Run `mindos mcp install` anytime to configure agents.', zh: '  → 已跳过。随时运行 `mindos mcp install` 配置 Agent。' },
+
   // next steps (onboard — keep it minimal, details shown on `mindos start`)
   nextSteps: {
     en: (cmd) => [
@@ -171,7 +180,7 @@ const tf = (key, ...args) => {
 
 // ── Step header ───────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 function stepHeader(n) {
   const title = T.stepTitles[uiLang][n - 1] ?? T.stepTitles.en[n - 1];
   const stepLabel = tf('step', n, TOTAL_STEPS);
@@ -387,15 +396,21 @@ const askYesNoDefault = (labelKey, arg = '') => askYesNo(labelKey, arg, true);
 function isPortInUse(port) {
   return new Promise((resolve) => {
     const sock = createConnection({ port, host: '127.0.0.1' });
-    sock.once('connect', () => { sock.destroy(); resolve(true); });
-    sock.once('error',   () => { sock.destroy(); resolve(false); });
+    const cleanup = (result) => { sock.destroy(); resolve(result); };
+    sock.setTimeout(500, () => cleanup(false));
+    sock.once('connect', () => cleanup(true));
+    sock.once('error', (err) => {
+      // ECONNREFUSED = nothing listening → free; other errors = treat as in-use
+      cleanup(err.code !== 'ECONNREFUSED');
+    });
   });
 }
 
 async function findFreePort(from) {
-  let p = from;
-  while (p <= 65535 && await isPortInUse(p)) p++;
-  return p;
+  for (let p = from; p <= 65535; p++) {
+    if (!await isPortInUse(p)) return p;
+  }
+  return from; // fallback (extremely unlikely)
 }
 
 async function askPort(labelKey, defaultPort) {
@@ -501,6 +516,150 @@ async function applyTemplate(tpl, mindDir) {
     cpSync(tplDir, mindDir, { recursive: true, filter: (src) => !src.endsWith('.gitkeep') });
     console.log(`${c.green(t('kbCreated'))}: ${c.dim(mindDir)}`);
   }
+}
+
+// ── MCP Agent definitions (mirrors bin/lib/mcp-install.js) ───────────────────
+
+const MCP_AGENTS_SETUP = {
+  'claude-code':    { name: 'Claude Code',    project: '.mcp.json',                       global: '~/.claude.json',                                                                         key: 'mcpServers' },
+  'claude-desktop': { name: 'Claude Desktop', project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Claude/claude_desktop_config.json' : '~/.config/Claude/claude_desktop_config.json', key: 'mcpServers' },
+  'cursor':         { name: 'Cursor',          project: '.cursor/mcp.json',                global: '~/.cursor/mcp.json',                                                                     key: 'mcpServers' },
+  'windsurf':       { name: 'Windsurf',        project: null,                               global: '~/.codeium/windsurf/mcp_config.json',                                                   key: 'mcpServers' },
+  'cline':          { name: 'Cline',           project: null,                               global: process.platform === 'darwin' ? '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json' : '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json', key: 'mcpServers' },
+  'trae':           { name: 'Trae',            project: '.trae/mcp.json',                  global: '~/.trae/mcp.json',                                                                       key: 'mcpServers' },
+  'gemini-cli':     { name: 'Gemini CLI',      project: '.gemini/settings.json',           global: '~/.gemini/settings.json',                                                                key: 'mcpServers' },
+  'openclaw':       { name: 'OpenClaw',        project: null,                               global: '~/.openclaw/mcp.json',                                                                   key: 'mcpServers' },
+  'codebuddy':      { name: 'CodeBuddy',       project: null,                               global: '~/.claude-internal/.claude.json',                                                        key: 'mcpServers' },
+};
+
+function expandHomePath(p) {
+  return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
+}
+
+/** Detect if an agent already has mindos configured (for pre-selection). */
+function isAgentInstalled(agentKey) {
+  const agent = MCP_AGENTS_SETUP[agentKey];
+  if (!agent) return false;
+  for (const cfgPath of [agent.global, agent.project]) {
+    if (!cfgPath) continue;
+    const abs = expandHomePath(cfgPath);
+    if (!existsSync(abs)) continue;
+    try {
+      const config = JSON.parse(readFileSync(abs, 'utf-8'));
+      if (config[agent.key]?.mindos) return true;
+    } catch { /* ignore */ }
+  }
+  return false;
+}
+
+/**
+ * Step 8: interactive multi-select of agents to configure, then install.
+ * Uses the same interactiveMultiSelect as mcp-install.js (re-implemented inline
+ * because this script uses its own raw-mode helpers).
+ */
+async function runMcpInstallStep(mcpPort, authToken) {
+  const keys = Object.keys(MCP_AGENTS_SETUP);
+
+  // Build options with installed status shown as hint
+  const options = keys.map(k => {
+    const installed = isAgentInstalled(k);
+    return {
+      label: MCP_AGENTS_SETUP[k].name,
+      hint:  installed ? (uiLang === 'zh' ? '已安装' : 'installed') : (uiLang === 'zh' ? '未安装' : 'not installed'),
+      value: k,
+      preselect: installed,
+    };
+  });
+
+  // Multi-select using raw mode
+  const selected = await (async () => {
+    return new Promise((resolveSelected) => {
+      let cursor = 0;
+      const chosen = new Set(options.map((o, i) => o.preselect ? i : -1).filter(i => i >= 0));
+
+      const render = (first = false) => {
+        if (!first) write(`\x1b[${options.length + 2}A\x1b[J`);
+        write(`${c.bold(uiLang === 'zh' ? '选择 Agent：' : 'Select agents:')}  ${c.dim(uiLang === 'zh' ? '(↑↓ 移动  空格 切换  A 全选  Enter 确认)' : '(↑↓ move  Space toggle  A all  Enter confirm)')}\n`);
+        for (let i = 0; i < options.length; i++) {
+          const o = options[i];
+          const check   = chosen.has(i) ? c.green('✔') : c.dim('○');
+          const pointer = i === cursor  ? c.cyan('❯') : ' ';
+          const label   = i === cursor  ? (chosen.has(i) ? c.green(o.label) : c.cyan(o.label)) : (chosen.has(i) ? c.green(o.label) : o.label);
+          write(`  ${pointer} ${check} ${label}  ${c.dim('(' + o.hint + ')')}\n`);
+        }
+        write(c.dim(`  ${chosen.size} ${uiLang === 'zh' ? '已选' : 'selected'}\n`));
+      };
+
+      write('\n');
+      render(true);
+
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.setEncoding('utf8');
+
+      const onKey = (key) => {
+        if (key === '\x03') { cleanup(); process.exit(1); }
+        if (key === `${ESC}[A`) { cursor = (cursor - 1 + options.length) % options.length; render(); }
+        else if (key === `${ESC}[B`) { cursor = (cursor + 1) % options.length; render(); }
+        else if (key === ' ') {
+          if (chosen.has(cursor)) chosen.delete(cursor); else chosen.add(cursor);
+          render();
+        } else if (key === 'a' || key === 'A') {
+          if (chosen.size === options.length) chosen.clear();
+          else options.forEach((_, i) => chosen.add(i));
+          render();
+        } else if (key === '\r' || key === '\n') {
+          cleanup();
+          resolveSelected([...chosen].sort().map(i => options[i].value));
+        }
+      };
+
+      const cleanup = () => {
+        process.stdin.removeListener('data', onKey);
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+      };
+
+      process.stdin.on('data', onKey);
+    });
+  })();
+
+  if (selected.length === 0) {
+    write(c.dim(t('mcpSkipped') + '\n'));
+    return;
+  }
+
+  write('\n' + c.dim(tf('mcpInstalling', selected.length) + '\n'));
+
+  // stdio entry (same as mcp-install.js)
+  const entry = { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
+  let okCount = 0;
+
+  for (const agentKey of selected) {
+    const agent = MCP_AGENTS_SETUP[agentKey];
+    // prefer global scope; fall back to project
+    const cfgPath = agent.global || agent.project;
+    if (!cfgPath) {
+      write(tf('mcpInstallFail', agent.name, 'no config path') + '\n');
+      continue;
+    }
+    const abs = expandHomePath(cfgPath);
+    try {
+      let config = {};
+      if (existsSync(abs)) config = JSON.parse(readFileSync(abs, 'utf-8'));
+      if (!config[agent.key]) config[agent.key] = {};
+      config[agent.key].mindos = entry;
+      const dir = resolve(abs, '..');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(abs, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+      write(tf('mcpInstallOk', agent.name, cfgPath) + '\n');
+      okCount++;
+    } catch (err) {
+      write(tf('mcpInstallFail', agent.name, String(err)) + '\n');
+    }
+  }
+
+  console.log(`\n${c.green(tf('mcpInstallDone', okCount))}`);
 }
 
 // ── GUI Setup ─────────────────────────────────────────────────────────────────
@@ -671,8 +830,13 @@ async function main() {
   // ── Step 3: Ports ─────────────────────────────────────────────────────────
   write('\n');
   stepHeader(3);
-  const webPort = await askPort('webPortPrompt', 3000);
-  const mcpPort = await askPort('mcpPortPrompt', 8787);
+  let webPort, mcpPort;
+  while (true) {
+    webPort = await askPort('webPortPrompt', 3000);
+    mcpPort = await askPort('mcpPortPrompt', webPort === 8787 ? 8788 : 8787);
+    if (webPort !== mcpPort) break;
+    write(c.yellow(`  ⚠ ${uiLang === 'zh' ? 'Web 端口和 MCP 端口不能相同，请重新选择' : 'Web port and MCP port must be different — please choose again'}\n`));
+  }
 
   // ── Step 4: Auth token ────────────────────────────────────────────────────
   write('\n');
@@ -791,6 +955,13 @@ async function main() {
   mkdirSync(MINDOS_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
+
+  // ── Step 8: MCP Agent Install ──────────────────────────────────────────────
+  write('\n');
+  stepHeader(8);
+  write(c.dim(tf('mcpStepHint') + '\n\n'));
+
+  await runMcpInstallStep(mcpPort, authToken);
 
   // ── Sync setup (optional) ──────────────────────────────────────────────────
   const wantSync = await askYesNo('syncSetup');
