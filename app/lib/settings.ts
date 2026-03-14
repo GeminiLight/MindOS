@@ -160,5 +160,5 @@ export function effectiveAiConfig() {
 /** Effective MIND_ROOT — settings file can override, env var is fallback */
 export function effectiveSopRoot(): string {
   const s = readSettings();
-  return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS');
+  return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS', 'mind');
 }

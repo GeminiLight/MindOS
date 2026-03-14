@@ -225,6 +225,7 @@ export const messages = {
       save: 'Save',
       saved: 'Saved',
       saveFailed: 'Save failed',
+      reconfigure: 'Reconfigure',
     },
     onboarding: {
       subtitle: 'Your knowledge base is empty. Pick a starter template to get going.',
@@ -275,7 +276,8 @@ export const messages = {
       // Step 1
       kbPath: 'Knowledge base path',
       kbPathHint: 'Absolute path to your notes directory.',
-      kbPathDefault: '~/MindOS',
+      kbPathDefault: '~/MindOS/mind',
+      kbPathExists: (n: number) => `Directory already has ${n} file(s) — template will not be applied.`,
       template: 'Starter template',
       templateSkip: 'Skip (directory already has files)',
       // Step 2
@@ -294,11 +296,14 @@ export const messages = {
       portInUse: (p: number) => `Port ${p} is already in use.`,
       portSuggest: (p: number) => `Use ${p}`,
       portChecking: 'Checking…',
+      portSelf: 'Current port',
       portConflict: 'Web UI and MCP ports must be different.',
       portVerifyHint: 'Click outside each field to verify, or wait for auto-check.',
       // Step 4
       authToken: 'Auth Token',
       authTokenHint: 'Bearer token for MCP / API clients. Auto-generated.',
+      authTokenUsage: 'Used for MCP connections and API clients. When configuring an Agent, this token is written automatically — no manual steps needed.',
+      authTokenUsageWhat: 'What is this?',
       authTokenSeed: 'Custom seed (optional)',
       authTokenSeedHint: 'Enter a passphrase to derive a deterministic token.',
       generateToken: 'Generate',
@@ -314,6 +319,7 @@ export const messages = {
       agentToolsLoading: 'Loading agents…',
       agentToolsEmpty: 'No supported agents detected.',
       agentNoneSelected: 'No agents selected — you can configure later in Settings → MCP.',
+      agentSkipLater: 'Skip — configure later',
       agentNotInstalled: 'not installed',
       agentStatusOk: 'configured',
       agentStatusError: 'failed',
@@ -324,8 +330,15 @@ export const messages = {
       // Step 6 — Review
       reviewHint: 'Verify your settings before completing setup.',
       reviewInstallResults: 'Agent configuration results:',
+      retryAgent: 'Retry',
+      agentFailureNote: 'Agent failures are non-blocking — you can enter MindOS and retry from Settings → MCP.',
       portAvailable: 'Available',
       portChanged: 'Port changed — please restart the server for it to take effect.',
+      restartRequired: 'Server restart required for these changes to take effect.',
+      restartNow: 'Restart now',
+      restarting: 'Restarting…',
+      restartDone: 'Server is restarting. Redirecting shortly…',
+      restartManual: 'Restart manually:',
       // Buttons
       back: 'Back',
       next: 'Next',
@@ -334,6 +347,12 @@ export const messages = {
       completing: 'Saving...',
       completeDone: 'Setup complete!',
       completeFailed: 'Setup failed. Please try again.',
+      // Welcome banner (shown after first onboard)
+      welcomeTitle: 'Welcome to MindOS!',
+      welcomeDesc: 'Setup is complete. Start by asking AI a question, browsing your knowledge base, or configuring MCP agents.',
+      welcomeLinkReconfigure: 'Reconfigure',
+      welcomeLinkAskAI: 'Ask AI',
+      welcomeLinkMCP: 'MCP Settings',
     },
   },
   zh: {
@@ -560,6 +579,7 @@ export const messages = {
       save: '保存',
       saved: '已保存',
       saveFailed: '保存失败',
+      reconfigure: '重新配置',
     },
     onboarding: {
       subtitle: '知识库为空，选择一个模板快速开始。',
@@ -610,7 +630,8 @@ export const messages = {
       // Step 1
       kbPath: '知识库路径',
       kbPathHint: '笔记目录的绝对路径。',
-      kbPathDefault: '~/MindOS',
+      kbPathDefault: '~/MindOS/mind',
+      kbPathExists: (n: number) => `目录已有 ${n} 个文件 — 将不会应用模板。`,
       template: '初始模板',
       templateSkip: '跳过（目录已有文件）',
       // Step 2
@@ -629,11 +650,14 @@ export const messages = {
       portInUse: (p: number) => `端口 ${p} 已被占用。`,
       portSuggest: (p: number) => `使用 ${p}`,
       portChecking: '检测中…',
+      portSelf: '当前端口',
       portConflict: 'Web UI 端口和 MCP 端口不能相同。',
       portVerifyHint: '点击输入框外部验证，或等待自动检测。',
       // Step 4
       authToken: 'Auth Token',
       authTokenHint: 'MCP / API 客户端使用的 Bearer Token，自动生成。',
+      authTokenUsage: '用于 MCP 连接和 API 客户端身份验证。配置 Agent 时会自动写入，无需手动填写。',
+      authTokenUsageWhat: '这是什么？',
       authTokenSeed: '自定义种子（可选）',
       authTokenSeedHint: '输入口令短语生成确定性 Token。',
       generateToken: '生成',
@@ -649,6 +673,7 @@ export const messages = {
       agentToolsLoading: '正在加载 Agent…',
       agentToolsEmpty: '未检测到受支持的 Agent。',
       agentNoneSelected: '未选择 agent — 可稍后在 设置 → MCP 中配置。',
+      agentSkipLater: '跳过 — 稍后配置',
       agentNotInstalled: '未安装',
       agentStatusOk: '已配置',
       agentStatusError: '失败',
@@ -659,8 +684,15 @@ export const messages = {
       // Step 6 — Review
       reviewHint: '完成设置前请确认以下信息。',
       reviewInstallResults: 'Agent 配置结果：',
+      retryAgent: '重试',
+      agentFailureNote: 'Agent 安装失败不影响进入 MindOS — 可稍后在 设置 → MCP 中重试。',
       portAvailable: '可用',
       portChanged: '端口已变更 — 请重启服务以使其生效。',
+      restartRequired: '以下变更需要重启服务后生效。',
+      restartNow: '立即重启',
+      restarting: '重启中…',
+      restartDone: '服务正在重启，稍后自动跳转…',
+      restartManual: '手动重启命令：',
       // Buttons
       back: '上一步',
       next: '下一步',
@@ -670,6 +702,12 @@ export const messages = {
       completing: '保存中...',
       completeDone: '设置完成！',
       completeFailed: '设置失败，请重试。',
+      // Welcome banner
+      welcomeTitle: '欢迎使用 MindOS！',
+      welcomeDesc: '初始化完成。可以开始向 AI 提问、浏览知识库，或配置 MCP Agent。',
+      welcomeLinkReconfigure: '重新配置',
+      welcomeLinkAskAI: '问 AI',
+      welcomeLinkMCP: 'MCP 设置',
     },
   },
 } as const;

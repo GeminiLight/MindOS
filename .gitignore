@@ -1,6 +1,7 @@
 **/node_modules/
 **/dist/
 app/.next
+app/.claude
 app/data
 !app/data/skills
 

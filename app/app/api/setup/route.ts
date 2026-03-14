@@ -5,6 +5,40 @@ import os from 'os';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { applyTemplate } from '@/lib/template';
 
+function maskApiKey(key: string): string {
+  if (!key || key.length < 6) return key ? '***' : '';
+  return key.slice(0, 6) + '***';
+}
+
+export async function GET() {
+  try {
+    const s = readSettings();
+    const home = os.homedir();
+    const sep = process.platform === 'win32' ? '\\' : '/';
+    const defaultMindRoot = s.mindRoot || [home, 'MindOS', 'mind'].join(sep);
+    return NextResponse.json({
+      mindRoot: defaultMindRoot,
+      homeDir: home,
+      platform: process.platform,
+      port: s.port ?? 3000,
+      mcpPort: s.mcpPort ?? 8787,
+      authToken: s.authToken ?? '',
+      webPassword: s.webPassword ?? '',
+      provider: s.ai.provider,
+      anthropicApiKey: maskApiKey(s.ai.providers.anthropic.apiKey),
+      anthropicModel: s.ai.providers.anthropic.model,
+      openaiApiKey: maskApiKey(s.ai.providers.openai.apiKey),
+      openaiModel: s.ai.providers.openai.model,
+      openaiBaseUrl: s.ai.providers.openai.baseUrl ?? '',
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
+}
+
 function expandHome(p: string): string {
   if (p.startsWith('~/')) return p.replace('~', os.homedir());
   if (p === '~') return os.homedir();
@@ -53,6 +87,19 @@ export async function POST(req: NextRequest) {
     const current = readSettings();
     const currentPort = current.port ?? 3000;
 
+    // Use the same resolved values that will actually be written to config
+    const resolvedAuthToken   = authToken   ?? current.authToken   ?? '';
+    const resolvedWebPassword = webPassword ?? '';
+    // Only compute needsRestart for re-onboard (setupPending=true means first-time setup)
+    const isFirstTime = current.setupPending === true || !current.mindRoot;
+    const needsRestart = !isFirstTime && (
+      webPort              !== (current.port      ?? 3000) ||
+      mcpPortNum           !== (current.mcpPort   ?? 8787) ||
+      resolvedRoot         !== (current.mindRoot  || '')    ||
+      resolvedAuthToken    !== (current.authToken   ?? '') ||
+      resolvedWebPassword  !== (current.webPassword ?? '')
+    );
+
     // Build config
     const config: ServerSettings = {
       ai: ai ?? current.ai,
@@ -70,6 +117,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       portChanged: webPort !== currentPort,
+      needsRestart,
+      newPort: webPort,
     });
   } catch (e) {
     console.error('[/api/setup] Error:', e);
