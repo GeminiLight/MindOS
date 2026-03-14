@@ -21,12 +21,12 @@ export interface AiConfig {
 export interface ServerSettings {
   ai: AiConfig;
   mindRoot: string;   // empty = use env var / default
-  // Fields managed by CLI only (not edited via GUI, preserved on write)
   port?: number;
   mcpPort?: number;
   authToken?: string;
   webPassword?: string;
   startMode?: 'dev' | 'start' | 'daemon';
+  setupPending?: boolean;  // true → / redirects to /setup
 }
 
 const DEFAULTS: ServerSettings = {
@@ -108,6 +108,9 @@ export function readSettings(): ServerSettings {
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
       authToken:   typeof parsed.authToken   === 'string' ? parsed.authToken   : undefined,
       mcpPort:     typeof parsed.mcpPort     === 'number' ? parsed.mcpPort     : undefined,
+      port:        typeof parsed.port        === 'number' ? parsed.port        : undefined,
+      startMode:   typeof parsed.startMode   === 'string' ? parsed.startMode as ServerSettings['startMode'] : undefined,
+      setupPending: parsed.setupPending === true ? true : undefined,
     };
   } catch {
     return { ...DEFAULTS, ai: { ...DEFAULTS.ai, providers: { ...DEFAULTS.ai.providers } } };
@@ -123,6 +126,14 @@ export function writeSettings(settings: ServerSettings): void {
   const merged: Record<string, unknown> = { ...existing, ai: settings.ai, mindRoot: settings.mindRoot };
   if (settings.webPassword !== undefined) merged.webPassword = settings.webPassword;
   if (settings.authToken   !== undefined) merged.authToken   = settings.authToken;
+  if (settings.port        !== undefined) merged.port        = settings.port;
+  if (settings.mcpPort     !== undefined) merged.mcpPort     = settings.mcpPort;
+  if (settings.startMode   !== undefined) merged.startMode   = settings.startMode;
+  // setupPending: false/undefined → remove the field (cleanup); true → set it
+  if ('setupPending' in settings) {
+    if (settings.setupPending) merged.setupPending = true;
+    else delete merged.setupPending;
+  }
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
 }
 
