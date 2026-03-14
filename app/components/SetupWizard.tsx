@@ -28,7 +28,7 @@ interface SetupState {
 
 interface PortStatus {
   checking: boolean;
-  available: boolean | null;  // null = not yet checked
+  available: boolean | null;
   suggestion: number | null;
 }
 
@@ -40,7 +40,6 @@ interface AgentEntry {
   hasGlobalScope: boolean;
 }
 
-// Per-agent install tracking (live, in Step 5)
 type AgentInstallState = 'pending' | 'installing' | 'ok' | 'error';
 interface AgentInstallStatus {
   state: AgentInstallState;
@@ -58,10 +57,8 @@ const STEP_KB = 0;
 const STEP_PORTS = 2;
 const STEP_AGENTS = 4;
 
-// -------------------------------------------------------------------
-// Step4Inner — extracted so its local seed/showSeed state survives
-// parent re-renders (declaring inside SetupWizard would remount it)
-// -------------------------------------------------------------------
+// ─── Step 4 (Security) ────────────────────────────────────────────────────────
+// Extracted at module level so its local seed/showSeed state survives parent re-renders
 function Step4Inner({
   authToken, tokenCopied, onCopy, onGenerate, webPassword, onPasswordChange, s,
 }: {
@@ -120,9 +117,7 @@ function Step4Inner({
   );
 }
 
-// -------------------------------------------------------------------
-// PortField — input + inline availability badge + suggestion button
-// -------------------------------------------------------------------
+// ─── PortField ────────────────────────────────────────────────────────────────
 function PortField({
   label, hint, value, onChange, status, onCheckPort, s,
 }: {
@@ -173,9 +168,370 @@ function PortField({
   );
 }
 
-// -------------------------------------------------------------------
-// Main component
-// -------------------------------------------------------------------
+// ─── Step 1: Knowledge Base ───────────────────────────────────────────────────
+function Step1({
+  state, update, t,
+}: {
+  state: SetupState;
+  update: <K extends keyof SetupState>(key: K, val: SetupState[K]) => void;
+  t: ReturnType<typeof useLocale>['t'];
+}) {
+  const s = t.setup;
+  return (
+    <div className="space-y-6">
+      <Field label={s.kbPath} hint={s.kbPathHint}>
+        <Input value={state.mindRoot} onChange={e => update('mindRoot', e.target.value)} placeholder={s.kbPathDefault} />
+      </Field>
+      <div>
+        <label className="text-sm text-foreground font-medium mb-3 block">{s.template}</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {TEMPLATES.map(tpl => (
+            <button key={tpl.id} onClick={() => update('template', tpl.id)}
+              className="flex flex-col items-start gap-2 p-4 rounded-xl border text-left transition-all duration-150"
+              style={{
+                background: state.template === tpl.id ? 'var(--amber-subtle, rgba(200,135,30,0.08))' : 'var(--card)',
+                borderColor: state.template === tpl.id ? 'var(--amber)' : 'var(--border)',
+              }}>
+              <div className="flex items-center gap-2">
+                <span style={{ color: 'var(--amber)' }}>{tpl.icon}</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>
+                  {t.onboarding.templates[tpl.id as 'en' | 'zh' | 'empty'].title}
+                </span>
+              </div>
+              <div className="w-full rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed font-display"
+                style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+                {tpl.dirs.map(d => <div key={d}>{d}</div>)}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2: AI Provider ──────────────────────────────────────────────────────
+function Step2({
+  state, update, s,
+}: {
+  state: SetupState;
+  update: <K extends keyof SetupState>(key: K, val: SetupState[K]) => void;
+  s: ReturnType<typeof useLocale>['t']['setup'];
+}) {
+  const providers = [
+    { id: 'anthropic' as const, icon: <Brain size={18} />, label: 'Anthropic', desc: 'Claude — claude-sonnet-4-6' },
+    { id: 'openai' as const, icon: <Zap size={18} />, label: 'OpenAI', desc: 'GPT or any OpenAI-compatible API' },
+    { id: 'skip' as const, icon: <SkipForward size={18} />, label: s.aiSkipTitle, desc: s.aiSkipDesc },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3">
+        {providers.map(p => (
+          <button key={p.id} onClick={() => update('provider', p.id)}
+            className="flex items-start gap-3 p-4 rounded-xl border text-left transition-all duration-150"
+            style={{
+              background: state.provider === p.id ? 'var(--amber-subtle, rgba(200,135,30,0.08))' : 'var(--card)',
+              borderColor: state.provider === p.id ? 'var(--amber)' : 'var(--border)',
+            }}>
+            <span className="mt-0.5" style={{ color: state.provider === p.id ? 'var(--amber)' : 'var(--muted-foreground)' }}>
+              {p.icon}
+            </span>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{p.label}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{p.desc}</p>
+            </div>
+            {state.provider === p.id && (
+              <CheckCircle2 size={16} className="ml-auto mt-0.5 shrink-0" style={{ color: 'var(--amber)' }} />
+            )}
+          </button>
+        ))}
+      </div>
+      {state.provider !== 'skip' && (
+        <div className="space-y-4 pt-2">
+          <Field label={s.apiKey}>
+            <ApiKeyInput
+              value={state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey}
+              onChange={v => update(state.provider === 'anthropic' ? 'anthropicKey' : 'openaiKey', v)}
+              placeholder={state.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
+            />
+          </Field>
+          <Field label={s.model}>
+            <Input
+              value={state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel}
+              onChange={e => update(state.provider === 'anthropic' ? 'anthropicModel' : 'openaiModel', e.target.value)}
+            />
+          </Field>
+          {state.provider === 'openai' && (
+            <Field label={s.baseUrl} hint={s.baseUrlHint}>
+              <Input value={state.openaiBaseUrl} onChange={e => update('openaiBaseUrl', e.target.value)}
+                placeholder="https://api.openai.com/v1" />
+            </Field>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Step 3: Ports ────────────────────────────────────────────────────────────
+function Step3({
+  state, update, webPortStatus, mcpPortStatus, setWebPortStatus, setMcpPortStatus, checkPort, portConflict, s,
+}: {
+  state: SetupState;
+  update: <K extends keyof SetupState>(key: K, val: SetupState[K]) => void;
+  webPortStatus: PortStatus;
+  mcpPortStatus: PortStatus;
+  setWebPortStatus: (s: PortStatus) => void;
+  setMcpPortStatus: (s: PortStatus) => void;
+  checkPort: (port: number, which: 'web' | 'mcp') => void;
+  portConflict: boolean;
+  s: ReturnType<typeof useLocale>['t']['setup'];
+}) {
+  return (
+    <div className="space-y-5">
+      <PortField
+        label={s.webPort} hint={s.portHint} value={state.webPort}
+        onChange={v => { update('webPort', v); setWebPortStatus({ checking: false, available: null, suggestion: null }); }}
+        status={webPortStatus}
+        onCheckPort={port => checkPort(port, 'web')}
+        s={s}
+      />
+      <PortField
+        label={s.mcpPort} hint={s.portHint} value={state.mcpPort}
+        onChange={v => { update('mcpPort', v); setMcpPortStatus({ checking: false, available: null, suggestion: null }); }}
+        status={mcpPortStatus}
+        onCheckPort={port => checkPort(port, 'mcp')}
+        s={s}
+      />
+      {portConflict && (
+        <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--amber)' }}>
+          <AlertTriangle size={12} /> {s.portConflict}
+        </p>
+      )}
+      {!portConflict && (webPortStatus.available === null || mcpPortStatus.available === null) && !webPortStatus.checking && !mcpPortStatus.checking && (
+        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.portVerifyHint}</p>
+      )}
+      <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--muted-foreground)' }}>
+        <AlertTriangle size={12} /> {s.portRestartWarning}
+      </p>
+    </div>
+  );
+}
+
+// ─── Step 5: Agent Tools ──────────────────────────────────────────────────────
+function Step5({
+  agents, agentsLoading, selectedAgents, setSelectedAgents,
+  agentTransport, setAgentTransport, agentScope, setAgentScope,
+  agentStatuses, s, settingsMcp,
+}: {
+  agents: AgentEntry[];
+  agentsLoading: boolean;
+  selectedAgents: Set<string>;
+  setSelectedAgents: React.Dispatch<React.SetStateAction<Set<string>>>;
+  agentTransport: 'stdio' | 'http';
+  setAgentTransport: (v: 'stdio' | 'http') => void;
+  agentScope: 'global' | 'project';
+  setAgentScope: (v: 'global' | 'project') => void;
+  agentStatuses: Record<string, AgentInstallStatus>;
+  s: ReturnType<typeof useLocale>['t']['setup'];
+  settingsMcp: ReturnType<typeof useLocale>['t']['settings']['mcp'];
+}) {
+  const toggleAgent = (key: string) => {
+    setSelectedAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const getStatusBadge = (key: string, installed: boolean) => {
+    const st = agentStatuses[key];
+    if (st) {
+      if (st.state === 'installing') return (
+        <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--muted-foreground)' }}>
+          <Loader2 size={10} className="animate-spin" /> {s.agentInstalling}
+        </span>
+      );
+      if (st.state === 'ok') return (
+        <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
+          style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
+          <CheckCircle2 size={10} /> {s.agentStatusOk}
+        </span>
+      );
+      if (st.state === 'error') return (
+        <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
+          style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+          <XCircle size={10} /> {s.agentStatusError}
+          {st.message && <span className="ml-1 text-[10px]">({st.message})</span>}
+        </span>
+      );
+    }
+    if (installed) return (
+      <span className="text-[11px] px-1.5 py-0.5 rounded"
+        style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
+        {settingsMcp.installed}
+      </span>
+    );
+    return (
+      <span className="text-[11px] px-1.5 py-0.5 rounded"
+        style={{ background: 'rgba(100,100,120,0.1)', color: 'var(--muted-foreground)' }}>
+        {s.agentNotInstalled}
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.agentToolsHint}</p>
+      {agentsLoading ? (
+        <div className="flex items-center gap-2 py-4" style={{ color: 'var(--muted-foreground)' }}>
+          <Loader2 size={14} className="animate-spin" />
+          <span className="text-sm">{s.agentToolsLoading}</span>
+        </div>
+      ) : agents.length === 0 ? (
+        <p className="text-sm py-4 text-center" style={{ color: 'var(--muted-foreground)' }}>
+          {s.agentToolsEmpty}
+        </p>
+      ) : (
+        <>
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            {agents.map((agent, i) => (
+              <label key={agent.key}
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                style={{
+                  background: i % 2 === 0 ? 'var(--card)' : 'transparent',
+                  borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+                }}>
+                <input
+                  type="checkbox"
+                  checked={selectedAgents.has(agent.key)}
+                  onChange={() => toggleAgent(agent.key)}
+                  className="accent-amber-500"
+                  disabled={agentStatuses[agent.key]?.state === 'installing'}
+                />
+                <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
+                {getStatusBadge(agent.key, agent.installed)}
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label={s.agentTransport}>
+              <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'stdio' | 'http')}>
+                <option value="stdio">{settingsMcp.transportStdio}</option>
+                <option value="http">{settingsMcp.transportHttp}</option>
+              </Select>
+            </Field>
+            <Field label={s.agentScope}>
+              <Select value={agentScope} onChange={e => setAgentScope(e.target.value as 'global' | 'project')}>
+                <option value="global">{settingsMcp.global}</option>
+                <option value="project">{settingsMcp.project}</option>
+              </Select>
+            </Field>
+          </div>
+          {selectedAgents.size === 0 && (
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentNoneSelected}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Step 6: Review ───────────────────────────────────────────────────────────
+function Step6({
+  state, selectedAgents, error, portChanged, maskKey, s,
+}: {
+  state: SetupState;
+  selectedAgents: Set<string>;
+  error: string;
+  portChanged: boolean;
+  maskKey: (key: string) => string;
+  s: ReturnType<typeof useLocale>['t']['setup'];
+}) {
+  const rows: [string, string][] = [
+    [s.kbPath, state.mindRoot],
+    [s.template, state.template || '—'],
+    [s.aiProvider, state.provider === 'skip' ? s.aiSkipTitle : state.provider],
+    ...(state.provider !== 'skip' ? [
+      [s.apiKey, maskKey(state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey)] as [string, string],
+      [s.model, state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel] as [string, string],
+    ] : []),
+    [s.webPort, String(state.webPort)],
+    [s.mcpPort, String(state.mcpPort)],
+    [s.authToken, state.authToken || '—'],
+    [s.webPassword, state.webPassword ? '••••••••' : '(none)'],
+    [s.agentToolsTitle, selectedAgents.size > 0 ? Array.from(selectedAgents).join(', ') : '—'],
+  ];
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        {rows.map(([label, value], i) => (
+          <div key={i} className="flex items-center justify-between px-4 py-3 text-sm"
+            style={{
+              background: i % 2 === 0 ? 'var(--card)' : 'transparent',
+              borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+            }}>
+            <span style={{ color: 'var(--muted-foreground)' }}>{label}</span>
+            <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>{value}</span>
+          </div>
+        ))}
+      </div>
+      {error && (
+        <div className="p-3 rounded-lg text-sm text-red-500" style={{ background: 'rgba(239,68,68,0.1)' }}>
+          {s.completeFailed}: {error}
+        </div>
+      )}
+      {portChanged && (
+        <div className="space-y-3">
+          <div className="p-3 rounded-lg text-sm flex items-center gap-2"
+            style={{ background: 'rgba(200,135,30,0.1)', color: 'var(--amber)' }}>
+            <AlertTriangle size={14} /> {s.portChanged}
+          </div>
+          <a href="/" className="inline-flex items-center gap-1 px-4 py-2 text-sm rounded-lg transition-colors"
+            style={{ background: 'var(--amber)', color: 'white' }}>
+            {s.completeDone} &rarr;
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Step dots ────────────────────────────────────────────────────────────────
+function StepDots({ step, setStep, stepTitles }: {
+  step: number;
+  setStep: (s: number) => void;
+  stepTitles: readonly string[];
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-8">
+      {stepTitles.map((title: string, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          {i > 0 && <div className="w-8 h-px" style={{ background: i <= step ? 'var(--amber)' : 'var(--border)' }} />}
+          <button onClick={() => i < step && setStep(i)} className="flex items-center gap-1.5" disabled={i > step}>
+            <div
+              className="w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-colors"
+              style={{
+                background: i <= step ? 'var(--amber)' : 'var(--muted)',
+                color: i <= step ? 'white' : 'var(--muted-foreground)',
+                opacity: i <= step ? 1 : 0.5,
+              }}>
+              {i + 1}
+            </div>
+            <span className="text-xs hidden sm:inline"
+              style={{ color: i === step ? 'var(--foreground)' : 'var(--muted-foreground)', opacity: i <= step ? 1 : 0.5 }}>
+              {title}
+            </span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function SetupWizard() {
   const { t } = useLocale();
   const s = t.setup;
@@ -200,17 +556,14 @@ export default function SetupWizard() {
   const [error, setError] = useState('');
   const [portChanged, setPortChanged] = useState(false);
 
-  // Port availability
   const [webPortStatus, setWebPortStatus] = useState<PortStatus>({ checking: false, available: null, suggestion: null });
   const [mcpPortStatus, setMcpPortStatus] = useState<PortStatus>({ checking: false, available: null, suggestion: null });
 
-  // Agent Tools
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [agentTransport, setAgentTransport] = useState<'stdio' | 'http'>('stdio');
   const [agentScope, setAgentScope] = useState<'global' | 'project'>('global');
-  // Live per-agent install status (shown inline in Step 5 during/after submit)
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentInstallStatus>>({});
 
   // Generate token on mount
@@ -288,11 +641,34 @@ export default function SetupWizard() {
     }
   }, []);
 
+  const maskKey = (key: string) => {
+    if (!key) return '(not set)';
+    if (key.length <= 8) return '•••';
+    return key.slice(0, 6) + '•••' + key.slice(-3);
+  };
+
+  const portConflict = state.webPort === state.mcpPort;
+
+  const canNext = () => {
+    if (step === STEP_KB) return state.mindRoot.trim().length > 0;
+    if (step === STEP_PORTS) {
+      if (portConflict) return false;
+      if (webPortStatus.checking || mcpPortStatus.checking) return false;
+      if (webPortStatus.available !== true || mcpPortStatus.available !== true) return false;
+      return (
+        state.webPort >= 1024 && state.webPort <= 65535 &&
+        state.mcpPort >= 1024 && state.mcpPort <= 65535
+      );
+    }
+    return true;
+  };
+
   const handleComplete = async () => {
     setSubmitting(true);
     setError('');
+    let didPortChange = false;
 
-    // 1. Save setup config first
+    // 1. Save setup config
     try {
       const payload = {
         mindRoot: state.mindRoot,
@@ -316,16 +692,16 @@ export default function SetupWizard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      if (data.portChanged) setPortChanged(true);
+      didPortChange = !!data.portChanged;
+      if (didPortChange) setPortChanged(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
       return;
     }
 
-    // 2. Install agents after config saved — update statuses live
+    // 2. Install agents after config saved
     if (selectedAgents.size > 0) {
-      // Mark all selected as "installing"
       const initialStatuses: Record<string, AgentInstallStatus> = {};
       for (const key of selectedAgents) initialStatuses[key] = { state: 'installing' };
       setAgentStatuses(initialStatuses);
@@ -346,15 +722,11 @@ export default function SetupWizard() {
         if (data.results) {
           const updated: Record<string, AgentInstallStatus> = {};
           for (const r of data.results as Array<{ agent: string; status: string; message?: string }>) {
-            updated[r.agent] = {
-              state: r.status === 'ok' ? 'ok' : 'error',
-              message: r.message,
-            };
+            updated[r.agent] = { state: r.status === 'ok' ? 'ok' : 'error', message: r.message };
           }
           setAgentStatuses(updated);
         }
       } catch {
-        // Mark all as error
         const errStatuses: Record<string, AgentInstallStatus> = {};
         for (const key of selectedAgents) errStatuses[key] = { state: 'error' };
         setAgentStatuses(errStatuses);
@@ -362,396 +734,18 @@ export default function SetupWizard() {
     }
 
     setSubmitting(false);
-    if (!portChanged) window.location.href = '/';
-  };
 
-  const portConflict = state.webPort === state.mcpPort;
-
-  const canNext = () => {
-    if (step === STEP_KB) return state.mindRoot.trim().length > 0;
-    if (step === STEP_PORTS) {
-      if (portConflict) return false;
-      if (webPortStatus.checking || mcpPortStatus.checking) return false;
-      if (webPortStatus.available !== true || mcpPortStatus.available !== true) return false;
-      return (
-        state.webPort >= 1024 && state.webPort <= 65535 &&
-        state.mcpPort >= 1024 && state.mcpPort <= 65535
-      );
+    if (didPortChange) {
+      // Port changed — stay on page, show restart hint
+      return;
     }
-    return true;
+    window.location.href = '/';
   };
-
-  const maskKey = (key: string) => {
-    if (!key) return '(not set)';
-    if (key.length <= 8) return '•••';
-    return key.slice(0, 6) + '•••' + key.slice(-3);
-  };
-
-  // ----------------------------------------------------------------
-  // Step dots
-  // ----------------------------------------------------------------
-  const StepDots = () => (
-    <div className="flex items-center gap-2 mb-8">
-      {s.stepTitles.map((title: string, i: number) => (
-        <div key={i} className="flex items-center gap-2">
-          {i > 0 && <div className="w-8 h-px" style={{ background: i <= step ? 'var(--amber)' : 'var(--border)' }} />}
-          <button onClick={() => i < step && setStep(i)} className="flex items-center gap-1.5" disabled={i > step}>
-            <div
-              className="w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-colors"
-              style={{
-                background: i <= step ? 'var(--amber)' : 'var(--muted)',
-                color: i <= step ? 'white' : 'var(--muted-foreground)',
-                opacity: i <= step ? 1 : 0.5,
-              }}
-            >
-              {i + 1}
-            </div>
-            <span className="text-xs hidden sm:inline"
-              style={{ color: i === step ? 'var(--foreground)' : 'var(--muted-foreground)', opacity: i <= step ? 1 : 0.5 }}>
-              {title}
-            </span>
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-
-  // ----------------------------------------------------------------
-  // Step 1: Knowledge Base
-  // ----------------------------------------------------------------
-  const Step1 = () => (
-    <div className="space-y-6">
-      <Field label={s.kbPath} hint={s.kbPathHint}>
-        <Input value={state.mindRoot} onChange={e => update('mindRoot', e.target.value)} placeholder={s.kbPathDefault} />
-      </Field>
-      <div>
-        <label className="text-sm text-foreground font-medium mb-3 block">{s.template}</label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {TEMPLATES.map(tpl => (
-            <button key={tpl.id} onClick={() => update('template', tpl.id)}
-              className="flex flex-col items-start gap-2 p-4 rounded-xl border text-left transition-all duration-150"
-              style={{
-                background: state.template === tpl.id ? 'var(--amber-subtle, rgba(200,135,30,0.08))' : 'var(--card)',
-                borderColor: state.template === tpl.id ? 'var(--amber)' : 'var(--border)',
-              }}>
-              <div className="flex items-center gap-2">
-                <span style={{ color: 'var(--amber)' }}>{tpl.icon}</span>
-                <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>
-                  {t.onboarding.templates[tpl.id as 'en' | 'zh' | 'empty'].title}
-                </span>
-              </div>
-              <div className="w-full rounded-lg px-2.5 py-1.5 text-[11px] leading-relaxed font-display"
-                style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
-                {tpl.dirs.map(d => <div key={d}>{d}</div>)}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ----------------------------------------------------------------
-  // Step 2: AI Provider — card-based selection including skip
-  // ----------------------------------------------------------------
-  const PROVIDERS = [
-    {
-      id: 'anthropic' as const,
-      icon: <Brain size={18} />,
-      label: 'Anthropic',
-      desc: 'Claude — claude-sonnet-4-6',
-    },
-    {
-      id: 'openai' as const,
-      icon: <Zap size={18} />,
-      label: 'OpenAI',
-      desc: 'GPT or any OpenAI-compatible API',
-    },
-    {
-      id: 'skip' as const,
-      icon: <SkipForward size={18} />,
-      label: s.aiSkipTitle,
-      desc: s.aiSkipDesc,
-    },
-  ];
-
-  const Step2 = () => (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-3">
-        {PROVIDERS.map(p => (
-          <button key={p.id} onClick={() => update('provider', p.id)}
-            className="flex items-start gap-3 p-4 rounded-xl border text-left transition-all duration-150"
-            style={{
-              background: state.provider === p.id ? 'var(--amber-subtle, rgba(200,135,30,0.08))' : 'var(--card)',
-              borderColor: state.provider === p.id ? 'var(--amber)' : 'var(--border)',
-            }}>
-            <span className="mt-0.5" style={{ color: state.provider === p.id ? 'var(--amber)' : 'var(--muted-foreground)' }}>
-              {p.icon}
-            </span>
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{p.label}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{p.desc}</p>
-            </div>
-            {state.provider === p.id && (
-              <CheckCircle2 size={16} className="ml-auto mt-0.5 shrink-0" style={{ color: 'var(--amber)' }} />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {state.provider !== 'skip' && (
-        <div className="space-y-4 pt-2">
-          <Field label={s.apiKey}>
-            <ApiKeyInput
-              value={state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey}
-              onChange={v => update(state.provider === 'anthropic' ? 'anthropicKey' : 'openaiKey', v)}
-              placeholder={state.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
-            />
-          </Field>
-          <Field label={s.model}>
-            <Input
-              value={state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel}
-              onChange={e => update(state.provider === 'anthropic' ? 'anthropicModel' : 'openaiModel', e.target.value)}
-            />
-          </Field>
-          {state.provider === 'openai' && (
-            <Field label={s.baseUrl} hint={s.baseUrlHint}>
-              <Input value={state.openaiBaseUrl} onChange={e => update('openaiBaseUrl', e.target.value)}
-                placeholder="https://api.openai.com/v1" />
-            </Field>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // ----------------------------------------------------------------
-  // Step 3: Ports
-  // ----------------------------------------------------------------
-  const Step3 = () => (
-    <div className="space-y-5">
-      <PortField
-        label={s.webPort} hint={s.portHint} value={state.webPort}
-        onChange={v => { update('webPort', v); setWebPortStatus({ checking: false, available: null, suggestion: null }); }}
-        status={webPortStatus}
-        onCheckPort={port => checkPort(port, 'web')}
-        s={s}
-      />
-      <PortField
-        label={s.mcpPort} hint={s.portHint} value={state.mcpPort}
-        onChange={v => { update('mcpPort', v); setMcpPortStatus({ checking: false, available: null, suggestion: null }); }}
-        status={mcpPortStatus}
-        onCheckPort={port => checkPort(port, 'mcp')}
-        s={s}
-      />
-      {portConflict && (
-        <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--amber)' }}>
-          <AlertTriangle size={12} /> {s.portConflict}
-        </p>
-      )}
-      {!portConflict && (webPortStatus.available === null || mcpPortStatus.available === null) && !webPortStatus.checking && !mcpPortStatus.checking && (
-        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.portVerifyHint}</p>
-      )}
-      <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--muted-foreground)' }}>
-        <AlertTriangle size={12} /> {s.portRestartWarning}
-      </p>
-    </div>
-  );
-
-  // ----------------------------------------------------------------
-  // Step 5: Agent Tools
-  // ----------------------------------------------------------------
-  const Step5 = () => {
-    const toggleAgent = (key: string) => {
-      setSelectedAgents(prev => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key); else next.add(key);
-        return next;
-      });
-    };
-
-    const getStatusBadge = (key: string, installed: boolean) => {
-      const st = agentStatuses[key];
-
-      // Show install result if we've run setup
-      if (st) {
-        if (st.state === 'installing') return (
-          <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--muted-foreground)' }}>
-            <Loader2 size={10} className="animate-spin" /> {s.agentInstalling}
-          </span>
-        );
-        if (st.state === 'ok') return (
-          <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
-            <CheckCircle2 size={10} /> {s.agentStatusOk}
-          </span>
-        );
-        if (st.state === 'error') return (
-          <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-            <XCircle size={10} /> {s.agentStatusError}
-            {st.message && <span className="ml-1 text-[10px]">({st.message})</span>}
-          </span>
-        );
-      }
-
-      // Show app install status (before setup runs)
-      if (installed) return (
-        <span className="text-[11px] px-1.5 py-0.5 rounded"
-          style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
-          {t.settings.mcp.installed}
-        </span>
-      );
-      return (
-        <span className="text-[11px] px-1.5 py-0.5 rounded"
-          style={{ background: 'rgba(100,100,120,0.1)', color: 'var(--muted-foreground)' }}>
-          {s.agentNotInstalled}
-        </span>
-      );
-    };
-
-    return (
-      <div className="space-y-5">
-        <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.agentToolsHint}</p>
-
-        {agentsLoading ? (
-          <div className="flex items-center gap-2 py-4" style={{ color: 'var(--muted-foreground)' }}>
-            <Loader2 size={14} className="animate-spin" />
-            <span className="text-sm">{s.agentToolsLoading}</span>
-          </div>
-        ) : agents.length === 0 ? (
-          <p className="text-sm py-4 text-center" style={{ color: 'var(--muted-foreground)' }}>
-            {s.agentToolsEmpty}
-          </p>
-        ) : (
-          <>
-            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-              {agents.map((agent, i) => (
-                <label key={agent.key}
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                  style={{
-                    background: i % 2 === 0 ? 'var(--card)' : 'transparent',
-                    borderTop: i > 0 ? '1px solid var(--border)' : undefined,
-                  }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedAgents.has(agent.key)}
-                    onChange={() => toggleAgent(agent.key)}
-                    className="accent-amber-500"
-                    disabled={agentStatuses[agent.key]?.state === 'installing'}
-                  />
-                  <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
-                  {getStatusBadge(agent.key, agent.installed)}
-                </label>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={s.agentTransport}>
-                <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'stdio' | 'http')}>
-                  <option value="stdio">{t.settings.mcp.transportStdio}</option>
-                  <option value="http">{t.settings.mcp.transportHttp}</option>
-                </Select>
-              </Field>
-              <Field label={s.agentScope}>
-                <Select value={agentScope} onChange={e => setAgentScope(e.target.value as 'global' | 'project')}>
-                  <option value="global">{t.settings.mcp.global}</option>
-                  <option value="project">{t.settings.mcp.project}</option>
-                </Select>
-              </Field>
-            </div>
-
-            {selectedAgents.size === 0 && (
-              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentNoneSelected}</p>
-            )}
-          </>
-        )}
-      </div>
-    );
-  };
-
-  // ----------------------------------------------------------------
-  // Step 6: Review
-  // ----------------------------------------------------------------
-  const Step6 = () => {
-    const rows: [string, string][] = [
-      [s.kbPath, state.mindRoot],
-      [s.template, state.template || '—'],
-      [s.aiProvider, state.provider === 'skip' ? s.aiSkipTitle : state.provider],
-      ...(state.provider !== 'skip' ? [
-        [s.apiKey, maskKey(state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey)] as [string, string],
-        [s.model, state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel] as [string, string],
-      ] : []),
-      [s.webPort, String(state.webPort)],
-      [s.mcpPort, String(state.mcpPort)],
-      [s.authToken, state.authToken || '—'],
-      [s.webPassword, state.webPassword ? '••••••••' : '(none)'],
-      [s.agentToolsTitle, selectedAgents.size > 0 ? Array.from(selectedAgents).join(', ') : '—'],
-    ];
-
-    return (
-      <div className="space-y-5">
-        <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          {rows.map(([label, value], i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3 text-sm"
-              style={{
-                background: i % 2 === 0 ? 'var(--card)' : 'transparent',
-                borderTop: i > 0 ? '1px solid var(--border)' : undefined,
-              }}>
-              <span style={{ color: 'var(--muted-foreground)' }}>{label}</span>
-              <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>{value}</span>
-            </div>
-          ))}
-        </div>
-
-        {error && (
-          <div className="p-3 rounded-lg text-sm text-red-500" style={{ background: 'rgba(239,68,68,0.1)' }}>
-            {s.completeFailed}: {error}
-          </div>
-        )}
-
-        {portChanged && (
-          <div className="space-y-3">
-            <div className="p-3 rounded-lg text-sm flex items-center gap-2"
-              style={{ background: 'rgba(200,135,30,0.1)', color: 'var(--amber)' }}>
-              <AlertTriangle size={14} /> {s.portChanged}
-            </div>
-            <a href="/" className="inline-flex items-center gap-1 px-4 py-2 text-sm rounded-lg transition-colors"
-              style={{ background: 'var(--amber)', color: 'white' }}>
-              {s.completeDone} &rarr;
-            </a>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const steps = [
-    Step1,
-    Step2,
-    Step3,
-    () => (
-      <Step4Inner
-        authToken={state.authToken}
-        tokenCopied={tokenCopied}
-        onCopy={copyToken}
-        onGenerate={generateToken}
-        webPassword={state.webPassword}
-        onPasswordChange={v => update('webPassword', v)}
-        s={s}
-      />
-    ),
-    Step5,
-    Step6,
-  ];
-  const CurrentStep = steps[step];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
       style={{ background: 'var(--background)' }}>
       <div className="w-full max-w-xl mx-auto px-6 py-12">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <Sparkles size={18} style={{ color: 'var(--amber)' }} />
@@ -762,14 +756,47 @@ export default function SetupWizard() {
         </div>
 
         <div className="flex justify-center">
-          <StepDots />
+          <StepDots step={step} setStep={setStep} stepTitles={s.stepTitles} />
         </div>
 
         <h2 className="text-lg font-semibold mb-5" style={{ color: 'var(--foreground)' }}>
           {s.stepTitles[step]}
         </h2>
 
-        <CurrentStep />
+        {step === 0 && <Step1 state={state} update={update} t={t} />}
+        {step === 1 && <Step2 state={state} update={update} s={s} />}
+        {step === 2 && (
+          <Step3
+            state={state} update={update}
+            webPortStatus={webPortStatus} mcpPortStatus={mcpPortStatus}
+            setWebPortStatus={setWebPortStatus} setMcpPortStatus={setMcpPortStatus}
+            checkPort={checkPort} portConflict={portConflict} s={s}
+          />
+        )}
+        {step === 3 && (
+          <Step4Inner
+            authToken={state.authToken} tokenCopied={tokenCopied}
+            onCopy={copyToken} onGenerate={generateToken}
+            webPassword={state.webPassword} onPasswordChange={v => update('webPassword', v)}
+            s={s}
+          />
+        )}
+        {step === 4 && (
+          <Step5
+            agents={agents} agentsLoading={agentsLoading}
+            selectedAgents={selectedAgents} setSelectedAgents={setSelectedAgents}
+            agentTransport={agentTransport} setAgentTransport={setAgentTransport}
+            agentScope={agentScope} setAgentScope={setAgentScope}
+            agentStatuses={agentStatuses} s={s} settingsMcp={t.settings.mcp}
+          />
+        )}
+        {step === 5 && (
+          <Step6
+            state={state} selectedAgents={selectedAgents}
+            error={error} portChanged={portChanged}
+            maskKey={maskKey} s={s}
+          />
+        )}
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
