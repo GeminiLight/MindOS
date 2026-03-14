@@ -186,6 +186,52 @@ export const messages = {
       { keys: ['Esc'], description: 'Cancel edit / close modal' },
       { keys: ['@'], description: 'Attach file in Ask AI' },
     ],
+    setup: {
+      stepTitles: ['Knowledge Base', 'AI Provider', 'Ports', 'Security', 'Review'],
+      // Step 1
+      kbPath: 'Knowledge base path',
+      kbPathHint: 'Absolute path to your notes directory.',
+      kbPathDefault: '~/MindOS',
+      template: 'Starter template',
+      templateSkip: 'Skip (directory already has files)',
+      // Step 2
+      aiProvider: 'AI Provider',
+      aiProviderHint: 'Choose your preferred AI service.',
+      aiSkip: 'Skip — configure later',
+      apiKey: 'API Key',
+      model: 'Model',
+      baseUrl: 'Base URL',
+      baseUrlHint: 'Optional. For proxies or OpenAI-compatible APIs.',
+      // Step 3
+      webPort: 'Web UI port',
+      mcpPort: 'MCP server port',
+      portHint: 'Valid range: 1024–65535',
+      portRestartWarning: 'Port changes take effect after server restart.',
+      // Step 4
+      authToken: 'Auth Token',
+      authTokenHint: 'Bearer token for MCP / API clients. Auto-generated.',
+      authTokenSeed: 'Custom seed (optional)',
+      authTokenSeedHint: 'Enter a passphrase to derive a deterministic token.',
+      generateToken: 'Generate',
+      copyToken: 'Copy',
+      copiedToken: 'Copied!',
+      webPassword: 'Web UI Password',
+      webPasswordHint: 'Optional. Protect browser access with a password.',
+      // Step 5
+      reviewTitle: 'Review Configuration',
+      reviewHint: 'Verify your settings before completing setup.',
+      keyMasked: (key: string) => key.slice(0, 6) + '•••' + key.slice(-3),
+      portChanged: 'Port changed — please restart the server for it to take effect.',
+      // Buttons
+      back: 'Back',
+      next: 'Next',
+      complete: 'Complete Setup',
+      skip: 'Skip',
+      // Status
+      completing: 'Saving...',
+      completeDone: 'Setup complete!',
+      completeFailed: 'Setup failed. Please try again.',
+    },
   },
   zh: {
     common: {
@@ -372,6 +418,52 @@ export const messages = {
       { keys: ['Esc'], description: '取消编辑 / 关闭弹窗' },
       { keys: ['@'], description: '在 AI 对话中添加附件' },
     ],
+    setup: {
+      stepTitles: ['知识库', 'AI 服务商', '端口', '安全', '确认'],
+      // Step 1
+      kbPath: '知识库路径',
+      kbPathHint: '笔记目录的绝对路径。',
+      kbPathDefault: '~/MindOS',
+      template: '初始模板',
+      templateSkip: '跳过（目录已有文件）',
+      // Step 2
+      aiProvider: 'AI 服务商',
+      aiProviderHint: '选择你偏好的 AI 服务。',
+      aiSkip: '跳过 — 稍后配置',
+      apiKey: 'API 密钥',
+      model: '模型',
+      baseUrl: '接口地址',
+      baseUrlHint: '可选。用于代理或 OpenAI 兼容 API。',
+      // Step 3
+      webPort: 'Web UI 端口',
+      mcpPort: 'MCP 服务端口',
+      portHint: '有效范围：1024–65535',
+      portRestartWarning: '端口修改需重启服务后生效。',
+      // Step 4
+      authToken: 'Auth Token',
+      authTokenHint: 'MCP / API 客户端使用的 Bearer Token，自动生成。',
+      authTokenSeed: '自定义种子（可选）',
+      authTokenSeedHint: '输入口令短语生成确定性 Token。',
+      generateToken: '生成',
+      copyToken: '复制',
+      copiedToken: '已复制！',
+      webPassword: '网页访问密码',
+      webPasswordHint: '可选。设置后浏览器访问需要登录。',
+      // Step 5
+      reviewTitle: '确认配置',
+      reviewHint: '完成设置前请确认以下信息。',
+      keyMasked: (key: string) => key.slice(0, 6) + '•••' + key.slice(-3),
+      portChanged: '端口已变更 — 请重启服务以使其生效。',
+      // Buttons
+      back: '上一步',
+      next: '下一步',
+      complete: '完成设置',
+      skip: '跳过',
+      // Status
+      completing: '保存中...',
+      completeDone: '设置完成！',
+      completeFailed: '设置失败，请重试。',
+    },
   },
 } as const;
 

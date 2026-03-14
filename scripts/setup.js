@@ -26,7 +26,7 @@ import { homedir, tmpdir, networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { pipeline } from 'node:stream/promises';
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { createConnection } from 'node:net';
 
@@ -40,6 +40,14 @@ const CONFIG_PATH = resolve(MINDOS_DIR, 'config.json');
 const T = {
   title:          { en: '🧠 MindOS Setup', zh: '🧠 MindOS 初始化' },
   langHint:       { en: '  ← → switch language / 切换语言    ↑ ↓ navigate    Enter confirm', zh: '  ← → switch language / 切换语言    ↑ ↓ 上下切换    Enter 确认' },
+
+  // mode selection
+  modePrompt:     { en: 'Setup mode', zh: '配置方式' },
+  modeOpts:       { en: ['CLI — terminal wizard', 'GUI — browser wizard (recommended)'], zh: ['CLI — 终端向导', 'GUI — 浏览器向导（推荐）'] },
+  modeVals:       ['cli', 'gui'],
+  guiStarting:    { en: '⏳ Starting server for GUI setup...', zh: '⏳ 正在启动服务...' },
+  guiReady:       { en: (url) => `🌐 Complete setup in browser: ${url}`, zh: (url) => `🌐 在浏览器中完成配置: ${url}` },
+  guiOpenFailed:  { en: (url) => `  Could not open browser automatically. Open this URL manually:\n  ${url}`, zh: (url) => `  无法自动打开浏览器，请手动访问：\n  ${url}` },
 
   // step labels
   step:           { en: (n, total) => `Step ${n}/${total}`, zh: (n, total) => `步骤 ${n}/${total}` },
@@ -493,10 +501,94 @@ async function applyTemplate(tpl, mindDir) {
   }
 }
 
+// ── GUI Setup ─────────────────────────────────────────────────────────────────
+
+function openBrowser(url) {
+  try {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      execSync(`open "${url}"`, { stdio: 'ignore' });
+    } else if (platform === 'linux') {
+      // Check for WSL
+      const isWSL = existsSync('/proc/version') &&
+        readFileSync('/proc/version', 'utf-8').toLowerCase().includes('microsoft');
+      if (isWSL) {
+        execSync(`cmd.exe /c start "${url}"`, { stdio: 'ignore' });
+      } else {
+        execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+      }
+    } else {
+      execSync(`cmd.exe /c start "${url}"`, { stdio: 'ignore' });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function startGuiSetup() {
+  // Ensure ~/.mindos directory exists
+  mkdirSync(MINDOS_DIR, { recursive: true });
+
+  // Read or create config, set setupPending
+  let config = {};
+  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
+  config.setupPending = true;
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+
+  // Find a free port
+  const port = await findFreePort(3000);
+  if (config.port === undefined) {
+    config.port = port;
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  }
+  const usePort = config.port || port;
+
+  write(c.yellow(t('guiStarting') + '\n'));
+
+  // Start the server in the background
+  const cliPath = resolve(__dirname, '../bin/cli.js');
+  const child = spawn(process.execPath, [cliPath, 'start'], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, PORT: String(usePort) },
+  });
+  child.unref();
+
+  // Wait for the server to be ready
+  const { waitForHttp } = await import('../bin/lib/gateway.js');
+  const ready = await waitForHttp(usePort, { retries: 60, intervalMs: 1000, label: 'MindOS' });
+
+  if (!ready) {
+    write(c.red('\n✘ Server failed to start.\n'));
+    process.exit(1);
+  }
+
+  const url = `http://localhost:${usePort}/setup`;
+  console.log(`\n${c.green(tf('guiReady', url))}\n`);
+
+  const opened = openBrowser(url);
+  if (!opened) {
+    console.log(c.dim(tf('guiOpenFailed', url)));
+  }
+
+  process.exit(0);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log(`\n${c.bold(t('title'))}\n\n${c.dim(t('langHint'))}\n`);
+
+  // ── Mode selection: CLI or GUI ───────────────────────────────────────────
+  const mode = await select('modePrompt', 'modeOpts', 'modeVals');
+
+  if (mode === 'gui') {
+    await startGuiSetup();
+    return;
+  }
+
+  // ── CLI mode continues below ─────────────────────────────────────────────
 
   // ── Early overwrite check ─────────────────────────────────────────────────
   if (existsSync(CONFIG_PATH)) {
