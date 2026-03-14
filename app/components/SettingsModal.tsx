@@ -223,6 +223,15 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
                   {t.settings.ai.restoreFromEnv}
                 </button>
               )}
+              {tab === 'knowledge' && (
+                <a
+                  href="/setup?force=1"
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <RotateCcw size={13} />
+                  {t.settings.reconfigure}
+                </a>
+              )}
               <div className="flex items-center gap-1.5 text-xs">
                 {status === 'saved' && (
                   <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{t.settings.saved}</span></>

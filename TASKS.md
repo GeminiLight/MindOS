@@ -1,3 +1,14 @@
+● 还没发布到 0.5.1，CI 还在跑。你可以稍后手动执行：
+
+  npm install -g @geminilight/mindos@latest
+
+  或者直接用本地版本（已经是最新代码）：
+
+  cd /data/home/geminitwang/code/sop_note && npm link
+
+
+
+
 你觉得用户还会有哪些觉得很模糊 或者 不友好的地方
 
 

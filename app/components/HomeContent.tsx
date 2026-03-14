@@ -8,6 +8,7 @@ import { encodePath, relativeTime } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 import OnboardingView from './OnboardingView';
+import WelcomeBanner from './WelcomeBanner';
 
 interface RecentFile {
   path: string;
@@ -67,6 +68,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-12">
+      <WelcomeBanner />
       {/* Hero */}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-3">
