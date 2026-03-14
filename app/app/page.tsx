@@ -5,6 +5,8 @@ import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 import HomeContent from '@/components/HomeContent';
 
+export const dynamic = 'force-dynamic';
+
 function getExistingFiles(paths: string[]): string[] {
   return paths.filter(p => {
     try { getFileContent(p); return true; } catch { return false; }

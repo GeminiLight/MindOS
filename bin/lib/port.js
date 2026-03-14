@@ -4,8 +4,14 @@ import { bold, dim, red } from './colors.js';
 export function isPortInUse(port) {
   return new Promise((resolve) => {
     const sock = createConnection({ port, host: '127.0.0.1' });
-    sock.once('connect', () => { sock.destroy(); resolve(true); });
-    sock.once('error',   () => { sock.destroy(); resolve(false); });
+    const cleanup = (result) => { sock.destroy(); resolve(result); };
+    sock.setTimeout(500, () => cleanup(false));
+    sock.once('connect', () => cleanup(true));
+    sock.once('error', (err) => {
+      // ECONNREFUSED = nothing listening → port is free
+      // EACCES / ENETUNREACH / etc. = treat as unavailable (can't bind either)
+      cleanup(err.code !== 'ECONNREFUSED');
+    });
   });
 }
 

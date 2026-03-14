@@ -232,7 +232,10 @@ export async function mcpInstall() {
     const ask2 = (q) => new Promise(r => rl2.question(q, r));
 
     if (!url) {
-      url = hasYesFlag ? 'http://localhost:8787/mcp' : (await ask2(`${bold('MCP URL')} ${dim('[http://localhost:8787/mcp]:')} `)).trim() || 'http://localhost:8787/mcp';
+      let mcpPort = 8787;
+      try { mcpPort = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).mcpPort || 8787; } catch {}
+      const defaultUrl = `http://localhost:${mcpPort}/mcp`;
+      url = hasYesFlag ? defaultUrl : (await ask2(`${bold('MCP URL')} ${dim(`[${defaultUrl}]:`)} `)).trim() || defaultUrl;
     }
 
     if (!token) {
