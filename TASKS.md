@@ -6,8 +6,7 @@
 
   cd /data/home/geminitwang/code/sop_note && npm link
 
-
-
+避免硬编码，比如json里面的变量
 
 你觉得用户还会有哪些觉得很模糊 或者 不友好的地方
 

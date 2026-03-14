@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-15 | Current stage: P1 -->
 
 # Backlog
 
@@ -6,7 +6,7 @@
 
 ## Bug
 
-(无)
+- [x] **`mindos update` 端口硬编码**：重启后健康检查轮询 `localhost:3000`，但用户实际端口可能不是 3000，导致"did not come back up in time"误报。修复：直接从 config 文件读 `port` 字段；顺带将 `waitForHttp` 探测路径从 `/` 改为 `/api/health` — v0.5.2
 
 ## 技术债
 
@@ -15,6 +15,8 @@
 - [ ] 13 个 renderer 插件文件仍使用 inline `fontFamily`，待迁移到 `.font-display`
 
 ## 改进想法
+
+- [x] **GUI RestartBlock 健康检查**：polling 判断条件从 `d.service === 'mindos'`（依赖响应体）改为 `r.status < 500`（只看状态码），与 CLI `waitForHttp` 逻辑一致，不受响应结构变更影响 — v0.5.2
 
 - [ ] **Onboarding — API Key 连通性验证**：Step 2 填写 API Key 后失焦自动测试（`max_tokens: 1`），显示 ✔/✘ badge 但不阻断继续；CLI 同步；Skip 模式不触发
 

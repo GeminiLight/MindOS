@@ -550,7 +550,9 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       await runGatewayCommand('stop');
       await runGatewayCommand('install');
       await runGatewayCommand('start');
-      const webPort = process.env.MINDOS_WEB_PORT || '3000';
+      const webPort = (() => {
+        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).port ?? 3000; } catch { return 3000; }
+      })();
       console.log(dim('  (Waiting for Web UI to come back up...)'));
       const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
       if (ready) {
