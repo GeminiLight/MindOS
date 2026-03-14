@@ -1,72 +1,36 @@
-<!-- Last verified: 2026-03-14 | Current stage: P4 (complete) -->
+<!-- Last verified: 2026-03-14 | Current stage: ALL COMPLETE (v0.4.0) -->
 
 # 插件架构设计 (Plugin Architecture)
 
 > 目标：新增插件 = 新建目录 + 写 manifest，**零侵入已有文件**。
+> **状态：全部 4 个 Phase 已完成，随 v0.4.0 发布。**
 
-## 现状分析
+## 当前架构（已实现）
 
-### 当前注册方式
-
-```
-app/lib/renderers/index.ts    ← 手动 import 10 个组件 + 10 次 registerRenderer()
-```
-
-每新增一个 renderer 必须：
-1. 在 `index.ts` 顶部加 `import`
-2. 在 `index.ts` 底部加 `registerRenderer({...})`
-3. 新建组件文件
-
-**侵入点**：`index.ts` 是所有插件的集中注册处，每次改动都涉及已有文件。
-
-### 当前消费方（不需要改）
-
-| 文件 | 调用 | 用途 |
-|------|------|------|
-| `ViewPageClient.tsx` | `resolveRenderer()` | 文件视图渲染 |
-| `HomeContent.tsx` | `getAllRenderers()` | 首页插件展示 |
-| `page.tsx` | `getAllRenderers()` | 服务端 entryPath 检测 |
-| `PluginsTab.tsx` | `getAllRenderers()` + `setRendererEnabled()` | 设置面板开关 |
-| `SettingsModal.tsx` | `loadDisabledState()` | 初始化禁用状态 |
-
-这些消费方只依赖 `registry.ts` 的 API，不直接 import 具体 renderer —— 改注册方式不影响它们。
-
----
-
-## 方案：Manifest 自注册 + Auto-discovery
-
-### 目录约定
+### 目录结构
 
 ```
 app/components/renderers/
 ├── todo/
-│   ├── manifest.ts          ← 自描述元数据 + match 规则
-│   ├── TodoRenderer.tsx     ← 组件实现
-│   └── index.ts             ← re-export（可选）
+│   ├── manifest.ts          ← 元数据 + match + lazy load
+│   └── TodoRenderer.tsx
 ├── csv/
 │   ├── manifest.ts
 │   ├── CsvRenderer.tsx
-│   ├── TableView.tsx
-│   ├── GalleryView.tsx
-│   ├── BoardView.tsx
-│   ├── EditableCell.tsx
-│   └── ConfigPanel.tsx
-├── graph/
-│   ├── manifest.ts
-│   └── GraphRenderer.tsx
-├── timeline/
-│   ├── manifest.ts
-│   └── TimelineRenderer.tsx
-├── ... (每个 renderer 一个子目录)
+│   ├── TableView.tsx / GalleryView.tsx / BoardView.tsx / ConfigPanel.tsx
+│   └── types.ts
+├── graph/          ├── timeline/       ├── summary/
+├── config/         ├── agent-inspector/ ├── backlinks/
+├── workflow/       └── diff/
 ```
 
 ### manifest.ts 规范
 
 ```ts
 // app/components/renderers/todo/manifest.ts
-import type { RendererManifest } from '@/lib/renderers/types';
+import type { RendererDefinition } from '@/lib/renderers/registry';
 
-export const manifest: RendererManifest = {
+export const manifest: RendererDefinition = {
   id: 'todo',
   name: 'TODO Board',
   description: 'Renders TODO.md/TODO.csv as interactive kanban board',
@@ -76,113 +40,59 @@ export const manifest: RendererManifest = {
   builtin: true,
   entryPath: 'TODO.md',
   match: ({ filePath }) => /\bTODO\b.*\.(md|csv)$/i.test(filePath),
-  // lazy load — 组件只在命中时加载，不进入初始 bundle
-  load: () => import('./TodoRenderer').then(m => m.TodoRenderer),
+  load: () => import('./TodoRenderer').then(m => ({ default: m.TodoRenderer })),
 };
 ```
 
-### 类型定义
+### Auto-discovery (codegen)
 
-```ts
-// app/lib/renderers/types.ts（从 registry.ts 分离）
-
-import type { ComponentType } from 'react';
-
-export interface RendererContext {
-  filePath: string;
-  content: string;
-  extension: string;
-  saveAction: (content: string) => Promise<void>;
-}
-
-export interface RendererManifest {
-  id: string;
-  name: string;
-  description: string;
-  author: string;
-  icon: string;
-  tags: string[];
-  builtin: boolean;
-  entryPath?: string;
-  match: (ctx: Pick<RendererContext, 'filePath' | 'extension'>) => boolean;
-  // 二选一：静态组件 or 懒加载
-  component?: ComponentType<RendererContext>;
-  load?: () => Promise<ComponentType<RendererContext>>;
-}
+```bash
+node scripts/gen-renderer-index.js
 ```
 
-### 自动扫描注册
+扫描 `app/components/renderers/*/manifest.ts`，自动生成 `app/lib/renderers/index.ts`（~23 行）。
 
-```ts
-// app/lib/renderers/index.ts（从 142 行 → ~10 行）
+钩子位置：
+- `bin/cli.js` — `start` 和 `build` 命令在 `next build` 前调用
+- `app/package.json` — `prebuild` 脚本
 
-import { registerRenderer } from './registry';
+### Lazy Loading
 
-// Webpack/Next.js import.meta.glob 等效：require.context 或 dynamic import
-// Next.js App Router 推荐方式：
-const modules = require.context(
-  '../../components/renderers',
-  true,                          // recursive
-  /\/manifest\.ts$/              // 只匹配 manifest.ts
-);
+- manifest 使用 `load: () => import(...)` 替代 `component`
+- `ViewPageClient.tsx` 使用 `React.lazy()` + `<Suspense>` 渲染
+- 组件只在命中时加载，不进入初始 bundle
 
-for (const key of modules.keys()) {
-  const { manifest } = modules(key);
-  registerRenderer(manifest);
-}
-```
+### 消费方（无需修改）
 
-> **Next.js 兼容说明**：`import.meta.glob` 是 Vite 特性，Next.js (webpack) 用 `require.context` 或在 build 时生成静态 import 列表。具体方案需根据 Next.js 16 的 bundler（Turbopack/webpack）选择。
-
-### registry.ts 适配
-
-```ts
-// resolveRenderer 增加 lazy load 支持
-export async function loadComponent(def: RendererManifest): Promise<ComponentType<RendererContext>> {
-  if (def.component) return def.component;
-  if (def.load) {
-    const comp = await def.load();
-    def.component = comp; // 缓存，只加载一次
-    return comp;
-  }
-  throw new Error(`Renderer "${def.id}" has no component or load function`);
-}
-```
+| 文件 | 调用 | 用途 |
+|------|------|------|
+| `ViewPageClient.tsx` | `resolveRenderer()` + `React.lazy` | 文件视图渲染 |
+| `HomeContent.tsx` | `getAllRenderers()` | 首页插件展示 |
+| `page.tsx` | `getAllRenderers()` | 服务端 entryPath 检测 |
+| `PluginsTab.tsx` | `getAllRenderers()` + `setRendererEnabled()` | 设置面板开关 |
+| `SettingsModal.tsx` | `loadDisabledState()` | 初始化禁用状态 |
 
 ---
 
-## 迁移计划
+## 新增 Renderer 步骤
 
-### Phase 1：目录拆分（纯文件移动，不改逻辑）
+1. 创建目录 `app/components/renderers/{name}/`
+2. 写组件 `{Name}Renderer.tsx`（export named function）
+3. 写 `manifest.ts`（参照上方规范）
+4. 运行 `node scripts/gen-renderer-index.js`（build 时自动运行）
 
-将单文件 renderer 移入各自子目录：
+**改动文件数：0 个已有文件。**
 
-| 现在 | 移到 |
-|------|------|
-| `renderers/TodoRenderer.tsx` | `renderers/todo/TodoRenderer.tsx` |
-| `renderers/GraphRenderer.tsx` | `renderers/graph/GraphRenderer.tsx` |
-| `renderers/TimelineRenderer.tsx` | `renderers/timeline/TimelineRenderer.tsx` |
-| `renderers/SummaryRenderer.tsx` | `renderers/summary/SummaryRenderer.tsx` |
-| `renderers/ConfigRenderer.tsx` | `renderers/config/ConfigRenderer.tsx` |
-| `renderers/AgentInspectorRenderer.tsx` | `renderers/agent-inspector/AgentInspectorRenderer.tsx` |
-| `renderers/BacklinksRenderer.tsx` | `renderers/backlinks/BacklinksRenderer.tsx` |
-| `renderers/WorkflowRenderer.tsx` | `renderers/workflow/WorkflowRenderer.tsx` |
-| `renderers/DiffRenderer.tsx` | `renderers/diff/DiffRenderer.tsx` |
-| `renderers/csv/` | `renderers/csv/`（已是子目录，不动） |
+---
 
-`index.ts` 更新 import 路径，功能不变。
+## 迁移历史
 
-### Phase 2：添加 manifest.ts
-
-每个子目录添加 `manifest.ts`，将 `registerRenderer({...})` 的内容搬过去。
-
-### Phase 3：Auto-discovery
-
-`index.ts` 替换为自动扫描，删除所有手动 import + register。
-
-### Phase 4（可选）：Lazy Loading
-
-`manifest.ts` 中 `component` 改为 `load`，组件按需加载。
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| P1 | 目录拆分：10 个 renderer 移入子目录 | ✅ v0.4.0 |
+| P2 | 添加 manifest.ts：元数据从 index.ts 搬入各子目录 | ✅ v0.4.0 |
+| P3 | Auto-discovery：codegen 脚本扫描 manifest 生成 index.ts | ✅ v0.4.0 |
+| P4 | Lazy Loading：`component` → `load`，React.lazy + Suspense | ✅ v0.4.0 |
 
 ---
 

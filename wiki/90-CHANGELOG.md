@@ -2,6 +2,34 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.4.0 — 插件架构重构 + CLI UX 增强 (2026-03-14)
+
+### 新增
+- **插件架构 4 阶段完成** — renderer 目录拆分 → manifest 自注册 → codegen auto-discovery → lazy loading
+- **codegen 脚本** — `scripts/gen-renderer-index.js` 自动扫描 `manifest.ts` 生成 `index.ts`（142 行 → 23 行）
+- **Lazy Loading** — 所有 10 个 renderer 改为 `React.lazy` + `Suspense`，按需加载
+- **CLI 更新检查** — `start`/`dev`/`doctor` 启动时非阻塞检查 npm 最新版本，24h 缓存，`MINDOS_NO_UPDATE_CHECK=1` 可禁用
+- **`--version` / `-v`** — 输出 `mindos/0.4.0 node/v22 linux-x64` 格式
+- **`--help` / `-h`** — 全局帮助（exit 0）
+- **`config unset <key>`** — 删除配置字段，支持 dot-notation
+- **`config set` 类型推断** — `true`/`false`/`null`/空字符串/数字自动转换
+- **`mindos sync` 子命令校验** — 未知子命令报错 + 显示可用列表
+- **setup 配置确认** — `mindos onboard` 写入前展示配置摘要，Y/n 确认
+- **统一 debug 模块** — `bin/lib/debug.js`，`MINDOS_DEBUG=1` 或 `--verbose` 启用
+- **deps 增量检测** — `ensureAppDeps` 基于 `package-lock.json` hash 判断
+- **MCP/Skills API** — `/api/mcp/*` + `/api/skills` 端点
+- **FindInPage** — 文件视图内 `⌘F` 搜索高亮
+- **UpdateBanner** — GUI 更新提示横幅
+
+### 变更
+- **新增 renderer = 新建目录 + manifest.ts**，零侵入已有文件
+- 启动信息精简，移除冗长 MCP JSON block
+- `pkill` 精确化，优先 `lsof -ti :PORT`
+- `run()` exit code 透传
+- NO_COLOR / FORCE_COLOR 遵循 CLI 标准
+
+---
+
 ## Unreleased — CLI UX 全面优化
 
 ### 新增
