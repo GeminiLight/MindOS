@@ -112,6 +112,9 @@ export async function POST(req: NextRequest) {
       mindRoot: body.mindRoot ?? current.mindRoot,
       webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
+      port: typeof body.port === 'number' ? body.port : current.port,
+      mcpPort: typeof body.mcpPort === 'number' ? body.mcpPort : current.mcpPort,
+      startMode: body.startMode ?? current.startMode,
     };
 
     writeSettings(next);

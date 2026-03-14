@@ -2,6 +2,36 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.2.1 — Sync 可见性增强 + PWA + Wiki 重组 (2026-03-14)
+
+### 新增
+- **SyncStatusBar** — 侧栏底部常驻同步状态条（状态圆点 + 文字 + Sync Now 按钮）
+- **SyncDot / MobileSyncDot** — 折叠侧栏和移动端的同步状态指示
+- **Settings → Sync 空状态引导** — 未配置同步时展示 3 步设置教程 + 特性清单
+- **Onboarding 同步提示** — 新用户引导页底部增加 `mindos sync init` 提示卡片
+- **CLI onboard sync 步骤** — `mindos onboard` 完成后询问是否配置 Git 同步
+- **`mindos doctor` sync 检查** — 健康检查新增第 8 项：同步状态诊断
+- **启动时打印 sync 状态** — `mindos start/dev` 启动信息中展示同步状态行
+- **同步恢复 toast** — 从 error/conflicts 恢复为 synced 时自动弹出提示
+- **sync-status 测试** — 17 个测试覆盖 `timeAgo` 和 `getStatusLevel`
+- **PWA 支持** — manifest.json、Service Worker、应用图标
+- **`/api/init` 端点** — Onboarding 模板初始化 API
+- i18n：新增 `sidebar.sync`、`settings.sync`、`onboarding.syncHint` 词条（en + zh）
+
+### 变更
+- `SyncTab` 导出 `SyncStatus` 接口和 `timeAgo()` 供 SyncStatusBar 复用
+- `SyncTab` 冲突列表增加可点击文件链接 + 远程版本查看入口
+- `SettingsModal` 支持 `initialTab` prop，侧栏点击可直接跳转 Sync tab
+- `Sidebar` 集成 `useSyncStatus` 共享轮询 hook
+- wiki/ 目录从自由命名重组为编号命名（00-xx）
+
+### 修复
+- `useTick` 回调变量名 `t` → `n`，避免与 `useLocale` 的 `t` 混淆
+- `useSyncStatus` 的 `stop()` 补充 `intervalRef.current = undefined` 清理
+- `mindos doctor` sync 检查增加 try/catch 防止 `getSyncStatus` 异常导致崩溃
+
+---
+
 ## v0.2 — CLI 模块化 + 组件拆分 + Git 同步 (2026-03-14)
 
 ### 新增
