@@ -62,7 +62,9 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
 
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
-  const renderers = getAllRenderers();
+  // Only show renderers with an entryPath on the home page grid.
+  // Opt-in renderers (like Graph) have no entryPath and are toggled from the view toolbar.
+  const renderers = getAllRenderers().filter(r => r.entryPath);
 
   const lastFile = recent[0];
 

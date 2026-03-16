@@ -13,7 +13,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import TableOfContents from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
-import { resolveRenderer } from '@/lib/renderers/registry';
+import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
 import '@/lib/renderers/index'; // registers all renderers
 
@@ -47,6 +47,8 @@ export default function ViewPageClient({
   );
 
   const [useRaw, setUseRaw] = useRendererState<boolean>('_raw', filePath, false);
+  // Global graph mode — shared across all md files (not per-file)
+  const [graphMode, setGraphMode] = useRendererState<boolean>('_graphMode', '_global', false);
   const router = useRouter();
   const [editing, setEditing] = useState(initialEditing || content === '');
   const [editContent, setEditContent] = useState(content);
@@ -70,9 +72,21 @@ export default function ViewPageClient({
     setUseRaw(prev => !prev);
   }, [setUseRaw]);
 
-  const renderer = resolveRenderer(filePath, extension);
+  const handleToggleGraph = useCallback(() => {
+    setGraphMode(prev => !prev);
+  }, [setGraphMode]);
+
+  const effectiveGraphMode = hydrated ? graphMode : false;
+
+  // Resolve renderer: for md files, graph mode overrides normal resolution
+  const registryRenderer = resolveRenderer(filePath, extension);
+  const graphRenderer = extension === 'md' && effectiveGraphMode
+    ? resolveRenderer(filePath, extension, 'graph')
+    : undefined;
+  const renderer = graphRenderer || registryRenderer;
   const isCsv = extension === 'csv';
-  const showRenderer = !editing && !effectiveUseRaw && !!renderer;
+  // Graph mode overrides Raw — when graph is active, always show the renderer
+  const showRenderer = !editing && !!renderer && (!effectiveUseRaw || !!graphRenderer);
 
   // Lazily resolve the renderer component for code-splitting
   const LazyComponent = useMemo(() => {
@@ -208,8 +222,24 @@ export default function ViewPageClient({
               <span className="text-xs text-red-400 hidden sm:inline">{saveError}</span>
             )}
 
-            {/* Renderer toggle — only shown when a custom renderer exists */}
-            {renderer && !editing && !isDraft && (
+            {/* Graph toggle — only for md files, hidden when graph plugin is disabled */}
+            {extension === 'md' && !editing && !isDraft && isRendererEnabled('graph') && (
+              <button
+                onClick={handleToggleGraph}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
+                style={{
+                  background: effectiveGraphMode ? `${'var(--amber)'}22` : 'var(--muted)',
+                  color: effectiveGraphMode ? 'var(--amber)' : 'var(--muted-foreground)',
+                }}
+                title={effectiveGraphMode ? 'Switch to document view' : 'Switch to Wiki Graph'}
+              >
+                <span>🕸️</span>
+                <span className="hidden sm:inline">Graph</span>
+              </button>
+            )}
+
+            {/* Renderer toggle — only shown when a custom renderer exists (excludes graph-mode override) */}
+            {registryRenderer && !editing && !isDraft && !graphRenderer && (
               <button
                 onClick={handleToggleRaw}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
@@ -217,10 +247,10 @@ export default function ViewPageClient({
                   background: effectiveUseRaw ? 'var(--muted)' : `${'var(--amber)'}22`,
                   color: effectiveUseRaw ? 'var(--muted-foreground)' : 'var(--amber)',
                 }}
-                title={effectiveUseRaw ? `Switch to ${renderer.name}` : 'View raw'}
+                title={effectiveUseRaw ? `Switch to ${registryRenderer?.name}` : 'View raw'}
               >
                 <LayoutTemplate size={13} />
-                <span className="hidden sm:inline">{effectiveUseRaw ? renderer.name : 'Raw'}</span>
+                <span className="hidden sm:inline">{effectiveUseRaw ? registryRenderer.name : 'Raw'}</span>
               </button>
             )}
 

@@ -63,7 +63,19 @@
 
 ## 构建 / 部署
 
-### CI 同步目录白名单
+### Skill 安装 process.cwd() 路径错误
+- **现象：** GUI Setup Wizard 安装 Skill 提示失败，CLI 正常
+- **原因：** API route 用 `path.resolve(process.cwd(), 'skills')` 定位 skills 目录，但 Next.js 的 `process.cwd()` 是 `app/`，解析到 `app/skills/`（不存在）。CLI 用 `__dirname` 相对定位所以没问题
+- **解决：** 改为 GitHub 源优先（`npx skills add GeminiLight/MindOS --skill mindos`），本地路径作为离线 fallback（搜索 `app/data/skills/` 和 `../skills/`）
+- **教训：** Next.js API route 里 `process.cwd()` 不等于项目根目录，定位文件用 GitHub 源或 `__dirname` 相对路径，不要依赖 cwd
+- **文件：** `app/api/mcp/install-skill/route.ts`、`scripts/setup.js`
+
+### Skill 安装多 agent 逗号分隔无效
+- **现象：** 选多个 agent 安装 Skill 时，`skills` CLI 报 "Invalid agents: claude-code,windsurf"
+- **原因：** `buildCommand` 用 `agents.join(',')` 拼成 `-a claude-code,windsurf`，但 `skills` CLI 不支持逗号分隔，每个 agent 需要独立的 `-a` flag
+- **解决：** 改为 `agents.map(a => \`-a ${a}\`).join(' ')`，生成 `-a claude-code -a windsurf`
+- **教训：** CLI 工具的多值参数格式不要想当然，先用 `--help` 或实际测试确认
+- **文件：** `app/api/mcp/install-skill/route.ts`、`scripts/setup.js`
 - **现象：** 新增的顶层目录未被同步到公开仓
 - **解决：** `.github/workflows/sync-to-mindos.yml` 中 rsync 目录列表需要手动维护
 

@@ -1,6 +1,6 @@
 # Task Spec: Onboarding Skill 自动安装
 
-**Status**: Draft
+**Status**: In Progress
 **Scope**: SetupWizard Step 5 + Skills API + Settings McpTab + `npx skills add`
 
 ---
@@ -91,19 +91,21 @@ interface SkillInstallRequest {
 
 ```bash
 # 情况 1: 用户选了 non-universal agent（如 claude-code, windsurf）
-npx skills add <source> -s <skill> -a claude-code,windsurf -g -y
+# 注意：每个 agent 需要独立的 -a flag，不支持逗号分隔
+npx skills add GeminiLight/MindOS --skill <skill> -a claude-code -a windsurf -g -y
 # → 自动复制到 ~/.agents/skills/（Universal 自动覆盖）+ 创建 symlink（Additional 覆盖）
 
 # 情况 2: 用户只选了 Universal agent（cursor, cline, gemini-cli）或无 agent
-npx skills add <source> -s <skill> -a universal -g -y
+npx skills add GeminiLight/MindOS --skill <skill> -a universal -g -y
 # → 只复制到 ~/.agents/skills/，不创建多余 symlink
 ```
 
+- **source 优先级**：GitHub 源 (`GeminiLight/MindOS`) 优先，本地路径 (`app/data/skills/` 或 `../skills/`) 作为离线 fallback
 - 任何 `-a` 命令都会先复制文件到 `~/.agents/skills/`，Universal agents 自动可读
 - `-a universal` 仅在没有 non-universal agent 时作为 fallback
 - `-g`：全局安装
 - `-y`：跳过确认
-- `<source>`：本项目 `skills/` 目录
+- **多 agent 格式**：每个 agent 独立 `-a` flag（`-a a1 -a a2`），不支持逗号分隔
 
 **为什么不用 `--all`**：
 - `--all` 会为 ~31 个 additional agent 创建 `~/.<agent>/` 目录，多数用户只用 2-3 个
@@ -126,9 +128,10 @@ npx skills add <source> -s <skill> -a universal -g -y
 
 API 逻辑：
 1. 从 `agents` 列表中过滤出 non-universal 且支持 Skill 的 agent（claude-code, windsurf, trae, openclaw, codebuddy）
-2. 若有 → 执行 `npx skills add ... -a <agent1>,<agent2> -g -y`（Universal 自动覆盖）
-3. 若无 → 执行 `npx skills add ... -a universal -g -y`（fallback，仅写 `~/.agents/skills/`）
-4. 返回执行结果
+2. 若有 → 执行 `npx skills add GeminiLight/MindOS --skill <skill> -a <agent1> -a <agent2> -g -y`（Universal 自动覆盖）
+3. 若无 → 执行 `npx skills add GeminiLight/MindOS --skill <skill> -a universal -g -y`（fallback，仅写 `~/.agents/skills/`）
+4. GitHub 源失败时自动 fallback 到本地路径（`app/data/skills/` 或 `../skills/`）
+5. 返回执行结果
 
 **详细机制参考**：`wiki/ref-npx-skills-mechanism.md`
 
@@ -221,13 +224,14 @@ Skill Language: [English] [中文]
 
 ## 文件变更清单
 
-| 操作 | 文件 |
-|------|------|
-| 新建 | `app/app/api/mcp/install-skill/route.ts` — 调用 npx skills add 的 API |
-| 修改 | `app/app/api/setup/route.ts` — 完成时根据 template 写入 disabledSkills |
-| 修改 | `app/components/SetupWizard.tsx` — Step 5 提示 + handleComplete 安装 Skill + Step 6 展示 |
-| 修改 | `app/components/settings/McpTab.tsx` — Skill 语言快捷切换 |
-| 修改 | `app/lib/i18n.ts` — 新增 8 个 i18n key |
+| 操作 | 文件 | 状态 |
+|------|------|------|
+| 新建 | `app/app/api/mcp/install-skill/route.ts` — 调用 npx skills add 的 API | ✅ 已实现（GitHub 源优先 + 本地 fallback + 独立 -a flag） |
+| 修改 | `scripts/setup.js` — CLI skill install 同步 GitHub 源 + 独立 -a flag | ✅ 已实现 |
+| 修改 | `app/app/api/setup/route.ts` — 完成时根据 template 写入 disabledSkills | 待做 |
+| 修改 | `app/components/SetupWizard.tsx` — Step 5 提示 + handleComplete 安装 Skill + Step 6 展示 | 待做 |
+| 修改 | `app/components/settings/McpTab.tsx` — Skill 语言快捷切换 | 待做 |
+| 修改 | `app/lib/i18n.ts` — 新增 8 个 i18n key | 待做 |
 
 ---
 
@@ -244,7 +248,7 @@ selected agents = [cursor, claude-code]
 skill = mindos-zh
 non-universal agents = [claude-code]
 
-→ npx skills add ./skills -s mindos-zh -a claude-code -g -y
+→ npx skills add GeminiLight/MindOS --skill mindos-zh -a claude-code -g -y
 ```
 
 结果：
@@ -261,7 +265,7 @@ selected agents = [cursor, cline, gemini-cli]
 skill = mindos
 non-universal agents = []  (空)
 
-→ npx skills add ./skills -s mindos -a universal -g -y  (fallback)
+→ npx skills add GeminiLight/MindOS --skill mindos -a universal -g -y  (fallback)
 ```
 
 结果：
@@ -278,7 +282,7 @@ selected agents = [claude-code, windsurf, trae, claude-desktop]
 skill = mindos-zh
 non-universal agents = [claude-code, windsurf, trae]  (claude-desktop 跳过)
 
-→ npx skills add ./skills -s mindos-zh -a claude-code,windsurf,trae -g -y
+→ npx skills add GeminiLight/MindOS --skill mindos-zh -a claude-code -a windsurf -a trae -g -y
 ```
 
 结果：
@@ -298,7 +302,7 @@ selected agents = [claude-desktop]
 skill = mindos
 non-universal agents = []  (claude-desktop 被排除)
 
-→ npx skills add ./skills -s mindos -a universal -g -y  (fallback)
+→ npx skills add GeminiLight/MindOS --skill mindos -a universal -g -y  (fallback)
 ```
 
 结果：
@@ -318,7 +322,7 @@ non-universal agents = []  (claude-desktop 被排除)
 disabledSkills: ['mindos-zh'] → ['mindos']
 
 # 重新安装 Skill 到之前的 agent（从 settings 中读取已配置的 agent 列表）
-npx skills add ./skills -s mindos-zh -a <已配置的 non-universal agents> -g -y
+npx skills add GeminiLight/MindOS --skill mindos-zh -a <已配置的 non-universal agents> -g -y
 ```
 
 结果：
@@ -338,7 +342,7 @@ npx skills add ./skills -s mindos-zh -a <已配置的 non-universal agents> -g -
 ```
 # MCP 配置照常安装（已有逻辑）
 # Skill 需要追加安装到 Windsurf
-npx skills add ./skills -s mindos -a windsurf -g -y
+npx skills add GeminiLight/MindOS --skill mindos -a windsurf -g -y
 ```
 
 结果：

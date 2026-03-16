@@ -484,6 +484,11 @@ async function main() {
 
     const expressApp = createMcpExpressApp({ host: MCP_HOST });
 
+    // Health endpoint — allows check-port to detect this is a MindOS MCP instance
+    expressApp.get("/api/health", (_req, res) => {
+      res.json({ ok: true, service: "mindos" });
+    });
+
     // Auth middleware
     if (AUTH_TOKEN) {
       expressApp.use(MCP_ENDPOINT, (req, res, next) => {

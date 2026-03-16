@@ -14,11 +14,12 @@
 
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
-  <a href="https://deepwiki.com/GeminiLight/MindOS"><img src="https://img.shields.io/badge/DeepWiki-MindOS-blue.svg?style=for-the-badge" alt="DeepWiki"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
+  <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-群聊-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-MindOS 是一个**人机协同心智系统**——基于本地优先的协作知识库，让你的笔记、工作流、个人上下文既对人类阅读友好，也能直接被 AI Agent 调用和执行。**为所有 Agents 全局同步你的心智，透明可控，共生演进。**
+MindOS 是一个**人机协同心智系统**——基于本地优先的协作知识库，让你的笔记、工作流、个人上下文既对人类阅读友好，也能直接被 Agent 调用和执行。**让所有 Agent 共享一个记忆层——可审计、可修正、越用越聪明。**
 
 ---
 
@@ -49,7 +50,7 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 ## 🧠 核心价值：人机共享心智
 
-**1. 全局同步 — 打破心智孤岛**
+**1. 全局同步 — 打破记忆割裂**
 
 传统笔记分散在不同工具和接口中，Agent 在关键时刻拿不到你的真实上下文。MindOS 把本地知识统一为 MCP 可读的单一来源，让所有 Agent 同步你的 Profile、SOP 与实时记忆。
 
@@ -57,9 +58,9 @@ MindOS 是一个**人机协同心智系统**——基于本地优先的协作知
 
 多数助手记忆封闭在黑箱里，人类难以审查和纠正决策过程。MindOS 将检索与执行轨迹沉淀为本地纯文本，让你可以持续审计、干预与优化。
 
-**3. 共生演进 — 动态指令流转**
+**3. 共生演进 — 经验回流为指令**
 
-静态文档难同步，也难在真实人机协作中承担执行系统角色。MindOS 以 Prompt-Native 与引用链接组织知识，让日常记录自然变成可执行工作流并持续进化。
+静态文档难同步，也难在真实人机协作中承担执行系统角色。MindOS 让笔记天然成为 Agent 可执行的指令，通过引用链接组织知识，日常记录自然变成可执行工作流并持续进化。
 
 > **底层原则：** 默认本地优先，全部数据以本地纯文本保存，兼顾隐私、主权与性能。
 
@@ -379,7 +380,7 @@ graph LR
 - **AI 独立开发者** — 将个人 SOP、技术栈偏好、项目上下文存入 MindOS，任何 Agent 即插即用你的工作习惯。
 - **知识工作者** — 用双链笔记管理研究资料，AI 助手基于你的完整上下文回答问题，而非泛泛而谈。
 - **团队协作** — 团队成员共享同一个 MindOS 知识库作为 Single Source of Truth，人与 Agent 读同一份剧本，保持对齐。
-- **Agent 自动运维** — 将标准流程写成 Prompt-Driven 文档，Agent 直接执行，人类审计结果。
+- **Agent 自动运维** — 将标准流程写成笔记即指令的文档，Agent 直接执行，人类审计结果。
 
 ---
 
@@ -470,6 +471,18 @@ MindOS/
 | `E` | 在阅读界面按 `E` 快速进入编辑模式 |
 | `⌘ + S` | 保存当前编辑 |
 | `Esc` | 取消编辑 / 关闭弹窗 |
+
+---
+
+## 💬 社区 <a name="wechat"></a>
+
+加入微信内测群，抢先体验、反馈建议、交流 AI 工作流：
+
+<p align="center">
+  <img src="assets/images/wechat-qr.png" alt="微信群二维码" width="200" />
+</p>
+
+> 扫码加入，或请群内成员邀请你。
 
 ---
 

@@ -6,60 +6,100 @@ import { CONFIG_PATH } from './constants.js';
 
 /**
  * Kill processes listening on the given port.
+ * Tries lsof first, then falls back to parsing `ss` output.
  * Returns number of processes killed.
  */
 function killByPort(port) {
-  let killed = 0;
+  const pidsToKill = new Set();
+
+  // Method 1: lsof
   try {
     const output = execSync(`lsof -ti :${port} 2>/dev/null`, { encoding: 'utf-8' }).trim();
     if (output) {
       for (const p of output.split('\n')) {
         const pid = Number(p);
-        if (pid > 0) {
-          try { process.kill(pid, 'SIGTERM'); killed++; } catch {}
-        }
+        if (pid > 0) pidsToKill.add(pid);
       }
     }
   } catch {
     // lsof not available or no processes found
   }
+
+  // Method 2: ss -tlnp (fallback — works when lsof can't see the process)
+  if (pidsToKill.size === 0) {
+    try {
+      const output = execSync(`ss -tlnp 2>/dev/null`, { encoding: 'utf-8' });
+      // Match lines like: LISTEN ... *:3003 ... users:(("next-server",pid=12345,fd=21))
+      // Match `:PORT` followed by a non-digit to avoid partial matches
+      // (e.g. port 80 must not match :8080)
+      const portRe = new RegExp(`:${port}(?!\\d)`);
+      for (const line of output.split('\n')) {
+        if (!portRe.test(line)) continue;
+        const pidMatch = line.match(/pid=(\d+)/g);
+        if (pidMatch) {
+          for (const m of pidMatch) {
+            const pid = Number(m.slice(4));
+            if (pid > 0) pidsToKill.add(pid);
+          }
+        }
+      }
+    } catch {
+      // ss not available
+    }
+  }
+
+  let killed = 0;
+  for (const pid of pidsToKill) {
+    try { process.kill(pid, 'SIGTERM'); killed++; } catch {}
+  }
   return killed;
 }
 
+/**
+ * Kill a process and all its children (process group).
+ */
+function killTree(pid) {
+  // Try to kill the entire process group first
+  try { process.kill(-pid, 'SIGTERM'); return true; } catch {}
+  // Fallback: kill individual process
+  try { process.kill(pid, 'SIGTERM'); return true; } catch {}
+  return false;
+}
+
 export function stopMindos() {
+  // Read ports from config for port-based cleanup
+  let webPort = '3000', mcpPort = '8787';
+  try {
+    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    if (config.port) webPort = String(config.port);
+    if (config.mcpPort) mcpPort = String(config.mcpPort);
+  } catch {}
+
   const pids = loadPids();
   if (!pids.length) {
     console.log(yellow('No PID file found, trying port-based stop...'));
-    // Read ports from config
-    let webPort = '3000', mcpPort = '8787';
-    try {
-      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-      if (config.port) webPort = String(config.port);
-      if (config.mcpPort) mcpPort = String(config.mcpPort);
-    } catch {}
+  } else {
+    // Kill saved PIDs (parent process + MCP) and their child processes
     let stopped = 0;
-    for (const port of [webPort, mcpPort]) {
-      stopped += killByPort(port);
+    for (const pid of pids) {
+      if (killTree(pid)) stopped++;
     }
-    if (stopped === 0) {
-      // Fallback: pkill pattern match (for envs without lsof)
-      try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: 'inherit' }); } catch {}
-      try { execSync('pkill -f "mcp/src/index"       2>/dev/null || true', { stdio: 'inherit' }); } catch {}
-    }
-    console.log(green('\u2714 Done'));
-    return;
+    clearPids();
+    if (stopped) console.log(green(`\u2714 Stopped ${stopped} process${stopped > 1 ? 'es' : ''}`));
   }
-  let stopped = 0;
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM');
-      stopped++;
-    } catch {
-      // process already gone — ignore
-    }
+
+  // Always do port-based cleanup — Next.js spawns worker processes whose PIDs
+  // are not recorded in the PID file and would otherwise become orphaned.
+  let portKilled = 0;
+  for (const port of [webPort, mcpPort]) {
+    portKilled += killByPort(port);
   }
-  clearPids();
-  console.log(stopped
-    ? green(`\u2714 Stopped ${stopped} process${stopped > 1 ? 'es' : ''}`)
-    : dim('No running processes found'));
+
+  if (!pids.length && portKilled === 0) {
+    // Last resort: pattern match (for envs without lsof)
+    try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: 'inherit' }); } catch {}
+    try { execSync('pkill -f "mcp/src/index"       2>/dev/null || true', { stdio: 'inherit' }); } catch {}
+  }
+
+  if (!pids.length) console.log(green('\u2714 Done'));
 }

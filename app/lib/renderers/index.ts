@@ -8,14 +8,14 @@ import { manifest as backlinks } from '@/components/renderers/backlinks/manifest
 import { manifest as config } from '@/components/renderers/config/manifest';
 import { manifest as csv } from '@/components/renderers/csv/manifest';
 import { manifest as diff } from '@/components/renderers/diff/manifest';
-import { manifest as graph } from '@/components/renderers/graph/manifest';
 import { manifest as summary } from '@/components/renderers/summary/manifest';
 import { manifest as timeline } from '@/components/renderers/timeline/manifest';
 import { manifest as todo } from '@/components/renderers/todo/manifest';
 import { manifest as workflow } from '@/components/renderers/workflow/manifest';
+import { manifest as graph } from '@/components/renderers/graph/manifest';
 
 const manifests = [
-  agentInspector, backlinks, config, csv, diff, graph, summary, timeline, todo, workflow,
+  agentInspector, backlinks, config, csv, diff, summary, timeline, todo, workflow, graph,
 ];
 
 for (const m of manifests) {

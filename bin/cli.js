@@ -317,8 +317,18 @@ const commands = {
   stop: () => stopMindos(),
 
   restart: async () => {
+    loadConfig();
+    const webPort = Number(process.env.MINDOS_WEB_PORT || '3000');
+    const mcpPort = Number(process.env.MINDOS_MCP_PORT || '8787');
     stopMindos();
-    await new Promise((r) => setTimeout(r, 1500));
+    // Wait until both ports are actually free (up to 15s)
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const webBusy = await isPortInUse(webPort);
+      const mcpBusy = await isPortInUse(mcpPort);
+      if (!webBusy && !mcpBusy) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
     await commands[getStartMode()]();
   },
 

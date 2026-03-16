@@ -746,34 +746,41 @@ function runSkillInstallStep(template, selectedAgents) {
   }
 
   const skillName = template === 'zh' ? 'mindos-zh' : 'mindos';
-  const source = resolve(ROOT, 'skills');
+  const localSource = resolve(ROOT, 'skills');
+  const githubSource = 'GeminiLight/MindOS';
 
   // Filter to non-universal, skill-capable agents
   const additionalAgents = selectedAgents
     .filter(key => !UNIVERSAL_AGENTS.has(key) && !SKILL_UNSUPPORTED.has(key))
     .map(key => AGENT_NAME_MAP[key] || key);
 
-  let cmd;
-  if (additionalAgents.length > 0) {
-    cmd = `npx skills add "${source}" -s ${skillName} -a ${additionalAgents.join(',')} -g -y`;
-  } else {
-    cmd = `npx skills add "${source}" -s ${skillName} -a universal -g -y`;
-  }
+  // Each agent needs its own -a flag (skills CLI does NOT accept comma-separated)
+  const agentFlags = additionalAgents.length > 0
+    ? additionalAgents.map(a => `-a ${a}`).join(' ')
+    : '-a universal';
+
+  // Try GitHub source first, fall back to local path
+  const sources = [githubSource, localSource];
 
   write(tf('skillInstalling', skillName) + '\n');
 
-  try {
-    execSync(cmd, {
-      encoding: 'utf-8',
-      timeout: 30_000,
-      env: { ...process.env, NODE_ENV: 'production' },
-      stdio: 'pipe',
-    });
-    write(tf('skillInstallOk', skillName) + '\n');
-  } catch (err) {
-    const msg = err.stderr || err.message || 'Unknown error';
-    write(tf('skillInstallFail', skillName, msg.split('\n')[0]) + '\n');
+  for (const source of sources) {
+    // Quote local paths for shell safety
+    const quotedSource = /[/\\]/.test(source) ? `"${source}"` : source;
+    const cmd = `npx skills add ${quotedSource} --skill ${skillName} ${agentFlags} -g -y`;
+    try {
+      execSync(cmd, {
+        encoding: 'utf-8',
+        timeout: 30_000,
+        env: { ...process.env, NODE_ENV: 'production' },
+        stdio: 'pipe',
+      });
+      write(tf('skillInstallOk', skillName) + '\n');
+      return;
+    } catch { /* try next source */ }
   }
+
+  write(tf('skillInstallFail', skillName, 'All sources failed') + '\n');
 }
 
 // ── GUI Setup ─────────────────────────────────────────────────────────────────
@@ -1187,7 +1194,9 @@ async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = 
       const doRestart = await askYesNoDefault('restartNow');
       if (doRestart) {
         const cliPath = resolve(__dirname, '../bin/cli.js');
-        execSync(`node "${cliPath}" start`, { stdio: 'inherit' });
+        // Use 'restart' (stop → start) instead of bare 'start' which would
+        // fail assertPortFree because the old process is still running.
+        execSync(`node "${cliPath}" restart`, { stdio: 'inherit' });
       } else {
         write(c.dim(t('restartManual') + '\n'));
       }
