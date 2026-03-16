@@ -15,7 +15,7 @@ const UNIVERSAL_AGENTS = new Set([
 ]);
 
 // Agents that do NOT support Skills at all
-const SKILL_UNSUPPORTED = new Set(['claude-desktop']);
+const SKILL_UNSUPPORTED = new Set<string>([]);
 
 // MCP agent key → npx skills agent name (for non-universal agents)
 const AGENT_NAME_MAP: Record<string, string> = {

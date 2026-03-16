@@ -54,15 +54,6 @@ describe('detectAgentPresence', () => {
     expect(detectAgentPresence('gemini-cli')).toBe(true);
   });
 
-  it('detects claude-desktop via dir only (no CLI check)', () => {
-    existsSyncSpy.mockImplementation((p: fs.PathLike) => {
-      return String(p).includes('Claude');
-    });
-    expect(detectAgentPresence('claude-desktop')).toBe(true);
-    // claude-desktop has no presenceCli, so execSync should not be called
-    expect(mockExecSync).not.toHaveBeenCalled();
-  });
-
   it('detects cline via globalStorage dir', () => {
     existsSyncSpy.mockImplementation((p: fs.PathLike) => {
       return String(p).includes('saoudrizwan.claude-dev');

@@ -119,7 +119,7 @@ describe('POST /api/mcp/install', () => {
     const req = new NextRequest('http://localhost/api/mcp/install', {
       method: 'POST',
       body: JSON.stringify({
-        agents: [{ key: 'claude-desktop', scope: 'project' }],
+        agents: [{ key: 'windsurf', scope: 'project' }],
         transport: 'stdio',
       }),
       headers: { 'content-type': 'application/json' },
@@ -132,11 +132,11 @@ describe('POST /api/mcp/install', () => {
 });
 
 describe('GET /api/mcp/agents', () => {
-  it('returns all 9 agents', async () => {
+  it('returns all 8 agents', async () => {
     const { GET } = await importAgentsRoute();
     const res = await GET();
     const body = await res.json();
-    expect(body.agents).toHaveLength(9);
+    expect(body.agents).toHaveLength(8);
     const keys = body.agents.map((a: { key: string }) => a.key);
     expect(keys).toContain('claude-code');
     expect(keys).toContain('cursor');

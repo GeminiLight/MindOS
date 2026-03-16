@@ -65,6 +65,17 @@ function writeDepsStamp() {
   }
 }
 
+/** Critical packages that must exist after npm install for the app to work. */
+const CRITICAL_DEPS = ['next', '@next/env', 'react', 'react-dom'];
+
+function verifyDeps() {
+  const nm = resolve(ROOT, 'app', 'node_modules');
+  for (const dep of CRITICAL_DEPS) {
+    if (!existsSync(resolve(nm, dep, 'package.json'))) return false;
+  }
+  return true;
+}
+
 export function ensureAppDeps() {
   const appNext = resolve(ROOT, 'app', 'node_modules', 'next', 'package.json');
   const needsInstall = !existsSync(appNext) || depsChanged();
@@ -90,5 +101,19 @@ export function ensureAppDeps() {
     : 'Installing app dependencies (first run)...\n';
   console.log(yellow(label));
   run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
+
+  // Verify critical deps — npm tar extraction can silently fail (ENOENT race)
+  if (!verifyDeps()) {
+    console.log(yellow('Some dependencies are incomplete, retrying with clean install...\n'));
+    const nm = resolve(ROOT, 'app', 'node_modules');
+    rmSync(nm, { recursive: true, force: true });
+    run('npm install --no-workspaces', resolve(ROOT, 'app'));
+    if (!verifyDeps()) {
+      console.error(red('\n✘ Failed to install dependencies after retry.\n'));
+      console.error('  Try manually: cd ' + resolve(ROOT, 'app') + ' && rm -rf node_modules && npm install');
+      process.exit(1);
+    }
+  }
+
   writeDepsStamp();
 }
