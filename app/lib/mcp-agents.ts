@@ -29,16 +29,6 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
     presenceCli: 'claude',
     presenceDirs: ['~/.claude/'],
   },
-  'claude-desktop': {
-    name: 'Claude Desktop',
-    project: null,
-    global: process.platform === 'darwin'
-      ? '~/Library/Application Support/Claude/claude_desktop_config.json'
-      : '~/.config/Claude/claude_desktop_config.json',
-    key: 'mcpServers',
-    preferredTransport: 'http',
-    presenceDirs: ['~/Library/Application Support/Claude/', '~/.config/Claude/'],
-  },
   'cursor': {
     name: 'Cursor',
     project: '.cursor/mcp.json',

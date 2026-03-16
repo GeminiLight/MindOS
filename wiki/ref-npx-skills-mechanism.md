@@ -2,31 +2,65 @@
 
 ## 概述
 
-`npx skills add` 是通用的 AI Agent Skill 分发工具，将 Skill 文件安装到 42 个 Agent 的约定目录中。
+`npx skills add` (v1.4.5) 是通用的 AI Agent Skill 分发工具，将 Skill 文件安装到 40 个 Agent 的约定目录中。
 
 ## Agent 分类
 
-### Universal Agents（9 个）
+### Universal Agents（8 个）
 
 直接从 `.agents/skills/<name>/` 读取（项目级）或 `~/.agents/skills/<name>/`（全局 `-g`），**不需要额外 symlink**。
 
-| Agent | 说明 |
-|-------|------|
-| Amp | |
-| Cline | VS Code 扩展 |
-| Codex | OpenAI CLI |
-| Cursor | IDE |
-| Gemini CLI | Google CLI |
-| GitHub Copilot | |
-| Kimi Code CLI | 月之暗面 CLI |
-| OpenCode | |
-| Warp | 终端 |
+| `-a` 值 | Agent | 说明 |
+|---------|-------|------|
+| `cline` | Cline | VS Code 扩展 |
+| `codex` | Codex | OpenAI CLI |
+| `cursor` | Cursor | IDE |
+| `gemini-cli` | Gemini CLI | Google CLI |
+| `github-copilot` | GitHub Copilot | |
+| `kimi-cli` | Kimi Code CLI | 月之暗面 CLI |
+| `opencode` | OpenCode | |
+| `warp` | Warp | 终端 |
 
-### Additional Agents（~31 个）
+> `replit` 和 `universal` 也使用 `.agents/skills/` 但设置了 `showInUniversalList: false`，不在通用列表中显示。
+
+### Additional Agents（32 个）
 
 通过 **symlink** 链接：`~/.<agent>/skills/<name>` → `../../.agents/skills/<name>`
 
-包括：Claude Code, Windsurf, Trae, OpenClaw, CodeBuddy, Roo, Goose, Augment, 等。
+| `-a` 值 | Agent | Skills 目录 |
+|---------|-------|------------|
+| `augment` | Augment | `.augment/skills` |
+| `claude-code` | Claude Code | `.claude/skills` |
+| `openclaw` | OpenClaw | `skills` |
+| `codebuddy` | CodeBuddy | `.codebuddy/skills` |
+| `command-code` | Command Code | `.commandcode/skills` |
+| `continue` | Continue | `.continue/skills` |
+| `cortex` | Cortex Code | `.cortex/skills` |
+| `crush` | Crush | `.crush/skills` |
+| `droid` | Droid | `.factory/skills` |
+| `goose` | Goose | `.goose/skills` |
+| `junie` | Junie | `.junie/skills` |
+| `iflow-cli` | iFlow CLI | `.iflow/skills` |
+| `kilo` | Kilo Code | `.kilocode/skills` |
+| `kiro-cli` | Kiro CLI | `.kiro/skills` |
+| `kode` | Kode | `.kode/skills` |
+| `mcpjam` | MCPJam | `.mcpjam/skills` |
+| `mistral-vibe` | Mistral Vibe | `.vibe/skills` |
+| `mux` | Mux | `.mux/skills` |
+| `openhands` | OpenHands | `.openhands/skills` |
+| `pi` | Pi | `.pi/skills` |
+| `qoder` | Qoder | `.qoder/skills` |
+| `qwen-code` | Qwen Code | `.qwen/skills` |
+| `roo` | Roo Code | `.roo/skills` |
+| `trae` | Trae | `.trae/skills` |
+| `trae-cn` | Trae CN | `.trae/skills` |
+| `windsurf` | Windsurf | `.windsurf/skills` |
+| `zencoder` | Zencoder | `.zencoder/skills` |
+| `neovate` | Neovate | `.neovate/skills` |
+| `pochi` | Pochi | `.pochi/skills` |
+| `adal` | AdaL | `.adal/skills` |
+| `replit` | Replit | `.agents/skills`（隐藏） |
+| `universal` | Universal | `.agents/skills`（隐藏，fallback） |
 
 ### 关键区别
 
@@ -48,7 +82,7 @@ npx skills add <source> [options]
 | `<source>` | Skill 来源：GitHub repo / local path / npm package |
 | `-s <name>` | 指定安装哪个 Skill（source 中可能有多个） |
 | `-a <agent1>,<agent2>` | 指定安装到哪些 agent（逗号分隔） |
-| `--all` | 安装到所有 42 个 agent |
+| `--all` | 安装到所有 40 个 agent |
 | `-g` | 全局安装（`~/.agents/skills/` 而非项目级） |
 | `-y` | 跳过交互确认 |
 
@@ -63,7 +97,7 @@ npx skills add <source> [options]
 
 ### `--all` 行为
 
-- 为所有 42 个 agent 创建目录/symlink，**不论该 agent 是否已安装**
+- 为所有 40 个 agent 创建目录/symlink，**不论该 agent 是否已安装**
 - 对未安装的 agent：只是创建了空目录和 dangling symlink，无副作用
 - 好处：用户未来安装新 agent 时 Skill 自动可用
 
@@ -96,9 +130,9 @@ npx skills add <source> -s <skill> -a universal -g -y
 ```
 
 **为什么不用 `--all`**：
-- `--all` 会为 ~31 个 additional agent 创建目录/symlink，多数用户只用 2-3 个 agent
+- `--all` 会为 ~32 个 additional agent 创建目录/symlink，多数用户只用 2-3 个 agent
 - 虽然无害，但 HOME 目录下多出大量 `~/.<agent>/` 空目录不够整洁
-- Universal 已覆盖 9 个主流 agent（Cursor, Cline, Gemini CLI 等），够用
+- Universal 已覆盖 8 个主流 agent（Cursor, Cline, Gemini CLI 等），够用
 
 **什么时候需要 `-a`**：
 用户选了 MindOS 支持的 agent 中不在 Universal 列表里的：
@@ -106,7 +140,6 @@ npx skills add <source> -s <skill> -a universal -g -y
 | MCP Agent Key | 是否 Universal | 需要 `-a` |
 |---------------|---------------|----------|
 | `claude-code` | ❌ Additional | ✅ `-a claude-code` |
-| `claude-desktop` | — | ❌ 不支持 Skill |
 | `cursor` | ✅ Universal | ❌ |
 | `windsurf` | ❌ Additional | ✅ `-a windsurf` |
 | `cline` | ✅ Universal | ❌ |
@@ -120,7 +153,6 @@ npx skills add <source> -s <skill> -a universal -g -y
 | MCP Agent Key | Skills Agent Name | Universal | 支持 Skill |
 |---------------|-------------------|-----------|-----------|
 | `claude-code` | `claude-code` | ❌ | ✅ |
-| `claude-desktop` | — | — | ❌ |
 | `cursor` | `cursor` | ✅ | ✅ |
 | `windsurf` | `windsurf` | ❌ | ✅ |
 | `cline` | `cline` | ✅ | ✅ |

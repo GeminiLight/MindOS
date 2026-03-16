@@ -115,6 +115,13 @@
 - **现象：** 新增的顶层目录未被同步到公开仓
 - **解决：** `.github/workflows/sync-to-mindos.yml` 中 rsync 目录列表需要手动维护
 
+### npm install 后 next build 报 MODULE_NOT_FOUND
+- **现象：** 全局安装后 `mindos start`，`npm install` 报 336 个 `TAR_ENTRY_ERROR ENOENT`，随后 `next build` 报 `Cannot find module '@next/env'`
+- **原因：** npm 在深层全局路径下并发解压 tar 时存在竞争条件（目录未创建完，文件就写入），导致大量文件丢失。Node v23.9.0（非 LTS 奇数版本）加剧了此问题
+- **解决：** `ensureAppDeps()` 新增安装后验证 + 自动重试：定义 `CRITICAL_DEPS`（next、@next/env、react、react-dom），安装后逐一检查 `package.json` 是否存在，缺失则删 `node_modules` 重新 `npm install`
+- **教训：** `npm install` 报 `added N packages` 不代表所有文件完整解压，关键依赖必须验证
+- **文件：** `bin/lib/build.js`
+
 ### 预编译 .next/ 进 npm 包 — 已评估放弃
 - **动机：** `npm update` 后首次启动需 ~12s `next build`，想预编译消除等待
 - **可行性结论：** 技术上可行（`next start` 不依赖硬编码路径，包体 9.9→15MB），但 **ROI 为负**
