@@ -13,7 +13,7 @@ const UNIVERSAL_AGENTS = new Set([
   'github-copilot', 'kimi-cli', 'opencode', 'warp',
 ]);
 
-const SKILL_UNSUPPORTED = new Set(['claude-desktop']);
+const SKILL_UNSUPPORTED = new Set<string>([]);
 
 const AGENT_NAME_MAP: Record<string, string> = {
   'claude-code': 'claude-code',
@@ -76,13 +76,8 @@ describe('CLI skill install — agent filtering', () => {
     expect(filterAgents(['claude-code', 'windsurf', 'trae'])).toEqual(['claude-code', 'windsurf', 'trae']);
   });
 
-  it('filters out skill-unsupported agents', () => {
-    expect(filterAgents(['claude-desktop'])).toEqual([]);
-    expect(filterAgents(['claude-desktop', 'claude-code'])).toEqual(['claude-code']);
-  });
-
-  it('handles mixed universal + non-universal + unsupported', () => {
-    const result = filterAgents(['cursor', 'claude-code', 'cline', 'windsurf', 'claude-desktop', 'trae']);
+  it('handles mixed universal + non-universal', () => {
+    const result = filterAgents(['cursor', 'claude-code', 'cline', 'windsurf', 'trae']);
     expect(result).toEqual(['claude-code', 'windsurf', 'trae']);
   });
 
@@ -163,13 +158,13 @@ describe('CLI skill install — end-to-end scenarios', () => {
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a universal -g -y');
   });
 
-  it('S3: claude-code + windsurf + trae + claude-desktop, zh', () => {
-    const cmd = simulate('zh', ['claude-code', 'windsurf', 'trae', 'claude-desktop']);
+  it('S3: claude-code + windsurf + trae, zh', () => {
+    const cmd = simulate('zh', ['claude-code', 'windsurf', 'trae']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos-zh -a claude-code -a windsurf -a trae -g -y');
   });
 
-  it('S4: claude-desktop only, en', () => {
-    const cmd = simulate('en', ['claude-desktop']);
+  it('S4: only universal agents, en', () => {
+    const cmd = simulate('en', ['cursor', 'cline']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a universal -g -y');
   });
 

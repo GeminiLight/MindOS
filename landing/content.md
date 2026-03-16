@@ -66,14 +66,14 @@
   - zh: 全局同步 — 打破记忆割裂
   - en: Global Mind Sync — Breaking Memory Silos
 - **Tagline**
-  - zh: 一处记录，全局复用，所有 Agent 共享同一份上下文
-  - en: Record once, reuse everywhere — all Agents share one context
+  - zh: 换个工具、开个新对话，就要把背景重讲一遍？
+  - en: Switch tools or start a new chat, and you have to re-explain everything?
 - **Pain**
   - zh: 多个 Agent 各记各的，切换工具靠人工搬运上下文 / 每次对话都要重新交代背景，知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
   - en: Each Agent keeps its own memory — switching tools means manual context transfer / Every conversation starts from scratch, knowledge can't be reused across Agents / Deep personal context scattered — Agents always lack the full picture
 - **Shift**
-  - zh: 内置 MCP Server (20+ 工具)，任意 Agent 零配置直连知识库 / 全阵容 Agent 兼容：Claude Code, Cursor, Windsurf, Gemini CLI 等 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
-  - en: Built-in MCP Server (20+ tools) — any Agent connects with zero config / Full-lineup Agent compatible: Claude Code, Cursor, Windsurf, Gemini CLI, etc. / Profile, SOPs & project memory: record once, empower all Agents
+  - zh: 内置 MCP Server (20+ 工具)，任意 Agent 零配置直连知识库 / 全阵容 Agent 兼容：OpenClaw, Claude Code, Cursor 等 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
+  - en: Built-in MCP Server (20+ tools) — any Agent connects with zero config / Full-lineup Agent compatible: OpenClaw, Claude Code, Cursor, etc. / Profile, SOPs & project memory: record once, empower all Agents
 
 ### Pillar 02: Transparent & Controllable
 
@@ -81,8 +81,8 @@
   - zh: 透明可控 — 消除记忆黑箱
   - en: Transparent & Controllable — No Black Boxes
 - **Tagline**
-  - zh: Agent 每次读写留痕，人类可审查、修正、删除
-  - en: Every Agent read/write leaves a trace — humans audit, correct, and delete
+  - zh: Agent 在记忆你，但记了什么、记对没有？
+  - en: Your Agent is memorizing you — but what exactly did it remember, and is it right?
 - **Pain**
   - zh: Agent 的"记忆"锁在系统黑箱中，人类完全不可见 / 中间推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
   - en: Agent memory locked in black boxes — fully invisible to humans / Intermediate reasoning can't be audited or traced back / Hallucinations compound unchecked, eroding trust over time
@@ -96,8 +96,8 @@
   - zh: 共生演进 — 经验回流为指令
   - en: Symbiotic Evolution — Experience Flows Back as Instructions
 - **Tagline**
-  - zh: 知识库即代码，对话经验自动沉淀为 Skill/SOP
-  - en: Knowledge as Code — conversation experience auto-distills into Skills/SOPs
+  - zh: 对话里攒下的经验，关掉窗口就散了？
+  - en: All that experience from your conversations — gone the moment you close the window?
 - **Pain**
   - zh: 对话里积累的最佳实践关掉就丢了，无法回流为工作流 / 用了 100 次 Agent，工作流还是第一天的样子 / 人机协作断裂，Agent 每次都从零开始理解上下文
   - en: Best practices from conversations vanish when the chat closes — no feedback loop / 100 Agent sessions later, workflows are still day-one quality / Human-AI context breaks — Agents restart from zero each time
@@ -482,7 +482,7 @@
 
 | Feature | zh Title | en Title | zh Desc | en Desc |
 |---------|----------|----------|---------|---------|
-| MCP | MCP Server & Skills | MCP Server & Skills | 20+ 工具，stdio + HTTP 双传输，全阵容 Agent 兼容（Claude Code, Cursor, Windsurf, Gemini CLI 等），零配置接入读写、搜索及执行本地工作流。 | 20+ tools, stdio + HTTP dual transport, full-lineup Agent compatible (Claude Code, Cursor, Windsurf, Gemini CLI, etc.). Zero-config access to read, write, search, and execute local workflows. |
+| MCP | MCP Server & Skills | MCP Server & Skills | 20+ 工具，stdio + HTTP 双传输，全阵容 Agent 兼容（OpenClaw, Claude Code, Cursor 等），零配置接入读写、搜索及执行本地工作流。 | 20+ tools, stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access to read, write, search, and execute local workflows. |
 | 模板 | 结构化模板 | Structured Templates | 预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。 | Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context. |
 | Agent-Ready | 笔记即指令 | Agent-Ready Docs | 日常笔记天然就是 Agent 可直接执行的高质量指令——无需额外格式转换，写下即可调度。 | Everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch. |
 

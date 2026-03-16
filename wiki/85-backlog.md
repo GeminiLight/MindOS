@@ -17,6 +17,8 @@
 
 ## 改进想法
 
+- [ ] **增加更多 Agent 支持**：当前 `MCP_AGENTS` 仅 8 个（claude-code, cursor, windsurf, cline, trae, gemini-cli, openclaw, codebuddy），`npx skills` 支持 40 个。优先级高的候选：Augment, Roo Code, Kilo Code, Continue, Goose, Kiro CLI, Qwen Code。改动文件：`app/lib/mcp-agents.ts`（主定义）+ `app/app/api/mcp/install-skill/route.ts`（Skill 安装常量）。完整 agent 清单见 `wiki/ref-npx-skills-mechanism.md`
+
 - [x] **GUI RestartBlock 健康检查**：polling 判断条件从 `d.service === 'mindos'`（依赖响应体）改为 `r.status < 500`（只看状态码），与 CLI `waitForHttp` 逻辑一致，不受响应结构变更影响 — v0.5.2
 
 - [ ] **Onboarding — API Key 连通性验证**：Step 2 填写 API Key 后失焦自动测试（`max_tokens: 1`），显示 ✔/✘ badge 但不阻断继续；CLI 同步；Skip 模式不触发

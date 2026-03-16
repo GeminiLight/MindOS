@@ -122,6 +122,19 @@ sop_note/
 
 同步：`skills/` → `app/data/skills/` 手动同步。
 
+### 5. Agent 支持体系
+
+新增 Agent 支持时需改动的文件：
+
+| 文件 | 改什么 | 说明 |
+|------|--------|------|
+| `app/lib/mcp-agents.ts` | `MCP_AGENTS` 对象新增 `AgentDef` | **主定义**，MCP 配置路径、传输方式、存在检测。UI 和 API 自动读取 |
+| `app/app/api/mcp/install-skill/route.ts` | `UNIVERSAL_AGENTS` / `AGENT_NAME_MAP` / `SKILL_UNSUPPORTED` | Skill 安装时判断是否需要 `-a` flag |
+
+自动生效（不需要改）：`/api/mcp/agents`（遍历 `MCP_AGENTS`）、`SetupWizard.tsx`、`McpTab.tsx`（动态渲染）。
+
+参考：`wiki/ref-npx-skills-mechanism.md`（完整 40 个 agent 清单 + Skills CLI 机制）。
+
 ## 数据流
 
 ### AI 对话流

@@ -115,18 +115,19 @@ describe('POST /api/mcp/install-skill — agent filtering', () => {
     expect(cmd).toContain('-a trae');
   });
 
-  it('filters out claude-desktop (skill-unsupported)', async () => {
+  it('filters out unknown agents that are not in AGENT_NAME_MAP', async () => {
     const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['claude-desktop', 'claude-code'] }));
+    await POST(makeReq({ skill: 'mindos', agents: ['some-unknown-agent', 'claude-code'] }));
 
     const cmd = execSyncMock.mock.calls[0][0] as string;
     expect(cmd).toContain('-a claude-code');
-    expect(cmd).not.toContain('-a claude-desktop');
+    // unknown agents pass through as-is (not filtered)
+    expect(cmd).toContain('-a some-unknown-agent');
   });
 
-  it('falls back to -a universal when only unsupported agents', async () => {
+  it('falls back to -a universal when only universal agents selected', async () => {
     const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['claude-desktop'] }));
+    await POST(makeReq({ skill: 'mindos', agents: ['cursor'] }));
 
     const cmd = execSyncMock.mock.calls[0][0] as string;
     expect(cmd).toContain('-a universal');
@@ -219,7 +220,7 @@ describe('POST /api/mcp/install-skill — command format', () => {
 
   it('returns filtered agent list in response', async () => {
     const { POST } = await importRoute();
-    const res = await POST(makeReq({ skill: 'mindos', agents: ['cursor', 'claude-code', 'claude-desktop'] }));
+    const res = await POST(makeReq({ skill: 'mindos', agents: ['cursor', 'claude-code'] }));
     const body = await res.json();
     expect(body.agents).toEqual(['claude-code']);
   });

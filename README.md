@@ -48,21 +48,23 @@ MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge bas
 > Help me execute the XXX SOP from MindOS.
 > ```
 
-## 🧠 Core Value: Human-AI Shared Mind
+## 🧠 Human-AI Shared Mind
 
-**1. Global Sync — Break Memory Silos**
+> No more fragmented memory, no more black-box behavior, no more lost experience.
 
-Traditional notes are scattered across tools and APIs, so agents miss your real context when it matters. MindOS turns your local knowledge into one MCP-ready source, so every agent can sync your Profile, SOPs, and live working memory.
+**1. Global Sync — Breaking Memory Silos**
 
-**2. Transparent and Controllable — Eliminate Memory Black Boxes**
+Each Agent keeps its own memory — switching tools means manually hauling context. **MindOS lets all Agents share one knowledge base via MCP and Skills — record once, reuse everywhere.**
 
-Most assistant memory lives in black boxes, leaving humans unable to inspect or correct how decisions are made. MindOS writes retrieval and execution traces into local plain text, so you can audit, intervene, and improve continuously.
+**2. Transparent & Controllable — No More Black Boxes**
+
+What did your Agent remember? Is it even correct? You have no way to know. **MindOS saves every read/write as local plain text — humans can audit, correct, and delete in the GUI.**
 
 **3. Symbiotic Evolution — Experience Flows Back as Instructions**
 
-Static documents are hard to synchronize and weak as execution systems in real human-agent collaboration. MindOS makes notes agent-ready and reference-linked, so daily writing naturally becomes executable workflows that evolve with you.
+All that experience from your conversations — gone the moment you close the window. **MindOS auto-distills conversation experience into Skills/SOPs. Notes are instructions. The knowledge base gets better with use.**
 
-> **Foundation:** Local-first by default - all data stays in local plain text for privacy, ownership, and speed.
+> **Foundation:** Local-first by default — all data stays in local plain text for privacy, ownership, and speed.
 
 ## ✨ Features
 
@@ -80,7 +82,7 @@ Static documents are hard to synchronize and weak as execution systems in real h
 
 **Infrastructure**
 
-- **Reference Sync**: keep cross-file status and context aligned via links/backlinks.
+- **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
 - **Knowledge Graph**: visualize relationships and dependencies across notes.
 - **Git Time Machine**: track every edit, audit history, and roll back safely.
 - **Cross-Device Sync**: auto-commit, push, and pull via Git — edits on one device appear on all others within minutes.
