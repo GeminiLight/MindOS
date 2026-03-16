@@ -19,7 +19,8 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
       ) : (
         <div className="flex flex-col gap-3">
           {getAllRenderers().map(renderer => {
-            const enabled = pluginStates[renderer.id] ?? true;
+            const isCore = !!renderer.core;
+            const enabled = isCore ? true : (pluginStates[renderer.id] ?? true);
             return (
               <div
                 key={renderer.id}
@@ -31,7 +32,12 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground">{renderer.name}</span>
-                        {renderer.builtin && (
+                        {isCore && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-600 font-mono">
+                            core
+                          </span>
+                        )}
+                        {renderer.builtin && !isCore && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                             {t.settings.plugins.builtinBadge}
                           </span>
@@ -51,21 +57,30 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      const next = !enabled;
-                      setRendererEnabled(renderer.id, next);
-                      setPluginStates(s => ({ ...s, [renderer.id]: next }));
-                    }}
-                    role="switch"
-                    aria-checked={enabled}
-                    className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
-                    title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled}
-                  >
+                  {isCore ? (
                     <span
-                      className={`absolute top-[3px] w-3.5 h-3.5 rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/50'}`}
-                    />
-                  </button>
+                      className="shrink-0 w-9 h-5 rounded-full bg-amber-600 relative cursor-not-allowed opacity-60"
+                      title={t.settings.plugins.coreHint ?? 'Core renderer — always enabled'}
+                    >
+                      <span className="absolute top-[3px] left-[18px] w-3.5 h-3.5 rounded-full shadow-sm bg-white" />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const next = !enabled;
+                        setRendererEnabled(renderer.id, next);
+                        setPluginStates(s => ({ ...s, [renderer.id]: next }));
+                      }}
+                      role="switch"
+                      aria-checked={enabled}
+                      className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
+                      title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled}
+                    >
+                      <span
+                        className={`absolute top-[3px] w-3.5 h-3.5 rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/50'}`}
+                      />
+                    </button>
+                  )}
                 </div>
               </div>
             );

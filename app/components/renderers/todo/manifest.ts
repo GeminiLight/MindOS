@@ -8,6 +8,7 @@ export const manifest: RendererDefinition = {
   icon: '✅',
   tags: ['productivity', 'tasks', 'markdown'],
   builtin: true,
+  core: true,
   entryPath: 'TODO.md',
   match: ({ filePath }) => /\bTODO\b.*\.(md|csv)$/i.test(filePath),
   load: () => import('./TodoRenderer').then(m => ({ default: m.TodoRenderer })),

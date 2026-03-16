@@ -15,6 +15,7 @@ export interface RendererDefinition {
   icon: string;          // emoji or short string
   tags: string[];
   builtin: boolean;      // true = ships with MindOS; false = user-installed (future)
+  core?: boolean;        // true = default renderer for a file type, cannot be disabled by user
   entryPath?: string;    // canonical entry file shown on home page (e.g. 'TODO.md')
   match: (ctx: Pick<RendererContext, 'filePath' | 'extension'>) => boolean;
   // Provide either `component` (eager) or `load` (lazy). Prefer `load` for code-splitting.
@@ -38,6 +39,9 @@ export function loadDisabledState() {
 }
 
 export function setRendererEnabled(id: string, enabled: boolean) {
+  // Core renderers cannot be disabled
+  const def = registry.find(r => r.id === id);
+  if (def?.core) return;
   if (enabled) {
     _disabledIds.delete(id);
   } else {
@@ -49,6 +53,9 @@ export function setRendererEnabled(id: string, enabled: boolean) {
 }
 
 export function isRendererEnabled(id: string): boolean {
+  // Core renderers cannot be disabled
+  const def = registry.find(r => r.id === id);
+  if (def?.core) return true;
   return !_disabledIds.has(id);
 }
 
