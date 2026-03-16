@@ -15,6 +15,7 @@ export async function GET() {
         configPath: status.configPath,
         hasProjectScope: !!agent.project,
         hasGlobalScope: !!agent.global,
+        preferredTransport: agent.preferredTransport,
       };
     });
     return NextResponse.json({ agents });

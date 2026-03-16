@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sparkles, Globe, BookOpen, FileText, Copy, Check, RefreshCw,
   Loader2, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
-  XCircle, Zap, Brain, SkipForward,
+  XCircle, Zap, Brain, SkipForward, Info,
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { Field, Input, Select, ApiKeyInput } from '@/components/settings/Primitives';
@@ -39,12 +39,16 @@ interface AgentEntry {
   installed: boolean;
   hasProjectScope: boolean;
   hasGlobalScope: boolean;
+  preferredTransport: 'stdio' | 'http';
 }
 
 type AgentInstallState = 'pending' | 'installing' | 'ok' | 'error';
 interface AgentInstallStatus {
   state: AgentInstallState;
   message?: string;
+  transport?: string;
+  verified?: boolean;
+  verifyError?: string;
 }
 
 const TEMPLATES: Array<{ id: Template; icon: React.ReactNode; dirs: string[] }> = [
@@ -469,7 +473,7 @@ function Step3({
         <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.portVerifyHint}</p>
       )}
       <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--muted-foreground)' }}>
-        <AlertTriangle size={12} /> {s.portRestartWarning}
+        <Info size={12} /> {s.portRestartWarning}
       </p>
     </div>
   );
@@ -479,19 +483,20 @@ function Step3({
 function Step5({
   agents, agentsLoading, selectedAgents, setSelectedAgents,
   agentTransport, setAgentTransport, agentScope, setAgentScope,
-  agentStatuses, s, settingsMcp,
+  agentStatuses, s, settingsMcp, template,
 }: {
   agents: AgentEntry[];
   agentsLoading: boolean;
   selectedAgents: Set<string>;
   setSelectedAgents: React.Dispatch<React.SetStateAction<Set<string>>>;
-  agentTransport: 'stdio' | 'http';
-  setAgentTransport: (v: 'stdio' | 'http') => void;
+  agentTransport: 'auto' | 'stdio' | 'http';
+  setAgentTransport: (v: 'auto' | 'stdio' | 'http') => void;
   agentScope: 'global' | 'project';
   setAgentScope: (v: 'global' | 'project') => void;
   agentStatuses: Record<string, AgentInstallStatus>;
   s: ReturnType<typeof useLocale>['t']['setup'];
   settingsMcp: ReturnType<typeof useLocale>['t']['settings']['mcp'];
+  template: Template;
 }) {
   const toggleAgent = (key: string) => {
     setSelectedAgents(prev => {
@@ -499,6 +504,11 @@ function Step5({
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+  };
+
+  const getEffectiveTransport = (agent: AgentEntry) => {
+    if (agentTransport === 'auto') return agent.preferredTransport;
+    return agentTransport;
   };
 
   const getStatusBadge = (key: string, installed: boolean) => {
@@ -567,13 +577,24 @@ function Step5({
                   disabled={agentStatuses[agent.key]?.state === 'installing'}
                 />
                 <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                  style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
+                  {getEffectiveTransport(agent)}
+                </span>
                 {getStatusBadge(agent.key, agent.installed)}
               </label>
             ))}
           </div>
+          {/* Skill auto-install hint */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+            style={{ background: 'rgba(100,100,120,0.06)', color: 'var(--muted-foreground)' }}>
+            <Brain size={13} className="shrink-0" />
+            <span>{s.skillAutoHint(template === 'zh' ? 'mindos-zh' : 'mindos')}</span>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <Field label={s.agentTransport}>
-              <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'stdio' | 'http')}>
+              <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'auto' | 'stdio' | 'http')}>
+                <option value="auto">{s.agentTransportAuto}</option>
                 <option value="stdio">{settingsMcp.transportStdio}</option>
                 <option value="http">{settingsMcp.transportHttp}</option>
               </Select>
@@ -660,6 +681,7 @@ function RestartBlock({ s, newPort }: { s: ReturnType<typeof useLocale>['t']['se
 // ─── Step 6: Review ───────────────────────────────────────────────────────────
 function Step6({
   state, selectedAgents, agentStatuses, onRetryAgent, error, needsRestart, maskKey, s,
+  skillInstallResult,
 }: {
   state: SetupState;
   selectedAgents: Set<string>;
@@ -669,7 +691,9 @@ function Step6({
   needsRestart: boolean;
   maskKey: (key: string) => string;
   s: ReturnType<typeof useLocale>['t']['setup'];
+  skillInstallResult: { ok?: boolean; skill?: string; error?: string } | null;
 }) {
+  const skillName = state.template === 'zh' ? 'mindos-zh' : 'mindos';
   const rows: [string, string][] = [
     [s.kbPath, state.mindRoot],
     [s.template, state.template || '—'],
@@ -683,9 +707,11 @@ function Step6({
     [s.authToken, state.authToken || '—'],
     [s.webPassword, state.webPassword ? '••••••••' : '(none)'],
     [s.agentToolsTitle, selectedAgents.size > 0 ? Array.from(selectedAgents).join(', ') : '—'],
+    [s.skillLabel, skillName],
   ];
 
   const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
+  const successAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'ok');
 
   return (
     <div className="space-y-5">
@@ -702,6 +728,43 @@ function Step6({
           </div>
         ))}
       </div>
+
+      {/* Agent verification results */}
+      {successAgents.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>{s.reviewInstallResults}</p>
+          {successAgents.map(([key, st]) => (
+            <div key={key} className="flex items-center gap-2 text-xs px-3 py-1.5 rounded"
+              style={{ background: 'rgba(34,197,94,0.06)' }}>
+              <CheckCircle2 size={11} className="text-green-500 shrink-0" />
+              <span style={{ color: 'var(--foreground)' }}>{key}</span>
+              <span className="font-mono text-[10px] px-1 py-0.5 rounded"
+                style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
+                {st.transport || 'stdio'}
+              </span>
+              {st.transport === 'http' ? (
+                st.verified ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
+                    {s.agentVerified}
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(239,168,68,0.12)', color: '#f59e0b' }}
+                    title={st.verifyError}>
+                    {s.agentUnverified}
+                  </span>
+                )
+              ) : (
+                <span className="text-[10px]" style={{ color: 'var(--muted-foreground)' }}>
+                  {s.agentVerifyNote}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {failedAgents.length > 0 && (
         <div className="p-3 rounded-lg space-y-2" style={{ background: 'rgba(239,68,68,0.08)' }}>
           <p className="text-xs font-medium" style={{ color: '#ef4444' }}>{s.reviewInstallResults}</p>
@@ -721,6 +784,22 @@ function Step6({
             </div>
           ))}
           <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentFailureNote}</p>
+        </div>
+      )}
+      {/* Skill install result */}
+      {skillInstallResult && (
+        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+          skillInstallResult.ok ? '' : ''
+        }`} style={{
+          background: skillInstallResult.ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+        }}>
+          {skillInstallResult.ok ? (
+            <><CheckCircle2 size={11} className="text-green-500 shrink-0" />
+            <span style={{ color: 'var(--foreground)' }}>{s.skillInstalled} — {skillInstallResult.skill}</span></>
+          ) : (
+            <><XCircle size={11} className="text-red-500 shrink-0" />
+            <span style={{ color: '#ef4444' }}>{s.skillFailed}{skillInstallResult.error ? `: ${skillInstallResult.error}` : ''}</span></>
+          )}
         </div>
       )}
       {error && (
@@ -798,9 +877,10 @@ export default function SetupWizard() {
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
-  const [agentTransport, setAgentTransport] = useState<'stdio' | 'http'>('stdio');
+  const [agentTransport, setAgentTransport] = useState<'auto' | 'stdio' | 'http'>('auto');
   const [agentScope, setAgentScope] = useState<'global' | 'project'>('global');
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentInstallStatus>>({});
+  const [skillInstallResult, setSkillInstallResult] = useState<{ ok?: boolean; skill?: string; error?: string } | null>(null);
 
   // Load existing config as defaults on mount, generate token if none exists
   useEffect(() => {
@@ -970,7 +1050,13 @@ export default function SetupWizard() {
       setAgentStatuses(initialStatuses);
 
       try {
-        const agentsPayload = Array.from(selectedAgents).map(key => ({ key, scope: agentScope }));
+        const agentsPayload = Array.from(selectedAgents).map(key => {
+          const agent = agents.find(a => a.key === key);
+          const effectiveTransport = agentTransport === 'auto'
+            ? (agent?.preferredTransport || 'stdio')
+            : agentTransport;
+          return { key, scope: agentScope, transport: effectiveTransport };
+        });
         const res = await fetch('/api/mcp/install', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -984,8 +1070,14 @@ export default function SetupWizard() {
         const data = await res.json();
         if (data.results) {
           const updated: Record<string, AgentInstallStatus> = {};
-          for (const r of data.results as Array<{ agent: string; status: string; message?: string }>) {
-            updated[r.agent] = { state: r.status === 'ok' ? 'ok' : 'error', message: r.message };
+          for (const r of data.results as Array<{ agent: string; status: string; message?: string; transport?: string; verified?: boolean; verifyError?: string }>) {
+            updated[r.agent] = {
+              state: r.status === 'ok' ? 'ok' : 'error',
+              message: r.message,
+              transport: r.transport,
+              verified: r.verified,
+              verifyError: r.verifyError,
+            };
           }
           setAgentStatuses(updated);
         }
@@ -994,6 +1086,20 @@ export default function SetupWizard() {
         for (const key of selectedAgents) errStatuses[key] = { state: 'error' };
         setAgentStatuses(errStatuses);
       }
+    }
+
+    // 3. Install skill to agents
+    const skillName = state.template === 'zh' ? 'mindos-zh' : 'mindos';
+    try {
+      const skillRes = await fetch('/api/mcp/install-skill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skill: skillName, agents: Array.from(selectedAgents) }),
+      });
+      const skillData = await skillRes.json();
+      setSkillInstallResult(skillData);
+    } catch {
+      setSkillInstallResult({ error: 'Failed to install skill' });
     }
 
     setSubmitting(false);
@@ -1009,11 +1115,15 @@ export default function SetupWizard() {
   const retryAgent = useCallback(async (key: string) => {
     setAgentStatuses(prev => ({ ...prev, [key]: { state: 'installing' } }));
     try {
+      const agent = agents.find(a => a.key === key);
+      const effectiveTransport = agentTransport === 'auto'
+        ? (agent?.preferredTransport || 'stdio')
+        : agentTransport;
       const res = await fetch('/api/mcp/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agents: [{ key, scope: agentScope }],
+          agents: [{ key, scope: agentScope, transport: effectiveTransport }],
           transport: agentTransport,
           url: `http://localhost:${state.mcpPort}/mcp`,
           token: state.authToken || undefined,
@@ -1021,13 +1131,22 @@ export default function SetupWizard() {
       });
       const data = await res.json();
       if (data.results?.[0]) {
-        const r = data.results[0] as { agent: string; status: string; message?: string };
-        setAgentStatuses(prev => ({ ...prev, [key]: { state: r.status === 'ok' ? 'ok' : 'error', message: r.message } }));
+        const r = data.results[0] as { agent: string; status: string; message?: string; transport?: string; verified?: boolean; verifyError?: string };
+        setAgentStatuses(prev => ({
+          ...prev,
+          [key]: {
+            state: r.status === 'ok' ? 'ok' : 'error',
+            message: r.message,
+            transport: r.transport,
+            verified: r.verified,
+            verifyError: r.verifyError,
+          },
+        }));
       }
     } catch {
       setAgentStatuses(prev => ({ ...prev, [key]: { state: 'error' } }));
     }
-  }, [agentScope, agentTransport, state.mcpPort, state.authToken]);
+  }, [agents, agentScope, agentTransport, state.mcpPort, state.authToken]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
@@ -1075,6 +1194,7 @@ export default function SetupWizard() {
             agentTransport={agentTransport} setAgentTransport={setAgentTransport}
             agentScope={agentScope} setAgentScope={setAgentScope}
             agentStatuses={agentStatuses} s={s} settingsMcp={t.settings.mcp}
+            template={state.template}
           />
         )}
         {step === 5 && (
@@ -1083,6 +1203,7 @@ export default function SetupWizard() {
             agentStatuses={agentStatuses} onRetryAgent={retryAgent}
             error={error} needsRestart={needsRestart}
             maskKey={maskKey} s={s}
+            skillInstallResult={skillInstallResult}
           />
         )}
 

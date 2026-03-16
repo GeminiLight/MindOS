@@ -11,7 +11,15 @@
 
 - 不要估算工时
 
-发现一个bug，应该看看有没有类似的 Bug（人类反馈、机器发现）
+### Bug 处理流程
+
+发现 bug 时按以下步骤处理：
+
+1. **复现** — 确认能稳定复现，记录复现步骤
+2. **检查类似 bug** — 搜索 `wiki/80-known-pitfalls.md` 和 `wiki/85-backlog.md`，看是否有同类问题（人工反馈或机器发现）
+3. **定位根因** — 不要只修表面现象，找到为什么会发生
+4. **评估影响范围** — 同样的根因是否在其他地方也存在
+5. **修复** — 修复后补 tests，将坑记入 `wiki/80-known-pitfalls.md`
 
 ### 并行任务防重复
 
@@ -88,3 +96,7 @@
    - `app/data/skills/<name>/SKILL.md`（按 CLAUDE.md 规则与 skills/ 保持一致）
    - `.claude-internal/skills/<name>/SKILL.md`（若存在）
 7. **验证一致性**：用命令行 diff 确认所有副本内容相同
+
+## Landing Page
+
+content.md <-> landing/index.html
