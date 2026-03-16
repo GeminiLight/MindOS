@@ -36,6 +36,7 @@ interface PortStatus {
 interface AgentEntry {
   key: string;
   name: string;
+  present: boolean;
   installed: boolean;
   hasProjectScope: boolean;
   hasGlobalScope: boolean;
@@ -511,7 +512,7 @@ function Step5({
     return agentTransport;
   };
 
-  const getStatusBadge = (key: string, installed: boolean) => {
+  const getStatusBadge = (key: string, agent: AgentEntry) => {
     const st = agentStatuses[key];
     if (st) {
       if (st.state === 'installing') return (
@@ -533,16 +534,22 @@ function Step5({
         </span>
       );
     }
-    if (installed) return (
+    if (agent.installed) return (
       <span className="text-[11px] px-1.5 py-0.5 rounded"
         style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
         {settingsMcp.installed}
       </span>
     );
+    if (agent.present) return (
+      <span className="text-[11px] px-1.5 py-0.5 rounded"
+        style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+        {s.agentDetected ?? 'detected'}
+      </span>
+    );
     return (
       <span className="text-[11px] px-1.5 py-0.5 rounded"
         style={{ background: 'rgba(100,100,120,0.1)', color: 'var(--muted-foreground)' }}>
-        {s.agentNotInstalled}
+        {s.agentNotFound ?? s.agentNotInstalled}
       </span>
     );
   };
@@ -581,7 +588,7 @@ function Step5({
                   style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
                   {getEffectiveTransport(agent)}
                 </span>
-                {getStatusBadge(agent.key, agent.installed)}
+                {getStatusBadge(agent.key, agent)}
               </label>
             ))}
           </div>
@@ -936,7 +943,7 @@ export default function SetupWizard() {
           if (data.agents) {
             setAgents(data.agents);
             setSelectedAgents(new Set(
-              (data.agents as AgentEntry[]).filter(a => a.installed).map(a => a.key)
+              (data.agents as AgentEntry[]).filter(a => a.installed || a.present).map(a => a.key)
             ));
           }
         })

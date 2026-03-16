@@ -41,6 +41,20 @@ describe('middleware — API protection (AUTH_TOKEN)', () => {
     const res = await middleware(makeApiRequest({ authorization: 'Bearer secret123' }));
     expect(res.status).toBe(200);
   });
+
+  it('allows /api/health without auth (for check-port self-detection)', async () => {
+    process.env.AUTH_TOKEN = 'secret123';
+    const req = new NextRequest('http://localhost/api/health');
+    const res = await middleware(req);
+    expect(res.status).toBe(200);
+  });
+
+  it('allows /api/auth without auth', async () => {
+    process.env.AUTH_TOKEN = 'secret123';
+    const req = new NextRequest('http://localhost/api/auth');
+    const res = await middleware(req);
+    expect(res.status).toBe(200);
+  });
 });
 
 describe('middleware — Web UI protection (WEB_PASSWORD)', () => {

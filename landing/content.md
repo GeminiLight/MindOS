@@ -17,10 +17,10 @@
 
 | 位置 | zh | en |
 |------|----|----|
-| Link 1 | 流程 | Flow |
-| Link 2 | 对比 | Compare |
-| Link 3 | 演示 | Workflow |
-| Link 4 | 愿景 | Vision |
+| Link 1 | 愿景 | Vision |
+| Link 2 | 流程 | Flow |
+| Link 3 | 对比 | Compare |
+| Link 4 | 循环 | Loop |
 | Link 5 | 特性 | Features |
 | Link 6 | 开始 | Start |
 | Theme Toggle | — | ◐ |
@@ -44,15 +44,96 @@
   - zh: 开始构建
   - en: Get Started
 - **CTA Secondary**: GitHub
-- **Trust Tags**: Agent-native · Local-first · Open Source
+- **Trust Tags**:
+  - zh: 原生适配 · 本地优先 · 完全开源
+  - en: Agent-native · Local-first · Open Source
+
+---
+
+## Vision (愿景)
+
+- **Section Tag**: 01. THE VISION
+- **Headline**
+  - zh: 人机共享心智
+  - en: Human-AI Shared Mind
+- **Subhead**
+  - zh: 记忆不再割裂，行为不再黑箱，经验不再断流。
+  - en: No more fragmented memory, no more black-box behavior, no more lost experience.
+
+### Pillar 01: Global Sync
+
+- **Title**
+  - zh: 全局同步 — 打破记忆割裂
+  - en: Global Mind Sync — Breaking Memory Silos
+- **Tagline**
+  - zh: 一处记录，全局复用，所有 Agent 共享同一份上下文
+  - en: Record once, reuse everywhere — all Agents share one context
+- **Pain**
+  - zh: 多个 Agent 各记各的，切换工具靠人工搬运上下文 / 每次对话都要重新交代背景，知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
+  - en: Each Agent keeps its own memory — switching tools means manual context transfer / Every conversation starts from scratch, knowledge can't be reused across Agents / Deep personal context scattered — Agents always lack the full picture
+- **Shift**
+  - zh: 内置 MCP Server (20+ 工具)，任意 Agent 零配置直连知识库 / 全阵容 Agent 兼容：Claude Code, Cursor, Windsurf, Gemini CLI 等 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
+  - en: Built-in MCP Server (20+ tools) — any Agent connects with zero config / Full-lineup Agent compatible: Claude Code, Cursor, Windsurf, Gemini CLI, etc. / Profile, SOPs & project memory: record once, empower all Agents
+
+### Pillar 02: Transparent & Controllable
+
+- **Title**
+  - zh: 透明可控 — 消除记忆黑箱
+  - en: Transparent & Controllable — No Black Boxes
+- **Tagline**
+  - zh: Agent 每次读写留痕，人类可审查、修正、删除
+  - en: Every Agent read/write leaves a trace — humans audit, correct, and delete
+- **Pain**
+  - zh: Agent 的"记忆"锁在系统黑箱中，人类完全不可见 / 中间推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
+  - en: Agent memory locked in black boxes — fully invisible to humans / Intermediate reasoning can't be audited or traced back / Hallucinations compound unchecked, eroding trust over time
+- **Shift**
+  - zh: 每次检索、反思与执行均通过 MCP 沉淀为本地纯文本 / GUI 工作台提供完整的审查、干预与心智修正界面 / 人类拥有绝对的心智纠偏权，随时校准 Agent 行为
+  - en: Every retrieval, reflection & action saved as local plain text via MCP / GUI workbench provides full audit, intervention & correction interface / Humans hold absolute mind-correction rights — recalibrate Agents anytime
+
+### Pillar 03: Symbiotic Evolution
+
+- **Title**
+  - zh: 共生演进 — 经验回流为指令
+  - en: Symbiotic Evolution — Experience Flows Back as Instructions
+- **Tagline**
+  - zh: 知识库即代码，对话经验自动沉淀为 Skill/SOP
+  - en: Knowledge as Code — conversation experience auto-distills into Skills/SOPs
+- **Pain**
+  - zh: 对话里积累的最佳实践关掉就丢了，无法回流为工作流 / 用了 100 次 Agent，工作流还是第一天的样子 / 人机协作断裂，Agent 每次都从零开始理解上下文
+  - en: Best practices from conversations vanish when the chat closes — no feedback loop / 100 Agent sessions later, workflows are still day-one quality / Human-AI context breaks — Agents restart from zero each time
+- **Shift**
+  - zh: 对话经验自然沉淀为可复用 Skill/SOP，Agent 自动识别并更新关联文件 / 笔记即指令——日常记录天然就是 Agent 可执行的高质量指令 / 人机在同一个 Shared Mind 中相互启发，知识库随使用自我进化
+  - en: Conversation experience auto-distills into reusable Skills/SOPs, Agents auto-update linked files / Notes as Instructions — everyday writing naturally doubles as executable Agent commands / Humans & AI co-inspire within a single Shared Mind, knowledge base self-evolves with use
+
+### Foundation Banner
+
+- **Title**
+  - zh: 底层基石：本地优先
+  - en: Foundational Pillar: Local-first
+- **Body**
+  - zh: 所有数据以纯文本形式存储在本地，彻底消除隐私顾虑，确保你拥有绝对的数据主权与极致的读写性能。
+  - en: All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.
+- **UX Principles**
+  - zh: 极速响应 · 极简界面 · 键盘优先 · 本地优先
+  - en: Speed First · Minimal Chrome · Keyboard-driven · Local-first
+
+### Target User
+
+- **Title**
+  - zh: 为谁而造
+  - en: Built For
+- **Core Persona**
+  - zh: 同时使用 3+ Agent 的独立开发者/创始人——管理复杂 SOP、产品路线图和技术架构，需要跨 Agent 共享上下文。
+  - en: Indie developers/founders using 3+ Agents simultaneously — managing complex SOPs, product roadmaps, and tech architecture, needing cross-Agent context sharing.
+- **Extended Users**
+  - zh: AI-native 小团队（3-15 人） · 系统性思考者（500+ 文件本地知识库）
+  - en: AI-native small teams (3-15 people) · Systematic thinkers (500+ file local knowledge bases)
 
 ---
 
 ## Demo Flow (一图看懂)
 
-- **Section Tag**
-  - zh: 一图看懂
-  - en: SEE IT IN ACTION
+- **Section Tag**: 02. THE FLOW
 - **Headline**
   - zh: 想法、执行到复盘，一条线贯穿
   - en: From Ideas to Execution to Review, One Thread Through All
@@ -139,9 +220,7 @@
 
 ## Compare (对比)
 
-- **Section Tag**
-  - zh: 亲身体验
-  - en: SEE THE DIFFERENCE
+- **Section Tag**: 03. THE DIFFERENCE
 - **Headline**
   - zh: 同一个任务，两种体验
   - en: Same Task, Two Realities
@@ -332,7 +411,7 @@
 
 ## Workflow (交互式心智循环)
 
-- **Section Tag**: 01. THE SHARED MIND LOOP
+- **Section Tag**: 04. THE SHARED MIND LOOP
 - **Headline**
   - zh: 交互式心智循环
   - en: Interactive Mind Loop
@@ -384,90 +463,9 @@
 
 ---
 
-## Vision (愿景)
-
-- **Section Tag**: 02. THE VISION
-- **Headline**
-  - zh: 人机共享心智
-  - en: Human-AI Shared Mind
-- **Subhead**
-  - zh: 击破人机协作结构性鸿沟，让人与 AI 在同一个心智空间中共生演进。
-  - en: Breaking the structural gaps in human-AI collaboration — co-evolving within a single Shared Mind.
-
-### Pillar 01: Global Sync
-
-- **Title**
-  - zh: 全局同步 — 打破记忆割裂
-  - en: Global Mind Sync — Breaking Memory Silos
-- **Tagline**
-  - zh: 一处记录，全局复用，所有 Agent 共享同一份上下文
-  - en: Record once, reuse everywhere — all Agents share one context
-- **Pain**
-  - zh: 多个 Agent 各记各的，切换工具靠人工搬运上下文 / 每次对话都要重新交代背景，知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
-  - en: Each Agent keeps its own memory — switching tools means manual context transfer / Every conversation starts from scratch, knowledge can't be reused across Agents / Deep personal context scattered — Agents always lack the full picture
-- **Shift**
-  - zh: 内置 MCP Server (20+ 工具)，任意 Agent 零配置直连知识库 / 全阵容 Agent 兼容：Claude Code, Cursor, Windsurf, Gemini CLI 等 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
-  - en: Built-in MCP Server (20+ tools) — any Agent connects with zero config / Full-lineup Agent compatible: Claude Code, Cursor, Windsurf, Gemini CLI, etc. / Profile, SOPs & project memory: record once, empower all Agents
-
-### Pillar 02: Transparent & Controllable
-
-- **Title**
-  - zh: 透明可控 — 消除 Agent 黑箱
-  - en: Transparent & Controllable — No Black Boxes
-- **Tagline**
-  - zh: 让 Agent 在阳光下思考
-  - en: Let Agents think in the light
-- **Pain**
-  - zh: Agent 的"记忆"锁在系统黑箱中，人类完全不可见 / 中间推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
-  - en: Agent memory locked in black boxes — fully invisible to humans / Intermediate reasoning can't be audited or traced back / Hallucinations compound unchecked, eroding trust over time
-- **Shift**
-  - zh: 每次检索、反思与执行均通过 MCP 沉淀为本地纯文本 / GUI 工作台提供完整的审查、干预与心智修正界面 / 人类拥有绝对的心智纠偏权，随时校准 Agent 行为
-  - en: Every retrieval, reflection & action saved as local plain text via MCP / GUI workbench provides full audit, intervention & correction interface / Humans hold absolute mind-correction rights — recalibrate Agents anytime
-
-### Pillar 03: Symbiotic Evolution
-
-- **Title**
-  - zh: 共生演进 — 经验回流为指令
-  - en: Symbiotic Evolution — Experience Flows Back as Instructions
-- **Tagline**
-  - zh: 知识库即代码，对话经验自动沉淀为 Skill/SOP
-  - en: Knowledge as Code — conversation experience auto-distills into Skills/SOPs
-- **Pain**
-  - zh: 对话里积累的最佳实践关掉就丢了，无法回流为工作流 / 用了 100 次 Agent，工作流还是第一天的样子 / 人机协作断裂，Agent 每次都从零开始理解上下文
-  - en: Best practices from conversations vanish when the chat closes — no feedback loop / 100 Agent sessions later, workflows are still day-one quality / Human-AI context breaks — Agents restart from zero each time
-- **Shift**
-  - zh: 对话经验自然沉淀为可复用 Skill/SOP，Agent 自动识别并更新关联文件 / 笔记即指令——日常记录天然就是 Agent 可执行的高质量指令 / 人机在同一个 Shared Mind 中相互启发，知识库随使用自我进化
-  - en: Conversation experience auto-distills into reusable Skills/SOPs, Agents auto-update linked files / Notes as Instructions — everyday writing naturally doubles as executable Agent commands / Humans & AI co-inspire within a single Shared Mind, knowledge base self-evolves with use
-
-### Foundation Banner
-
-- **Title**
-  - zh: 底层基石：本地优先
-  - en: Foundational Pillar: Local-first
-- **Body**
-  - zh: 所有数据以纯文本形式存储在本地，彻底消除隐私顾虑，确保你拥有绝对的数据主权与极致的读写性能。
-  - en: All data is stored locally as plain text, eliminating privacy concerns and ensuring absolute data sovereignty with ultimate read/write performance.
-- **UX Principles**
-  - zh: Speed First · Minimal Chrome · Keyboard-driven · 本地优先
-  - en: Speed First · Minimal Chrome · Keyboard-driven · Local-first
-
-### Target User
-
-- **Title**
-  - zh: 为谁而造
-  - en: Built For
-- **Core Persona**
-  - zh: 同时使用 3+ Agent 的独立开发者/创始人——管理复杂 SOP、产品路线图和技术架构，需要跨 Agent 共享上下文。
-  - en: Indie developers/founders using 3+ Agents simultaneously — managing complex SOPs, product roadmaps, and tech architecture, needing cross-Agent context sharing.
-- **Extended Users**
-  - zh: AI-native 小团队（3-15 人） · 系统性思考者（500+ 文件本地知识库）
-  - en: AI-native small teams (3-15 people) · Systematic thinkers (500+ file local knowledge bases)
-
----
-
 ## Features (核心功能特性)
 
-- **Section Tag**: 03. FEATURES
+- **Section Tag**: 05. FEATURES
 - **Headline**
   - zh: 核心功能特性
   - en: Core Features
@@ -500,7 +498,7 @@
 
 ## Ecosystem (Agent 生态)
 
-- **Section Tag**: 04. AGENT ECOSYSTEM
+- **Section Tag**: 06. AGENT ECOSYSTEM
 - **Headline**
   - zh: 无缝链接 Agents 生态
   - en: Seamless Agent Ecosystem
@@ -549,7 +547,7 @@
 
 ## Quickstart (快速开始)
 
-- **Section Tag**: 05. QUICKSTART
+- **Section Tag**: 07. QUICKSTART
 - **Headline**
   - zh: 30 秒安装，一句话上手
   - en: 30-Second Setup. One Prompt to Start.
@@ -563,8 +561,8 @@
   - zh: 适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…
   - en: Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…
 - **CLI Alternative**
-  - zh: 或手动安装：`npm i -g mindos && mindos onboard`，30 秒浏览器可用
-  - en: Or install manually: `npm i -g mindos && mindos onboard` — ready in 30 seconds
+  - zh: 或手动安装：`npm i -g @geminilight/mindos && mindos onboard`，30 秒浏览器可用
+  - en: Or install manually: `npm i -g @geminilight/mindos && mindos onboard` — ready in 30 seconds
 - **Badge**
   - zh: 安装 Prompt
   - en: Install Prompt

@@ -66,7 +66,14 @@ function killTree(pid) {
   return false;
 }
 
-export function stopMindos() {
+/**
+ * Stop MindOS processes.
+ * @param {Object} [opts] - Optional overrides.
+ * @param {string[]} [opts.extraPorts] - Additional ports to clean up (e.g. old
+ *   ports before a config change).  These are cleaned in addition to the ports
+ *   read from the current config file.
+ */
+export function stopMindos(opts = {}) {
   // Read ports from config for port-based cleanup
   let webPort = '3000', mcpPort = '8787';
   try {
@@ -90,8 +97,14 @@ export function stopMindos() {
 
   // Always do port-based cleanup — Next.js spawns worker processes whose PIDs
   // are not recorded in the PID file and would otherwise become orphaned.
+  // Include any extra ports (e.g. old ports from before a config change).
+  const portsToClean = new Set([webPort, mcpPort]);
+  if (opts.extraPorts) {
+    for (const p of opts.extraPorts) portsToClean.add(String(p));
+  }
+
   let portKilled = 0;
-  for (const port of [webPort, mcpPort]) {
+  for (const port of portsToClean) {
     portKilled += killByPort(port);
   }
 

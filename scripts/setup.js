@@ -30,7 +30,7 @@ import { execSync, spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { createConnection } from 'node:net';
 import http from 'node:http';
-import { MCP_AGENTS } from '../bin/lib/mcp-agents.js';
+import { MCP_AGENTS, detectAgentPresence } from '../bin/lib/mcp-agents.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -616,14 +616,15 @@ function isAgentInstalled(agentKey) {
 async function runMcpInstallStep(mcpPort, authToken) {
   const keys = Object.keys(MCP_AGENTS);
 
-  // Build options with installed status shown as hint
+  // Build options with installed/detected status shown as hint
   const options = keys.map(k => {
     const installed = isAgentInstalled(k);
+    const present = detectAgentPresence(k);
     return {
       label: MCP_AGENTS[k].name,
-      hint:  installed ? (uiLang === 'zh' ? '已安装' : 'installed') : (uiLang === 'zh' ? '未安装' : 'not installed'),
+      hint:  installed ? (uiLang === 'zh' ? '已配置' : 'configured') : present ? (uiLang === 'zh' ? '已检测' : 'detected') : (uiLang === 'zh' ? '未找到' : 'not found'),
       value: k,
-      preselect: installed,
+      preselect: installed || present,
     };
   });
 

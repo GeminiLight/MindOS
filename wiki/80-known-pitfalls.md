@@ -61,6 +61,42 @@
 - **现象：** 大文件读取超过 LLM context
 - **解决：** 单文件读取上限 25,000 字符 + `truncate()` 工具函数
 
+## 进程生命周期
+
+### stopMindos 只清理 config 端口，漏掉旧端口
+- **现象：** GUI 改端口后 restart，旧 MCP 进程存活，新服务报 "Port already in use"
+- **原因：** `stopMindos()` 从 config 文件读端口，但 config 在 `/api/setup` 时已写入新端口；旧进程实际运行在旧端口，port cleanup 打空
+- **解决：** `stopMindos()` 新增 `opts.extraPorts`；`/api/restart` 通过 `MINDOS_OLD_*` env 传递旧端口；`cli.js restart` 对比新旧差异自动传入
+- **教训：** 多步状态变更（config 写入 → 进程 stop → 进程 start）之间，数据来源必须区分"运行态"和"配置态"
+
+### /api/restart 环境变量继承导致新端口不生效
+- **现象：** GUI 改端口后 restart，服务仍在旧端口启动
+- **原因：** `spawn` 传 `process.env` 给子进程，`loadConfig()` 的 `set()` 策略是"已有则不覆盖" → 旧 env 值屏蔽了 config 文件的新值
+- **解决：** spawn 前删除 `MINDOS_WEB_PORT` 等 env vars，让子进程 `loadConfig()` 从文件读新值
+- **教训：** 子进程继承父进程 env 时，如果有"配置加载跳过已有 env"逻辑，必须主动清理过时的 env vars
+
+### PID 文件只记录主进程，工人进程残留
+- **现象：** `mindos stop` 后端口仍被占用
+- **原因：** `savePids()` 只存主进程 PID + MCP PID，Next.js 工人进程（独立 PID）不在文件中
+- **解决：** (1) `killTree(-pid)` 杀整个进程组 (2) 端口清理 ALWAYS 运行，不因有 PID 文件就跳过
+- **教训：** PID 文件不可靠（只是部分快照），必须有端口清理兜底
+
+### lsof 环境差异 + ss 端口子串误匹配
+- **现象：** `lsof -ti :PORT` 在某些环境返回 exit 1（权限问题）；`ss` 输出 `:3003` 误匹配 `:30030`
+- **解决：** lsof 失败后 fallback 到 `ss -tlnp`；端口匹配用正则 `/:PORT(?!\d)/` 防子串
+- **教训：** 系统工具的可用性不能假设统一，关键路径必须有 fallback
+
+### restart 用固定 sleep 等端口释放不可靠
+- **现象：** 1.5s sleep 后端口尚未释放，`assertPortFree` 失败
+- **解决：** 改为 polling `isPortInUse()` + 15s deadline
+- **教训：** 异步资源释放用轮询确认，不用固定 delay
+
+### /api/health 被 middleware auth 拦截
+- **现象：** re-onboard 时 `isSelfPort()` 调 `/api/health` 被 401 → 误报 "Port already in use"
+- **原因：** server-to-self HTTP 请求没有 `Sec-Fetch-Site: same-origin` header，也没有 auth token
+- **解决：** `proxy.ts` 豁免 `/api/health` 和 `/api/auth`
+- **教训：** 健康检查端点必须无认证，否则内部自检会失败
+
 ## 构建 / 部署
 
 ### Skill 安装 process.cwd() 路径错误
@@ -78,6 +114,13 @@
 - **文件：** `app/api/mcp/install-skill/route.ts`、`scripts/setup.js`
 - **现象：** 新增的顶层目录未被同步到公开仓
 - **解决：** `.github/workflows/sync-to-mindos.yml` 中 rsync 目录列表需要手动维护
+
+### 预编译 .next/ 进 npm 包 — 已评估放弃
+- **动机：** `npm update` 后首次启动需 ~12s `next build`，想预编译消除等待
+- **可行性结论：** 技术上可行（`next start` 不依赖硬编码路径，包体 9.9→15MB），但 **ROI 为负**
+- **放弃原因：** (1) 12s 延迟只在版本更新后首次启动触发，频率极低 (2) 所有用户每次 `npm install` 都多下载 5MB，总成本远高于偶发的 12s (3) CI 必须耦合 `next build`，构建失败阻塞发版 (4) 非标准模式，Next.js 升级可能静默破坏 (5) CI 环境变量会 bake 进产物，用户端出诡异 bug
+- **当前方案：** 已有 `Building MindOS (first run or new version detected)...` 提示，用户体感可接受，不做额外优化
+- **评估日期：** 2026-03-17
 
 ### 免交互模式 (-y) 区分可跳过 vs 必须交互
 - **现象：** `-y` 全局免交互跳过了 agent 选择（用户必须自己选）

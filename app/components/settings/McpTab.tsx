@@ -22,6 +22,7 @@ interface McpStatus {
 interface AgentInfo {
   key: string;
   name: string;
+  present: boolean;
   installed: boolean;
   scope?: string;
   transport?: string;
@@ -231,7 +232,9 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
                 <span className="text-[10px] text-muted-foreground">{agent.scope}</span>
               </>
             ) : (
-              <span className="text-[10px] text-muted-foreground">{m?.notInstalled ?? 'Not installed'}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {agent.present ? (m?.detected ?? 'Detected') : (m?.notFound ?? 'Not found')}
+              </span>
             )}
             {/* Scope selector */}
             {selected.has(agent.key) && agent.hasProjectScope && agent.hasGlobalScope && (

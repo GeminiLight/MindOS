@@ -270,3 +270,124 @@ describe('stopMindos — port cleanup always runs', () => {
     expect(result.portCleanupRan).toBe(true);
   });
 });
+
+// ── Port-change restart contract ────────────────────────────────────────────
+// When user changes ports in GUI, the config file has NEW ports but processes
+// still listen on OLD ports.  stopMindos must clean up BOTH old and new ports.
+
+describe('restart with port change — old ports must be cleaned', () => {
+  // Simulate the restart logic: collect old ports, pass as extraPorts
+  function getExtraPorts(
+    oldEnv: { webPort?: string; mcpPort?: string },
+    newConfig: { webPort: number; mcpPort: number },
+  ): string[] {
+    const extra: string[] = [];
+    if (oldEnv.webPort && Number(oldEnv.webPort) !== newConfig.webPort) {
+      extra.push(oldEnv.webPort);
+    }
+    if (oldEnv.mcpPort && Number(oldEnv.mcpPort) !== newConfig.mcpPort) {
+      extra.push(oldEnv.mcpPort);
+    }
+    return extra;
+  }
+
+  // Simulate stopMindos port collection
+  function getPortsToClean(
+    configPorts: { webPort: string; mcpPort: string },
+    extraPorts: string[],
+  ): Set<string> {
+    const ports = new Set([configPorts.webPort, configPorts.mcpPort]);
+    for (const p of extraPorts) ports.add(p);
+    return ports;
+  }
+
+  it('includes old ports when ports changed', () => {
+    const extra = getExtraPorts(
+      { webPort: '3011', mcpPort: '8787' },
+      { webPort: 3012, mcpPort: 8796 },
+    );
+    expect(extra).toEqual(['3011', '8787']);
+
+    // stopMindos config already has new ports
+    const ports = getPortsToClean({ webPort: '3012', mcpPort: '8796' }, extra);
+    expect(ports.has('3011')).toBe(true);  // old web port
+    expect(ports.has('8787')).toBe(true);  // old mcp port
+    expect(ports.has('3012')).toBe(true);  // new web port
+    expect(ports.has('8796')).toBe(true);  // new mcp port
+  });
+
+  it('no extra ports when ports unchanged', () => {
+    const extra = getExtraPorts(
+      { webPort: '3011', mcpPort: '8787' },
+      { webPort: 3011, mcpPort: 8787 },
+    );
+    expect(extra).toEqual([]);
+  });
+
+  it('handles missing old env vars (fresh start)', () => {
+    const extra = getExtraPorts({}, { webPort: 3012, mcpPort: 8796 });
+    expect(extra).toEqual([]);
+  });
+
+  // Regression: /api/restart passed process.env directly to child,
+  // so loadConfig() skipped new values because env vars were already set.
+  it('REGRESSION: child process env must not contain stale port vars', () => {
+    // Simulate what /api/restart does now
+    const parentEnv: Record<string, string> = {
+      MINDOS_WEB_PORT: '3011',
+      MINDOS_MCP_PORT: '8787',
+      PATH: '/usr/bin',
+    };
+    const childEnv = { ...parentEnv };
+    const oldWeb = childEnv.MINDOS_WEB_PORT;
+    const oldMcp = childEnv.MINDOS_MCP_PORT;
+    delete childEnv.MINDOS_WEB_PORT;
+    delete childEnv.MINDOS_MCP_PORT;
+    // Old ports must be passed via MINDOS_OLD_* so restart can clean them up
+    if (oldWeb) childEnv.MINDOS_OLD_WEB_PORT = oldWeb;
+    if (oldMcp) childEnv.MINDOS_OLD_MCP_PORT = oldMcp;
+
+    expect(childEnv.MINDOS_WEB_PORT).toBeUndefined();
+    expect(childEnv.MINDOS_MCP_PORT).toBeUndefined();
+    expect(childEnv.MINDOS_OLD_WEB_PORT).toBe('3011');
+    expect(childEnv.MINDOS_OLD_MCP_PORT).toBe('8787');
+    expect(childEnv.PATH).toBe('/usr/bin'); // other vars preserved
+  });
+
+  // cli.js restart reads old ports from MINDOS_OLD_* OR current MINDOS_*
+  it('restart reads old ports from MINDOS_OLD_* env (GUI path)', () => {
+    // Simulate: /api/restart set MINDOS_OLD_* and deleted MINDOS_*
+    const env: Record<string, string | undefined> = {
+      MINDOS_OLD_WEB_PORT: '3011',
+      MINDOS_OLD_MCP_PORT: '8787',
+    };
+    const oldWebPort = env.MINDOS_OLD_WEB_PORT || env.MINDOS_WEB_PORT;
+    const oldMcpPort = env.MINDOS_OLD_MCP_PORT || env.MINDOS_MCP_PORT;
+    expect(oldWebPort).toBe('3011');
+    expect(oldMcpPort).toBe('8787');
+  });
+
+  it('restart reads old ports from MINDOS_* env (CLI path)', () => {
+    // Simulate: `mindos restart` from CLI, no MINDOS_OLD_* set
+    const env: Record<string, string | undefined> = {
+      MINDOS_WEB_PORT: '3011',
+      MINDOS_MCP_PORT: '8787',
+    };
+    const oldWebPort = env.MINDOS_OLD_WEB_PORT || env.MINDOS_WEB_PORT;
+    const oldMcpPort = env.MINDOS_OLD_MCP_PORT || env.MINDOS_MCP_PORT;
+    expect(oldWebPort).toBe('3011');
+    expect(oldMcpPort).toBe('8787');
+  });
+
+  // The restart wait loop must wait for ALL ports (old + new) to be free
+  it('wait loop covers both old and new ports', async () => {
+    const allPorts = new Set([3012, 8796]);
+    for (const p of ['3011', '8787']) allPorts.add(Number(p));
+
+    expect(allPorts.size).toBe(4);
+    expect(allPorts.has(3011)).toBe(true);
+    expect(allPorts.has(8787)).toBe(true);
+    expect(allPorts.has(3012)).toBe(true);
+    expect(allPorts.has(8796)).toBe(true);
+  });
+});

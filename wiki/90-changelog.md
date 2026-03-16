@@ -2,6 +2,22 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.5.6 — README 优化 + 营销文档 + 代码质量 (2026-03-16)
+
+### 新增
+- **WeChat 社区入口** — README 新增 Community section（二维码 + 加群引导），中英文同步
+- **营销文档** — `marketing/user-growth.md` 增长飞轮策略（MCP 生态占位、搜索截流、开发者社区、被动分发）；`marketing/wechat-community.md` 微信内测群运营方案
+- **MCP 请求日志** — MCP Server 新增请求日志中间件
+- **新增测试** — skill install、stop-restart、check-port、setup 共 4 组测试
+
+### 变更
+- **README badge 重构** — 新增 npm version（amber）+ WeChat（微信绿），去掉 DeepWiki，排序调整为 Website → npm → WeChat → License，颜色协调统一
+- **Skill 自动安装增强** — 重试逻辑、校验、错误处理优化
+- **Graceful stop** — 关停时等待进行中请求完成
+- **Renderer** — graph manifest 修复，codegen 脚本更新，新增 core flag
+
+---
+
 ## v0.5.4 — Skill 自动安装 + Onboard 端口分离 (2026-03-16)
 
 ### 新增

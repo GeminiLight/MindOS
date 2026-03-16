@@ -16,8 +16,9 @@ export async function proxy(req: NextRequest) {
 
   // --- API protection (AUTH_TOKEN) ---
   if (pathname.startsWith('/api/')) {
-    // /api/auth handles its own password validation — never block it
-    if (pathname === '/api/auth') return NextResponse.next();
+    // /api/auth handles its own password validation — never block it.
+    // /api/health is unauthenticated so check-port can detect this MindOS instance.
+    if (pathname === '/api/auth' || pathname === '/api/health') return NextResponse.next();
 
     if (!authToken) return NextResponse.next();
 

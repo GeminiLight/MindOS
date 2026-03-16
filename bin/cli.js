@@ -317,16 +317,39 @@ const commands = {
   stop: () => stopMindos(),
 
   restart: async () => {
+    // Capture old ports BEFORE loadConfig overwrites env vars, so we can
+    // clean up processes that are still listening on the previous ports
+    // (e.g. user changed ports in the GUI and config was already saved).
+    // Sources: (1) MINDOS_OLD_* set by /api/restart when it strips the
+    //              current env, (2) current MINDOS_*_PORT env vars.
+    const oldWebPort = process.env.MINDOS_OLD_WEB_PORT || process.env.MINDOS_WEB_PORT;
+    const oldMcpPort = process.env.MINDOS_OLD_MCP_PORT || process.env.MINDOS_MCP_PORT;
+
     loadConfig();
-    const webPort = Number(process.env.MINDOS_WEB_PORT || '3000');
-    const mcpPort = Number(process.env.MINDOS_MCP_PORT || '8787');
-    stopMindos();
-    // Wait until both ports are actually free (up to 15s)
+
+    // After loadConfig, env vars reflect the NEW config (or old if unchanged).
+    const newWebPort = Number(process.env.MINDOS_WEB_PORT || '3000');
+    const newMcpPort = Number(process.env.MINDOS_MCP_PORT || '8787');
+
+    // Collect old ports that differ from new ones — processes may still be
+    // listening there even though config already points to the new ports.
+    const extraPorts = [];
+    if (oldWebPort && Number(oldWebPort) !== newWebPort) extraPorts.push(oldWebPort);
+    if (oldMcpPort && Number(oldMcpPort) !== newMcpPort) extraPorts.push(oldMcpPort);
+
+    stopMindos({ extraPorts });
+
+    // Wait until ALL ports (old + new) are actually free (up to 15s)
+    const allPorts = new Set([newWebPort, newMcpPort]);
+    for (const p of extraPorts) allPorts.add(Number(p));
+
     const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
-      const webBusy = await isPortInUse(webPort);
-      const mcpBusy = await isPortInUse(mcpPort);
-      if (!webBusy && !mcpBusy) break;
+      let anyBusy = false;
+      for (const p of allPorts) {
+        if (await isPortInUse(p)) { anyBusy = true; break; }
+      }
+      if (!anyBusy) break;
       await new Promise((r) => setTimeout(r, 500));
     }
     await commands[getStartMode()]();
