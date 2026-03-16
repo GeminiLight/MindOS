@@ -2,6 +2,25 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.5.4 — Skill 自动安装 + Onboard 端口分离 (2026-03-16)
+
+### 新增
+- **Skill 自动安装** — GUI/CLI onboarding 完成时自动安装对应语言的操作指南 Skill（`mindos` / `mindos-zh`），并写入 `disabledSkills` 禁用另一语言版本
+- **Skill 安装 API** — `POST /api/mcp/install-skill`，执行 `npx skills add` 分发 Skill 到选定的 AI Agent
+- **Settings Skill 语言切换** — MCP → Skills 区域新增语言切换按钮（EN / 中文）
+- **新增 MCP Agent** — amp, codex, github-copilot, kimi-cli, opencode, warp
+
+### 变更
+- **Onboard 端口分离** — 首次 onboard 使用临时端口（9100+），不再占用用户配置的正式端口；re-onboard 复用已运行的服务
+- **needsRestart 逻辑修正** — 首次 onboard 始终 restart（临时端口 → 正式端口），re-onboard 仅在配置变更时 restart
+- Step 3 端口提示图标从 ⚠️ 改为 ℹ️，文案改为"完成配置后服务将以这些端口启动"
+
+### 修复
+- **isSelfPort 误判** — 设置 webPassword 后 `/api/health` 返回 401，旧逻辑未识别为 MindOS 服务，导致 re-onboard 误启新进程
+- **CLI selectedTemplate 作用域错误** — 已有知识库时模板变量未赋值，Skill 安装始终用 `en`
+
+---
+
 ## v0.4.0 — 插件架构重构 + CLI UX 增强 (2026-03-14)
 
 ### 新增
