@@ -8,6 +8,7 @@ import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
 import CsvView from '@/components/CsvView';
 import Backlinks from '@/components/Backlinks';
+import { useRendererState } from '@/lib/renderers/useRendererState';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import TableOfContents from '@/components/TableOfContents';
@@ -45,22 +46,7 @@ export default function ViewPageClient({
     () => false,
   );
 
-  const useRaw = useSyncExternalStore(
-    (onStoreChange) => {
-      const listener = () => onStoreChange();
-      window.addEventListener('storage', listener);
-      window.addEventListener('mindos-use-raw-change', listener);
-      return () => {
-        window.removeEventListener('storage', listener);
-        window.removeEventListener('mindos-use-raw-change', listener);
-      };
-    },
-    () => {
-      const saved = localStorage.getItem('mindos-use-raw');
-      return saved !== null ? saved === 'true' : false;
-    },
-    () => false,
-  );
+  const [useRaw, setUseRaw] = useRendererState<boolean>('_raw', filePath, false);
   const router = useRouter();
   const [editing, setEditing] = useState(initialEditing || content === '');
   const [editContent, setEditContent] = useState(content);
@@ -81,10 +67,8 @@ export default function ViewPageClient({
   const effectiveUseRaw = hydrated ? useRaw : false;
 
   const handleToggleRaw = useCallback(() => {
-    const next = !useRaw;
-    localStorage.setItem('mindos-use-raw', String(next));
-    window.dispatchEvent(new Event('mindos-use-raw-change'));
-  }, [useRaw]);
+    setUseRaw(prev => !prev);
+  }, [setUseRaw]);
 
   const renderer = resolveRenderer(filePath, extension);
   const isCsv = extension === 'csv';

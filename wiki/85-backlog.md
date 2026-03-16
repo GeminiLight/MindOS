@@ -32,6 +32,7 @@
 - [ ] CLI 增加 per-command `--help`（`mindos start --help` 显示子命令选项）
 - [ ] CLI 增加 `mindos status` 命令（一览服务状态、端口、同步状态）
 - [ ] 首次使用引导流程：检测新模板 → 展示知识库结构 → 引导 AI 提问 → 引导配置 Sync
+- [ ] **Onboarding 端口分离**：Setup wizard 使用固定临时端口（如 5000）启动，用户配置的端口独立写入 config，完成后按 config 端口重启正式服务。当前行为：onboard 和正式服务共用同一端口，改端口后必须 restart，体验割裂
 
 ## 待验证
 

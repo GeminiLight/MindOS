@@ -2,29 +2,29 @@
 
 # 产品建议书 (Product Proposal): MindOS
 
+## 一句话介绍 (Elevator Pitch)
+
+**MindOS 是 Agent 时代的人机协同心智平台——让所有 Agent 共享一个记忆层，用户可审计、可修正、越用越聪明。**
+
+---
+
 ## 愿景 (Vision)
 
-**"人类在此思考，Agent 依此行动。"**
-
-MindOS 是一个 **人机协同心智平台 (Human-AI Collaborative Mind Platform)**。它提供极致简洁的浏览器界面，让用户管理、编辑并与自己的"第二大脑"对话。通过 MCP 协议，将人类思维碎片转化为 AI Agent 可执行的结构化指令。
-
-### 产品愿景（EN）
+### EN
 
 **Human-AI Shared Mind** — Your knowledge should be readable by humans and executable by agents in the same place.
 
 1. **Global Mind Sync** — Capture once, reuse everywhere. MCP server lets any compatible agent access your Profile, SOPs, and project memory.
 2. **Transparent and Controllable** — Retrieval, reflection, and execution outcomes are written to local plain text. Humans can audit and correct continuously in the GUI.
-3. **Symbiotic Evolution** — Knowledge as Code. Daily notes naturally become executable instructions through prompt-native writing and cross-file reference linking.
+3. **Symbiotic Evolution** — Knowledge as Code. Daily notes naturally become executable instructions through agent-ready writing and cross-file reference linking.
 
-**Foundation: Local-first.** All data stored locally as plain text for privacy, ownership, and performance.
-
-### 产品愿景（ZH）
+### ZH
 
 **人机共享心智** — 让知识在同一处同时服务人类阅读与 Agent 执行。
 
 1. **全局心智同步** — 一次记录，全局复用。内置 MCP Server 让兼容 Agent 可立即读取 Profile、SOP 与项目记忆。
 2. **透明可控** — 检索、反思、执行结果沉淀为本地纯文本，人类可在 GUI 中持续审计与修正。
-3. **共生演进** — 知识库即代码。通过 Prompt-Native 记录与引用驱动同步，笔记自然转化为可执行指令。
+3. **共生演进** — 知识库即代码。对话经验自然沉淀为可执行指令，知识库随使用自我进化。
 
 **底层原则：本地优先。** 所有数据以本地纯文本存储，确保隐私与数据主权。
 
@@ -34,52 +34,52 @@ MindOS 是一个 **人机协同心智平台 (Human-AI Collaborative Mind Platfor
 
 | 痛点 | 描述 |
 |------|------|
-| 孤岛效应 | 多个 AI 工具/对话之间上下文割裂，每次都要重新交代背景，知识无法跨 Agent 复用 |
-| 心智隔阂 | 人类笔记（Notion/Obsidian）给人看，Agent 记忆（向量数据库）给机器看，互不通气——用户和 Agent 各维护一套上下文，重复劳动 |
-| Agent 黑箱 | Agent 记忆不透明——不知道它记了什么、记在哪里，也无法方便地审查和修正 |
-| 管理负担 | 文件夹管理繁琐，文件间关联靠人维护，缺乏自动化同步更新 |
+| 记忆割裂 | 多个 Agent 各记各的，切换工具靠人工搬运上下文——每次对话都要重新交代背景，知识无法跨 Agent 复用 |
+| 记忆黑箱 | Agent 记了什么、记对没有，用户无法审查和修正——你不知道它"理解"的和你想的是不是一回事 |
+| 经验断流 | 对话里积累的最佳实践没有回流为 SOP/Skill，工作流无法自我进化——用了 100 次 Agent，工作流还是第一天的样子 |
+
+## 解决方案 (Solution)
+
+| 痛点 | MindOS 的回答 |
+|------|--------------|
+| 记忆割裂 | **统一记忆** — 所有 Agent 通过 MCP 协议读写同一份本地知识库，一次记录，全局复用 |
+| 记忆黑箱 | **透明审计** — Agent 的每次读写留痕，用户可在 GUI 中审查、修正、删除 Agent 记忆 |
+| 经验断流 | **经验回流** — 对话中的最佳实践沉淀为 Skill/SOP，Agent 自动识别并更新关联文件，知识库随使用越来越好 |
 
 ## 目标用户 (Target User)
 
-**核心 Persona：** 同时使用 3+ AI Agent 的独立开发者/创始人——管理复杂 SOP、产品路线图和技术架构，需要跨 Agent 共享上下文。
+**核心 Persona：** 同时使用 3+ Agent 的独立开发者/创始人——管理复杂 SOP、产品路线图和技术架构，需要跨 Agent 共享上下文。
 
 **扩展用户：**
 - **AI-native 小团队（3-15 人）** — 共享 SOP、Profile、项目记忆给团队 Agent
-- **系统性思考者** — 拥有庞大本地 Markdown/CSV 知识库，追求本地控制与隐私
+- **系统性思考者** — 重度 Markdown 用户（本地知识库 500+ 文件），追求本地控制与隐私
 
 ## 用户旅程 (User Journey)
 
-| 场景 | 现状痛点 | MindOS 解决方案 |
-|------|---------|----------------|
-| 获取信息 | 文件树+搜索，缺乏上下文 | ⌘K 全局模糊搜索 + 实时片段预览 |
-| 管理文件关联 | 文件间关联靠人维护，缺乏自动化 | Wiki Graph + Backlinks 自动追踪引用关系 |
-| 人机协作 | 手动复制粘贴 Context | Agent 通过 MCP 直接读写 Markdown |
-| 修正幻觉 | 无法知道 AI 记住了什么 | 在 UI 中审查并修改 Agent "记忆" |
-| 知识沉淀 | 碎片难结构化 | 内置结构化模板引导系统化 |
-| 深度对话 | AI 无法关联多文件 | AI Ask (⌘/) 支持 `@` 附件引用 |
+| 场景 | 现状痛点 | MindOS 怎么做 |
+|------|---------|--------------|
+| 首次上手 | 工具配置复杂，门槛高 | `npm i -g && mindos onboard`，30 秒浏览器可用 |
+| 跨 Agent 工作 | 每换一个 Agent 就要重新交代背景 | `mindos token` 一键生成配置，粘到任意 Agent 即连通 |
+| 审查 Agent 行为 | 不知道 AI 记住了什么、改了什么 | Agent Inspector 实时日志 + GUI 中审查/修正/删除 |
+| 沉淀工作流 | 对话最佳实践关掉就丢了 | 对话经验沉淀为 Skill/SOP，Agent 自动更新关联文件 |
+| 深度对话 | AI 无法关联多文件上下文 | AI Ask (⌘/) 支持 `@` 附件引用多文件 |
 
 ## 核心功能 (Features)
 
-### 已实现 (Shipped)
-
-- **人机协同 UI：** 琥珀色设计系统，亮/暗主题，专为长文阅读优化
-- **双模式编辑器：** TipTap 富文本 + CodeMirror 6 Markdown 源码
-- **MCP Server (20+ 工具)：** stdio + HTTP 双传输，Bearer Token 认证
-- **MindOS Skills (EN + ZH)：** 结构感知路由、搜索回退策略、多文件审批
-- **AI 对话 (⌘/)：** Vercel AI SDK 流式输出，`@` 文件引用 + PDF 上传
-- **全局搜索 (⌘K)：** 毫秒级全文搜索 + snippet 预览
-- **11 个渲染器插件：** TODO Board, CSV Views, Wiki Graph, Timeline, Backlinks, AI Briefing, Config, Agent Inspector, Diff Viewer, Workflow Runner, Onboarding
-- **CLI：** onboard / start / open / sync / mcp install / gateway daemon / token — 13 个 lib 模块
-- **Git 自动同步：** `mindos sync` — 自动 commit/push/pull，冲突保留 `.sync-conflict`
-- **PWA 支持：** manifest + service worker + 可安装
-- **安全：** Bearer Token, 路径沙箱, INSTRUCTION.md 写保护, 原子写入
-- **11+ Agent 兼容：** Claude Code, Cursor, Windsurf, Cline, Gemini CLI 等
+- **MCP Server (20+ 工具)** — stdio + HTTP 双传输，全阵容 Agent 兼容（Claude Code, Cursor, Windsurf, Gemini CLI 等）
+- **人机协同 GUI** — 双模式编辑器（富文本 + Markdown 源码）、AI 对话、全局搜索、Wiki Graph
+- **MindOS Skills** — 结构感知路由，对话经验可沉淀为可复用 Skill
+- **11 个渲染器插件** — TODO Board, CSV Views, Wiki Graph, Timeline, Agent Inspector 等
+- **CLI 工具链** — onboard / start / sync / token，30 秒完成安装到 Agent 连通
+- **Git 自动同步** — 自动 commit/push/pull，冲突保留 `.sync-conflict`
+- **安全** — Bearer Token, 路径沙箱, INSTRUCTION.md 写保护, 原子写入
 
 ### 不做什么 (Out of Scope)
 
-- 自建富文本格式（依赖纯 Markdown/CSV）
-- 实时多光标协同编辑（支持团队异步共享，但不做 Google Docs 式实时协作）
-- Agent 训练/微调（只做知识存储和工具调用）
+- 不做通用笔记工具 — 不在编辑器层和 Notion/Obsidian 竞争，聚焦 Agent 知识层
+- 不做自建富文本格式 — 依赖纯 Markdown/CSV，保证可迁移
+- 不做实时多光标协同编辑 — 支持团队异步共享，但不做 Google Docs 式实时协作
+- 不做 Agent 训练/微调 — 只做知识存储和工具调用
 
 ## 交互原则 (UX Principles)
 
@@ -94,7 +94,7 @@ MindOS 是一个 **人机协同心智平台 (Human-AI Collaborative Mind Platfor
 
 | 阶段 | 北极星指标 | 目标 |
 |------|-----------|------|
-| P1（当前） | 周活跃知识库数（至少 1 次 MCP 读写或 GUI 编辑） | 100+ |
+| P1（当前） | 周活跃知识库数（至少 1 次 MCP 读写或 GUI 编辑） | 100+（当前：内测群 ~30 人） |
 | P1.5（过渡） | 累计活跃知识库数 + 社区反馈 | 300+ 累计，GitHub 50+ issues |
 | P2 | 月活跃用户 + 7 日留存率 | MAU 1000+，7d retention > 40% |
 | P3 | Pro 付费转化率 + Team 层 ARR | conversion > 5%，ARR $50K+ |
