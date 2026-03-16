@@ -8,6 +8,7 @@ export const manifest: RendererDefinition = {
   icon: '📊',
   tags: ['csv', 'table', 'gallery', 'board', 'data'],
   builtin: true,
+  core: true,
   entryPath: 'Resources/Products.csv',
   match: ({ extension, filePath }) => extension === 'csv' && !/\bTODO\b/i.test(filePath),
   load: () => import('./CsvRenderer').then(m => ({ default: m.CsvRenderer })),

@@ -32,7 +32,12 @@ export function useRendererState<T>(
   // Cache parsed value to maintain referential stability for useSyncExternalStore.
   // Without this, JSON.parse returns a new object on every getSnapshot call,
   // causing Object.is to fail → infinite re-renders for non-primitive types.
-  const cacheRef = useRef<{ raw: string | null; parsed: T }>({ raw: null, parsed: defaultValue });
+  const cacheRef = useRef<{ key: string; raw: string | null; parsed: T }>({ key, raw: null, parsed: defaultValue });
+
+  // Reset cache when key changes (different file or different renderer)
+  if (cacheRef.current.key !== key) {
+    cacheRef.current = { key, raw: null, parsed: defaultValue };
+  }
 
   const state = useSyncExternalStore(
     (onStoreChange) => {
@@ -49,11 +54,11 @@ export function useRendererState<T>(
         const raw = localStorage.getItem(key);
         if (raw === cacheRef.current.raw) return cacheRef.current.parsed;
         if (raw === null) {
-          cacheRef.current = { raw: null, parsed: defaultValue };
+          cacheRef.current = { key, raw: null, parsed: defaultValue };
           return defaultValue;
         }
         const parsed = JSON.parse(raw) as T;
-        cacheRef.current = { raw, parsed };
+        cacheRef.current = { key, raw, parsed };
         return parsed;
       } catch {
         return defaultValue;
@@ -77,7 +82,7 @@ export function useRendererState<T>(
         const serialized = JSON.stringify(next);
         localStorage.setItem(key, serialized);
         // Update cache eagerly so the next getSnapshot returns stable ref
-        cacheRef.current = { raw: serialized, parsed: next };
+        cacheRef.current = { key, raw: serialized, parsed: next };
       } catch { /* ignore quota errors */ }
       window.dispatchEvent(new Event(CHANGE_EVENT));
     },
