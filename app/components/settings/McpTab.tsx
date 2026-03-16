@@ -28,6 +28,7 @@ interface AgentInfo {
   configPath?: string;
   hasProjectScope: boolean;
   hasGlobalScope: boolean;
+  preferredTransport: 'stdio' | 'http';
 }
 
 interface SkillInfo {
@@ -133,12 +134,17 @@ function ServerStatus({ status, t }: { status: McpStatus | null; t: any }) {
 function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; onRefresh: () => void }) {
   const m = t.settings?.mcp;
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [transport, setTransport] = useState<'stdio' | 'http'>('stdio');
+  const [transport, setTransport] = useState<'auto' | 'stdio' | 'http'>('auto');
   const [httpUrl, setHttpUrl] = useState('http://localhost:8787/mcp');
   const [httpToken, setHttpToken] = useState('');
   const [scopes, setScopes] = useState<Record<string, 'project' | 'global'>>({});
   const [installing, setInstalling] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const getEffectiveTransport = (agent: AgentInfo) => {
+    if (transport === 'auto') return agent.preferredTransport;
+    return transport;
+  };
 
   const toggle = (key: string) => {
     setSelected(prev => {
@@ -154,12 +160,21 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
     setMessage(null);
     try {
       const payload = {
-        agents: [...selected].map(key => ({
-          key,
-          scope: scopes[key] || (agents.find(a => a.key === key)?.hasProjectScope ? 'project' : 'global'),
-        })),
+        agents: [...selected].map(key => {
+          const agent = agents.find(a => a.key === key);
+          const effectiveTransport = transport === 'auto'
+            ? (agent?.preferredTransport || 'stdio')
+            : transport;
+          return {
+            key,
+            scope: scopes[key] || (agents.find(a => a.key === key)?.hasProjectScope ? 'project' : 'global'),
+            transport: effectiveTransport,
+          };
+        }),
         transport,
         ...(transport === 'http' ? { url: httpUrl, token: httpToken } : {}),
+        // For auto mode, pass http settings for agents that need it
+        ...(transport === 'auto' ? { url: httpUrl, token: httpToken } : {}),
       };
       const res = await apiFetch<{ results: Array<{ agent: string; status: string; message?: string }> }>('/api/mcp/install', {
         method: 'POST',
@@ -183,6 +198,12 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
     }
   };
 
+  // Show http fields if transport is 'http', or 'auto' with any http-preferred agent selected
+  const showHttpFields = transport === 'http' || (transport === 'auto' && [...selected].some(key => {
+    const agent = agents.find(a => a.key === key);
+    return agent?.preferredTransport === 'http';
+  }));
+
   return (
     <div className="space-y-3">
       <SectionLabel>{m?.agentsTitle ?? 'Agent Configuration'}</SectionLabel>
@@ -198,6 +219,10 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
               className="rounded border-border accent-amber-500"
             />
             <span className="w-28 shrink-0 text-xs">{agent.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+              style={{ background: 'rgba(100,100,120,0.08)' }}>
+              {getEffectiveTransport(agent)}
+            </span>
             {agent.installed ? (
               <>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-500 font-mono">
@@ -229,11 +254,21 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
           <input
             type="radio"
             name="transport"
+            checked={transport === 'auto'}
+            onChange={() => setTransport('auto')}
+            className="accent-amber-500"
+          />
+          {m?.transportAuto ?? 'auto (recommended)'}
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            name="transport"
             checked={transport === 'stdio'}
             onChange={() => setTransport('stdio')}
             className="accent-amber-500"
           />
-          {m?.transportStdio ?? 'stdio (recommended)'}
+          {m?.transportStdio ?? 'stdio'}
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input
@@ -248,7 +283,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
       </div>
 
       {/* HTTP settings */}
-      {transport === 'http' && (
+      {showHttpFields && (
         <div className="space-y-2 pl-5 text-xs">
           <div className="space-y-1">
             <label className="text-muted-foreground">{m?.httpUrl ?? 'MCP URL'}</label>
@@ -378,6 +413,49 @@ function SkillsSection({ t }: { t: any }) {
   return (
     <div className="space-y-3">
       <SectionLabel>{m?.skillsTitle ?? 'Skills'}</SectionLabel>
+
+      {/* Skill language switcher */}
+      {(() => {
+        const mindosEnabled = skills.find(s => s.name === 'mindos')?.enabled ?? true;
+        const currentLang = mindosEnabled ? 'en' : 'zh';
+        const handleLangSwitch = async (lang: 'en' | 'zh') => {
+          if (lang === currentLang) return;
+          if (lang === 'en') {
+            await handleToggle('mindos', true);
+            await handleToggle('mindos-zh', false);
+          } else {
+            await handleToggle('mindos-zh', true);
+            await handleToggle('mindos', false);
+          }
+        };
+        return (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">{m?.skillLanguage ?? 'Skill Language'}</span>
+            <div className="flex rounded-md border border-border overflow-hidden">
+              <button
+                onClick={() => handleLangSwitch('en')}
+                className={`px-2.5 py-1 text-xs transition-colors ${
+                  currentLang === 'en'
+                    ? 'bg-amber-500/15 text-amber-600 font-medium'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {m?.skillLangEn ?? 'English'}
+              </button>
+              <button
+                onClick={() => handleLangSwitch('zh')}
+                className={`px-2.5 py-1 text-xs transition-colors border-l border-border ${
+                  currentLang === 'zh'
+                    ? 'bg-amber-500/15 text-amber-600 font-medium'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {m?.skillLangZh ?? '中文'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {skills.map(skill => (
         <div key={skill.name} className="border border-border rounded-lg overflow-hidden">

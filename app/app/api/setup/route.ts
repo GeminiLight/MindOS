@@ -90,9 +90,10 @@ export async function POST(req: NextRequest) {
     // Use the same resolved values that will actually be written to config
     const resolvedAuthToken   = authToken   ?? current.authToken   ?? '';
     const resolvedWebPassword = webPassword ?? '';
-    // Only compute needsRestart for re-onboard (setupPending=true means first-time setup)
+    // First-time onboard always needs restart (temporary setup port → user's chosen port).
+    // Re-onboard only needs restart if port/path/auth/password actually changed.
     const isFirstTime = current.setupPending === true || !current.mindRoot;
-    const needsRestart = !isFirstTime && (
+    const needsRestart = isFirstTime || (
       webPort              !== (current.port      ?? 3000) ||
       mcpPortNum           !== (current.mcpPort   ?? 8787) ||
       resolvedRoot         !== (current.mindRoot  || '')    ||
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Build config
+    const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];
     const config: ServerSettings = {
       ai: ai ?? current.ai,
       mindRoot: resolvedRoot,
@@ -110,6 +112,7 @@ export async function POST(req: NextRequest) {
       webPassword: webPassword ?? '',
       startMode: current.startMode,
       setupPending: false,  // clear the flag
+      disabledSkills,
     };
 
     writeSettings(config);

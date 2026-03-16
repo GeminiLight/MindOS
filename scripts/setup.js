@@ -133,6 +133,12 @@ const T = {
   mcpInstallDone: { en: (n) => `✔ ${n} agent(s) configured`, zh: (n) => `✔ 已配置 ${n} 个 Agent` },
   mcpSkipped:     { en: '  → Skipped. Run `mindos mcp install` anytime to configure agents.', zh: '  → 已跳过。随时运行 `mindos mcp install` 配置 Agent。' },
 
+  // skill install step
+  skillInstalling:  { en: (name) => `⏳ Installing Skill "${name}"...`, zh: (name) => `⏳ 正在安装 Skill "${name}"...` },
+  skillInstallOk:   { en: (name) => `  ${c.green('✔')} Skill "${name}" installed`, zh: (name) => `  ${c.green('✔')} Skill "${name}" 已安装` },
+  skillInstallFail: { en: (name, msg) => `  ${c.red('✘')} Skill "${name}" failed: ${msg}`, zh: (name, msg) => `  ${c.red('✘')} Skill "${name}" 安装失败：${msg}` },
+  skillSkipped:     { en: '  → No agents selected, skill install skipped.', zh: '  → 未选择 Agent，跳过 Skill 安装。' },
+
   // restart prompts (re-onboard with config changes)
   restartRequired:   { en: 'Config changed. Service restart required.', zh: '配置已变更，需要重启服务。' },
   restartNow:        { en: 'Restart now?', zh: '立即重启？' },
@@ -441,8 +447,13 @@ async function isSelfPort(port) {
         res.on('end', () => {
           try {
             const data = JSON.parse(body);
-            resolve(data.service === 'mindos');
-          } catch { resolve(false); }
+            // 200 with service=mindos → definitely us.
+            // 401 Unauthorized → also us (webPassword is set).
+            resolve(data.service === 'mindos' || res.statusCode === 401);
+          } catch {
+            // Non-JSON but got a response on /api/health → likely us
+            resolve(res.statusCode === 401 || res.statusCode === 200);
+          }
         });
       });
       req.on('error', () => resolve(false));
@@ -671,7 +682,7 @@ async function runMcpInstallStep(mcpPort, authToken) {
 
   if (selected.length === 0) {
     write(c.dim(t('mcpSkipped') + '\n'));
-    return;
+    return [];
   }
 
   write('\n' + c.dim(tf('mcpInstalling', selected.length) + '\n'));
@@ -705,6 +716,64 @@ async function runMcpInstallStep(mcpPort, authToken) {
   }
 
   console.log(`\n${c.green(tf('mcpInstallDone', okCount))}`);
+  return selected;
+}
+
+/* ── Skill auto-install ────────────────────────────────────────────────────── */
+
+const UNIVERSAL_AGENTS = new Set([
+  'amp', 'cline', 'codex', 'cursor', 'gemini-cli',
+  'github-copilot', 'kimi-cli', 'opencode', 'warp',
+]);
+const SKILL_UNSUPPORTED = new Set(['claude-desktop']);
+const AGENT_NAME_MAP = {
+  'claude-code': 'claude-code',
+  'windsurf': 'windsurf',
+  'trae': 'trae',
+  'openclaw': 'openclaw',
+  'codebuddy': 'codebuddy',
+};
+
+/**
+ * Install the appropriate MindOS Skill to selected agents via `npx skills add`.
+ * @param {string} template - 'en' | 'zh' | 'empty' | 'custom'
+ * @param {string[]} selectedAgents - MCP agent keys from the multi-select step
+ */
+function runSkillInstallStep(template, selectedAgents) {
+  if (!selectedAgents || selectedAgents.length === 0) {
+    write(c.dim(t('skillSkipped') + '\n'));
+    return;
+  }
+
+  const skillName = template === 'zh' ? 'mindos-zh' : 'mindos';
+  const source = resolve(ROOT, 'skills');
+
+  // Filter to non-universal, skill-capable agents
+  const additionalAgents = selectedAgents
+    .filter(key => !UNIVERSAL_AGENTS.has(key) && !SKILL_UNSUPPORTED.has(key))
+    .map(key => AGENT_NAME_MAP[key] || key);
+
+  let cmd;
+  if (additionalAgents.length > 0) {
+    cmd = `npx skills add "${source}" -s ${skillName} -a ${additionalAgents.join(',')} -g -y`;
+  } else {
+    cmd = `npx skills add "${source}" -s ${skillName} -a universal -g -y`;
+  }
+
+  write(tf('skillInstalling', skillName) + '\n');
+
+  try {
+    execSync(cmd, {
+      encoding: 'utf-8',
+      timeout: 30_000,
+      env: { ...process.env, NODE_ENV: 'production' },
+      stdio: 'pipe',
+    });
+    write(tf('skillInstallOk', skillName) + '\n');
+  } catch (err) {
+    const msg = err.stderr || err.message || 'Unknown error';
+    write(tf('skillInstallFail', skillName, msg.split('\n')[0]) + '\n');
+  }
 }
 
 // ── GUI Setup ─────────────────────────────────────────────────────────────────
@@ -739,16 +808,34 @@ async function startGuiSetup() {
   // Read or create config, set setupPending
   let config = {};
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
+
+  const isFirstTime = !config.mindRoot;
   config.setupPending = true;
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
 
-  // Find a free port
-  const port = await findFreePort(3000);
-  if (config.port === undefined) {
-    config.port = port;
-    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  // Determine which port to use for the setup wizard
+  let usePort;
+  if (isFirstTime) {
+    // First-time onboard: use a temporary port (scan from 9100) so the user's
+    // chosen port in Step 3 can differ without a mid-setup restart.
+    // 9100 is chosen to avoid conflicts with common services (5000=AirPlay, 3000/8080=dev).
+    usePort = await findFreePort(9100);
+  } else {
+    // Re-onboard: service is already running on config.port — reuse it.
+    const existingPort = config.port || 3000;
+    if (await isSelfPort(existingPort)) {
+      // Service already running — just open the setup page, no need to spawn.
+      const url = `http://localhost:${existingPort}/setup`;
+      console.log(`\n${c.green(tf('guiReady', url))}\n`);
+      const opened = openBrowser(url);
+      if (!opened) console.log(c.dim(tf('guiOpenFailed', url)));
+      process.exit(0);
+    }
+    // Service not running — start on existing port
+    usePort = await isPortInUse(existingPort)
+      ? await findFreePort(9100)  // existing port occupied by another process
+      : existingPort;
   }
-  const usePort = config.port || port;
 
   write(c.yellow(t('guiStarting') + '\n'));
 
@@ -841,6 +928,15 @@ async function main() {
 
   const { readdirSync } = await import('node:fs');
   let mindDir;
+  let selectedTemplate = 'en'; // hoisted — set by template selection or inferred from existing config
+  // Infer template from existing config's disabledSkills or UI language
+  if (resumeCfg.disabledSkills?.includes('mindos')) {
+    selectedTemplate = 'zh';
+  } else if (resumeCfg.disabledSkills?.includes('mindos-zh')) {
+    selectedTemplate = 'en';
+  } else {
+    selectedTemplate = uiLang; // fallback to UI language for first-time existing KB
+  }
 
   // Default KB path: existing mindRoot if set, otherwise ~/MindOS (same as GUI default)
   const HOME = homedir();
@@ -875,9 +971,9 @@ async function main() {
     } else {
       // ── Template selection (part of Step 1) ─────────────────────────────
       write('\n');
-      const tpl = await select('tplPrompt', 'tplOptions', 'tplValues');
+      selectedTemplate = await select('tplPrompt', 'tplOptions', 'tplValues');
       mkdirSync(mindDir, { recursive: true });
-      await applyTemplate(tpl, mindDir);
+      await applyTemplate(selectedTemplate, mindDir);
       break;
     }
   }
@@ -1000,12 +1096,13 @@ async function main() {
   }
 
   const config = {
-    mindRoot:    mindDir,
-    port:        webPort,
-    mcpPort:     mcpPort,
-    authToken:   authToken,
-    webPassword: webPassword || '',
-    startMode:   startMode,
+    mindRoot:       mindDir,
+    port:           webPort,
+    mcpPort:        mcpPort,
+    authToken:      authToken,
+    webPassword:    webPassword || '',
+    startMode:      startMode,
+    disabledSkills: selectedTemplate === 'zh' ? ['mindos'] : ['mindos-zh'],
     ai: {
       provider:  isSkip ? existingAiProvider : (isAnthropic ? 'anthropic' : 'openai'),
       providers: existingProviders,
@@ -1052,7 +1149,13 @@ async function main() {
   stepHeader(7);
   write(c.dim(tf('mcpStepHint') + '\n\n'));
 
-  await runMcpInstallStep(mcpPort, authToken);
+  const selectedAgents = await runMcpInstallStep(mcpPort, authToken);
+
+  // ── Skill auto-install ────────────────────────────────────────────────────
+  if (selectedAgents && selectedAgents.length > 0) {
+    write('\n');
+    runSkillInstallStep(selectedTemplate, selectedAgents);
+  }
 
   // ── Sync setup (optional) ──────────────────────────────────────────────────
   const wantSync = await askYesNo('syncSetup');

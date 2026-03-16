@@ -29,6 +29,18 @@
 - **解决：** 使用 `encodePath()`（按 `/` 分割后逐段编码），不要用 `encodeURIComponent`
 - **规则：** 凡是文件路径拼接到 URL 的场景，一律用 `encodePath()`
 
+### 插件开关（raw/plugin toggle）全局污染
+- **现象：** 在 `.agent-log.json` 上点击插件按钮切到 raw 视图 → 所有文件都变 raw（md 不显示 wiki graph，csv 不显示表格插件）
+- **原因：** `mindos-use-raw` 在 localStorage 里存的是全局 boolean，一个文件切换影响所有文件
+- **解决：** 统一为 `useRendererState` hook（`lib/renderers/useRendererState.ts`），per-file 持久化状态，key 格式 `mindos-renderer:{rendererId}:{filePath}`，CSV config 同步迁移
+- **文件：** `app/app/view/[...path]/ViewPageClient.tsx`、`app/components/renderers/csv/CsvRenderer.tsx`
+
+### useSyncExternalStore + JSON.parse 无限重渲染
+- **现象：** `useSyncExternalStore` 的 `getSnapshot` 每次调用 `JSON.parse` 返回新对象引用 → `Object.is` 永远 false → 对象类型 state（如 CsvConfig）触发无限重渲染
+- **原因：** 原始值（boolean、number）不受影响，但对象/数组每次 parse 产生新引用
+- **解决：** `useRendererState` 内部用 `cacheRef` 缓存上次 raw string，只在值实际变化时重新 parse；`setState` 同步更新 cache 避免 stale ref
+- **规则：** 凡是 `useSyncExternalStore` + localStorage 存对象，必须做 snapshot 缓存
+
 ### inline fontFamily 反模式
 - **现象：** 8+ 组件用 `style={{ fontFamily: "IBM Plex Mono..." }}`，绕过 Next.js 字体优化
 - **解决：** 统一用 `.font-display` 工具类（定义在 `globals.css`）

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { LayoutGrid, Columns, Table2, Settings2 } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
 import type { ViewType, CsvConfig } from './types';
-import { defaultConfig, loadConfig, saveConfig, parseCSV } from './types';
+import { defaultConfig, parseCSV } from './types';
+import { useRendererState } from '@/lib/renderers/useRendererState';
 import { TableView } from './TableView';
 import { GalleryView } from './GalleryView';
 import { BoardView } from './BoardView';
@@ -18,21 +19,14 @@ const VIEW_TABS: { id: ViewType; icon: React.ReactNode; label: string }[] = [
 
 export function CsvRenderer({ filePath, content, saveAction }: RendererContext) {
   const { headers, rows } = useMemo(() => parseCSV(content), [content]);
-  const [cfg, setCfg] = useState<CsvConfig>(() => defaultConfig(headers));
-  const [configLoaded, setConfigLoaded] = useState(false);
+  const def = useMemo(() => defaultConfig(headers), [headers]);
+  const [cfg, setCfg] = useRendererState<CsvConfig>('csv', filePath, def);
   const [showConfig, setShowConfig] = useState(false);
-
-  useEffect(() => {
-    setCfg(loadConfig(filePath, headers));
-    setConfigLoaded(true);
-  }, [filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateConfig = useCallback((next: CsvConfig) => {
     setCfg(next);
-    saveConfig(filePath, next);
-  }, [filePath]);
+  }, [setCfg]);
 
-  if (!configLoaded) return null;
   const view = cfg.activeView;
 
   return (
