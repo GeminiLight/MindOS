@@ -166,13 +166,18 @@ const launchd = {
     <string>start</string>
   </array>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
+  <key>ThrottleInterval</key><integer>5</integer>
   <key>StandardOutPath</key><string>${LOG_PATH}</string>
   <key>StandardErrorPath</key><string>${LOG_PATH}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${homedir()}</string>
     <key>PATH</key><string>${currentPath}</string>
+    <key>LAUNCHED_BY_LAUNCHD</key><string>1</string>
   </dict>
 </dict>
 </plist>
