@@ -48,8 +48,30 @@ body.light {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; overflow-x: hidden; }
-/* Prevent FOUC: early light class set before body renders */
-html.early-light { background-color: #fdfbf7; }
+/* Prevent FOUC: early light class set before body renders —
+   duplicate light-theme variables so everything using var(--*) is correct before main.js runs */
+html.early-light {
+    --bg: #fdfbf7;
+    --fg: #1c1a17;
+    --accent: #c8873a;
+    --accent-glow: rgba(200, 135, 58, 0.3);
+    --accent-dim: rgba(200, 135, 58, 0.08);
+    --muted: #f2efe9;
+    --muted-fg: #7a7568;
+    --card-bg: rgba(255, 255, 255, 0.85);
+    --border: rgba(28, 26, 23, 0.1);
+    --border-hover: rgba(200, 135, 58, 0.4);
+    --spark-color: #c8873a;
+    --nav-bg: rgba(253, 251, 247, 0.7);
+    --grain-opacity: 0.025;
+    --code-bg: #f1ede4;
+    --code-fg: #9b4a1a;
+    --code-border: rgba(28, 26, 23, 0.08);
+    background-color: #fdfbf7;
+    color: #1c1a17;
+}
+/* Suppress transition during initial theme application */
+html.early-light *, html.early-light *::before, html.early-light *::after { transition: none !important; }
 
 body {
     background-color: var(--bg);

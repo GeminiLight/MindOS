@@ -803,7 +803,14 @@ ${bold('Examples:')}
     }
 
     if (sub === 'now') {
-      manualSync(mindRoot);
+      try {
+        console.log(dim('Pulling...'));
+        manualSync(mindRoot);
+        console.log(green('✔ Sync complete'));
+      } catch (err) {
+        console.error(red(err.message));
+        process.exit(1);
+      }
       return;
     }
 

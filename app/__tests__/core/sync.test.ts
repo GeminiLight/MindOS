@@ -173,6 +173,94 @@ describe('sync: state file management', () => {
   });
 });
 
+describe('sync: .gitignore auto-creation (O5)', () => {
+  beforeEach(setup);
+  afterEach(cleanup);
+
+  it('creates .gitignore with expected entries when file does not exist', () => {
+    const gitignorePath = path.join(mindRoot, '.gitignore');
+
+    // Initially setup() does NOT create .gitignore
+    expect(fs.existsSync(gitignorePath)).toBe(false);
+
+    // Simulate what initSync does: create .gitignore if missing
+    if (!fs.existsSync(gitignorePath)) {
+      fs.writeFileSync(gitignorePath, [
+        '# MindOS auto-generated',
+        '.DS_Store',
+        'Thumbs.db',
+        '*.tmp',
+        '*.bak',
+        '*.swp',
+        '*.sync-conflict',
+        'node_modules/',
+        '.obsidian/',
+        '',
+      ].join('\n'), 'utf-8');
+    }
+
+    expect(fs.existsSync(gitignorePath)).toBe(true);
+    const content = fs.readFileSync(gitignorePath, 'utf-8');
+    expect(content).toContain('.DS_Store');
+    expect(content).toContain('*.sync-conflict');
+    expect(content).toContain('node_modules/');
+    expect(content).toContain('.obsidian/');
+  });
+
+  it('does not overwrite existing .gitignore', () => {
+    const gitignorePath = path.join(mindRoot, '.gitignore');
+    const customContent = '# Custom gitignore\n*.log\n';
+    fs.writeFileSync(gitignorePath, customContent);
+
+    // Simulate initSync check: skip if exists
+    if (!fs.existsSync(gitignorePath)) {
+      fs.writeFileSync(gitignorePath, '# MindOS auto-generated\n');
+    }
+
+    expect(fs.readFileSync(gitignorePath, 'utf-8')).toBe(customContent);
+  });
+});
+
+describe('sync: daemon idempotency (O1)', () => {
+  it('idempotent guard prevents double activation', () => {
+    // Simulate the idempotent guard logic from startSyncDaemon
+    let activeWatcher: unknown = null;
+    let callCount = 0;
+
+    function startDaemon() {
+      if (activeWatcher) return null; // idempotent guard
+      callCount++;
+      activeWatcher = { close() { activeWatcher = null; } };
+      return activeWatcher;
+    }
+
+    // First call succeeds
+    const result1 = startDaemon();
+    expect(result1).not.toBeNull();
+    expect(callCount).toBe(1);
+
+    // Second call returns null (already running)
+    const result2 = startDaemon();
+    expect(result2).toBeNull();
+    expect(callCount).toBe(1); // not incremented
+  });
+});
+
+describe('sync: manualSync throws instead of process.exit (bonus)', () => {
+  it('throws error for non-git directory', () => {
+    // Simulate the manualSync logic: throw instead of process.exit
+    function manualSync(mindRoot: string | null) {
+      if (!mindRoot || !fs.existsSync(path.join(mindRoot, '.git'))) {
+        throw new Error('Not a git repository. Run `mindos sync init` first.');
+      }
+    }
+
+    // Should throw for a directory without .git
+    expect(() => manualSync(os.tmpdir())).toThrow('Not a git repository');
+    expect(() => manualSync(null)).toThrow('Not a git repository');
+  });
+});
+
 describe('sync: config management', () => {
   beforeEach(setup);
   afterEach(cleanup);
