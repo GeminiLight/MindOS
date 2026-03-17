@@ -84,7 +84,7 @@ const commands = {
   // ── open ───────────────────────────────────────────────────────────────────
   open: () => {
     loadConfig();
-    const webPort = process.env.MINDOS_WEB_PORT || '3000';
+    const webPort = process.env.MINDOS_WEB_PORT || '3456';
     const url = `http://localhost:${webPort}`;
     let cmd;
     if (process.platform === 'darwin') {
@@ -121,7 +121,7 @@ const commands = {
       console.log(dim('No auth token set. Run `mindos onboard` to configure one.'));
       process.exit(0);
     }
-    const mcpPort = config.mcpPort || 8787;
+    const mcpPort = config.mcpPort || 8781;
     const localIP = getLocalIP();
 
     const localUrl = `http://localhost:${mcpPort}/mcp`;
@@ -197,8 +197,8 @@ const commands = {
   // ── dev ────────────────────────────────────────────────────────────────────
   dev: async () => {
     loadConfig();
-    const webPort = process.env.MINDOS_WEB_PORT || '3000';
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
+    const webPort = process.env.MINDOS_WEB_PORT || '3456';
+    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
     await assertPortFree(Number(webPort), 'web');
     await assertPortFree(Number(mcpPort), 'mcp');
     ensureAppDeps();
@@ -231,8 +231,8 @@ const commands = {
         console.warn(yellow('Warning: daemon mode not supported on this platform. Falling back to foreground.'));
       } else {
         loadConfig();
-        const webPort = process.env.MINDOS_WEB_PORT || '3000';
-        const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
+        const webPort = process.env.MINDOS_WEB_PORT || '3456';
+        const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
         console.log(cyan(`Installing MindOS as a background service (${platform})...`));
         await runGatewayCommand('install');
         // install() already starts the service via launchctl bootstrap + RunAtLoad=true.
@@ -263,8 +263,8 @@ const commands = {
       }
     }
     loadConfig();
-    const webPort = process.env.MINDOS_WEB_PORT || '3000';
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
+    const webPort = process.env.MINDOS_WEB_PORT || '3456';
+    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
 
     // When launched by a daemon manager (launchd/systemd), wait for ports to
     // free instead of exiting immediately — the previous instance may still be
@@ -324,8 +324,8 @@ const commands = {
       run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'mcp'));
     }
     // Map config env vars to what the MCP server expects
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
-    const webPort = process.env.MINDOS_WEB_PORT || '3000';
+    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+    const webPort = process.env.MINDOS_WEB_PORT || '3456';
     process.env.MCP_PORT   = mcpPort;
     process.env.MINDOS_URL = `http://localhost:${webPort}`;
     run(`npx tsx src/index.ts`, resolve(ROOT, 'mcp'));
@@ -346,8 +346,8 @@ const commands = {
     loadConfig();
 
     // After loadConfig, env vars reflect the NEW config (or old if unchanged).
-    const newWebPort = Number(process.env.MINDOS_WEB_PORT || '3000');
-    const newMcpPort = Number(process.env.MINDOS_MCP_PORT || '8787');
+    const newWebPort = Number(process.env.MINDOS_WEB_PORT || '3456');
+    const newMcpPort = Number(process.env.MINDOS_MCP_PORT || '8781');
 
     // Collect old ports that differ from new ones — processes may still be
     // listening there even though config already points to the new ports.
@@ -483,8 +483,8 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     }
 
     // 6. Ports
-    const webPort = Number(config?.port || process.env.MINDOS_WEB_PORT || 3000);
-    const mcpPort = Number(config?.mcpPort || process.env.MINDOS_MCP_PORT || 8787);
+    const webPort = Number(config?.port || process.env.MINDOS_WEB_PORT || 3456);
+    const mcpPort = Number(config?.mcpPort || process.env.MINDOS_MCP_PORT || 8781);
     const webInUse = await isPortInUse(webPort);
     const mcpInUse = await isPortInUse(mcpPort);
     if (webInUse) {
@@ -604,7 +604,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       // Do NOT call start() here — kickstart -k would kill the just-started process,
       // causing a port-conflict race condition with KeepAlive restart loops.
       const webPort = (() => {
-        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).port ?? 3000; } catch { return 3000; }
+        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).port ?? 3456; } catch { return 3456; }
       })();
       console.log(dim('  (Waiting for Web UI to come back up — first run after update includes a rebuild...)'));
       const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });

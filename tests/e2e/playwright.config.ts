@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 30_000,
   retries: 0,
   use: {
-    baseURL: process.env.MINDOS_URL ?? 'http://localhost:3000',
+    baseURL: process.env.MINDOS_URL ?? 'http://localhost:3456',
     screenshot: 'only-on-failure',
   },
   outputDir: './results',

@@ -21,7 +21,7 @@ function buildEntry(transport: string, url?: string, token?: string) {
   if (transport === 'stdio') {
     return { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
   }
-  const entry: Record<string, unknown> = { url: url || 'http://localhost:8787/mcp' };
+  const entry: Record<string, unknown> = { url: url || 'http://localhost:8781/mcp' };
   if (token) entry.headers = { Authorization: `Bearer ${token}` };
   return entry;
 }

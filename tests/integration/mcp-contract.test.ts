@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const BASE_URL = process.env.MINDOS_URL ?? 'http://localhost:3000';
+const BASE_URL = process.env.MINDOS_URL ?? 'http://localhost:3456';
 
 // Helper: call an App API endpoint
 async function api(path: string, init?: RequestInit) {

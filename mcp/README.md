@@ -26,7 +26,7 @@ mindos start   # starts app + MCP server together
 Or run MCP server only:
 
 ```bash
-mindos mcp     # HTTP mode (default, port 8787)
+mindos mcp     # HTTP mode (default, port 8781)
 MCP_TRANSPORT=stdio mindos mcp   # stdio mode
 ```
 
@@ -34,11 +34,11 @@ MCP_TRANSPORT=stdio mindos mcp   # stdio mode
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MINDOS_URL` | `http://localhost:3000` | App server base URL |
+| `MINDOS_URL` | `http://localhost:3456` | App server base URL |
 | `AUTH_TOKEN` | — | Optional: bearer token (must match App's `AUTH_TOKEN`) |
 | `MCP_TRANSPORT` | `http` | Transport mode: `http` or `stdio` |
 | `MCP_HOST` | `127.0.0.1` | HTTP bind address (`0.0.0.0` for remote access) |
-| `MCP_PORT` | `8787` | HTTP listen port (configurable via `mindos onboard`) |
+| `MCP_PORT` | `8781` | HTTP listen port (configurable via `mindos onboard`) |
 | `MCP_ENDPOINT` | `/mcp` | HTTP endpoint path |
 
 ## MCP Tools (20)
@@ -75,7 +75,7 @@ Add to your Agent's MCP config (field names vary by client):
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://localhost:8787/mcp",
+      "url": "http://localhost:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }
@@ -101,7 +101,7 @@ Add to your Agent's MCP config (field names vary by client):
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://<server-ip>:8787/mcp",
+      "url": "http://<server-ip>:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }

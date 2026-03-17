@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN, CONFIG_PATH } from './constants.js';
@@ -7,6 +7,18 @@ import { green, red, dim, cyan, yellow } from './colors.js';
 import { isPortInUse } from './port.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Rotate log file when it exceeds 2 MB. Keeps at most one .old backup. */
+function rotateLogs() {
+  try {
+    const stat = statSync(LOG_PATH);
+    if (stat.size > 2 * 1024 * 1024) {
+      const old = LOG_PATH + '.old';
+      try { unlinkSync(old); } catch {}
+      renameSync(LOG_PATH, old);
+    }
+  } catch { /* file doesn't exist yet, nothing to rotate */ }
+}
 
 export function getPlatform() {
   if (process.platform === 'darwin') return 'launchd';
@@ -72,6 +84,7 @@ const systemd = {
   install() {
     if (!existsSync(SYSTEMD_DIR)) mkdirSync(SYSTEMD_DIR, { recursive: true });
     ensureMindosDir();
+    rotateLogs();
     const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const unit = [
       '[Unit]',
@@ -100,6 +113,7 @@ const systemd = {
   },
 
   async start() {
+    rotateLogs();
     execSync('systemctl --user start mindos', { stdio: 'inherit' });
     const ok = await waitForService(() => {
       try {
@@ -153,6 +167,7 @@ const launchd = {
   install() {
     if (!existsSync(LAUNCHD_DIR)) mkdirSync(LAUNCHD_DIR, { recursive: true });
     ensureMindosDir();
+    rotateLogs();
     const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -197,6 +212,7 @@ const launchd = {
   },
 
   async start() {
+    rotateLogs();
     execSync(`launchctl kickstart -k gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
     const ok = await waitForService(() => {
       try {
@@ -214,7 +230,7 @@ const launchd = {
 
   async stop() {
     // Read ports before bootout so we can wait for them to be freed
-    let webPort = 3000, mcpPort = 8787;
+    let webPort = 3456, mcpPort = 8781;
     try {
       const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
       if (config.port) webPort = Number(config.port);

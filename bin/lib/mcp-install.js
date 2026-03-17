@@ -253,8 +253,8 @@ export async function mcpInstall() {
     const ask2 = (q) => new Promise(r => rl2.question(q, r));
 
     if (!url) {
-      let mcpPort = 8787;
-      try { mcpPort = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).mcpPort || 8787; } catch {}
+      let mcpPort = 8781;
+      try { mcpPort = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).mcpPort || 8781; } catch {}
       const defaultUrl = `http://localhost:${mcpPort}/mcp`;
       url = hasYesFlag ? defaultUrl : (await ask2(`${bold('MCP URL')} ${dim(`[${defaultUrl}]:`)} `)).trim() || defaultUrl;
     }
