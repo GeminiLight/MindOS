@@ -106,6 +106,13 @@
 - **解决：** 改为 polling `isPortInUse()` + 15s deadline
 - **教训：** 异步资源释放用轮询确认，不用固定 delay
 
+### launchd KeepAlive=true 导致多种无限重启循环
+- **现象：** (1) daemon 启动时端口未释放 → `assertPortFree` exit(1) → KeepAlive 立即重启 → 无限循环 (2) build 失败 → exit(1) → 立即重启 → 日志暴涨 (3) `mindos start --daemon` 的 install+start 同时执行，install(bootstrap+RunAtLoad) 已启动，start(kickstart -k) 杀进程导致端口冲突
+- **原因：** `KeepAlive=true` 是无条件重启，任何 exit 立即重启，无间隔。与 `assertPortFree` 的 `process.exit(1)` 组合形成快速循环
+- **解决：** 4 个改动：(1) plist 的 `KeepAlive` 改为 `<dict><key>SuccessfulExit</key><false/></dict>`（只在非正常退出时重启）+ `ThrottleInterval=5`（至少 5 秒间隔） (2) plist 注入 `LAUNCHED_BY_LAUNCHD=1` 环境变量，cli.js 在 daemon 模式下用 `waitForPortFree`（等 30s）替代 `assertPortFree`（立即退出） (3) `mindos start --daemon` 移除多余的 `runGatewayCommand('start')`（install 已通过 bootstrap+RunAtLoad 启动） (4) build 失败的无限重启被 ThrottleInterval 自然节流
+- **教训：** launchd 的 `KeepAlive=true` 等效于"无条件无延迟重启"，任何可能失败的服务都不应使用。正确方式是 `SuccessfulExit=false`（等效 systemd 的 `Restart=on-failure`）+ `ThrottleInterval`
+- **文件：** `bin/lib/gateway.js`、`bin/cli.js`
+
 ### update 命令 launchctl bootout 不等端口释放
 - **现象：** `mindos update` 在 macOS 上 stop → install → start，新服务报 "Port already in use" 并无限循环重试
 - **原因：** `launchctl bootout` 是异步的——发信号给进程但不等进程退出，端口在 bootout 返回后仍被旧进程占用。与 `systemctl --user stop`（同步等待）行为不同
