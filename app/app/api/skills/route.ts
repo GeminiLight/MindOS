@@ -9,7 +9,7 @@ const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 
 function getMindRoot(): string {
   const s = readSettings();
-  return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS');
+  return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS', 'mind');
 }
 
 interface SkillInfo {

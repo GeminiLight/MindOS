@@ -417,7 +417,7 @@ MindOS/
 ~/.mindos/            # User data directory (outside project, never committed)
 ├── config.json       # All configuration (AI keys, port, auth token, sync settings)
 ├── sync-state.json   # Sync state (last sync time, conflicts)
-└── my-mind/          # Your private knowledge base (default path, customizable on onboard)
+└── mind/             # Your private knowledge base (default: ~/MindOS/mind, customizable on onboard)
 ```
 
 ---

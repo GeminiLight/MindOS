@@ -80,7 +80,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
                   {headers.map((h, ci) => {
                     if (ci === groupIdx || ci === titleIdx || ci === descIdx) return null;
                     const v = row[ci]; if (!v) return null;
-                    return <span key={ci} className="text-[10px] px-1.5 py-0.5 rounded font-display"
+                    return <span key={ci} className="text-2xs px-1.5 py-0.5 rounded font-display"
                       style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                     >{h}: {v}</span>;
                   })}
@@ -124,7 +124,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
                 setShowNewCol(false);
               }}
                 className="text-xs px-2 py-1 rounded font-display"
-                style={{ background: 'var(--amber)', color: '#131210' }}
+                style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
               >Create</button>
               <button onClick={() => { setNewColInput(''); setShowNewCol(false); }}
                 className="text-xs px-2 py-1 rounded font-display"

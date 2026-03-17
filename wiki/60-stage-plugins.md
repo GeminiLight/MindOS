@@ -2,7 +2,7 @@
 
 # 插件系统 (Stage: Plugins)
 
-> 详见 [./02-system-architecture.md](./02-system-architecture.md) 的渲染器部分。
+> 详见 [./02-system-architecture.md](./20-system-architecture.md) 的渲染器部分。
 
 MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户可在 Settings 中单独禁用。
 

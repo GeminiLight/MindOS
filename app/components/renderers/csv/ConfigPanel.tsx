@@ -39,7 +39,7 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
       {view === 'table' && (
         <>
           <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-[11px] font-semibold uppercase tracking-wider" style={labelStyle}>Sort</p>
+          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Sort</p>
           <FieldSelect label="Sort by" value={cfg.table.sortField}
             onChange={v => onChange({ ...cfg, table: { ...cfg.table, sortField: v } })} />
           <div className="flex items-center justify-between gap-2">
@@ -51,7 +51,7 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
                   style={{
                     fontSize: '0.72rem',
                     background: cfg.table.sortDir === d ? 'var(--amber)' : 'var(--background)',
-                    color: cfg.table.sortDir === d ? '#131210' : 'var(--muted-foreground)',
+                    color: cfg.table.sortDir === d ? 'var(--amber-foreground)' : 'var(--muted-foreground)',
                   }}
                 >{d}</button>
               ))}
@@ -59,12 +59,12 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
           </div>
 
           <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-[11px] font-semibold uppercase tracking-wider" style={labelStyle}>Group</p>
+          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Group</p>
           <FieldSelect label="Group by" value={cfg.table.groupField}
             onChange={v => onChange({ ...cfg, table: { ...cfg.table, groupField: v } })} />
 
           <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-[11px] font-semibold uppercase tracking-wider" style={labelStyle}>Columns</p>
+          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Columns</p>
           <div className="flex flex-col gap-1.5">
             {headers.map(h => {
               const hidden = cfg.table.hiddenFields.includes(h);
@@ -77,7 +77,7 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
                       : [...cfg.table.hiddenFields, h];
                     onChange({ ...cfg, table: { ...cfg.table, hiddenFields: next } });
                   }}
-                    className="text-[11px] px-2 py-0.5 rounded transition-colors font-display"
+                    className="text-xs px-2 py-0.5 rounded transition-colors font-display"
                     style={{
                       background: hidden ? 'var(--muted)' : 'var(--amber-dim)',
                       color: hidden ? 'var(--muted-foreground)' : 'var(--amber)',

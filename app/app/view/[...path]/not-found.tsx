@@ -69,7 +69,7 @@ export default function ViewNotFound() {
             onClick={handleCreate}
             disabled={creating}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-            style={{ background: 'var(--amber)', color: '#131210' }}
+            style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
           >
             <FilePlus size={14} />
             {creating

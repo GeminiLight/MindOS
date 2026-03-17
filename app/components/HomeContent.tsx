@@ -102,7 +102,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
               {suggestions[suggestionIdx]}
             </span>
             <kbd
-              className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium"
+              className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium"
               style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}
             >
               ⌘/
@@ -118,7 +118,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
           >
             <Search size={14} />
             <span className="hidden sm:inline">{t.home.shortcuts.searchFiles}</span>
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono" style={{ background: 'var(--muted)' }}>
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-mono" style={{ background: 'var(--muted)' }}>
               ⌘K
             </kbd>
           </button>
@@ -189,17 +189,17 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
                         {r.name}
                       </span>
                     </div>
-                    <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
+                    <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
                       {r.description}
                     </p>
                     {hintId === r.id ? (
-                      <p className="text-[10px] animate-in" style={{ color: 'var(--amber)' }} role="status">
+                      <p className="text-2xs animate-in" style={{ color: 'var(--amber)' }} role="status">
                         {(t.home.createToActivate ?? 'Create {file} to activate').replace('{file}', entryPath ?? '')}
                       </p>
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {r.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+                          <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
                             {tag}
                           </span>
                         ))}
@@ -222,12 +222,12 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
                       {r.name}
                     </span>
                   </div>
-                  <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
+                  <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
                     {r.description}
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {r.tags.slice(0, 3).map(tag => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+                      <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
                         {tag}
                       </span>
                     ))}

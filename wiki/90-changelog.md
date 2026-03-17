@@ -2,6 +2,23 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.5.9 — 非空目录 Onboard 优化 (2026-03-17)
+
+### 新增
+- **非空目录模板选择** — Onboarding 时检测到目录已有文件，显示 amber 提示框 + "跳过模板"（默认）/ "选择模板合并" 两个选项，避免静默跳过无反馈
+- **导航守卫增强** — Setup 提交期间（`submitting` / `completed`），StepDots 步骤条和 Back 按钮同步禁用，防止用户中途跳走
+
+### 变更
+- **后端模板 guard 放宽** — `setup/route.ts` 移除 `dirEmpty` 条件，改由前端控制是否发送 template，后端依赖 `copyRecursive` skip-existing 保护
+- **StepDots 组件** — 新增 `disabled` prop，支持 `disabled:cursor-not-allowed disabled:opacity-60` 视觉反馈
+
+### 文档
+- **开发洞察** — `wiki/41-dev-pitfall-patterns.md` 新增"状态变更的影响面追踪"章节（规则 6-8）
+- **已知陷阱** — `wiki/80-known-pitfalls.md` 新增"变更质量 checklist"
+- **Agent 协作规则** — `AGENTS.md` 新增"前端状态变更检查"条目
+
+---
+
 ## v0.5.7 — Agent 自动检测 + README 优化 + Landing Page 刷新 (2026-03-17)
 
 ### 新增

@@ -144,7 +144,7 @@ export function ConfigRenderer({ content, saveAction }: RendererContext) {
                         className="px-2.5 py-1 rounded-md text-xs font-medium"
                         style={{
                           background: value ? 'var(--amber)' : 'var(--muted)',
-                          color: value ? '#131210' : 'var(--muted-foreground)',
+                          color: value ? 'var(--amber-foreground)' : 'var(--muted-foreground)',
                         }}
                       >
                         {value ? 'ON' : 'OFF'}

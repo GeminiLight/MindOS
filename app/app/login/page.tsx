@@ -101,7 +101,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2 bg-[var(--amber)] text-[#131210]"
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2 bg-[var(--amber)] text-[var(--amber-foreground)]"
           >
             {loading ? (
               <Loader2 size={14} className="animate-spin" />

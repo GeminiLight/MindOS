@@ -121,7 +121,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
       {/* Mobile navbar */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border flex items-center justify-between px-3 py-2" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <button onClick={() => setMobileOpen(true)} className="p-2.5 -ml-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label="Open menu">
+        <button onClick={() => setMobileOpen(true)} className="p-3 -ml-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label="Open menu">
           <Menu size={20} />
         </button>
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -132,15 +132,15 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
           {/* #8 — Mobile sync dot: visible when there's a problem */}
           <button
             onClick={openSyncSettings}
-            className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent flex items-center justify-center"
+            className="p-3 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent flex items-center justify-center"
             aria-label="Sync status"
           >
             <MobileSyncDot status={syncStatus} />
           </button>
-          <button onClick={() => setSearchOpen(true)} className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.searchTitle}>
+          <button onClick={() => setSearchOpen(true)} className="p-3 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.searchTitle}>
             <Search size={20} />
           </button>
-          <button onClick={() => setSettingsOpen(true)} className="p-2.5 -mr-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.settingsTitle}>
+          <button onClick={() => setSettingsOpen(true)} className="p-3 -mr-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent" aria-label={t.sidebar.settingsTitle}>
             <Settings size={20} />
           </button>
         </div>

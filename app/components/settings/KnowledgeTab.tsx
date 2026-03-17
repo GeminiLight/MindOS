@@ -114,7 +114,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
                 className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
                 title={k.authTokenCopy}
               >
-                {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
               </button>
             )}
           </div>

@@ -18,7 +18,7 @@ export function GalleryView({ headers, rows, cfg }: { headers: string[]; rows: s
           <div key={i} className="rounded-xl border p-4 flex flex-col gap-2 hover:bg-muted/50 transition-colors"
             style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
           >
-            {tag && tc && <span className="self-start text-[11px] px-2 py-0.5 rounded-full font-medium"
+            {tag && tc && <span className="self-start text-xs px-2 py-0.5 rounded-full font-medium"
               style={{ background: tc.bg, color: tc.text }}>{tag}</span>}
             <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--foreground)' }}>{title}</p>
             {desc && <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--muted-foreground)' }}>{desc}</p>}

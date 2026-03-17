@@ -4,6 +4,14 @@ app/.next
 app/data
 !app/data/skills
 *.tsbuildinfo
+*.pptx
+*.pdf
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+*.zip
 
 # User config is stored in ~/.mindos/config.json (never committed)
 app/.env.local
@@ -13,6 +21,7 @@ my-mind/
 my-mind-backup/
 review/
 experience/
+activities/
 template/template-generation-skill.md
 
 landing/screenshots/

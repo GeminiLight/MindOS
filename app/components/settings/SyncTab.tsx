@@ -111,12 +111,12 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
           }}
         />
         {remoteUrl.trim() && !isValid && (
-          <p className="text-[11px]" style={{ color: 'var(--destructive, red)' }}>
+          <p className="text-xs" style={{ color: 'var(--destructive, red)' }}>
             {syncT?.invalidUrl ?? 'Invalid Git URL — use HTTPS (https://...) or SSH (git@...)'}
           </p>
         )}
         {urlType === 'ssh' && (
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             <AlertCircle size={11} className="shrink-0" />
             {syncT?.sshHint ?? 'SSH URLs require SSH key configured on this machine. HTTPS with token recommended.'}
           </p>
@@ -147,7 +147,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
               {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {syncT?.tokenHint ?? 'GitHub: Settings → Developer settings → Personal access tokens → repo scope'}
           </p>
         </div>
@@ -174,7 +174,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
         onClick={handleConnect}
         disabled={!isValid || connecting}
         className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: 'var(--amber)', color: '#131210' }}
+        style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
       >
         {connecting && <Loader2 size={14} className="animate-spin" />}
         {connecting
@@ -191,7 +191,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
       )}
 
       {/* Features */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground pt-2">
+      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pt-2">
         {[
           syncT?.featureAutoCommit ?? 'Auto-commit on save',
           syncT?.featureAutoPull ?? 'Auto-pull from remote',
@@ -199,7 +199,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
           syncT?.featureMultiDevice ?? 'Works across devices',
         ].map((f, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <CheckCircle2 size={11} className="text-green-500/60 shrink-0" />
+            <CheckCircle2 size={11} className="text-success/60 shrink-0" />
             <span>{f}</span>
           </div>
         ))}
@@ -336,7 +336,7 @@ export function SyncTab({ t }: SyncTabProps) {
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             status.enabled
               ? 'border-border text-muted-foreground hover:text-destructive hover:border-destructive/50'
-              : 'border-green-500/30 text-green-500 hover:bg-green-500/10'
+              : 'border-success/30 text-success hover:bg-success/10'
           }`}
         >
           {status.enabled ? 'Disable Auto-sync' : 'Enable Auto-sync'}
@@ -347,7 +347,7 @@ export function SyncTab({ t }: SyncTabProps) {
       {message && (
         <div className="flex items-center gap-1.5 text-xs" role="status" aria-live="polite">
           {message.type === 'success' ? (
-            <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{message.text}</span></>
+            <><CheckCircle2 size={13} className="text-success" /><span className="text-success">{message.text}</span></>
           ) : (
             <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{message.text}</span></>
           )}

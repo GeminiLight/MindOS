@@ -60,7 +60,7 @@ export default function UpdateBanner() {
         </span>
         <span className="text-muted-foreground">
           {updateT?.runUpdate ?? 'Run'}{' '}
-          <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px]">mindos update</code>
+          <code className="px-1 py-0.5 rounded bg-muted font-mono text-xs">mindos update</code>
           {updateT?.orSee ? (
             <>
               {' '}{updateT.orSee}{' '}

@@ -28,6 +28,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-error: var(--error);
+  --color-amber-foreground: var(--amber-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -65,7 +66,7 @@ body {
   --secondary: #e8e4db;
   --secondary-foreground: #1c1a17;
   --muted: #e8e4db;
-  --muted-foreground: #7a7568;
+  --muted-foreground: #685f52;
   --accent: #d9d3c6;
   --accent-foreground: #1c1a17;
   --destructive: oklch(0.58 0.22 27);
@@ -75,6 +76,7 @@ body {
   --radius: 0.5rem;
   --amber: #c8873a;
   --amber-dim: rgba(200, 135, 58, 0.12);
+  --amber-foreground: #131210;
   --success: #7aad80;
   --error: #c85050;
   --sidebar: #ede9e1;
@@ -108,6 +110,7 @@ body {
   --ring: var(--amber);
   --amber: #d4954a;
   --amber-dim: rgba(212, 149, 74, 0.12);
+  --amber-foreground: #131210;
   --success: #7aad80;
   --error: #c85050;
   --sidebar: #1c1a17;
@@ -282,6 +285,11 @@ body {
   -webkit-backdrop-filter: blur(8px);
 }
 
+/* Micro type scale: text-2xs = 10px (between nothing and text-xs 12px) */
+@layer utilities {
+  .text-2xs { font-size: 10px; line-height: 1.4; }
+}
+
 /* Hide scrollbar but keep scroll functionality */
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
@@ -341,7 +349,7 @@ a:focus-visible,
 /* Selection */
 .wysiwyg-editor ::selection {
   background: var(--amber);
-  color: #131210;
+  color: var(--amber-foreground);
   opacity: 0.35;
 }
 
