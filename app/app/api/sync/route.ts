@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { execSync, execFile } from 'child_process';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
 
 const MINDOS_DIR = join(homedir(), '.mindos');
@@ -35,6 +35,15 @@ function getUnpushedCount(cwd: string) {
 
 function isGitRepo(dir: string) {
   return existsSync(join(dir, '.git'));
+}
+
+function getCliInvocation() {
+  const cliPath = process.env.MINDOS_CLI_PATH;
+  const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
+  if (!cliPath) {
+    throw new Error('MindOS CLI path is unavailable. Restart MindOS from the `mindos` command.');
+  }
+  return { cliPath, nodeBin };
 }
 
 export async function GET() {
@@ -99,12 +108,12 @@ export async function POST(req: NextRequest) {
 
         // Call CLI's sync init — pass clean remote + token separately (never embed token in URL)
         try {
-          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
+          const { cliPath, nodeBin } = getCliInvocation();
           const args = ['sync', 'init', '--non-interactive', '--remote', remote, '--branch', branch];
           if (body.token) args.push('--token', body.token);
 
           await new Promise<void>((res, rej) => {
-            execFile('node', [cliPath, ...args], { timeout: 30000 }, (err, stdout, stderr) => {
+            execFile(nodeBin, [cliPath, ...args], { timeout: 30000 }, (err, stdout, stderr) => {
               if (err) rej(new Error(stderr?.trim() || err.message));
               else res();
             });
@@ -122,9 +131,9 @@ export async function POST(req: NextRequest) {
         }
         // Delegate to CLI for unified conflict handling
         try {
-          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
+          const { cliPath, nodeBin } = getCliInvocation();
           await new Promise<void>((res, rej) => {
-            execFile('node', [cliPath, 'sync', 'now'], { timeout: 60000 }, (err, stdout, stderr) => {
+            execFile(nodeBin, [cliPath, 'sync', 'now'], { timeout: 60000 }, (err, stdout, stderr) => {
               if (err) rej(new Error(stderr?.trim() || err.message));
               else res();
             });

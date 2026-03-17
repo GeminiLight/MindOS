@@ -249,7 +249,9 @@ export async function initSync(mindRoot, opts = {}) {
   // 5. Test connection
   if (!nonInteractive) console.log(dim('Testing connection...'));
   try {
-    execSync('git ls-remote --exit-code origin', { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+    // `git ls-remote --exit-code origin` returns non-zero for an empty remote,
+    // which breaks first-time setup against a freshly created repository.
+    execSync('git ls-remote origin', { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
     if (!nonInteractive) console.log(green('✔ Connection successful'));
   } catch {
     const errMsg = 'Remote not reachable — check URL and credentials';
