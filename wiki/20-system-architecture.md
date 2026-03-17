@@ -149,7 +149,7 @@ sop_note/
 
 ```
 Agent → stdio: spawn node mcp/dist/index.js ← stdin/stdout → MCP Server ← fs → my-mind/
-     → HTTP:  POST http://host:8787/mcp ← Bearer Token → MCP Server ← fs → my-mind/
+     → HTTP:  POST http://host:8781/mcp ← Bearer Token → MCP Server ← fs → my-mind/
 ```
 
 ## 技术决策

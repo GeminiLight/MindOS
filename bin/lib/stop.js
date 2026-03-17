@@ -75,7 +75,7 @@ function killTree(pid) {
  */
 export function stopMindos(opts = {}) {
   // Read ports from config for port-based cleanup
-  let webPort = '3000', mcpPort = '8787';
+  let webPort = '3456', mcpPort = '8781';
   try {
     const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
     if (config.port) webPort = String(config.port);

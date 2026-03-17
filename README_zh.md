@@ -158,8 +158,8 @@ mindos onboard --install-daemon
 ```json
 {
   "mindRoot": "~/MindOS",
-  "port": 3000,
-  "mcpPort": 8787,
+  "port": 3456,
+  "mcpPort": 8781,
   "authToken": "",
   "webPassword": "",
   "startMode": "daemon",
@@ -184,8 +184,8 @@ mindos onboard --install-daemon
 | 字段 | 默认值 | 说明 |
 | :--- | :--- | :--- |
 | `mindRoot` | `~/MindOS` | **必填**。知识库根目录的绝对路径 |
-| `port` | `3000` | 可选。Web 服务端口 |
-| `mcpPort` | `8787` | 可选。MCP 服务端口 |
+| `port` | `3456` | 可选。Web 服务端口 |
+| `mcpPort` | `8781` | 可选。MCP 服务端口 |
 | `authToken` | — | 可选。保护 App `/api/*` 和 MCP `/mcp` 的 Bearer Token 认证。供 Agent / MCP 客户端使用，暴露到网络时建议设置 |
 | `webPassword` | — | 可选。为 Web UI 添加登录密码保护。供浏览器访问，与 `authToken` 相互独立 |
 | `startMode` | `start` | 启动模式：`daemon`（后台服务，开机自启）、`start`（前台）或 `dev` |
@@ -259,15 +259,15 @@ mindos mcp install -g -y
 使用 `http` transport — 远程机器上需先运行 `mindos start`：
 
 ```bash
-mindos mcp install --transport http --url http://<服务器IP>:8787/mcp --token your-token -g
+mindos mcp install --transport http --url http://<服务器IP>:8781/mcp --token your-token -g
 ```
 
 > [!NOTE]
-> 远程访问时，请确保端口 `8787` 已在防火墙/安全组中放行。
+> 远程访问时，请确保端口 `8781` 已在防火墙/安全组中放行。
 
 > 加 `-g` 表示全局安装 — MCP 配置写入用户级配置文件，所有项目共享，而非仅当前目录。
 
-> MCP 端口默认为 `8787`。如需修改，运行 `mindos onboard` 设置 `mcpPort`。
+> MCP 端口默认为 `8781`。如需修改，运行 `mindos onboard` 设置 `mcpPort`。
 
 <details>
 <summary>手动配置（JSON 片段）</summary>
@@ -293,7 +293,7 @@ mindos mcp install --transport http --url http://<服务器IP>:8787/mcp --token 
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://localhost:8787/mcp",
+      "url": "http://localhost:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }
@@ -306,7 +306,7 @@ mindos mcp install --transport http --url http://<服务器IP>:8787/mcp --token 
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://<服务器IP>:8787/mcp",
+      "url": "http://<服务器IP>:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }
