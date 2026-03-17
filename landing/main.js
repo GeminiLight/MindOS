@@ -6,9 +6,13 @@
 const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 const systemLang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
 const state = { theme: localStorage.getItem('mindos-theme') || systemTheme, lang: localStorage.getItem('mindos-lang') || systemLang, loopStarted: false };
-const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); requestAnimationFrame(() => { requestAnimationFrame(() => { document.documentElement.classList.remove('early-light'); }); }); };
+const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); };
 const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
 applyTheme(state.theme); applyLang(state.lang);
+// Remove early-light AFTER body.light is applied — FOUC prevention cleanup
+if (document.documentElement.classList.contains('early-light')) {
+    requestAnimationFrame(() => { requestAnimationFrame(() => { document.documentElement.classList.remove('early-light'); }); });
+}
 
 /* --- Compare Tabs --- */
 document.querySelectorAll('.compare-tab').forEach(tab => {
