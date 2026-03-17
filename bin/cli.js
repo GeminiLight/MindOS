@@ -50,7 +50,7 @@ import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDep
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
-import { getPlatform, ensureMindosDir, waitForHttp, runGatewayCommand } from './lib/gateway.js';
+import { getPlatform, ensureMindosDir, waitForHttp, waitForPortFree, runGatewayCommand } from './lib/gateway.js';
 import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
 import { mcpInstall } from './lib/mcp-install.js';
@@ -235,7 +235,9 @@ const commands = {
         const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
         console.log(cyan(`Installing MindOS as a background service (${platform})...`));
         await runGatewayCommand('install');
-        await runGatewayCommand('start');
+        // install() already starts the service via launchctl bootstrap + RunAtLoad=true.
+        // Do NOT call start() here — kickstart -k would kill the just-started process,
+        // causing a port-conflict race condition with KeepAlive restart loops.
         console.log(dim('  (First run may take a few minutes to install dependencies and build the app.)'));
         console.log(dim('  Follow live progress with:  mindos logs\n'));
         const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
@@ -263,8 +265,24 @@ const commands = {
     loadConfig();
     const webPort = process.env.MINDOS_WEB_PORT || '3000';
     const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
-    await assertPortFree(Number(webPort), 'web');
-    await assertPortFree(Number(mcpPort), 'mcp');
+
+    // When launched by a daemon manager (launchd/systemd), wait for ports to
+    // free instead of exiting immediately — the previous instance may still be
+    // shutting down after a restart/update.
+    const launchedByDaemon = process.env.LAUNCHED_BY_LAUNCHD === '1'
+      || !!process.env.INVOCATION_ID; /* systemd sets INVOCATION_ID */
+
+    if (launchedByDaemon) {
+      const webOk = await waitForPortFree(Number(webPort), { retries: 60, intervalMs: 500 });
+      const mcpOk = await waitForPortFree(Number(mcpPort), { retries: 60, intervalMs: 500 });
+      if (!webOk || !mcpOk) {
+        console.error('Ports still in use after 30s, exiting.');
+        process.exit(1);  // KeepAlive will retry after ThrottleInterval
+      }
+    } else {
+      await assertPortFree(Number(webPort), 'web');
+      await assertPortFree(Number(mcpPort), 'mcp');
+    }
     ensureAppDeps();
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
