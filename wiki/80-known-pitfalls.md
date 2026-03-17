@@ -76,6 +76,35 @@
 - **现象：** 大文件读取超过 LLM context
 - **解决：** 单文件读取上限 25,000 字符 + `truncate()` 工具函数
 
+## Agent (Ask Modal)
+
+### 跳过 spec 直接写代码 — 流程违规
+- **现象：** Phase 1（7 工具 + UIMessageStream）从 plan 直接跳到执行，跳过 spec + spec review
+- **后果：** 没有验收标准就动手，连续多轮 code review 才逐步发现 React state mutation、setState 频率过高、多轮 tool 历史丢失等问题——本应在 spec 阶段就识别为边界条件
+- **根因：** 把 roadmap plan（战略级）当成了 spec（执行级）。Plan 描述方向，spec 描述变更范围、文件清单、接口设计、验收标准
+- **规则：** 每个 phase/任务执行前必须先写 spec（`wiki/specs/`），等用户确认后再动手。**Spec ≠ Plan**
+
+### React state mutation — stream consumer 浅拷贝
+- **现象：** `buildMessage()` 返回的 parts 与 mutable working copies 共享引用，后续 `part.text += delta` 篡改了已在 React state 中的对象
+- **解决：** `buildMessage()` 深拷贝每个 part：TextPart 用 `{ type: 'text', text: p.text }`，ToolCallPart 用 `{ ...p }`（`input` 是替换而非修改，浅拷贝安全）
+- **规则：** 任何流式更新组装对象传给 React setState 前，必须断开与 mutable 源的引用
+
+### setState 频率过高 — 每条 SSE line 触发一次
+- **现象：** 单次 `reader.read()` 可能包含多条 SSE line，每条都调用 `onUpdate(buildMessage())` 触发 React 重渲染
+- **解决：** 用 `changed` flag，每个 `reader.read()` 批次只在循环结束后触发一次 `onUpdate`
+- **规则：** 流式解析中 setState 应按 I/O 批次聚合，不按解析单元
+
+### 多轮对话 tool 历史丢失
+- **现象：** 前端发送 `Message[]`（`{role, content, parts?}`），但 AI SDK 的 `streamText()` 期望 `ModelMessage[]`，其中 tool calls 需拆为 assistant message + tool message。直接透传导致 AI 在后续轮次不知道之前执行了什么工具
+- **解决：** 后端新增 `convertToModelMessages()` 转换函数：assistant parts 拆为 `{role: 'assistant', content: [TextPart, ToolCallPart]}`（不含 output）+ `{role: 'tool', content: [ToolResultPart]}`
+- **规则：** 前端 Message 格式与 AI SDK ModelMessage 格式不同，跨边界传递时必须转换
+- **文件：** `app/app/api/ask/route.ts`
+
+### Abort 后只检查 content 不检查 parts
+- **现象：** 用户中断时，代码只检查 `!content.trim()` 判断消息是否为空。但 UIMessageStream 下消息可能有 tool call parts 但空 text content
+- **解决：** 改为 `const hasContent = last.content.trim() || (last.parts && last.parts.length > 0)`
+- **规则：** UIMessageStream 后判断消息"是否有内容"必须同时检查 `content` 和 `parts`
+
 ## 进程生命周期
 
 ### stopMindos 只清理 config 端口，漏掉旧端口

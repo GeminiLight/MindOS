@@ -13,9 +13,27 @@ export interface BacklinkItem {
   snippets: string[];
 }
 
+export interface ToolCallPart {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+  output?: string;
+  state: 'pending' | 'running' | 'done' | 'error';
+}
+
+export interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+export type MessagePart = TextPart | ToolCallPart;
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  /** Structured parts for assistant messages (tool calls + text segments) */
+  parts?: MessagePart[];
 }
 
 export interface LocalAttachment {

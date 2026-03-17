@@ -1,10 +1,11 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '@/lib/types';
+import ToolCallBlock from './ToolCallBlock';
 
 function AssistantMessage({ content, isStreaming }: { content: string; isStreaming: boolean }) {
   return (
@@ -28,6 +29,57 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
   );
 }
 
+function AssistantMessageWithParts({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
+  const parts = message.parts;
+  if (!parts || parts.length === 0) {
+    // Fallback to plain text rendering
+    return message.content ? (
+      <AssistantMessage content={message.content} isStreaming={isStreaming} />
+    ) : null;
+  }
+
+  // Check if the last part is a running tool call — show a spinner after it
+  const lastPart = parts[parts.length - 1];
+  const showTrailingSpinner = isStreaming && lastPart.type === 'tool-call' && (lastPart.state === 'running' || lastPart.state === 'pending');
+
+  return (
+    <div>
+      {parts.map((part, idx) => {
+        if (part.type === 'text') {
+          const isLastTextPart = isStreaming && idx === parts.length - 1;
+          return part.text ? (
+            <AssistantMessage key={idx} content={part.text} isStreaming={isLastTextPart} />
+          ) : null;
+        }
+        if (part.type === 'tool-call') {
+          return <ToolCallBlock key={part.toolCallId} part={part} />;
+        }
+        return null;
+      })}
+      {showTrailingSpinner && (
+        <div className="flex items-center gap-2 py-1 mt-1">
+          <Loader2 size={12} className="animate-spin" style={{ color: 'var(--amber)' }} />
+          <span className="text-xs text-muted-foreground animate-pulse">Executing tool…</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StepCounter({ parts, maxSteps }: { parts: Message['parts']; maxSteps?: number }) {
+  if (!parts) return null;
+  const toolCalls = parts.filter(p => p.type === 'tool-call');
+  if (toolCalls.length === 0) return null;
+  const lastToolCall = toolCalls[toolCalls.length - 1];
+  const toolLabel = lastToolCall.type === 'tool-call' ? lastToolCall.toolName : '';
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground/70">
+      <Wrench size={10} />
+      <span>Step {toolCalls.length}{maxSteps ? `/${maxSteps}` : ''}{toolLabel ? ` — ${toolLabel}` : ''}</span>
+    </div>
+  );
+}
+
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
@@ -35,6 +87,7 @@ interface MessageListProps {
   emptyPrompt: string;
   suggestions: readonly string[];
   onSuggestionClick: (text: string) => void;
+  maxSteps?: number;
   labels: {
     connecting: string;
     thinking: string;
@@ -49,6 +102,7 @@ export default function MessageList({
   emptyPrompt,
   suggestions,
   onSuggestionClick,
+  maxSteps,
   labels,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -102,8 +156,13 @@ export default function MessageList({
             </div>
           ) : (
             <div className="max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm bg-muted text-foreground text-sm">
-              {m.content ? (
-                <AssistantMessage content={m.content} isStreaming={isLoading && i === messages.length - 1} />
+              {(m.parts && m.parts.length > 0) || m.content ? (
+                <>
+                  <AssistantMessageWithParts message={m} isStreaming={isLoading && i === messages.length - 1} />
+                  {isLoading && i === messages.length - 1 && (
+                    <StepCounter parts={m.parts} maxSteps={maxSteps} />
+                  )}
+                </>
               ) : isLoading && i === messages.length - 1 ? (
                 <div className="flex items-center gap-2 py-1">
                   <Loader2 size={14} className="animate-spin" style={{ color: 'var(--amber)' }} />

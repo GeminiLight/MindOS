@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   searchFiles, getFileContent, getFileTree, getRecentlyModified,
   saveFileContent, createFile, appendToFile, insertAfterHeading, updateSection,
+  deleteFile, renameFile, moveFile, findBacklinks, gitLog, gitShowFile, appendCsvRow,
 } from '@/lib/fs';
 import { assertNotProtected } from '@/lib/core';
 import { logAgentOp } from './log';
@@ -164,6 +165,127 @@ export const knowledgeBaseTools = {
         assertWritable(path);
         updateSection(path, heading, content);
         return `Section "${heading}" updated in ${path}`;
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  // ─── New tools (Phase 1a) ──────────────────────────────────────────────────
+
+  delete_file: tool({
+    description: 'Permanently delete a file from the knowledge base. This is destructive and cannot be undone.',
+    inputSchema: z.object({
+      path: z.string().describe('Relative file path to delete'),
+    }),
+    execute: logged('delete_file', async ({ path }) => {
+      try {
+        assertWritable(path);
+        deleteFile(path);
+        return `File deleted: ${path}`;
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  rename_file: tool({
+    description: 'Rename a file within its current directory. Only the filename changes, not the directory.',
+    inputSchema: z.object({
+      path: z.string().describe('Current relative file path'),
+      new_name: z.string().describe('New filename (no path separators, e.g. "new-name.md")'),
+    }),
+    execute: logged('rename_file', async ({ path, new_name }) => {
+      try {
+        assertWritable(path);
+        const newPath = renameFile(path, new_name);
+        return `File renamed: ${path} → ${newPath}`;
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  move_file: tool({
+    description: 'Move a file to a new location. Also returns any files that had backlinks affected by the move.',
+    inputSchema: z.object({
+      from_path: z.string().describe('Current relative file path'),
+      to_path: z.string().describe('New relative file path'),
+    }),
+    execute: logged('move_file', async ({ from_path, to_path }) => {
+      try {
+        assertWritable(from_path);
+        const result = moveFile(from_path, to_path);
+        const affected = result.affectedFiles.length > 0
+          ? `\nAffected backlinks in: ${result.affectedFiles.join(', ')}`
+          : '';
+        return `File moved: ${from_path} → ${result.newPath}${affected}`;
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  get_backlinks: tool({
+    description: 'Find all files that reference a given file path. Useful for understanding connections between notes.',
+    inputSchema: z.object({
+      path: z.string().describe('Relative file path to find backlinks for'),
+    }),
+    execute: logged('get_backlinks', async ({ path }) => {
+      try {
+        const backlinks = findBacklinks(path);
+        if (backlinks.length === 0) return `No backlinks found for: ${path}`;
+        return backlinks.map(b => `- **${b.source}** (L${b.line}): ${b.context}`).join('\n');
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  get_history: tool({
+    description: 'Get git commit history for a file. Shows recent commits that modified this file.',
+    inputSchema: z.object({
+      path: z.string().describe('Relative file path'),
+      limit: z.number().min(1).max(50).default(10).describe('Number of commits to return'),
+    }),
+    execute: logged('get_history', async ({ path, limit }) => {
+      try {
+        const commits = gitLog(path, limit);
+        if (commits.length === 0) return `No git history found for: ${path}`;
+        return commits.map(c => `- \`${c.hash.slice(0, 7)}\` ${c.date} — ${c.message} (${c.author})`).join('\n');
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  get_file_at_version: tool({
+    description: 'Read the content of a file at a specific git commit. Use get_history first to find commit hashes.',
+    inputSchema: z.object({
+      path: z.string().describe('Relative file path'),
+      commit: z.string().describe('Git commit hash (full or abbreviated)'),
+    }),
+    execute: logged('get_file_at_version', async ({ path, commit }) => {
+      try {
+        const content = gitShowFile(path, commit);
+        return truncate(content);
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }),
+  }),
+
+  append_csv: tool({
+    description: 'Append a row to a CSV file. Values are automatically escaped per RFC 4180.',
+    inputSchema: z.object({
+      path: z.string().describe('Relative path to .csv file'),
+      row: z.array(z.string()).describe('Array of cell values for the new row'),
+    }),
+    execute: logged('append_csv', async ({ path, row }) => {
+      try {
+        assertWritable(path);
+        const result = appendCsvRow(path, row);
+        return `Row appended to ${path} (now ${result.newRowCount} rows)`;
       } catch (e: unknown) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`;
       }

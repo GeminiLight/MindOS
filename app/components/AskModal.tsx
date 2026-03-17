@@ -11,6 +11,7 @@ import MessageList from '@/components/ask/MessageList';
 import MentionPopover from '@/components/ask/MentionPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
 import FileChip from '@/components/ask/FileChip';
+import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 
 interface AskModalProps {
   open: boolean;
@@ -151,25 +152,22 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
 
       if (!res.body) throw new Error('No response body');
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = '';
       setLoadingPhase('thinking');
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk) setLoadingPhase('streaming');
-        assistantContent += chunk;
-        session.setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: assistantContent };
-          return updated;
-        });
-      }
+      const finalMessage = await consumeUIMessageStream(
+        res.body,
+        (msg) => {
+          setLoadingPhase('streaming');
+          session.setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = msg;
+            return updated;
+          });
+        },
+        controller.signal,
+      );
 
-      if (!assistantContent.trim()) {
+      if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
         session.setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { role: 'assistant', content: `__error__${t.ask.errorNoResponse}` };
@@ -181,8 +179,12 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         session.setMessages(prev => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
-          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content.trim()) {
-            updated[lastIdx] = { role: 'assistant', content: `__error__${t.ask.stopped}` };
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+            const last = updated[lastIdx];
+            const hasContent = last.content.trim() || (last.parts && last.parts.length > 0);
+            if (!hasContent) {
+              updated[lastIdx] = { role: 'assistant', content: `__error__${t.ask.stopped}` };
+            }
           }
           return updated;
         });
@@ -191,9 +193,13 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         session.setMessages(prev => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
-          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content.trim()) {
-            updated[lastIdx] = { role: 'assistant', content: `__error__${errMsg}` };
-            return updated;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+            const last = updated[lastIdx];
+            const hasContent = last.content.trim() || (last.parts && last.parts.length > 0);
+            if (!hasContent) {
+              updated[lastIdx] = { role: 'assistant', content: `__error__${errMsg}` };
+              return updated;
+            }
           }
           return [...updated, { role: 'assistant', content: `__error__${errMsg}` }];
         });
@@ -281,6 +287,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           emptyPrompt={t.ask.emptyPrompt}
           suggestions={t.ask.suggestions}
           onSuggestionClick={setInput}
+          maxSteps={maxSteps}
           labels={{ connecting: t.ask.connecting, thinking: t.ask.thinking, generating: t.ask.generating }}
         />
 
