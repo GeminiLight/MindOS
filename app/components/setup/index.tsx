@@ -11,6 +11,7 @@ import StepPorts from './StepPorts';
 import StepSecurity from './StepSecurity';
 import StepAgents from './StepAgents';
 import StepReview from './StepReview';
+import { RestartButton } from './StepReview';
 import StepDots from './StepDots';
 
 // ─── Helpers (shared by handleComplete + retryAgent) ─────────────────────────
@@ -439,14 +440,16 @@ export default function SetupWizard() {
               {s.next} <ChevronRight size={14} />
             </button>
           ) : completed ? (
-            // After completing: show Done link (no restart needed) or nothing (RestartBlock handles it)
-            !needsRestart ? (
+            // After completing: show Done link or Restart button in the same position
+            needsRestart ? (
+              <RestartButton s={s} newPort={state.webPort} />
+            ) : (
               <a href="/?welcome=1"
                 className="flex items-center gap-1 px-5 py-2 text-sm font-medium rounded-lg transition-colors"
                 style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}>
                 {s.completeDone} &rarr;
               </a>
-            ) : null
+            )
           ) : (
             <button
               onClick={handleComplete}
