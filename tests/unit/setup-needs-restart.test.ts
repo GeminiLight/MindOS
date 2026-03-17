@@ -25,8 +25,8 @@ function computeNeedsRestart(current: CurrentConfig, incoming: IncomingPayload):
   const resolvedAuthToken   = incoming.authToken   ?? current.authToken   ?? '';
   const resolvedWebPassword = incoming.webPassword ?? '';
   return !isFirstTime && (
-    incoming.webPort      !== (current.port      ?? 3000) ||
-    incoming.mcpPortNum   !== (current.mcpPort   ?? 8787) ||
+    incoming.webPort      !== (current.port      ?? 3456) ||
+    incoming.mcpPortNum   !== (current.mcpPort   ?? 8781) ||
     incoming.resolvedRoot !== (current.mindRoot  || '')   ||
     resolvedAuthToken     !== (current.authToken   ?? '') ||
     resolvedWebPassword   !== (current.webPassword ?? '')
@@ -38,15 +38,15 @@ function computeNeedsRestart(current: CurrentConfig, incoming: IncomingPayload):
 const EXISTING: CurrentConfig = {
   setupPending: false,
   mindRoot: '/home/user/MindOS/mind',
-  port: 3000,
-  mcpPort: 8787,
+  port: 3456,
+  mcpPort: 8781,
   authToken: 'abc-token',
   webPassword: 'secret',
 };
 
 const UNCHANGED: IncomingPayload = {
-  webPort: 3000,
-  mcpPortNum: 8787,
+  webPort: 3456,
+  mcpPortNum: 8781,
   resolvedRoot: '/home/user/MindOS/mind',
   authToken: 'abc-token',
   webPassword: 'secret',
@@ -121,7 +121,7 @@ describe('needsRestart — 边界条件', () => {
     expect(computeNeedsRestart(current, incoming)).toBe(false);
   });
 
-  it('current 无 port/mcpPort 时使用默认值 3000/8787', () => {
+  it('current 无 port/mcpPort 时使用默认值 3456/8781', () => {
     const current: CurrentConfig = { ...EXISTING, port: undefined, mcpPort: undefined };
     // incoming 与默认值相同，不触发
     expect(computeNeedsRestart(current, UNCHANGED)).toBe(false);

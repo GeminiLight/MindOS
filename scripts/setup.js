@@ -844,11 +844,11 @@ async function startGuiSetup() {
   if (isFirstTime) {
     // First-time onboard: use a temporary port (scan from 9100) so the user's
     // chosen port in Step 3 can differ without a mid-setup restart.
-    // 9100 is chosen to avoid conflicts with common services (5000=AirPlay, 3000/8080=dev).
+    // 9100 is chosen to avoid conflicts with common services (5000=AirPlay, 3456/8080=dev).
     usePort = await findFreePort(9100);
   } else {
     // Re-onboard: service is already running on config.port — reuse it.
-    const existingPort = config.port || 3000;
+    const existingPort = config.port || 3456;
     if (await isSelfPort(existingPort)) {
       // Service already running — just open the setup page, no need to spawn.
       const url = `http://localhost:${existingPort}/setup`;
@@ -866,7 +866,7 @@ async function startGuiSetup() {
         // stopMindos() sends SIGTERM synchronously — wait for both web and mcp
         // ports to free, since `start` will assertPortFree on both.
         const { waitForPortFree } = await import('../bin/lib/gateway.js');
-        const mcpPort = config.mcpPort || 8787;
+        const mcpPort = config.mcpPort || 8781;
         const [webFreed, mcpFreed] = await Promise.all([
           waitForPortFree(existingPort),
           waitForPortFree(mcpPort),
@@ -941,8 +941,8 @@ async function main() {
 
     console.log(c.bold('\nExisting config:'));
     console.log(row('Knowledge base:', c.cyan(existing.mindRoot || '(not set)')));
-    console.log(row('Web port:',       c.cyan(String(existing.port || '3000'))));
-    console.log(row('MCP port:',       c.cyan(String(existing.mcpPort || '8787'))));
+    console.log(row('Web port:',       c.cyan(String(existing.port || '3456'))));
+    console.log(row('MCP port:',       c.cyan(String(existing.mcpPort || '8781'))));
     console.log(row('Auth token:',     existing.authToken ? mask(existing.authToken) : c.dim('(not set)')));
     console.log(row('Web password:',   existing.webPassword ? '••••••••' : c.dim('(none)')));
     console.log(row('AI provider:',    c.cyan(existing.ai?.provider || '(not set)')));
@@ -953,7 +953,7 @@ async function main() {
     const overwrite = await askYesNo('cfgExists', CONFIG_PATH);
     if (!overwrite) {
       const existingMode     = existing.startMode || 'start';
-      const existingMcpPort  = existing.mcpPort   || 8787;
+      const existingMcpPort  = existing.mcpPort   || 8781;
       const existingAuth     = existing.authToken || '';
       const existingMindRoot = existing.mindRoot  || resolve(homedir(), 'MindOS', 'mind');
       console.log(`\n${c.green(t('cfgKept'))}  ${c.dim(CONFIG_PATH)}`);
@@ -1072,8 +1072,8 @@ async function main() {
   write('\n');
   stepHeader(3);
   const existingCfg = resumeCfg;
-  const defaultWebPort = typeof existingCfg.port === 'number' ? existingCfg.port : 3000;
-  const defaultMcpPort = typeof existingCfg.mcpPort === 'number' ? existingCfg.mcpPort : (defaultWebPort === 8787 ? 8788 : 8787);
+  const defaultWebPort = typeof existingCfg.port === 'number' ? existingCfg.port : 3456;
+  const defaultMcpPort = typeof existingCfg.mcpPort === 'number' ? existingCfg.mcpPort : (defaultWebPort === 8781 ? 8782 : 8781);
   let webPort, mcpPort;
   while (true) {
     webPort = await askPort('webPortPrompt', defaultWebPort);
@@ -1178,8 +1178,8 @@ async function main() {
 
   const isResuming = Object.keys(resumeCfg).length > 0;
   const needsRestart = isResuming && (
-    config.port        !== (resumeCfg.port        ?? 3000) ||
-    config.mcpPort     !== (resumeCfg.mcpPort     ?? 8787) ||
+    config.port        !== (resumeCfg.port        ?? 3456) ||
+    config.mcpPort     !== (resumeCfg.mcpPort     ?? 8781) ||
     config.mindRoot    !== (resumeCfg.mindRoot     ?? '')   ||
     config.authToken   !== (resumeCfg.authToken   ?? '')   ||
     config.webPassword !== (resumeCfg.webPassword ?? '')
@@ -1212,7 +1212,7 @@ async function main() {
   }
 
   const installDaemon = startMode === 'daemon' || process.argv.includes('--install-daemon');
-  finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon, needsRestart, resumeCfg.port ?? 3000);
+  finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon, needsRestart, resumeCfg.port ?? 3456);
 }
 
 function getLocalIP() {
@@ -1224,7 +1224,7 @@ function getLocalIP() {
   return null;
 }
 
-async function finish(mindDir, startMode = 'start', mcpPort = 8787, authToken = '', installDaemon = false, needsRestart = false, oldPort = 3000) {
+async function finish(mindDir, startMode = 'start', mcpPort = 8781, authToken = '', installDaemon = false, needsRestart = false, oldPort = 3456) {
   if (needsRestart) {
     const isRunning = await isSelfPort(oldPort);
     if (isRunning) {

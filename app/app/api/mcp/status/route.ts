@@ -5,7 +5,7 @@ import { readSettings } from '@/lib/settings';
 export async function GET() {
   try {
     const settings = readSettings();
-    const port = settings.mcpPort ?? 8787;
+    const port = settings.mcpPort ?? 8781;
     const endpoint = `http://127.0.0.1:${port}/mcp`;
     const authConfigured = !!settings.authToken;
 
