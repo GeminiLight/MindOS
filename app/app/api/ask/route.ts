@@ -5,6 +5,85 @@ import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { getModel, knowledgeBaseTools, truncate, AGENT_SYSTEM_PROMPT } from '@/lib/agent';
+import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart } from '@/lib/types';
+
+/**
+ * Convert frontend Message[] (with parts containing tool calls + results)
+ * into AI SDK ModelMessage[] that streamText expects.
+ *
+ * Frontend format:
+ *   { role: 'assistant', content: '...', parts: [TextPart, ToolCallPart(with output/state)] }
+ *
+ * AI SDK format:
+ *   { role: 'assistant', content: [TextPart, ToolCallPart(no output)] }
+ *   { role: 'tool', content: [ToolResultPart] }  // one per completed tool call
+ */
+function convertToModelMessages(messages: FrontendMessage[]): ModelMessage[] {
+  const result: ModelMessage[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      result.push({ role: 'user', content: msg.content });
+      continue;
+    }
+
+    // Skip error placeholder messages from frontend
+    if (msg.content.startsWith('__error__')) continue;
+
+    // Assistant message
+    if (!msg.parts || msg.parts.length === 0) {
+      // Plain text assistant message — no tool calls
+      if (msg.content) {
+        result.push({ role: 'assistant', content: msg.content });
+      }
+      continue;
+    }
+
+    // Build assistant message content array (text parts + tool call parts)
+    const assistantContent: Array<
+      { type: 'text'; text: string } |
+      { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
+    > = [];
+    const completedToolCalls: FrontendToolCallPart[] = [];
+
+    for (const part of msg.parts) {
+      if (part.type === 'text') {
+        if (part.text) {
+          assistantContent.push({ type: 'text', text: part.text });
+        }
+      } else if (part.type === 'tool-call') {
+        assistantContent.push({
+          type: 'tool-call',
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          input: part.input,
+        });
+        if (part.state === 'done' || part.state === 'error') {
+          completedToolCalls.push(part);
+        }
+      }
+    }
+
+    if (assistantContent.length > 0) {
+      result.push({ role: 'assistant', content: assistantContent });
+    }
+
+    // Add tool result messages for completed tool calls
+    if (completedToolCalls.length > 0) {
+      result.push({
+        role: 'tool',
+        content: completedToolCalls.map(tc => ({
+          type: 'tool-result' as const,
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          output: { type: 'text' as const, value: tc.output ?? '' },
+        })),
+      });
+    }
+  }
+
+  return result;
+}
 
 function readKnowledgeFile(filePath: string): { ok: boolean; content: string; error?: string } {
   try {
@@ -33,7 +112,7 @@ function dirnameOf(filePath?: string): string | null {
 
 export async function POST(req: NextRequest) {
   let body: {
-    messages: ModelMessage[];
+    messages: FrontendMessage[];
     currentFile?: string;
     attachedFiles?: string[];
     uploadedFiles?: Array<{ name: string; content: string }>;
@@ -148,18 +227,62 @@ export async function POST(req: NextRequest) {
 
   try {
     const model = getModel();
+    const modelMessages = convertToModelMessages(messages);
+
+    // Phase 2: Step monitoring + loop detection
+    const stepHistory: Array<{ tool: string; input: string }> = [];
+    let loopDetected = false;
+    let loopCooldown = 0; // skip detection for N steps after warning
+
     const result = streamText({
       model,
       system: systemPrompt,
-      messages,
+      messages: modelMessages,
       tools: knowledgeBaseTools,
       stopWhen: stepCountIs(stepLimit),
+
+      onStepFinish: ({ toolCalls, usage }) => {
+        if (toolCalls) {
+          for (const tc of toolCalls) {
+            stepHistory.push({ tool: tc.toolName, input: JSON.stringify(tc.input) });
+          }
+        }
+        // Loop detection: same tool + same args 3 times in a row
+        // Skip detection during cooldown to avoid repeated warnings
+        if (loopCooldown > 0) {
+          loopCooldown--;
+        } else if (stepHistory.length >= 3) {
+          const last3 = stepHistory.slice(-3);
+          if (last3.every(s => s.tool === last3[0].tool && s.input === last3[0].input)) {
+            loopDetected = true;
+          }
+        }
+        console.log(`[ask] Step ${stepHistory.length}/${stepLimit}, tokens=${usage?.totalTokens ?? '?'}`);
+      },
+
+      prepareStep: ({ messages: stepMessages }) => {
+        if (loopDetected) {
+          loopDetected = false;
+          loopCooldown = 3; // suppress re-detection for 3 steps
+          return {
+            messages: [
+              ...stepMessages,
+              {
+                role: 'user' as const,
+                content: '[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.',
+              },
+            ],
+          };
+        }
+        return {}; // no modification
+      },
+
       onError: ({ error }) => {
         console.error('[ask] Stream error:', error);
       },
     });
 
-    return result.toTextStreamResponse();
+    return result.toUIMessageStreamResponse();
   } catch (err) {
     console.error('[ask] Failed to initialize model:', err);
     return NextResponse.json(
