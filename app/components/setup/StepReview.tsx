@@ -7,7 +7,24 @@ import {
 import type { SetupState, SetupMessages, AgentInstallStatus } from './types';
 
 // ─── Restart Block ────────────────────────────────────────────────────────────
-function RestartBlock({ s, newPort }: { s: SetupMessages; newPort: number }) {
+
+/** Restart warning banner — shown in the content area */
+export function RestartBanner({ s }: { s: SetupMessages }) {
+  return (
+    <div className="space-y-2">
+      <div className="p-3 rounded-lg text-sm flex items-center gap-2"
+        style={{ background: 'color-mix(in srgb, var(--amber) 10%, transparent)', color: 'var(--amber)' }}>
+        <AlertTriangle size={14} /> {s.restartRequired}
+      </div>
+      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+        {s.restartManual} <code className="font-mono">mindos start</code>
+      </p>
+    </div>
+  );
+}
+
+/** Restart button — shown in the bottom navigation bar (same position as Complete/Saving button) */
+export function RestartButton({ s, newPort }: { s: SetupMessages; newPort: number }) {
   const [restarting, setRestarting] = useState(false);
   const [done, setDone] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
@@ -40,34 +57,23 @@ function RestartBlock({ s, newPort }: { s: SetupMessages; newPort: number }) {
 
   if (done) {
     return (
-      <div className="p-3 rounded-lg text-sm flex items-center gap-2"
-        style={{ background: 'color-mix(in srgb, var(--success) 10%, transparent)', color: 'var(--success)' }}>
+      <span className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg"
+        style={{ background: 'color-mix(in srgb, var(--success) 15%, transparent)', color: 'var(--success)' }}>
         <CheckCircle2 size={14} /> {s.restartDone}
-      </div>
+      </span>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="p-3 rounded-lg text-sm flex items-center gap-2"
-        style={{ background: 'color-mix(in srgb, var(--amber) 10%, transparent)', color: 'var(--amber)' }}>
-        <AlertTriangle size={14} /> {s.restartRequired}
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleRestart}
-          disabled={restarting}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors disabled:opacity-50"
-          style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}>
-          {restarting ? <Loader2 size={13} className="animate-spin" /> : null}
-          {restarting ? s.restarting : s.restartNow}
-        </button>
-        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-          {s.restartManual} <code className="font-mono">mindos start</code>
-        </span>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={handleRestart}
+      disabled={restarting}
+      className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+      style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}>
+      {restarting ? <Loader2 size={13} className="animate-spin" /> : null}
+      {restarting ? s.restarting : s.restartNow}
+    </button>
   );
 }
 
@@ -205,7 +211,7 @@ export default function StepReview({
           {s.completeFailed}: {error}
         </div>
       )}
-      {needsRestart && setupPhase === 'done' && <RestartBlock s={s} newPort={state.webPort} />}
+      {needsRestart && setupPhase === 'done' && <RestartBanner s={s} />}
     </div>
   );
 }
