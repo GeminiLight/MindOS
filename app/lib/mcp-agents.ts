@@ -93,6 +93,87 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
     presenceCli: 'claude-internal',
     presenceDirs: ['~/.claude-internal/'],
   },
+  'iflow-cli': {
+    name: 'iFlow CLI',
+    project: '.iflow/settings.json',
+    global: '~/.iflow/settings.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'iflow',
+    presenceDirs: ['~/.iflow/'],
+  },
+  'kimi-cli': {
+    name: 'Kimi Code',
+    project: '.kimi/mcp.json',
+    global: '~/.kimi/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'kimi',
+    presenceDirs: ['~/.kimi/'],
+  },
+  'opencode': {
+    name: 'OpenCode',
+    project: null,
+    global: '~/.config/opencode/config.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'opencode',
+    presenceDirs: ['~/.config/opencode/'],
+  },
+  'pi': {
+    name: 'Pi',
+    project: '.pi/settings.json',
+    global: '~/.pi/agent/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'pi',
+    presenceDirs: ['~/.pi/'],
+  },
+  'augment': {
+    name: 'Augment',
+    project: '.augment/settings.json',
+    global: '~/.augment/settings.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'auggie',
+    presenceDirs: ['~/.augment/'],
+  },
+  'qwen-code': {
+    name: 'Qwen Code',
+    project: '.qwen/settings.json',
+    global: '~/.qwen/settings.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'qwen',
+    presenceDirs: ['~/.qwen/'],
+  },
+  'trae-cn': {
+    name: 'Trae CN',
+    project: '.trae/mcp.json',
+    global: process.platform === 'darwin'
+      ? '~/Library/Application Support/Trae CN/User/mcp.json'
+      : '~/.config/Trae CN/User/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'trae-cli',
+    presenceDirs: [
+      '~/Library/Application Support/Trae CN/',
+      '~/.config/Trae CN/',
+    ],
+  },
+  'roo': {
+    name: 'Roo Code',
+    project: '.roo/mcp.json',
+    global: process.platform === 'darwin'
+      ? '~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json'
+      : '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceDirs: [
+      '~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
+      '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
+    ],
+  },
 };
 
 /* ── MindOS MCP Install Detection ──────────────────────────────────────── */

@@ -59,8 +59,8 @@ function opKind(tool: string): OpKind {
 const KIND_STYLE: Record<OpKind, { bg: string; text: string; border: string }> = {
   read:   { bg: 'rgba(138,180,216,0.10)', text: '#8ab4d8', border: 'rgba(138,180,216,0.25)' },
   write:  { bg: 'rgba(200,135,58,0.10)',  text: 'var(--amber)', border: 'rgba(200,135,58,0.25)' },
-  create: { bg: 'rgba(122,173,128,0.10)', text: '#7aad80', border: 'rgba(122,173,128,0.25)' },
-  delete: { bg: 'rgba(200,80,80,0.10)',   text: '#c85050', border: 'rgba(200,80,80,0.25)' },
+  create: { bg: 'rgba(122,173,128,0.10)', text: 'var(--success)', border: 'rgba(122,173,128,0.25)' },
+  delete: { bg: 'rgba(200,80,80,0.10)',   text: 'var(--error)', border: 'rgba(200,80,80,0.25)' },
   search: { bg: 'rgba(200,160,216,0.10)', text: '#c8a0d8', border: 'rgba(200,160,216,0.25)' },
   other:  { bg: 'var(--muted)', text: 'var(--muted-foreground)', border: 'var(--border)' },
 };
@@ -159,8 +159,8 @@ function OpCard({ op }: { op: AgentOp }) {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {/* result */}
           {op.result === 'ok'
-            ? <CheckCircle2 size={13} style={{ color: '#7aad80' }} />
-            : <AlertCircle size={13} style={{ color: '#c85050' }} />
+            ? <CheckCircle2 size={13} style={{ color: 'var(--success)' }} />
+            : <AlertCircle size={13} style={{ color: 'var(--error)' }} />
           }
           {/* timestamp */}
           <span className="font-display" style={{ fontSize: '0.68rem', color: 'var(--muted-foreground)', opacity: 0.6 }} title={formatTs(op.ts)}>
@@ -191,7 +191,7 @@ function OpCard({ op }: { op: AgentOp }) {
           {op.message && (
             <div className="font-display" style={{ marginTop: 6, padding: '5px 9px', borderRadius: 5, fontSize: '0.72rem',
               background: op.result === 'error' ? 'rgba(200,80,80,0.08)' : 'rgba(122,173,128,0.08)',
-              color: op.result === 'error' ? '#c85050' : '#7aad80',
+              color: op.result === 'error' ? 'var(--error)' : 'var(--success)',
               border: `1px solid ${op.result === 'error' ? 'rgba(200,80,80,0.2)' : 'rgba(122,173,128,0.2)'}`,
             }}>
               {op.message}

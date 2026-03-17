@@ -429,7 +429,8 @@ function isPortInUse(port) {
   return new Promise((resolve) => {
     const sock = createConnection({ port, host: '127.0.0.1' });
     const cleanup = (result) => { sock.destroy(); resolve(result); };
-    sock.setTimeout(500, () => cleanup(true));
+    // On localhost, timeout means no response — treat as free (same as bin/lib/port.js)
+    sock.setTimeout(500, () => cleanup(false));
     sock.once('connect', () => cleanup(true));
     sock.once('error', (err) => {
       // ECONNREFUSED = nothing listening → free; other errors = treat as in-use
@@ -628,6 +629,12 @@ async function runMcpInstallStep(mcpPort, authToken) {
     };
   });
 
+  // Sort: configured > detected > not found (stable within each group)
+  options.sort((a, b) => {
+    const rank = (o) => o.hint.includes('configured') || o.hint.includes('已配置') ? 0 : o.preselect ? 1 : 2;
+    return rank(a) - rank(b);
+  });
+
   // Multi-select using raw mode
   const selected = await (async () => {
     return new Promise((resolveSelected) => {
@@ -636,7 +643,7 @@ async function runMcpInstallStep(mcpPort, authToken) {
 
       const render = (first = false) => {
         if (!first) write(`\x1b[${options.length + 2}A\x1b[J`);
-        write(`${c.bold(uiLang === 'zh' ? '选择 Agent：' : 'Select agents:')}  ${c.dim(uiLang === 'zh' ? '(↑↓ 移动  空格 切换  A 全选  Enter 确认)' : '(↑↓ move  Space toggle  A all  Enter confirm)')}\n`);
+        write(`${c.bold(uiLang === 'zh' ? '选择 Agent：' : 'Select agents:')}  ${c.dim(uiLang === 'zh' ? '(↑↓ 移动  空格 切换  D 已检测  A 全选  Enter 确认)' : '(↑↓ move  Space toggle  D detected  A all  Enter confirm)')}\n`);
         for (let i = 0; i < options.length; i++) {
           const o = options[i];
           const check   = chosen.has(i) ? c.green('✔') : c.dim('○');
@@ -664,6 +671,11 @@ async function runMcpInstallStep(mcpPort, authToken) {
         } else if (key === 'a' || key === 'A') {
           if (chosen.size === options.length) chosen.clear();
           else options.forEach((_, i) => chosen.add(i));
+          render();
+        } else if (key === 'd' || key === 'D') {
+          // Select only detected/configured agents
+          chosen.clear();
+          options.forEach((o, i) => { if (o.preselect) chosen.add(i); });
           render();
         } else if (key === '\r' || key === '\n') {
           cleanup();
@@ -733,6 +745,12 @@ const AGENT_NAME_MAP = {
   'trae': 'trae',
   'openclaw': 'openclaw',
   'codebuddy': 'codebuddy',
+  'iflow-cli': 'iflow-cli',
+  'pi': 'pi',
+  'augment': 'augment',
+  'qwen-code': 'qwen-code',
+  'trae-cn': 'trae-cn',
+  'roo': 'roo',
 };
 
 /**
@@ -840,19 +858,38 @@ async function startGuiSetup() {
       process.exit(0);
     }
     // Service not running — start on existing port
-    usePort = await isPortInUse(existingPort)
-      ? await findFreePort(9100)  // existing port occupied by another process
-      : existingPort;
+    if (await isPortInUse(existingPort)) {
+      // Port occupied — try stopping leftover MindOS processes first
+      try {
+        const { stopMindos } = await import('../bin/lib/stop.js');
+        stopMindos();
+        // stopMindos() sends SIGTERM synchronously — wait for both web and mcp
+        // ports to free, since `start` will assertPortFree on both.
+        const { waitForPortFree } = await import('../bin/lib/gateway.js');
+        const mcpPort = config.mcpPort || 8787;
+        const [webFreed, mcpFreed] = await Promise.all([
+          waitForPortFree(existingPort),
+          waitForPortFree(mcpPort),
+        ]);
+        usePort = webFreed ? existingPort : await findFreePort(9100);
+      } catch {
+        usePort = await findFreePort(9100);
+      }
+    } else {
+      usePort = existingPort;
+    }
   }
 
   write(c.yellow(t('guiStarting') + '\n'));
 
   // Start the server in the background
+  // Pass MINDOS_WEB_PORT (not PORT) so loadConfig() won't override with the
+  // config file port — this is critical when we need a temporary port.
   const cliPath = resolve(__dirname, '../bin/cli.js');
   const child = spawn(process.execPath, [cliPath, 'start'], {
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, PORT: String(usePort) },
+    env: { ...process.env, MINDOS_WEB_PORT: String(usePort) },
   });
   child.unref();
 

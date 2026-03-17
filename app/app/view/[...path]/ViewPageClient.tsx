@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -213,13 +213,13 @@ export default function ViewPageClient({
 
           <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             {saveSuccess && (
-              <span className="text-xs flex items-center gap-1.5 font-display" style={{ color: '#7aad80' }}>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#7aad80' }} />
+              <span className="text-xs flex items-center gap-1.5 font-display" style={{ color: 'var(--success)' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
                 <span className="hidden sm:inline">saved</span>
               </span>
             )}
             {saveError && (
-              <span className="text-xs text-red-400 hidden sm:inline">{saveError}</span>
+              <span className="text-xs text-error hidden sm:inline">{saveError}</span>
             )}
 
             {/* Graph toggle — only for md files, hidden when graph plugin is disabled */}
@@ -233,8 +233,8 @@ export default function ViewPageClient({
                 }}
                 title={effectiveGraphMode ? 'Switch to document view' : 'Switch to Wiki Graph'}
               >
-                <span>🕸️</span>
-                <span className="hidden sm:inline">Graph</span>
+                {effectiveGraphMode ? <FileText size={13} /> : <Share2 size={13} />}
+                <span className="hidden sm:inline">{effectiveGraphMode ? 'Doc' : 'Graph'}</span>
               </button>
             )}
 
@@ -244,12 +244,12 @@ export default function ViewPageClient({
                 onClick={handleToggleRaw}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
                 style={{
-                  background: effectiveUseRaw ? 'var(--muted)' : `${'var(--amber)'}22`,
-                  color: effectiveUseRaw ? 'var(--muted-foreground)' : 'var(--amber)',
+                  background: effectiveUseRaw ? `${'var(--amber)'}22` : 'var(--muted)',
+                  color: effectiveUseRaw ? 'var(--amber)' : 'var(--muted-foreground)',
                 }}
                 title={effectiveUseRaw ? `Switch to ${registryRenderer?.name}` : 'View raw'}
               >
-                <LayoutTemplate size={13} />
+                {effectiveUseRaw ? <LayoutTemplate size={13} /> : <Code size={13} />}
                 <span className="hidden sm:inline">{effectiveUseRaw ? registryRenderer.name : 'Raw'}</span>
               </button>
             )}

@@ -22,8 +22,8 @@ export function getStatusLevel(status: SyncStatus | null, syncing: boolean): Sta
 export const DOT_COLORS: Record<StatusLevel, string> = {
   synced: 'bg-green-500',
   unpushed: 'bg-yellow-500',
-  conflicts: 'bg-red-500',       // #6 — conflicts more prominent than unpushed
-  error: 'bg-red-500',
+  conflicts: 'bg-error',       // #6 — conflicts more prominent than unpushed
+  error: 'bg-error',
   off: 'bg-muted-foreground/40',
   syncing: 'bg-blue-500',
 };
@@ -232,7 +232,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       <div className="flex items-center gap-1 shrink-0 ml-2">
         {/* #2 — sync result flash */}
         {(syncResult === 'success' || toast) && <CheckCircle2 size={12} className="text-green-500 animate-in fade-in duration-200" />}
-        {syncResult === 'error' && <XCircle size={12} className="text-red-500 animate-in fade-in duration-200" />}
+        {syncResult === 'error' && <XCircle size={12} className="text-error animate-in fade-in duration-200" />}
         <button
           onClick={handleSyncNow}
           disabled={syncing}

@@ -36,7 +36,7 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
             <button
               type="button"
               onClick={() => onDelete(s.id)}
-              className="p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-muted"
+              className="p-1 rounded text-muted-foreground hover:text-error hover:bg-muted"
               title="Delete session"
             >
               <Trash2 size={12} />

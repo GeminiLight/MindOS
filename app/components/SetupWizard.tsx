@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Sparkles, Globe, BookOpen, FileText, Copy, Check, RefreshCw,
   Loader2, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
-  XCircle, Zap, Brain, SkipForward, Info,
+  XCircle, Zap, Brain, SkipForward, Info, ChevronDown,
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { Field, Input, Select, ApiKeyInput } from '@/components/settings/Primitives';
@@ -147,13 +147,30 @@ function PortField({
   onCheckPort: (port: number) => void;
   s: { portChecking: string; portInUse: (p: number) => string; portSuggest: (p: number) => string; portAvailable: string; portSelf: string };
 }) {
+  // Debounce auto-check on input change (500ms)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = parseInt(e.target.value, 10) || value;
+    onChange(v);
+    clearTimeout(timerRef.current);
+    if (v >= 1024 && v <= 65535) {
+      timerRef.current = setTimeout(() => onCheckPort(v), 500);
+    }
+  };
+  const handleBlur = () => {
+    // Cancel pending debounce — onBlur fires the check immediately
+    clearTimeout(timerRef.current);
+    onCheckPort(value);
+  };
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
   return (
     <Field label={label} hint={hint}>
       <div className="space-y-1.5">
         <Input
           type="number" min={1024} max={65535} value={value}
-          onChange={e => onChange(parseInt(e.target.value, 10) || value)}
-          onBlur={() => onCheckPort(value)}
+          onChange={handleChange}
+          onBlur={handleBlur}
         />
         {status.checking && (
           <p className="text-xs flex items-center gap-1" style={{ color: 'var(--muted-foreground)' }}>
@@ -217,6 +234,7 @@ function Step1({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [showTemplatePickerAnyway, setShowTemplatePickerAnyway] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Debounced autocomplete
@@ -259,7 +277,12 @@ function Step1({
         body: JSON.stringify({ path: state.mindRoot }),
       })
         .then(r => r.json())
-        .then(d => setPathInfo(d))
+        .then(d => {
+          setPathInfo(d);
+          setShowTemplatePickerAnyway(false);
+          // Non-empty directory: default to skip template (user can opt-in to merge)
+          if (d?.exists && !d.empty) update('template', '');
+        })
         .catch(() => setPathInfo(null));
     }, 600);
     return () => clearTimeout(timer);
@@ -338,12 +361,45 @@ function Step1({
             </div>
           )}
         </div>
-        {pathInfo?.exists && !pathInfo.empty && (
-          <p className="text-xs flex items-center gap-1 mt-1.5" style={{ color: 'var(--amber)' }}>
-            <AlertTriangle size={11} /> {s.kbPathExists(pathInfo.count)}
-          </p>
+        {/* Recommended default — one-click accept */}
+        {state.mindRoot !== placeholder && placeholder !== s.kbPathDefault && (
+          <button type="button"
+            onClick={() => update('mindRoot', placeholder)}
+            className="mt-1.5 px-2.5 py-1 text-xs rounded-md border transition-colors hover:bg-muted/50"
+            style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>
+            {s.kbPathUseDefault(placeholder)}
+          </button>
         )}
       </Field>
+      {/* Template selection — conditional on directory state */}
+      {pathInfo && pathInfo.exists && !pathInfo.empty && !showTemplatePickerAnyway ? (
+        <div>
+          <label className="text-sm text-foreground font-medium mb-3 block">{s.template}</label>
+          <div className="rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--amber)', background: 'rgba(245,158,11,0.06)' }}>
+            <p style={{ color: 'var(--amber)' }}>
+              {s.kbPathHasFiles(pathInfo.count)}
+            </p>
+            <div className="flex gap-2 mt-2">
+              <button type="button"
+                onClick={() => update('template', '')}
+                className="px-2.5 py-1 text-xs rounded-md border transition-colors"
+                style={{
+                  borderColor: 'var(--amber)',
+                  color: state.template === '' ? 'var(--background)' : 'var(--amber)',
+                  background: state.template === '' ? 'var(--amber)' : 'transparent',
+                }}>
+                {state.template === '' ? <>{s.kbTemplateSkip} ✓</> : s.kbTemplateSkip}
+              </button>
+              <button type="button"
+                onClick={() => setShowTemplatePickerAnyway(true)}
+                className="px-2.5 py-1 text-xs rounded-md border transition-colors hover:bg-muted/50"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
+                {s.kbTemplateMerge}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div>
         <label className="text-sm text-foreground font-medium mb-3 block">{s.template}</label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -368,6 +424,7 @@ function Step1({
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -507,6 +564,9 @@ function Step5({
     });
   };
 
+  const [showOtherAgents, setShowOtherAgents] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const getEffectiveTransport = (agent: AgentEntry) => {
     if (agentTransport === 'auto') return agent.preferredTransport;
     return agentTransport;
@@ -528,7 +588,7 @@ function Step5({
       );
       if (st.state === 'error') return (
         <span className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
-          style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+          style={{ background: 'rgba(200,80,80,0.1)', color: 'var(--error)' }}>
           <XCircle size={10} /> {s.agentStatusError}
           {st.message && <span className="ml-1 text-[10px]">({st.message})</span>}
         </span>
@@ -543,16 +603,44 @@ function Step5({
     if (agent.present) return (
       <span className="text-[11px] px-1.5 py-0.5 rounded"
         style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
-        {s.agentDetected ?? 'detected'}
+        {s.agentDetected}
       </span>
     );
     return (
       <span className="text-[11px] px-1.5 py-0.5 rounded"
         style={{ background: 'rgba(100,100,120,0.1)', color: 'var(--muted-foreground)' }}>
-        {s.agentNotFound ?? s.agentNotInstalled}
+        {s.agentNotFound}
       </span>
     );
   };
+
+  const { detected, other } = useMemo(() => ({
+    detected: agents.filter(a => a.installed || a.present),
+    other: agents.filter(a => !a.installed && !a.present),
+  }), [agents]);
+
+  const renderAgentRow = (agent: AgentEntry, i: number) => (
+    <label key={agent.key}
+      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+      style={{
+        background: i % 2 === 0 ? 'var(--card)' : 'transparent',
+        borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+      }}>
+      <input
+        type="checkbox"
+        checked={selectedAgents.has(agent.key)}
+        onChange={() => toggleAgent(agent.key)}
+        className="accent-amber-500"
+        disabled={agentStatuses[agent.key]?.state === 'installing'}
+      />
+      <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
+      <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+        style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
+        {getEffectiveTransport(agent)}
+      </span>
+      {getStatusBadge(agent.key, agent)}
+    </label>
+  );
 
   return (
     <div className="space-y-5">
@@ -568,58 +656,107 @@ function Step5({
         </p>
       ) : (
         <>
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            {agents.map((agent, i) => (
-              <label key={agent.key}
-                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                style={{
-                  background: i % 2 === 0 ? 'var(--card)' : 'transparent',
-                  borderTop: i > 0 ? '1px solid var(--border)' : undefined,
-                }}>
-                <input
-                  type="checkbox"
-                  checked={selectedAgents.has(agent.key)}
-                  onChange={() => toggleAgent(agent.key)}
-                  className="accent-amber-500"
-                  disabled={agentStatuses[agent.key]?.state === 'installing'}
-                />
-                <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                  style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
-                  {getEffectiveTransport(agent)}
-                </span>
-                {getStatusBadge(agent.key, agent)}
-              </label>
-            ))}
+          {/* Badge legend */}
+          <div className="flex items-center gap-4 text-[10px]" style={{ color: 'var(--muted-foreground)' }}>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
+              {s.badgeInstalled}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#f59e0b' }} />
+              {s.badgeDetected}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--muted-foreground)' }} />
+              {s.badgeNotFound}
+            </span>
           </div>
-          {/* Skill auto-install hint */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-            style={{ background: 'rgba(100,100,120,0.06)', color: 'var(--muted-foreground)' }}>
-            <Brain size={13} className="shrink-0" />
-            <span>{s.skillAutoHint(template === 'zh' ? 'mindos-zh' : 'mindos')}</span>
+
+          {/* Detected agents — always visible */}
+          {detected.length > 0 ? (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+              {detected.map((agent, i) => renderAgentRow(agent, i))}
+            </div>
+          ) : (
+            <p className="text-xs py-2" style={{ color: 'var(--muted-foreground)' }}>
+              {s.agentNoneDetected}
+            </p>
+          )}
+          {/* Other agents — collapsed by default */}
+          {other.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowOtherAgents(!showOtherAgents)}
+                className="flex items-center gap-1.5 text-xs py-1.5 transition-colors"
+                style={{ color: 'var(--muted-foreground)' }}>
+                <ChevronDown size={12} className={`transition-transform ${showOtherAgents ? 'rotate-180' : ''}`} />
+                {s.agentShowMore(other.length)}
+              </button>
+              {showOtherAgents && (
+                <div className="rounded-xl border overflow-hidden mt-1" style={{ borderColor: 'var(--border)' }}>
+                  {other.map((agent, i) => renderAgentRow(agent, i))}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Skill context + auto-install hint */}
+          <div className="space-y-1.5">
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {s.skillWhat}
+            </p>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+              style={{ background: 'rgba(100,100,120,0.06)', color: 'var(--muted-foreground)' }}>
+              <Brain size={13} className="shrink-0" />
+              <span>{s.skillAutoHint(template === 'zh' ? 'mindos-zh' : 'mindos')}</span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label={s.agentTransport}>
-              <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'auto' | 'stdio' | 'http')}>
-                <option value="auto">{s.agentTransportAuto}</option>
-                <option value="stdio">{settingsMcp.transportStdio}</option>
-                <option value="http">{settingsMcp.transportHttp}</option>
-              </Select>
-            </Field>
-            <Field label={s.agentScope}>
-              <Select value={agentScope} onChange={e => setAgentScope(e.target.value as 'global' | 'project')}>
-                <option value="global">{settingsMcp.global}</option>
-                <option value="project">{settingsMcp.project}</option>
-              </Select>
-            </Field>
+          {/* Advanced options — collapsed by default */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-1.5 text-xs py-1.5 transition-colors"
+              style={{ color: 'var(--muted-foreground)' }}>
+              <ChevronDown size={12} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              {s.agentAdvanced}
+            </button>
+            {showAdvanced && (
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <Field label={s.agentTransport}>
+                  <Select value={agentTransport} onChange={e => setAgentTransport(e.target.value as 'auto' | 'stdio' | 'http')}>
+                    <option value="auto">{s.agentTransportAuto}</option>
+                    <option value="stdio">{settingsMcp.transportStdio}</option>
+                    <option value="http">{settingsMcp.transportHttp}</option>
+                  </Select>
+                </Field>
+                <Field label={s.agentScope}>
+                  <Select value={agentScope} onChange={e => setAgentScope(e.target.value as 'global' | 'project')}>
+                    <option value="global">{s.agentScopeGlobal}</option>
+                    <option value="project">{s.agentScopeProject}</option>
+                  </Select>
+                </Field>
+              </div>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={() => setSelectedAgents(new Set())}
-            className="text-xs underline mt-1"
-            style={{ color: 'var(--muted-foreground)' }}>
-            {s.agentSkipLater}
-          </button>
+          <div className="flex gap-2 mt-1">
+            <button
+              type="button"
+              onClick={() => setSelectedAgents(new Set(
+                agents.filter(a => a.installed || a.present).map(a => a.key)
+              ))}
+              className="text-xs px-2.5 py-1 rounded-md border transition-colors hover:bg-muted/50"
+              style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>
+              {s.agentSelectDetected}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedAgents(new Set())}
+              className="text-xs px-2.5 py-1 rounded-md border transition-colors hover:bg-muted/50"
+              style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
+              {s.agentSkipLater}
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -687,8 +824,8 @@ function RestartBlock({ s, newPort }: { s: ReturnType<typeof useLocale>['t']['se
 
 // ─── Step 6: Review ───────────────────────────────────────────────────────────
 function Step6({
-  state, selectedAgents, agentStatuses, onRetryAgent, error, needsRestart, maskKey, s,
-  skillInstallResult,
+  state, selectedAgents, agentStatuses, onRetryAgent, error, needsRestart, s,
+  skillInstallResult, setupPhase,
 }: {
   state: SetupState;
   selectedAgents: Set<string>;
@@ -696,88 +833,90 @@ function Step6({
   onRetryAgent: (key: string) => void;
   error: string;
   needsRestart: boolean;
-  maskKey: (key: string) => string;
   s: ReturnType<typeof useLocale>['t']['setup'];
   skillInstallResult: { ok?: boolean; skill?: string; error?: string } | null;
+  setupPhase: 'review' | 'saving' | 'agents' | 'skill' | 'done';
 }) {
-  const skillName = state.template === 'zh' ? 'mindos-zh' : 'mindos';
-  const rows: [string, string][] = [
+  const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
+
+  // Compact config summary (only key info)
+  const summaryRows: [string, string][] = [
     [s.kbPath, state.mindRoot],
-    [s.template, state.template || '—'],
-    [s.aiProvider, state.provider === 'skip' ? s.aiSkipTitle : state.provider],
-    ...(state.provider !== 'skip' ? [
-      [s.apiKey, maskKey(state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey)] as [string, string],
-      [s.model, state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel] as [string, string],
-    ] : []),
-    [s.webPort, String(state.webPort)],
-    [s.mcpPort, String(state.mcpPort)],
-    [s.authToken, state.authToken || '—'],
-    [s.webPassword, state.webPassword ? '••••••••' : '(none)'],
-    [s.agentToolsTitle, selectedAgents.size > 0 ? Array.from(selectedAgents).join(', ') : '—'],
-    [s.skillLabel, skillName],
+    [s.webPort, `${state.webPort} / ${state.mcpPort}`],
+    [s.agentToolsTitle, selectedAgents.size > 0 ? s.agentCountSummary(selectedAgents.size) : '—'],
   ];
 
-  const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
-  const successAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'ok');
+  // Progress stepper phases
+  type Phase = typeof setupPhase;
+  const phases: { key: Phase; label: string }[] = [
+    { key: 'saving', label: s.phaseSaving },
+    { key: 'agents', label: s.phaseAgents },
+    { key: 'skill', label: s.phaseSkill },
+    { key: 'done', label: s.phaseDone },
+  ];
+  const phaseOrder: Phase[] = ['saving', 'agents', 'skill', 'done'];
+  const currentIdx = phaseOrder.indexOf(setupPhase);
 
   return (
     <div className="space-y-5">
-      <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
+      {/* Compact config summary */}
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-        {rows.map(([label, value], i) => (
-          <div key={i} className="flex items-center justify-between px-4 py-3 text-sm"
+        {summaryRows.map(([label, value], i) => (
+          <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm"
             style={{
               background: i % 2 === 0 ? 'var(--card)' : 'transparent',
               borderTop: i > 0 ? '1px solid var(--border)' : undefined,
             }}>
             <span style={{ color: 'var(--muted-foreground)' }}>{label}</span>
-            <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>{value}</span>
+            <span className="font-mono text-xs truncate ml-4" style={{ color: 'var(--foreground)' }}>{value}</span>
           </div>
         ))}
       </div>
 
-      {/* Agent verification results */}
-      {successAgents.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>{s.reviewInstallResults}</p>
-          {successAgents.map(([key, st]) => (
-            <div key={key} className="flex items-center gap-2 text-xs px-3 py-1.5 rounded"
-              style={{ background: 'rgba(34,197,94,0.06)' }}>
-              <CheckCircle2 size={11} className="text-green-500 shrink-0" />
-              <span style={{ color: 'var(--foreground)' }}>{key}</span>
-              <span className="font-mono text-[10px] px-1 py-0.5 rounded"
-                style={{ background: 'rgba(100,100,120,0.08)', color: 'var(--muted-foreground)' }}>
-                {st.transport || 'stdio'}
-              </span>
-              {st.transport === 'http' ? (
-                st.verified ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
-                    {s.agentVerified}
-                  </span>
-                ) : (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'rgba(239,168,68,0.12)', color: '#f59e0b' }}
-                    title={st.verifyError}>
-                    {s.agentUnverified}
-                  </span>
-                )
-              ) : (
-                <span className="text-[10px]" style={{ color: 'var(--muted-foreground)' }}>
-                  {s.agentVerifyNote}
+      {/* Before submit: review hint */}
+      {setupPhase === 'review' && (
+        <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
+      )}
+
+      {/* Progress stepper — visible during/after setup */}
+      {setupPhase !== 'review' && (
+        <div className="space-y-2 py-2">
+          {phases.map(({ key, label }, i) => {
+            const idx = phaseOrder.indexOf(key);
+            const isDone = currentIdx > idx || (key === 'done' && setupPhase === 'done');
+            const isActive = setupPhase === key && key !== 'done';
+            const isPending = currentIdx < idx;
+            return (
+              <div key={key} className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px]"
+                  style={{
+                    background: isDone ? 'rgba(34,197,94,0.15)' : isActive ? 'rgba(200,135,30,0.15)' : 'var(--muted)',
+                    color: isDone ? '#22c55e' : isActive ? 'var(--amber)' : 'var(--muted-foreground)',
+                  }}>
+                  {isDone ? <CheckCircle2 size={12} /> : isActive ? <Loader2 size={12} className="animate-spin" /> : (i + 1)}
+                </div>
+                <span className="text-sm" style={{
+                  color: isDone ? '#22c55e' : isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
+                  fontWeight: isActive ? 500 : 400,
+                  opacity: isPending ? 0.5 : 1,
+                }}>
+                  {label}
                 </span>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {failedAgents.length > 0 && (
-        <div className="p-3 rounded-lg space-y-2" style={{ background: 'rgba(239,68,68,0.08)' }}>
-          <p className="text-xs font-medium" style={{ color: '#ef4444' }}>{s.reviewInstallResults}</p>
+      {/* Agent failures — expandable */}
+      {failedAgents.length > 0 && setupPhase === 'done' && (
+        <div className="p-3 rounded-lg space-y-2" style={{ background: 'rgba(200,80,80,0.08)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--error)' }}>
+            {s.agentFailedCount(failedAgents.length)}
+          </p>
           {failedAgents.map(([key, st]) => (
             <div key={key} className="flex items-center justify-between gap-2">
-              <span className="text-xs flex items-center gap-1" style={{ color: '#ef4444' }}>
+              <span className="text-xs flex items-center gap-1" style={{ color: 'var(--error)' }}>
                 <XCircle size={11} /> {key}{st.message ? ` — ${st.message}` : ''}
               </span>
               <button
@@ -785,7 +924,7 @@ function Step6({
                 onClick={() => onRetryAgent(key)}
                 disabled={st.state === 'installing'}
                 className="text-xs px-2 py-0.5 rounded border transition-colors disabled:opacity-40"
-                style={{ borderColor: '#ef4444', color: '#ef4444' }}>
+                style={{ borderColor: 'var(--error)', color: 'var(--error)' }}>
                 {st.state === 'installing' ? <Loader2 size={10} className="animate-spin inline" /> : s.retryAgent}
               </button>
             </div>
@@ -793,44 +932,45 @@ function Step6({
           <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{s.agentFailureNote}</p>
         </div>
       )}
-      {/* Skill install result */}
-      {skillInstallResult && (
-        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
-          skillInstallResult.ok ? '' : ''
-        }`} style={{
-          background: skillInstallResult.ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+
+      {/* Skill result — compact */}
+      {skillInstallResult && setupPhase === 'done' && (
+        <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg" style={{
+          background: skillInstallResult.ok ? 'rgba(34,197,94,0.06)' : 'rgba(200,80,80,0.06)',
         }}>
           {skillInstallResult.ok ? (
             <><CheckCircle2 size={11} className="text-green-500 shrink-0" />
             <span style={{ color: 'var(--foreground)' }}>{s.skillInstalled} — {skillInstallResult.skill}</span></>
           ) : (
-            <><XCircle size={11} className="text-red-500 shrink-0" />
-            <span style={{ color: '#ef4444' }}>{s.skillFailed}{skillInstallResult.error ? `: ${skillInstallResult.error}` : ''}</span></>
+            <><XCircle size={11} className="text-error shrink-0" />
+            <span style={{ color: 'var(--error)' }}>{s.skillFailed}{skillInstallResult.error ? `: ${skillInstallResult.error}` : ''}</span></>
           )}
         </div>
       )}
+
       {error && (
-        <div className="p-3 rounded-lg text-sm text-red-500" style={{ background: 'rgba(239,68,68,0.1)' }}>
+        <div className="p-3 rounded-lg text-sm text-error" style={{ background: 'rgba(200,80,80,0.1)' }}>
           {s.completeFailed}: {error}
         </div>
       )}
-      {needsRestart && <RestartBlock s={s} newPort={state.webPort} />}
+      {needsRestart && setupPhase === 'done' && <RestartBlock s={s} newPort={state.webPort} />}
     </div>
   );
 }
 
 // ─── Step dots ────────────────────────────────────────────────────────────────
-function StepDots({ step, setStep, stepTitles }: {
+function StepDots({ step, setStep, stepTitles, disabled }: {
   step: number;
   setStep: (s: number) => void;
   stepTitles: readonly string[];
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 mb-8">
       {stepTitles.map((title: string, i: number) => (
         <div key={i} className="flex items-center gap-2">
           {i > 0 && <div className="w-8 h-px" style={{ background: i <= step ? 'var(--amber)' : 'var(--border)' }} />}
-          <button onClick={() => i < step && setStep(i)} className="flex items-center gap-1.5" disabled={i > step}>
+          <button onClick={() => !disabled && i < step && setStep(i)} className="flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-60" disabled={disabled || i > step}>
             <div
               className="w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-colors"
               style={{
@@ -888,6 +1028,7 @@ export default function SetupWizard() {
   const [agentScope, setAgentScope] = useState<'global' | 'project'>('global');
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentInstallStatus>>({});
   const [skillInstallResult, setSkillInstallResult] = useState<{ ok?: boolean; skill?: string; error?: string } | null>(null);
+  const [setupPhase, setSetupPhase] = useState<'review' | 'saving' | 'agents' | 'skill' | 'done'>('review');
 
   // Load existing config as defaults on mount, generate token if none exists
   useEffect(() => {
@@ -991,11 +1132,6 @@ export default function SetupWizard() {
     }
   }, []);
 
-  const maskKey = (key: string) => {
-    if (!key) return '(not set)';
-    if (key.length <= 8) return '•••';
-    return key.slice(0, 6) + '•••' + key.slice(-3);
-  };
 
   const portConflict = state.webPort === state.mcpPort;
 
@@ -1016,6 +1152,7 @@ export default function SetupWizard() {
   const handleComplete = async () => {
     setSubmitting(true);
     setError('');
+    setSetupPhase('saving');
     let restartNeeded = false;
 
     // 1. Save setup config
@@ -1046,11 +1183,13 @@ export default function SetupWizard() {
       if (restartNeeded) setNeedsRestart(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setSetupPhase('review');
       setSubmitting(false);
       return;
     }
 
     // 2. Install agents after config saved
+    setSetupPhase('agents');
     if (selectedAgents.size > 0) {
       const initialStatuses: Record<string, AgentInstallStatus> = {};
       for (const key of selectedAgents) initialStatuses[key] = { state: 'installing' };
@@ -1096,6 +1235,7 @@ export default function SetupWizard() {
     }
 
     // 3. Install skill to agents
+    setSetupPhase('skill');
     const skillName = state.template === 'zh' ? 'mindos-zh' : 'mindos';
     try {
       const skillRes = await fetch('/api/mcp/install-skill', {
@@ -1111,6 +1251,7 @@ export default function SetupWizard() {
 
     setSubmitting(false);
     setCompleted(true);
+    setSetupPhase('done');
 
     if (restartNeeded) {
       // Config changed requiring restart — stay on page, show restart block
@@ -1169,7 +1310,7 @@ export default function SetupWizard() {
         </div>
 
         <div className="flex justify-center">
-          <StepDots step={step} setStep={setStep} stepTitles={s.stepTitles} />
+          <StepDots step={step} setStep={setStep} stepTitles={s.stepTitles} disabled={submitting || completed} />
         </div>
 
         <h2 className="text-lg font-semibold mb-5" style={{ color: 'var(--foreground)' }}>
@@ -1209,8 +1350,9 @@ export default function SetupWizard() {
             state={state} selectedAgents={selectedAgents}
             agentStatuses={agentStatuses} onRetryAgent={retryAgent}
             error={error} needsRestart={needsRestart}
-            maskKey={maskKey} s={s}
+            s={s}
             skillInstallResult={skillInstallResult}
+            setupPhase={setupPhase}
           />
         )}
 
@@ -1218,7 +1360,7 @@ export default function SetupWizard() {
         <div className="flex items-center justify-between mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={() => setStep(step - 1)}
-            disabled={step === 0}
+            disabled={step === 0 || submitting || completed}
             className="flex items-center gap-1 px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ color: 'var(--foreground)' }}>
             <ChevronLeft size={14} /> {s.back}

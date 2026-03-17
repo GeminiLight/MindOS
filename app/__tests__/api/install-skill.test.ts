@@ -224,4 +224,49 @@ describe('POST /api/mcp/install-skill — command format', () => {
     const body = await res.json();
     expect(body.agents).toEqual(['claude-code']);
   });
+
+  it('passes new agents (augment, roo, trae-cn) as -a flags', async () => {
+    const { POST } = await importRoute();
+    await POST(makeReq({ skill: 'mindos', agents: ['augment', 'roo', 'trae-cn'] }));
+
+    const cmd = execSyncMock.mock.calls[0][0] as string;
+    expect(cmd).toContain('-a augment');
+    expect(cmd).toContain('-a roo');
+    expect(cmd).toContain('-a trae-cn');
+    expect(cmd).not.toContain('-a universal');
+  });
+
+  it('treats kimi-cli and opencode as universal (filtered out)', async () => {
+    const { POST } = await importRoute();
+    await POST(makeReq({ skill: 'mindos', agents: ['kimi-cli', 'opencode'] }));
+
+    const cmd = execSyncMock.mock.calls[0][0] as string;
+    expect(cmd).toContain('-a universal');
+    expect(cmd).not.toContain('-a kimi-cli');
+    expect(cmd).not.toContain('-a opencode');
+  });
+});
+
+/* ── AGENT_NAME_MAP completeness ─────────────────────────────────── */
+
+describe('AGENT_NAME_MAP completeness', () => {
+  it('every non-universal MCP agent key has a mapping or is in UNIVERSAL_AGENTS', async () => {
+    // Import MCP_AGENTS from the source of truth
+    const { MCP_AGENTS } = await import('../../lib/mcp-agents');
+    const { POST } = await importRoute();
+
+    // We can't directly access AGENT_NAME_MAP, but we can verify behavior:
+    // Every non-universal agent should produce -a flags (not be silently dropped)
+    const nonUniversalKeys = Object.keys(MCP_AGENTS).filter(
+      k => !['amp', 'cline', 'codex', 'cursor', 'gemini-cli', 'github-copilot', 'kimi-cli', 'opencode', 'warp'].includes(k)
+    );
+
+    for (const key of nonUniversalKeys) {
+      execSyncMock.mockClear();
+      await POST(makeReq({ skill: 'mindos', agents: [key] }));
+      const cmd = execSyncMock.mock.calls[0]?.[0] as string;
+      // Should have -a <something>, not fall through to -a universal
+      expect(cmd, `Agent '${key}' should produce an -a flag`).toContain(`-a ${key}`);
+    }
+  });
 });

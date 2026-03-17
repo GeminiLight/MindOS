@@ -310,7 +310,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           )}
 
           {upload.uploadError && (
-            <div className="px-4 pb-1 text-xs text-red-400">{upload.uploadError}</div>
+            <div className="px-4 pb-1 text-xs text-error">{upload.uploadError}</div>
           )}
 
           {/* @-mention dropdown */}

@@ -560,9 +560,11 @@
 - **Sub**
   - zh: 适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…
   - en: Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…
-- **CLI Alternative**
-  - zh: 或手动安装：`npm i -g @geminilight/mindos && mindos onboard`，30 秒浏览器可用
-  - en: Or install manually: `npm i -g @geminilight/mindos && mindos onboard` — ready in 30 seconds
+- **CLI Card** (divider + copyable card, matches Agent Prompt card style)
+  - Divider: zh: —— 或手动安装 —— / en: —— or install manually ——
+  - Badge: CLI
+  - Command: `npm i -g @geminilight/mindos && mindos onboard`
+  - Copy Button: zh: 复制 / 已复制 / en: Copy / Copied!
 - **Badge**
   - zh: 安装 Prompt
   - en: Install Prompt

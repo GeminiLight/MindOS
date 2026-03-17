@@ -92,9 +92,9 @@ function renderBody(body: string): string {
 function StatusIcon({ status }: { status: StepStatus }) {
   if (status === 'pending')  return <Circle size={15} style={{ color: 'var(--border)' }} />;
   if (status === 'running')  return <Loader2 size={15} style={{ color: 'var(--amber)', animation: 'spin 1s linear infinite' }} />;
-  if (status === 'done')     return <CheckCircle2 size={15} style={{ color: '#7aad80' }} />;
+  if (status === 'done')     return <CheckCircle2 size={15} style={{ color: 'var(--success)' }} />;
   if (status === 'skipped')  return <SkipForward size={15} style={{ color: 'var(--muted-foreground)', opacity: .5 }} />;
-  return <AlertCircle size={15} style={{ color: '#c85050' }} />;
+  return <AlertCircle size={15} style={{ color: 'var(--error)' }} />;
 }
 
 const STATUS_BORDER: Record<StepStatus, string> = {

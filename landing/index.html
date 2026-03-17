@@ -1076,8 +1076,6 @@
                         <h3 data-zh>发给你的 Agent，自动安装一切</h3><h3 data-en>Send to Your Agent — Auto-Install Everything</h3>
                         <p class="qs-phase-sub" data-zh>适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…</p>
                         <p class="qs-phase-sub" data-en>Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…</p>
-                        <p class="qs-phase-sub" style="opacity:0.55;font-size:0.8rem;margin-top:0.25rem;" data-zh>或手动安装：<code>npm i -g @geminilight/mindos && mindos onboard</code></p>
-                        <p class="qs-phase-sub" style="opacity:0.55;font-size:0.8rem;margin-top:0.25rem;" data-en>Or install manually: <code>npm i -g @geminilight/mindos && mindos onboard</code></p>
                     </div>
                 </div>
                 <div class="qs-prompt-card">
@@ -1093,6 +1091,23 @@
                     <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1rem; line-height: 1.7; padding: 1.25rem;">
                         <span data-zh>帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</span>
                         <span data-en>Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.</span>
+                    </div>
+                </div>
+                <div class="qs-or-divider" style="text-align:center;margin:1rem 0;opacity:0.5;font-size:0.85rem;letter-spacing:0.1em;">
+                    <span data-zh>—— 或手动安装 ——</span><span data-en>—— or install manually ——</span>
+                </div>
+                <div class="qs-prompt-card">
+                    <div class="qs-prompt-bar">
+                        <div class="qs-terminal-meta">
+                            <div class="qs-prompt-badge">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                <span>CLI</span>
+                            </div>
+                        </div>
+                        <button class="qs-copy-btn" id="copy-cli-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
+                    </div>
+                    <div class="qs-prompt-body" id="cli-install-text" style="font-size: 0.95rem; line-height: 1.7; padding: 1.25rem; font-family: 'IBM Plex Mono', ui-monospace, monospace;">
+                        npm i -g @geminilight/mindos && mindos onboard
                     </div>
                 </div>
                 <div class="qs-auto-steps">

@@ -18,7 +18,7 @@ export function Input({ className = '', ...props }: React.InputHTMLAttributes<HT
   return (
     <input
       {...props}
-      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 ${className}`}
+      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 ${className}`}
     />
   );
 }
@@ -27,7 +27,7 @@ export function Select({ className = '', ...props }: React.SelectHTMLAttributes<
   return (
     <select
       {...props}
-      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 ${className}`}
+      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 ${className}`}
     />
   );
 }
@@ -53,7 +53,7 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder ?? 'sk-...'}
       disabled={disabled}
-      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
       onFocus={() => { if (isMasked) onChange(''); }}
     />
   );
