@@ -95,25 +95,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Sync already configured' }, { status: 400 });
         }
 
-        // Build the effective remote URL (inject token for HTTPS)
-        let effectiveRemote = remote;
-        if (isHTTPS && body.token) {
-          try {
-            const urlObj = new URL(remote);
-            urlObj.username = 'oauth2';
-            urlObj.password = body.token;
-            effectiveRemote = urlObj.toString();
-          } catch {
-            return NextResponse.json({ error: 'Invalid remote URL' }, { status: 400 });
-          }
-        }
-
         const branch = body.branch?.trim() || 'main';
 
-        // Call CLI's sync init via execFile (avoids module resolution issues with Turbopack)
+        // Call CLI's sync init — pass clean remote + token separately (never embed token in URL)
         try {
           const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
-          const args = ['sync', 'init', '--non-interactive', '--remote', effectiveRemote, '--branch', branch];
+          const args = ['sync', 'init', '--non-interactive', '--remote', remote, '--branch', branch];
+          if (body.token) args.push('--token', body.token);
 
           await new Promise<void>((res, rej) => {
             execFile('node', [cliPath, ...args], { timeout: 30000 }, (err, stdout, stderr) => {
@@ -132,23 +120,20 @@ export async function POST(req: NextRequest) {
         if (!isGitRepo(mindRoot)) {
           return NextResponse.json({ error: 'Not a git repository' }, { status: 400 });
         }
-        // Pull
-        try { execSync('git pull --rebase --autostash', { cwd: mindRoot, stdio: 'pipe' }); } catch {
-          try { execSync('git rebase --abort', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
-          try { execSync('git pull --no-rebase', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+        // Delegate to CLI for unified conflict handling
+        try {
+          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
+          await new Promise<void>((res, rej) => {
+            execFile('node', [cliPath, 'sync', 'now'], { timeout: 60000 }, (err, stdout, stderr) => {
+              if (err) rej(new Error(stderr?.trim() || err.message));
+              else res();
+            });
+          });
+          return NextResponse.json({ ok: true });
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
-        // Commit + push
-        execSync('git add -A', { cwd: mindRoot, stdio: 'pipe' });
-        const status = execSync('git status --porcelain', { cwd: mindRoot, encoding: 'utf-8' }).trim();
-        if (status) {
-          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-          execSync(`git commit -m "auto-sync: ${timestamp}"`, { cwd: mindRoot, stdio: 'pipe' });
-          execSync('git push', { cwd: mindRoot, stdio: 'pipe' });
-        }
-        const state = loadSyncState();
-        state.lastSync = new Date().toISOString();
-        writeFileSync(SYNC_STATE_PATH, JSON.stringify(state, null, 2) + '\n');
-        return NextResponse.json({ ok: true });
       }
 
       case 'on': {

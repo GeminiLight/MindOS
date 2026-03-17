@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-17 | Current stage: P1 -->
 
 # 踩坑记录 (Known Pitfalls)
 
@@ -178,6 +178,13 @@
 - **现象：** `-y` 全局免交互跳过了 agent 选择（用户必须自己选）
 - **解决：** `choose()` 加 `forcePrompt` 参数，必须交互的选项标记 `{ forcePrompt: true }`
 
+### npm 包体积膨胀 — package.json files 排除项遗漏
+- **现象：** npm 包从 ~480kB 膨胀到 1.7MB
+- **原因：** `package.json` 的 `files` 字段缺少排除项：`assets/images/`（1.2MB README 截图）、`mcp/package-lock.json`（58kB）
+- **注意：** `app/package-lock.json`（560kB）**不能排除**——`bin/lib/build.js` 的 `depsHash()` 读它做 hash，缺失会导致每次 `mindos start` 都重新 `npm install`
+- **教训：** 新增顶层目录或大文件后，跑 `npm pack --dry-run | sort -h -r | head -30` 检查包内容，关注非源码文件（lock、图片、node_modules）
+- **文件：** `package.json`
+
 ## 变更质量 checklist（通用）
 
 ### 加新 UI 分支前，检查旧 UI 是否需要移除
@@ -200,3 +207,30 @@
 ### `.catch(() => {})` 静默吞错误
 - **案例：** SetupWizard 初始化阶段 token 生成和 agent 加载的 3 处 `.catch(() => {})` 完全静默，导致后续状态异常时难以排查
 - **规则：** 至少 `console.warn`，或设置 error state 给用户反馈。可以降级处理但不能完全无视
+
+### autocomplete effect 在 programmatic setState 后重触发
+- **案例：** StepKB `selectSuggestion()` 调用 `update('mindRoot', val)` → 触发 autocomplete `useEffect` → `setShowSuggestions(true)` → dropdown 闪回一帧
+- **原因：** React state 变更无论来源（用户输入 / 代码调用）都会触发依赖该 state 的 effect
+- **解决：** 用 `useRef` flag（`justSelectedRef`）标记"本次变更来自选中"，effect 开头检查并跳过
+- **规则：** 当 programmatic setState 会触发不希望的 effect 时，用 ref flag 做一次性跳过，不要用 setTimeout 延迟（竞态不可控）
+
+### disabled prop 对永远不可达的状态值做守卫（dead code）
+- **案例：** StepReview retry button `disabled={st.state === 'installing'}`，但 `failedAgents` 的 filter 条件是 `v.state === 'error'`，`installing` 条目根本不会出现在列表中
+- **规则：** 加 `disabled` 前先确认 guard 的状态值在当前渲染上下文中是否可达。不可达的 guard 是 dead code，增加阅读负担且暗示错误的心智模型
+
+## 云同步 (Sync)
+
+### Turbopack 无法 bundle chokidar 等 native 模块
+- **现象：** `instrumentation.ts` 直接 `import('../bin/lib/sync.js')` 会被 Turbopack 扫描，chokidar（含 native 绑定）解析失败
+- **解决：** (1) `next.config.ts` 添加 `serverExternalPackages: ['chokidar']` (2) 用 `resolve()` 构造绝对路径 + `/* webpackIgnore: true */` 注解绕过 bundler
+- **教训：** Next.js instrumentation.ts 中导入含 native 依赖的模块，必须同时做 serverExternalPackages 注册和 bundler ignore
+
+### git credential approve 后再 chmod
+- **现象：** `chmod 600 ~/.git-credentials` 在 `git credential approve` 之前执行，文件尚不存在，chmod 无效
+- **解决：** 调整顺序：先 `git credential approve`（创建文件），再 `chmod 600`
+- **教训：** 涉及文件权限的操作，确认文件已存在再执行
+
+### git rev-list @{u}..HEAD 在无 upstream 时抛异常
+- **现象：** 首次 `initSync` 后尚未设置 upstream tracking，`autoPull()` 末尾的 push 重试逻辑执行 `git rev-list --count @{u}..HEAD` 抛异常，错误写入 `sync-state.json`，UI 显示红色错误状态
+- **解决：** catch 块改为静默忽略（`// No upstream tracking or push failed`），不写 `lastError`
+- **教训：** Git 命令在仓库初始状态下的行为可能与成熟仓库不同（如无 upstream、无 commit 等），关键路径需处理这些边界

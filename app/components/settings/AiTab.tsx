@@ -1,8 +1,29 @@
 'use client';
 
-import { AlertCircle } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import type { AiSettings, ProviderConfig, SettingsData } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput } from './Primitives';
+
+type TestState = 'idle' | 'testing' | 'ok' | 'error';
+type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
+
+interface TestResult {
+  state: TestState;
+  latency?: number;
+  error?: string;
+  code?: ErrorCode;
+}
+
+function errorMessage(t: any, code?: ErrorCode): string {
+  switch (code) {
+    case 'auth_error': return t.settings.ai.testKeyAuthError;
+    case 'model_not_found': return t.settings.ai.testKeyModelNotFound;
+    case 'rate_limited': return t.settings.ai.testKeyRateLimited;
+    case 'network_error': return t.settings.ai.testKeyNetworkError;
+    default: return t.settings.ai.testKeyUnknown;
+  }
+}
 
 interface AiTabProps {
   data: SettingsData;
@@ -15,13 +36,76 @@ export function AiTab({ data, updateAi, t }: AiTabProps) {
   const envVal = data.envValues ?? {};
   const provider = data.ai.provider;
 
-  function patchProvider(name: 'anthropic' | 'openai', patch: Partial<ProviderConfig>) {
+  // --- Test key state ---
+  const [testResult, setTestResult] = useState<Record<string, TestResult>>({});
+  const okTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const prevProviderRef = useRef(provider);
+
+  // Reset test result when provider changes
+  useEffect(() => {
+    if (prevProviderRef.current !== provider) {
+      prevProviderRef.current = provider;
+      setTestResult({});
+      if (okTimerRef.current) { clearTimeout(okTimerRef.current); okTimerRef.current = undefined; }
+    }
+  }, [provider]);
+
+  // Cleanup ok timer
+  useEffect(() => () => { if (okTimerRef.current) clearTimeout(okTimerRef.current); }, []);
+
+  const handleTestKey = useCallback(async (providerName: 'anthropic' | 'openai') => {
+    const prov = data.ai.providers?.[providerName] ?? {} as ProviderConfig;
+    setTestResult(prev => ({ ...prev, [providerName]: { state: 'testing' } }));
+
+    try {
+      const body: Record<string, string> = { provider: providerName };
+      if (prov.apiKey) body.apiKey = prov.apiKey;
+      if (prov.model) body.model = prov.model;
+      if (providerName === 'openai' && prov.baseUrl) body.baseUrl = prov.baseUrl;
+
+      const res = await fetch('/api/settings/test-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+
+      if (json.ok) {
+        setTestResult(prev => ({ ...prev, [providerName]: { state: 'ok', latency: json.latency } }));
+        // Auto-clear after 5s
+        if (okTimerRef.current) clearTimeout(okTimerRef.current);
+        okTimerRef.current = setTimeout(() => {
+          setTestResult(prev => ({ ...prev, [providerName]: { state: 'idle' } }));
+        }, 5000);
+      } else {
+        setTestResult(prev => ({
+          ...prev,
+          [providerName]: { state: 'error', error: json.error, code: json.code },
+        }));
+      }
+    } catch {
+      setTestResult(prev => ({
+        ...prev,
+        [providerName]: { state: 'error', code: 'network_error', error: 'Network error' },
+      }));
+    }
+  }, [data.ai.providers]);
+
+  // Reset test result when key changes
+  const patchProviderWithReset = useCallback((name: 'anthropic' | 'openai', patch: Partial<ProviderConfig>) => {
+    if ('apiKey' in patch) {
+      setTestResult(prev => ({ ...prev, [name]: { state: 'idle' } }));
+    }
     updateAi({
       providers: {
         ...data.ai.providers,
         [name]: { ...data.ai.providers?.[name], ...patch },
       },
     });
+  }, [data.ai.providers, updateAi]);
+
+  function patchProvider(name: 'anthropic' | 'openai', patch: Partial<ProviderConfig>) {
+    patchProviderWithReset(name, patch);
   }
 
   const anthropic = data.ai.providers?.anthropic ?? { apiKey: '', model: '' };
@@ -30,6 +114,38 @@ export function AiTab({ data, updateAi, t }: AiTabProps) {
   const activeApiKey = provider === 'anthropic' ? anthropic.apiKey : openai.apiKey;
   const activeEnvKey = provider === 'anthropic' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY;
   const missingApiKey = !activeApiKey && !activeEnvKey;
+
+  // Test button helper
+  const renderTestButton = (providerName: 'anthropic' | 'openai', hasKey: boolean, hasEnv: boolean) => {
+    const result = testResult[providerName] ?? { state: 'idle' as TestState };
+    const disabled = result.state === 'testing' || (!hasKey && !hasEnv);
+
+    return (
+      <div className="flex items-center gap-2 mt-1.5">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => handleTestKey(providerName)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {result.state === 'testing' ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              {t.settings.ai.testKeyTesting}
+            </>
+          ) : (
+            t.settings.ai.testKey
+          )}
+        </button>
+        {result.state === 'ok' && result.latency != null && (
+          <span className="text-xs text-success">{t.settings.ai.testKeyOk(result.latency)}</span>
+        )}
+        {result.state === 'error' && (
+          <span className="text-xs text-error">✗ {errorMessage(t, result.code)}</span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -60,6 +176,7 @@ export function AiTab({ data, updateAi, t }: AiTabProps) {
               value={anthropic.apiKey}
               onChange={v => patchProvider('anthropic', { apiKey: v })}
             />
+            {renderTestButton('anthropic', !!anthropic.apiKey, !!env.ANTHROPIC_API_KEY)}
           </Field>
         </>
       ) : (
@@ -79,6 +196,7 @@ export function AiTab({ data, updateAi, t }: AiTabProps) {
               value={openai.apiKey}
               onChange={v => patchProvider('openai', { apiKey: v })}
             />
+            {renderTestButton('openai', !!openai.apiKey, !!env.OPENAI_API_KEY)}
           </Field>
           <Field
             label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}

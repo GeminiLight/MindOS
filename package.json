@@ -54,8 +54,10 @@
     "!assets/capture-demo.mjs",
     "!assets/demo-flow.html",
     "!assets/demo-flow-zh.html",
+    "!assets/images",
     "!mcp/node_modules",
-    "!mcp/dist"
+    "!mcp/dist",
+    "!mcp/package-lock.json"
   ],
   "scripts": {
     "setup": "node scripts/setup.js",
