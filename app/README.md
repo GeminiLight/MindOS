@@ -20,7 +20,7 @@ MIND_ROOT=~/MindOS ANTHROPIC_API_KEY=sk-ant-... npm run dev
 # Or copy .env.local.example to app/.env.local and fill in values
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3456](http://localhost:3456).
 
 ## Features
 
@@ -47,7 +47,7 @@ Copy `.env.local.example` to `.env.local`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MIND_ROOT` | `./my-mind` | Path to your knowledge base directory |
-| `MINDOS_WEB_PORT` | `3000` | Dev/production server port |
+| `MINDOS_WEB_PORT` | `3456` | Dev/production server port |
 | `AI_PROVIDER` | `anthropic` | `anthropic` or `openai` |
 | `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic` |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Anthropic model ID |

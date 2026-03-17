@@ -14,8 +14,8 @@ const mockSettings = {
     },
   },
   mindRoot: '',
-  port: 3000,
-  mcpPort: 8787,
+  port: 3456,
+  mcpPort: 8781,
   authToken: '',
   webPassword: '',
   setupPending: true,
@@ -42,8 +42,8 @@ beforeEach(() => {
   writtenConfig = null;
   // Reset mockSettings for each test
   mockSettings.mindRoot = '';
-  mockSettings.port = 3000;
-  mockSettings.mcpPort = 8787;
+  mockSettings.port = 3456;
+  mockSettings.mcpPort = 8781;
   mockSettings.authToken = '';
   mockSettings.webPassword = '';
   mockSettings.setupPending = true;
@@ -71,8 +71,8 @@ describe('GET /api/setup', () => {
     expect(body).toHaveProperty('platform');
     expect(body).toHaveProperty('port');
     expect(body).toHaveProperty('mcpPort');
-    expect(body.port).toBe(3000);
-    expect(body.mcpPort).toBe(8787);
+    expect(body.port).toBe(3456);
+    expect(body.mcpPort).toBe(8781);
   });
 
   it('masks API keys', async () => {
@@ -128,7 +128,7 @@ describe('POST /api/setup — validation', () => {
     const { POST } = await importSetupRoute();
     const req = new NextRequest('http://localhost/api/setup', {
       method: 'POST',
-      body: JSON.stringify({ mindRoot: tempDir, port: 3000, mcpPort: 500 }),
+      body: JSON.stringify({ mindRoot: tempDir, port: 3456, mcpPort: 500 }),
       headers: { 'content-type': 'application/json' },
     });
     const res = await POST(req);
@@ -221,11 +221,11 @@ describe('POST /api/setup — config writing', () => {
     fs.writeFileSync(path.join(existingRoot, 'dummy.md'), 'x');
     mockSettings.setupPending = false;
     mockSettings.mindRoot = existingRoot;
-    mockSettings.port = 3000;
+    mockSettings.port = 3456;
     const { POST } = await importSetupRoute();
     const req = new NextRequest('http://localhost/api/setup', {
       method: 'POST',
-      body: JSON.stringify({ mindRoot: existingRoot, port: 3001 }),
+      body: JSON.stringify({ mindRoot: existingRoot, port: 3457 }),
       headers: { 'content-type': 'application/json' },
     });
     const res = await POST(req);
@@ -237,8 +237,8 @@ describe('POST /api/setup — config writing', () => {
   it('skips restart when nothing changed on re-setup', async () => {
     mockSettings.setupPending = false;
     mockSettings.mindRoot = path.join(tempDir, 'stable');
-    mockSettings.port = 3000;
-    mockSettings.mcpPort = 8787;
+    mockSettings.port = 3456;
+    mockSettings.mcpPort = 8781;
     mockSettings.authToken = '';
     mockSettings.webPassword = '';
     // Pre-create dir so template is not applied
@@ -250,8 +250,8 @@ describe('POST /api/setup — config writing', () => {
       method: 'POST',
       body: JSON.stringify({
         mindRoot: path.join(tempDir, 'stable'),
-        port: 3000,
-        mcpPort: 8787,
+        port: 3456,
+        mcpPort: 8781,
       }),
       headers: { 'content-type': 'application/json' },
     });

@@ -22,11 +22,11 @@ import { z } from "zod";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const BASE_URL       = process.env.MINDOS_URL      ?? "http://localhost:3000";
+const BASE_URL       = process.env.MINDOS_URL      ?? "http://localhost:3456";
 const AUTH_TOKEN     = process.env.AUTH_TOKEN;
 const MCP_TRANSPORT  = process.env.MCP_TRANSPORT   ?? "http";    // "http" | "stdio"
 const MCP_HOST       = process.env.MCP_HOST        ?? "127.0.0.1";
-const MCP_PORT       = parseInt(process.env.MCP_PORT ?? "8787", 10);
+const MCP_PORT       = parseInt(process.env.MCP_PORT ?? "8781", 10);
 const MCP_ENDPOINT   = process.env.MCP_ENDPOINT    ?? "/mcp";
 const CHARACTER_LIMIT = 25_000;
 

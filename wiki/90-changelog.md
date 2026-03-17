@@ -1,6 +1,16 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-18 | Current stage: P1 -->
 
 # 变更日志 (CHANGELOG)
+
+## v0.5.12 — 默认端口变更 + 日志轮转 (未发版)
+
+### 变更
+- **默认端口** — Web 端口从 `3000` 改为 `3456`，MCP 端口从 `8787` 改为 `8781`，避免与 Next.js/Vite/Express 和 Cloudflare Wrangler 冲突。已有用户配置（`~/.mindos/config.json`）不受影响
+
+### 新增
+- **日志自动轮转** — daemon 模式（systemd/launchd）启动时，若 `~/.mindos/mindos.log` 超过 2MB 自动轮转为 `.old`，防止日志无限增长
+
+---
 
 ## v0.5.9 — 非空目录 Onboard 优化 (2026-03-17)
 

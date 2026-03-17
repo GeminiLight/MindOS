@@ -269,7 +269,7 @@ describe('sync: config management', () => {
     const configPath = path.join(tmpDir, 'config.json');
     const existing = {
       mindRoot,
-      port: 3000,
+      port: 3456,
       authToken: 'test',
     };
     fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
@@ -299,7 +299,7 @@ describe('sync: config management', () => {
     const configPath = path.join(tmpDir, 'config.json');
     const config = {
       mindRoot,
-      port: 3000,
+      port: 3456,
       sync: { enabled: true, provider: 'git', autoCommitInterval: 30, autoPullInterval: 300 },
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));

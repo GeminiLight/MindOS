@@ -172,7 +172,7 @@
   - zh: 自动整理
   - en: Auto-Organize
 - **Sub**: MindOS GUI
-- **Desktop Title**: MindOS — localhost:3000
+- **Desktop Title**: MindOS — localhost:3456
 - **Sidebar**: Profile / Workflows (active) / Projects / Configs / Resources
 - **Filepath**: Projects/新项目计划.md
 - **Update Badge**

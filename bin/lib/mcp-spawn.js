@@ -5,8 +5,8 @@ import { ROOT } from './constants.js';
 import { bold, red, yellow } from './colors.js';
 
 export function spawnMcp(verbose = false) {
-  const mcpPort = process.env.MINDOS_MCP_PORT || '8787';
-  const webPort = process.env.MINDOS_WEB_PORT || '3000';
+  const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+  const webPort = process.env.MINDOS_WEB_PORT || '3456';
   // Ensure mcp/node_modules exists (auto-install on first run)
   const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
   if (!existsSync(mcpSdk)) {
@@ -16,7 +16,7 @@ export function spawnMcp(verbose = false) {
   const env = {
     ...process.env,
     MCP_PORT: mcpPort,
-    MINDOS_URL: `http://localhost:${webPort}`,
+    MINDOS_URL: process.env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
     ...(verbose ? { MCP_VERBOSE: '1' } : {}),
   };
   const child = spawn('npx', ['tsx', 'src/index.ts'], {

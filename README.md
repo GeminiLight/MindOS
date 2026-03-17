@@ -156,8 +156,8 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
 ```json
 {
   "mindRoot": "~/MindOS",
-  "port": 3000,
-  "mcpPort": 8787,
+  "port": 3456,
+  "mcpPort": 8781,
   "authToken": "",
   "webPassword": "",
   "startMode": "daemon",
@@ -182,8 +182,8 @@ Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Referen
 | Field | Default | Description |
 | :--- | :--- | :--- |
 | `mindRoot` | `~/MindOS` | **Required**. Absolute path to the knowledge base root. |
-| `port` | `3000` | Optional. Web app port. |
-| `mcpPort` | `8787` | Optional. MCP server port. |
+| `port` | `3456` | Optional. Web app port. |
+| `mcpPort` | `8781` | Optional. MCP server port. |
 | `authToken` | — | Optional. Protects App `/api/*` and MCP `/mcp` with bearer token auth. For Agent / MCP clients. Recommended when exposed to a network. |
 | `webPassword` | — | Optional. Protects the web UI with a login page. For browser access. Independent from `authToken`. |
 | `startMode` | `start` | Start mode: `daemon` (background service, auto-starts on boot), `start` (foreground), or `dev`. |
@@ -257,15 +257,15 @@ mindos mcp install -g -y
 Use `http` transport — MindOS must be running (`mindos start`) on the remote machine:
 
 ```bash
-mindos mcp install--transport http --url http://<server-ip>:8787/mcp --token your-token -g
+mindos mcp install--transport http --url http://<server-ip>:8781/mcp --token your-token -g
 ```
 
 > [!NOTE]
-> For remote access, ensure port `8787` is open in your firewall/security-group.
+> For remote access, ensure port `8781` is open in your firewall/security-group.
 
 > Add `-g` to install globally — MCP config is shared across all projects instead of the current directory only.
 
-> The MCP port defaults to `8787`. To use a different port, run `mindos onboard` and set `mcpPort`.
+> The MCP port defaults to `8781`. To use a different port, run `mindos onboard` and set `mcpPort`.
 
 <details>
 <summary>Manual config (JSON snippets)</summary>
@@ -291,7 +291,7 @@ mindos mcp install--transport http --url http://<server-ip>:8787/mcp --token you
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://localhost:8787/mcp",
+      "url": "http://localhost:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }
@@ -304,7 +304,7 @@ mindos mcp install--transport http --url http://<server-ip>:8787/mcp --token you
 {
   "mcpServers": {
     "mindos": {
-      "url": "http://<server-ip>:8787/mcp",
+      "url": "http://<server-ip>:8781/mcp",
       "headers": { "Authorization": "Bearer your-token" }
     }
   }
