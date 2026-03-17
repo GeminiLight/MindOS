@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync, execFile } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
@@ -35,6 +35,24 @@ function getUnpushedCount(cwd: string) {
 
 function isGitRepo(dir: string) {
   return existsSync(join(dir, '.git'));
+}
+
+/** Resolve path to bin/cli.js at runtime. */
+function getCliPath() {
+  return resolve(process.cwd(), '..', 'bin', 'cli' + '.js');
+}
+
+/** Run CLI command via shell string — avoids Turbopack static analysis of file paths */
+function runCli(args: string[], timeoutMs = 30000): Promise<void> {
+  const cliPath = getCliPath();
+  const escaped = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
+  const cmd = `${process.execPath} ${cliPath} ${escaped}`;
+  return new Promise((res, rej) => {
+    exec(cmd, { timeout: timeoutMs }, (err, _stdout, stderr) => {
+      if (err) rej(new Error(stderr?.trim() || err.message));
+      else res();
+    });
+  });
 }
 
 export async function GET() {
@@ -99,16 +117,9 @@ export async function POST(req: NextRequest) {
 
         // Call CLI's sync init — pass clean remote + token separately (never embed token in URL)
         try {
-          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
           const args = ['sync', 'init', '--non-interactive', '--remote', remote, '--branch', branch];
           if (body.token) args.push('--token', body.token);
-
-          await new Promise<void>((res, rej) => {
-            execFile('node', [cliPath, ...args], { timeout: 30000 }, (err, stdout, stderr) => {
-              if (err) rej(new Error(stderr?.trim() || err.message));
-              else res();
-            });
-          });
+          await runCli(args, 30000);
           return NextResponse.json({ success: true, message: 'Sync initialized' });
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -122,13 +133,7 @@ export async function POST(req: NextRequest) {
         }
         // Delegate to CLI for unified conflict handling
         try {
-          const cliPath = resolve(process.cwd(), '..', 'bin', 'cli.js');
-          await new Promise<void>((res, rej) => {
-            execFile('node', [cliPath, 'sync', 'now'], { timeout: 60000 }, (err, stdout, stderr) => {
-              if (err) rej(new Error(stderr?.trim() || err.message));
-              else res();
-            });
-          });
+          await runCli(['sync', 'now'], 60000);
           return NextResponse.json({ ok: true });
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);

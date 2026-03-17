@@ -20,8 +20,8 @@ export async function GET() {
       mindRoot: defaultMindRoot,
       homeDir: home,
       platform: process.platform,
-      port: s.port ?? 3000,
-      mcpPort: s.mcpPort ?? 8787,
+      port: s.port ?? 3456,
+      mcpPort: s.mcpPort ?? 8781,
       authToken: s.authToken ?? '',
       webPassword: s.webPassword ?? '',
       provider: s.ai.provider,
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     const resolvedRoot = expandHome(mindRoot.trim());
 
     // Validate ports
-    const webPort = typeof port === 'number' ? port : 3000;
-    const mcpPortNum = typeof mcpPort === 'number' ? mcpPort : 8787;
+    const webPort = typeof port === 'number' ? port : 3456;
+    const mcpPortNum = typeof mcpPort === 'number' ? mcpPort : 8781;
     if (webPort < 1024 || webPort > 65535) {
       return NextResponse.json({ error: `Invalid web port: ${webPort}` }, { status: 400 });
     }
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     // Read current running port for portChanged detection
     const current = readSettings();
-    const currentPort = current.port ?? 3000;
+    const currentPort = current.port ?? 3456;
 
     // Use the same resolved values that will actually be written to config
     const resolvedAuthToken   = authToken   ?? current.authToken   ?? '';
@@ -87,8 +87,8 @@ export async function POST(req: NextRequest) {
     // Re-onboard only needs restart if port/path/auth/password actually changed.
     const isFirstTime = current.setupPending === true || !current.mindRoot;
     const needsRestart = isFirstTime || (
-      webPort              !== (current.port      ?? 3000) ||
-      mcpPortNum           !== (current.mcpPort   ?? 8787) ||
+      webPort              !== (current.port      ?? 3456) ||
+      mcpPortNum           !== (current.mcpPort   ?? 8781) ||
       resolvedRoot         !== (current.mindRoot  || '')    ||
       resolvedAuthToken    !== (current.authToken   ?? '') ||
       resolvedWebPassword  !== (current.webPassword ?? '')

@@ -37,8 +37,8 @@ Help me upgrade my MindOS installation from the old source-based setup to the ne
    ```json
    {
      "mindRoot": "<value of MIND_ROOT>",
-     "port": 3000,
-     "mcpPort": 8787,
+     "port": 3456,
+     "mcpPort": 8781,
      "authToken": "<value of AUTH_TOKEN or empty string>",
      "webPassword": "",
      "ai": {
@@ -69,7 +69,7 @@ Help me upgrade my MindOS installation from the old source-based setup to the ne
    ```
    (First run will build automatically — this may take a minute.)
 
-7. **Confirm** the app is accessible at http://localhost:3000 and MCP is running at http://localhost:8787/mcp.
+7. **Confirm** the app is accessible at http://localhost:3456 and MCP is running at http://localhost:8781/mcp.
 
 Do not delete the old cloned repository — keep it as a backup. The `app/.env.local` file can also be kept as reference.
 ```
@@ -109,8 +109,8 @@ Do not delete the old cloned repository — keep it as a backup. The `app/.env.l
    ```json
    {
      "mindRoot": "<MIND_ROOT 的值>",
-     "port": 3000,
-     "mcpPort": 8787,
+     "port": 3456,
+     "mcpPort": 8781,
      "authToken": "<AUTH_TOKEN 的值，没有则留空字符串>",
      "webPassword": "",
      "ai": {
@@ -141,7 +141,7 @@ Do not delete the old cloned repository — keep it as a backup. The `app/.env.l
    ```
    （首次运行会自动构建，可能需要一两分钟。）
 
-7. **确认** http://localhost:3000 可以访问，http://localhost:8787/mcp 的 MCP 服务也在运行。
+7. **确认** http://localhost:3456 可以访问，http://localhost:8781/mcp 的 MCP 服务也在运行。
 
 不要删除旧的克隆仓库，保留作为备份。`app/.env.local` 也可以保留作参考。
 ```
