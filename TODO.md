@@ -1,5 +1,31 @@
 ## PENDING
 
+GUI Onboard 界面
+
+1. 如果目录下有其他文件，应当提示用户如果继续选择模版将会覆盖，另外允许用户跳过选择模版，不进行覆盖。
+
+
+
+2. 在最后complete step后，下方有Saving，还没结束呢，但上方的Restart Now已经可以点了，这肯定不行。
+
+### UX Heuristics 评估发现（6.5/10）
+
+**P0 — Major (Severity 3)** ✅
+- [x] Step 5 Agent 列表认知过载 → 已改为 detected/other 分组，未检测到的默认折叠
+- [x] Step 6 Review 信息密度过高 → 已改为 4 阶段 progress stepper + 配置摘要精简为 3 行
+- [x] Port 输入缺即时反馈 → 已加 500ms debounce 自动检测 + blur 立即触发 + suggestion 可点击 chip
+
+**P1 — Minor (Severity 2)** ✅
+- [x] StepDots 导航无标签 → 已有 stepTitles i18n + `hidden sm:inline` 桌面端显示（此前已实现）
+- [x] McpTab 三区块视觉权重相同 → ServerStatus 突出卡片 + Agent/Skills 折叠面板
+- [x] Transport/Scope selector 术语不透明 → 隐藏到"高级选项"折叠，Scope 用"为所有项目安装"/"仅当前项目"
+- [x] "Skip, I'll do this later" 措辞模糊 → 改为 "Skip — install agents later in Settings > MCP"
+- [x] Agent badge 状态无图例 → 列表顶部加三色圆点图例（Installed/Detected/Not found）
+
+**P2 — Cosmetic (Severity 1)** ✅
+- [x] McpTab "Select Detected" / "Clear" 按钮样式过弱 → 改为 ghost button（border + hover bg）
+- [x] Step 1 KB 路径无推荐默认值提示 → 加 "Use ~/MindOS/mind" 一键填入按钮
+- [x] Skills 区域缺上下文说明 → 加一句话 "Skills teach AI agents how to use your knowledge base"
 
 沉淀交互模式
 11

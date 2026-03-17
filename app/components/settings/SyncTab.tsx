@@ -104,7 +104,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
           value={remoteUrl}
           onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
           placeholder="https://github.com/user/my-mind.git"
-          className="w-full px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+          className="w-full px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           style={{
             borderColor: remoteUrl.trim() && !isValid ? 'var(--destructive, red)' : 'var(--border)',
             color: 'var(--foreground)',
@@ -136,7 +136,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
               value={token}
               onChange={e => setToken(e.target.value)}
               placeholder="ghp_xxxxxxxxxxxx"
-              className="w-full px-3 py-2 pr-9 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+              className="w-full px-3 py-2 pr-9 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
             />
             <button
@@ -163,7 +163,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
           value={branch}
           onChange={e => setBranch(e.target.value)}
           placeholder="main"
-          className="w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus:outline-none focus:ring-1"
+          className="w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
         />
       </div>
@@ -184,7 +184,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-2 text-xs p-3 rounded-lg" role="alert" aria-live="polite" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--destructive, red)' }}>
+        <div className="flex items-start gap-2 text-xs p-3 rounded-lg" role="alert" aria-live="polite" style={{ background: 'rgba(200,80,80,0.1)', color: 'var(--error)' }}>
           <AlertCircle size={13} className="shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -361,7 +361,7 @@ export function SyncTab({ t }: SyncTabProps) {
           <div className="space-y-1.5">
             {conflicts.map((c, i) => (
               <div key={i} className="flex items-center gap-2 text-xs group">
-                <AlertCircle size={12} className="text-red-500 shrink-0" />
+                <AlertCircle size={12} className="text-error shrink-0" />
                 <a
                   href={`/view/${encodeURIComponent(c.file)}`}
                   className="font-mono truncate hover:text-foreground hover:underline transition-colors"

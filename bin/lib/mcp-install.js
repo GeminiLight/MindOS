@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { expandHome } from './utils.js';
-import { MCP_AGENTS } from './mcp-agents.js';
+import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
 
 export { MCP_AGENTS };
 
@@ -76,7 +76,7 @@ async function interactiveSelect(title, options) {
 async function interactiveMultiSelect(title, options) {
   return new Promise((resolve) => {
     let cursor = 0;
-    const selected = new Set();
+    const selected = new Set(options.map((o, i) => o.preselect ? i : -1).filter(i => i >= 0));
     const { stdin, stdout } = process;
 
     function render() {
@@ -85,7 +85,7 @@ async function interactiveMultiSelect(title, options) {
     }
 
     function draw() {
-      stdout.write(`${bold(title)}  ${dim('(↑↓ move, Space select, A all, Enter confirm)')}\n`);
+      stdout.write(`${bold(title)}  ${dim('(↑↓ move, Space select, D detected, A all, Enter confirm)')}\n`);
       for (let i = 0; i < options.length; i++) {
         const o = options[i];
         const check = selected.has(i) ? green('✔') : dim('○');
@@ -119,6 +119,10 @@ async function interactiveMultiSelect(title, options) {
       } else if (key === 'a' || key === 'A') { // toggle all
         if (selected.size === options.length) selected.clear();
         else options.forEach((_, i) => selected.add(i));
+        render();
+      } else if (key === 'd' || key === 'D') { // select detected only
+        selected.clear();
+        options.forEach((o, i) => { if (o.preselect) selected.add(i); });
         render();
       } else if (key === '\r' || key === '\n') { // enter
         cleanup();
@@ -178,9 +182,35 @@ export async function mcpInstall() {
       agentKeys = keys;
     } else {
       rl.close(); // close readline so raw mode works
+
+      // Build options with detected status and preselect
+      const agentOptions = keys.map(k => {
+        const agent = MCP_AGENTS[k];
+        const present = detectAgentPresence(k);
+        // Check if already configured
+        let installed = false;
+        for (const cfgPath of [agent.global, agent.project]) {
+          if (!cfgPath) continue;
+          const abs = expandHome(cfgPath);
+          if (!existsSync(abs)) continue;
+          try {
+            const config = JSON.parse(readFileSync(abs, 'utf-8'));
+            if (config[agent.key]?.mindos) { installed = true; break; }
+          } catch {}
+        }
+        const hint = installed ? 'configured' : present ? 'detected' : 'not found';
+        return { label: agent.name, hint, value: k, preselect: installed || present };
+      });
+
+      // Sort: configured > detected > not found
+      agentOptions.sort((a, b) => {
+        const rank = (o) => o.hint === 'configured' ? 0 : o.preselect ? 1 : 2;
+        return rank(a) - rank(b);
+      });
+
       const picked = await interactiveMultiSelect(
         'Which Agents to configure?',
-        keys.map(k => ({ label: MCP_AGENTS[k].name, hint: k, value: k })),
+        agentOptions,
       );
       if (picked.length === 0) {
         console.log(dim('\nNo agents selected. Exiting.\n'));

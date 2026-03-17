@@ -26,6 +26,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-error: var(--error);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -69,10 +71,12 @@ body {
   --destructive: oklch(0.58 0.22 27);
   --border: rgba(28, 26, 23, 0.1);
   --input: rgba(28, 26, 23, 0.12);
-  --ring: rgba(28, 26, 23, 0.3);
+  --ring: var(--amber);
   --radius: 0.5rem;
   --amber: #c8873a;
   --amber-dim: rgba(200, 135, 58, 0.12);
+  --success: #7aad80;
+  --error: #c85050;
   --sidebar: #ede9e1;
   --sidebar-foreground: #1c1a17;
   --sidebar-primary: #1c1a17;
@@ -101,9 +105,11 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --border: rgba(232, 228, 220, 0.08);
   --input: rgba(232, 228, 220, 0.1);
-  --ring: rgba(232, 228, 220, 0.2);
+  --ring: var(--amber);
   --amber: #d4954a;
   --amber-dim: rgba(212, 149, 74, 0.12);
+  --success: #7aad80;
+  --error: #c85050;
   --sidebar: #1c1a17;
   --sidebar-foreground: #e8e4dc;
   --sidebar-primary: #d4954a;
@@ -288,6 +294,16 @@ body {
 /* Tap highlight removal for mobile */
 @media (hover: none) {
   button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Respect user's reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Global focus-visible ring for interactive elements */

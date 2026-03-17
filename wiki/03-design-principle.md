@@ -103,7 +103,7 @@
 | `--warning` | `var(--amber)` | `var(--amber)` | 警告提示（复用品牌色） |
 | `--info` | `#5a8ab4` | `#8ab4d8` | 信息提示、帮助文本 |
 
-> **迁移状态**：当前 `#7aad80` 和 `#c85050` 分别在 10+ / 8+ 文件中硬编码，待定义变量后全局替换（见 backlog P1）。
+> **迁移状态**：已完成。CSS 变量已定义，Tailwind token 已注册（`text-success` / `text-error`），全部硬编码已替换。
 
 ## 字体栈
 
@@ -165,6 +165,8 @@ outline-offset: 2px;
 border-radius: 4px;
 ```
 
+`--ring` 变量指向 `var(--amber)`，shadcn/ui 组件通过 `ring-ring` 自动继承。自定义 input 使用 `focus-visible:ring-1 focus-visible:ring-ring`。**不要用 `focus:` 前缀**（鼠标点击不应触发 ring）。
+
 ### Z-Index 层级
 
 | 层级 | Tailwind | 用途 |
@@ -219,6 +221,6 @@ border-radius: 4px;
 | 键盘导航 | 所有可交互元素可 Tab 到达；快捷键 ⌘K（搜索）、⌘/（AI 对话）、⌘E（编辑模式） |
 | ARIA | Modal 必须 `role="dialog" aria-modal="true"`；toggle 用 `role="switch" aria-checked` |
 | 屏幕阅读器 | 纯图标按钮必须有 `aria-label`；装饰性图标加 `aria-hidden="true"` |
-| 动效 | 应支持 `prefers-reduced-motion: reduce` 关闭动画（见 backlog P2） |
+| 动效 | 已支持 `prefers-reduced-motion: reduce` 关闭动画 |
 | 色彩对比 | 正文/背景对比度 ≥ 4.5:1（WCAG AA） |
 | Skip link | 未来应增加 "Skip to content" 跳转链接 |

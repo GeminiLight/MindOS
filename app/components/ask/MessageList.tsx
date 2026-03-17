@@ -94,8 +94,8 @@ export default function MessageList({
               {m.content}
             </div>
           ) : m.content.startsWith('__error__') ? (
-            <div className="max-w-[85%] px-3 py-2.5 rounded-xl rounded-bl-sm border border-red-500/20 bg-red-500/8 text-sm">
-              <div className="flex items-start gap-2 text-red-400">
+            <div className="max-w-[85%] px-3 py-2.5 rounded-xl rounded-bl-sm border border-error/20 bg-error/8 text-sm">
+              <div className="flex items-start gap-2 text-error">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{m.content.slice(9)}</span>
               </div>

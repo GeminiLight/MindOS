@@ -15,6 +15,7 @@ on:
       - 'bin/**'
       - 'scripts/**'
       - 'tests/**'
+      - 'AGENTS.md'
       - 'README.md'
       - 'README_zh.md'
       - '.env.local.example'
@@ -74,7 +75,7 @@ jobs:
 
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
 
-          for f in package.json package-lock.json README.md README_zh.md LICENSE .env.local.example; do
+          for f in package.json package-lock.json README.md README_zh.md LICENSE AGENTS.md .env.local.example; do
             [ -f "$f" ] && cp "$f" /tmp/mindos/
           done
 

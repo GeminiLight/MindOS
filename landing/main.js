@@ -38,6 +38,18 @@ agentCopyBtn?.addEventListener('click', (e) => {
     }, 2000);
 });
 
+/* --- Quickstart: CLI Copy Button --- */
+const cliCopyBtn = document.getElementById('copy-cli-btn');
+const cliCopyBtnLabel = '<span data-zh>复制</span><span data-en>Copy</span>';
+cliCopyBtn?.addEventListener('click', (e) => {
+    const text = document.getElementById('cli-install-text')?.textContent.trim() || '';
+    navigator.clipboard.writeText(text);
+    e.currentTarget.textContent = state.lang === 'zh' ? '已复制' : 'Copied!';
+    setTimeout(() => {
+        e.currentTarget.innerHTML = cliCopyBtnLabel;
+    }, 2000);
+});
+
 /* --- Try-it Card Copy Buttons --- */
 document.querySelectorAll('.qs-try-card').forEach(card => {
     const copyBtn = card.querySelector('.qs-try-copy');

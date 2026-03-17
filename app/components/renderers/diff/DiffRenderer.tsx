@@ -191,8 +191,8 @@ function DiffCard({ entry, saveAction, fullContent }: {
         </span>
 
         {/* diff stats */}
-        <span className="font-display" style={{ fontSize: '0.7rem', color: '#7aad80', flexShrink: 0 }}>+{added}</span>
-        <span className="font-display" style={{ fontSize: '0.7rem', color: '#c85050', flexShrink: 0 }}>−{removed}</span>
+        <span className="font-display" style={{ fontSize: '0.7rem', color: 'var(--success)', flexShrink: 0 }}>+{added}</span>
+        <span className="font-display" style={{ fontSize: '0.7rem', color: 'var(--error)', flexShrink: 0 }}>−{removed}</span>
 
         {/* tool badge */}
         <span className="font-display" style={{ fontSize: '0.65rem', padding: '1px 7px', borderRadius: 999, background: 'var(--muted)', color: 'var(--muted-foreground)', flexShrink: 0 }}>
@@ -210,20 +210,20 @@ function DiffCard({ entry, saveAction, fullContent }: {
             <button
               onClick={handleApprove}
               title="Approve this change"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#7aad80', display: 'flex', alignItems: 'center' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--success)', display: 'flex', alignItems: 'center' }}
             >
               <CheckCircle2 size={15} />
             </button>
             <button
               onClick={handleReject}
               title="Reject & revert this change"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#c85050', display: 'flex', alignItems: 'center' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--error)', display: 'flex', alignItems: 'center' }}
             >
               <XCircle size={15} />
             </button>
           </>
         ) : (
-          <span className="font-display" style={{ fontSize: '0.68rem', color: approved ? '#7aad80' : '#c85050' }}>
+          <span className="font-display" style={{ fontSize: '0.68rem', color: approved ? 'var(--success)' : 'var(--error)' }}>
             {approved ? '✓ approved' : '✕ reverted'}
           </span>
         )}
@@ -252,8 +252,8 @@ function DiffCard({ entry, saveAction, fullContent }: {
               line.type === 'delete' ? 'rgba(200,80,80,0.10)' :
               'transparent';
             const color =
-              line.type === 'insert' ? '#7aad80' :
-              line.type === 'delete' ? '#c85050' :
+              line.type === 'insert' ? 'var(--success)' :
+              line.type === 'delete' ? 'var(--error)' :
               'var(--muted-foreground)';
             const prefix =
               line.type === 'insert' ? '+' :
@@ -299,8 +299,8 @@ export function DiffRenderer({ content, saveAction }: RendererContext) {
       {/* stats bar */}
       <div className="font-display" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.2rem', fontSize: 11, color: 'var(--muted-foreground)' }}>
         <span>{entries.length} change{entries.length !== 1 ? 's' : ''}</span>
-        <span style={{ color: '#7aad80' }}>+{totalAdded}</span>
-        <span style={{ color: '#c85050' }}>−{totalRemoved}</span>
+        <span style={{ color: 'var(--success)' }}>+{totalAdded}</span>
+        <span style={{ color: 'var(--error)' }}>−{totalRemoved}</span>
       </div>
 
       {entries.map((entry, i) => (

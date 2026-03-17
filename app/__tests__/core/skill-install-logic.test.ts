@@ -21,6 +21,12 @@ const AGENT_NAME_MAP: Record<string, string> = {
   'trae': 'trae',
   'openclaw': 'openclaw',
   'codebuddy': 'codebuddy',
+  'iflow-cli': 'iflow-cli',
+  'pi': 'pi',
+  'augment': 'augment',
+  'qwen-code': 'qwen-code',
+  'trae-cn': 'trae-cn',
+  'roo': 'roo',
 };
 
 /* ── Replicated logic from scripts/setup.js ──────────────────────── */
@@ -181,5 +187,20 @@ describe('CLI skill install — end-to-end scenarios', () => {
   it('S7: all supported non-universal agents, zh', () => {
     const cmd = simulate('zh', ['claude-code', 'windsurf', 'trae', 'openclaw', 'codebuddy']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos-zh -a claude-code -a windsurf -a trae -a openclaw -a codebuddy -g -y');
+  });
+
+  it('S8: new agents (augment + roo + pi), en', () => {
+    const cmd = simulate('en', ['augment', 'roo', 'pi']);
+    expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a augment -a roo -a pi -g -y');
+  });
+
+  it('S9: mix of old + new non-universal agents, zh', () => {
+    const cmd = simulate('zh', ['claude-code', 'augment', 'trae-cn', 'qwen-code']);
+    expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos-zh -a claude-code -a augment -a trae-cn -a qwen-code -g -y');
+  });
+
+  it('S10: kimi-cli + opencode are universal, should be filtered', () => {
+    const cmd = simulate('en', ['kimi-cli', 'opencode', 'iflow-cli']);
+    expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a iflow-cli -g -y');
   });
 });

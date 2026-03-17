@@ -12,9 +12,9 @@
 
 ## 技术债
 
-- [ ] **P1：硬编码状态色 → CSS 变量**：定义 `--success`/`--error` 变量后全局替换 `#7aad80` → `var(--success)`、`#c85050` → `var(--error)`、`text-red-400` → 自定义 class。影响 20+ 文件，每处简单替换。详见 `wiki/03-design-principle.md` 状态色章节
-- [ ] **P2：`prefers-reduced-motion` 支持**：当前零实现。在 `globals.css` 添加 `@media (prefers-reduced-motion: reduce)` 将 `animation-duration` / `transition-duration` 置为 `0.01ms`
-- [ ] **P3：Focus ring 统一**：部分组件用 `focus-visible:ring-ring/50`（Tailwind 默认），部分用 `outline: 2px solid var(--amber)`（设计规范）。应统一为 amber outline 方案
+- [x] **P1：硬编码状态色 → CSS 变量**：定义 `--success`/`--error` 变量后全局替换 `#7aad80` → `var(--success)`、`#c85050` → `var(--error)`、`text-red-400/500` → `text-error`、`#ef4444` → `var(--error)`、`rgba(239,68,68,...)` → `rgba(200,80,80,...)`。涉及 15 文件
+- [x] **P2：`prefers-reduced-motion` 支持**：在 `globals.css` 添加 `@media (prefers-reduced-motion: reduce)` 将 `animation-duration` / `transition-duration` 置为 `0.01ms`
+- [x] **P3：Focus ring 统一**：`--ring` 改为 `var(--amber)`，所有自定义 input 从 `focus:` 迁移到 `focus-visible:`，FileTree 蓝色 focus 改为 amber ring。涉及 7 文件
 - [ ] 模板内容待优化（中英双语）
 - [ ] SearchModal / AskModal 添加 `role="dialog"` + `aria-modal="true"`（无障碍）
 - [ ] 13 个 renderer 插件文件仍使用 inline `fontFamily`，待迁移到 `.font-display`

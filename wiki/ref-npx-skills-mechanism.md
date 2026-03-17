@@ -147,6 +147,14 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `gemini-cli` | ✅ Universal | ❌ |
 | `openclaw` | ❌ Additional | ✅ `-a openclaw` |
 | `codebuddy` | ❌ Additional | ✅ `-a codebuddy` |
+| `iflow-cli` | ❌ Additional | ✅ `-a iflow-cli` |
+| `kimi-cli` | ✅ Universal | ❌ |
+| `opencode` | ✅ Universal | ❌ |
+| `pi` | ❌ Additional | ✅ `-a pi` |
+| `augment` | ❌ Additional | ✅ `-a augment` |
+| `qwen-code` | ❌ Additional | ✅ `-a qwen-code` |
+| `trae-cn` | ❌ Additional | ✅ `-a trae-cn` |
+| `roo` | ❌ Additional | ✅ `-a roo` |
 
 ### Agent 映射表
 
@@ -160,3 +168,11 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `gemini-cli` | `gemini-cli` | ✅ | ✅ |
 | `openclaw` | `openclaw` | ❌ | ✅ |
 | `codebuddy` | `codebuddy` | ❌ | ✅ |
+| `iflow-cli` | `iflow-cli` | ❌ | ✅ |
+| `kimi-cli` | `kimi-cli` | ✅ | ✅ |
+| `opencode` | `opencode` | ✅ | ✅ |
+| `pi` | `pi` | ❌ | ✅ |
+| `augment` | `augment` | ❌ | ✅ |
+| `qwen-code` | `qwen-code` | ❌ | ✅ |
+| `trae-cn` | `trae-cn` | ❌ | ✅ |
+| `roo` | `roo` | ❌ | ✅ |

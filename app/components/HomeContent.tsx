@@ -278,7 +278,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
                     >
                       {isCSV
-                        ? <Table size={13} className="shrink-0" style={{ color: '#7aad80' }} />
+                        ? <Table size={13} className="shrink-0" style={{ color: 'var(--success)' }} />
                         : <FileText size={13} className="shrink-0" style={{ color: 'var(--muted-foreground)' }} />
                       }
                       <div className="flex-1 min-w-0">
