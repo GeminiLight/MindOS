@@ -73,7 +73,7 @@ export function serializeCSV(headers: string[], rows: string[][]) {
 
 const TAG_COLORS = [
   { bg: 'rgba(200,135,58,0.12)', text: 'var(--amber)' },
-  { bg: 'rgba(122,173,128,0.12)', text: '#7aad80' },
+  { bg: 'rgba(122,173,128,0.12)', text: 'var(--success)' },
   { bg: 'rgba(138,180,216,0.12)', text: '#8ab4d8' },
   { bg: 'rgba(200,160,216,0.12)', text: '#c8a0d8' },
   { bg: 'rgba(200,96,96,0.12)', text: '#c86060' },

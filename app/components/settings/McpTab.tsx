@@ -5,7 +5,6 @@ import {
   Plug, CheckCircle2, AlertCircle, Loader2, Copy, Check,
   ChevronDown, ChevronRight, Trash2, Plus, X,
 } from 'lucide-react';
-import { SectionLabel } from './Primitives';
 import { apiFetch } from '@/lib/api';
 
 /* ── Types ─────────────────────────────────────────────────────── */
@@ -206,9 +205,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
   }));
 
   return (
-    <div className="space-y-3">
-      <SectionLabel>{m?.agentsTitle ?? 'Agent Configuration'}</SectionLabel>
-
+    <div className="space-y-3 pt-2">
       {/* Agent list */}
       <div className="space-y-1">
         {agents.map(agent => (
@@ -249,6 +246,23 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
             )}
           </div>
         ))}
+      </div>
+
+      {/* Select detected / Clear buttons */}
+      <div className="flex gap-2 text-xs pt-1">
+        <button type="button"
+          onClick={() => setSelected(new Set(
+            agents.filter(a => !a.installed && a.present).map(a => a.key)
+          ))}
+          className="px-2.5 py-1 rounded-md border transition-colors hover:bg-muted/50"
+          style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>
+          {m?.selectDetected ?? 'Select Detected'}
+        </button>
+        <button type="button"
+          onClick={() => setSelected(new Set())}
+          className="px-2.5 py-1 rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+          {m?.clearSelection ?? 'Clear'}
+        </button>
       </div>
 
       {/* Transport selector */}
@@ -294,7 +308,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
               type="text"
               value={httpUrl}
               onChange={e => setHttpUrl(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
@@ -304,7 +318,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
               value={httpToken}
               onChange={e => setHttpToken(e.target.value)}
               placeholder="Bearer token"
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
         </div>
@@ -414,9 +428,7 @@ function SkillsSection({ t }: { t: any }) {
   }
 
   return (
-    <div className="space-y-3">
-      <SectionLabel>{m?.skillsTitle ?? 'Skills'}</SectionLabel>
-
+    <div className="space-y-3 pt-2">
       {/* Skill language switcher */}
       {(() => {
         const mindosEnabled = skills.find(s => s.name === 'mindos')?.enabled ?? true;
@@ -520,7 +532,7 @@ function SkillsSection({ t }: { t: any }) {
               value={newName}
               onChange={e => setNewName(e.target.value.replace(/[^a-z0-9-]/g, ''))}
               placeholder="my-skill"
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
@@ -530,7 +542,7 @@ function SkillsSection({ t }: { t: any }) {
               value={newDesc}
               onChange={e => setNewDesc(e.target.value)}
               placeholder="What does this skill do?"
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
@@ -540,7 +552,7 @@ function SkillsSection({ t }: { t: any }) {
               onChange={e => setNewContent(e.target.value)}
               rows={6}
               placeholder="Skill instructions (markdown)..."
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus:ring-1 focus:ring-ring resize-y font-mono"
+              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-mono"
             />
           </div>
           {error && (
@@ -586,6 +598,8 @@ export function McpTab({ t }: McpTabProps) {
   const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAgents, setShowAgents] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -609,22 +623,50 @@ export function McpTab({ t }: McpTabProps) {
     );
   }
 
+  const m = t.settings?.mcp;
+
   return (
     <div className="space-y-6">
-      {/* MCP Server Status */}
-      <ServerStatus status={mcpStatus} t={t} />
+      {/* MCP Server Status — prominent card */}
+      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+        <ServerStatus status={mcpStatus} t={t} />
+      </div>
 
-      {/* Divider */}
-      <div className="border-t border-border" />
+      {/* Agent Install — collapsible */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        <button
+          type="button"
+          onClick={() => setShowAgents(!showAgents)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+          style={{ color: 'var(--foreground)' }}
+        >
+          <span>{m?.agentsTitle ?? 'Agent Configuration'}</span>
+          <ChevronDown size={14} className={`transition-transform text-muted-foreground ${showAgents ? 'rotate-180' : ''}`} />
+        </button>
+        {showAgents && (
+          <div className="px-4 pb-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <AgentInstall agents={agents} t={t} onRefresh={fetchAll} />
+          </div>
+        )}
+      </div>
 
-      {/* Agent Install */}
-      <AgentInstall agents={agents} t={t} onRefresh={fetchAll} />
-
-      {/* Divider */}
-      <div className="border-t border-border" />
-
-      {/* Skills */}
-      <SkillsSection t={t} />
+      {/* Skills — collapsible */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        <button
+          type="button"
+          onClick={() => setShowSkills(!showSkills)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+          style={{ color: 'var(--foreground)' }}
+        >
+          <span>{m?.skillsTitle ?? 'Skills'}</span>
+          <ChevronDown size={14} className={`transition-transform text-muted-foreground ${showSkills ? 'rotate-180' : ''}`} />
+        </button>
+        {showSkills && (
+          <div className="px-4 pb-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <SkillsSection t={t} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

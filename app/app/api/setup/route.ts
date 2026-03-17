@@ -67,17 +67,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Invalid MCP port: ${mcpPortNum}` }, { status: 400 });
     }
 
-    // Apply template if mindRoot doesn't exist or is empty
+    // Apply template (copyRecursive has skip-existing protection)
     const dirExists = fs.existsSync(resolvedRoot);
-    let dirEmpty = true;
-    if (dirExists) {
-      try {
-        const entries = fs.readdirSync(resolvedRoot).filter(e => !e.startsWith('.'));
-        dirEmpty = entries.length === 0;
-      } catch { /* treat as empty */ }
-    }
 
-    if (template && (!dirExists || dirEmpty)) {
+    if (template) {
       applyTemplate(template, resolvedRoot);
     } else if (!dirExists) {
       fs.mkdirSync(resolvedRoot, { recursive: true });

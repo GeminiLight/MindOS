@@ -65,7 +65,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
           className="
             flex-1 bg-muted border border-border rounded px-2 py-1
             text-xs text-foreground placeholder:text-muted-foreground
-            focus:outline-none focus:border-blue-500/60
+            focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring
           "
         />
         {isPending
@@ -80,7 +80,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
           )
         }
       </div>
-      {error && <p className="text-xs text-red-400 mt-0.5 px-1">{error}</p>}
+      {error && <p className="text-xs text-error mt-0.5 px-1">{error}</p>}
     </div>
   );
 }
@@ -161,7 +161,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
             if (e.key === 'Escape') setRenaming(false);
           }}
           onBlur={commitRename}
-          className="w-full bg-muted border border-blue-500/60 rounded px-2 py-0.5 text-xs text-foreground focus:outline-none"
+          className="w-full bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />}
       </div>
@@ -304,7 +304,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
             if (e.key === 'Escape') setRenaming(false);
           }}
           onBlur={commitRename}
-          className="w-full bg-muted border border-blue-500/60 rounded px-2 py-0.5 text-xs text-foreground focus:outline-none"
+          className="w-full bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />}
       </div>
@@ -334,7 +334,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
         <button onClick={startRename} className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t.fileTree.rename}>
           <Pencil size={12} />
         </button>
-        <button onClick={handleDelete} className="p-0.5 rounded text-muted-foreground hover:text-red-400 hover:bg-muted transition-colors" title={t.fileTree.delete}>
+        <button onClick={handleDelete} className="p-0.5 rounded text-muted-foreground hover:text-error hover:bg-muted transition-colors" title={t.fileTree.delete}>
           <Trash2 size={12} />
         </button>
       </div>

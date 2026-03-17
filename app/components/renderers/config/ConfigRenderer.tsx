@@ -98,7 +98,7 @@ export function ConfigRenderer({ content, saveAction }: RendererContext) {
 
   if (!parsed || !data) {
     return (
-      <div className="rounded-xl border border-border p-4 text-sm text-red-400">
+      <div className="rounded-xl border border-border p-4 text-sm text-error">
         CONFIG.json parse failed. Please check JSON format.
       </div>
     );
@@ -110,11 +110,11 @@ export function ConfigRenderer({ content, saveAction }: RendererContext) {
         <div className="text-xs text-muted-foreground">CONFIG Control Panel</div>
         <div className="text-xs flex items-center gap-2">
           {saving && <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 size={12} className="animate-spin" />Saving</span>}
-          {!saving && saved && <span className="inline-flex items-center gap-1" style={{ color: '#7aad80' }}><Check size={12} />Saved</span>}
+          {!saving && saved && <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Check size={12} />Saved</span>}
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</div>}
+      {error && <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</div>}
 
       {sections.map((section) => (
         <div key={section.id} className="rounded-xl border border-border bg-card p-4">

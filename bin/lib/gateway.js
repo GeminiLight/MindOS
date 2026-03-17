@@ -1,9 +1,10 @@
 import { execSync } from 'node:child_process';
-import { existsSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN } from './constants.js';
-import { green, red, dim, cyan } from './colors.js';
+import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN, CONFIG_PATH } from './constants.js';
+import { green, red, dim, cyan, yellow } from './colors.js';
+import { isPortInUse } from './port.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,18 @@ export async function waitForService(check, { retries = 10, intervalMs = 1000 } 
     await new Promise(r => setTimeout(r, intervalMs));
   }
   return check();
+}
+
+/**
+ * Wait until a port is free (no process listening).
+ * Returns true if port is free, false on timeout.
+ */
+export async function waitForPortFree(port, { retries = 30, intervalMs = 500 } = {}) {
+  for (let i = 0; i < retries; i++) {
+    if (!(await isPortInUse(port))) return true;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return !(await isPortInUse(port));
 }
 
 export async function waitForHttp(port, { retries = 120, intervalMs = 2000, label = 'service' } = {}) {
@@ -194,10 +207,37 @@ const launchd = {
     console.log(green('\u2714 Service started'));
   },
 
-  stop() {
+  async stop() {
+    // Read ports before bootout so we can wait for them to be freed
+    let webPort = 3000, mcpPort = 8787;
+    try {
+      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+      if (config.port) webPort = Number(config.port);
+      if (config.mcpPort) mcpPort = Number(config.mcpPort);
+    } catch {}
+
     try {
       execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
     } catch { /* may not be running */ }
+
+    // launchctl bootout is async — wait for ports to actually be freed
+    let [webFree, mcpFree] = await Promise.all([
+      waitForPortFree(webPort),
+      waitForPortFree(mcpPort),
+    ]);
+    if (!webFree || !mcpFree) {
+      console.log(yellow('Ports still in use after bootout, force-killing...'));
+      const { stopMindos } = await import('./stop.js');
+      stopMindos();
+      // stopMindos() sends SIGTERM synchronously — wait for processes to exit
+      [webFree, mcpFree] = await Promise.all([
+        waitForPortFree(webPort),
+        waitForPortFree(mcpPort),
+      ]);
+      if (!webFree || !mcpFree) {
+        console.error(red('Warning: ports still in use after force-kill. Continuing anyway.'));
+      }
+    }
     console.log(green('\u2714 Service stopped'));
   },
 

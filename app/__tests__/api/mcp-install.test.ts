@@ -132,15 +132,23 @@ describe('POST /api/mcp/install', () => {
 });
 
 describe('GET /api/mcp/agents', () => {
-  it('returns all 8 agents', async () => {
+  it('returns all 16 agents', async () => {
     const { GET } = await importAgentsRoute();
     const res = await GET();
     const body = await res.json();
-    expect(body.agents).toHaveLength(8);
+    expect(body.agents).toHaveLength(16);
     const keys = body.agents.map((a: { key: string }) => a.key);
     expect(keys).toContain('claude-code');
     expect(keys).toContain('cursor');
     expect(keys).toContain('codebuddy');
+    expect(keys).toContain('iflow-cli');
+    expect(keys).toContain('kimi-cli');
+    expect(keys).toContain('opencode');
+    expect(keys).toContain('pi');
+    expect(keys).toContain('augment');
+    expect(keys).toContain('qwen-code');
+    expect(keys).toContain('trae-cn');
+    expect(keys).toContain('roo');
   });
 
   it('detects installed agent from config file', async () => {
@@ -165,5 +173,31 @@ describe('GET /api/mcp/agents', () => {
     const body = await res.json();
     const cursor = body.agents.find((a: { key: string }) => a.key === 'cursor');
     expect(cursor.installed).toBe(false);
+  });
+
+  it('sorts agents: installed first, then detected, then not found', async () => {
+    // Pre-seed claude-code as installed
+    const configPath = path.join(tempHome, '.claude.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      mcpServers: { mindos: { type: 'stdio', command: 'mindos', args: ['mcp'] } },
+    }), 'utf-8');
+
+    const { GET } = await importAgentsRoute();
+    const res = await GET();
+    const body = await res.json();
+    const agents = body.agents as { key: string; installed: boolean; present: boolean }[];
+
+    // claude-code should be first (installed)
+    expect(agents[0].key).toBe('claude-code');
+    expect(agents[0].installed).toBe(true);
+
+    // Verify ordering invariant: no non-installed agent appears before an installed one,
+    // and no not-found agent appears before a detected one
+    for (let i = 1; i < agents.length; i++) {
+      const prev = agents[i - 1];
+      const curr = agents[i];
+      const rankOf = (a: typeof prev) => a.installed ? 0 : a.present ? 1 : 2;
+      expect(rankOf(prev)).toBeLessThanOrEqual(rankOf(curr));
+    }
   });
 });

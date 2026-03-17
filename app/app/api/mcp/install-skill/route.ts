@@ -24,6 +24,12 @@ const AGENT_NAME_MAP: Record<string, string> = {
   'trae': 'trae',
   'openclaw': 'openclaw',
   'codebuddy': 'codebuddy',
+  'iflow-cli': 'iflow-cli',
+  'pi': 'pi',
+  'augment': 'augment',
+  'qwen-code': 'qwen-code',
+  'trae-cn': 'trae-cn',
+  'roo': 'roo',
 };
 
 /* ── Helpers ──────────────────────────────────────────────────── */

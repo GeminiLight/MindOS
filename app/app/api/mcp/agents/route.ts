@@ -20,6 +20,13 @@ export async function GET() {
         preferredTransport: agent.preferredTransport,
       };
     });
+
+    // Sort: installed first, then detected, then not found
+    agents.sort((a, b) => {
+      const rank = (x: typeof a) => x.installed ? 0 : x.present ? 1 : 2;
+      return rank(a) - rank(b);
+    });
+
     return NextResponse.json({ agents });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

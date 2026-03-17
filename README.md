@@ -70,22 +70,21 @@ All that experience from your conversations — gone the moment you close the wi
 
 **For Humans**
 
-- **GUI Collaboration Workbench**: use one command entry to browse, edit, and search efficiently (`⌘K` / `⌘/`).
-- **Built-in Agent Assistant**: converse in context while edits are captured into managed knowledge.
-- **Plugin Views**: use scenario-focused views like TODO, Kanban, and Timeline.
+- **GUI Workbench**: browse, edit, search notes with unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
+- **Built-in Agent Assistant**: converse with the knowledge base in context; edits seamlessly capture human-curated knowledge.
+- **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Agent Inspector, and more.
 
 **For Agents**
 
-- **MCP Server + Skills**: connect any compatible agent to read, write, search, and run workflows.
-- **Structured Templates**: start quickly with Profile, Workflows, and Configurations scaffolds.
-- **Experience Auto-Distillation**: automatically distill daily work into reusable, executable SOP experience.
+- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access.
+- **Structured Templates**: pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
+- **Agent-Ready Docs**: everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch.
 
 **Infrastructure**
 
 - **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
-- **Knowledge Graph**: visualize relationships and dependencies across notes.
-- **Git Time Machine**: track every edit, audit history, and roll back safely.
-- **Cross-Device Sync**: auto-commit, push, and pull via Git — edits on one device appear on all others within minutes.
+- **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
+- **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
 
 <details>
 <summary><strong>Coming Soon</strong></summary>

@@ -46,6 +46,21 @@
 - **解决：** 统一用 `.font-display` 工具类（定义在 `globals.css`）
 - **规则：** 新组件禁止 inline fontFamily，全部走 CSS class
 
+### 硬编码状态色 — 用 CSS 变量管理
+- **现象：** `#7aad80`（success）和 `#c85050`（error）在 20+ 文件中硬编码，暗色模式无法单独调整；`#ef4444`（Tailwind red-500）和 `#c85050` 两种红混用，视觉不一致
+- **解决：** globals.css 定义 `--success` / `--error` 变量（:root + .dark），Tailwind `@theme inline` 注册 `--color-success` / `--color-error`。TSX 中 inline style 用 `var(--success)` / `var(--error)`，Tailwind class 用 `text-success` / `text-error`
+- **规则：** 新增语义色值必须先在 globals.css 定义变量 + 文档化到 `03-design-principle.md`，禁止直接写 hex 值
+
+### focus ring 用 focus-visible 而非 focus
+- **现象：** 部分自定义 input 用 `focus:ring-1`，鼠标点击也触发 ring，视觉噪音
+- **解决：** 统一改为 `focus-visible:ring-1 focus-visible:ring-ring`；`--ring` 变量改为 `var(--amber)` 与设计规范一致
+- **规则：** 新组件的 focus 样式一律用 `focus-visible:` 前缀，不要用 `focus:`
+
+### FileTree 蓝色 focus border 偏离设计系统
+- **现象：** FileTree 的 rename/create input 用 `border-blue-500/60`，与全局 amber focus ring 不一致
+- **解决：** 改为 `focus-visible:ring-1 focus-visible:ring-ring`（继承 amber）
+- **规则：** 任何 focus 指示色都走 `ring-ring`（即 `--amber`），不要用 Tailwind 默认色
+
 ### Google Fonts 不要随意删除
 - **现象：** 以为 5 个字体太多想精简到 3 个，实际审计发现 15+ 文件引用了全部 5 个
 - **解决：** 只删除未使用的 weight（如 IBM Plex Sans 的 300、IBM Plex Mono 的 500），不删整个字体
@@ -91,11 +106,41 @@
 - **解决：** 改为 polling `isPortInUse()` + 15s deadline
 - **教训：** 异步资源释放用轮询确认，不用固定 delay
 
+### update 命令 launchctl bootout 不等端口释放
+- **现象：** `mindos update` 在 macOS 上 stop → install → start，新服务报 "Port already in use" 并无限循环重试
+- **原因：** `launchctl bootout` 是异步的——发信号给进程但不等进程退出，端口在 bootout 返回后仍被旧进程占用。与 `systemctl --user stop`（同步等待）行为不同
+- **解决：** `launchd.stop()` 改为 async，bootout 后 polling `isPortInUse()` 等端口释放（30 次 × 500ms = 15s deadline），超时则 fallback 到 `stopMindos()` 强制 kill
+- **教训：** macOS launchctl 和 Linux systemctl 的 stop 语义不同，macOS 需要额外的端口释放等待
+- **文件：** `bin/lib/gateway.js`
+
+### onboard GUI 模式端口冲突 + env 不匹配
+- **现象：** `mindos onboard` 选 GUI，旧 MindOS 半死（端口占着但 `/api/health` 无响应），新服务报 "Port already in use" 无限循环
+- **原因（两个 bug）：** (1) `startGuiSetup()` 传 `env.PORT` 给 spawn 的 start 进程，但 `loadConfig()` 设的是 `MINDOS_WEB_PORT`，`PORT` 被忽略，临时端口白分配 (2) 端口被旧进程占着时直接换临时端口，不尝试清理旧进程
+- **解决：** (1) spawn env 改传 `MINDOS_WEB_PORT` 而非 `PORT` (2) 端口被占时先调 `stopMindos()` 清理旧进程 + `waitForPortFree()` 等释放，失败才 fallback 到临时端口
+- **教训：** env 变量名必须与消费侧严格匹配；端口冲突时优先清理而非回避
+- **文件：** `scripts/setup.js`
+
 ### /api/health 被 middleware auth 拦截
 - **现象：** re-onboard 时 `isSelfPort()` 调 `/api/health` 被 401 → 误报 "Port already in use"
 - **原因：** server-to-self HTTP 请求没有 `Sec-Fetch-Site: same-origin` header，也没有 auth token
 - **解决：** `proxy.ts` 豁免 `/api/health` 和 `/api/auth`
 - **教训：** 健康检查端点必须无认证，否则内部自检会失败
+
+### check-port 自回环 fetch 超时导致误报"端口占用"
+- **现象：** 在 `http://localhost:3013/setup` 上 onboard 时，webPort 输入 3013 提示"已被占用"
+- **原因：** `check-port` API 检测端口占用后，通过 `fetch('http://127.0.0.1:3013/api/health')` 回环请求自身判断 isSelf。Next.js 单线程模式下，当前请求未结束时发出的新请求被队列阻塞，800ms 超时 → `isSelfPort` 返回 false → 把自己的端口报为"已被占用"
+- **解决：** 从 `req.nextUrl.port` 直接获取当前监听端口，检测相同端口时直接返回 `{available: true, isSelf: true}`，跳过网络自回环。HTTP 回环保留为后备逻辑
+- **注意：** 只信任 `req.nextUrl.port`（实际监听的端口），不从 settings 读配置端口——settings 里是"配置值"不是"监听值"（首次 onboard 时 MCP 端口可能未启动，误标为 self 会掩盖真实冲突）
+- **教训：** 服务端 self-detection 不要依赖网络自回环（可能死锁/超时），优先用进程内信息（request context）判断
+- **文件：** `app/app/api/setup/check-port/route.ts`
+
+### setup.js 与 port.js 的 isPortInUse timeout 行为不一致
+- **现象：** `scripts/setup.js` 和 `bin/lib/port.js` 各有一份 `isPortInUse`，timeout 返回值相反
+- **差异：** setup.js `sock.setTimeout → cleanup(true)` vs port.js `sock.setTimeout → cleanup(false)`
+- **影响：** setup.js 在极端慢响应（localhost 几乎不触发）时误判端口被占，导致不必要地切换到临时端口
+- **解决：** 统一为 `cleanup(false)`（localhost timeout = 无人监听 = 端口空闲）
+- **教训：** 同一功能的两份实现必须行为一致，或者只保留一份、另一处 import 复用
+- **文件：** `scripts/setup.js`、`bin/lib/port.js`
 
 ## 构建 / 部署
 
@@ -132,3 +177,17 @@
 ### 免交互模式 (-y) 区分可跳过 vs 必须交互
 - **现象：** `-y` 全局免交互跳过了 agent 选择（用户必须自己选）
 - **解决：** `choose()` 加 `forcePrompt` 参数，必须交互的选项标记 `{ forcePrompt: true }`
+
+## 变更质量 checklist（通用）
+
+### 加新 UI 分支前，检查旧 UI 是否需要移除
+- **案例：** 非空目录新增提示框，但旧的 amber 警告行未移除，用户看到两条重复提示
+- **规则：** 加条件分支时，grep 被替代的旧 UI 元素（同一 state 变量驱动的），确认移除或互斥
+
+### 加条件分支后，验证所有状态的初始值
+- **案例：** 非空目录条件分支依赖 `template === ''` 做默认跳过，但初始值是 `'en'`，用户不点跳过直接 Next 就合并了
+- **规则：** 新分支如果改变了某状态的"期望默认值"，必须在分支生效时主动设置（不能依赖用户手动点击）
+
+### 加禁用状态后，排查所有消费同一状态的 UI 入口
+- **案例：** `submitting` 只禁用了 Complete 按钮，StepDots 和 Back 按钮漏了，用户可以在 saving 期间跳走
+- **规则：** 加 disabled 逻辑时，grep 所有能触发 `setStep` / 导航的地方，逐一确认守卫
