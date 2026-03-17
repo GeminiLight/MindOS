@@ -133,7 +133,7 @@ sop_note/
 
 自动生效（不需要改）：`/api/mcp/agents`（遍历 `MCP_AGENTS`）、`SetupWizard.tsx`、`McpTab.tsx`（动态渲染）。
 
-参考：`wiki/ref-npx-skills-mechanism.md`（完整 40 个 agent 清单 + Skills CLI 机制）。
+参考：`wiki/refs/npx-skills-mechanism.md`（完整 40 个 agent 清单 + Skills CLI 机制）。
 
 ## 数据流
 

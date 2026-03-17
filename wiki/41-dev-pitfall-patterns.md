@@ -26,7 +26,7 @@
 
 ### 规则 2：新建组件前，先查设计原则文档
 
-写新组件前花 30 秒扫一遍 `wiki/03-design-principle.md`：
+写新组件前花 30 秒扫一遍 `wiki/21-design-principle.md`：
 
 - 状态色用什么？→ `var(--success)` / `var(--error)` / `text-success` / `text-error`
 - Focus ring 用什么？→ `focus-visible:ring-1 focus-visible:ring-ring`（不是 `focus:`）
@@ -129,3 +129,51 @@ rg 'setStep' app/components/SetupWizard.tsx
 | 默认值是隐形分支 | 初始值 + 用户不操作 = 一条真实执行路径，必须验证 |
 | disabled 是访问控制，漏一个入口就有绕过 | 加 disabled 后 grep setter，像查权限一样查全 |
 | 重复 UI 比缺 UI 更难发现 | 新增 UI 后肉眼不容易发现旧 UI 仍在，靠 grep 确认 |
+
+## 跨 Agent 协议文件的管理
+
+> 复盘 2026-03-17 CLAUDE.md → AGENTS.md 重命名，解决多 Agent 共用项目规则的问题。
+
+### 问题
+
+`CLAUDE.md` 是 Claude Code 专用的约定文件名，但项目规则应该对所有 Coding Agent（Cursor、Windsurf、Cline 等）生效。维护多份实体文件（CLAUDE.md + AGENTS.md + .cursorrules）必然会不一致。
+
+### 方案：AGENTS.md + symlink
+
+```
+AGENTS.md          ← canonical source，所有规则在这
+CLAUDE.md → AGENTS.md  ← symlink，Claude Code 自动读取
+```
+
+### 关键细节
+
+| 要点 | 说明 |
+|------|------|
+| Git 原生支持 symlink | `git add` symlink 时存储目标路径字符串（9 bytes），文件模式为 `120000` |
+| GitHub UI 正确显示 | 会显示 "Symbolic Link → AGENTS.md" |
+| CI/CD 同步注意 | `cp` 默认跟随 symlink 复制内容，保留 symlink 要用 `cp -P` |
+| `-L` 判断 symlink | `[ -L "CLAUDE.md" ]` 判断是否为 symlink，`-f` 会穿透 |
+| 编辑器打开 symlink | 显示的就是目标文件内容，这是正常行为，不是重复 |
+
+### workflow 同步写法
+
+```yaml
+# 普通文件用 cp（跟随 symlink，复制内容）
+for f in AGENTS.md ...; do
+  [ -f "$f" ] && cp "$f" /tmp/target/
+done
+
+# symlink 用 cp -P（保留 symlink 本身）
+[ -L "CLAUDE.md" ] && cp -P CLAUDE.md /tmp/target/
+```
+
+### 教训
+
+| 教训 | 行动 |
+|------|------|
+| 两份实体文件迟早不一致 | 用 symlink 保证单一 source of truth |
+| `cp` 和 `cp -P` 行为不同 | 同步 workflow 里 symlink 必须用 `cp -P` |
+| 文件名是约定不是标准 | AGENTS.md 是通用名，各 Agent 通过各自的 symlink/config 指向它 |
+
+
+避免硬编码

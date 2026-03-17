@@ -158,7 +158,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 `}
               >
                 {ext === '.csv'
-                  ? <Table size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                  ? <Table size={14} className="text-success shrink-0 mt-0.5" />
                   : <FileText size={14} className="text-muted-foreground shrink-0 mt-0.5" />
                 }
                 <div className="min-w-0 flex-1">

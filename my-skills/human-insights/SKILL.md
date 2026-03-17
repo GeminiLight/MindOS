@@ -139,5 +139,5 @@ human-insights/
 ## 边界说明
 
 - vs `wiki/80-known-pitfalls.md`：pitfalls 记客观技术坑（别人也会踩），insights 记主观协作发现（你个人的认知）
-- vs `wiki/06-conventions.md`：conventions 是已确定的规范，insights 是还在验证中的发现
+- vs `wiki/40-conventions.md`：conventions 是已确定的规范，insights 是还在验证中的发现
 - vs `CLAUDE.md`：CLAUDE.md 是已固化的规则，insights 是原材料

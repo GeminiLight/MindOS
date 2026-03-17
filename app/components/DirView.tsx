@@ -15,14 +15,14 @@ interface DirViewProps {
 
 function FileIcon({ node }: { node: FileNode }) {
   if (node.type === 'directory') return <Folder size={16} className="text-yellow-400 shrink-0" />;
-  if (node.extension === '.csv') return <Table size={16} className="text-emerald-400 shrink-0" />;
-  return <FileText size={16} className="text-zinc-400 shrink-0" />;
+  if (node.extension === '.csv') return <Table size={16} className="text-success shrink-0" />;
+  return <FileText size={16} className="text-muted-foreground shrink-0" />;
 }
 
 function FileIconLarge({ node }: { node: FileNode }) {
   if (node.type === 'directory') return <FolderOpen size={28} className="text-yellow-400" />;
-  if (node.extension === '.csv') return <Table size={28} className="text-emerald-400" />;
-  return <FileText size={28} className="text-zinc-400" />;
+  if (node.extension === '.csv') return <Table size={28} className="text-success" />;
+  return <FileText size={28} className="text-muted-foreground" />;
 }
 
 function countFiles(node: FileNode): number {
@@ -125,10 +125,10 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
                     {entry.name}
                   </span>
                   {entry.type === 'directory' && (
-                    <span className="text-[10px] text-muted-foreground">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
+                    <span className="text-2xs text-muted-foreground">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
                   )}
                   {entry.type === 'file' && entry.mtime && (
-                    <span className="text-[10px] text-muted-foreground font-display" suppressHydrationWarning>
+                    <span className="text-2xs text-muted-foreground font-display" suppressHydrationWarning>
                       {formatTime(entry.mtime)}
                     </span>
                   )}

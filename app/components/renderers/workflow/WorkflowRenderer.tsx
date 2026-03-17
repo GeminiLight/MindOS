@@ -206,7 +206,7 @@ function StepCard({
                   padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
                   cursor: canRun ? 'pointer' : 'not-allowed',
                   border: 'none', background: canRun ? 'var(--amber)' : 'var(--muted)',
-                  color: canRun ? '#131210' : 'var(--muted-foreground)',
+                  color: canRun ? 'var(--amber-foreground)' : 'var(--muted-foreground)',
                   opacity: canRun ? 1 : 0.5,
                 }}
               >
@@ -362,7 +362,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
                 padding: '4px 12px', borderRadius: 7, fontSize: '0.75rem',
                 cursor: running ? 'not-allowed' : 'pointer',
                 border: 'none', background: running ? 'var(--muted)' : 'var(--amber)',
-                color: running ? 'var(--muted-foreground)' : '#131210',
+                color: running ? 'var(--muted-foreground)' : 'var(--amber-foreground)',
                 opacity: running ? 0.7 : 1,
               }}
             >

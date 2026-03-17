@@ -31,18 +31,18 @@ export default function MentionPopover({ results, selectedIndex, onSelect }: Men
             }`}
           >
             {isCsv ? (
-              <Table size={13} className="text-emerald-400 shrink-0" />
+              <Table size={13} className="text-success shrink-0" />
             ) : (
-              <FileText size={13} className="text-zinc-400 shrink-0" />
+              <FileText size={13} className="text-muted-foreground shrink-0" />
             )}
             <span className="truncate flex-1">{name}</span>
-            <span className="text-[10px] text-muted-foreground/50 truncate max-w-[140px] shrink-0">
+            <span className="text-2xs text-muted-foreground/50 truncate max-w-[140px] shrink-0">
               {f.split('/').slice(0, -1).join('/')}
             </span>
           </button>
         );
       })}
-      <div className="px-3 py-1.5 border-t border-border flex gap-3 text-[10px] text-muted-foreground/50">
+      <div className="px-3 py-1.5 border-t border-border flex gap-3 text-2xs text-muted-foreground/50">
         <span>↑↓ navigate</span>
         <span>↵ select</span>
         <span>ESC dismiss</span>

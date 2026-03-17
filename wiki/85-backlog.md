@@ -12,20 +12,29 @@
 
 ## 技术债
 
-- [x] **P1：硬编码状态色 → CSS 变量**：定义 `--success`/`--error` 变量后全局替换 `#7aad80` → `var(--success)`、`#c85050` → `var(--error)`、`text-red-400/500` → `text-error`、`#ef4444` → `var(--error)`、`rgba(239,68,68,...)` → `rgba(200,80,80,...)`。涉及 15 文件
+- [x] **P1：硬编码状态色 → CSS 变量**：定义 `--success`/`--error` 变量后全局替换 `#7aad80` → `var(--success)`、`#c85050` → `var(--error)`、`text-red-400/500` → `text-error`、`#ef4444` → `var(--error)`、`rgba(239,68,68,...)` → `rgba(200,80,80,...)`。涉及 15 文件。二轮补充：`text-green-500` / `bg-green-500` → `text-success` / `bg-success`（SyncStatusBar、SettingsModal、SyncTab、McpTab、KnowledgeTab），`accent-amber-500` → `accentColor: var(--amber)`（McpTab ×4）
 - [x] **P2：`prefers-reduced-motion` 支持**：在 `globals.css` 添加 `@media (prefers-reduced-motion: reduce)` 将 `animation-duration` / `transition-duration` 置为 `0.01ms`
 - [x] **P3：Focus ring 统一**：`--ring` 改为 `var(--amber)`，所有自定义 input 从 `focus:` 迁移到 `focus-visible:`，FileTree 蓝色 focus 改为 amber ring。涉及 7 文件
 - [ ] 模板内容待优化（中英双语）
-- [ ] SearchModal / AskModal 添加 `role="dialog"` + `aria-modal="true"`（无障碍）
+- [x] SearchModal / AskModal 添加 `role="dialog"` + `aria-modal="true"`（无障碍）— 已完成（三个 modal 均已有）
 - [ ] 13 个 renderer 插件文件仍使用 inline `fontFamily`，待迁移到 `.font-display`
+- [x] **SetupWizard 硬编码色值清理**：10+ 处 `#22c55e` → `var(--success)`、`#f59e0b` → `var(--amber)`；与 P1 治理同类问题
+- [x] **SetupWizard `.catch(() => {})` 静默吞错**：9 处空 catch 改为 `console.warn('[SetupWizard] ...')` 输出上下文（init fetch ×3, checkPort, agent install, skill install, retryAgent, autocomplete, check-path, restart）
+- [x] **i18n 清理 `kbPathExists` 废弃 key**：EN/ZH 各一处，已被 `kbPathHasFiles` 替代
+- [x] **`copyToken` setState 内副作用**：改为直接读 `state.authToken` 执行 clipboard 写入，deps 加 `[state.authToken]`
+- [x] **Checkbox accent 色值统一**：`accent-amber-500`（Tailwind `#f59e0b`）→ `accentColor: var(--amber)`（`#c8873a`），与设计系统一致
+- [x] **`#131210` → `--amber-foreground` 全局治理**：新增 `--amber-foreground` CSS 变量（light/dark 均为 `#131210`），注册到 `@theme inline`，全局 15 个文件 22 处 `#131210` 硬编码替换为 `var(--amber-foreground)`。涉及 SetupWizard、SettingsModal、AskModal、McpTab、SyncTab、MessageList、login、not-found、ViewPageClient、ConfigRenderer、SummaryRenderer、WorkflowRenderer、GraphRenderer、BoardView、ConfigPanel、globals.css
+- [x] **SetupWizard 文件拆分**：~1400 行拆为 `app/components/setup/` 目录下 10 个文件（types.ts, constants.tsx, StepKB, StepAI, StepPorts, StepSecurity, StepAgents, StepReview, StepDots, index.tsx），原文件改为 re-export
 
 ## 改进想法
 
-- [x] **增加更多 Agent 支持**：当前 `MCP_AGENTS` 16 个（claude-code, cursor, windsurf, cline, trae, gemini-cli, openclaw, codebuddy, iflow-cli, kimi-cli, opencode, pi, augment, qwen-code, trae-cn, roo），`npx skills` 支持 40 个。改动文件：`app/lib/mcp-agents.ts`（主定义）+ `app/app/api/mcp/install-skill/route.ts`（Skill 安装常量）。完整 agent 清单见 `wiki/ref-npx-skills-mechanism.md`
+- [x] **增加更多 Agent 支持**：当前 `MCP_AGENTS` 16 个（claude-code, cursor, windsurf, cline, trae, gemini-cli, openclaw, codebuddy, iflow-cli, kimi-cli, opencode, pi, augment, qwen-code, trae-cn, roo），`npx skills` 支持 40 个。改动文件：`app/lib/mcp-agents.ts`（主定义）+ `app/app/api/mcp/install-skill/route.ts`（Skill 安装常量）。完整 agent 清单见 `wiki/refs/npx-skills-mechanism.md`
 
 - [x] **GUI RestartBlock 健康检查**：polling 判断条件从 `d.service === 'mindos'`（依赖响应体）改为 `r.status < 500`（只看状态码），与 CLI `waitForHttp` 逻辑一致，不受响应结构变更影响 — v0.5.2
 
 - [ ] **Onboarding — API Key 连通性验证**：Step 2 填写 API Key 后失焦自动测试（`max_tokens: 1`），显示 ✔/✘ badge 但不阻断继续；CLI 同步；Skip 模式不触发
+
+- [x] **Onboarding — 非空目录模板选择**：非空目录 onboard 时，后端 silent-skip 模板无反馈。修复：前端显示跳过/合并选项，默认跳过；后端放宽 guard 依赖 copyRecursive skip-existing 保护；导航按钮 submitting 期间 disabled — v0.5.9
 
 - ❌ **Onboarding — 原生文件夹选择器（Web 不做，桌面端要做）**：浏览器 `showDirectoryPicker()` 返回的是内存句柄（`FileSystemDirectoryHandle`），规范层面无 `.path` 属性，无法获取服务器上的真实路径。Web 模式下路径补全（SPEC-OB-16）是最接近的替代方案。**桌面端**（Electron）列为必做：用 `dialog.showOpenDialog` 实现原生文件夹选择，直接返回真实路径。
 

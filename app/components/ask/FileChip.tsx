@@ -12,7 +12,7 @@ export default function FileChip({ path, onRemove, variant = 'kb' }: FileChipPro
   const name = path.split('/').pop() ?? path;
   const isCsv = name.endsWith('.csv');
   const Icon = variant === 'upload' ? Paperclip : isCsv ? Table : FileText;
-  const iconClass = variant === 'upload' ? 'text-zinc-400' : isCsv ? 'text-emerald-400' : 'text-zinc-400';
+  const iconClass = variant === 'upload' ? 'text-muted-foreground' : isCsv ? 'text-success' : 'text-muted-foreground';
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs border border-border bg-muted text-foreground max-w-[220px]">

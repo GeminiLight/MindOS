@@ -1,10 +1,30 @@
 ## PENDING
 
+MindOS 审计更改
+
+Review change
+
+
+沉淀交互模式
+11
+
+模块解耦化，
+
+我经常开多个Terminal端口怎么办
+
+你再核查下然后开启下一个阶段
+
+如何管理开源版本和闭源版本
+
+- 支持用户有多个mindos
+- wiki 使用指南，比如roadmap到stage
+
+## ADDRESSED
+
+
 GUI Onboard 界面
 
 1. 如果目录下有其他文件，应当提示用户如果继续选择模版将会覆盖，另外允许用户跳过选择模版，不进行覆盖。
-
-
 
 2. 在最后complete step后，下方有Saving，还没结束呢，但上方的Restart Now已经可以点了，这肯定不行。
 
@@ -27,21 +47,6 @@ GUI Onboard 界面
 - [x] Step 1 KB 路径无推荐默认值提示 → 加 "Use ~/MindOS/mind" 一键填入按钮
 - [x] Skills 区域缺上下文说明 → 加一句话 "Skills teach AI agents how to use your knowledge base"
 
-沉淀交互模式
-11
-
-模块解耦化，
-
-我经常开多个Terminal端口怎么办
-
-你再核查下然后开启下一个阶段
-
-如何管理开源版本和闭源版本
-
-- 支持用户有多个mindos
-- wiki 使用指南，比如roadmap到stage
-
-## ADDRESSED
 
 CLI有没有可能进来之后 检查系统语言选择展示的语言
 

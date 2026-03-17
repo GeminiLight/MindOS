@@ -133,7 +133,7 @@ API 逻辑：
 4. GitHub 源失败时自动 fallback 到本地路径（`app/data/skills/` 或 `../skills/`）
 5. 返回执行结果
 
-**详细机制参考**：`wiki/ref-npx-skills-mechanism.md`
+**详细机制参考**：`wiki/refs/npx-skills-mechanism.md`
 
 ### 2. Setup 完成时安装 Skill + 写入偏好
 

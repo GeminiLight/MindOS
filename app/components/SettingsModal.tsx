@@ -234,7 +234,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               )}
               <div className="flex items-center gap-1.5 text-xs">
                 {status === 'saved' && (
-                  <><CheckCircle2 size={13} className="text-green-500" /><span className="text-green-500">{t.settings.saved}</span></>
+                  <><CheckCircle2 size={13} className="text-success" /><span className="text-success">{t.settings.saved}</span></>
                 )}
                 {status === 'error' && (
                   <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{t.settings.saveFailed}</span></>
@@ -245,7 +245,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               onClick={handleSave}
               disabled={saving || !data}
               className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              style={{ background: 'var(--amber)', color: '#131210' }}
+              style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
               {t.settings.save}

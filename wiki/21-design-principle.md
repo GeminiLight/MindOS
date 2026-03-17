@@ -34,6 +34,7 @@
 |-------|-----|---------|
 | `--amber` | `#c8873a` | 品牌主色，交互高亮，链接，focus ring |
 | `--amber-dim` | `rgba(200,135,58,0.12)` | amber 背景色（badge、hover 底色） |
+| `--amber-foreground` | `#131210` | amber 按钮上的文字前景色 |
 | `--background` | `#f8f6f1` | 页面背景（温暖米白） |
 | `--foreground` | `#1c1a17` | 正文前景色 |
 | `--primary` | `#1c1a17` | 主按钮填充色（深灰，非 amber） |
@@ -58,6 +59,7 @@
 |-------|-----|---------|
 | `--amber` | `#d4954a` | 品牌主色（暗色微提亮） |
 | `--amber-dim` | `rgba(212,149,74,0.12)` | amber 背景色 |
+| `--amber-foreground` | `#131210` | amber 按钮上的文字前景色 |
 | `--background` | `#131210` | 页面背景（近纯黑） |
 | `--foreground` | `#e8e4dc` | 正文前景色 |
 | `--primary` | `#e8e4dc` | 主按钮填充色 |
@@ -103,7 +105,7 @@
 | `--warning` | `var(--amber)` | `var(--amber)` | 警告提示（复用品牌色） |
 | `--info` | `#5a8ab4` | `#8ab4d8` | 信息提示、帮助文本 |
 
-> **迁移状态**：已完成。CSS 变量已定义，Tailwind token 已注册（`text-success` / `text-error`），全部硬编码已替换。
+> **迁移状态**：已完成。CSS 变量已定义，Tailwind token 已注册（`text-success` / `text-error` / `bg-success`），全部硬编码已替换（含 `text-green-500` / `bg-green-500` / `accent-amber-500`）。装饰色（`yellow-400` 文件夹图标、`emerald-400` CSV 图标、`blue-500` sync 指示、`purple-500` skill badge、`red-400`/`blue-400` TODO 标签）暂保留 Tailwind 原始色，不纳入语义色管理。
 
 ## 字体栈
 

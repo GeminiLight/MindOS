@@ -20,7 +20,7 @@ export function getStatusLevel(status: SyncStatus | null, syncing: boolean): Sta
 }
 
 export const DOT_COLORS: Record<StatusLevel, string> = {
-  synced: 'bg-green-500',
+  synced: 'bg-success',
   unpushed: 'bg-yellow-500',
   conflicts: 'bg-error',       // #6 — conflicts more prominent than unpushed
   error: 'bg-error',
@@ -173,7 +173,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
           className="p-1 rounded hover:bg-muted hover:text-foreground transition-colors shrink-0 ml-2 text-muted-foreground/50 hover:text-muted-foreground"
           title="Dismiss"
         >
-          <span className="text-[10px]">✕</span>
+          <span className="text-2xs">✕</span>
         </button>
       </div>
     );
@@ -231,7 +231,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       </button>
       <div className="flex items-center gap-1 shrink-0 ml-2">
         {/* #2 — sync result flash */}
-        {(syncResult === 'success' || toast) && <CheckCircle2 size={12} className="text-green-500 animate-in fade-in duration-200" />}
+        {(syncResult === 'success' || toast) && <CheckCircle2 size={12} className="text-success animate-in fade-in duration-200" />}
         {syncResult === 'error' && <XCircle size={12} className="text-error animate-in fade-in duration-200" />}
         <button
           onClick={handleSyncNow}

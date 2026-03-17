@@ -33,25 +33,25 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground">{renderer.name}</span>
                         {isCore && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-600 font-mono">
+                          <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-600 font-mono">
                             core
                           </span>
                         )}
                         {renderer.builtin && !isCore && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                          <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                             {t.settings.plugins.builtinBadge}
                           </span>
                         )}
                         <div className="flex gap-1 flex-wrap">
                           {renderer.tags.map(tag => (
-                            <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                            <span key={tag} className="text-2xs px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
                               {tag}
                             </span>
                           ))}
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{renderer.description}</p>
-                      <p className="text-[11px] text-muted-foreground/60 mt-1.5 font-mono">
+                      <p className="text-xs text-muted-foreground/60 mt-1.5 font-mono">
                         {t.settings.plugins.matchHint}: <code className="bg-muted px-1 rounded">{renderer.match.toString().match(/\/(.+)\//)?.[1] ?? '—'}</code>
                       </p>
                     </div>

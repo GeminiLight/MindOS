@@ -149,7 +149,7 @@ const WikiNode = memo(function WikiNode({ data }: NodeProps) {
         textOverflow: 'ellipsis',
         opacity: isOrphan ? 0.4 : 1,
         background: isCurrent ? 'var(--amber)' : 'var(--card)',
-        color: isCurrent ? '#131210' : 'var(--foreground)',
+        color: isCurrent ? 'var(--amber-foreground)' : 'var(--foreground)',
         border: `1.5px solid ${isCurrent ? 'var(--amber)' : 'var(--border)'}`,
         boxShadow: isCurrent 
           ? '0 0 20px var(--amber-dim), 0 0 0 2px var(--amber-dim)' 

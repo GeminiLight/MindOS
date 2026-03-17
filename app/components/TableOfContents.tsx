@@ -111,7 +111,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         style={{ background: 'var(--background)' }}
       >
         <p
-          className="text-[10px] font-semibold uppercase tracking-wider px-2 mb-1"
+          className="text-2xs font-semibold uppercase tracking-wider px-2 mb-1"
           style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}
         >
           On this page

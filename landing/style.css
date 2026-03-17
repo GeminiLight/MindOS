@@ -47,7 +47,7 @@ body.light {
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 /* Prevent FOUC: early light class set before body renders */
 html.early-light { background-color: #fdfbf7; }
 
@@ -68,7 +68,7 @@ body {
 }
 
 .ambient-glow {
-    position: absolute; width: 1000px; height: 800px;
+    position: absolute; width: 100%; max-width: 1000px; height: 800px;
     background: radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);
     top: -300px; left: 50%; transform: translateX(-50%);
     pointer-events: none; z-index: 0;
@@ -78,7 +78,7 @@ h1, h2, h3, h4 { font-family: 'Lora', Georgia, serif; font-weight: 500; letter-s
 .mono { font-family: 'IBM Plex Mono', monospace; }
 
 .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
-.section { padding: 10rem 0; position: relative; }
+.section { padding: 10rem 0; position: relative; overflow: hidden; }
 .section-header { text-align: center; margin-bottom: 5rem; }
 .section-header .mono { display: block; font-size: 0.75rem; color: var(--accent); margin-bottom: 1rem; letter-spacing: 0.2em; }
 .section-header h2 { font-size: 2.5rem; }
@@ -958,6 +958,7 @@ body.light .qs-copy-btn:hover { color: #fff; }
 .qs-prompt-body {
     padding: 1.25rem 1.5rem; font-size: 0.85rem; line-height: 1.75; color: var(--fg);
     display: flex; flex-direction: column; gap: 0.28rem; text-align: left;
+    overflow-wrap: anywhere; word-break: break-word;
 }
 .qs-prompt-body p { margin: 0; }
 
@@ -1089,7 +1090,7 @@ html[lang="zh"] #quickstart .qs-path-sub { letter-spacing: 0.005em; }
     .qs-path-header { padding: 1.15rem 1.1rem; gap: 0.75rem; }
     .qs-default-badge { align-self: flex-start; margin-top: 0.1rem; }
     .qs-terminal-bar { padding: 0.55rem 1.1rem; }
-    .qs-terminal-body, .qs-prompt-body { padding: 1rem 1.1rem; }
+    .qs-terminal-body, .qs-prompt-body { padding: 1rem 1.1rem !important; }
     .qs-step { width: 1.05rem; height: 1.05rem; font-size: 0.58rem; }
     /* Compare section mobile */
     .compare-grid { grid-template-columns: 1fr; }
@@ -1107,16 +1108,42 @@ html[lang="zh"] #quickstart .qs-path-sub { letter-spacing: 0.005em; }
     .df-grid { grid-template-columns: 1fr !important; gap: 1.5rem !important; }
     .df-arrow-gap { display: none !important; }
     .df-arrows-svg { display: none !important; }
-    .df-canvas { padding: 1.5rem !important; }
+    .df-canvas { padding: 1.5rem !important; overflow: hidden !important; }
     .df-desktop-layout { flex-direction: column !important; }
     .df-sidebar { flex-direction: row !important; width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; overflow-x: auto !important; padding: 0.5rem 0.5rem !important; gap: 0.25rem !important; }
     .df-sidebar-item { padding: 0.3rem 0.6rem !important; font-size: 0.65rem !important; white-space: nowrap !important; }
+    /* CLI install text wrap on mobile */
+    #cli-install-text { word-break: break-all; overflow-wrap: anywhere; font-size: 0.8rem !important; }
+    #agent-prompt-text { font-size: 0.85rem !important; }
+    .qs-prompt-body { overflow-wrap: anywhere; word-break: break-word; }
+    /* Prevent any card from extending beyond viewport */
+    .qs-prompt-card, .qs-terminal, .pillar-card, .feat-card, .compare-grid,
+    .foundation-banner, .story-card { max-width: 100%; }
+}
+@media (max-width: 480px) {
+    .container { padding: 0 0.75rem; }
+    .section { padding: 4.5rem 0; }
+    .hero { padding-top: 9rem; padding-bottom: 3rem; }
+    .hero h1 { font-size: 2.2rem; }
+    .hero-sub { font-size: 0.95rem; margin-bottom: 2rem; }
+    .section-header { margin-bottom: 3rem; }
+    .section-header h2 { font-size: 1.5rem; }
+    .pillar-head { padding: 1rem; }
+    .pillar-body { padding: 1rem; }
+    .foundation-banner { padding: 1.25rem; }
+    .nav-content { padding: 0.6rem 0.75rem; }
+    .nav-links a { font-size: 0.72rem; }
+    .controls { gap: 0.5rem; }
+    .qs-prompt-bar, .qs-terminal-bar { padding: 0.5rem 0.75rem; }
+    .qs-terminal-body, .qs-prompt-body { padding: 0.75rem !important; font-size: 0.75rem !important; }
+    .df-canvas { padding: 1rem !important; }
+    .df-mobile-body { min-height: 140px; }
 }
 
 /* ============================
    Demo Flow Section
    ============================ */
-.demo-flow-section { padding: 8rem 0; }
+.demo-flow-section { padding: 8rem 0; overflow: hidden; }
 
 .df-canvas {
     max-width: 1360px;

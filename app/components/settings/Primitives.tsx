@@ -35,7 +35,7 @@ export function Select({ className = '', ...props }: React.SelectHTMLAttributes<
 export function EnvBadge({ overridden }: { overridden: boolean }) {
   if (!overridden) return null;
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono ml-1.5">env</span>
+    <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono ml-1.5">env</span>
   );
 }
 

@@ -16,8 +16,8 @@ interface FileTreeProps {
 
 function getIcon(node: FileNode) {
   if (node.type === 'directory') return null;
-  if (node.extension === '.csv') return <Table size={14} className="text-emerald-400 shrink-0" />;
-  return <FileText size={14} className="text-zinc-400 shrink-0" />;
+  if (node.extension === '.csv') return <Table size={14} className="text-success shrink-0" />;
+  return <FileText size={14} className="text-muted-foreground shrink-0" />;
 }
 
 function getCurrentFilePath(pathname: string): string {

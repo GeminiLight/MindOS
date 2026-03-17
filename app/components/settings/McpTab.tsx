@@ -94,8 +94,8 @@ function ServerStatus({ status, t }: { status: McpStatus | null; t: any }) {
       <div className="space-y-1.5 text-sm pl-11">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-20 shrink-0 text-xs">{m?.status ?? 'Status'}</span>
-          <span className={`text-xs flex items-center gap-1 ${status.running ? 'text-green-500' : 'text-muted-foreground'}`}>
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${status.running ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+          <span className={`text-xs flex items-center gap-1 ${status.running ? 'text-success' : 'text-muted-foreground'}`}>
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${status.running ? 'bg-success' : 'bg-muted-foreground'}`} />
             {status.running ? (m?.running ?? 'Running') : (m?.stopped ?? 'Stopped')}
           </span>
         </div>
@@ -115,7 +115,7 @@ function ServerStatus({ status, t }: { status: McpStatus | null; t: any }) {
           <span className="text-muted-foreground w-20 shrink-0 text-xs">{m?.auth ?? 'Auth'}</span>
           <span className="text-xs">
             {status.authConfigured
-              ? <span className="text-green-500">{m?.authSet ?? 'Token set'}</span>
+              ? <span className="text-success">{m?.authSet ?? 'Token set'}</span>
               : <span className="text-muted-foreground">{m?.authNotSet ?? 'No token'}</span>}
           </span>
         </div>
@@ -214,22 +214,23 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
               type="checkbox"
               checked={selected.has(agent.key)}
               onChange={() => toggle(agent.key)}
-              className="rounded border-border accent-amber-500"
+              className="rounded border-border"
+              style={{ accentColor: 'var(--amber)' }}
             />
             <span className="w-28 shrink-0 text-xs">{agent.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+            <span className="text-2xs px-1.5 py-0.5 rounded font-mono"
               style={{ background: 'rgba(100,100,120,0.08)' }}>
               {getEffectiveTransport(agent)}
             </span>
             {agent.installed ? (
               <>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-500 font-mono">
+                <span className="text-2xs px-1.5 py-0.5 rounded bg-success/15 text-success font-mono">
                   {agent.transport}
                 </span>
-                <span className="text-[10px] text-muted-foreground">{agent.scope}</span>
+                <span className="text-2xs text-muted-foreground">{agent.scope}</span>
               </>
             ) : (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 {agent.present ? (m?.detected ?? 'Detected') : (m?.notFound ?? 'Not found')}
               </span>
             )}
@@ -238,7 +239,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
               <select
                 value={scopes[agent.key] || 'project'}
                 onChange={e => setScopes({ ...scopes, [agent.key]: e.target.value as 'project' | 'global' })}
-                className="ml-auto text-[10px] px-1.5 py-0.5 rounded border border-border bg-background text-foreground"
+                className="ml-auto text-2xs px-1.5 py-0.5 rounded border border-border bg-background text-foreground"
               >
                 <option value="project">{m?.project ?? 'Project'}</option>
                 <option value="global">{m?.global ?? 'Global'}</option>
@@ -273,7 +274,8 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
             name="transport"
             checked={transport === 'auto'}
             onChange={() => setTransport('auto')}
-            className="accent-amber-500"
+            className=""
+            style={{ accentColor: 'var(--amber)' }}
           />
           {m?.transportAuto ?? 'auto (recommended)'}
         </label>
@@ -283,7 +285,8 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
             name="transport"
             checked={transport === 'stdio'}
             onChange={() => setTransport('stdio')}
-            className="accent-amber-500"
+            className=""
+            style={{ accentColor: 'var(--amber)' }}
           />
           {m?.transportStdio ?? 'stdio'}
         </label>
@@ -293,7 +296,8 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
             name="transport"
             checked={transport === 'http'}
             onChange={() => setTransport('http')}
-            className="accent-amber-500"
+            className=""
+            style={{ accentColor: 'var(--amber)' }}
           />
           {m?.transportHttp ?? 'http'}
         </label>
@@ -329,7 +333,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
         onClick={handleInstall}
         disabled={selected.size === 0 || installing}
         className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: 'var(--amber)', color: '#131210' }}
+        style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
       >
         {installing && <Loader2 size={12} className="animate-spin" />}
         {installing ? (m?.installing ?? 'Installing...') : (m?.installSelected ?? 'Install Selected')}
@@ -339,7 +343,7 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
       {message && (
         <div className="flex items-center gap-1.5 text-xs" role="status">
           {message.type === 'success' ? (
-            <><CheckCircle2 size={12} className="text-green-500" /><span className="text-green-500">{message.text}</span></>
+            <><CheckCircle2 size={12} className="text-success" /><span className="text-success">{message.text}</span></>
           ) : (
             <><AlertCircle size={12} className="text-destructive" /><span className="text-destructive">{message.text}</span></>
           )}
@@ -480,7 +484,7 @@ function SkillsSection({ t }: { t: any }) {
           >
             {expanded === skill.name ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             <span className="text-xs font-medium flex-1">{skill.name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+            <span className={`text-2xs px-1.5 py-0.5 rounded ${
               skill.source === 'builtin' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'
             }`}>
               {skill.source === 'builtin' ? (m?.skillBuiltin ?? 'Built-in') : (m?.skillUser ?? 'Custom')}
@@ -489,7 +493,7 @@ function SkillsSection({ t }: { t: any }) {
             <button
               onClick={e => { e.stopPropagation(); handleToggle(skill.name, !skill.enabled); }}
               className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                skill.enabled ? 'bg-green-500' : 'bg-muted-foreground/30'
+                skill.enabled ? 'bg-success' : 'bg-muted-foreground/30'
               }`}
             >
               <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${
@@ -501,11 +505,11 @@ function SkillsSection({ t }: { t: any }) {
           {expanded === skill.name && (
             <div className="px-3 py-2 border-t border-border text-xs space-y-1.5 bg-muted/20">
               <p className="text-muted-foreground">{skill.description || 'No description'}</p>
-              <p className="text-muted-foreground font-mono text-[10px]">{skill.path}</p>
+              <p className="text-muted-foreground font-mono text-2xs">{skill.path}</p>
               {skill.editable && (
                 <button
                   onClick={() => handleDelete(skill.name)}
-                  className="flex items-center gap-1 text-[10px] text-destructive hover:underline"
+                  className="flex items-center gap-1 text-2xs text-destructive hover:underline"
                 >
                   <Trash2 size={10} />
                   {m?.deleteSkill ?? 'Delete'}
@@ -526,7 +530,7 @@ function SkillsSection({ t }: { t: any }) {
             </button>
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">{m?.skillName ?? 'Name'}</label>
+            <label className="text-2xs text-muted-foreground">{m?.skillName ?? 'Name'}</label>
             <input
               type="text"
               value={newName}
@@ -536,7 +540,7 @@ function SkillsSection({ t }: { t: any }) {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">{m?.skillDesc ?? 'Description'}</label>
+            <label className="text-2xs text-muted-foreground">{m?.skillDesc ?? 'Description'}</label>
             <input
               type="text"
               value={newDesc}
@@ -546,7 +550,7 @@ function SkillsSection({ t }: { t: any }) {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] text-muted-foreground">{m?.skillContent ?? 'Content'}</label>
+            <label className="text-2xs text-muted-foreground">{m?.skillContent ?? 'Content'}</label>
             <textarea
               value={newContent}
               onChange={e => setNewContent(e.target.value)}
@@ -556,7 +560,7 @@ function SkillsSection({ t }: { t: any }) {
             />
           </div>
           {error && (
-            <p className="text-[10px] text-destructive flex items-center gap-1">
+            <p className="text-2xs text-destructive flex items-center gap-1">
               <AlertCircle size={10} />
               {error}
             </p>
@@ -566,7 +570,7 @@ function SkillsSection({ t }: { t: any }) {
               onClick={handleCreate}
               disabled={!newName.trim() || saving}
               className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              style={{ background: 'var(--amber)', color: '#131210' }}
+              style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
             >
               {saving && <Loader2 size={10} className="animate-spin" />}
               {m?.saveSkill ?? 'Save'}

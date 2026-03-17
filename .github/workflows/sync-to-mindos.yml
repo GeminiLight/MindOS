@@ -79,6 +79,9 @@ jobs:
             [ -f "$f" ] && cp "$f" /tmp/mindos/
           done
 
+          # Preserve CLAUDE.md symlink
+          [ -L "CLAUDE.md" ] && cp -P CLAUDE.md /tmp/mindos/
+
           # Get the latest commit message from mindos-dev
           DEV_MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --format='%s')
 

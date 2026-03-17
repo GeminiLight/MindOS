@@ -191,3 +191,12 @@
 ### 加禁用状态后，排查所有消费同一状态的 UI 入口
 - **案例：** `submitting` 只禁用了 Complete 按钮，StepDots 和 Back 按钮漏了，用户可以在 saving 期间跳走
 - **规则：** 加 disabled 逻辑时，grep 所有能触发 `setStep` / 导航的地方，逐一确认守卫
+
+### setState updater 中不要做副作用
+- **案例：** `setState(prev => { navigator.clipboard.writeText(prev.authToken); return prev })` — clipboard 写入是副作用，放在 state updater 里违反 React 纯函数约定（React 18 严格模式下 updater 可能执行两次）
+- **解决：** 用 ref 或直接从 state 读值后在外层执行副作用
+- **规则：** `setState(fn)` 的 fn 只做纯计算，不触发 I/O / DOM / 网络
+
+### `.catch(() => {})` 静默吞错误
+- **案例：** SetupWizard 初始化阶段 token 生成和 agent 加载的 3 处 `.catch(() => {})` 完全静默，导致后续状态异常时难以排查
+- **规则：** 至少 `console.warn`，或设置 error state 给用户反馈。可以降级处理但不能完全无视

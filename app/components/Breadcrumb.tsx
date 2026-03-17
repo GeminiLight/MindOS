@@ -5,8 +5,8 @@ import { ChevronRight, Home, FileText, Table, Folder } from 'lucide-react';
 
 function FileTypeIcon({ name }: { name: string }) {
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
-  if (ext === '.csv') return <Table size={13} className="text-emerald-400 shrink-0" />;
-  if (ext) return <FileText size={13} className="text-zinc-400 shrink-0" />;
+  if (ext === '.csv') return <Table size={13} className="text-success shrink-0" />;
+  if (ext) return <FileText size={13} className="text-muted-foreground shrink-0" />;
   return <Folder size={13} className="text-yellow-400 shrink-0" />;
 }
 

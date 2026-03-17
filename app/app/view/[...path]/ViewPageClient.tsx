@@ -118,6 +118,11 @@ export default function ViewPageClient({
       setSaveError('Please enter a file name');
       return;
     }
+    // Reject path traversal and illegal filename characters
+    if (/[/\\:*?"<>|]/.test(trimmed) || trimmed.includes('..')) {
+      setSaveError('File name contains invalid characters');
+      return;
+    }
     if (!createDraftAction) {
       setSaveError('Draft save is not available');
       return;
@@ -283,7 +288,7 @@ export default function ViewPageClient({
                   onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50 font-display"
-                  style={{ background: 'var(--amber)', color: '#131210' }}
+                  style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   <span className="hidden sm:inline">Save</span>

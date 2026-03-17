@@ -289,7 +289,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           {/* Attached file chips */}
           {attachedFiles.length > 0 && (
             <div className="px-4 pt-2.5 pb-1">
-              <div className="text-[11px] text-muted-foreground/70 mb-1.5">Knowledge Base Context</div>
+              <div className="text-xs text-muted-foreground/70 mb-1.5">Knowledge Base Context</div>
               <div className="flex flex-wrap gap-1.5">
                 {attachedFiles.map(f => (
                   <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
@@ -300,7 +300,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
 
           {upload.localAttachments.length > 0 && (
             <div className="px-4 pb-1">
-              <div className="text-[11px] text-muted-foreground/70 mb-1.5">Uploaded Files</div>
+              <div className="text-xs text-muted-foreground/70 mb-1.5">Uploaded Files</div>
               <div className="flex flex-wrap gap-1.5">
                 {upload.localAttachments.map((f, idx) => (
                   <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
@@ -371,7 +371,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
                 <StopCircle size={15} />
               </button>
             ) : (
-              <button type="submit" disabled={!input.trim()} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0" style={{ background: 'var(--amber)', color: '#131210' }}>
+              <button type="submit" disabled={!input.trim()} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0" style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}>
                 <Send size={14} />
               </button>
             )}
@@ -384,7 +384,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
           <span className="inline-flex items-center gap-1">
             <span>Agent steps</span>
-            <select value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))} disabled={isLoading} className="bg-transparent border border-border rounded px-1.5 py-0.5 text-[11px] text-foreground">
+            <select value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))} disabled={isLoading} className="bg-transparent border border-border rounded px-1.5 py-0.5 text-xs text-foreground">
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={30}>30</option>

@@ -110,7 +110,7 @@ export default function OnboardingView() {
 
               {/* Directory preview */}
               <div
-                className="w-full rounded-lg px-3 py-2 text-[11px] leading-relaxed font-display"
+                className="w-full rounded-lg px-3 py-2 text-xs leading-relaxed font-display"
                 style={{
                   background: 'var(--muted)',
                   color: 'var(--muted-foreground)',

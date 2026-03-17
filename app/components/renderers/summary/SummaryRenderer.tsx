@@ -155,7 +155,7 @@ Be specific. Reference actual content from the files. Keep the total response un
             cursor: streaming || recentFiles.length === 0 ? 'not-allowed' : 'pointer',
             border: 'none',
             background: streaming ? 'var(--muted)' : 'var(--amber)',
-            color: streaming ? 'var(--muted-foreground)' : '#131210',
+            color: streaming ? 'var(--muted-foreground)' : 'var(--amber-foreground)',
             opacity: recentFiles.length === 0 ? 0.5 : 1,
             transition: 'opacity .15s',
           }}
