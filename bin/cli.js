@@ -582,11 +582,13 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
       await runGatewayCommand('stop');
       await runGatewayCommand('install');
-      await runGatewayCommand('start');
+      // Note: install() already starts the service via launchctl bootstrap + RunAtLoad=true.
+      // Do NOT call start() here — kickstart -k would kill the just-started process,
+      // causing a port-conflict race condition with KeepAlive restart loops.
       const webPort = (() => {
         try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).port ?? 3000; } catch { return 3000; }
       })();
-      console.log(dim('  (Waiting for Web UI to come back up...)'));
+      console.log(dim('  (Waiting for Web UI to come back up — first run after update includes a rebuild...)'));
       const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
       if (ready) {
         console.log(green('✔ MindOS restarted and ready.\n'));
