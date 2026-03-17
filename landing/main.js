@@ -6,7 +6,7 @@
 const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 const systemLang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
 const state = { theme: localStorage.getItem('mindos-theme') || systemTheme, lang: localStorage.getItem('mindos-lang') || systemLang, loopStarted: false };
-const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); document.documentElement.classList.remove('early-light'); localStorage.setItem('mindos-theme', t); };
+const applyTheme = (t) => { document.body.classList.toggle('light', t === 'light'); localStorage.setItem('mindos-theme', t); requestAnimationFrame(() => { requestAnimationFrame(() => { document.documentElement.classList.remove('early-light'); }); }); };
 const applyLang = (l) => { document.documentElement.lang = l; localStorage.setItem('mindos-lang', l); };
 applyTheme(state.theme); applyLang(state.lang);
 

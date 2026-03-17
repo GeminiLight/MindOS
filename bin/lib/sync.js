@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { CONFIG_PATH, MINDOS_DIR } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 
@@ -129,12 +130,24 @@ function autoPull(mindRoot) {
       }
     }
   }
+
+  // Retry any pending pushes (handles previous push failures)
+  try {
+    const unpushed = gitExec('git rev-list --count @{u}..HEAD', mindRoot);
+    if (parseInt(unpushed) > 0) {
+      execSync('git push', { cwd: mindRoot, stdio: 'pipe' });
+      saveSyncState({ ...loadSyncState(), lastSync: new Date().toISOString(), lastError: null });
+    }
+  } catch {
+    // No upstream tracking or push failed — ignore silently, autoCommitAndPush handles primary pushes
+  }
 }
 
 // ── Exported API ────────────────────────────────────────────────────────────
 
 let activeWatcher = null;
 let activePullInterval = null;
+let activeShutdownHandler = null;
 
 /**
  * Interactive sync init — configure remote git repo
@@ -187,18 +200,43 @@ export async function initSync(mindRoot, opts = {}) {
     try { execSync('git checkout -b main', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
   }
 
+  // 1b. Ensure .gitignore exists
+  const gitignorePath = resolve(mindRoot, '.gitignore');
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, [
+      '# MindOS auto-generated',
+      '.DS_Store',
+      'Thumbs.db',
+      '*.tmp',
+      '*.bak',
+      '*.swp',
+      '*.sync-conflict',
+      'node_modules/',
+      '.obsidian/',
+      '',
+    ].join('\n'), 'utf-8');
+  }
+
   // Handle token for HTTPS
   if (token && remoteUrl.startsWith('https://')) {
     const urlObj = new URL(remoteUrl);
-    urlObj.username = 'oauth2';
-    urlObj.password = token;
-    // Configure credential helper
-    try { execSync(`git config credential.helper store`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
-    // Store the credential
+    // Choose credential helper by platform
+    const platform = process.platform;
+    let helper;
+    if (platform === 'darwin') helper = 'osxkeychain';
+    else if (platform === 'win32') helper = 'manager';
+    else helper = 'store';
+    try { execSync(`git config credential.helper '${helper}'`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    // Store the credential via git credential approve
     try {
       const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
       execSync('git credential approve', { cwd: mindRoot, input: credInput, stdio: 'pipe' });
     } catch {}
+    // For 'store' helper, restrict file permissions AFTER credential file is created
+    if (helper === 'store') {
+      const credFile = resolve(process.env.HOME || homedir(), '.git-credentials');
+      try { execSync(`chmod 600 "${credFile}"`, { stdio: 'pipe' }); } catch {}
+    }
   }
 
   // 4. Set remote
@@ -257,6 +295,7 @@ export async function initSync(mindRoot, opts = {}) {
  * Start file watcher + periodic pull
  */
 export async function startSyncDaemon(mindRoot) {
+  if (activeWatcher) return null; // already running — idempotent guard
   const config = loadSyncConfig();
   if (!config.enabled) return null;
   if (!mindRoot || !isGitRepo(mindRoot)) return null;
@@ -281,10 +320,20 @@ export async function startSyncDaemon(mindRoot) {
   // Pull on startup
   autoPull(mindRoot);
 
+  // Graceful shutdown: flush pending changes before exit
+  const gracefulShutdown = () => {
+    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+    try { autoCommitAndPush(mindRoot); } catch {}
+    stopSyncDaemon();
+  };
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
+
   activeWatcher = watcher;
   activePullInterval = pullInterval;
+  activeShutdownHandler = gracefulShutdown;
 
-  return { watcher, pullInterval };
+  return { watcher, pullInterval, gracefulShutdown };
 }
 
 /**
@@ -298,6 +347,11 @@ export function stopSyncDaemon() {
   if (activePullInterval) {
     clearInterval(activePullInterval);
     activePullInterval = null;
+  }
+  if (activeShutdownHandler) {
+    process.removeListener('SIGTERM', activeShutdownHandler);
+    process.removeListener('SIGINT', activeShutdownHandler);
+    activeShutdownHandler = null;
   }
 }
 
@@ -336,14 +390,10 @@ export function getSyncStatus(mindRoot) {
  */
 export function manualSync(mindRoot) {
   if (!mindRoot || !isGitRepo(mindRoot)) {
-    console.error(red('Not a git repository. Run `mindos sync init` first.'));
-    process.exit(1);
+    throw new Error('Not a git repository. Run `mindos sync init` first.');
   }
-  console.log(dim('Pulling...'));
   autoPull(mindRoot);
-  console.log(dim('Committing & pushing...'));
   autoCommitAndPush(mindRoot);
-  console.log(green('✔ Sync complete'));
 }
 
 /**

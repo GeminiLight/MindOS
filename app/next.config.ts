@@ -3,7 +3,7 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['github-slugger'],
-  serverExternalPackages: ['pdfjs-dist', 'pdf-parse'],
+  serverExternalPackages: ['pdfjs-dist', 'pdf-parse', 'chokidar'],
   outputFileTracingRoot: path.join(__dirname),
   turbopack: {
     root: path.join(__dirname),
