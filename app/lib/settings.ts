@@ -18,8 +18,16 @@ export interface AiConfig {
   };
 }
 
+export interface AgentConfig {
+  maxSteps?: number;          // default 20, range 1-30
+  enableThinking?: boolean;   // default false, Anthropic only
+  thinkingBudget?: number;    // default 5000
+  contextStrategy?: 'auto' | 'off'; // default 'auto'
+}
+
 export interface ServerSettings {
   ai: AiConfig;
+  agent?: AgentConfig;
   mindRoot: string;   // empty = use env var / default
   port?: number;
   mcpPort?: number;
@@ -99,12 +107,25 @@ function migrateAi(parsed: Record<string, unknown>): AiConfig {
   };
 }
 
+/** Parse agent config from unknown input */
+function parseAgent(raw: unknown): AgentConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const result: AgentConfig = {};
+  if (typeof obj.maxSteps === 'number') result.maxSteps = Math.min(30, Math.max(1, obj.maxSteps));
+  if (typeof obj.enableThinking === 'boolean') result.enableThinking = obj.enableThinking;
+  if (typeof obj.thinkingBudget === 'number') result.thinkingBudget = Math.min(50000, Math.max(1000, obj.thinkingBudget));
+  if (obj.contextStrategy === 'auto' || obj.contextStrategy === 'off') result.contextStrategy = obj.contextStrategy;
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export function readSettings(): ServerSettings {
   try {
     const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
       ai: migrateAi(parsed),
+      agent: parseAgent(parsed.agent),
       mindRoot: (parsed.mindRoot ?? parsed.sopRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
       authToken:   typeof parsed.authToken   === 'string' ? parsed.authToken   : undefined,
@@ -126,6 +147,7 @@ export function writeSettings(settings: ServerSettings): void {
   let existing: Record<string, unknown> = {};
   try { existing = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')); } catch { /* ignore */ }
   const merged: Record<string, unknown> = { ...existing, ai: settings.ai, mindRoot: settings.mindRoot };
+  if (settings.agent !== undefined) merged.agent = settings.agent;
   if (settings.webPassword !== undefined) merged.webPassword = settings.webPassword;
   if (settings.authToken   !== undefined) merged.authToken   = settings.authToken;
   if (settings.port        !== undefined) merged.port        = settings.port;

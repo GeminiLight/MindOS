@@ -73,11 +73,15 @@
 
 ### 提交步骤
 
-1. **检查改动**：`git status` + `git diff` 查看所有变更
-2. **确认范围**：向用户确认哪些文件需要提交（排除不相关的临时文件）
-3. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
-4. **提交并 push**：`git add <files> && git commit && git push origin main`
-5. **确认发版**：提交后主动询问用户：
+1. **公开仓同步检查**（修改前执行）：确认 mindos (public) 没有未回流的外部 PR commit
+   - `git fetch public main && git log public/main --oneline -5`
+   - 有未同步的 → 先 `git merge public/main --no-edit`，再开始改代码
+   - 无 public remote 则跳过（`git remote | grep public`）
+2. **检查改动**：`git status` + `git diff` 查看所有变更
+3. **确认范围**：向用户确认哪些文件需要提交（排除不相关的临时文件）
+4. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
+5. **提交并 push**：`git add <files> && git commit && git push origin main`
+6. **确认发版**：提交后主动询问用户：
    - "是否需要发布新版本到 npm？"
    - 如果是，默认使用 `patch`，除非用户指定 `minor`（新功能）或 `major`（破坏性变更）
    - 然后执行 `npm run release [patch|minor|major]`

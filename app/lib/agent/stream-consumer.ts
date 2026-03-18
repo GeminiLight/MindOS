@@ -1,4 +1,4 @@
-import type { Message, MessagePart, ToolCallPart, TextPart } from '@/lib/types';
+import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart } from '@/lib/types';
 
 /**
  * Parse a UIMessageStream SSE response into structured Message parts.
@@ -17,11 +17,13 @@ export async function consumeUIMessageStream(
   const parts: MessagePart[] = [];
   const toolCalls = new Map<string, ToolCallPart>();
   let currentTextId: string | null = null;
+  let currentReasoningPart: ReasoningPart | null = null;
 
   /** Deep-clone parts into an immutable Message snapshot for React state */
   function buildMessage(): Message {
     const clonedParts: MessagePart[] = parts.map(p => {
       if (p.type === 'text') return { type: 'text' as const, text: p.text };
+      if (p.type === 'reasoning') return { type: 'reasoning' as const, text: p.text };
       return { ...p }; // ToolCallPart — shallow copy is safe (all primitive fields + `input` is replaced, not mutated)
     });
     const textContent = clonedParts
@@ -159,7 +161,25 @@ export async function consumeUIMessageStream(
             changed = true;
             break;
           }
-          // step-start, reasoning-*, metadata, finish — ignored for now
+          // step-start, metadata, finish — ignored for now
+          case 'reasoning-start': {
+            currentReasoningPart = { type: 'reasoning', text: '' };
+            parts.push(currentReasoningPart);
+            currentTextId = null;
+            changed = true;
+            break;
+          }
+          case 'reasoning-delta': {
+            if (currentReasoningPart) {
+              currentReasoningPart.text += chunk.delta as string;
+              changed = true;
+            }
+            break;
+          }
+          case 'reasoning-end': {
+            currentReasoningPart = null;
+            break;
+          }
           default:
             break;
         }
@@ -172,6 +192,20 @@ export async function consumeUIMessageStream(
     }
   } finally {
     reader.releaseLock();
+  }
+
+  // Finalize any tool calls still stuck in running/pending state
+  // (stream ended before their output arrived — e.g. abort, network error, step limit)
+  let finalized = false;
+  for (const tc of toolCalls.values()) {
+    if (tc.state === 'running' || tc.state === 'pending') {
+      tc.state = 'error';
+      tc.output = tc.output ?? 'Stream ended before tool completed';
+      finalized = true;
+    }
+  }
+  if (finalized) {
+    onUpdate(buildMessage());
   }
 
   return buildMessage();

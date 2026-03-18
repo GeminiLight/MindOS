@@ -1225,6 +1225,11 @@ function getLocalIP() {
 }
 
 async function finish(mindDir, startMode = 'start', mcpPort = 8781, authToken = '', installDaemon = false, needsRestart = false, oldPort = 3456) {
+  // startMode 'daemon' stored in config is equivalent to installDaemon flag
+  if (startMode === 'daemon') {
+    installDaemon = true;
+    startMode = 'start';
+  }
   if (needsRestart) {
     const isRunning = await isSelfPort(oldPort);
     if (isRunning) {

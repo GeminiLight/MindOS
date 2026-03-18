@@ -28,7 +28,6 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming'>('connecting');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
-  const [maxSteps, setMaxSteps] = useState(20);
   const [showHistory, setShowHistory] = useState(false);
 
   const session = useAskSession(currentFile);
@@ -136,7 +135,6 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           currentFile,
           attachedFiles,
           uploadedFiles: upload.localAttachments,
-          maxSteps,
         }),
         signal: controller.signal,
       });
@@ -208,7 +206,7 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, maxSteps, t.ask.errorNoResponse, t.ask.stopped]);
+  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, t.ask.errorNoResponse, t.ask.stopped]);
 
   const handleResetSession = useCallback(() => {
     if (isLoading) return;
@@ -287,7 +285,6 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
           emptyPrompt={t.ask.emptyPrompt}
           suggestions={t.ask.suggestions}
           onSuggestionClick={setInput}
-          maxSteps={maxSteps}
           labels={{ connecting: t.ask.connecting, thinking: t.ask.thinking, generating: t.ask.generating }}
         />
 
@@ -389,14 +386,6 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         <div className="hidden md:flex px-4 pb-2 items-center gap-3 text-xs text-muted-foreground/50 shrink-0">
           <span><kbd className="font-mono">↵</kbd> {t.ask.send}</span>
           <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
-          <span className="inline-flex items-center gap-1">
-            <span>Agent steps</span>
-            <select value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))} disabled={isLoading} className="bg-transparent border border-border rounded px-1.5 py-0.5 text-xs text-foreground">
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={30}>30</option>
-            </select>
-          </span>
           <span><kbd className="font-mono">ESC</kbd> {t.search.close}</span>
         </div>
       </div>

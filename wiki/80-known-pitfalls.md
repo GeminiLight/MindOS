@@ -215,11 +215,11 @@
 - **解决：** `choose()` 加 `forcePrompt` 参数，必须交互的选项标记 `{ forcePrompt: true }`
 
 ### npm 包体积膨胀 — package.json files 排除项遗漏
-- **现象：** npm 包从 ~480kB 膨胀到 1.7MB
-- **原因：** `package.json` 的 `files` 字段缺少排除项：`assets/images/`（1.2MB README 截图）、`mcp/package-lock.json`（58kB）
-- **注意：** `app/package-lock.json`（560kB）**不能排除**——`bin/lib/build.js` 的 `depsHash()` 读它做 hash，缺失会导致每次 `mindos start` 都重新 `npm install`
-- **教训：** 新增顶层目录或大文件后，跑 `npm pack --dry-run | sort -h -r | head -30` 检查包内容，关注非源码文件（lock、图片、node_modules）
-- **文件：** `package.json`
+- **现象：** npm 包从 ~480kB 膨胀到 1.8MB
+- **原因：** `package.json` 的 `files` 字段缺少排除项：`assets/images/`（1.2MB 截图）、`mcp/package-lock.json`（58kB）、`app/package-lock.json`（560kB）
+- **`app/package-lock.json` 处理：** 原本 `depsHash()` 读 lock 文件做 hash，导致不能排除。改为读 `app/package.json`（几 KB）做 hash——依赖增删改时 package.json 一定变，精度足够
+- **教训：** npm 官方建议**不要发布 lock 文件**，lock 只对根项目有意义。如有 build 脚本依赖 lock 文件，应改为依赖 package.json 或预算 hash 写入小文件
+- **文件：** `package.json`, `bin/lib/build.js`
 
 ## 变更质量 checklist（通用）
 
@@ -270,3 +270,28 @@
 - **现象：** 首次 `initSync` 后尚未设置 upstream tracking，`autoPull()` 末尾的 push 重试逻辑执行 `git rev-list --count @{u}..HEAD` 抛异常，错误写入 `sync-state.json`，UI 显示红色错误状态
 - **解决：** catch 块改为静默忽略（`// No upstream tracking or push failed`），不写 `lastError`
 - **教训：** Git 命令在仓库初始状态下的行为可能与成熟仓库不同（如无 upstream、无 commit 等），关键路径需处理这些边界
+
+### sync.js 全量 execSync → execFileSync 迁移 + credential 静默吞错
+- **现象（P0）：** `git config credential.helper` 和 `git credential approve` 失败被空 `catch {}` 吞掉，后续 `git ls-remote` 因无凭证失败报 "Remote not reachable"，用户无从排查是 credential 问题
+- **现象（P1 注入）：** `remoteUrl` 和 `branch` 通过模板字符串插入 `execSync`，理论上可被 shell 注入
+- **现象（P1 竞态）：** SIGTERM + SIGINT 同时触发 `gracefulShutdown` → `autoCommitAndPush` 跑两次 → git 并发写冲突
+- **解决：**
+  - credential catch 块记日志 + fallback 到 URL 内嵌 token
+  - `ls-remote` 失败时从 `err.stderr` 提取具体错误信息
+  - sync.js 全部 `execSync` 迁移至 `execFileSync` 参数数组（含 `gitExec` 改为接收数组）
+  - `gracefulShutdown` 加 `shutdownInProgress` guard
+- **教训：** (1) catch 空块是 P0 级反模式，至少 `console.error` (2) 即使命令是硬编码的，统一用 `execFileSync` 消除整个攻击面比逐行审计更可靠
+- **文件：** `bin/lib/sync.js`
+
+### route.ts exec() shell 注入 + context.ts Anthropic API 兼容
+- **现象（P1）：** `app/api/sync/route.ts` 的 `runCli` 用 `exec()` 拼接 shell 字符串，用户输入可注入
+- **现象（P1）：** `truncateToolOutputs` 未做 `trp.output` null guard，output 为 undefined 时 crash
+- **现象（P2）：** `compactMessages` 产生连续 user 消息，Anthropic API 拒绝
+- **现象（P2）：** `hardPrune` 裁剪后首条可能是 assistant，Anthropic 要求 user 开头
+- **解决：**
+  - `runCli` 改为 `execFile` + 参数数组
+  - `trp.output` 加 null/type guard
+  - compact 时检测 recentMessages 首条是否 user，是则合并（支持 string 和 array content）
+  - hardPrune 跳过非 user 后加 fallback 注入 synthetic user 消息
+- **教训：** Anthropic API 严格要求消息以 user 开头且无连续同 role 消息，所有裁剪/合并操作后都需校验
+- **文件：** `app/app/api/sync/route.ts`、`app/lib/agent/context.ts`

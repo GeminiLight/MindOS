@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import type { ToolCallPart } from '@/lib/types';
+
+const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
 
 const TOOL_ICONS: Record<string, string> = {
   search: '🔍',
@@ -48,17 +50,23 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   const [expanded, setExpanded] = useState(false);
   const icon = TOOL_ICONS[part.toolName] ?? '🔧';
   const inputSummary = formatInput(part.input);
+  const isDestructive = DESTRUCTIVE_TOOLS.has(part.toolName);
 
   return (
-    <div className="my-1 rounded-md border border-border/50 bg-muted/30 text-xs font-mono">
+    <div className={`my-1 rounded-md border text-xs font-mono ${
+      isDestructive
+        ? 'border-amber-500/30 bg-amber-500/5'
+        : 'border-border/50 bg-muted/30'
+    }`}>
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-muted/50 transition-colors rounded-md"
       >
         {expanded ? <ChevronDown size={12} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={12} className="shrink-0 text-muted-foreground" />}
+        {isDestructive && <AlertTriangle size={11} className="shrink-0 text-amber-500" />}
         <span>{icon}</span>
-        <span className="text-foreground font-medium">{part.toolName}</span>
+        <span className={`font-medium ${isDestructive ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'}`}>{part.toolName}</span>
         <span className="text-muted-foreground truncate flex-1">({inputSummary})</span>
         <span className="shrink-0 ml-auto">
           {part.state === 'pending' || part.state === 'running' ? (

@@ -27,7 +27,12 @@ export interface TextPart {
   text: string;
 }
 
-export type MessagePart = TextPart | ToolCallPart;
+export interface ReasoningPart {
+  type: 'reasoning';
+  text: string;
+}
+
+export type MessagePart = TextPart | ToolCallPart | ReasoningPart;
 
 export interface Message {
   role: 'user' | 'assistant';

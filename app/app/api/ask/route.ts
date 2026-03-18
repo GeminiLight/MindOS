@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
-import { getModel, knowledgeBaseTools, truncate, AGENT_SYSTEM_PROMPT } from '@/lib/agent';
+import { getModel, knowledgeBaseTools, truncate, AGENT_SYSTEM_PROMPT, estimateTokens, estimateStringTokens, getContextLimit, needsCompact, truncateToolOutputs, compactMessages, hardPrune } from '@/lib/agent';
+import { effectiveAiConfig, readSettings } from '@/lib/settings';
 import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart } from '@/lib/types';
 
 /**
@@ -62,6 +63,7 @@ function convertToModelMessages(messages: FrontendMessage[]): ModelMessage[] {
           completedToolCalls.push(part);
         }
       }
+      // 'reasoning' parts are display-only; not sent back to model
     }
 
     if (assistantContent.length > 0) {
@@ -124,8 +126,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { messages, currentFile, attachedFiles, uploadedFiles, maxSteps } = body;
-  const stepLimit = Number.isFinite(maxSteps) ? Math.min(30, Math.max(1, Number(maxSteps))) : 20;
+  const { messages, currentFile, attachedFiles, uploadedFiles } = body;
+
+  // Read agent config from settings
+  // NOTE: readSettings() is also called inside getModel() → effectiveAiConfig().
+  // Acceptable duplication — both are sync fs reads with identical results.
+  const serverSettings = readSettings();
+  const agentConfig = serverSettings.agent ?? {};
+  const stepLimit = Number.isFinite(body.maxSteps)
+    ? Math.min(30, Math.max(1, Number(body.maxSteps)))
+    : Math.min(30, Math.max(1, agentConfig.maxSteps ?? 20));
+  const enableThinking = agentConfig.enableThinking ?? false;
+  const thinkingBudget = agentConfig.thinkingBudget ?? 5000;
+  const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
   // Auto-load skill + bootstrap context for each request.
   const skillPath = path.resolve(process.cwd(), 'data/skills/mindos/SKILL.md');
@@ -143,19 +156,21 @@ export async function POST(req: NextRequest) {
     target_config_md: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.md`) : null,
   };
 
-  const initStatus = [
-    `skill.mindos: ${skill.ok ? 'ok' : `failed (${skill.error})`} [${skillPath}]`,
-    `bootstrap.instruction: ${bootstrap.instruction.ok ? 'ok' : `failed (${bootstrap.instruction.error})`}`,
-    `bootstrap.index: ${bootstrap.index.ok ? 'ok' : `failed (${bootstrap.index.error})`}`,
-    `bootstrap.config_json: ${bootstrap.config_json.ok ? 'ok' : `failed (${bootstrap.config_json.error})`}`,
-    `bootstrap.config_md: ${bootstrap.config_md.ok ? 'ok' : `failed (${bootstrap.config_md.error})`}`,
-    `bootstrap.target_dir: ${targetDir ?? '(none)'}`,
-    `bootstrap.target_readme: ${bootstrap.target_readme ? (bootstrap.target_readme.ok ? 'ok' : `failed (${bootstrap.target_readme.error})`) : 'skipped'}`,
-    `bootstrap.target_instruction: ${bootstrap.target_instruction ? (bootstrap.target_instruction.ok ? 'ok' : `failed (${bootstrap.target_instruction.error})`) : 'skipped'}`,
-    `bootstrap.target_config_json: ${bootstrap.target_config_json ? (bootstrap.target_config_json.ok ? 'ok' : `failed (${bootstrap.target_config_json.error})`) : 'skipped'}`,
-    `bootstrap.target_config_md: ${bootstrap.target_config_md ? (bootstrap.target_config_md.ok ? 'ok' : `failed (${bootstrap.target_config_md.error})`) : 'skipped'}`,
-    `bootstrap.mind_root: ${getMindRoot()}`,
-  ].join('\n');
+  // Only report failures — when everything loads fine, a single summary line suffices.
+  const initFailures: string[] = [];
+  if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
+  if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
+  if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
+  if (!bootstrap.config_json.ok) initFailures.push(`bootstrap.config_json: failed (${bootstrap.config_json.error})`);
+  if (!bootstrap.config_md.ok) initFailures.push(`bootstrap.config_md: failed (${bootstrap.config_md.error})`);
+  if (bootstrap.target_readme && !bootstrap.target_readme.ok) initFailures.push(`bootstrap.target_readme: failed (${bootstrap.target_readme.error})`);
+  if (bootstrap.target_instruction && !bootstrap.target_instruction.ok) initFailures.push(`bootstrap.target_instruction: failed (${bootstrap.target_instruction.error})`);
+  if (bootstrap.target_config_json && !bootstrap.target_config_json.ok) initFailures.push(`bootstrap.target_config_json: failed (${bootstrap.target_config_json.error})`);
+  if (bootstrap.target_config_md && !bootstrap.target_config_md.ok) initFailures.push(`bootstrap.target_config_md: failed (${bootstrap.target_config_md.error})`);
+
+  const initStatus = initFailures.length === 0
+    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`
+    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`;
 
   const initContextBlocks: string[] = [];
   if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
@@ -227,7 +242,34 @@ export async function POST(req: NextRequest) {
 
   try {
     const model = getModel();
-    const modelMessages = convertToModelMessages(messages);
+    const cfg = effectiveAiConfig();
+    const modelName = cfg.provider === 'openai' ? cfg.openaiModel : cfg.anthropicModel;
+    let modelMessages = convertToModelMessages(messages);
+
+    // Phase 3: Context management pipeline
+    // 1. Truncate tool outputs in historical messages
+    modelMessages = truncateToolOutputs(modelMessages);
+
+    const preTokens = estimateTokens(modelMessages);
+    const sysTokens = estimateStringTokens(systemPrompt);
+    const ctxLimit = getContextLimit(modelName);
+    console.log(`[ask] Context: ~${preTokens + sysTokens} tokens (messages=${preTokens}, system=${sysTokens}), limit=${ctxLimit}`);
+
+    // 2. Compact if >70% context limit (skip if user disabled)
+    if (contextStrategy === 'auto' && needsCompact(modelMessages, systemPrompt, modelName)) {
+      console.log('[ask] Context >70% limit, compacting...');
+      const result = await compactMessages(modelMessages, model);
+      modelMessages = result.messages;
+      if (result.compacted) {
+        const postTokens = estimateTokens(modelMessages);
+        console.log(`[ask] After compact: ~${postTokens + sysTokens} tokens`);
+      } else {
+        console.log('[ask] Compact skipped (too few messages), hard prune will handle overflow if needed');
+      }
+    }
+
+    // 3. Hard prune if still >90% context limit
+    modelMessages = hardPrune(modelMessages, systemPrompt, modelName);
 
     // Phase 2: Step monitoring + loop detection
     const stepHistory: Array<{ tool: string; input: string }> = [];
@@ -240,6 +282,13 @@ export async function POST(req: NextRequest) {
       messages: modelMessages,
       tools: knowledgeBaseTools,
       stopWhen: stepCountIs(stepLimit),
+      ...(enableThinking && cfg.provider === 'anthropic' ? {
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'enabled', budgetTokens: thinkingBudget },
+          },
+        },
+      } : {}),
 
       onStepFinish: ({ toolCalls, usage }) => {
         if (toolCalls) {

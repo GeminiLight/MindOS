@@ -49,6 +49,7 @@ export async function GET() {
     webPassword: settings.webPassword ? '***set***' : '',
     authToken: maskToken(settings.authToken),
     mcpPort: settings.mcpPort ?? 8781,
+    agent: settings.agent ?? {},
     envOverrides: {
       AI_PROVIDER:       !!process.env.AI_PROVIDER,
       ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
         },
       },
       mindRoot: body.mindRoot ?? current.mindRoot,
+      agent: body.agent ?? current.agent,
       webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
       port: typeof body.port === 'number' ? body.port : current.port,

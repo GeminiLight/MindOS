@@ -45,11 +45,44 @@ function logged<P extends Record<string, unknown>>(
 
 export const knowledgeBaseTools = {
   list_files: tool({
-    description: 'List the full file tree of the knowledge base. Use this to browse what files exist.',
-    inputSchema: z.object({}),
-    execute: logged('list_files', async () => {
+    description: 'List files in the knowledge base as an indented tree. Directories beyond `depth` show "... (N items)". Pass `path` to list only a subdirectory, or `depth` to control how deep to expand (default 3).',
+    inputSchema: z.object({
+      path: z.string().optional().describe('Optional subdirectory to list (e.g. "Projects/Products"). Omit to list everything.'),
+      depth: z.number().min(1).max(10).optional().describe('Max tree depth to expand (default 3). Directories deeper than this show item count only.'),
+    }),
+    execute: logged('list_files', async ({ path: subdir, depth: maxDepth }) => {
       const tree = getFileTree();
-      return JSON.stringify(tree, null, 2);
+      const limit = maxDepth ?? 3;
+      const lines: string[] = [];
+      function walk(nodes: Array<{ name: string; type: string; children?: unknown[] }>, depth: number) {
+        for (const n of nodes) {
+          lines.push('  '.repeat(depth) + (n.type === 'directory' ? `${n.name}/` : n.name));
+          if (n.type === 'directory' && Array.isArray(n.children)) {
+            if (depth + 1 < limit) {
+              walk(n.children as typeof nodes, depth + 1);
+            } else {
+              lines.push('  '.repeat(depth + 1) + `... (${n.children.length} items)`);
+            }
+          }
+        }
+      }
+
+      if (subdir) {
+        const segments = subdir.replace(/\/$/, '').split('/').filter(Boolean);
+        let current: Array<{ name: string; type: string; path?: string; children?: unknown[] }> = tree as any;
+        for (const seg of segments) {
+          const found = current.find(n => n.name === seg && n.type === 'directory');
+          if (!found || !Array.isArray(found.children)) {
+            return `Directory not found: ${subdir}`;
+          }
+          current = found.children as typeof current;
+        }
+        walk(current as any, 0);
+      } else {
+        walk(tree as any, 0);
+      }
+
+      return lines.length > 0 ? lines.join('\n') : '(empty directory)';
     }),
   }),
 

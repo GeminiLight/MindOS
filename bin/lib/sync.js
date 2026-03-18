@@ -1,9 +1,18 @@
-import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { CONFIG_PATH, MINDOS_DIR } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
+
+// ── Atomic write helper ────────────────────────────────────────────────────
+
+function atomicWriteJSON(filePath, data) {
+  const content = JSON.stringify(data, null, 2) + '\n';
+  const tmp = filePath + '.tmp';
+  writeFileSync(tmp, content, 'utf-8');
+  renameSync(tmp, filePath);
+}
 
 // ── Config helpers ──────────────────────────────────────────────────────────
 
@@ -20,7 +29,7 @@ function saveSyncConfig(syncConfig) {
   let config = {};
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
   config.sync = syncConfig;
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  atomicWriteJSON(CONFIG_PATH, config);
 }
 
 function getMindRoot() {
@@ -44,7 +53,7 @@ function loadSyncState() {
 
 function saveSyncState(state) {
   if (!existsSync(MINDOS_DIR)) mkdirSync(MINDOS_DIR, { recursive: true });
-  writeFileSync(SYNC_STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+  atomicWriteJSON(SYNC_STATE_PATH, state);
 }
 
 // ── Git helpers ─────────────────────────────────────────────────────────────
@@ -53,13 +62,13 @@ function isGitRepo(dir) {
   return existsSync(resolve(dir, '.git'));
 }
 
-function gitExec(cmd, cwd) {
-  return execSync(cmd, { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim();
+function gitExec(args, cwd) {
+  return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim();
 }
 
 function getRemoteUrl(cwd) {
   try {
-    return gitExec('git remote get-url origin', cwd);
+    return gitExec(['remote', 'get-url', 'origin'], cwd);
   } catch {
     return null;
   }
@@ -67,7 +76,7 @@ function getRemoteUrl(cwd) {
 
 function getBranch(cwd) {
   try {
-    return gitExec('git rev-parse --abbrev-ref HEAD', cwd);
+    return gitExec(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
   } catch {
     return 'main';
   }
@@ -75,7 +84,7 @@ function getBranch(cwd) {
 
 function getUnpushedCount(cwd) {
   try {
-    return gitExec('git rev-list --count @{u}..HEAD', cwd);
+    return gitExec(['rev-list', '--count', '@{u}..HEAD'], cwd);
   } catch {
     return '?';
   }
@@ -85,12 +94,12 @@ function getUnpushedCount(cwd) {
 
 function autoCommitAndPush(mindRoot) {
   try {
-    execSync('git add -A', { cwd: mindRoot, stdio: 'pipe' });
-    const status = gitExec('git status --porcelain', mindRoot);
+    execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe' });
+    const status = gitExec(['status', '--porcelain'], mindRoot);
     if (!status) return;
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    execSync(`git commit -m "auto-sync: ${timestamp}"`, { cwd: mindRoot, stdio: 'pipe' });
-    execSync('git push', { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', `auto-sync: ${timestamp}`], { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd: mindRoot, stdio: 'pipe' });
     saveSyncState({ ...loadSyncState(), lastSync: new Date().toISOString(), lastError: null });
   } catch (err) {
     saveSyncState({ ...loadSyncState(), lastError: err.message, lastErrorTime: new Date().toISOString() });
@@ -99,31 +108,34 @@ function autoCommitAndPush(mindRoot) {
 
 function autoPull(mindRoot) {
   try {
-    execSync('git pull --rebase --autostash', { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['pull', '--rebase', '--autostash'], { cwd: mindRoot, stdio: 'pipe' });
     saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
   } catch {
     // rebase conflict → abort → merge
-    try { execSync('git rebase --abort', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    try { execFileSync('git', ['rebase', '--abort'], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
     try {
-      execSync('git pull --no-rebase', { cwd: mindRoot, stdio: 'pipe' });
+      execFileSync('git', ['pull', '--no-rebase'], { cwd: mindRoot, stdio: 'pipe' });
       saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
     } catch {
       // merge conflict → keep both versions
       try {
-        const conflicts = gitExec('git diff --name-only --diff-filter=U', mindRoot).split('\n').filter(Boolean);
+        const conflicts = gitExec(['diff', '--name-only', '--diff-filter=U'], mindRoot).split('\n').filter(Boolean);
+        const conflictWarnings = [];
         for (const file of conflicts) {
           try {
-            const theirs = execSync(`git show :3:${file}`, { cwd: mindRoot, encoding: 'utf-8' });
+            const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
             writeFileSync(resolve(mindRoot, file + '.sync-conflict'), theirs, 'utf-8');
-          } catch {}
-          try { execSync(`git checkout --ours "${file}"`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+          } catch {
+            conflictWarnings.push(file);
+          }
+          try { execFileSync('git', ['checkout', '--ours', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
         }
-        execSync('git add -A', { cwd: mindRoot, stdio: 'pipe' });
-        execSync('git commit -m "auto-sync: resolved conflicts (kept both versions)"', { cwd: mindRoot, stdio: 'pipe' });
+        execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe' });
+        execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept both versions)'], { cwd: mindRoot, stdio: 'pipe' });
         saveSyncState({
           ...loadSyncState(),
           lastPull: new Date().toISOString(),
-          conflicts: conflicts.map(f => ({ file: f, time: new Date().toISOString() })),
+          conflicts: conflicts.map(f => ({ file: f, time: new Date().toISOString(), noBackup: conflictWarnings.includes(f) })),
         });
       } catch (err) {
         saveSyncState({ ...loadSyncState(), lastError: err.message, lastErrorTime: new Date().toISOString() });
@@ -133,9 +145,9 @@ function autoPull(mindRoot) {
 
   // Retry any pending pushes (handles previous push failures)
   try {
-    const unpushed = gitExec('git rev-list --count @{u}..HEAD', mindRoot);
+    const unpushed = gitExec(['rev-list', '--count', '@{u}..HEAD'], mindRoot);
     if (parseInt(unpushed) > 0) {
-      execSync('git push', { cwd: mindRoot, stdio: 'pipe' });
+      execFileSync('git', ['push'], { cwd: mindRoot, stdio: 'pipe' });
       saveSyncState({ ...loadSyncState(), lastSync: new Date().toISOString(), lastError: null });
     }
   } catch {
@@ -196,8 +208,8 @@ export async function initSync(mindRoot, opts = {}) {
   // 1. Ensure git repo
   if (!isGitRepo(mindRoot)) {
     if (!nonInteractive) console.log(dim('Initializing git repository...'));
-    execSync('git init', { cwd: mindRoot, stdio: 'pipe' });
-    try { execSync('git checkout -b main', { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    execFileSync('git', ['init'], { cwd: mindRoot, stdio: 'pipe' });
+    try { execFileSync('git', ['checkout', '-b', 'main'], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
   }
 
   // 1b. Ensure .gitignore exists
@@ -226,35 +238,61 @@ export async function initSync(mindRoot, opts = {}) {
     if (platform === 'darwin') helper = 'osxkeychain';
     else if (platform === 'win32') helper = 'manager';
     else helper = 'store';
-    try { execSync(`git config credential.helper '${helper}'`, { cwd: mindRoot, stdio: 'pipe' }); } catch {}
-    // Store the credential via git credential approve
+    try { execFileSync('git', ['config', 'credential.helper', helper], { cwd: mindRoot, stdio: 'pipe' }); } catch (e) {
+      console.error(`[sync] credential.helper setup failed: ${e.message}`);
+    }
+    // Store the credential via git credential approve, then verify it stuck
+    let credentialStored = false;
     try {
       const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
-      execSync('git credential approve', { cwd: mindRoot, input: credInput, stdio: 'pipe' });
-    } catch {}
+      execFileSync('git', ['credential', 'approve'], { cwd: mindRoot, input: credInput, stdio: 'pipe' });
+      // Verify: credential fill should return the password we just stored
+      try {
+        const fillInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\n\n`;
+        const fillResult = execFileSync('git', ['credential', 'fill'], {
+          cwd: mindRoot, input: fillInput, encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+        });
+        credentialStored = fillResult.includes(`password=${token}`);
+      } catch {
+        credentialStored = false;
+      }
+    } catch (e) {
+      if (!nonInteractive) console.error(`[sync] credential approve failed: ${e.message}`);
+    }
+    // If credential helper didn't actually persist, embed token in URL
+    if (!credentialStored) {
+      if (!nonInteractive) console.log(dim('Credential helper unavailable, using inline token'));
+      const fallbackUrl = new URL(remoteUrl);
+      fallbackUrl.username = 'oauth2';
+      fallbackUrl.password = token;
+      remoteUrl = fallbackUrl.toString();
+    }
     // For 'store' helper, restrict file permissions AFTER credential file is created
     if (helper === 'store') {
       const credFile = resolve(process.env.HOME || homedir(), '.git-credentials');
-      try { execSync(`chmod 600 "${credFile}"`, { stdio: 'pipe' }); } catch {}
+      try { execFileSync('chmod', ['600', credFile], { stdio: 'pipe' }); } catch {}
     }
   }
 
   // 4. Set remote
   try {
-    execSync(`git remote add origin "${remoteUrl}"`, { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['remote', 'add', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
   } catch {
-    execSync(`git remote set-url origin "${remoteUrl}"`, { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
   }
 
   // 5. Test connection
   if (!nonInteractive) console.log(dim('Testing connection...'));
   try {
-    execSync('git ls-remote --exit-code origin', { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+    execFileSync('git', ['ls-remote', '--exit-code', 'origin'], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
     if (!nonInteractive) console.log(green('✔ Connection successful'));
-  } catch {
-    const errMsg = 'Remote not reachable — check URL and credentials';
+  } catch (lsErr) {
+    const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
+    const errMsg = `Remote not reachable${detail ? ': ' + detail : ''} — check URL and credentials`;
     if (nonInteractive) throw new Error(errMsg);
-    console.error(red('✘ Could not connect to remote. Check your URL and credentials.'));
+    console.error(red(`✘ ${errMsg}`));
     process.exit(1);
   }
 
@@ -272,11 +310,11 @@ export async function initSync(mindRoot, opts = {}) {
 
   // 7. First sync: pull if remote has content, push otherwise
   try {
-    const refs = gitExec('git ls-remote --heads origin', mindRoot);
+    const refs = gitExec(['ls-remote', '--heads', 'origin'], mindRoot);
     if (refs) {
       if (!nonInteractive) console.log(dim('Pulling from remote...'));
       try {
-        execSync(`git pull origin ${syncConfig.branch} --allow-unrelated-histories`, { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit' });
+        execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit' });
       } catch {
         if (!nonInteractive) console.log(yellow('Pull completed with warnings. Check for conflicts.'));
       }
@@ -321,7 +359,10 @@ export async function startSyncDaemon(mindRoot) {
   autoPull(mindRoot);
 
   // Graceful shutdown: flush pending changes before exit
+  let shutdownInProgress = false;
   const gracefulShutdown = () => {
+    if (shutdownInProgress) return;
+    shutdownInProgress = true;
     if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
     try { autoCommitAndPush(mindRoot); } catch {}
     stopSyncDaemon();

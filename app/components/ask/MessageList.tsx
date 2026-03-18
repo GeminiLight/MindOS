@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '@/lib/types';
 import ToolCallBlock from './ToolCallBlock';
+import ThinkingBlock from './ThinkingBlock';
 
 function AssistantMessage({ content, isStreaming }: { content: string; isStreaming: boolean }) {
   return (
@@ -45,6 +46,10 @@ function AssistantMessageWithParts({ message, isStreaming }: { message: Message;
   return (
     <div>
       {parts.map((part, idx) => {
+        if (part.type === 'reasoning') {
+          const isLastPart = isStreaming && idx === parts.length - 1;
+          return <ThinkingBlock key={`reasoning-${idx}`} text={part.text} isStreaming={isLastPart} />;
+        }
         if (part.type === 'text') {
           const isLastTextPart = isStreaming && idx === parts.length - 1;
           return part.text ? (
@@ -66,7 +71,7 @@ function AssistantMessageWithParts({ message, isStreaming }: { message: Message;
   );
 }
 
-function StepCounter({ parts, maxSteps }: { parts: Message['parts']; maxSteps?: number }) {
+function StepCounter({ parts }: { parts: Message['parts'] }) {
   if (!parts) return null;
   const toolCalls = parts.filter(p => p.type === 'tool-call');
   if (toolCalls.length === 0) return null;
@@ -75,7 +80,7 @@ function StepCounter({ parts, maxSteps }: { parts: Message['parts']; maxSteps?: 
   return (
     <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground/70">
       <Wrench size={10} />
-      <span>Step {toolCalls.length}{maxSteps ? `/${maxSteps}` : ''}{toolLabel ? ` — ${toolLabel}` : ''}</span>
+      <span>Step {toolCalls.length}{toolLabel ? ` — ${toolLabel}` : ''}</span>
     </div>
   );
 }
@@ -87,7 +92,6 @@ interface MessageListProps {
   emptyPrompt: string;
   suggestions: readonly string[];
   onSuggestionClick: (text: string) => void;
-  maxSteps?: number;
   labels: {
     connecting: string;
     thinking: string;
@@ -102,7 +106,6 @@ export default function MessageList({
   emptyPrompt,
   suggestions,
   onSuggestionClick,
-  maxSteps,
   labels,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -160,7 +163,7 @@ export default function MessageList({
                 <>
                   <AssistantMessageWithParts message={m} isStreaming={isLoading && i === messages.length - 1} />
                   {isLoading && i === messages.length - 1 && (
-                    <StepCounter parts={m.parts} maxSteps={maxSteps} />
+                    <StepCounter parts={m.parts} />
                   )}
                 </>
               ) : isLoading && i === messages.length - 1 ? (

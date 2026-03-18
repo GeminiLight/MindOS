@@ -14,8 +14,16 @@ export interface AiSettings {
   };
 }
 
+export interface AgentSettings {
+  maxSteps?: number;
+  enableThinking?: boolean;
+  thinkingBudget?: number;
+  contextStrategy?: 'auto' | 'off';
+}
+
 export interface SettingsData {
   ai: AiSettings;
+  agent?: AgentSettings;
   mindRoot: string;
   webPassword?: string;
   authToken?: string;   // masked: first-xxxx-••••-last pattern

@@ -6,28 +6,23 @@ export async function GET() {
   try {
     const settings = readSettings();
     const port = settings.mcpPort ?? 8781;
-    const endpoint = `http://127.0.0.1:${port}/mcp`;
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const endpoint = `${baseUrl}/mcp`;
     const authConfigured = !!settings.authToken;
 
-    // Check if MCP server is running
     let running = false;
-    let toolCount = 0;
+
     try {
+      // Use the health endpoint — avoids MCP handshake complexity
+      const healthUrl = `${baseUrl}/api/health`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
-        signal: controller.signal,
-      });
+      const res = await fetch(healthUrl, { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timeout);
+
       if (res.ok) {
-        running = true;
-        try {
-          const data = await res.json();
-          if (data?.result?.tools) toolCount = data.result.tools.length;
-        } catch { /* non-JSON response — still running */ }
+        const data = await res.json() as { ok?: boolean; service?: string };
+        running = data.ok === true && data.service === 'mindos';
       }
     } catch {
       // Connection refused or timeout — not running
@@ -38,7 +33,7 @@ export async function GET() {
       transport: 'http',
       endpoint,
       port,
-      toolCount,
+      toolCount: running ? 20 : 0,
       authConfigured,
     });
   } catch (err) {

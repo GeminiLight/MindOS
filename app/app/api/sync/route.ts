@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync, exec } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
@@ -42,13 +42,11 @@ function getCliPath() {
   return resolve(process.cwd(), '..', 'bin', 'cli' + '.js');
 }
 
-/** Run CLI command via shell string — avoids Turbopack static analysis of file paths */
+/** Run CLI command via execFile — avoids shell injection by passing args as array */
 function runCli(args: string[], timeoutMs = 30000): Promise<void> {
   const cliPath = getCliPath();
-  const escaped = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
-  const cmd = `${process.execPath} ${cliPath} ${escaped}`;
   return new Promise((res, rej) => {
-    exec(cmd, { timeout: timeoutMs }, (err, _stdout, stderr) => {
+    execFile(process.execPath, [cliPath, ...args], { timeout: timeoutMs }, (err, _stdout, stderr) => {
       if (err) rej(new Error(stderr?.trim() || err.message));
       else res();
     });

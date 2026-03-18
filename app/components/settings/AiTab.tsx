@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import type { AiSettings, ProviderConfig, SettingsData } from './types';
+import type { AiSettings, AgentSettings, ProviderConfig, SettingsData } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput } from './Primitives';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
@@ -28,10 +28,11 @@ function errorMessage(t: any, code?: ErrorCode): string {
 interface AiTabProps {
   data: SettingsData;
   updateAi: (patch: Partial<AiSettings>) => void;
+  updateAgent: (patch: Partial<AgentSettings>) => void;
   t: any;
 }
 
-export function AiTab({ data, updateAi, t }: AiTabProps) {
+export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   const env = data.envOverrides ?? {};
   const envVal = data.envValues ?? {};
   const provider = data.ai.provider;
@@ -224,6 +225,79 @@ export function AiTab({ data, updateAi, t }: AiTabProps) {
           <span>{t.settings.ai.envHint}</span>
         </div>
       )}
+
+      {/* Agent Behavior */}
+      <div className="pt-3 border-t border-border">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t.settings.agent.title}</h3>
+
+        <div className="space-y-4">
+          <Field label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
+            <Select
+              value={String(data.agent?.maxSteps ?? 20)}
+              onChange={e => updateAgent({ maxSteps: Number(e.target.value) })}
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+              <option value="25">25</option>
+              <option value="30">30</option>
+            </Select>
+          </Field>
+
+          <Field label={t.settings.agent.contextStrategy} hint={t.settings.agent.contextStrategyHint}>
+            <Select
+              value={data.agent?.contextStrategy ?? 'auto'}
+              onChange={e => updateAgent({ contextStrategy: e.target.value as 'auto' | 'off' })}
+            >
+              <option value="auto">{t.settings.agent.contextStrategyAuto}</option>
+              <option value="off">{t.settings.agent.contextStrategyOff}</option>
+            </Select>
+          </Field>
+
+          {provider === 'anthropic' && (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-foreground">{t.settings.agent.thinking}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{t.settings.agent.thinkingHint}</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={data.agent?.enableThinking ?? false}
+                  onClick={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    data.agent?.enableThinking ? 'bg-amber-500' : 'bg-muted'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                      data.agent?.enableThinking ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {data.agent?.enableThinking && (
+                <Field label={t.settings.agent.thinkingBudget} hint={t.settings.agent.thinkingBudgetHint}>
+                  <Input
+                    type="number"
+                    value={String(data.agent?.thinkingBudget ?? 5000)}
+                    onChange={e => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) updateAgent({ thinkingBudget: Math.max(1000, Math.min(50000, v)) });
+                    }}
+                    min={1000}
+                    max={50000}
+                    step={1000}
+                  />
+                </Field>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

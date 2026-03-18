@@ -6,7 +6,7 @@ import { useLocale } from '@/lib/LocaleContext';
 import { getAllRenderers, loadDisabledState, isRendererEnabled } from '@/lib/renderers/registry';
 import { apiFetch } from '@/lib/api';
 import '@/lib/renderers/index';
-import type { AiSettings, SettingsData, Tab } from './settings/types';
+import type { AiSettings, AgentSettings, SettingsData, Tab } from './settings/types';
 import { FONTS } from './settings/types';
 import { AiTab } from './settings/AiTab';
 import { AppearanceTab } from './settings/AppearanceTab';
@@ -88,7 +88,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
       await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai: data.ai, mindRoot: data.mindRoot, webPassword: data.webPassword, authToken: data.authToken }),
+        body: JSON.stringify({ ai: data.ai, agent: data.agent, mindRoot: data.mindRoot, webPassword: data.webPassword, authToken: data.authToken }),
       });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2500);
@@ -102,6 +102,10 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
 
   const updateAi = useCallback((patch: Partial<AiSettings>) => {
     setData(d => d ? { ...d, ai: { ...d.ai, ...patch } } : d);
+  }, []);
+
+  const updateAgent = useCallback((patch: Partial<AgentSettings>) => {
+    setData(d => d ? { ...d, agent: { ...(d.agent ?? {}), ...patch } } : d);
   }, []);
 
   const restoreFromEnv = useCallback(async () => {
@@ -198,7 +202,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             </div>
           ) : (
             <>
-              {tab === 'ai' && data?.ai && <AiTab data={data} updateAi={updateAi} t={t} />}
+              {tab === 'ai' && data?.ai && <AiTab data={data} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
               {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
               {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
               {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} />}
