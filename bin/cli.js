@@ -29,6 +29,7 @@
  *   mindos gateway status           — show service status
  *   mindos gateway logs             — tail service logs
  *   mindos doctor                   — health check (config, ports, build, daemon)
+ *   mindos uninstall                — fully uninstall MindOS (stop, remove daemon, npm uninstall)
  *   mindos update                   — update to latest version
  *   mindos logs                     — tail service logs (~/.mindos/mindos.log)
  *   mindos config show              — print current config (API keys masked)
@@ -42,7 +43,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
-import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH } from './lib/constants.js';
+import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH, MINDOS_DIR } from './lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
 import { run } from './lib/utils.js';
 import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
@@ -242,7 +243,7 @@ const commands = {
         // causing a port-conflict race condition with KeepAlive restart loops.
         console.log(dim('  (First run may take a few minutes to install dependencies and build the app.)'));
         console.log(dim('  Follow live progress with:  mindos logs\n'));
-        const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
+        const ready = await waitForHttp(Number(webPort), { retries: 60, intervalMs: 2000, label: 'Web UI' });
         if (!ready) {
           console.error(red('\n✘ Service started but Web UI did not become ready in time.'));
           console.error(dim('  Check logs with: mindos logs\n'));
@@ -604,23 +605,170 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
       await runGatewayCommand('stop');
       await runGatewayCommand('install');
-      // Note: install() already starts the service via launchctl bootstrap + RunAtLoad=true.
-      // Do NOT call start() here — kickstart -k would kill the just-started process,
-      // causing a port-conflict race condition with KeepAlive restart loops.
-      const webPort = (() => {
-        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).port ?? 3456; } catch { return 3456; }
+      // install() starts the service:
+      //   - systemd: daemon-reload + enable + start
+      //   - launchd: bootstrap (RunAtLoad=true auto-starts)
+      // Do NOT call start() again — on macOS kickstart -k would kill the
+      // just-started process, causing a port-conflict race with KeepAlive.
+      const updateConfig = (() => {
+        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
       })();
+      const webPort = updateConfig.port ?? 3456;
+      const mcpPort = updateConfig.mcpPort ?? 8781;
       console.log(dim('  (Waiting for Web UI to come back up — first run after update includes a rebuild...)'));
-      const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI' });
+      const ready = await waitForHttp(Number(webPort), { retries: 60, intervalMs: 2000, label: 'Web UI' });
       if (ready) {
-        console.log(green('✔ MindOS restarted and ready.\n'));
+        const localIP = getLocalIP();
+        console.log(`\n${'─'.repeat(53)}`);
+        console.log(`${green('✔')} ${bold(`MindOS updated: ${currentVersion} → ${newVersion}`)}\n`);
+        console.log(`  ${green('●')} Web UI   ${cyan(`http://localhost:${webPort}`)}`);
+        if (localIP) console.log(`             ${cyan(`http://${localIP}:${webPort}`)}`);
+        console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
+        console.log(`\n  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}`);
+        console.log(`${'─'.repeat(53)}\n`);
       } else {
         console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
         process.exit(1);
       }
     } else {
-      console.log(dim('  Run `mindos start` — it will rebuild automatically.\n'));
+      console.log(`\n${green('✔')} ${bold(`Updated: ${currentVersion} → ${newVersion}`)}`);
+      console.log(dim('  Run `mindos start` — it will rebuild automatically.'));
+      console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
     }
+  },
+
+  // ── uninstall ──────────────────────────────────────────────────────────────
+  uninstall: async () => {
+    const readline = await import('node:readline');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+    // Buffer lines eagerly — readline.question() loses buffered lines when
+    // piped stdin delivers multiple lines at once (Node.js known behavior).
+    const lineBuffer = [];
+    let lineResolve = null;
+    rl.on('line', (line) => {
+      if (lineResolve) {
+        const r = lineResolve;
+        lineResolve = null;
+        r(line);
+      } else {
+        lineBuffer.push(line);
+      }
+    });
+    // On EOF with no pending resolve, close gracefully
+    rl.on('close', () => {
+      if (lineResolve) { lineResolve(''); lineResolve = null; }
+    });
+
+    function prompt(question) {
+      process.stdout.write(question + ' ');
+      if (lineBuffer.length > 0) return Promise.resolve(lineBuffer.shift());
+      return new Promise((resolve) => { lineResolve = resolve; });
+    }
+
+    async function confirm(question) {
+      const a = (await prompt(question + ' [y/N]')).trim().toLowerCase();
+      return a === 'y' || a === 'yes';
+    }
+
+    async function askInput(question) {
+      return (await prompt(question)).trim();
+    }
+
+    async function askPassword(question) {
+      // Mute echoed keystrokes
+      const stdout = process.stdout;
+      const origWrite = stdout.write.bind(stdout);
+      stdout.write = (chunk, ...args) => {
+        // Suppress everything except the prompt itself
+        if (typeof chunk === 'string' && chunk.includes(question)) return origWrite(chunk, ...args);
+        return true;
+      };
+      const answer = await prompt(question);
+      stdout.write = origWrite;
+      console.log(); // newline after hidden input
+      return answer.trim();
+    }
+
+    const done = () => rl.close();
+
+    console.log(`\n${bold('🗑  MindOS Uninstall')}\n`);
+    console.log('  This will:');
+    console.log(`  ${green('✓')} Stop running MindOS processes`);
+    console.log(`  ${green('✓')} Remove background service (if installed)`);
+    console.log(`  ${green('✓')} Uninstall npm package\n`);
+
+    if (!await confirm('Proceed?')) {
+      console.log(dim('\n  Aborted.\n'));
+      done();
+      return;
+    }
+
+    // 1. Stop processes
+    console.log(`\n${cyan('Stopping MindOS...')}`);
+    try { stopMindos(); } catch { /* may not be running */ }
+
+    // 2. Remove daemon (skip if platform unsupported)
+    if (getPlatform()) {
+      try {
+        await runGatewayCommand('uninstall');
+      } catch {
+        // Daemon may not be installed — that's fine
+      }
+    }
+
+    // Read config before potentially deleting ~/.mindos/
+    let config = {};
+    try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+    const mindRoot = config.mindRoot?.replace(/^~/, homedir());
+
+    // 3. Ask to remove ~/.mindos/
+    if (existsSync(MINDOS_DIR)) {
+      if (await confirm(`Remove config directory (${dim(MINDOS_DIR)})?`)) {
+        rmSync(MINDOS_DIR, { recursive: true, force: true });
+        console.log(`${green('✔')} Removed ${dim(MINDOS_DIR)}`);
+      } else {
+        console.log(dim(`  Kept ${MINDOS_DIR}`));
+      }
+    }
+
+    // 4. Ask to remove knowledge base (triple protection: confirm → type YES → password)
+    if (mindRoot && existsSync(mindRoot)) {
+      if (await confirm(`Remove knowledge base (${dim(mindRoot)})?`)) {
+        const typed = await askInput(`${yellow('⚠  This is irreversible.')} Type ${bold('YES')} to confirm:`);
+        if (typed === 'YES') {
+          const webPassword = config.webPassword;
+          let authorized = true;
+          if (webPassword) {
+            const pw = await askPassword('Enter web password:');
+            if (pw !== webPassword) {
+              console.log(red('  Wrong password. Knowledge base kept.'));
+              authorized = false;
+            }
+          }
+          if (authorized) {
+            rmSync(mindRoot, { recursive: true, force: true });
+            console.log(`${green('✔')} Removed ${dim(mindRoot)}`);
+          }
+        } else {
+          console.log(dim('  Knowledge base kept.'));
+        }
+      } else {
+        console.log(dim(`  Kept ${mindRoot}`));
+      }
+    }
+
+    // 5. npm uninstall -g
+    console.log(`\n${cyan('Uninstalling npm package...')}`);
+    try {
+      execSync('npm uninstall -g @geminilight/mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
+    } catch {
+      console.log(yellow('  npm uninstall failed — you may need to run manually:'));
+      console.log(dim('  npm uninstall -g @geminilight/mindos'));
+    }
+
+    console.log(`\n${green('✔ MindOS uninstalled.')}\n`);
+    done();
   },
 
   // ── logs ───────────────────────────────────────────────────────────────────
@@ -628,7 +776,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     ensureMindosDir();
     if (!existsSync(LOG_PATH)) {
       console.log(dim(`No log file yet at ${LOG_PATH}`));
-      console.log(dim('Logs are written when running in daemon mode (mindos start --daemon).'));
+      console.log(dim('Logs are created when starting MindOS (mindos start, mindos onboard, or daemon mode).'));
       process.exit(0);
     }
     const noFollow = process.argv.includes('--no-follow');
@@ -932,6 +1080,7 @@ ${bold('Config & Diagnostics:')}
 ${row('mindos config <subcommand>',        'View/update config (show/validate/set/unset)')}
 ${row('mindos doctor',                     'Health check (config, ports, build, daemon)')}
 ${row('mindos update',                     'Update MindOS to the latest version')}
+${row('mindos uninstall',                  'Fully uninstall MindOS (stop, remove daemon, npm uninstall)')}
 ${row('mindos logs',                       'Tail service logs (~/.mindos/mindos.log)')}
 ${row('mindos',                            'Start using mode saved in ~/.mindos/config.json')}
 `);

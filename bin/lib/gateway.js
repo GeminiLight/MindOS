@@ -50,8 +50,19 @@ export async function waitForPortFree(port, { retries = 30, intervalMs = 500 } =
   return !(await isPortInUse(port));
 }
 
-export async function waitForHttp(port, { retries = 120, intervalMs = 2000, label = 'service' } = {}) {
-  process.stdout.write(cyan(`  Waiting for ${label} to be ready`));
+export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label = 'service' } = {}) {
+  const start = Date.now();
+  const elapsed = () => {
+    const s = Math.round((Date.now() - start) / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
+  };
+  const phases = [
+    { after: 0,  msg: 'installing dependencies' },
+    { after: 15, msg: 'building app' },
+    { after: 60, msg: 'still building (first run takes a while)' },
+  ];
+  let currentPhase = -1;
+
   for (let i = 0; i < retries; i++) {
     try {
       const { request } = await import('node:http');
@@ -62,12 +73,30 @@ export async function waitForHttp(port, { retries = 120, intervalMs = 2000, labe
         req.on('timeout', () => { req.destroy(); resolve(false); });
         req.end();
       });
-      if (ok) { process.stdout.write(` ${green('\u2714')}\n`); return true; }
+      if (ok) {
+        // Clear line and print success
+        process.stdout.write(`\r\x1b[K`);
+        process.stdout.write(`  ${green('\u2714')} ${label} ready ${dim(`(${elapsed()})`)}\n`);
+        return true;
+      }
     } catch { /* not ready yet */ }
-    process.stdout.write('.');
+
+    // Update phase hint
+    const secs = (Date.now() - start) / 1000;
+    const nextPhase = phases.reduce((idx, p, i) => secs >= p.after ? i : idx, -1);
+    if (nextPhase !== currentPhase) {
+      currentPhase = nextPhase;
+    }
+    const hint = currentPhase >= 0 ? phases[currentPhase].msg : '';
+
+    // Rewrite the status line in place
+    process.stdout.write(`\r\x1b[K`);
+    process.stdout.write(cyan(`  ⏳ Waiting for ${label}`) + dim(` — ${hint} (${elapsed()})`));
+
     await new Promise(r => setTimeout(r, intervalMs));
   }
-  process.stdout.write(` ${red('\u2718')}\n`);
+  process.stdout.write(`\r\x1b[K`);
+  process.stdout.write(`  ${red('\u2718')} ${label} did not start ${dim(`(${elapsed()})`)}\n`);
   return false;
 }
 
@@ -107,14 +136,15 @@ const systemd = {
     ].join('\n');
     writeFileSync(SYSTEMD_UNIT, unit, 'utf-8');
     console.log(green(`\u2714 Wrote ${SYSTEMD_UNIT}`));
-    execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
-    execSync('systemctl --user enable mindos', { stdio: 'inherit' });
-    console.log(green('\u2714 Service installed and enabled'));
+    execSync('systemctl --user daemon-reload', { stdio: ['ignore', 'inherit', 'inherit'] });
+    execSync('systemctl --user enable mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
+    execSync('systemctl --user start mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
+    console.log(green('\u2714 Service installed and started'));
   },
 
   async start() {
     rotateLogs();
-    execSync('systemctl --user start mindos', { stdio: 'inherit' });
+    execSync('systemctl --user start mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
     const ok = await waitForService(() => {
       try {
         const out = execSync('systemctl --user is-active mindos', { encoding: 'utf-8' }).trim();
@@ -123,36 +153,36 @@ const systemd = {
     });
     if (!ok) {
       console.error(red('\n\u2718 Service failed to start. Last log output:'));
-      try { execSync(`journalctl --user -u mindos -n 30 --no-pager`, { stdio: 'inherit' }); } catch {}
+      try { execSync(`journalctl --user -u mindos -n 30 --no-pager`, { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
       process.exit(1);
     }
     console.log(green('\u2714 Service started'));
   },
 
   stop() {
-    execSync('systemctl --user stop mindos', { stdio: 'inherit' });
+    execSync('systemctl --user stop mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
     console.log(green('\u2714 Service stopped'));
   },
 
   status() {
     try {
-      execSync('systemctl --user status mindos', { stdio: 'inherit' });
+      execSync('systemctl --user status mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
     } catch { /* status exits non-zero when stopped */ }
   },
 
   logs() {
-    execSync(`journalctl --user -u mindos -f`, { stdio: 'inherit' });
+    execSync(`journalctl --user -u mindos -f`, { stdio: ['ignore', 'inherit', 'inherit'] });
   },
 
   uninstall() {
     try {
-      execSync('systemctl --user disable --now mindos', { stdio: 'inherit' });
+      execSync('systemctl --user disable --now mindos', { stdio: ['ignore', 'inherit', 'inherit'] });
     } catch { /* may already be stopped */ }
     if (existsSync(SYSTEMD_UNIT)) {
       rmSync(SYSTEMD_UNIT);
       console.log(green(`\u2714 Removed ${SYSTEMD_UNIT}`));
     }
-    execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+    execSync('systemctl --user daemon-reload', { stdio: ['ignore', 'inherit', 'inherit'] });
     console.log(green('\u2714 Service uninstalled'));
   },
 };
@@ -213,7 +243,7 @@ const launchd = {
 
   async start() {
     rotateLogs();
-    execSync(`launchctl kickstart -k gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
+    execSync(`launchctl kickstart -k gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: ['ignore', 'inherit', 'inherit'] });
     const ok = await waitForService(() => {
       try {
         const out = execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { encoding: 'utf-8' });
@@ -222,7 +252,7 @@ const launchd = {
     });
     if (!ok) {
       console.error(red('\n\u2718 Service failed to start. Last log output:'));
-      try { execSync(`tail -n 30 ${LOG_PATH}`, { stdio: 'inherit' }); } catch {}
+      try { execSync(`tail -n 30 ${LOG_PATH}`, { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
       process.exit(1);
     }
     console.log(green('\u2714 Service started'));
@@ -238,7 +268,7 @@ const launchd = {
     } catch {}
 
     try {
-      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
+      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: ['ignore', 'inherit', 'inherit'] });
     } catch { /* may not be running */ }
 
     // launchctl bootout is async — wait for ports to actually be freed
@@ -264,19 +294,19 @@ const launchd = {
 
   status() {
     try {
-      execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: 'inherit' });
+      execSync(`launchctl print gui/${launchctlUid()}/${LAUNCHD_LABEL}`, { stdio: ['ignore', 'inherit', 'inherit'] });
     } catch {
       console.log(dim('Service is not running'));
     }
   },
 
   logs() {
-    execSync(`tail -f ${LOG_PATH}`, { stdio: 'inherit' });
+    execSync(`tail -f ${LOG_PATH}`, { stdio: ['ignore', 'inherit', 'inherit'] });
   },
 
   uninstall() {
     try {
-      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: 'inherit' });
+      execSync(`launchctl bootout gui/${launchctlUid()} ${LAUNCHD_PLIST}`, { stdio: ['ignore', 'inherit', 'inherit'] });
     } catch { /* may not be running */ }
     if (existsSync(LAUNCHD_PLIST)) {
       rmSync(LAUNCHD_PLIST);

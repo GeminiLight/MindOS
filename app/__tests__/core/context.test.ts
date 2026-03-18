@@ -52,6 +52,16 @@ function toolMsg(toolName: string, value: string): ModelMessage {
   } as ModelMessage;
 }
 
+/** Create an assistant message with a tool call (simulates LLM calling a tool) */
+function assistantWithToolCall(toolName: string, input: unknown = {}): ModelMessage {
+  return {
+    role: 'assistant',
+    content: [
+      { type: 'tool-call', toolCallId: `call_${toolName}`, toolName, input },
+    ],
+  } as unknown as ModelMessage;
+}
+
 /** Create a tool message with undefined output (triggers null guard) */
 function toolMsgNoOutput(toolName: string): ModelMessage {
   return {
@@ -117,6 +127,29 @@ describe('context: model limits', () => {
 
   it('returns default for unknown models', () => {
     expect(getContextLimit('llama-3-70b')).toBe(100_000);
+  });
+
+  // N3: prefix matching order — gpt-4o must match before gpt-4
+  it('matches gpt-4o before gpt-4 (N3 prefix sort)', () => {
+    expect(getContextLimit('gpt-4o-mini')).toBe(128_000);
+    expect(getContextLimit('gpt-4o-2024-05-13')).toBe(128_000);
+    expect(getContextLimit('gpt-4-turbo')).toBe(128_000);
+    expect(getContextLimit('gpt-4')).toBe(128_000);
+  });
+
+  it('matches gpt-3.5 before gpt-4 (N3 prefix sort)', () => {
+    expect(getContextLimit('gpt-3.5-turbo-16k')).toBe(16_000);
+    expect(getContextLimit('gpt-3.5-turbo')).toBe(16_000);
+  });
+
+  it('matches gpt-5 models correctly', () => {
+    expect(getContextLimit('gpt-5')).toBe(200_000);
+    expect(getContextLimit('gpt-5.4')).toBe(200_000);
+  });
+
+  it('is case-insensitive', () => {
+    expect(getContextLimit('Claude-3.5-Sonnet')).toBe(200_000);
+    expect(getContextLimit('GPT-4O-MINI')).toBe(128_000);
   });
 
   it('needsCompact detects threshold breach', () => {
@@ -437,5 +470,69 @@ describe('context: compactMessages', () => {
     expect(result2.compacted).toBe(true);
     expect(result2.messages[0].role).toBe('user');   // summary
     expect(result2.messages[1].role).toBe('assistant'); // no consecutive user
+  });
+
+  // M6: compact split must not cut between assistant (with tool calls) and tool result
+  it('does not split between assistant tool-call and tool result (M6)', async () => {
+    mockGenerateText.mockResolvedValue({ text: 'Tool summary.' } as any);
+
+    // 10 messages: tool pair straddles the split boundary
+    // Without M6 fix, splitIdx = 10-6 = 4, which lands on the tool message (idx 4)
+    // — orphaning it from its assistant (idx 3).
+    const msgs: ModelMessage[] = [
+      userMsg('e1'),                            // 0
+      assistantMsg('e2'),                        // 1
+      userMsg('e3'),                             // 2
+      assistantWithToolCall('read_file'),         // 3 — assistant with tool call
+      toolMsg('read_file', 'file content here'), // 4 — its tool result  ← naive splitIdx lands here
+      userMsg('r1'),                             // 5
+      assistantMsg('r2'),                        // 6
+      userMsg('r3'),                             // 7
+      assistantMsg('r4'),                        // 8
+      userMsg('r5'),                             // 9
+    ];
+
+    const result = await compactMessages(msgs, fakeModel);
+    expect(result.compacted).toBe(true);
+
+    // The tool result at idx 4 must NOT appear as the first recent message
+    // without its preceding assistant. Check: no recent message is an orphaned tool.
+    for (let i = 0; i < result.messages.length; i++) {
+      if (result.messages[i].role === 'tool') {
+        // The message before it must be assistant (within the result array)
+        expect(i).toBeGreaterThan(0);
+        expect(result.messages[i - 1].role).toBe('assistant');
+      }
+    }
+  });
+
+  it('handles multiple consecutive tool messages at split boundary (M6)', async () => {
+    mockGenerateText.mockResolvedValue({ text: 'Multi-tool summary.' } as any);
+
+    // assistant calls 2 tools → 2 tool results
+    const msgs: ModelMessage[] = [
+      userMsg('e1'),                              // 0
+      assistantMsg('e2'),                          // 1
+      assistantWithToolCall('search'),             // 2
+      toolMsg('search', 'results'),                // 3
+      assistantWithToolCall('read_file'),           // 4
+      toolMsg('read_file', 'content'),             // 5 ← naive splitIdx (11-6=5) lands here
+      userMsg('r1'),                               // 6
+      assistantMsg('r2'),                          // 7
+      userMsg('r3'),                               // 8
+      assistantMsg('r4'),                          // 9
+      userMsg('r5'),                               // 10
+    ];
+
+    const result = await compactMessages(msgs, fakeModel);
+    expect(result.compacted).toBe(true);
+
+    // No orphaned tool messages
+    for (let i = 0; i < result.messages.length; i++) {
+      if (result.messages[i].role === 'tool') {
+        expect(i).toBeGreaterThan(0);
+        expect(result.messages[i - 1].role).toBe('assistant');
+      }
+    }
   });
 });

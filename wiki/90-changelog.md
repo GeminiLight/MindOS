@@ -2,6 +2,20 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.5.14 — CLI 路径解析修复 + 空仓库同步支持 (2026-03-18)
+
+### 修复
+- **CLI 路径解析** — `sync/route.ts` 和 `restart/route.ts` 通过环境变量 `MINDOS_CLI_PATH` / `MINDOS_NODE_BIN` 解析 CLI 路径，Turbopack 下不再依赖 `process.cwd()` 动态解析。两个 route 统一 fallback 到 cwd 相对路径
+- **空仓库 sync init** — `git ls-remote` 移除 `--exit-code`，首次同步到空 GitHub 仓库不再报错
+
+### 变更
+- `bin/cli.js` 的 `dev` 和 `start` 命令启动时设置 `MINDOS_CLI_PATH` / `MINDOS_NODE_BIN` 环境变量供子进程使用
+
+### 致谢
+- 感谢 [@yeahjack](https://github.com/yeahjack) 提交 [PR #1](https://github.com/GeminiLight/MindOS/pull/1)
+
+---
+
 ## v0.5.12 — 默认端口变更 + 日志轮转 (未发版)
 
 ### 变更
