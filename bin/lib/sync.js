@@ -286,7 +286,9 @@ export async function initSync(mindRoot, opts = {}) {
   // 5. Test connection
   if (!nonInteractive) console.log(dim('Testing connection...'));
   try {
-    execFileSync('git', ['ls-remote', '--exit-code', 'origin'], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+    // `git ls-remote --exit-code origin` returns non-zero for an empty remote,
+    // which breaks first-time setup against a freshly created repository.
+    execFileSync('git', ['ls-remote', 'origin'], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
     if (!nonInteractive) console.log(green('✔ Connection successful'));
   } catch (lsErr) {
     const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
