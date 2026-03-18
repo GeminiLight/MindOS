@@ -197,6 +197,8 @@ const commands = {
   // ── dev ────────────────────────────────────────────────────────────────────
   dev: async () => {
     loadConfig();
+    process.env.MINDOS_CLI_PATH = resolve(ROOT, 'bin', 'cli.js');
+    process.env.MINDOS_NODE_BIN = process.execPath;
     const webPort = process.env.MINDOS_WEB_PORT || '3456';
     const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
     await assertPortFree(Number(webPort), 'web');
@@ -283,6 +285,8 @@ const commands = {
       await assertPortFree(Number(webPort), 'web');
       await assertPortFree(Number(mcpPort), 'mcp');
     }
+    process.env.MINDOS_CLI_PATH = resolve(ROOT, 'bin', 'cli.js');
+    process.env.MINDOS_NODE_BIN = process.execPath;
     ensureAppDeps();
     if (needsBuild()) {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
