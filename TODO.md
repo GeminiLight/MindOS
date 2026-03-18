@@ -1,6 +1,8 @@
 ## PENDING
 
 
+Waiting for Web UI 有可能展示出具体细节吗
+
 这种同步的方式，如何处理对于 MindOS 的 PR
 
 
