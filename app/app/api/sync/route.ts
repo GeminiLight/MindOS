@@ -37,16 +37,17 @@ function isGitRepo(dir: string) {
   return existsSync(join(dir, '.git'));
 }
 
-/** Resolve path to bin/cli.js at runtime. */
+/** Resolve path to bin/cli.js — prefer env var set by CLI launcher, fall back to cwd. */
 function getCliPath() {
-  return resolve(process.cwd(), '..', 'bin', 'cli' + '.js');
+  return process.env.MINDOS_CLI_PATH || resolve(process.cwd(), '..', 'bin', 'cli' + '.js');
 }
 
 /** Run CLI command via execFile — avoids shell injection by passing args as array */
 function runCli(args: string[], timeoutMs = 30000): Promise<void> {
   const cliPath = getCliPath();
+  const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
   return new Promise((res, rej) => {
-    execFile(process.execPath, [cliPath, ...args], { timeout: timeoutMs }, (err, _stdout, stderr) => {
+    execFile(nodeBin, [cliPath, ...args], { timeout: timeoutMs }, (err, _stdout, stderr) => {
       if (err) rej(new Error(stderr?.trim() || err.message));
       else res();
     });
