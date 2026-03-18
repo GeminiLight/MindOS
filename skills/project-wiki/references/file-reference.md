@@ -252,3 +252,66 @@
 | 会议纪要 | 对话历史就是"会议纪要"，MEMORY.md 更有效 | 有多个人类参与决策时 |
 | 贡献指南（CONTRIBUTING.md） | 除非有其他人类贡献者 | 开源或团队扩展时 |
 | 架构决策记录（ADR） | stage 文件的"设计决策"章节够用 | stage 超过 10 个、早期决策上下文丢失时 |
+
+---
+
+## 子目录文件说明
+
+### specs/spec-{name}.md — 任务规格
+
+**为什么需要：** Stage 文件覆盖一个阶段的全部功能，粒度偏大。当一个小功能/改进点需要明确的边界和验收标准，但又不值得开一个完整的 stage 时，spec 是最合适的载体。它也是 review 的评审对象——没有 spec，评审就没有锚点。
+
+**写给谁看：** Agent + 评审者
+
+**核心内容：** 背景、目标、边界、设计方案（数据模型 + API + 受影响文件）、验收标准
+
+**生命周期：** draft → in-review → approved → done → archived。完成后移入 `archive/specs/`。
+
+**与 stage 文件的关系：** Spec 是 stage 内某个功能点的展开。Stage 文件用一行索引指向 spec，不重复 spec 的内容。
+
+**维护频率：** 活跃开发期间持续更新，完成后归档不再修改。
+
+---
+
+### refs/ref-{topic}.md — 参考资料
+
+**为什么需要：** Agent 没有外部系统的内部知识。Stripe webhook 的重试机制、WebRTC 的 signaling 流程、某个私有 API 的字段含义——这些信息每次新对话都要重新查阅。写一次 ref，后续所有 stage/spec 直接引用，不重复调研。
+
+**写给谁看：** Agent
+
+**核心内容：** 机制说明、关键 API 摘要、与本项目的集成点、踩坑备注、来源链接和版本
+
+**生命周期：** 长期存在，不主动归档。外部系统更新时更新内容并刷新 `Last verified` 标记。集成方案废弃时标记 `<!-- Deprecated -->`。
+
+**与其他文件的关系：** Stage/spec 中通过 `→ 详见 refs/ref-xxx.md` 引用。Ref 文件本身不引用 stage/spec（单向依赖）。
+
+**维护频率：** 外部系统版本更新时检查。日常开发中基本稳定。
+
+---
+
+### reviews/review-{date}-{subject}.md — 评审记录
+
+**为什么需要：** Spec 通过评审进入 approved 状态，但评审中发现的问题和 action items 如果不记录，下次对话就丢失了。Review 文件是评审结论的持久化存储，也是归档前的 checklist——action items 全部完成才能归档。
+
+**写给谁看：** 你自己 + Agent（检查 action items）
+
+**核心内容：** 评审对象（链接到 spec/PR）、结论、发现的问题列表、action items、遗留讨论点
+
+**生命周期：** 创建后更新 action items 的完成状态，全部完成后移入 `archive/reviews/`。
+
+**联动规则：** 创建后在对应 spec 头部追加 `<!-- Reviewed: YYYY-MM-DD → reviews/review-xxx.md -->`。
+
+**维护频率：** 评审后创建，action items 推进时更新勾选，归档后不再修改。
+
+---
+
+### archive/ — 归档目录
+
+**为什么需要：** 删除历史文档会丢失上下文——三个月后你想知道"当时为什么这样设计"却找不到了。归档保留完整历史，但把它们从活跃目录移走，减少 Agent 的搜索噪音。
+
+**子结构：** `archive/specs/`、`archive/reviews/`、`archive/stages/`
+
+**归档原则：**
+- 只做移入，不删除（`git mv` 保留 git 历史）
+- 原位留痕：在 roadmap/backlog 中标注 `[archived → archive/xxx]`
+- 引用不断链：归档后全文搜索旧路径，更新指向新路径
