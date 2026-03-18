@@ -452,6 +452,7 @@ MindOS/
 | `mindos gateway logs` | Tail background service logs |
 | `mindos doctor` | Health check (config, ports, build, daemon status) |
 | `mindos update` | Update MindOS to the latest version |
+| `mindos uninstall` | Fully uninstall MindOS (stop, remove daemon, npm uninstall) |
 | `mindos logs` | Tail service logs (`~/.mindos/mindos.log`) |
 | `mindos config show` | Print current config (API keys masked) |
 | `mindos config validate` | Validate config file |
@@ -480,7 +481,14 @@ Join our WeChat group for early access, feedback, and AI workflow discussions:
   <img src="assets/images/wechat-qr.png" alt="WeChat Group QR Code" width="200" />
 </p>
 
-> Scan the QR code or ask an existing member to invite you.
+> Scan the QR code or add WeChat **wtfly2018** to be invited.
+
+---
+
+## 👥 Contributors
+
+<a href="https://github.com/GeminiLight"><img src="https://github.com/GeminiLight.png" width="60" style="border-radius:50%" alt="GeminiLight" /></a>
+<a href="https://github.com/yeahjack"><img src="https://github.com/yeahjack.png" width="60" style="border-radius:50%" alt="yeahjack" /></a>
 
 ---
 
