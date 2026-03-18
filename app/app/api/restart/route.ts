@@ -1,14 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
 
 export async function POST() {
   try {
-    const cliPath = process.env.MINDOS_CLI_PATH;
+    const cliPath = process.env.MINDOS_CLI_PATH || resolve(process.cwd(), '..', 'bin', 'cli.js');
     const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
-    if (!cliPath) {
-      throw new Error('MindOS CLI path is unavailable. Restart MindOS from the `mindos` command.');
-    }
     // Use 'restart' (stop all → wait for ports free → start) instead of bare
     // 'start' which would fail assertPortFree because the current process and
     // its MCP child are still holding the ports.
