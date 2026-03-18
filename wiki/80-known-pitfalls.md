@@ -295,3 +295,12 @@
   - hardPrune 跳过非 user 后加 fallback 注入 synthetic user 消息
 - **教训：** Anthropic API 严格要求消息以 user 开头且无连续同 role 消息，所有裁剪/合并操作后都需校验
 - **文件：** `app/app/api/sync/route.ts`、`app/lib/agent/context.ts`
+
+## 依赖版本
+
+### @types/node 版本号写了不存在的大版本
+- **现象：** 新电脑首次 `mindos start`，MCP 依赖安装报 `npm error code ETARGET — No matching version found for @types/node@^25.4.0`
+- **原因：** `mcp/package.json` 的 `@types/node` 写成了 `^25.4.0`，但 npm 上该包最新大版本对应 Node 22。开发机有缓存 `node_modules` 所以不触发安装，新机器首次 `npm install` 找不到匹配版本
+- **解决：** 改为 `^22`，与实际 Node 版本对齐
+- **规则：** `@types/node` 的大版本号 = Node.js 大版本号（如 Node 22 → `@types/node@^22`）。写 devDependencies 时不要凭感觉写版本号，先 `npm view @types/node versions` 确认存在
+- **文件：** `mcp/package.json`
