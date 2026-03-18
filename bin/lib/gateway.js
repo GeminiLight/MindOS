@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync, openSync, readSync, closeSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN, CONFIG_PATH } from './constants.js';
@@ -50,18 +50,76 @@ export async function waitForPortFree(port, { retries = 30, intervalMs = 500 } =
   return !(await isPortInUse(port));
 }
 
-export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label = 'service' } = {}) {
+/**
+ * Parse a log line to extract a user-friendly status hint.
+ * Returns null if the line isn't interesting enough to show.
+ * @internal Exported for testing only.
+ */
+export function parseLogHint(line) {
+  const l = line.trim();
+  if (!l) return null;
+  // npm install progress
+  if (/added \d+ packages/i.test(l)) return 'dependencies installed';
+  // MCP-specific must come before generic "Installing" match
+  if (/Installing MCP dependencies/i.test(l)) return 'installing MCP…';
+  if (/Installing app dependencies/i.test(l)) return 'installing dependencies…';
+  if (/Updating app dependencies/i.test(l)) return 'updating dependencies…';
+  // next build progress
+  if (/Building MindOS/i.test(l)) return 'building app…';
+  if (/Creating.*optimized.*production/i.test(l)) return 'building app…';
+  if (/Compil/i.test(l)) return 'compiling…';
+  if (/Collecting page data/i.test(l)) return 'collecting page data…';
+  if (/Generating static pages/i.test(l)) return 'generating pages…';
+  if (/Finalizing page optimization/i.test(l)) return 'optimizing…';
+  if (/[○●◐λƒ]\s+\/\S+.*\d+(\.\d+)?\s*kB/i.test(l)) return 'bundling routes…';
+  // next start / ready
+  if (/▲ Next\.js/i.test(l)) return 'starting server…';
+  if (/Ready in/i.test(l)) return 'starting server…';
+  return null;
+}
+
+export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label = 'service', logFile = null } = {}) {
   const start = Date.now();
   const elapsed = () => {
     const s = Math.round((Date.now() - start) / 1000);
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
   };
-  const phases = [
-    { after: 0,  msg: 'installing dependencies' },
-    { after: 15, msg: 'building app' },
-    { after: 60, msg: 'still building (first run takes a while)' },
-  ];
-  let currentPhase = -1;
+
+  // Track log file position for incremental reads
+  let logOffset = 0;
+  let lastHint = 'starting…';
+  if (logFile) {
+    try {
+      logOffset = statSync(logFile).size; // start from current end
+    } catch { /* file may not exist yet */ }
+  }
+
+  /** Read new lines from logFile and update lastHint */
+  function updateHintFromLog() {
+    if (!logFile) return;
+    try {
+      const st = statSync(logFile);
+      // File was truncated or rotated — reset offset
+      if (st.size < logOffset) logOffset = 0;
+      if (st.size <= logOffset) return;
+      // Read new chunk (at most 4KB to avoid large reads)
+      const readSize = Math.min(st.size - logOffset, 4096);
+      const buf = Buffer.alloc(readSize);
+      const fd = openSync(logFile, 'r');
+      try {
+        readSync(fd, buf, 0, readSize, logOffset);
+      } finally {
+        closeSync(fd);
+      }
+      logOffset = logOffset + readSize;
+      const newLines = buf.toString('utf-8').split('\n');
+      // Walk lines in order, keep the last interesting hint
+      for (const line of newLines) {
+        const hint = parseLogHint(line);
+        if (hint) lastHint = hint;
+      }
+    } catch { /* log file may not exist yet or be rotated */ }
+  }
 
   for (let i = 0; i < retries; i++) {
     try {
@@ -74,24 +132,18 @@ export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label
         req.end();
       });
       if (ok) {
-        // Clear line and print success
         process.stdout.write(`\r\x1b[K`);
         process.stdout.write(`  ${green('\u2714')} ${label} ready ${dim(`(${elapsed()})`)}\n`);
         return true;
       }
     } catch { /* not ready yet */ }
 
-    // Update phase hint
-    const secs = (Date.now() - start) / 1000;
-    const nextPhase = phases.reduce((idx, p, i) => secs >= p.after ? i : idx, -1);
-    if (nextPhase !== currentPhase) {
-      currentPhase = nextPhase;
-    }
-    const hint = currentPhase >= 0 ? phases[currentPhase].msg : '';
+    // Update hint from real log output
+    updateHintFromLog();
 
     // Rewrite the status line in place
     process.stdout.write(`\r\x1b[K`);
-    process.stdout.write(cyan(`  ⏳ Waiting for ${label}`) + dim(` — ${hint} (${elapsed()})`));
+    process.stdout.write(cyan(`  ⏳ Waiting for ${label}`) + dim(` — ${lastHint} (${elapsed()})`));
 
     await new Promise(r => setTimeout(r, intervalMs));
   }
