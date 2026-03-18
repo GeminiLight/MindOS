@@ -902,7 +902,7 @@ async function startGuiSetup() {
 
   // Wait for the server to be ready (120s timeout)
   const { waitForHttp } = await import('../bin/lib/gateway.js');
-  const ready = await waitForHttp(usePort, { retries: 120, intervalMs: 1000, label: 'MindOS' });
+  const ready = await waitForHttp(usePort, { retries: 120, intervalMs: 1000, label: 'MindOS', logFile: LOG_PATH });
 
   if (!ready) {
     write(c.red('\n✘ Server failed to start.\n'));
