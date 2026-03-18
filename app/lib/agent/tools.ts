@@ -51,38 +51,42 @@ export const knowledgeBaseTools = {
       depth: z.number().min(1).max(10).optional().describe('Max tree depth to expand (default 3). Directories deeper than this show item count only.'),
     }),
     execute: logged('list_files', async ({ path: subdir, depth: maxDepth }) => {
-      const tree = getFileTree();
-      const limit = maxDepth ?? 3;
-      const lines: string[] = [];
-      function walk(nodes: Array<{ name: string; type: string; children?: unknown[] }>, depth: number) {
-        for (const n of nodes) {
-          lines.push('  '.repeat(depth) + (n.type === 'directory' ? `${n.name}/` : n.name));
-          if (n.type === 'directory' && Array.isArray(n.children)) {
-            if (depth + 1 < limit) {
-              walk(n.children as typeof nodes, depth + 1);
-            } else {
-              lines.push('  '.repeat(depth + 1) + `... (${n.children.length} items)`);
+      try {
+        const tree = getFileTree();
+        const limit = maxDepth ?? 3;
+        const lines: string[] = [];
+        function walk(nodes: Array<{ name: string; type: string; children?: unknown[] }>, depth: number) {
+          for (const n of nodes) {
+            lines.push('  '.repeat(depth) + (n.type === 'directory' ? `${n.name}/` : n.name));
+            if (n.type === 'directory' && Array.isArray(n.children)) {
+              if (depth + 1 < limit) {
+                walk(n.children as typeof nodes, depth + 1);
+              } else {
+                lines.push('  '.repeat(depth + 1) + `... (${n.children.length} items)`);
+              }
             }
           }
         }
-      }
 
-      if (subdir) {
-        const segments = subdir.replace(/\/$/, '').split('/').filter(Boolean);
-        let current: Array<{ name: string; type: string; path?: string; children?: unknown[] }> = tree as any;
-        for (const seg of segments) {
-          const found = current.find(n => n.name === seg && n.type === 'directory');
-          if (!found || !Array.isArray(found.children)) {
-            return `Directory not found: ${subdir}`;
+        if (subdir) {
+          const segments = subdir.replace(/\/$/, '').split('/').filter(Boolean);
+          let current: Array<{ name: string; type: string; path?: string; children?: unknown[] }> = tree as any;
+          for (const seg of segments) {
+            const found = current.find(n => n.name === seg && n.type === 'directory');
+            if (!found || !Array.isArray(found.children)) {
+              return `Directory not found: ${subdir}`;
+            }
+            current = found.children as typeof current;
           }
-          current = found.children as typeof current;
+          walk(current as any, 0);
+        } else {
+          walk(tree as any, 0);
         }
-        walk(current as any, 0);
-      } else {
-        walk(tree as any, 0);
-      }
 
-      return lines.length > 0 ? lines.join('\n') : '(empty directory)';
+        return lines.length > 0 ? lines.join('\n') : '(empty directory)';
+      } catch (e: unknown) {
+        return `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
     }),
   }),
 

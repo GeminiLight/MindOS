@@ -38,14 +38,15 @@ export function cleanNextDir() {
 }
 
 function depsHash() {
-  // Use package.json (not package-lock.json) so we don't need to ship the
-  // 560kB lock file in the npm tarball.  package.json changes whenever
-  // dependencies are added/removed/bumped, which is the only case that
-  // requires a fresh `npm install`.
+  // Hash both package.json and package-lock.json (if present) so that
+  // changes to either trigger a fresh npm install.
   const pkgPath = resolve(ROOT, 'app', 'package.json');
+  const lockPath = resolve(ROOT, 'app', 'package-lock.json');
   try {
-    const content = readFileSync(pkgPath);
-    return createHash('sha256').update(content).digest('hex').slice(0, 16);
+    const h = createHash('sha256');
+    h.update(readFileSync(pkgPath));
+    try { h.update(readFileSync(lockPath)); } catch {}
+    return h.digest('hex').slice(0, 16);
   } catch {
     return null;
   }

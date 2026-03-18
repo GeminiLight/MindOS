@@ -2,6 +2,37 @@
 
 # 变更日志 (CHANGELOG)
 
+## v0.5.15 — `mindos uninstall` + daemon 启动修复 + 等待 UX 优化 (2026-03-18)
+
+### 新增
+- **`mindos uninstall` 命令** — 一条命令干净卸载：停进程 → 卸 daemon → 可选删除配置目录 → 可选删除知识库（三重保护：确认 → 输入 YES → 密码验证）→ npm uninstall
+- **uninstall 测试** — 13 个集成测试覆盖 abort、三重保护、config 读取时序回归、tilde 展开
+
+### 修复
+- **systemd daemon 启动失败** — `systemd.install()` 只做了 `enable`（创建开机自启 symlink）没有 `start`，导致 Linux 上 `mindos start --daemon` 永远超时。launchd 的 `bootstrap` 会自动启动，但 systemd 需要显式 `start`
+- **readline 丢行** — 多个 `readline.createInterface` 实例在 piped stdin 下丢失 buffered 行。改为共享单个 rl + `line` 事件手动 buffer
+- **子进程消耗 stdin** — `stopMindos`/`gateway` 的 `execSync` 用 `stdio: 'inherit'` 会让子进程（pkill/systemctl）抢占 stdin 数据。改为 `['ignore', 'inherit', 'inherit']`
+
+### 变更
+- **waitForHttp 进度提示** — 从点点点（`...........✔`）改为原地刷新的阶段提示 + 计时器：`⏳ Waiting for Web UI — building app (23s)`。三阶段：installing dependencies → building app → still building
+- **waitForHttp 超时** — 默认 retries 从 120 降为 60（4 分钟 → 2 分钟）
+
+---
+
+## v0.5.14 — CLI 路径解析修复 + 空仓库同步支持 (2026-03-18)
+
+### 修复
+- **CLI 路径解析** — `sync/route.ts` 和 `restart/route.ts` 通过环境变量 `MINDOS_CLI_PATH` / `MINDOS_NODE_BIN` 解析 CLI 路径，Turbopack 下不再依赖 `process.cwd()` 动态解析。两个 route 统一 fallback 到 cwd 相对路径
+- **空仓库 sync init** — `git ls-remote` 移除 `--exit-code`，首次同步到空 GitHub 仓库不再报错
+
+### 变更
+- `bin/cli.js` 的 `dev` 和 `start` 命令启动时设置 `MINDOS_CLI_PATH` / `MINDOS_NODE_BIN` 环境变量供子进程使用
+
+### 致谢
+- 感谢 [@yeahjack](https://github.com/yeahjack) 提交 [PR #1](https://github.com/GeminiLight/MindOS/pull/1)
+
+---
+
 ## v0.5.12 — 默认端口变更 + 日志轮转 (未发版)
 
 ### 变更

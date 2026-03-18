@@ -20,7 +20,7 @@
  *   Enter confirms
  */
 
-import { existsSync, cpSync, writeFileSync, readFileSync, mkdirSync, createWriteStream, rmSync } from 'node:fs';
+import { existsSync, cpSync, writeFileSync, readFileSync, mkdirSync, createWriteStream, rmSync, openSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { homedir, tmpdir, networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const MINDOS_DIR = resolve(homedir(), '.mindos');
 const CONFIG_PATH = resolve(MINDOS_DIR, 'config.json');
+const LOG_PATH = resolve(MINDOS_DIR, 'mindos.log');
 
 // ── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -886,19 +887,34 @@ async function startGuiSetup() {
   // Pass MINDOS_WEB_PORT (not PORT) so loadConfig() won't override with the
   // config file port — this is critical when we need a temporary port.
   const cliPath = resolve(__dirname, '../bin/cli.js');
+  const logFd = openSync(LOG_PATH, 'a');
   const child = spawn(process.execPath, [cliPath, 'start'], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     env: { ...process.env, MINDOS_WEB_PORT: String(usePort) },
   });
   child.unref();
 
-  // Wait for the server to be ready
+  // First-time install hint
+  if (isFirstTime) {
+    write(c.dim('  First run: installing dependencies and building app (may take a few minutes)...\n'));
+  }
+
+  // Wait for the server to be ready (120s timeout)
   const { waitForHttp } = await import('../bin/lib/gateway.js');
-  const ready = await waitForHttp(usePort, { retries: 60, intervalMs: 1000, label: 'MindOS' });
+  const ready = await waitForHttp(usePort, { retries: 120, intervalMs: 1000, label: 'MindOS' });
 
   if (!ready) {
     write(c.red('\n✘ Server failed to start.\n'));
+    if (existsSync(LOG_PATH)) {
+      write(c.dim(`\n  Last log output (${LOG_PATH}):\n`));
+      try {
+        const lines = readFileSync(LOG_PATH, 'utf-8').trim().split('\n').slice(-15);
+        for (const line of lines) write(c.dim(`  ${line}\n`));
+      } catch {}
+    }
+    write(c.dim(`\n  Full logs: mindos logs\n`));
+    write(c.dim(`  Manual start: mindos start\n\n`));
     process.exit(1);
   }
 

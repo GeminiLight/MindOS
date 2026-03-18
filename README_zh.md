@@ -455,6 +455,7 @@ MindOS/
 | `mindos gateway logs` | 实时查看服务日志 |
 | `mindos doctor` | 健康检查（配置、端口、构建、daemon 状态） |
 | `mindos update` | 更新 MindOS 到最新版本 |
+| `mindos uninstall` | 完整卸载 MindOS（停止进程、移除 daemon、npm 卸载） |
 | `mindos logs` | 实时查看服务日志（`~/.mindos/mindos.log`） |
 | `mindos config show` | 查看当前配置（API Key 脱敏显示） |
 | `mindos config validate` | 验证配置文件 |
@@ -483,7 +484,14 @@ MindOS/
   <img src="assets/images/wechat-qr.png" alt="微信群二维码" width="200" />
 </p>
 
-> 扫码加入，或请群内成员邀请你。
+> 扫码加入，或添加微信 **wtfly2018** 邀请入群。
+
+---
+
+## 👥 贡献者
+
+<a href="https://github.com/GeminiLight"><img src="https://github.com/GeminiLight.png" width="60" style="border-radius:50%" alt="GeminiLight" /></a>
+<a href="https://github.com/yeahjack"><img src="https://github.com/yeahjack.png" width="60" style="border-radius:50%" alt="yeahjack" /></a>
 
 ---
 
