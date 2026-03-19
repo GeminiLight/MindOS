@@ -30,6 +30,7 @@ export async function GET() {
       openaiApiKey: maskApiKey(s.ai.providers.openai.apiKey),
       openaiModel: s.ai.providers.openai.model,
       openaiBaseUrl: s.ai.providers.openai.baseUrl ?? '',
+      guideState: s.guideState ?? null,
     });
   } catch (e) {
     return NextResponse.json(
@@ -95,9 +96,33 @@ export async function POST(req: NextRequest) {
     );
 
     // Build config
+    // Merge AI config: empty apiKey means "keep existing" — never overwrite a
+    // configured key with blank just because the user didn't re-enter it.
+    let mergedAi = current.ai;
+    if (ai) {
+      const inAnthropicKey = ai.providers?.anthropic?.apiKey;
+      const inOpenaiKey    = ai.providers?.openai?.apiKey;
+      mergedAi = {
+        provider: ai.provider ?? current.ai.provider,
+        providers: {
+          anthropic: {
+            apiKey: inAnthropicKey || current.ai.providers.anthropic.apiKey,
+            model:  ai.providers?.anthropic?.model || current.ai.providers.anthropic.model,
+          },
+          openai: {
+            apiKey:  inOpenaiKey || current.ai.providers.openai.apiKey,
+            model:   ai.providers?.openai?.model  || current.ai.providers.openai.model,
+            baseUrl: ai.providers?.openai?.baseUrl ?? current.ai.providers.openai.baseUrl ?? '',
+          },
+        },
+      };
+    }
+
     const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];
+    // Determine guide template from setup template
+    const guideTemplate = body.template === 'zh' ? 'zh' : body.template === 'empty' ? 'empty' : 'en';
     const config: ServerSettings = {
-      ai: ai ?? current.ai,
+      ai: mergedAi,
       mindRoot: resolvedRoot,
       port: webPort,
       mcpPort: mcpPortNum,
@@ -106,6 +131,14 @@ export async function POST(req: NextRequest) {
       startMode: current.startMode,
       setupPending: false,  // clear the flag
       disabledSkills,
+      guideState: {
+        active: true,
+        dismissed: false,
+        template: guideTemplate as 'en' | 'zh' | 'empty',
+        step1Done: false,
+        askedAI: false,
+        nextStepIndex: 0,
+      },
     };
 
     writeSettings(config);
@@ -118,6 +151,36 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('[/api/setup] Error:', e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { guideState: patch } = body;
+    if (!patch || typeof patch !== 'object') {
+      return NextResponse.json({ error: 'guideState object required' }, { status: 400 });
+    }
+    const current = readSettings();
+    const existing = current.guideState ?? {
+      active: false, dismissed: false, template: 'en' as const,
+      step1Done: false, askedAI: false, nextStepIndex: 0,
+    };
+    // Merge only known fields
+    const updated = { ...existing };
+    if (typeof patch.dismissed === 'boolean') updated.dismissed = patch.dismissed;
+    if (typeof patch.step1Done === 'boolean') updated.step1Done = patch.step1Done;
+    if (typeof patch.askedAI === 'boolean') updated.askedAI = patch.askedAI;
+    if (typeof patch.nextStepIndex === 'number' && patch.nextStepIndex >= 0) updated.nextStepIndex = patch.nextStepIndex;
+    if (typeof patch.active === 'boolean') updated.active = patch.active;
+
+    writeSettings({ ...current, guideState: updated });
+    return NextResponse.json({ ok: true, guideState: updated });
+  } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
       { status: 500 },

@@ -1,0 +1,361 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Sparkles, FolderOpen, MessageCircle, RefreshCw, Check, ChevronRight } from 'lucide-react';
+import { useLocale } from '@/lib/LocaleContext';
+import { openAskModal } from '@/hooks/useAskModal';
+import type { GuideState } from '@/lib/settings';
+
+const DIR_ICONS: Record<string, string> = {
+  profile: '👤', notes: '📝', connections: '🔗',
+  workflows: '🔄', resources: '📚', projects: '🚀',
+};
+
+const EMPTY_FILES = ['INSTRUCTION.md', 'README.md', 'CONFIG.json'];
+
+interface GuideCardProps {
+  /** Called when user clicks a file/dir to open it in FileView */
+  onNavigate?: (path: string) => void;
+}
+
+export default function GuideCard({ onNavigate }: GuideCardProps) {
+  const { t } = useLocale();
+  const g = t.guide;
+
+  const [guideState, setGuideState] = useState<GuideState | null>(null);
+  const [expanded, setExpanded] = useState<'kb' | 'ai' | 'sync' | null>(null);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
+  const [browsedCount, setBrowsedCount] = useState(0);
+
+  // Fetch guide state from backend
+  const fetchGuideState = useCallback(() => {
+    fetch('/api/setup')
+      .then(r => r.json())
+      .then(data => {
+        const gs = data.guideState;
+        if (gs?.active && !gs.dismissed) {
+          setGuideState(gs);
+          if (gs.step1Done) setBrowsedCount(1);
+        } else {
+          // Guide inactive or dismissed — clear local state
+          setGuideState(null);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchGuideState();
+
+    // ?welcome=1 → first visit, auto-expand explore task
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('welcome') === '1') {
+      setIsFirstVisit(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('welcome');
+      window.history.replaceState({}, '', url.pathname + (url.search || ''));
+    }
+
+    // Re-fetch when guide state is updated (e.g. after AskFab patches askedAI)
+    const handleGuideUpdate = () => fetchGuideState();
+    window.addEventListener('focus', handleGuideUpdate);
+    window.addEventListener('guide-state-updated', handleGuideUpdate);
+    return () => {
+      window.removeEventListener('focus', handleGuideUpdate);
+      window.removeEventListener('guide-state-updated', handleGuideUpdate);
+    };
+  }, [fetchGuideState]);
+
+  // Auto-expand KB task on first visit
+  useEffect(() => {
+    if (isFirstVisit && guideState && !guideState.step1Done) {
+      setExpanded('kb');
+    }
+  }, [isFirstVisit, guideState]);
+
+  // Patch guideState to backend
+  const patchGuide = useCallback((patch: Partial<GuideState>) => {
+    setGuideState(prev => prev ? { ...prev, ...patch } : prev);
+    fetch('/api/setup', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guideState: patch }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    patchGuide({ dismissed: true });
+    setGuideState(null);
+  }, [patchGuide]);
+
+  const handleFileOpen = useCallback((path: string) => {
+    onNavigate?.(path);
+    if (browsedCount === 0) {
+      setBrowsedCount(1);
+      patchGuide({ step1Done: true });
+      // Collapse after a beat
+      setTimeout(() => setExpanded(null), 300);
+    }
+  }, [browsedCount, patchGuide, onNavigate]);
+
+  const handleSkipKB = useCallback(() => {
+    setBrowsedCount(1);
+    patchGuide({ step1Done: true });
+    setExpanded(null);
+  }, [patchGuide]);
+
+  const handleStartAI = useCallback(() => {
+    const gs = guideState;
+    const isEmpty = gs?.template === 'empty';
+    const prompt = isEmpty ? g.ai.promptEmpty : g.ai.prompt;
+    openAskModal(prompt, 'guide');
+    // Don't optimistically set askedAI here — wait until user actually sends a message
+    // AskFab.onFirstMessage will PATCH askedAI:true
+  }, [guideState, g]);
+
+  const handleNextStepClick = useCallback(() => {
+    if (!guideState) return;
+    const idx = guideState.nextStepIndex;
+    const steps = g.done.steps;
+    if (idx < steps.length) {
+      openAskModal(steps[idx].prompt, 'guide-next');
+      // Optimistic local update — AskFab will persist to backend on first message
+      patchGuide({ nextStepIndex: idx + 1 });
+    }
+  }, [guideState, g, patchGuide]);
+
+  const handleSyncClick = useCallback(() => {
+    // Dispatch ⌘, to open Settings modal
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true }));
+  }, []);
+
+  // Auto-dismiss final state after 8 seconds
+  const autoDismissRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const step1Done_ = guideState?.step1Done;
+  const step2Done_ = guideState?.askedAI;
+  const nextIdx_ = guideState?.nextStepIndex ?? 0;
+  const allDone_ = step1Done_ && step2Done_;
+  const allNextDone_ = allDone_ && nextIdx_ >= g.done.steps.length;
+
+  useEffect(() => {
+    if (allNextDone_) {
+      autoDismissRef.current = setTimeout(() => handleDismiss(), 8000);
+    }
+    return () => { if (autoDismissRef.current) clearTimeout(autoDismissRef.current); };
+  }, [allNextDone_, handleDismiss]);
+
+  // Don't render if no active guide
+  if (!guideState) return null;
+
+  const step1Done = guideState.step1Done;
+  const step2Done = guideState.askedAI;
+  const allDone = step1Done && step2Done;
+  const nextIdx = guideState.nextStepIndex;
+  const nextSteps = g.done.steps;
+  const allNextDone = nextIdx >= nextSteps.length;
+  const isEmptyTemplate = guideState.template === 'empty';
+
+  // After all next-steps done → final state (auto-dismisses after 8s)
+  if (allDone && allNextDone) {
+    return (
+      <div className="mb-6 rounded-xl border px-5 py-4 flex items-center gap-3 animate-in fade-in duration-300"
+        style={{ background: 'var(--amber-subtle, rgba(200,135,30,0.08))', borderColor: 'var(--amber)' }}>
+        <Sparkles size={16} className="animate-spin-slow" style={{ color: 'var(--amber)' }} />
+        <span className="text-sm font-semibold flex-1" style={{ color: 'var(--foreground)' }}>
+          ✨ {g.done.titleFinal}
+        </span>
+        <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors"
+          style={{ color: 'var(--muted-foreground)' }}>
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  // Collapsed done state with next-step prompts
+  if (allDone) {
+    const step = nextSteps[nextIdx];
+    return (
+      <div className="mb-6 rounded-xl border px-5 py-4 animate-in fade-in duration-300"
+        style={{ background: 'var(--amber-subtle, rgba(200,135,30,0.08))', borderColor: 'var(--amber)' }}>
+        <div className="flex items-center gap-3">
+          <Sparkles size={16} style={{ color: 'var(--amber)' }} />
+          <span className="text-sm font-semibold flex-1" style={{ color: 'var(--foreground)' }}>
+            🎉 {g.done.title}
+          </span>
+          <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors"
+            style={{ color: 'var(--muted-foreground)' }}>
+            <X size={14} />
+          </button>
+        </div>
+        {step && (
+          <button
+            onClick={handleNextStepClick}
+            className="mt-3 flex items-center gap-2 text-sm transition-colors hover:opacity-80 cursor-pointer animate-in fade-in slide-in-from-left-2 duration-300"
+            style={{ color: 'var(--amber)' }}
+          >
+            <ChevronRight size={14} />
+            <span>{step.hint}</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Main guide card with 3 tasks
+  return (
+    <div className="mb-6 rounded-xl border overflow-hidden"
+      style={{ background: 'var(--amber-subtle, rgba(200,135,30,0.08))', borderColor: 'var(--amber)' }}>
+
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2">
+        <Sparkles size={16} style={{ color: 'var(--amber)' }} />
+        <span className="text-sm font-semibold flex-1 font-display" style={{ color: 'var(--foreground)' }}>
+          {g.title}
+        </span>
+        <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors"
+          style={{ color: 'var(--muted-foreground)' }}>
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Task cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 px-5 py-3">
+        {/* ① Explore KB */}
+        <TaskCard
+          icon={<FolderOpen size={16} />}
+          title={g.kb.title}
+          cta={g.kb.cta}
+          done={step1Done}
+          active={expanded === 'kb'}
+          onClick={() => step1Done ? null : setExpanded(expanded === 'kb' ? null : 'kb')}
+        />
+        {/* ② Chat with AI */}
+        <TaskCard
+          icon={<MessageCircle size={16} />}
+          title={g.ai.title}
+          cta={g.ai.cta}
+          done={step2Done}
+          active={expanded === 'ai'}
+          onClick={() => {
+            if (!step2Done) handleStartAI();
+          }}
+        />
+        {/* ③ Sync (optional) */}
+        <TaskCard
+          icon={<RefreshCw size={16} />}
+          title={g.sync.title}
+          cta={g.sync.cta}
+          done={false}
+          optional={g.sync.optional}
+          active={false}
+          onClick={handleSyncClick}
+        />
+      </div>
+
+      {/* Expanded content: Explore KB */}
+      {expanded === 'kb' && !step1Done && (
+        <div className="px-5 pb-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="rounded-lg border p-4" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <p className="text-xs mb-3" style={{ color: 'var(--muted-foreground)' }}>
+              {isEmptyTemplate ? g.kb.emptyDesc : g.kb.fullDesc}
+            </p>
+
+            {isEmptyTemplate ? (
+              <div className="flex flex-col gap-1.5">
+                {EMPTY_FILES.map(file => (
+                  <button key={file} onClick={() => handleFileOpen(file)}
+                    className="text-left text-xs px-3 py-2 rounded-lg border transition-colors hover:border-amber-500/30 hover:bg-muted/50"
+                    style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                    📄 {(g.kb.emptyFiles as Record<string, string>)[file.split('.')[0].toLowerCase()] || file}
+                  </button>
+                ))}
+                <p className="text-xs mt-2" style={{ color: 'var(--muted-foreground)', opacity: 0.7 }}>
+                  {g.kb.emptyHint}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {Object.entries(DIR_ICONS).map(([key, icon]) => (
+                    <button key={key} onClick={() => handleFileOpen(key.charAt(0).toUpperCase() + key.slice(1))}
+                      className="text-left text-xs px-3 py-2 rounded-lg border transition-colors hover:border-amber-500/30 hover:bg-muted/50"
+                      style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                      <span className="mr-1.5">{icon}</span>
+                      <span className="capitalize">{key}</span>
+                      <span className="block text-2xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                        {(g.kb.dirs as Record<string, string>)[key]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs mt-3" style={{ color: 'var(--amber)' }}>
+                  💡 {g.kb.instructionHint}
+                </p>
+              </>
+            )}
+
+            <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+              <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                {g.kb.progress(browsedCount)}
+              </span>
+              <button onClick={handleSkipKB}
+                className="text-xs px-3 py-1 rounded-lg transition-colors hover:bg-muted"
+                style={{ color: 'var(--muted-foreground)' }}>
+                {g.skip}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Expose callback for AskModal integration
+export { type GuideCardProps };
+
+// Reusable sub-component
+function TaskCard({ icon, title, cta, done, active, optional, onClick }: {
+  icon: React.ReactNode;
+  title: string;
+  cta: string;
+  done: boolean;
+  active: boolean;
+  optional?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={done}
+      className={`
+        flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg border text-center
+        transition-all duration-150
+        ${done ? 'opacity-60' : 'hover:border-amber-500/30 hover:bg-muted/50 cursor-pointer'}
+        ${active ? 'border-amber-500/40 bg-muted/50' : ''}
+      `}
+      style={{ borderColor: done || active ? 'var(--amber)' : 'var(--border)' }}
+    >
+      <span
+        className={done ? 'animate-in zoom-in-50 duration-300' : ''}
+        style={{ color: done ? 'var(--success)' : 'var(--amber)' }}
+      >
+        {done ? <Check size={16} /> : icon}
+      </span>
+      <span className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>
+        {title}
+      </span>
+      {optional && (
+        <span className="text-2xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
+          {optional}
+        </span>
+      )}
+      {!done && !optional && (
+        <span className="text-2xs" style={{ color: 'var(--amber)' }}>
+          {cta} →
+        </span>
+      )}
+    </button>
+  );
+}

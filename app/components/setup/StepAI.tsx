@@ -45,8 +45,16 @@ export default function StepAI({ state, update, s }: StepAIProps) {
             <ApiKeyInput
               value={state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey}
               onChange={v => update(state.provider === 'anthropic' ? 'anthropicKey' : 'openaiKey', v)}
-              placeholder={state.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
+              placeholder={
+                (state.provider === 'anthropic' ? state.anthropicKeyMask : state.openaiKeyMask)
+                || (state.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...')
+              }
             />
+            {(state.provider === 'anthropic' ? state.anthropicKeyMask : state.openaiKeyMask) && !(state.provider === 'anthropic' ? state.anthropicKey : state.openaiKey) && (
+              <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                {s.apiKeyExisting ?? 'Existing key configured. Leave blank to keep it.'}
+              </p>
+            )}
           </Field>
           <Field label={s.model}>
             <Input

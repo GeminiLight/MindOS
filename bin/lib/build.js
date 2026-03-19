@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { ROOT, BUILD_STAMP, DEPS_STAMP } from './constants.js';
 import { red, dim, yellow } from './colors.js';
-import { run } from './utils.js';
+import { run, npmInstall } from './utils.js';
 
 export function needsBuild() {
   const nextDir = resolve(ROOT, 'app', '.next');
@@ -105,12 +105,7 @@ export function ensureAppDeps() {
     ? 'Updating app dependencies (package-lock.json changed)...\n'
     : 'Installing app dependencies (first run)...\n';
   console.log(yellow(label));
-  try {
-    execSync('npm install --prefer-offline --no-workspaces', { cwd: resolve(ROOT, 'app'), stdio: 'inherit' });
-  } catch {
-    console.log(yellow('Offline install failed, retrying online...\n'));
-    run('npm install --no-workspaces', resolve(ROOT, 'app'));
-  }
+  npmInstall(resolve(ROOT, 'app'), '--no-workspaces');
 
   // Verify critical deps — npm tar extraction can silently fail (ENOENT race)
   if (!verifyDeps()) {

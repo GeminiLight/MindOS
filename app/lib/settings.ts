@@ -25,6 +25,15 @@ export interface AgentConfig {
   contextStrategy?: 'auto' | 'off'; // default 'auto'
 }
 
+export interface GuideState {
+  active: boolean;        // setup 完成时写入 true
+  dismissed: boolean;     // 用户关闭 Guide Card 时写入 true
+  template: 'en' | 'zh' | 'empty';  // setup 时写入
+  step1Done: boolean;     // 至少浏览过 1 个文件
+  askedAI: boolean;       // 至少发过 1 条 AI 消息
+  nextStepIndex: number;  // 0=C2, 1=C3, 2=C4, 3=全部完成
+}
+
 export interface ServerSettings {
   ai: AiConfig;
   agent?: AgentConfig;
@@ -36,6 +45,7 @@ export interface ServerSettings {
   startMode?: 'dev' | 'start' | 'daemon';
   setupPending?: boolean;  // true → / redirects to /setup
   disabledSkills?: string[];
+  guideState?: GuideState;
 }
 
 const DEFAULTS: ServerSettings = {
@@ -119,6 +129,23 @@ function parseAgent(raw: unknown): AgentConfig | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** Parse guideState from unknown input */
+function parseGuideState(raw: unknown): GuideState | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  if (obj.active !== true) return undefined;
+  const template = obj.template === 'en' || obj.template === 'zh' || obj.template === 'empty'
+    ? obj.template : 'en';
+  return {
+    active: true,
+    dismissed: obj.dismissed === true,
+    template,
+    step1Done: obj.step1Done === true,
+    askedAI: obj.askedAI === true,
+    nextStepIndex: typeof obj.nextStepIndex === 'number' ? obj.nextStepIndex : 0,
+  };
+}
+
 export function readSettings(): ServerSettings {
   try {
     const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8');
@@ -134,6 +161,7 @@ export function readSettings(): ServerSettings {
       startMode:   typeof parsed.startMode   === 'string' ? parsed.startMode as ServerSettings['startMode'] : undefined,
       setupPending: parsed.setupPending === true ? true : undefined,
       disabledSkills: Array.isArray(parsed.disabledSkills) ? parsed.disabledSkills as string[] : undefined,
+      guideState: parseGuideState(parsed.guideState),
     };
   } catch {
     return { ...DEFAULTS, ai: { ...DEFAULTS.ai, providers: { ...DEFAULTS.ai.providers } } };
@@ -154,6 +182,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.mcpPort     !== undefined) merged.mcpPort     = settings.mcpPort;
   if (settings.startMode   !== undefined) merged.startMode   = settings.startMode;
   if (settings.disabledSkills !== undefined) merged.disabledSkills = settings.disabledSkills;
+  if (settings.guideState !== undefined) merged.guideState = settings.guideState;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;

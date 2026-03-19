@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import AskModal from './AskModal';
+import { useAskModal } from '@/hooks/useAskModal';
 
 export default function AskFab() {
   const [open, setOpen] = useState(false);
@@ -12,10 +13,49 @@ export default function AskFab() {
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
     : undefined;
 
+  // Listen to useAskModal store for cross-component open requests (e.g. from GuideCard)
+  const askModal = useAskModal();
+  const [initialMessage, setInitialMessage] = useState('');
+  const [openSource, setOpenSource] = useState<'user' | 'guide' | 'guide-next'>('user');
+
+  useEffect(() => {
+    if (askModal.open) {
+      setInitialMessage(askModal.initialMessage);
+      setOpenSource(askModal.source);
+      setOpen(true);
+      askModal.close(); // Reset store state after consuming
+    }
+  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.close]);
+
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    setInitialMessage('');
+    setOpenSource('user');
+  }, []);
+
+  // Dispatch correct PATCH based on how the modal was opened
+  const handleFirstMessage = useCallback(() => {
+    const notifyGuide = () => window.dispatchEvent(new Event('guide-state-updated'));
+
+    if (openSource === 'guide') {
+      // Task ② completion: mark askedAI
+      fetch('/api/setup', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guideState: { askedAI: true } }),
+      }).then(notifyGuide).catch(() => {});
+    } else if (openSource === 'guide-next') {
+      // Next-step advancement: GuideCard already PATCHed nextStepIndex optimistically.
+      // Just notify GuideCard to re-fetch for consistency; no additional PATCH needed.
+      notifyGuide();
+    }
+    // For 'user' source: no guide action needed
+  }, [openSource]);
+
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setInitialMessage(''); setOpenSource('user'); setOpen(true); }}
         className="
           group
           fixed z-40
@@ -53,7 +93,13 @@ export default function AskFab() {
         </span>
       </button>
 
-      <AskModal open={open} onClose={() => setOpen(false)} currentFile={currentFile} />
+      <AskModal
+        open={open}
+        onClose={handleClose}
+        currentFile={currentFile}
+        initialMessage={initialMessage}
+        onFirstMessage={handleFirstMessage}
+      />
     </>
   );
 }

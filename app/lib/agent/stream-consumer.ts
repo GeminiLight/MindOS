@@ -138,7 +138,9 @@ export async function consumeUIMessageStream(
           case 'tool-output-available': {
             const tc = toolCalls.get(chunk.toolCallId as string);
             if (tc) {
-              tc.output = typeof chunk.output === 'string' ? chunk.output : JSON.stringify(chunk.output);
+              tc.output = chunk.output != null
+                ? (typeof chunk.output === 'string' ? chunk.output : JSON.stringify(chunk.output))
+                : '';
               tc.state = 'done';
               changed = true;
             }
@@ -148,7 +150,7 @@ export async function consumeUIMessageStream(
           case 'tool-input-error': {
             const tc = toolCalls.get(chunk.toolCallId as string);
             if (tc) {
-              tc.output = (chunk.errorText as string) ?? 'Error';
+              tc.output = (chunk.errorText as string) ?? (chunk.error as string) ?? 'Tool error';
               tc.state = 'error';
               changed = true;
             }

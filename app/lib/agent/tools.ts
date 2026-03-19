@@ -4,6 +4,7 @@ import {
   searchFiles, getFileContent, getFileTree, getRecentlyModified,
   saveFileContent, createFile, appendToFile, insertAfterHeading, updateSection,
   deleteFile, renameFile, moveFile, findBacklinks, gitLog, gitShowFile, appendCsvRow,
+  getMindRoot,
 } from '@/lib/fs';
 import { assertNotProtected } from '@/lib/core';
 import { logAgentOp } from './log';
@@ -21,7 +22,13 @@ export function assertWritable(filePath: string): void {
   assertNotProtected(filePath, 'modified by AI agent');
 }
 
-/** Helper: wrap a tool execute fn with agent-op logging */
+/**
+ * Wrap a tool execute fn with agent-op logging.
+ * Catches ALL exceptions and returns an error string — never throws.
+ * This is critical: an unhandled throw from a tool execute function kills
+ * the AI SDK stream and corrupts the session message state, causing
+ * "Cannot read properties of undefined" on every subsequent request.
+ */
 function logged<P extends Record<string, unknown>>(
   toolName: string,
   fn: (params: P) => Promise<string>,
@@ -31,12 +38,12 @@ function logged<P extends Record<string, unknown>>(
     try {
       const result = await fn(params);
       const isError = result.startsWith('Error:');
-      logAgentOp({ ts, tool: toolName, params, result: isError ? 'error' : 'ok', message: result.slice(0, 200) });
+      try { logAgentOp({ ts, tool: toolName, params, result: isError ? 'error' : 'ok', message: result.slice(0, 200) }); } catch { /* logging must never kill the stream */ }
       return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAgentOp({ ts, tool: toolName, params, result: 'error', message: msg.slice(0, 200) });
-      throw e;
+      try { logAgentOp({ ts, tool: toolName, params, result: 'error', message: msg.slice(0, 200) }); } catch { /* swallow — logging must never kill the stream */ }
+      return `Error: ${msg}`;
     }
   };
 }
@@ -47,12 +54,19 @@ export const knowledgeBaseTools = {
   list_files: tool({
     description: 'List files in the knowledge base as an indented tree. Directories beyond `depth` show "... (N items)". Pass `path` to list only a subdirectory, or `depth` to control how deep to expand (default 3).',
     inputSchema: z.object({
-      path: z.string().optional().describe('Optional subdirectory to list (e.g. "Projects/Products"). Omit to list everything.'),
-      depth: z.number().min(1).max(10).optional().describe('Max tree depth to expand (default 3). Directories deeper than this show item count only.'),
+      path: z.string().nullish().describe('Optional subdirectory to list (e.g. "Projects/Products"). Omit to list everything.'),
+      depth: z.number().min(1).max(10).nullish().describe('Max tree depth to expand (default 3). Directories deeper than this show item count only.'),
     }),
     execute: logged('list_files', async ({ path: subdir, depth: maxDepth }) => {
       try {
         const tree = getFileTree();
+
+        // Empty tree at root level → likely a misconfigured mindRoot
+        if (tree.length === 0 && !subdir) {
+          const root = getMindRoot();
+          return `(empty — no .md or .csv files found under mind_root: ${root})`;
+        }
+
         const limit = maxDepth ?? 3;
         const lines: string[] = [];
         function walk(nodes: Array<{ name: string; type: string; children?: unknown[] }>, depth: number) {
@@ -114,9 +128,9 @@ export const knowledgeBaseTools = {
 
   get_recent: tool({
     description: 'Get the most recently modified files in the knowledge base.',
-    inputSchema: z.object({ limit: z.number().min(1).max(50).default(10).describe('Number of files to return') }),
+    inputSchema: z.object({ limit: z.number().min(1).max(50).nullish().describe('Number of files to return (default 10)') }),
     execute: logged('get_recent', async ({ limit }) => {
-      const files = getRecentlyModified(limit);
+      const files = getRecentlyModified(limit ?? 10);
       return files.map(f => `- ${f.path} (${new Date(f.mtime).toISOString()})`).join('\n');
     }),
   }),
@@ -142,12 +156,12 @@ export const knowledgeBaseTools = {
     description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically.',
     inputSchema: z.object({
       path: z.string().describe('Relative file path (must end in .md or .csv)'),
-      content: z.string().default('').describe('Initial file content'),
+      content: z.string().nullish().describe('Initial file content'),
     }),
     execute: logged('create_file', async ({ path, content }) => {
       try {
         assertWritable(path);
-        createFile(path, content);
+        createFile(path, content ?? '');
         return `File created: ${path}`;
       } catch (e: unknown) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`;
@@ -283,11 +297,11 @@ export const knowledgeBaseTools = {
     description: 'Get git commit history for a file. Shows recent commits that modified this file.',
     inputSchema: z.object({
       path: z.string().describe('Relative file path'),
-      limit: z.number().min(1).max(50).default(10).describe('Number of commits to return'),
+      limit: z.number().min(1).max(50).nullish().describe('Number of commits to return (default 10)'),
     }),
     execute: logged('get_history', async ({ path, limit }) => {
       try {
-        const commits = gitLog(path, limit);
+        const commits = gitLog(path, limit ?? 10);
         if (commits.length === 0) return `No git history found for: ${path}`;
         return commits.map(c => `- \`${c.hash.slice(0, 7)}\` ${c.date} — ${c.message} (${c.author})`).join('\n');
       } catch (e: unknown) {

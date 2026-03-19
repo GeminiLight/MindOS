@@ -261,11 +261,13 @@
 
 **为什么需要：** Stage 文件覆盖一个阶段的全部功能，粒度偏大。当一个小功能/改进点需要明确的边界和验收标准，但又不值得开一个完整的 stage 时，spec 是最合适的载体。它也是 review 的评审对象——没有 spec，评审就没有锚点。
 
+**命名兼容：** 推荐 `spec-{name}.md`，历史遗留的 `task-spec-*.md` 也可接受。新建一律用 `spec-*`。
+
 **写给谁看：** Agent + 评审者
 
 **核心内容：** 背景、目标、边界、设计方案（数据模型 + API + 受影响文件）、验收标准
 
-**生命周期：** draft → in-review → approved → done → archived。完成后移入 `archive/specs/`。
+**生命周期：** 在 `specs/` = 活跃，在 `archive/specs/` = 完成。位置即状态，无需维护额外标记。
 
 **与 stage 文件的关系：** Spec 是 stage 内某个功能点的展开。Stage 文件用一行索引指向 spec，不重复 spec 的内容。
 
@@ -273,9 +275,11 @@
 
 ---
 
-### refs/ref-{topic}.md — 参考资料
+### refs/{topic}.md — 参考资料
 
 **为什么需要：** Agent 没有外部系统的内部知识。Stripe webhook 的重试机制、WebRTC 的 signaling 流程、某个私有 API 的字段含义——这些信息每次新对话都要重新查阅。写一次 ref，后续所有 stage/spec 直接引用，不重复调研。
+
+**命名：** 描述性文件名即可（如 `git-sync-workflow.md`、`npx-skills-mechanism.md`）。`ref-` 前缀可选。
 
 **写给谁看：** Agent
 
