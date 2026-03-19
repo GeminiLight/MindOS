@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Settings } from 'lucide-react';
 import FileTree from './FileTree';
 import SearchModal from './SearchModal';
@@ -45,6 +45,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   const [settingsTab, setSettingsTab] = useState<Tab | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useLocale();
+  const router = useRouter();
 
   // Shared sync status for collapsed dot & mobile dot
   const { status: syncStatus } = useSyncStatus();
@@ -53,6 +54,25 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   const currentFile = pathname.startsWith('/view/')
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
     : undefined;
+
+  // Refresh file tree when tab becomes visible (catches external changes from
+  // MCP agents, CLI edits, or other browser tabs) and periodically while visible.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') router.refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // Light periodic refresh every 30s while tab is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') router.refresh();
+    }, 30_000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+  }, [router]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plug, CheckCircle2, AlertCircle, Loader2, Copy, Check,
-  ChevronDown, ChevronRight, Trash2, Plus, X,
+  ChevronDown, ChevronRight, Trash2, Plus, X, Search, Pencil,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import dynamic from 'next/dynamic';
+
+const MarkdownView = dynamic(() => import('@/components/MarkdownView'), { ssr: false });
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
@@ -454,6 +457,12 @@ function AgentInstall({ agents, t, onRefresh }: { agents: AgentInfo[]; t: any; o
 
 /* ── Skills Section ────────────────────────────────────────────── */
 
+const SKILL_TEMPLATES: Record<string, (name: string) => string> = {
+  general: (n: string) => `---\nname: ${n}\ndescription: >\n  Describe WHEN the agent should use this\n  skill. Be specific about trigger conditions.\n---\n\n# Instructions\n\n## Context\n<!-- Background knowledge for the agent -->\n\n## Steps\n1. \n2. \n\n## Rules\n<!-- Constraints, edge cases, formats -->\n- `,
+  'tool-use': (n: string) => `---\nname: ${n}\ndescription: >\n  Describe WHEN the agent should use this\n  skill. Be specific about trigger conditions.\n---\n\n# Instructions\n\n## Available Tools\n<!-- List tools the agent can use -->\n- \n\n## When to Use\n<!-- Conditions that trigger this skill -->\n\n## Output Format\n<!-- Expected response structure -->\n`,
+  workflow: (n: string) => `---\nname: ${n}\ndescription: >\n  Describe WHEN the agent should use this\n  skill. Be specific about trigger conditions.\n---\n\n# Instructions\n\n## Trigger\n<!-- What triggers this workflow -->\n\n## Steps\n1. \n2. \n\n## Validation\n<!-- How to verify success -->\n\n## Rollback\n<!-- What to do on failure -->\n`,
+};
+
 function SkillsSection({ t }: { t: any }) {
   const m = t.settings?.mcp;
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -461,10 +470,18 @@ function SkillsSection({ t }: { t: any }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
   const [newContent, setNewContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // New state for search, grouping, full content, editing
+  const [search, setSearch] = useState('');
+  const [builtinCollapsed, setBuiltinCollapsed] = useState(true);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [fullContent, setFullContent] = useState<Record<string, string>>({});
+  const [loadingContent, setLoadingContent] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<'general' | 'tool-use' | 'workflow'>('general');
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -475,6 +492,16 @@ function SkillsSection({ t }: { t: any }) {
   }, []);
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
+
+  // Filtered + grouped
+  const filtered = useMemo(() => {
+    if (!search) return skills;
+    const q = search.toLowerCase();
+    return skills.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
+  }, [skills, search]);
+
+  const customSkills = useMemo(() => filtered.filter(s => s.source === 'user'), [filtered]);
+  const builtinSkills = useMemo(() => filtered.filter(s => s.source === 'builtin'), [filtered]);
 
   const handleToggle = async (name: string, enabled: boolean) => {
     try {
@@ -496,8 +523,68 @@ function SkillsSection({ t }: { t: any }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', name }),
       });
+      setFullContent(prev => { const n = { ...prev }; delete n[name]; return n; });
+      if (editing === name) setEditing(null);
+      if (expanded === name) setExpanded(null);
       fetchSkills();
     } catch { /* ignore */ }
+  };
+
+  const loadFullContent = async (name: string) => {
+    if (fullContent[name]) return;
+    setLoadingContent(name);
+    try {
+      const data = await apiFetch<{ content: string }>('/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'read', name }),
+      });
+      setFullContent(prev => ({ ...prev, [name]: data.content }));
+    } catch {
+      // Store empty marker so UI shows "No description" rather than stuck loading
+      setFullContent(prev => ({ ...prev, [name]: '' }));
+    } finally {
+      setLoadingContent(null);
+    }
+  };
+
+  const handleExpand = (name: string) => {
+    const next = expanded === name ? null : name;
+    setExpanded(next);
+    if (next) loadFullContent(name);
+    if (editing && editing !== name) setEditing(null);
+  };
+
+  const handleEditStart = (name: string) => {
+    setEditing(name);
+    setEditContent(fullContent[name] || '');
+  };
+
+  const handleEditSave = async (name: string) => {
+    setSaving(true);
+    try {
+      await apiFetch('/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update', name, content: editContent }),
+      });
+      setFullContent(prev => ({ ...prev, [name]: editContent }));
+      setEditing(null);
+      fetchSkills(); // refresh description from updated frontmatter
+    } catch { /* ignore */ } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditing(null);
+    setEditContent('');
+  };
+
+  const getTemplate = (skillName: string, tmpl?: string) => {
+    const key = tmpl || selectedTemplate;
+    const fn = SKILL_TEMPLATES[key] || SKILL_TEMPLATES.general;
+    return fn(skillName || 'my-skill');
   };
 
   const handleCreate = async () => {
@@ -505,20 +592,40 @@ function SkillsSection({ t }: { t: any }) {
     setSaving(true);
     setError('');
     try {
+      // Content is the full SKILL.md (with frontmatter)
+      const content = newContent || getTemplate(newName.trim());
       await apiFetch('/api/skills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', name: newName.trim(), description: newDesc.trim(), content: newContent }),
+        body: JSON.stringify({ action: 'create', name: newName.trim(), content }),
       });
       setAdding(false);
       setNewName('');
-      setNewDesc('');
       setNewContent('');
       fetchSkills();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create skill');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Sync template name when newName changes (only if content matches a template)
+  const handleNameChange = (val: string) => {
+    const cleaned = val.replace(/[^a-z0-9-]/g, '');
+    const oldTemplate = getTemplate(newName || 'my-skill');
+    if (!newContent || newContent === oldTemplate) {
+      setNewContent(getTemplate(cleaned || 'my-skill'));
+    }
+    setNewName(cleaned);
+  };
+
+  const handleTemplateChange = (tmpl: 'general' | 'tool-use' | 'workflow') => {
+    const oldTemplate = getTemplate(newName || 'my-skill', selectedTemplate);
+    setSelectedTemplate(tmpl);
+    // Only replace content if it matches the old template (user hasn't customized)
+    if (!newContent || newContent === oldTemplate) {
+      setNewContent(getTemplate(newName || 'my-skill', tmpl));
     }
   };
 
@@ -530,8 +637,128 @@ function SkillsSection({ t }: { t: any }) {
     );
   }
 
+  const renderSkillRow = (skill: SkillInfo) => (
+    <div key={skill.name} className="border border-border rounded-lg overflow-hidden">
+      <div
+        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={() => handleExpand(skill.name)}
+      >
+        {expanded === skill.name ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        <span className="text-xs font-medium flex-1">{skill.name}</span>
+        <span className={`text-2xs px-1.5 py-0.5 rounded ${
+          skill.source === 'builtin' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'
+        }`}>
+          {skill.source === 'builtin' ? (m?.skillBuiltin ?? 'Built-in') : (m?.skillUser ?? 'Custom')}
+        </span>
+        <button
+          onClick={e => { e.stopPropagation(); handleToggle(skill.name, !skill.enabled); }}
+          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+            skill.enabled ? 'bg-success' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${
+            skill.enabled ? 'translate-x-3.5' : 'translate-x-0.5'
+          }`} />
+        </button>
+      </div>
+
+      {expanded === skill.name && (
+        <div className="px-3 py-2 border-t border-border text-xs space-y-2 bg-muted/20">
+          <p className="text-muted-foreground">{skill.description || 'No description'}</p>
+          <p className="text-muted-foreground font-mono text-2xs">{skill.path}</p>
+
+          {/* Full content display / edit */}
+          {loadingContent === skill.name ? (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Loader2 size={10} className="animate-spin" />
+              <span className="text-2xs">Loading...</span>
+            </div>
+          ) : fullContent[skill.name] ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-2xs text-muted-foreground font-medium">{m?.skillContent ?? 'Content'}</span>
+                <div className="flex items-center gap-2">
+                  {skill.editable && editing !== skill.name && (
+                    <button
+                      onClick={() => handleEditStart(skill.name)}
+                      className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Pencil size={10} />
+                      {m?.editSkill ?? 'Edit'}
+                    </button>
+                  )}
+                  {skill.editable && (
+                    <button
+                      onClick={() => handleDelete(skill.name)}
+                      className="flex items-center gap-1 text-2xs text-destructive hover:underline"
+                    >
+                      <Trash2 size={10} />
+                      {m?.deleteSkill ?? 'Delete'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {editing === skill.name ? (
+                <div className="space-y-1.5">
+                  <textarea
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    rows={Math.min(20, (editContent.match(/\n/g) || []).length + 3)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-mono"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleEditSave(skill.name)}
+                      disabled={saving}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+                    >
+                      {saving && <Loader2 size={10} className="animate-spin" />}
+                      {m?.saveSkill ?? 'Save'}
+                    </button>
+                    <button
+                      onClick={handleEditCancel}
+                      className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {m?.cancelSkill ?? 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full rounded-md border border-border bg-background/50 max-h-[300px] overflow-y-auto px-2.5 py-1.5 text-xs [&_.prose]:max-w-none [&_.prose]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs [&_pre]:text-2xs [&_code]:text-2xs">
+                  <MarkdownView content={fullContent[skill.name].replace(/^---\n[\s\S]*?\n---\n*/, '')} />
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-3 pt-2">
+      {/* Search */}
+      <div className="relative">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={m?.searchSkills ?? 'Search skills...'}
+          className="w-full pl-7 pr-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X size={10} />
+          </button>
+        )}
+      </div>
+
       {/* Skill language switcher */}
       {(() => {
         const mindosEnabled = skills.find(s => s.name === 'mindos')?.enabled ?? true;
@@ -575,56 +802,49 @@ function SkillsSection({ t }: { t: any }) {
         );
       })()}
 
-      {skills.map(skill => (
-        <div key={skill.name} className="border border-border rounded-lg overflow-hidden">
-          <div
-            className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => setExpanded(expanded === skill.name ? null : skill.name)}
-          >
-            {expanded === skill.name ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            <span className="text-xs font-medium flex-1">{skill.name}</span>
-            <span className={`text-2xs px-1.5 py-0.5 rounded ${
-              skill.source === 'builtin' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'
-            }`}>
-              {skill.source === 'builtin' ? (m?.skillBuiltin ?? 'Built-in') : (m?.skillUser ?? 'Custom')}
-            </span>
-            {/* Toggle */}
-            <button
-              onClick={e => { e.stopPropagation(); handleToggle(skill.name, !skill.enabled); }}
-              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                skill.enabled ? 'bg-success' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${
-                skill.enabled ? 'translate-x-3.5' : 'translate-x-0.5'
-              }`} />
-            </button>
-          </div>
+      {/* Empty search result */}
+      {filtered.length === 0 && search && (
+        <p className="text-xs text-muted-foreground text-center py-3">
+          {m?.noSkillsMatch ? m.noSkillsMatch(search) : `No skills match "${search}"`}
+        </p>
+      )}
 
-          {expanded === skill.name && (
-            <div className="px-3 py-2 border-t border-border text-xs space-y-1.5 bg-muted/20">
-              <p className="text-muted-foreground">{skill.description || 'No description'}</p>
-              <p className="text-muted-foreground font-mono text-2xs">{skill.path}</p>
-              {skill.editable && (
-                <button
-                  onClick={() => handleDelete(skill.name)}
-                  className="flex items-center gap-1 text-2xs text-destructive hover:underline"
-                >
-                  <Trash2 size={10} />
-                  {m?.deleteSkill ?? 'Delete'}
-                </button>
-              )}
+      {/* Custom group — always open */}
+      {customSkills.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span>{m?.customGroup ?? 'Custom'} ({customSkills.length})</span>
+          </div>
+          <div className="space-y-1.5">
+            {customSkills.map(renderSkillRow)}
+          </div>
+        </div>
+      )}
+
+      {/* Built-in group — collapsible, default collapsed */}
+      {builtinSkills.length > 0 && (
+        <div className="space-y-1.5">
+          <div
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+            onClick={() => setBuiltinCollapsed(!builtinCollapsed)}
+          >
+            {builtinCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            <span>{m?.builtinGroup ?? 'Built-in'} ({builtinSkills.length})</span>
+          </div>
+          {!builtinCollapsed && (
+            <div className="space-y-1.5">
+              {builtinSkills.map(renderSkillRow)}
             </div>
           )}
         </div>
-      ))}
+      )}
 
-      {/* Add skill form */}
+      {/* Add skill form — template-based */}
       {adding ? (
         <div className="border border-border rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium">{m?.addSkill ?? '+ Add Skill'}</span>
-            <button onClick={() => setAdding(false)} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
+            <button onClick={() => { setAdding(false); setNewName(''); setNewContent(''); setError(''); }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
               <X size={12} />
             </button>
           </div>
@@ -633,27 +853,37 @@ function SkillsSection({ t }: { t: any }) {
             <input
               type="text"
               value={newName}
-              onChange={e => setNewName(e.target.value.replace(/[^a-z0-9-]/g, ''))}
+              onChange={e => handleNameChange(e.target.value)}
               placeholder="my-skill"
               className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-2xs text-muted-foreground">{m?.skillDesc ?? 'Description'}</label>
-            <input
-              type="text"
-              value={newDesc}
-              onChange={e => setNewDesc(e.target.value)}
-              placeholder="What does this skill do?"
-              className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
+            <label className="text-2xs text-muted-foreground">{m?.skillTemplate ?? 'Template'}</label>
+            <div className="flex rounded-md border border-border overflow-hidden w-fit">
+              {(['general', 'tool-use', 'workflow'] as const).map((tmpl, i) => (
+                <button
+                  key={tmpl}
+                  onClick={() => handleTemplateChange(tmpl)}
+                  className={`px-2.5 py-1 text-xs transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                    selectedTemplate === tmpl
+                      ? 'bg-amber-500/15 text-amber-600 font-medium'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {tmpl === 'general' ? (m?.skillTemplateGeneral ?? 'General')
+                    : tmpl === 'tool-use' ? (m?.skillTemplateToolUse ?? 'Tool-use')
+                    : (m?.skillTemplateWorkflow ?? 'Workflow')}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="space-y-1">
             <label className="text-2xs text-muted-foreground">{m?.skillContent ?? 'Content'}</label>
             <textarea
               value={newContent}
               onChange={e => setNewContent(e.target.value)}
-              rows={6}
+              rows={16}
               placeholder="Skill instructions (markdown)..."
               className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-mono"
             />
@@ -675,7 +905,7 @@ function SkillsSection({ t }: { t: any }) {
               {m?.saveSkill ?? 'Save'}
             </button>
             <button
-              onClick={() => setAdding(false)}
+              onClick={() => { setAdding(false); setNewName(''); setNewContent(''); setError(''); }}
               className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
             >
               {m?.cancelSkill ?? 'Cancel'}
@@ -684,7 +914,7 @@ function SkillsSection({ t }: { t: any }) {
         </div>
       ) : (
         <button
-          onClick={() => setAdding(true)}
+          onClick={() => { setAdding(true); setSelectedTemplate('general'); setNewContent(getTemplate('my-skill', 'general')); }}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus size={12} />

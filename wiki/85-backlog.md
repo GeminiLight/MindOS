@@ -58,6 +58,7 @@
 - [ ] **I4：CLI per-command `--help`** — `mindos start --help` 显示子命令选项。与 I1 一起做，CLI 专业度提升
 - [ ] **I5：首次使用引导流程** — 检测新模板 → 展示知识库结构 → 引导 AI 提问 → 引导配置 Sync。激活率关键路径，但工作量较大
 - [ ] **I6：首页 Plugins 更好的展示方式** — 当前插件列表平铺，缺乏分类和预览
+- [x] **I6.5：Skill 管理面板改进** — 分组显示（Custom/Built-in）+ 搜索过滤 + 全文查看（read API）+ 内联编辑 + 预填模板创建（General/Tool-use/Workflow）+ Markdown 渲染。解决"不知道给新 agent 提供什么信息"的 pain point
 - [x] **I7：文件视图 topbar 文件图标** — Breadcrumb 组件已有 `FileTypeIcon`（.csv → Table，.md → FileText，目录 → Folder）
 - [ ] **I8：Skill 渐进式加载** — SKILL.md 瘦身为 loader（~30 行），规则文件存到知识库 `.agents/skills/`，支持热更新 + 用户个性化 + 主动智能 + 可演化学习。[spec](./specs/progressive-skill-loading.md)
 

@@ -1,5 +1,7 @@
 ## PENDING
 
+添加删除文件或更新文件名称，旁边文件目录的不更新
+
 ❯ MindOS MCP Server                             
 Status                                          
 Running                                         
