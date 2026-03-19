@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, name, description, content, enabled } = body as {
-      action: 'create' | 'update' | 'delete' | 'toggle';
+      action: 'create' | 'update' | 'delete' | 'toggle' | 'read';
       name?: string;
       description?: string;
       content?: string;
@@ -172,8 +172,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'A skill with this name already exists' }, { status: 409 });
         }
         fs.mkdirSync(skillDir, { recursive: true });
-        const frontmatter = `---\nname: ${name}\ndescription: ${description || name}\n---\n\n${content || ''}`;
-        fs.writeFileSync(path.join(skillDir, 'SKILL.md'), frontmatter, 'utf-8');
+        // If content already has frontmatter, use it as-is; otherwise build frontmatter
+        const fileContent = content && content.trimStart().startsWith('---')
+          ? content
+          : `---\nname: ${name}\ndescription: ${description || name}\n---\n\n${content || ''}`;
+        fs.writeFileSync(path.join(skillDir, 'SKILL.md'), fileContent, 'utf-8');
         return NextResponse.json({ ok: true });
       }
 
@@ -197,6 +200,22 @@ export async function POST(req: NextRequest) {
         }
         fs.rmSync(skillDir, { recursive: true, force: true });
         return NextResponse.json({ ok: true });
+      }
+
+      case 'read': {
+        if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 });
+        const dirs = [
+          path.join(PROJECT_ROOT, 'app', 'data', 'skills', name),
+          path.join(PROJECT_ROOT, 'skills', name),
+          path.join(userSkillsDir, name),
+        ];
+        for (const dir of dirs) {
+          const file = path.join(dir, 'SKILL.md');
+          if (fs.existsSync(file)) {
+            return NextResponse.json({ content: fs.readFileSync(file, 'utf-8') });
+          }
+        }
+        return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
       }
 
       default:

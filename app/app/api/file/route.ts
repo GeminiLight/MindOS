@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import {
   getFileContent,
   saveFileContent,
@@ -37,6 +38,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Ops that change file tree structure (sidebar needs refresh)
+const TREE_CHANGING_OPS = new Set(['create_file', 'delete_file', 'rename_file', 'move_file']);
+
 // POST /api/file  body: { op, path, ...params }
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -47,20 +51,24 @@ export async function POST(req: NextRequest) {
   if (!filePath || typeof filePath !== 'string') return err('missing path');
 
   try {
+    let resp: NextResponse;
+
     switch (op) {
 
       case 'save_file': {
         const { content } = params as { content: string };
         if (typeof content !== 'string') return err('missing content');
         saveFileContent(filePath, content);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'append_to_file': {
         const { content } = params as { content: string };
         if (typeof content !== 'string') return err('missing content');
         appendToFile(filePath, content);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'insert_lines': {
@@ -68,7 +76,8 @@ export async function POST(req: NextRequest) {
         if (typeof after_index !== 'number') return err('missing after_index');
         if (!Array.isArray(lines)) return err('lines must be array');
         insertLines(filePath, after_index, lines);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'update_lines': {
@@ -78,7 +87,8 @@ export async function POST(req: NextRequest) {
         if (start < 0 || end < 0) return err('start/end must be >= 0');
         if (start > end) return err('start must be <= end');
         updateLines(filePath, start, end, lines);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'insert_after_heading': {
@@ -86,7 +96,8 @@ export async function POST(req: NextRequest) {
         if (typeof heading !== 'string') return err('missing heading');
         if (typeof content !== 'string') return err('missing content');
         insertAfterHeading(filePath, heading, content);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'update_section': {
@@ -94,44 +105,57 @@ export async function POST(req: NextRequest) {
         if (typeof heading !== 'string') return err('missing heading');
         if (typeof content !== 'string') return err('missing content');
         updateSection(filePath, heading, content);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'delete_file': {
         deleteFile(filePath);
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'rename_file': {
         const { new_name } = params as { new_name: string };
         if (typeof new_name !== 'string' || !new_name) return err('missing new_name');
         const newPath = renameFile(filePath, new_name);
-        return NextResponse.json({ ok: true, newPath });
+        resp = NextResponse.json({ ok: true, newPath });
+        break;
       }
 
       case 'create_file': {
         const { content } = params as { content?: string };
         createFile(filePath, typeof content === 'string' ? content : '');
-        return NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true });
+        break;
       }
 
       case 'move_file': {
         const { to_path } = params as { to_path: string };
         if (typeof to_path !== 'string' || !to_path) return err('missing to_path');
         const result = moveFile(filePath, to_path);
-        return NextResponse.json({ ok: true, ...result });
+        resp = NextResponse.json({ ok: true, ...result });
+        break;
       }
 
       case 'append_csv': {
         const { row } = params as { row: string[] };
         if (!Array.isArray(row) || row.length === 0) return err('row must be non-empty array');
         const result = appendCsvRow(filePath, row);
-        return NextResponse.json({ ok: true, ...result });
+        resp = NextResponse.json({ ok: true, ...result });
+        break;
       }
 
       default:
         return err(`unknown op: ${op}`);
     }
+
+    // Invalidate Next.js router cache so sidebar file tree updates
+    if (TREE_CHANGING_OPS.has(op)) {
+      try { revalidatePath('/', 'layout'); } catch { /* noop in test env */ }
+    }
+
+    return resp;
   } catch (e) {
     return err((e as Error).message, 500);
   }

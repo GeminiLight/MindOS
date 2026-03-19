@@ -4,15 +4,42 @@
 
 ## 开发流程
 
-### 任务执行流程
+### 全自治执行流程
 
-1. 从 **roadmap / backlog** 取任务，确认阶段匹配
-2. 写 **stage / spec**，明确边界和验收标准
-3. **human review + AI review** spec
-4. **执行**
-5. **code review**
-6. **结果验证**
+当用户提出一个想法或需求时，Agent 独立完成以下全链路，**中间不停下来等确认**：
 
+```
+用户提 idea
+  ↓
+① 调研：读 backlog、已有 spec、相关代码，理解上下文
+  ↓
+② 写 spec：输出到 wiki/specs/，包含目标、方案、变更文件、验收标准
+  ↓
+③ 自我 review spec（≥2 轮）：
+   - 轮 1：检查完整性（边界 case、与现有架构的冲突、遗漏的依赖）
+   - 轮 2：检查可行性（涉及的 API 是否存在、版本是否兼容、性能影响）
+   - 有问题就修改 spec 并重新 review，直到满意
+  ↓
+④ 实现代码
+  ↓
+⑤ 自我 code review（≥2 轮）：
+   - 轮 1：对照 spec 逐条验收 + 查 wiki/80-known-pitfalls.md 防踩旧坑
+   - 轮 2：检查改动文件的未使用 import、错误处理、测试兼容性、缓存失效
+   - 有问题就修代码并重新 review，直到满意
+  ↓
+⑥ 跑测试（npx vitest run），必须全部通过
+  ↓
+⑦ 更新文档：wiki（架构/新坑）、backlog（打勾）、changelog（发版时）
+  ↓
+⑧ commit + push（遵循 Git 流程）
+  ↓
+⑨ 向用户呈现：改了什么、为什么、变更 diff 摘要
+```
+
+**关键原则：**
+- 整个流程 Agent 自驱，用户只在最终验收时介入
+- 如果 spec 阶段发现需求有歧义，才停下来问用户（用一次提问问清，不拆多轮）
+- 用户说"release"则在 ⑧ 后追加 `npm run release patch`
 - 不要估算工时
 
 ### Bug 处理流程
@@ -77,14 +104,10 @@
    - `git fetch public main && git log public/main --oneline -5`
    - 有未同步的 → 先 `git merge public/main --no-edit`，再开始改代码
    - 无 public remote 则跳过（`git remote | grep public`）
-2. **检查改动**：`git status` + `git diff` 查看所有变更
-3. **确认范围**：向用户确认哪些文件需要提交（排除不相关的临时文件）
-4. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
-5. **提交并 push**：`git add <files> && git commit && git push origin main`
-6. **确认发版**：提交后主动询问用户：
-   - "是否需要发布新版本到 npm？"
-   - 如果是，默认使用 `patch`，除非用户指定 `minor`（新功能）或 `major`（破坏性变更）
-   - 然后执行 `npm run release [patch|minor|major]`
+2. **检查改动**：`git status` + `git diff`，排除不相关的临时文件
+3. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
+4. **提交并 push**：`git add <files> && git commit && git push origin main`
+5. 如果用户要求 release → 执行 `npm run release [patch|minor|major]`（默认 patch）
 
 ### 发版说明
 
@@ -123,6 +146,30 @@
    - `app/data/skills/<name>/SKILL.md`（按 AGENTS.md 规则与 skills/ 保持一致）
    - `.claude-internal/skills/<name>/SKILL.md`（若存在）
 7. **验证一致性**：用命令行 diff 确认所有副本内容相同
+
+## Agent 自治原则
+
+> 目标：用户发一条指令，Agent 一次做完，减少来回交互轮次。
+
+### 一次性交付
+
+- **理解终态**：用户说"修这个 bug"，隐含的完整链路是：定位 → 修复 → 自检 → 跑测试 → 更新文档。不要做一步等一步，一次性做到"可提交"状态再呈现
+- **合并中间步骤**：如果用户同时或连续提到 commit / push / release，一条链串完，不要每步都停下来汇报
+- **不等用户催 review**：改完代码后主动自检（见下方清单），不需要用户说"review 下"才去做
+
+### 提交前自检清单（每次改动后自动执行）
+
+1. 跑测试（`npx vitest run`），全部通过才继续
+2. 检查改动文件：未使用的 import、遗漏的错误处理、与测试环境不兼容的 API 调用
+3. 框架特定陷阱：查 `wiki/80-known-pitfalls.md` 中已记录的模式，确认没有重蹈覆辙
+4. 涉及缓存/刷新的改动：确认客户端缓存、服务端缓存、内存缓存三层都已处理
+5. 新增写操作 API → 检查是否需要通知其他组件刷新
+
+### 主动沟通而非被动等待
+
+- 发现改动影响范围超预期 → 主动说明，不等用户追问
+- 发现关联 bug → 一并修复并说明，不留给下一轮
+- 不确定的决策 → 列出选项和推荐，一次问清，不要拆成多轮提问
 
 ## Landing Page
 

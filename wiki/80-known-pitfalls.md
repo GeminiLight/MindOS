@@ -66,6 +66,19 @@
 - **解决：** 只删除未使用的 weight（如 IBM Plex Sans 的 300、IBM Plex Mono 的 500），不删整个字体
 - **教训：** 精简前先全局 grep 确认引用
 
+### Sidebar 文件目录不更新（创建/删除/重命名后）
+- **现象：** 在 sidebar 创建、删除、重命名文件后，文件树不更新；MCP agent 在后台操作文件后更不更新
+- **原因：** 三层问题叠加：
+  1. Next.js client-side Router Cache 默认 30s，`router.refresh()` 可能拿到 stale 的 RSC payload
+  2. `/api/file` route（MCP 调用路径）的写操作没有调用 `revalidatePath('/', 'layout')`，服务端 router cache 不失效
+  3. 没有任何客户端主动刷新机制（visibilitychange / 定时轮询），外部变更无法被感知
+- **解决：**
+  1. `next.config.ts` 加 `experimental.staleTimes.dynamic = 0`，禁用 dynamic 路由的客户端 router cache
+  2. `/api/file` route 的 tree-changing ops（create/delete/rename/move）加 `revalidatePath('/', 'layout')`
+  3. `Sidebar.tsx` 加 `visibilitychange` 监听 + 30s 定时 `router.refresh()`
+- **注意：** `export const dynamic = 'force-dynamic'` 只对 page/route 有效，对 layout.tsx 无效
+- **规则：** 凡是新增文件写操作的 API route，必须调用 `revalidatePath('/', 'layout')` 来通知 layout 刷新 file tree
+
 ## MCP
 
 ### INSTRUCTION.md 写保护

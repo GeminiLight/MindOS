@@ -39,7 +39,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -268,6 +268,41 @@ const commands = {
     const webPort = process.env.MINDOS_WEB_PORT || '3456';
     const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
 
+    // ── Auto-migrate skill rules (v3 split → v4 merged) ──────────────────
+    try {
+      const cfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+      const mr = cfg.mindRoot;
+      if (mr && existsSync(mr)) {
+        const isZh = cfg.disabledSkills?.includes('mindos');
+        const sName = isZh ? 'mindos-zh' : 'mindos';
+        const lang = isZh ? 'zh' : 'en';
+        const sDir = resolve(mr, '.agents', 'skills', sName);
+        const merged = resolve(sDir, 'skill-rules.md');
+        const legacyRules = resolve(sDir, 'rules.md');
+        // Migrate if legacy exists but merged doesn't
+        if (existsSync(legacyRules) && !existsSync(merged)) {
+          const tpl = resolve(ROOT, 'templates', 'skill-rules', lang, 'skill-rules.md');
+          if (existsSync(tpl)) {
+            cpSync(tpl, merged);
+            for (const f of ['rules.md', 'patterns.md', 'proactive.md']) {
+              const p = resolve(sDir, f);
+              if (existsSync(p)) rmSync(p);
+            }
+            console.log(`  ${green('✓')} ${dim('Skill rules migrated to skill-rules.md')}`);
+          }
+        }
+        // Init if .agents/skills/ doesn't exist at all
+        if (!existsSync(sDir)) {
+          const srcDir = resolve(ROOT, 'templates', 'skill-rules', lang);
+          if (existsSync(srcDir)) {
+            mkdirSync(sDir, { recursive: true });
+            cpSync(srcDir, sDir, { recursive: true });
+            console.log(`  ${green('✓')} ${dim('Skill rules initialized')}`);
+          }
+        }
+      }
+    } catch { /* best-effort, don't block startup */ }
+
     // When launched by a daemon manager (launchd/systemd), wait for ports to
     // free instead of exiting immediately — the previous instance may still be
     // shutting down after a restart/update.
@@ -398,6 +433,80 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       return;
     }
     await runGatewayCommand(sub);
+  },
+
+  // ── init-skills ──────────────────────────────────────────────────────────
+  'init-skills': async () => {
+    const force = process.argv.includes('--force');
+    console.log(`\n${bold('📦 Initialize Skill Rules')}\n`);
+
+    if (!existsSync(CONFIG_PATH)) {
+      console.log(`  ${red('✘')} Config not found. Run ${cyan('mindos onboard')} first.\n`);
+      process.exit(1);
+    }
+    let config;
+    try {
+      config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    } catch {
+      console.log(`  ${red('✘')} Failed to parse config at ${dim(CONFIG_PATH)}\n`);
+      process.exit(1);
+    }
+    const mindRoot = config.mindRoot;
+    if (!mindRoot || !existsSync(mindRoot)) {
+      console.log(`  ${red('✘')} Knowledge base not found: ${dim(mindRoot || '(not set)')}\n`);
+      process.exit(1);
+    }
+
+    const isZh = config.disabledSkills?.includes('mindos');
+    const skillName = isZh ? 'mindos-zh' : 'mindos';
+    const lang = isZh ? 'zh' : 'en';
+    const skillDir = resolve(mindRoot, '.agents', 'skills', skillName);
+    const sourceDir = resolve(ROOT, 'templates', 'skill-rules', lang);
+
+    if (!existsSync(sourceDir)) {
+      console.log(`  ${red('✘')} Template not found: ${dim(sourceDir)}\n`);
+      process.exit(1);
+    }
+
+    const files = ['skill-rules.md', 'user-rules.md'];
+    mkdirSync(skillDir, { recursive: true });
+
+    let count = 0;
+    for (const file of files) {
+      const dest = resolve(skillDir, file);
+      const src = resolve(sourceDir, file);
+      if (!existsSync(src)) continue;
+
+      // Never overwrite user-rules.md even with --force
+      if (file === 'user-rules.md' && existsSync(dest)) {
+        console.log(`  ${dim('skip')}  ${file} (user rules preserved)`);
+        continue;
+      }
+
+      if (existsSync(dest) && !force) {
+        console.log(`  ${dim('skip')}  ${file} (already exists)`);
+        continue;
+      }
+
+      cpSync(src, dest);
+      console.log(`  ${green('✓')}  ${file}${force ? ' (reset)' : ''}`);
+      count++;
+    }
+
+    // Clean up legacy split files from v3
+    for (const legacy of ['rules.md', 'patterns.md', 'proactive.md']) {
+      const legacyPath = resolve(skillDir, legacy);
+      if (existsSync(legacyPath)) {
+        rmSync(legacyPath);
+        console.log(`  ${dim('cleanup')}  ${legacy} (merged into skill-rules.md)`);
+      }
+    }
+
+    if (count === 0) {
+      console.log(`\n  ${dim('All files already exist. Use --force to reset defaults (user-rules.md is always preserved).')}\n`);
+    } else {
+      console.log(`\n  ${green('✔')} Skill rules initialized at ${dim(skillDir)}\n`);
+    }
   },
 
   // ── doctor ─────────────────────────────────────────────────────────────────
@@ -634,6 +743,28 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.log(dim('  Run `mindos start` — it will rebuild automatically.'));
       console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
     }
+
+    // ── Check if skill rules need updating ──────────────────────────────────
+    try {
+      const updateCfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+      const mindRoot = updateCfg.mindRoot;
+      if (mindRoot && existsSync(mindRoot)) {
+        const isZh = updateCfg.disabledSkills?.includes('mindos');
+        const sName = isZh ? 'mindos-zh' : 'mindos';
+        const lang = isZh ? 'zh' : 'en';
+        const installedRules = resolve(mindRoot, '.agents', 'skills', sName, 'skill-rules.md');
+        const tplRules = resolve(ROOT, 'templates', 'skill-rules', lang, 'skill-rules.md');
+        if (existsSync(installedRules) && existsSync(tplRules)) {
+          const uVer = readFileSync(installedRules, 'utf-8').match(/<!--\s*version:\s*(\S+)\s*-->/)?.[1];
+          const tVer = readFileSync(tplRules, 'utf-8').match(/<!--\s*version:\s*(\S+)\s*-->/)?.[1];
+          if (uVer && tVer && uVer !== tVer) {
+            console.log(`  ${yellow('!')} Skill rules ${dim(uVer)} → ${bold(tVer)} available. Run ${cyan('mindos init-skills --force')} to update ${dim('(user-rules.md preserved)')}\n`);
+          }
+        } else if (!existsSync(resolve(mindRoot, '.agents', 'skills', sName))) {
+          console.log(`  ${dim('Tip:')} Run ${cyan('mindos init-skills')} to enable skill rules in your knowledge base.\n`);
+        }
+      }
+    } catch {}
   },
 
   // ── uninstall ──────────────────────────────────────────────────────────────
@@ -1078,6 +1209,7 @@ ${row('mindos gateway <subcommand>',       'Manage background service (install/u
 ${bold('Config & Diagnostics:')}
 ${row('mindos config <subcommand>',        'View/update config (show/validate/set/unset)')}
 ${row('mindos doctor',                     'Health check (config, ports, build, daemon)')}
+${row('mindos init-skills [--force]',       'Initialize skill rules in knowledge base')}
 ${row('mindos update',                     'Update MindOS to the latest version')}
 ${row('mindos uninstall',                  'Fully uninstall MindOS (stop, remove daemon, npm uninstall)')}
 ${row('mindos logs',                       'Tail service logs (~/.mindos/mindos.log)')}
