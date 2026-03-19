@@ -29,6 +29,12 @@ interface AgentInfo {
   hasProjectScope: boolean;
   hasGlobalScope: boolean;
   preferredTransport: 'stdio' | 'http';
+  // Snippet generation fields
+  format: 'json' | 'toml';
+  configKey: string;
+  globalNestedKey?: string;
+  globalPath: string;
+  projectPath?: string | null;
 }
 
 interface SkillInfo {
@@ -66,19 +72,72 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
+/* ── Config Snippet Generator ─────────────────────────────────── */
+
+function generateConfigSnippet(
+  agent: AgentInfo,
+  status: McpStatus,
+  token?: string,
+): { snippet: string; path: string } {
+  const isRunning = status.running;
+
+  // Determine entry (stdio vs http)
+  const stdioEntry: Record<string, unknown> = { type: 'stdio', command: 'mindos', args: ['mcp'] };
+  const httpEntry: Record<string, unknown> = { url: status.endpoint };
+  if (token) httpEntry.headers = { Authorization: `Bearer ${token}` };
+  const entry = isRunning ? httpEntry : stdioEntry;
+
+  // TOML format (Codex)
+  if (agent.format === 'toml') {
+    const lines: string[] = [`[${agent.configKey}.mindos]`];
+    if (isRunning) {
+      lines.push(`type = "http"`);
+      lines.push(`url = "${status.endpoint}"`);
+      if (token) {
+        lines.push('');
+        lines.push(`[${agent.configKey}.mindos.headers]`);
+        lines.push(`Authorization = "Bearer ${token}"`);
+      }
+    } else {
+      lines.push(`command = "mindos"`);
+      lines.push(`args = ["mcp"]`);
+      lines.push('');
+      lines.push(`[${agent.configKey}.mindos.env]`);
+      lines.push(`MCP_TRANSPORT = "stdio"`);
+    }
+    return { snippet: lines.join('\n'), path: agent.globalPath };
+  }
+
+  // JSON with globalNestedKey (VS Code project-level uses flat key)
+  if (agent.globalNestedKey) {
+    // project-level: flat key structure
+    const projectSnippet = JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
+    return { snippet: projectSnippet, path: agent.projectPath ?? agent.globalPath };
+  }
+
+  // Standard JSON
+  const snippet = JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
+  return { snippet, path: agent.globalPath };
+}
+
 /* ── MCP Server Status ─────────────────────────────────────────── */
 
-function ServerStatus({ status, t }: { status: McpStatus | null; t: any }) {
+function ServerStatus({ status, agents, t }: { status: McpStatus | null; agents: AgentInfo[]; t: any }) {
   const m = t.settings?.mcp;
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+
+  // Auto-select first installed or first detected agent
+  useEffect(() => {
+    if (agents.length > 0 && !selectedAgent) {
+      const first = agents.find(a => a.installed) ?? agents.find(a => a.present) ?? agents[0];
+      if (first) setSelectedAgent(first.key);
+    }
+  }, [agents, selectedAgent]);
+
   if (!status) return null;
 
-  const configSnippet = JSON.stringify({
-    mcpServers: {
-      mindos: status.running
-        ? { url: status.endpoint }
-        : { type: 'stdio', command: 'mindos', args: ['mcp'] },
-    },
-  }, null, 2);
+  const currentAgent = agents.find(a => a.key === selectedAgent);
+  const snippetResult = currentAgent ? generateConfigSnippet(currentAgent, status) : null;
 
   return (
     <div className="space-y-3">
@@ -123,8 +182,48 @@ function ServerStatus({ status, t }: { status: McpStatus | null; t: any }) {
 
       <div className="flex items-center gap-2 pl-11">
         <CopyButton text={status.endpoint} label={m?.copyEndpoint ?? 'Copy Endpoint'} />
-        <CopyButton text={configSnippet} label={m?.copyConfig ?? 'Copy Config'} />
       </div>
+
+      {/* Quick Setup — agent-specific config snippet */}
+      {agents.length > 0 && (
+        <div className="pl-11 pt-2 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">
+              ── {m?.quickSetup ?? 'Quick Setup'} ──
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground shrink-0">{m?.configureFor ?? 'Configure for'}</span>
+            <select
+              value={selectedAgent}
+              onChange={e => setSelectedAgent(e.target.value)}
+              className="text-xs px-2 py-1 rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {agents.map(a => (
+                <option key={a.key} value={a.key}>
+                  {a.name}{a.installed ? ` ✓` : a.present ? ` ·` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {snippetResult && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{m?.configPath ?? 'Config path'}</span>
+                <span className="text-xs font-mono text-foreground">{snippetResult.path}</span>
+              </div>
+
+              <pre className="text-xs font-mono bg-muted/50 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre">
+                {snippetResult.snippet}
+              </pre>
+
+              <CopyButton text={snippetResult.snippet} label={m?.copyConfig ?? 'Copy Config'} />
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -633,7 +732,7 @@ export function McpTab({ t }: McpTabProps) {
     <div className="space-y-6">
       {/* MCP Server Status — prominent card */}
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
-        <ServerStatus status={mcpStatus} t={t} />
+        <ServerStatus status={mcpStatus} agents={agents} t={t} />
       </div>
 
       {/* Agent Install — collapsible */}

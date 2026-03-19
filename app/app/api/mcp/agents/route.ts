@@ -18,6 +18,12 @@ export async function GET() {
         hasProjectScope: !!agent.project,
         hasGlobalScope: !!agent.global,
         preferredTransport: agent.preferredTransport,
+        // Snippet generation fields
+        format: agent.format ?? 'json',
+        configKey: agent.key,
+        globalNestedKey: agent.globalNestedKey,
+        globalPath: agent.global,
+        projectPath: agent.project,
       };
     });
 

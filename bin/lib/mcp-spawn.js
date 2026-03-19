@@ -11,7 +11,19 @@ export function spawnMcp(verbose = false) {
   const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
   if (!existsSync(mcpSdk)) {
     console.log(yellow('Installing MCP dependencies (first run)...\n'));
-    execSync('npm install --prefer-offline --no-workspaces', { cwd: resolve(ROOT, 'mcp'), stdio: 'inherit' });
+    const mcpCwd = resolve(ROOT, 'mcp');
+    try {
+      execSync('npm install --prefer-offline --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
+    } catch {
+      console.log(yellow('Offline install failed, retrying online...\n'));
+      try {
+        execSync('npm install --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
+      } catch (err) {
+        console.error(red('Failed to install MCP dependencies.'));
+        console.error(`  Try manually: cd ${mcpCwd} && npm install\n`);
+        process.exit(1);
+      }
+    }
   }
   const env = {
     ...process.env,
