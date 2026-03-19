@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT } from './constants.js';
 import { bold, red, yellow } from './colors.js';
+import { npmInstall } from './utils.js';
 
 export function spawnMcp(verbose = false) {
   const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
@@ -11,19 +12,7 @@ export function spawnMcp(verbose = false) {
   const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
   if (!existsSync(mcpSdk)) {
     console.log(yellow('Installing MCP dependencies (first run)...\n'));
-    const mcpCwd = resolve(ROOT, 'mcp');
-    try {
-      execSync('npm install --prefer-offline --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
-    } catch {
-      console.log(yellow('Offline install failed, retrying online...\n'));
-      try {
-        execSync('npm install --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
-      } catch (err) {
-        console.error(red('Failed to install MCP dependencies.'));
-        console.error(`  Try manually: cd ${mcpCwd} && npm install\n`);
-        process.exit(1);
-      }
-    }
+    npmInstall(resolve(ROOT, 'mcp'), '--no-workspaces');
   }
   const env = {
     ...process.env,

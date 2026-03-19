@@ -1,7 +1,23 @@
 ## PENDING
 
+❯ MindOS MCP Server                             
+Status                                          
+Running                                         
+Transport                                       
+HTTP                                            
+Endpoint                                        
+http://127.0.0.1:8796/mcp                       
+Tools                                           
+20 registered                                   
+Auth                                            
+Token set                                       
+Copy Endpoint                                   
+Copy Config                                     
+                                                
+ GUI -》 Settingsh ->                           
+MCP页面下，现在用户想要再去配置新的Agent工具很  
+不1方便，因为他们不知道给新agent提供什么信息  
 
-Waiting for Web UI 有可能展示出具体细节吗
 
 这种同步的方式，如何处理对于 MindOS 的 PR
 
@@ -26,6 +42,9 @@ Review change
 - wiki 使用指南，比如roadmap到stage
 
 ## ADDRESSED
+
+Waiting for Web UI 有可能展示出具体细节吗
+
 
 ### Sync "Remote not reachable" — credential 静默吞错 ✅
 - 原报错：`initSync` credential approve 失败被空 catch 吞掉 → `ls-remote` 无凭证 → 泛泛的 "Remote not reachable"

@@ -41,7 +41,8 @@ function formatInput(input: unknown): string {
   return parts.join(', ');
 }
 
-function truncateOutput(output: string, maxLen = 200): string {
+function truncateOutput(output: string | undefined, maxLen = 200): string {
+  if (!output) return '';
   if (output.length <= maxLen) return output;
   return output.slice(0, maxLen) + '…';
 }

@@ -45,7 +45,7 @@ import { homedir } from 'node:os';
 
 import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH, MINDOS_DIR } from './lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
-import { run } from './lib/utils.js';
+import { run, npmInstall } from './lib/utils.js';
 import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
 import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
@@ -325,13 +325,7 @@ const commands = {
     const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
     if (!existsSync(mcpSdk)) {
       console.log(yellow('Installing MCP dependencies (first run)...\n'));
-      const mcpCwd = resolve(ROOT, 'mcp');
-      try {
-        execSync('npm install --prefer-offline --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
-      } catch {
-        console.log(yellow('Offline install failed, retrying online...\n'));
-        run('npm install --no-workspaces', mcpCwd);
-      }
+      npmInstall(resolve(ROOT, 'mcp'), '--no-workspaces');
     }
     // Map config env vars to what the MCP server expects
     const mcpPort = process.env.MINDOS_MCP_PORT || '8781';

@@ -59,7 +59,7 @@
 - [ ] **I5：首次使用引导流程** — 检测新模板 → 展示知识库结构 → 引导 AI 提问 → 引导配置 Sync。激活率关键路径，但工作量较大
 - [ ] **I6：首页 Plugins 更好的展示方式** — 当前插件列表平铺，缺乏分类和预览
 - [x] **I7：文件视图 topbar 文件图标** — Breadcrumb 组件已有 `FileTypeIcon`（.csv → Table，.md → FileText，目录 → Folder）
-- [ ] **I8：Skill 工作流引导优化** — 持续迭代
+- [ ] **I8：Skill 渐进式加载** — SKILL.md 瘦身为 loader（~30 行），规则文件存到知识库 `.agents/skills/`，支持热更新 + 用户个性化 + 主动智能 + 可演化学习。[spec](./specs/progressive-skill-loading.md)
 
 ### 🟢 低优先（等需求驱动）
 

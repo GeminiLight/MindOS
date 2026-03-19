@@ -17,11 +17,14 @@ interface AskModalProps {
   open: boolean;
   onClose: () => void;
   currentFile?: string;
+  initialMessage?: string;
+  onFirstMessage?: () => void;
 }
 
-export default function AskModal({ open, onClose, currentFile }: AskModalProps) {
+export default function AskModal({ open, onClose, currentFile, initialMessage, onFirstMessage }: AskModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const firstMessageFired = useRef(false);
   const { t } = useLocale();
 
   const [input, setInput] = useState('');
@@ -43,7 +46,8 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
         if (cancelled) return;
         await session.initSessions();
       })();
-      setInput('');
+      setInput(initialMessage || '');
+      firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
       upload.clearAttachments();
       mention.resetMention();
@@ -119,6 +123,11 @@ export default function AskModal({ open, onClose, currentFile }: AskModalProps) 
     const requestMessages = [...session.messages, userMsg];
     session.setMessages([...requestMessages, { role: 'assistant', content: '' }]);
     setInput('');
+    // Notify guide card on first user message (ref prevents duplicate fires during re-render)
+    if (onFirstMessage && !firstMessageFired.current) {
+      firstMessageFired.current = true;
+      onFirstMessage();
+    }
     setAttachedFiles(currentFile ? [currentFile] : []);
     setIsLoading(true);
     setLoadingPhase('connecting');

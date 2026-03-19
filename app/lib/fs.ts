@@ -59,7 +59,15 @@ function ensureCache(): FileTreeCache {
   if (isCacheValid()) return _cache!;
   const root = getMindRoot();
   const tree = buildFileTree(root);
-  const allFiles = buildAllFiles(root);
+  // Extract all file paths from the tree to avoid a second full traversal.
+  const allFiles: string[] = [];
+  function collect(nodes: FileNode[]) {
+    for (const n of nodes) {
+      if (n.type === 'file') allFiles.push(n.path);
+      else if (n.children) collect(n.children);
+    }
+  }
+  collect(tree);
   _cache = { tree, allFiles, timestamp: Date.now() };
   return _cache;
 }
