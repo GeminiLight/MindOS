@@ -8,10 +8,13 @@ app/data
 *.pdf
 *.log
 *.tmp
+*.tgz
 *.bak
 *.swp
 .DS_Store
 *.zip
+
+.codebuddy
 
 # User config is stored in ~/.mindos/config.json (never committed)
 app/.env.local
@@ -30,6 +33,7 @@ landing/test-results/
 skills/mindos/evals
 skills/mindos-zh/evals
 skills/human-insight
+skills/project-wiki-workspace
 
 */skills-lock.json
 
