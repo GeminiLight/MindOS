@@ -105,7 +105,12 @@ export function ensureAppDeps() {
     ? 'Updating app dependencies (package-lock.json changed)...\n'
     : 'Installing app dependencies (first run)...\n';
   console.log(yellow(label));
-  run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'app'));
+  try {
+    execSync('npm install --prefer-offline --no-workspaces', { cwd: resolve(ROOT, 'app'), stdio: 'inherit' });
+  } catch {
+    console.log(yellow('Offline install failed, retrying online...\n'));
+    run('npm install --no-workspaces', resolve(ROOT, 'app'));
+  }
 
   // Verify critical deps — npm tar extraction can silently fail (ENOENT race)
   if (!verifyDeps()) {

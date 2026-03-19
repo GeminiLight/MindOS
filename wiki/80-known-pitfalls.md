@@ -304,3 +304,18 @@
 - **解决：** 改为 `^22`，与实际 Node 版本对齐
 - **规则：** `@types/node` 的大版本号 = Node.js 大版本号（如 Node 22 → `@types/node@^22`）。写 devDependencies 时不要凭感觉写版本号，先 `npm view @types/node versions` 确认存在
 - **文件：** `mcp/package.json`
+
+### @modelcontextprotocol/sdk 版本范围过宽导致 express transport 缺失
+- **现象：** 新环境 / 缓存旧版本时，`npm install` 安装到 <1.25.0 的 SDK 版本，运行时 `import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js"` 报 `MODULE_NOT_FOUND`
+- **原因：** `mcp/package.json` 声明 `"@modelcontextprotocol/sdk": "^1.6.1"`，但 `server/express.js` 直到 **1.25.0** 才加入 SDK（1.6.1 ~ 1.24.x 共 19 个大版本都没有该文件）。开发机有 lockfile 锁定 1.27.1 所以不触发
+- **触发条件：** lockfile 丢失 / 新环境首次 install / `--prefer-offline` 命中旧缓存版本
+- **解决：** 版本范围从 `^1.6.1` 改为 `^1.25.0`，确保最低安装到有 express.js 的版本
+- **规则：** 代码 import 了某个子路径（如 `sdk/server/express.js`），`package.json` 的版本范围**下界**必须 ≥ 该子路径首次出现的版本。用 `npm pack @pkg@x.y.z --dry-run | grep filename` 验证
+- **文件：** `mcp/package.json`、`mcp/package-lock.json`
+
+### --prefer-offline 首次安装失败无回退
+- **现象：** 新机器 `mindos start` 时 MCP 依赖安装失败，报 `npm error code ETARGET` 或 `No matching version found`
+- **原因：** `mcp-spawn.js`、`cli.js`、`build.js` 三处用 `npm install --prefer-offline` 做首次安装，本地 npm 缓存中无所需版本的 packument 时直接报错退出，无在线回退
+- **解决：** try `--prefer-offline` → catch 后回退到 `npm install`（不带 offline flag）。缓存命中时仍享受离线加速，缓存缺失时自动联网
+- **规则：** `--prefer-offline` 仅作为优化手段，不能出现在唯一安装路径上。必须有在线回退
+- **文件：** `bin/lib/mcp-spawn.js`、`bin/cli.js`、`bin/lib/build.js`

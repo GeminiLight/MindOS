@@ -13,6 +13,10 @@ export interface AgentDef {
   global: string;
   key: string;
   preferredTransport: 'stdio' | 'http';
+  /** Config file format: 'json' (default) or 'toml'. */
+  format?: 'json' | 'toml';
+  /** For agents whose global config nests under a parent key (e.g. VS Code: mcp.servers). */
+  globalNestedKey?: string;
   /** CLI binary name for presence detection (e.g. 'claude'). Optional. */
   presenceCli?: string;
   /** Data directories for presence detection. Any one existing → present. */
@@ -173,6 +177,31 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
       '~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
       '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
     ],
+  },
+  'vscode': {
+    name: 'VS Code',
+    project: '.vscode/mcp.json',
+    global: process.platform === 'darwin'
+      ? '~/Library/Application Support/Code/User/settings.json'
+      : '~/.config/Code/User/settings.json',
+    key: 'servers',
+    globalNestedKey: 'mcp.servers',
+    preferredTransport: 'stdio',
+    presenceDirs: [
+      '~/Library/Application Support/Code/',
+      '~/.config/Code/',
+    ],
+    presenceCli: 'code',
+  },
+  'codex': {
+    name: 'Codex',
+    project: null,
+    global: '~/.codex/config.toml',
+    key: 'mcp_servers',
+    format: 'toml',
+    preferredTransport: 'stdio',
+    presenceCli: 'codex',
+    presenceDirs: ['~/.codex/'],
   },
 };
 

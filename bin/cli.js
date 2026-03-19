@@ -325,7 +325,13 @@ const commands = {
     const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
     if (!existsSync(mcpSdk)) {
       console.log(yellow('Installing MCP dependencies (first run)...\n'));
-      run('npm install --prefer-offline --no-workspaces', resolve(ROOT, 'mcp'));
+      const mcpCwd = resolve(ROOT, 'mcp');
+      try {
+        execSync('npm install --prefer-offline --no-workspaces', { cwd: mcpCwd, stdio: 'inherit' });
+      } catch {
+        console.log(yellow('Offline install failed, retrying online...\n'));
+        run('npm install --no-workspaces', mcpCwd);
+      }
     }
     // Map config env vars to what the MCP server expects
     const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
