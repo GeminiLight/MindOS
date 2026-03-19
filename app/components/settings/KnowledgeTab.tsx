@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
-import { Copy, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles } from 'lucide-react';
 import type { SettingsData } from './types';
 import { Field, Input, EnvBadge, SectionLabel } from './Primitives';
 import { apiFetch } from '@/lib/api';
@@ -15,6 +15,38 @@ interface KnowledgeTabProps {
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
   const k = t.settings.knowledge;
+
+  // Guide state toggle
+  const [guideActive, setGuideActive] = useState<boolean | null>(null);
+  const [guideDismissed, setGuideDismissed] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/setup')
+      .then(r => r.json())
+      .then(d => {
+        const gs = d.guideState;
+        if (gs) {
+          setGuideActive(gs.active);
+          setGuideDismissed(!!gs.dismissed);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleGuideToggle = useCallback(() => {
+    const newDismissed = !guideDismissed;
+    setGuideDismissed(newDismissed);
+    // If re-enabling, also ensure active is true
+    const patch: Record<string, boolean> = { dismissed: newDismissed };
+    if (!newDismissed) patch.active = true;
+    fetch('/api/setup', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guideState: patch }),
+    })
+      .then(() => window.dispatchEvent(new Event('guide-state-updated')))
+      .catch(() => setGuideDismissed(!newDismissed)); // rollback on failure
+  }, [guideDismissed]);
 
   const origin = useSyncExternalStore(
     () => () => {},
@@ -158,6 +190,36 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           )}
         </div>
       </Field>
+
+      {/* Getting Started Guide toggle */}
+      {guideActive !== null && (
+        <div className="border-t border-border pt-5">
+          <SectionLabel>{t.guide?.title ?? 'Getting Started'}</SectionLabel>
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} style={{ color: 'var(--amber)' }} />
+              <div>
+                <div className="text-sm text-foreground">{t.guide?.showGuide ?? 'Show getting started guide'}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!guideDismissed}
+              onClick={handleGuideToggle}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                !guideDismissed ? 'bg-amber-500' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  !guideDismissed ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

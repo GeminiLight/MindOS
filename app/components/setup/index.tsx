@@ -129,9 +129,11 @@ export default function SetupWizard() {
     provider: 'anthropic',
     anthropicKey: '',
     anthropicModel: 'claude-sonnet-4-6',
+    anthropicKeyMask: '',
     openaiKey: '',
     openaiModel: 'gpt-5.4',
     openaiBaseUrl: '',
+    openaiKeyMask: '',
     webPort: 3000,
     mcpPort: 8787,
     authToken: '',
@@ -172,8 +174,10 @@ export default function SetupWizard() {
           webPassword: data.webPassword || prev.webPassword,
           provider: (data.provider === 'anthropic' || data.provider === 'openai') ? data.provider : prev.provider,
           anthropicModel: data.anthropicModel || prev.anthropicModel,
+          anthropicKeyMask: data.anthropicApiKey || '',
           openaiModel: data.openaiModel || prev.openaiModel,
           openaiBaseUrl: data.openaiBaseUrl ?? prev.openaiBaseUrl,
+          openaiKeyMask: data.openaiApiKey || '',
         }));
         // Generate a new token only if none exists yet
         if (!data.authToken) {

@@ -57,11 +57,12 @@ function convertToModelMessages(messages: FrontendMessage[]): ModelMessage[] {
           type: 'tool-call',
           toolCallId: part.toolCallId,
           toolName: part.toolName,
-          input: part.input,
+          input: part.input ?? {},
         });
-        if (part.state === 'done' || part.state === 'error') {
-          completedToolCalls.push(part);
-        }
+        // Always emit a tool result for every tool call. Orphaned tool calls
+        // (running/pending from interrupted streams) get an empty result;
+        // without one the API rejects the request.
+        completedToolCalls.push(part);
       }
       // 'reasoning' parts are display-only; not sent back to model
     }

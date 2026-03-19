@@ -288,6 +288,7 @@ body {
 /* Micro type scale: text-2xs = 10px (between nothing and text-xs 12px) */
 @layer utilities {
   .text-2xs { font-size: 10px; line-height: 1.4; }
+  .animate-spin-slow { animation: spin 3s linear infinite; }
 }
 
 /* Hide scrollbar but keep scroll functionality */

@@ -14,9 +14,11 @@ export interface SetupState {
   provider: 'anthropic' | 'openai' | 'skip';
   anthropicKey: string;
   anthropicModel: string;
+  anthropicKeyMask: string;   // masked existing key from server (display only)
   openaiKey: string;
   openaiModel: string;
   openaiBaseUrl: string;
+  openaiKeyMask: string;      // masked existing key from server (display only)
   webPort: number;
   mcpPort: number;
   authToken: string;
