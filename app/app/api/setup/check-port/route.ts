@@ -15,16 +15,17 @@ function isPortInUse(port: number): Promise<boolean> {
 }
 
 async function isSelfPort(port: number): Promise<boolean> {
-  try {
-    const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
-      signal: AbortSignal.timeout(800),
-    });
-    if (!res.ok) return false;
-    const data = await res.json() as Record<string, unknown>;
-    return data.service === 'mindos';
-  } catch {
-    return false;
+  for (const host of ['127.0.0.1', 'localhost']) {
+    try {
+      const res = await fetch(`http://${host}:${port}/api/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as Record<string, unknown>;
+      if (data.service === 'mindos') return true;
+    } catch { /* try next host */ }
   }
+  return false;
 }
 
 async function findFreePort(start: number, selfPorts: Set<number>): Promise<number | null> {
