@@ -47,16 +47,16 @@ export function McpTab({ t }: McpTabProps) {
         <ServerStatus status={mcpStatus} agents={agents} t={t} />
       </div>
 
-      {/* Agent Configuration */}
-      <div>
-        <h3 className="text-sm font-medium text-foreground mb-3">{m?.agentsTitle ?? 'Agent Configuration'}</h3>
-        <AgentInstall agents={agents} t={t} onRefresh={fetchAll} />
-      </div>
-
       {/* Skills */}
       <div>
         <h3 className="text-sm font-medium text-foreground mb-3">{m?.skillsTitle ?? 'Skills'}</h3>
         <SkillsSection t={t} />
+      </div>
+
+      {/* Agent Configuration */}
+      <div>
+        <h3 className="text-sm font-medium text-foreground mb-3">{m?.agentsTitle ?? 'Agent Configuration'}</h3>
+        <AgentInstall agents={agents} t={t} onRefresh={fetchAll} />
       </div>
     </div>
   );

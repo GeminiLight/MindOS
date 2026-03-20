@@ -59,6 +59,12 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 | **npx 版本不匹配修复** | `npx next` → 本地 `.bin/next` 绝对路径，防止全局缓存版本冲突 | ✅ v0.5.21 |
 | **测试修复** | tools.test.ts 适配新数组 API（14→0 失败）、context.test.ts 迁移到 pi-ai 类型（7→0 失败） | ✅ v0.5.21 |
 | **测试覆盖率提升** | 新增 jwt/api/setup PATCH 测试，build-integrity 智能跳过 | ✅ v0.5.21 |
+| **Agent Dashboard** | Settings 新增 Agents Tab（Agent 发现 + MCP 状态 + 30s 自动刷新） | ✅ v0.5.22 |
+| **Monitoring Tab** | Settings 新增 Monitoring Tab（系统/应用/知识库/MCP 指标，5s 轮询） | ✅ v0.5.22 |
+| **统一错误处理** | `MindOSError` + 12 个 ErrorCodes + core/ 13 处迁移 | ✅ v0.5.22 |
+| **增量搜索索引** | 倒排索引 + CJK bigram 分词，与 invalidateCache 联动 | ✅ v0.5.22 |
+| **首页 Plugins 展示优化** | 卡片展示 description + tags，消除重复映射，不可用 plugin 创建引导 | ✅ v0.5.22 |
+| **文件/目录视图 UX 优化** | 目录卡片密度分层 + Breadcrumb 文件图标 + ⌘F 文档内搜索 | ✅ v0.5.22 |
 
 ---
 
@@ -68,7 +74,7 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 
 | 里程碑 | 交付 | 详情 |
 |--------|------|------|
-| **Agent Dashboard** | 本机 Agent 发现（扫描 ~/.claude/、~/.config/Cursor 等）+ MCP 连接状态 + Agent 运行状态面板 | Settings 新增 Agents Tab，基于目录扫描 + MCP Inspector 思路，无需外部依赖 |
+| **Agent Dashboard** | 本机 Agent 发现（扫描 ~/.claude/、~/.config/Cursor 等）+ MCP 连接状态 + Agent 运行状态面板 | ✅ v0.5.22 已提前交付 |
 | **Cloud Hub** | RESTful API + S3/R2 存储 + E2E 加密 | 替代 Git 同步，降低门槛 |
 | **桌面安装包** | macOS .dmg / Windows .msi (Tauri/pkg) | [详情](./64-stage-desktop.md) |
 | **Knowledge Health** | 过期检测、孤立文件、AI 矛盾扫描、完整度评分 | 首页 Health Score 卡片 |
@@ -127,7 +133,10 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 | npx 版本锁定修复 | ✅ | v0.5 | npx next → 本地 .bin/next 绝对路径 |
 | 测试修复 + 覆盖率提升 | ✅ | v0.5 | tools/context 测试迁移 + jwt/setup PATCH 新增 |
 | 局域网自动发现 | 📋 规划 | P1 | [详情](./63-stage-mdns.md) |
-| Agent Dashboard | 📋 规划 | P2 | 本机 Agent 发现 + MCP 状态 + 运行状态面板 |
+| Agent Dashboard | ✅ | v0.5 | Agents Tab — Agent 发现 + MCP 状态面板（从 P2 提前交付） |
+| Monitoring Tab | ✅ | v0.5 | 系统/应用/知识库/MCP 指标仪表盘 |
+| 统一错误处理 | ✅ | v0.5 | MindOSError + ErrorCodes + apiError() |
+| 增量搜索索引 | ✅ | v0.5 | 倒排索引 + CJK bigram + invalidateCache 联动 |
 | Cloud Hub | 待做 | P2 | RESTful + S3/R2 + E2E 加密 |
 | 桌面安装包 | 📋 规划 | P2 | [详情](./64-stage-desktop.md) |
 | Knowledge Health 仪表盘 | 待做 | P2 | 过期检测、孤立文件、矛盾检测 |

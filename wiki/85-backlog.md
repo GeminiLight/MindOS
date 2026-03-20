@@ -51,20 +51,21 @@
 - [x] **I2：登录页产品标语** — 已实现（`loginT.tagline` + `loginT.subtitle`）
 - [x] **I3：API Key 连通性验证** — Settings AI Tab 已有 Test 按钮（`/api/settings/test-key`），支持 Anthropic/OpenAI，返回延迟和错误分类
 - [x] **I3.5：`mindos uninstall` 命令** — 一条命令干净卸载（停进程 + 卸 daemon + 删配置 + 删知识库三重保护 + npm uninstall）— v0.5.15
+- [x] **I12：Activity Bar + Panel 布局重构** — 左侧新增 48px Rail（Logo + Files/Search/AI + Settings/Sync），Sidebar 改为可切换 Panel。AI 对话/搜索/设置从 Modal 变为 Panel，不遮盖内容。移动端不变。[spec](./specs/spec-activity-bar-layout.md)
 
 ### 🟡 中优先
 
 - [ ] **I4：CLI per-command `--help`** — `mindos start --help` 显示子命令选项。与 I1 一起做，CLI 专业度提升
 - [ ] **I5：首次使用引导流程** — 检测新模板 → 展示知识库结构 → 引导 AI 提问 → 引导配置 Sync。激活率关键路径，但工作量较大
-- [ ] **I6：首页 Plugins 更好的展示方式** — 当前插件列表平铺，缺乏分类和预览
+- [x] **I6：首页 Plugins 展示优化** — 卡片展示 description + tags，消除 RENDERER_ENTRY / PLUGIN_ENTRY_FILES 重复映射，不可用 plugin 点击提示创建引导，补齐 3 个漏注册 renderer（backlinks/workflow/diff）
 - [x] **I6.5：Skill 管理面板改进** — 分组显示（Custom/Built-in）+ 搜索过滤 + 全文查看（read API）+ 内联编辑 + 预填模板创建（General/Tool-use/Workflow）+ Markdown 渲染。解决"不知道给新 agent 提供什么信息"的 pain point
 - [x] **I7：文件视图 topbar 文件图标** — Breadcrumb 组件已有 `FileTypeIcon`（.csv → Table，.md → FileText，目录 → Folder）
 - [x] **I8：Skill 渐进式加载** — ✅ 完成：v4 架构（2 文件），CLI 自动迁移 + App 端 skill-rules 注入。[spec](./specs/progressive-skill-loading.md)
 
 ### 🟢 低优先（等需求驱动）
 
-- [ ] **I9：Onboarding 端口分离** — Setup wizard 用临时端口，完成后按配置端口重启。体验改善明显但改动范围大（CLI + GUI + 进程管理），当前 restart 方案可用
-- [ ] **I10：目录视图卡片密度优化** — 文件夹 vs 单文件调整大小，等用户反馈
+- [x] **I9：Onboarding 端口分离** — Setup wizard 用临时端口（9100+），完成后按配置端口重启 — v0.5.4
+- [x] **I10：目录视图卡片密度优化** — 文件夹 `p-3` + 22px 图标（紧凑），文件 `p-4` + 28px 图标（保持信息量）。Breadcrumb 增加 FileTypeIcon。FindInPage 阅读模式搜索
 - [ ] **I11：局域网自动发现 (mDNS/Bonjour)** — 手机/平板自动连。P2 桌面端阶段再做更合适，[详情](./63-stage-mdns.md)
 
 ### 已完成 / 不做

@@ -1205,18 +1205,8 @@ async function main() {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
   console.log(`\n${c.green(t('cfgSaved'))}: ${c.dim(CONFIG_PATH)}`);
 
-  // ── Init skill rules in knowledge base ────────────────────────────────────
-  const skillName = selectedTemplate === 'zh' ? 'mindos-zh' : 'mindos';
-  const skillRulesDir = resolve(mindDir, '.agents', 'skills', skillName);
-  if (!existsSync(skillRulesDir)) {
-    const skillRulesLang = selectedTemplate === 'zh' ? 'zh' : 'en';
-    const skillRulesSource = resolve(ROOT, 'templates', 'skill-rules', skillRulesLang);
-    if (existsSync(skillRulesSource)) {
-      mkdirSync(skillRulesDir, { recursive: true });
-      cpSync(skillRulesSource, skillRulesDir, { recursive: true });
-      console.log(`${c.green('✓')} ${c.dim(`Skill rules initialized: ${skillRulesDir}`)}`);
-    }
-  }
+  // ── Skill rules are now built into SKILL.md — no install needed ──────────
+  // user-skill-rules.md will be created on first preference capture or via `mindos init-skills`.
 
   // ── Step 7: MCP Agent Install ──────────────────────────────────────────────
   write('\n');

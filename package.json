@@ -1,6 +1,6 @@
 {
   "name": "@geminilight/mindos",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
   "keywords": [
     "mindos",
@@ -57,7 +57,9 @@
     "!assets/images",
     "!mcp/node_modules",
     "!mcp/dist",
-    "!mcp/package-lock.json"
+    "!mcp/package-lock.json",
+    "!mcp/*.tgz",
+    "!app/package-lock.json"
   ],
   "scripts": {
     "setup": "node scripts/setup.js",

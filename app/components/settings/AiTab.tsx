@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
-import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle } from './Primitives';
+import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SectionLabel } from './Primitives';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
 type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
@@ -276,6 +276,44 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
             </>
           )}
         </div>
+      </div>
+
+      {/* Ask AI Display Mode */}
+      <AskDisplayMode />
+    </div>
+  );
+}
+
+/* ── Ask AI Display Mode (localStorage-based, no server roundtrip) ── */
+
+function AskDisplayMode() {
+  const [mode, setMode] = useState<'panel' | 'popup'>('panel');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('ask-mode');
+      if (stored === 'popup') setMode('popup');
+    } catch {}
+  }, []);
+
+  const handleChange = (value: string) => {
+    const next = value as 'panel' | 'popup';
+    setMode(next);
+    try { localStorage.setItem('ask-mode', next); } catch {}
+    // Notify SidebarLayout to pick up the change
+    window.dispatchEvent(new StorageEvent('storage', { key: 'ask-mode', newValue: next }));
+  };
+
+  return (
+    <div className="pt-3 border-t border-border">
+      <SectionLabel>MindOS Agent</SectionLabel>
+      <div className="space-y-4">
+        <Field label="Display Mode" hint="Side panel stays docked on the right. Popup opens a floating dialog.">
+          <Select value={mode} onChange={e => handleChange(e.target.value)}>
+            <option value="panel">Side Panel</option>
+            <option value="popup">Popup</option>
+          </Select>
+        </Field>
       </div>
     </div>
   );
