@@ -11,6 +11,7 @@ interface AgentOpEntry {
   params: Record<string, unknown>;
   result: 'ok' | 'error';
   message?: string;
+  durationMs?: number;
 }
 
 /**

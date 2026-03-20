@@ -205,3 +205,34 @@ cd / && rm -rf /tmp/mindos-smoke-$$
 ## Landing Page
 
 content.md <-> landing/index.html
+
+## Design Context
+
+### Users
+
+同时使用 3+ AI Agent 的独立开发者/创始人。日常在 CLI、IDE、多个 AI 对话窗口之间切换，管理 500+ 文件的本地 Markdown 知识库。使用场景：快速查阅笔记、沉淀对话经验、跨 Agent 共享上下文。核心诉求是效率和掌控感，而非协作或社交。
+
+### Brand Personality
+
+**温暖、专业、克制。**
+
+Warm Amber 传递人机共生的温度，但绝不花哨。工具本身退到背景，内容是主角。品牌情感目标：让用户感到"安静的信赖"——像一本皮质笔记本，不是一个闪亮的 App。
+
+### Aesthetic Direction
+
+- **靠近**：Notion（留白与内容优先）、Obsidian（本地优先 + Graph 可视化）、Linear（键盘驱动 + 工程师审美）
+- **远离**：企业 SaaS（Jira/Salesforce 的蓝灰密集表单）、黑客终端（纯黑底绿字）、玩具感（过多圆角渐变卡通图标）
+- **色调**：低饱和暖土色系（Warm Amber #c8873a），完整 light/dark 双主题
+- **字体**：Lora serif（长文阅读）+ IBM Plex Sans（UI）+ IBM Plex Mono（代码/display）
+
+### Design Principles
+
+1. **Content is King** — 界面为内容服务。最大化阅读区域，最小化 chrome（工具栏、边框、装饰）。
+2. **Keyboard First, Mouse Welcome** — 核心操作都有快捷键（⌘K/⌘/ /⌘,），但鼠标用户不应感到被忽视。
+3. **Progressive Disclosure** — 功能按需展开，不在首屏堆砌所有选项。空状态引导而非空白。
+4. **Warm Industrial** — 琥珀色点缀工业克制的灰调骨架。交互反馈用颜色和微动效，不用弹窗打断。
+5. **Local & Transparent** — 所有操作可审计、可撤销、数据在本地。UI 传递"你掌控一切"的安全感。
+
+### Layout Direction
+
+目标演进方向：Activity Bar（48px 纯图标 Rail）+ 可切换 Panel + Content，替代当前的多 Modal 方案。详见 `wiki/22-page-design.md` 优化路线图。

@@ -7,9 +7,14 @@ export async function register() {
       const configPath = join(homedir(), '.mindos', 'config.json');
       const config = JSON.parse(readFileSync(configPath, 'utf-8'));
       if (config.sync?.enabled && config.mindRoot) {
-        // Resolve absolute path to avoid Turbopack bundling issues
+        // Turbopack statically analyzes ALL forms of require/import — including
+        // createRequire() calls. The only way to load a runtime-computed path
+        // is to hide the require call inside a Function constructor, which is
+        // opaque to bundler static analysis.
         const syncModule = resolve(process.cwd(), '..', 'bin', 'lib', 'sync.js');
-        const { startSyncDaemon } = await import(/* webpackIgnore: true */ syncModule);
+        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+        const dynamicRequire = new Function('id', 'return require(id)') as (id: string) => any;
+        const { startSyncDaemon } = dynamicRequire(syncModule);
         await startSyncDaemon(config.mindRoot);
       }
     } catch {

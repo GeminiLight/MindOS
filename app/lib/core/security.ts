@@ -1,11 +1,12 @@
 import path from 'path';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 
 /**
  * Asserts that a resolved path is within the given root.
  */
 export function assertWithinRoot(resolved: string, root: string): void {
   if (!resolved.startsWith(root + path.sep) && resolved !== root) {
-    throw new Error('Access denied: path outside MIND_ROOT');
+    throw new MindOSError(ErrorCodes.PATH_OUTSIDE_ROOT, 'Access denied: path outside MIND_ROOT', { resolved, root });
   }
 }
 
@@ -35,9 +36,11 @@ export function isRootProtected(filePath: string): boolean {
  */
 export function assertNotProtected(filePath: string, operation: string): void {
   if (isRootProtected(filePath)) {
-    throw new Error(
+    throw new MindOSError(
+      ErrorCodes.PROTECTED_FILE,
       `Protected file: root "${filePath}" cannot be ${operation} via MCP. ` +
-      `This is a system kernel file (§7 of INSTRUCTION.md). Edit it manually or use a dedicated confirmation workflow.`
+      `This is a system kernel file (§7 of INSTRUCTION.md). Edit it manually or use a dedicated confirmation workflow.`,
+      { filePath, operation },
     );
   }
 }

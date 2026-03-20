@@ -36,7 +36,7 @@ export {
 export type { TreeOptions } from './tree';
 
 // Search
-export { searchFiles } from './search';
+export { searchFiles, invalidateSearchIndex } from './search';
 
 // Line-level operations
 export {

@@ -8,10 +8,12 @@
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -41,11 +43,18 @@ export async function apiFetch<T>(url: string, opts: ApiFetchOptions = {}): Prom
 
     if (!res.ok) {
       let msg = `Request failed (${res.status})`;
+      let code: string | undefined;
       try {
         const body = await res.json();
-        if (body?.error) msg = body.error;
+        // Support structured { ok: false, error: { code, message } } envelope
+        if (body?.error?.code && body?.error?.message) {
+          msg = body.error.message;
+          code = body.error.code;
+        } else if (body?.error) {
+          msg = typeof body.error === 'string' ? body.error : body.error.message ?? msg;
+        }
       } catch { /* non-JSON error body */ }
-      throw new ApiError(msg, res.status);
+      throw new ApiError(msg, res.status, code);
     }
 
     return (await res.json()) as T;
