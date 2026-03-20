@@ -1,9 +1,21 @@
+/**
+ * Parse MindOS SSE stream (6 event types) into structured Message parts.
+ *
+ * MindOS SSE format (backend: route.ts):
+ * - text_delta: { type, delta }
+ * - thinking_delta: { type, delta } (Anthropic extended thinking)
+ * - tool_start: { type, toolCallId, toolName, args }
+ * - tool_end: { type, toolCallId, output, isError }
+ * - done: { type, usage? }
+ * - error: { type, message }
+ *
+ * Frontend Message structure:
+ * - role: 'assistant'
+ * - content: concatenated text deltas (for display)
+ * - parts: structured [TextPart | ReasoningPart | ToolCallPart] (for detailed view)
+ */
 import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart } from '@/lib/types';
 
-/**
- * Parse a UIMessageStream SSE response into structured Message parts.
- * The stream format is Server-Sent Events where each data line is a JSON-encoded UIMessageChunk.
- */
 export async function consumeUIMessageStream(
   body: ReadableStream<Uint8Array>,
   onUpdate: (message: Message) => void,
@@ -13,18 +25,19 @@ export async function consumeUIMessageStream(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  // Mutable working copies — we deep-clone when emitting to React
+  // Mutable working copies
   const parts: MessagePart[] = [];
   const toolCalls = new Map<string, ToolCallPart>();
   let currentTextId: string | null = null;
   let currentReasoningPart: ReasoningPart | null = null;
 
-  /** Deep-clone parts into an immutable Message snapshot for React state */
+  /** Build an immutable Message snapshot from current parts */
   function buildMessage(): Message {
     const clonedParts: MessagePart[] = parts.map(p => {
       if (p.type === 'text') return { type: 'text' as const, text: p.text };
       if (p.type === 'reasoning') return { type: 'reasoning' as const, text: p.text };
-      return { ...p }; // ToolCallPart — shallow copy is safe (all primitive fields + `input` is replaced, not mutated)
+      // ToolCallPart — shallow copy safe (primitive fields, input is replaced not mutated)
+      return { ...p };
     });
     const textContent = clonedParts
       .filter((p): p is TextPart => p.type === 'text')
@@ -37,6 +50,7 @@ export async function consumeUIMessageStream(
     };
   }
 
+  /** Get or create the last text part with given ID */
   function findOrCreateTextPart(id: string): TextPart {
     if (currentTextId === id) {
       const last = parts[parts.length - 1];
@@ -48,6 +62,7 @@ export async function consumeUIMessageStream(
     return part;
   }
 
+  /** Get or create a tool call part */
   function findOrCreateToolCall(toolCallId: string, toolName?: string): ToolCallPart {
     let tc = toolCalls.get(toolCallId);
     if (!tc) {
@@ -60,7 +75,7 @@ export async function consumeUIMessageStream(
       };
       toolCalls.set(toolCallId, tc);
       parts.push(tc);
-      currentTextId = null; // break text continuity
+      currentTextId = null;
     }
     return tc;
   }
@@ -82,112 +97,93 @@ export async function consumeUIMessageStream(
       for (const line of lines) {
         const trimmed = line.trim();
 
-        // SSE format: the ai SDK v6 UIMessageStream uses "d:{json}\n"
-        // Also handle standard "data:{json}" for robustness
+        // Standard SSE format: "data:{json}"
         let jsonStr: string | null = null;
-        if (trimmed.startsWith('d:')) {
-          jsonStr = trimmed.slice(2);
-        } else if (trimmed.startsWith('data:')) {
+        if (trimmed.startsWith('data:')) {
           jsonStr = trimmed.slice(5).trim();
         }
 
         if (!jsonStr) continue;
 
-        let chunk: Record<string, unknown>;
+        let event: Record<string, unknown>;
         try {
-          chunk = JSON.parse(jsonStr);
+          event = JSON.parse(jsonStr);
         } catch {
-          continue; // skip malformed lines
+          continue; // skip malformed
         }
 
-        const type = chunk.type as string;
+        const type = event.type as string;
 
         switch (type) {
-          case 'text-start': {
-            findOrCreateTextPart(chunk.id as string);
+          case 'text_delta': {
+            // Regular text from assistant
+            const part = findOrCreateTextPart('text');
+            part.text += (event.delta as string) ?? '';
             changed = true;
             break;
           }
-          case 'text-delta': {
-            const part = findOrCreateTextPart(chunk.id as string);
-            part.text += chunk.delta as string;
+
+          case 'thinking_delta': {
+            // Extended thinking (Anthropic)
+            if (!currentReasoningPart) {
+              currentReasoningPart = { type: 'reasoning', text: '' };
+              parts.push(currentReasoningPart);
+              currentTextId = null;
+            }
+            currentReasoningPart.text += (event.delta as string) ?? '';
             changed = true;
             break;
           }
-          case 'text-end': {
-            // Text part is complete — no state change needed
-            break;
-          }
-          case 'tool-input-start': {
-            const tc = findOrCreateToolCall(chunk.toolCallId as string, chunk.toolName as string);
+
+          case 'tool_start': {
+            // Beginning of tool execution
+            const toolCallId = event.toolCallId as string;
+            const toolName = event.toolName as string;
+            const tc = findOrCreateToolCall(toolCallId, toolName);
+            tc.input = event.args;
             tc.state = 'running';
             changed = true;
             break;
           }
-          case 'tool-input-delta': {
-            // Streaming input — we wait for input-available for the complete input
-            break;
-          }
-          case 'tool-input-available': {
-            const tc = findOrCreateToolCall(chunk.toolCallId as string, chunk.toolName as string);
-            tc.input = chunk.input;
-            tc.state = 'running';
-            changed = true;
-            break;
-          }
-          case 'tool-output-available': {
-            const tc = toolCalls.get(chunk.toolCallId as string);
+
+          case 'tool_end': {
+            // Tool execution finished
+            const toolCallId = event.toolCallId as string;
+            const tc = toolCalls.get(toolCallId);
             if (tc) {
-              tc.output = chunk.output != null
-                ? (typeof chunk.output === 'string' ? chunk.output : JSON.stringify(chunk.output))
-                : '';
-              tc.state = 'done';
+              const output = event.output as string;
+              tc.output = output ?? '';
+              tc.state = (event.isError ? 'error' : 'done');
               changed = true;
             }
             break;
           }
-          case 'tool-output-error':
-          case 'tool-input-error': {
-            const tc = toolCalls.get(chunk.toolCallId as string);
-            if (tc) {
-              tc.output = (chunk.errorText as string) ?? (chunk.error as string) ?? 'Tool error';
-              tc.state = 'error';
-              changed = true;
-            }
-            break;
-          }
+
           case 'error': {
-            const errorText = (chunk.errorText as string) ?? 'Unknown error';
-            parts.push({ type: 'text', text: `\n\n**Error:** ${errorText}` });
+            // Stream error
+            const message = event.message as string;
+            parts.push({
+              type: 'text',
+              text: `\n\n**Stream Error:** ${message}`,
+            });
             currentTextId = null;
             changed = true;
             break;
           }
-          // step-start, metadata, finish — ignored for now
-          case 'reasoning-start': {
-            currentReasoningPart = { type: 'reasoning', text: '' };
-            parts.push(currentReasoningPart);
-            currentTextId = null;
-            changed = true;
+
+          case 'done': {
+            // Stream completed cleanly — usage data is optional
+            // No state change needed; just marks end of SSE stream
             break;
           }
-          case 'reasoning-delta': {
-            if (currentReasoningPart) {
-              currentReasoningPart.text += chunk.delta as string;
-              changed = true;
-            }
-            break;
-          }
-          case 'reasoning-end': {
-            currentReasoningPart = null;
-            break;
-          }
+
           default:
+            // Ignore unknown event types
             break;
         }
       }
 
-      // Emit once per reader.read() batch, not per SSE line
+      // Emit once per reader batch, not per SSE line
       if (changed) {
         onUpdate(buildMessage());
       }
@@ -196,8 +192,8 @@ export async function consumeUIMessageStream(
     reader.releaseLock();
   }
 
-  // Finalize any tool calls still stuck in running/pending state
-  // (stream ended before their output arrived — e.g. abort, network error, step limit)
+  // Finalize any tool calls still in running/pending state
+  // (stream ended unexpectedly — abort, network error, step limit)
   let finalized = false;
   for (const tc of toolCalls.values()) {
     if (tc.state === 'running' || tc.state === 'pending') {

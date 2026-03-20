@@ -1,4 +1,5 @@
-import type { Locale } from '@/lib/i18n';
+import type { Locale, Messages } from '@/lib/i18n';
+import type React from 'react';
 
 export interface ProviderConfig {
   apiKey: string;
@@ -32,7 +33,7 @@ export interface SettingsData {
   envValues?: Record<string, string>;
 }
 
-export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'plugins' | 'shortcuts' | 'sync';
+export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'plugins' | 'sync';
 
 export const CONTENT_WIDTHS = [
   { value: '680px', label: 'Narrow (680px)' },
@@ -47,3 +48,116 @@ export const FONTS = [
   { value: 'geist', label: 'Geist', style: { fontFamily: 'var(--font-geist-sans), sans-serif' } },
   { value: 'ibm-plex-mono', label: 'IBM Plex Mono (mono)', style: { fontFamily: "'IBM Plex Mono', monospace" } },
 ];
+
+/* ── MCP Types ────────────────────────────────────────────────── */
+
+export interface McpStatus {
+  running: boolean;
+  transport: string;
+  endpoint: string;
+  port: number;
+  toolCount: number;
+  authConfigured: boolean;
+}
+
+export interface AgentInfo {
+  key: string;
+  name: string;
+  present: boolean;
+  installed: boolean;
+  scope?: string;
+  transport?: string;
+  configPath?: string;
+  hasProjectScope: boolean;
+  hasGlobalScope: boolean;
+  preferredTransport: 'stdio' | 'http';
+  // Snippet generation fields
+  format: 'json' | 'toml';
+  configKey: string;
+  globalNestedKey?: string;
+  globalPath: string;
+  projectPath?: string | null;
+}
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  path: string;
+  source: 'builtin' | 'user';
+  enabled: boolean;
+  editable: boolean;
+}
+
+/** 🟢 MINOR #7: Moved from SyncTab.tsx for consistency */
+export interface SyncStatus {
+  enabled: boolean;
+  provider?: string;
+  remote?: string;
+  branch?: string;
+  lastSync?: string | null;
+  lastPull?: string | null;
+  unpushed?: string;
+  conflicts?: Array<{ file: string; time: string }>;
+  lastError?: string | null;
+  autoCommitInterval?: number;
+  autoPullInterval?: number;
+}
+
+export interface McpTabProps {
+  t: Messages;
+}
+
+export interface AppearanceTabProps {
+  font: string;
+  setFont: (v: string) => void;
+  contentWidth: string;
+  setContentWidth: (v: string) => void;
+  dark: boolean;
+  setDark: (v: boolean) => void;
+  locale: Locale;
+  setLocale: (v: Locale) => void;
+  t: Messages;
+}
+
+export interface AiTabProps {
+  data: SettingsData;
+  updateAi: (patch: Partial<AiSettings>) => void;
+  updateAgent: (patch: Partial<AgentSettings>) => void;
+  t: Messages;
+}
+
+export interface KnowledgeTabProps {
+  data: SettingsData;
+  setData: React.Dispatch<React.SetStateAction<SettingsData | null>>;
+  t: Messages;
+}
+
+export interface PluginsTabProps {
+  pluginStates: Record<string, boolean>;
+  setPluginStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  t: Messages;
+}
+
+export interface SyncTabProps {
+  t: Messages;
+}
+
+export interface McpServerStatusProps {
+  status: McpStatus | null;
+  agents: AgentInfo[];
+  t: Messages;
+}
+
+export interface McpAgentInstallProps {
+  agents: AgentInfo[];
+  t: Messages;
+  onRefresh: () => void;
+}
+
+export interface McpSkillsSectionProps {
+  t: Messages;
+}
+
+export interface ShortcutsTabProps {
+  t: Messages;
+}

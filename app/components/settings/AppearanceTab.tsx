@@ -1,22 +1,14 @@
 'use client';
 
+import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
-import { CONTENT_WIDTHS, FONTS } from './types';
+import { CONTENT_WIDTHS, FONTS, AppearanceTabProps } from './types';
 import { Field, Select } from './Primitives';
 
-interface AppearanceTabProps {
-  font: string;
-  setFont: (v: string) => void;
-  contentWidth: string;
-  setContentWidth: (v: string) => void;
-  dark: boolean;
-  setDark: (v: boolean) => void;
-  locale: Locale;
-  setLocale: (v: Locale) => void;
-  t: any;
-}
-
 export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, dark, setDark, locale, setLocale, t }: AppearanceTabProps) {
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   return (
     <div className="space-y-5">
       <Field label={t.settings.appearance.readingFont}>
@@ -96,6 +88,32 @@ export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, da
       </Field>
 
       <p className="text-xs text-muted-foreground">{t.settings.appearance.browserNote}</p>
+
+      {/* Keyboard Shortcuts */}
+      <div className="border-t border-border pt-4">
+        <button
+          type="button"
+          onClick={() => setShowShortcuts(!showShortcuts)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+        >
+          {showShortcuts ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          {t.settings.tabs.shortcuts}
+        </button>
+        {showShortcuts && (
+          <div className="mt-3 space-y-1">
+            {t.shortcuts.map((s: { readonly description: string; readonly keys: readonly string[] }, i: number) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                <span className="text-sm text-foreground">{s.description}</span>
+                <div className="flex items-center gap-1">
+                  {s.keys.map((k: string, j: number) => (
+                    <kbd key={j} className="px-2 py-0.5 text-xs font-mono bg-muted border border-border rounded text-foreground">{k}</kbd>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

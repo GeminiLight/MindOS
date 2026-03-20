@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { X, Settings, Save, Loader2, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { X, Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Puzzle } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { getAllRenderers, loadDisabledState, isRendererEnabled } from '@/lib/renderers/registry';
 import { apiFetch } from '@/lib/api';
@@ -12,7 +12,6 @@ import { AiTab } from './settings/AiTab';
 import { AppearanceTab } from './settings/AppearanceTab';
 import { KnowledgeTab } from './settings/KnowledgeTab';
 import { PluginsTab } from './settings/PluginsTab';
-import { ShortcutsTab } from './settings/ShortcutsTab';
 import { SyncTab } from './settings/SyncTab';
 import { McpTab } from './settings/McpTab';
 
@@ -28,6 +27,8 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'load-error'>('idle');
   const { t, locale, setLocale } = useLocale();
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dataLoaded = useRef(false);
 
   // Appearance state (localStorage-based)
   const [font, setFont] = useState('lora');
@@ -37,8 +38,8 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
   const [pluginStates, setPluginStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!open) return;
-    apiFetch<SettingsData>('/api/settings').then(setData).catch(() => setStatus('load-error'));
+    if (!open) { dataLoaded.current = false; return; }
+    apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
     setFont(localStorage.getItem('prose-font') ?? 'lora');
     setContentWidth(localStorage.getItem('content-width') ?? '780px');
     const stored = localStorage.getItem('theme');
@@ -81,14 +82,14 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  const handleSave = useCallback(async () => {
-    if (!data) return;
+  // Auto-save with debounce when data changes
+  const doSave = useCallback(async (d: SettingsData) => {
     setSaving(true);
     try {
       await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai: data.ai, agent: data.agent, mindRoot: data.mindRoot, webPassword: data.webPassword, authToken: data.authToken }),
+        body: JSON.stringify({ ai: d.ai, agent: d.agent, mindRoot: d.mindRoot, webPassword: d.webPassword, authToken: d.authToken }),
       });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2500);
@@ -98,7 +99,14 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
     } finally {
       setSaving(false);
     }
-  }, [data]);
+  }, []);
+
+  useEffect(() => {
+    if (!data || !dataLoaded.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => doSave(data), 800);
+    return () => clearTimeout(saveTimer.current);
+  }, [data, doSave]);
 
   const updateAi = useCallback((patch: Partial<AiSettings>) => {
     setData(d => d ? { ...d, ai: { ...d.ai, ...patch } } : d);
@@ -117,36 +125,28 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
         openai:    { apiKey: '', model: '', baseUrl: '' },
       },
     };
+    // Set defaults — auto-save will persist them
     setData(d => d ? { ...d, ai: defaults } : d);
-    setSaving(true);
-    try {
-      await apiFetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai: defaults, mindRoot: data.mindRoot }),
-      });
-      setStatus('saved');
-    } catch {
-      setStatus('error');
-    } finally {
-      setSaving(false);
-    }
-    apiFetch<SettingsData>('/api/settings').then(setData).catch(() => setStatus('error'));
-    setTimeout(() => setStatus('idle'), 2500);
+    // 🟢 MINOR #4: Refetch after auto-save completes (800ms debounce + 500ms save operation)
+    // Rather than magic 1200ms, wait for save to finish before refetching env-resolved values
+    const DEBOUNCE_DELAY = 800;
+    const SAVE_OPERATION_TIME = 500;
+    setTimeout(() => {
+      apiFetch<SettingsData>('/api/settings').then(d => { setData(d); }).catch(() => setStatus('error'));
+    }, DEBOUNCE_DELAY + SAVE_OPERATION_TIME);
   }, [data]);
 
   if (!open) return null;
 
   const env = data?.envOverrides ?? {};
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: 'ai', label: t.settings.tabs.ai },
-    { id: 'appearance', label: t.settings.tabs.appearance },
-    { id: 'knowledge', label: t.settings.tabs.knowledge },
-    { id: 'sync', label: t.settings.tabs.sync ?? 'Sync' },
-    { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP' },
-    { id: 'plugins', label: t.settings.tabs.plugins },
-    { id: 'shortcuts', label: t.settings.tabs.shortcuts },
+  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={13} /> },
+    { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={13} /> },
+    { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Database size={13} /> },
+    { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={13} /> },
+    { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP', icon: <Plug size={13} /> },
+    { id: 'plugins', label: t.settings.tabs.plugins, icon: <Puzzle size={13} /> },
   ];
 
   return (
@@ -177,12 +177,13 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === t.id
                   ? 'border-amber-500 text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
+              {t.icon}
               {t.label}
             </button>
           ))}
@@ -196,7 +197,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               <p className="text-sm text-destructive font-medium">Failed to load settings</p>
               <p className="text-xs text-muted-foreground">Check that the server is running and AUTH_TOKEN is configured correctly.</p>
             </div>
-          ) : !data && tab !== 'shortcuts' && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' ? (
+          ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' ? (
             <div className="flex justify-center py-8">
               <Loader2 size={18} className="animate-spin text-muted-foreground" />
             </div>
@@ -206,54 +207,47 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
               {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
               {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} />}
-              {tab === 'shortcuts' && <ShortcutsTab t={t} />}
               {tab === 'sync' && <SyncTab t={t} />}
               {tab === 'mcp' && <McpTab t={t} />}
             </>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — status bar + contextual actions */}
         {(tab === 'ai' || tab === 'knowledge') && (
-          <div className="px-5 py-3 border-t border-border shrink-0 flex items-center justify-between">
+          <div className="px-5 py-2.5 border-t border-border shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {tab === 'ai' && Object.values(env).some(Boolean) && (
                 <button
                   onClick={restoreFromEnv}
                   disabled={saving || !data}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  <RotateCcw size={13} />
+                  <RotateCcw size={12} />
                   {t.settings.ai.restoreFromEnv}
                 </button>
               )}
               {tab === 'knowledge' && (
                 <a
                   href="/setup?force=1"
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
-                  <RotateCcw size={13} />
+                  <RotateCcw size={12} />
                   {t.settings.reconfigure}
                 </a>
               )}
-              <div className="flex items-center gap-1.5 text-xs">
-                {status === 'saved' && (
-                  <><CheckCircle2 size={13} className="text-success" /><span className="text-success">{t.settings.saved}</span></>
-                )}
-                {status === 'error' && (
-                  <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{t.settings.saveFailed}</span></>
-                )}
-              </div>
             </div>
-            <button
-              onClick={handleSave}
-              disabled={saving || !data}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
-            >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {t.settings.save}
-            </button>
+            <div className="flex items-center gap-1.5 text-xs" role="status" aria-live="polite">
+              {saving && (
+                <><Loader2 size={12} className="animate-spin text-muted-foreground" /><span className="text-muted-foreground">{t.settings.save}...</span></>
+              )}
+              {status === 'saved' && (
+                <><CheckCircle2 size={12} className="text-success" /><span className="text-success">{t.settings.saved}</span></>
+              )}
+              {status === 'error' && (
+                <><AlertCircle size={12} className="text-destructive" /><span className="text-destructive">{t.settings.saveFailed}</span></>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -2,26 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff } from 'lucide-react';
-import { SectionLabel } from './Primitives';
+import { SectionLabel, PrimaryButton } from './Primitives';
 import { apiFetch } from '@/lib/api';
+import type { SyncStatus, SyncTabProps } from './types';
+import type { Messages } from '@/lib/i18n';
 
-export interface SyncStatus {
-  enabled: boolean;
-  provider?: string;
-  remote?: string;
-  branch?: string;
-  lastSync?: string | null;
-  lastPull?: string | null;
-  unpushed?: string;
-  conflicts?: Array<{ file: string; time: string }>;
-  lastError?: string | null;
-  autoCommitInterval?: number;
-  autoPullInterval?: number;
-}
-
-interface SyncTabProps {
-  t: any;
-}
+export { SyncStatus }; // Re-export for backward compatibility
 
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return 'never';
@@ -40,7 +26,7 @@ function isValidGitUrl(url: string): 'https' | 'ssh' | false {
   return false;
 }
 
-function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => void }) {
+function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: () => void }) {
   const syncT = t.settings?.sync;
 
   const [remoteUrl, setRemoteUrl] = useState('');
@@ -169,18 +155,16 @@ function SyncEmptyState({ t, onInitComplete }: { t: any; onInitComplete: () => v
       </div>
 
       {/* Connect button */}
-      <button
-        type="button"
+      <PrimaryButton
         onClick={handleConnect}
         disabled={!isValid || connecting}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+        className="flex items-center gap-2"
       >
         {connecting && <Loader2 size={14} className="animate-spin" />}
         {connecting
           ? (syncT?.connecting ?? 'Connecting...')
           : (syncT?.connectButton ?? 'Connect & Start Sync')}
-      </button>
+      </PrimaryButton>
 
       {/* Error */}
       {error && (

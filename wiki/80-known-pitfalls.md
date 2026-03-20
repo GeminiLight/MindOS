@@ -18,6 +18,13 @@
 - **现象：** 构建缓存导致 stale artifact 错误
 - **解决：** 清理整个 `.next` 目录，不做选择性清理
 
+### npx next 会拉全局缓存版本导致 Web UI 崩溃
+- **现象：** `mindos start` 后 Web UI 立即崩溃，报 `TypeError: Cannot read properties of undefined (reading 'map')`
+- **原因：** `npx next start` 不保证用本地 `node_modules` 的版本。如果用户全局 npx 缓存里有更高版本的 Next.js（如 16.2.0），而 build 产物是本地 16.1.6 编译的，版本不匹配导致运行时崩溃
+- **解决：** `bin/cli.js` 中定义 `NEXT_BIN = resolve(ROOT, 'app', 'node_modules', '.bin', 'next')`，所有调用直接用绝对路径，彻底绕开 npx/npm exec 的解析逻辑
+- **注意：** `npm exec -- next` 和 `npx next` 在 npm 7+ 中本质是同一个东西（npx 是 npm exec 的别名），解析逻辑相同，都不可靠。直接引用 `.bin/next` 是唯一确定的方式
+- **防护：** 无自动化测试可覆盖此问题（依赖用户环境），靠此记录防止回归
+
 ## 前端
 
 ### 组件拆分时 import 路径

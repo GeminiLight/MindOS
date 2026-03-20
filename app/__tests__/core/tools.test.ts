@@ -1,17 +1,48 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { seedFile, testMindRoot } from '../setup';
-import { knowledgeBaseTools } from '@/lib/agent/tools';
+import { seedFile } from '../setup';
+import { knowledgeBaseTools, truncate } from '@/lib/agent/tools';
 
-// The tools use logged() wrapper + @/lib/fs which reads from effectiveSopRoot().
-// The setup.ts mock provides a temp mindRoot for each test.
+// knowledgeBaseTools is an array of AgentTool objects.
+// Each tool: { name, execute: (toolCallId, params, signal?) => AgentToolResult }
+// AgentToolResult: { content: [{ type: 'text', text }], details }
 
-// Also mock the agent log so it doesn't pollute test output
-vi.mock('@/lib/agent/log', () => ({
-  logAgentOp: vi.fn(),
-}));
+/** Find a tool by name from the array */
+function getTool(name: string) {
+  const tool = knowledgeBaseTools.find(t => t.name === name);
+  if (!tool) throw new Error(`Tool "${name}" not found. Available: ${knowledgeBaseTools.map(t => t.name).join(', ')}`);
+  return tool;
+}
 
-// Helper: call a tool's execute function with standard test context
-const ctx = { toolCallId: 'test', messages: [] as any, abortSignal: undefined as any };
+/** Call a tool and extract the text result */
+async function callTool(name: string, params: Record<string, unknown>): Promise<string> {
+  const tool = getTool(name);
+  const result = await tool.execute!('test-call-id', params);
+  // AgentToolResult has content: [{ type: 'text', text }]
+  const textPart = result.content?.find((c: any) => c.type === 'text');
+  return textPart?.text ?? JSON.stringify(result);
+}
+
+// ---------------------------------------------------------------------------
+// truncate (exported utility)
+// ---------------------------------------------------------------------------
+
+describe('truncate', () => {
+  it('returns short content unchanged', () => {
+    expect(truncate('hello')).toBe('hello');
+  });
+
+  it('returns content at exact limit unchanged', () => {
+    const content = 'a'.repeat(20_000);
+    expect(truncate(content)).toBe(content);
+  });
+
+  it('truncates content exceeding limit', () => {
+    const content = 'a'.repeat(25_000);
+    const result = truncate(content);
+    expect(result.length).toBeLessThan(content.length);
+    expect(result).toContain('[...truncated');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // list_files tool
@@ -19,7 +50,6 @@ const ctx = { toolCallId: 'test', messages: [] as any, abortSignal: undefined as
 
 describe('tools: list_files', () => {
   beforeEach(() => {
-    // Seed a basic knowledge base structure
     seedFile('README.md', '# Root README');
     seedFile('Profile/Identity.md', '# Identity');
     seedFile('Profile/Goals.md', '# Goals');
@@ -28,9 +58,7 @@ describe('tools: list_files', () => {
   });
 
   it('lists all files with default params', async () => {
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: undefined, depth: undefined }, ctx,
-    );
+    const result = await callTool('list_files', {});
     expect(result).toContain('Profile/');
     expect(result).toContain('Identity.md');
     expect(result).toContain('Goals.md');
@@ -40,50 +68,35 @@ describe('tools: list_files', () => {
   });
 
   it('lists a specific subdirectory', async () => {
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: 'Profile', depth: undefined }, ctx,
-    );
+    const result = await callTool('list_files', { path: 'Profile' });
     expect(result).toContain('Identity.md');
     expect(result).toContain('Goals.md');
-    // Should NOT contain root-level files
     expect(result).not.toContain('README.md');
     expect(result).not.toContain('data.csv');
   });
 
   it('respects depth parameter', async () => {
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: undefined, depth: 1 }, ctx,
-    );
-    // At depth 1, subdirectories should show "... (N items)" instead of expanding
+    const result = await callTool('list_files', { depth: 1 });
     expect(result).toContain('Profile/');
     expect(result).toContain('...');
-    // Root-level files should be visible
     expect(result).toContain('README.md');
   });
 
   it('returns error message for non-existent directory', async () => {
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: 'NonExistent', depth: undefined }, ctx,
-    );
+    const result = await callTool('list_files', { path: 'NonExistent' });
     expect(result).toContain('Directory not found');
     expect(result).toContain('NonExistent');
   });
 
   it('handles nested subdirectory path', async () => {
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: 'Projects/Products', depth: undefined }, ctx,
-    );
+    const result = await callTool('list_files', { path: 'Projects/Products' });
     expect(result).toContain('ProductA.md');
     expect(result).not.toContain('README.md');
   });
 
   it('returns (empty directory) for dir with no allowed files', async () => {
-    // The directory needs to exist but with no .md/.csv files
-    seedFile('EmptyDir/test.txt', 'not allowed');  // .txt excluded from tree
-    const result = await knowledgeBaseTools.list_files.execute!(
-      { path: undefined, depth: undefined }, ctx,
-    );
-    // EmptyDir should not appear at all (omitted as empty by tree)
+    seedFile('EmptyDir/test.txt', 'not allowed');
+    const result = await callTool('list_files', {});
     expect(result).not.toContain('EmptyDir');
   });
 });
@@ -98,17 +111,13 @@ describe('tools: read_file', () => {
   });
 
   it('reads an existing file', async () => {
-    const result = await knowledgeBaseTools.read_file.execute!(
-      { path: 'test.md' }, ctx,
-    );
+    const result = await callTool('read_file', { path: 'test.md' });
     expect(result).toContain('# Test file');
     expect(result).toContain('Some content here.');
   });
 
   it('returns error for non-existent file', async () => {
-    const result = await knowledgeBaseTools.read_file.execute!(
-      { path: 'does-not-exist.md' }, ctx,
-    );
+    const result = await callTool('read_file', { path: 'does-not-exist.md' });
     expect(result).toContain('Error:');
   });
 });
@@ -124,15 +133,9 @@ describe('tools: search', () => {
   });
 
   it('returns no results for unmatched query', async () => {
-    const result = await knowledgeBaseTools.search.execute!(
-      { query: 'definitelynotfound99' }, ctx,
-    );
+    const result = await callTool('search', { query: 'definitelynotfound99' });
     expect(result).toBe('No results found.');
   });
-
-  // NOTE: Fuzzy search (Fuse.js) with cached indexes makes exact-match testing
-  // fragile in unit tests. Full search coverage is in __tests__/core/search.test.ts
-  // and __tests__/api/search.test.ts which use the core search directly.
 });
 
 // ---------------------------------------------------------------------------
@@ -145,15 +148,10 @@ describe('tools: write_file', () => {
   });
 
   it('overwrites file content', async () => {
-    const result = await knowledgeBaseTools.write_file.execute!(
-      { path: 'existing.md', content: '# New content' }, ctx,
-    );
+    const result = await callTool('write_file', { path: 'existing.md', content: '# New content' });
     expect(result).toContain('File written');
 
-    // Verify content changed
-    const read = await knowledgeBaseTools.read_file.execute!(
-      { path: 'existing.md' }, ctx,
-    );
+    const read = await callTool('read_file', { path: 'existing.md' });
     expect(read).toContain('# New content');
     expect(read).not.toContain('# Old content');
   });
@@ -165,21 +163,15 @@ describe('tools: write_file', () => {
 
 describe('tools: create_file', () => {
   it('creates a new file', async () => {
-    const result = await knowledgeBaseTools.create_file.execute!(
-      { path: 'new-note.md', content: '# Hello World' }, ctx,
-    );
+    const result = await callTool('create_file', { path: 'new-note.md', content: '# Hello World' });
     expect(result).toContain('File created');
 
-    const read = await knowledgeBaseTools.read_file.execute!(
-      { path: 'new-note.md' }, ctx,
-    );
+    const read = await callTool('read_file', { path: 'new-note.md' });
     expect(read).toContain('# Hello World');
   });
 
   it('creates parent directories automatically', async () => {
-    const result = await knowledgeBaseTools.create_file.execute!(
-      { path: 'deep/nested/dir/file.md', content: 'nested content' }, ctx,
-    );
+    const result = await callTool('create_file', { path: 'deep/nested/dir/file.md', content: 'nested content' });
     expect(result).toContain('File created');
   });
 });
@@ -194,15 +186,10 @@ describe('tools: delete_file', () => {
   });
 
   it('deletes an existing file', async () => {
-    const result = await knowledgeBaseTools.delete_file.execute!(
-      { path: 'to-delete.md' }, ctx,
-    );
+    const result = await callTool('delete_file', { path: 'to-delete.md' });
     expect(result).toContain('File deleted');
 
-    // Verify file no longer readable
-    const read = await knowledgeBaseTools.read_file.execute!(
-      { path: 'to-delete.md' }, ctx,
-    );
+    const read = await callTool('read_file', { path: 'to-delete.md' });
     expect(read).toContain('Error:');
   });
 });
@@ -217,15 +204,59 @@ describe('tools: append_to_file', () => {
   });
 
   it('appends content to file', async () => {
-    const result = await knowledgeBaseTools.append_to_file.execute!(
-      { path: 'append-target.md', content: '\n## Added Section' }, ctx,
-    );
+    const result = await callTool('append_to_file', { path: 'append-target.md', content: '\n## Added Section' });
     expect(result).toContain('Content appended');
 
-    const read = await knowledgeBaseTools.read_file.execute!(
-      { path: 'append-target.md' }, ctx,
-    );
+    const read = await callTool('read_file', { path: 'append-target.md' });
     expect(read).toContain('# Start');
     expect(read).toContain('## Added Section');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rename_file tool
+// ---------------------------------------------------------------------------
+
+describe('tools: rename_file', () => {
+  beforeEach(() => {
+    seedFile('old-name.md', '# Rename me');
+  });
+
+  it('renames a file', async () => {
+    const result = await callTool('rename_file', { path: 'old-name.md', new_name: 'new-name.md' });
+    expect(result).toContain('renamed');
+    expect(result).toContain('new-name.md');
+
+    // Old path should be gone
+    const oldRead = await callTool('read_file', { path: 'old-name.md' });
+    expect(oldRead).toContain('Error:');
+
+    // New path should work
+    const newRead = await callTool('read_file', { path: 'new-name.md' });
+    expect(newRead).toContain('# Rename me');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// get_recent tool
+// ---------------------------------------------------------------------------
+
+describe('tools: get_recent', () => {
+  beforeEach(() => {
+    seedFile('a.md', '# A');
+    seedFile('b.md', '# B');
+  });
+
+  it('returns recently modified files', async () => {
+    const result = await callTool('get_recent', {});
+    expect(result).toContain('a.md');
+    expect(result).toContain('b.md');
+  });
+
+  it('respects limit parameter', async () => {
+    const result = await callTool('get_recent', { limit: 1 });
+    // Should only contain one file entry (one line starting with "- ")
+    const lines = result.split('\n').filter(l => l.startsWith('- '));
+    expect(lines).toHaveLength(1);
   });
 });

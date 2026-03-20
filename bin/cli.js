@@ -45,6 +45,9 @@ import { homedir } from 'node:os';
 
 import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH, MINDOS_DIR } from './lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
+
+// Resolve the local next binary to avoid npx pulling a mismatched global version
+const NEXT_BIN = resolve(ROOT, 'app', 'node_modules', '.bin', 'next');
 import { run, npmInstall } from './lib/utils.js';
 import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
 import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
@@ -214,7 +217,7 @@ const commands = {
       startSyncDaemon(devMindRoot).catch(() => {});
     }
     await printStartupInfo(webPort, mcpPort);
-    run(`npx next dev -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
+    run(`${NEXT_BIN} dev -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
 
   // ── start ──────────────────────────────────────────────────────────────────
@@ -327,7 +330,7 @@ const commands = {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
       cleanNextDir();
       run('node scripts/gen-renderer-index.js', ROOT);
-      run('npx next build', resolve(ROOT, 'app'));
+      run(`${NEXT_BIN} build`, resolve(ROOT, 'app'));
       writeBuildStamp();
     }
     const mcp = spawnMcp(isVerbose);
@@ -339,7 +342,7 @@ const commands = {
       startSyncDaemon(mindRoot).catch(() => {});
     }
     await printStartupInfo(webPort, mcpPort);
-    run(`npx next start -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
+    run(`${NEXT_BIN} start -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
   },
 
   // ── build ──────────────────────────────────────────────────────────────────
@@ -347,7 +350,7 @@ const commands = {
     ensureAppDeps();
     cleanNextDir();
     run('node scripts/gen-renderer-index.js', ROOT);
-    run(`npx next build ${extra}`, resolve(ROOT, 'app'));
+    run(`${NEXT_BIN} build ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
   },
 
