@@ -304,3 +304,109 @@ describe('POST /api/setup — LLM skip', () => {
     expect(ai.provider).toBe('openai');
   });
 });
+
+/* ── PATCH /api/setup — guideState ─────────────────────────────── */
+
+describe('PATCH /api/setup — guideState', () => {
+  it('rejects missing guideState', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/guideState/i);
+  });
+
+  it('rejects non-object guideState', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({ guideState: 'invalid' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(400);
+  });
+
+  it('updates dismissed field', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({ guideState: { dismissed: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.guideState.dismissed).toBe(true);
+  });
+
+  it('updates step1Done field', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({ guideState: { step1Done: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.guideState.step1Done).toBe(true);
+  });
+
+  it('updates nextStepIndex field', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({ guideState: { nextStepIndex: 3 } }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.guideState.nextStepIndex).toBe(3);
+  });
+
+  it('ignores negative nextStepIndex', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({ guideState: { nextStepIndex: -1 } }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.guideState.nextStepIndex).toBe(0);
+  });
+
+  it('updates multiple fields at once', async () => {
+    const { PATCH } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        guideState: {
+          dismissed: true,
+          step1Done: true,
+          askedAI: true,
+          active: true,
+          nextStepIndex: 2,
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PATCH(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.guideState.dismissed).toBe(true);
+    expect(body.guideState.step1Done).toBe(true);
+    expect(body.guideState.askedAI).toBe(true);
+    expect(body.guideState.active).toBe(true);
+    expect(body.guideState.nextStepIndex).toBe(2);
+  });
+});

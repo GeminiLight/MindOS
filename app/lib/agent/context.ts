@@ -2,31 +2,35 @@
  * Phase 3: Context management — token estimation, compaction, tool output truncation.
  *
  * All operations are request-scoped (no persistence to frontend session).
+ * Uses pi-ai types (AgentMessage from pi-agent-core, complete from pi-ai).
  */
-import { generateText, type ModelMessage, type ToolResultPart, type ToolModelMessage } from 'ai';
-import type { LanguageModel } from 'ai';
+import { complete, type Model } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { ToolResultMessage, AssistantMessage, UserMessage } from '@mariozechner/pi-ai';
 
 // ---------------------------------------------------------------------------
 // Token estimation (1 token ≈ 4 chars)
 // ---------------------------------------------------------------------------
 
-/** Rough token count for a single ModelMessage */
-function messageTokens(msg: ModelMessage): number {
-  if (typeof msg.content === 'string') return Math.ceil(msg.content.length / 4);
-  if (Array.isArray(msg.content)) {
-    let chars = 0;
-    for (const part of msg.content) {
-      if ('text' in part && typeof part.text === 'string') chars += part.text.length;
-      if ('value' in part && typeof part.value === 'string') chars += part.value.length;
-      if ('input' in part) chars += JSON.stringify(part.input).length;
+/** Rough token count for a single AgentMessage */
+function messageTokens(msg: AgentMessage): number {
+  if ('content' in msg) {
+    const content = (msg as any).content;
+    if (typeof content === 'string') return Math.ceil(content.length / 4);
+    if (Array.isArray(content)) {
+      let chars = 0;
+      for (const part of content) {
+        if ('text' in part && typeof part.text === 'string') chars += part.text.length;
+        if ('args' in part) chars += JSON.stringify(part.args).length;
+      }
+      return Math.ceil(chars / 4);
     }
-    return Math.ceil(chars / 4);
   }
   return 0;
 }
 
 /** Estimate total tokens for a message array */
-export function estimateTokens(messages: ModelMessage[]): number {
+export function estimateTokens(messages: AgentMessage[]): number {
   let total = 0;
   for (const m of messages) total += messageTokens(m);
   return total;
@@ -64,7 +68,7 @@ export function getContextLimit(model: string): number {
 
 /** Check if messages + system prompt exceed threshold of context limit */
 export function needsCompact(
-  messages: ModelMessage[],
+  messages: AgentMessage[],
   systemPrompt: string,
   model: string,
   threshold = 0.7,
@@ -102,38 +106,35 @@ const TOOL_OUTPUT_LIMITS: Record<string, number> = {
 
 /**
  * Truncate tool outputs in historical messages to save tokens.
- * Only truncates non-last tool messages (the last tool message is kept intact
+ * Only truncates non-last toolResult messages (the last one is kept intact
  * because the model may need its full output for the current step).
  */
-export function truncateToolOutputs(messages: ModelMessage[]): ModelMessage[] {
-  // Find the index of the last 'tool' role message
+export function truncateToolOutputs(messages: AgentMessage[]): AgentMessage[] {
+  // Find the index of the last 'toolResult' role message
   let lastToolIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'tool') { lastToolIdx = i; break; }
+    if ((messages[i] as any).role === 'toolResult') { lastToolIdx = i; break; }
   }
 
   return messages.map((msg, idx) => {
-    if (msg.role !== 'tool' || idx === lastToolIdx) return msg;
+    const m = msg as any;
+    if (m.role !== 'toolResult' || idx === lastToolIdx) return msg;
 
-    const toolMsg = msg as ToolModelMessage;
+    const toolMsg = m as ToolResultMessage;
+    const toolName = toolMsg.toolName ?? '';
+    const limit = TOOL_OUTPUT_LIMITS[toolName] ?? 500;
+
+    // Truncate text content in toolResult
     const truncatedContent = toolMsg.content.map(part => {
-      if (part.type !== 'tool-result') return part;
-      const trp = part as ToolResultPart;
-      const toolName = trp.toolName ?? '';
-      const limit = TOOL_OUTPUT_LIMITS[toolName] ?? 500;
-      if (!trp.output || typeof trp.output !== 'object' || trp.output.type !== 'text') return part;
-      if (trp.output.value.length <= limit) return part;
-
+      if (part.type !== 'text') return part;
+      if (part.text.length <= limit) return part;
       return {
-        ...trp,
-        output: {
-          ...trp.output,
-          value: trp.output.value.slice(0, limit) + `\n[...truncated from ${trp.output.value.length} chars]`,
-        },
-      } satisfies ToolResultPart;
+        ...part,
+        text: part.text.slice(0, limit) + `\n[...truncated from ${part.text.length} chars]`,
+      };
     });
 
-    return { ...toolMsg, content: truncatedContent } satisfies ToolModelMessage;
+    return { ...toolMsg, content: truncatedContent } as AgentMessage;
   });
 }
 
@@ -149,23 +150,21 @@ const COMPACT_PROMPT = `Summarize the key points, decisions, and file operations
 
 Be concise and factual. Output only the summary, no preamble.`;
 
-/** Extract a short text representation from a ModelMessage for summarization */
-function messageToText(m: ModelMessage): string {
-  const role = m.role;
+/** Extract a short text representation from an AgentMessage for summarization */
+function messageToText(m: AgentMessage): string {
+  const msg = m as any;
+  const role = msg.role;
   let content = '';
-  if (typeof m.content === 'string') {
-    content = m.content;
-  } else if (Array.isArray(m.content)) {
+
+  if (typeof msg.content === 'string') {
+    content = msg.content;
+  } else if (Array.isArray(msg.content)) {
     const pieces: string[] = [];
-    for (const part of m.content) {
-      if ('text' in part && typeof (part as { text?: string }).text === 'string') {
-        pieces.push((part as { text: string }).text);
-      } else if (part.type === 'tool-call' && 'toolName' in part) {
-        pieces.push(`[Tool: ${(part as { toolName: string }).toolName}]`);
-      } else if (part.type === 'tool-result' && 'output' in part) {
-        const trp = part as ToolResultPart;
-        const val = trp.output && typeof trp.output === 'object' && trp.output.type === 'text' ? trp.output.value : '';
-        pieces.push(`[Result: ${val.slice(0, 200)}]`);
+    for (const part of msg.content) {
+      if (part.type === 'text' && typeof part.text === 'string') {
+        pieces.push(part.text);
+      } else if (part.type === 'toolCall' && 'toolName' in part) {
+        pieces.push(`[Tool: ${part.toolName}]`);
       }
     }
     content = pieces.filter(Boolean).join(' ');
@@ -178,27 +177,22 @@ function messageToText(m: ModelMessage): string {
  * Returns a new message array with early messages replaced by a summary.
  * Only called when needsCompact() returns true.
  *
- * NOTE: Currently uses the same model as the main generation. A cheaper model
- * (e.g. haiku) would suffice for summarization and avoid competing for rate
- * limits. Deferred until users report rate-limit issues — compact triggers
- * infrequently (>70% context fill).
+ * Uses pi-ai complete() for summarization.
  */
 export async function compactMessages(
-  messages: ModelMessage[],
-  model: LanguageModel,
-): Promise<{ messages: ModelMessage[]; compacted: boolean }> {
+  messages: AgentMessage[],
+  model: Model<any>,
+  apiKey: string,
+): Promise<{ messages: AgentMessage[]; compacted: boolean }> {
   if (messages.length < 6) {
     return { messages, compacted: false };
   }
 
   // Keep the last 6 messages intact, summarize the rest.
   // Adjust split point to avoid cutting between an assistant (with tool calls)
-  // and its tool result. Only need to check for orphaned 'tool' messages —
-  // an assistant at the split point is safe because its tool results follow it.
-  // (Orphaned assistants without results can't exist in history: only completed
-  // tool calls are persisted by the frontend.)
+  // and its tool result.
   let splitIdx = messages.length - 6;
-  while (splitIdx > 0 && messages[splitIdx]?.role === 'tool') {
+  while (splitIdx > 0 && (messages[splitIdx] as any).role === 'toolResult') {
     splitIdx--;
   }
   if (splitIdx < 2) {
@@ -216,41 +210,49 @@ export async function compactMessages(
   }
 
   try {
-    const { text: summary } = await generateText({
-      model,
-      prompt: `${COMPACT_PROMPT}\n\n---\n\nConversation to summarize:\n\n${earlyText}`,
-    });
+    const summaryMessage = await complete(model, {
+      messages: [{
+        role: 'user',
+        content: `${COMPACT_PROMPT}\n\n---\n\nConversation to summarize:\n\n${earlyText}`,
+        timestamp: Date.now(),
+      }],
+    }, { apiKey });
 
-    console.log(`[ask] Compacted ${earlyMessages.length} early messages into summary (${summary.length} chars)`);
+    const summaryText = summaryMessage.content
+      .filter(p => p.type === 'text')
+      .map(p => (p as any).text)
+      .join('');
 
-    const summaryText = `[Summary of earlier conversation]\n\n${summary}`;
+    console.log(`[ask] Compacted ${earlyMessages.length} early messages into summary (${summaryText.length} chars)`);
+
+    const summaryContent = `[Summary of earlier conversation]\n\n${summaryText}`;
 
     // If first recent message is also 'user', merge summary into it to avoid
     // consecutive user messages (Anthropic rejects user→user sequences).
-    if (recentMessages[0]?.role === 'user') {
-      const merged = { ...recentMessages[0] };
+    if ((recentMessages[0] as any)?.role === 'user') {
+      const merged = { ...(recentMessages[0] as any) };
       if (typeof merged.content === 'string') {
-        merged.content = `${summaryText}\n\n---\n\n${merged.content}`;
+        merged.content = `${summaryContent}\n\n---\n\n${merged.content}`;
       } else if (Array.isArray(merged.content)) {
-        // Multimodal content (e.g. images) — prepend summary as text part
-        merged.content = [{ type: 'text' as const, text: `${summaryText}\n\n---\n\n` }, ...merged.content];
+        merged.content = [{ type: 'text' as const, text: `${summaryContent}\n\n---\n\n` }, ...merged.content];
       } else {
-        merged.content = summaryText;
+        merged.content = summaryContent;
       }
       return {
-        messages: [merged, ...recentMessages.slice(1)],
+        messages: [merged as AgentMessage, ...recentMessages.slice(1)],
         compacted: true,
       };
     }
 
     // Otherwise prepend as separate user message
-    const summaryMessage: ModelMessage = {
+    const summaryMsg: UserMessage = {
       role: 'user',
-      content: summaryText,
+      content: summaryContent,
+      timestamp: Date.now(),
     };
 
     return {
-      messages: [summaryMessage, ...recentMessages],
+      messages: [summaryMsg as AgentMessage, ...recentMessages],
       compacted: true,
     };
   } catch (err) {
@@ -269,10 +271,10 @@ export async function compactMessages(
  * (containing tool calls) and its following tool result message.
  */
 export function hardPrune(
-  messages: ModelMessage[],
+  messages: AgentMessage[],
   systemPrompt: string,
   model: string,
-): ModelMessage[] {
+): AgentMessage[] {
   const limit = getContextLimit(model);
   const threshold = limit * 0.9;
   const systemTokens = estimateStringTokens(systemPrompt);
@@ -288,24 +290,27 @@ export function hardPrune(
   }
 
   // Ensure we don't cut between an assistant (with tool calls) and its tool result.
-  // If cutIdx lands on a 'tool' message, advance past it so the pair stays together
-  // or is fully removed.
-  while (cutIdx < messages.length - 1 && messages[cutIdx].role === 'tool') {
+  while (cutIdx < messages.length - 1 && (messages[cutIdx] as any).role === 'toolResult') {
     total -= messageTokens(messages[cutIdx]);
     cutIdx++;
   }
 
   // Ensure first message is 'user' (Anthropic requirement)
-  while (cutIdx < messages.length - 1 && messages[cutIdx].role !== 'user') {
+  while (cutIdx < messages.length - 1 && (messages[cutIdx] as any).role !== 'user') {
     total -= messageTokens(messages[cutIdx]);
     cutIdx++;
   }
 
   // Fallback: if no user message found in remaining messages, inject a synthetic one
   const pruned = cutIdx > 0 ? messages.slice(cutIdx) : messages;
-  if (pruned.length > 0 && pruned[0].role !== 'user') {
+  if (pruned.length > 0 && (pruned[0] as any).role !== 'user') {
     console.log(`[ask] Hard pruned ${cutIdx} messages, injecting synthetic user message (${messages.length} → ${pruned.length + 1})`);
-    return [{ role: 'user', content: '[Conversation context was pruned due to length. Continuing from here.]' } as ModelMessage, ...pruned];
+    const syntheticUser: UserMessage = {
+      role: 'user',
+      content: '[Conversation context was pruned due to length. Continuing from here.]',
+      timestamp: Date.now(),
+    };
+    return [syntheticUser as AgentMessage, ...pruned];
   }
 
   if (cutIdx > 0) {
@@ -314,4 +319,48 @@ export function hardPrune(
   }
 
   return messages;
+}
+
+// ---------------------------------------------------------------------------
+// transformContext factory — for Agent's transformContext hook
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a transformContext function that captures the model and apiKey via closure.
+ * Agent calls this before each LLM call to manage context window.
+ */
+export function createTransformContext(
+  systemPrompt: string,
+  modelName: string,
+  getCompactModel: () => Model<any>,
+  apiKey: string,
+  contextStrategy: string,
+) {
+  return async (messages: AgentMessage[], signal?: AbortSignal): Promise<AgentMessage[]> => {
+    // 1. Truncate tool outputs in historical messages
+    let result = truncateToolOutputs(messages);
+
+    const preTokens = estimateTokens(result);
+    const sysTokens = estimateStringTokens(systemPrompt);
+    const ctxLimit = getContextLimit(modelName);
+    console.log(`[ask] Context: ~${preTokens + sysTokens} tokens (messages=${preTokens}, system=${sysTokens}), limit=${ctxLimit}`);
+
+    // 2. Compact if >70% context limit (skip if user disabled)
+    if (contextStrategy === 'auto' && needsCompact(result, systemPrompt, modelName)) {
+      console.log('[ask] Context >70% limit, compacting...');
+      const compactResult = await compactMessages(result, getCompactModel(), apiKey);
+      result = compactResult.messages;
+      if (compactResult.compacted) {
+        const postTokens = estimateTokens(result);
+        console.log(`[ask] After compact: ~${postTokens + sysTokens} tokens`);
+      } else {
+        console.log('[ask] Compact skipped (too few messages), hard prune will handle overflow if needed');
+      }
+    }
+
+    // 3. Hard prune if still >90% context limit
+    result = hardPrune(result, systemPrompt, modelName);
+
+    return result;
+  };
 }
