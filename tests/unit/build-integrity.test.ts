@@ -14,8 +14,8 @@ import path from 'path';
 const APP_DIR = path.resolve(__dirname, '..', '..', 'app');
 const NEXT_DIR = path.join(APP_DIR, '.next');
 
-// Skip all tests if no build output exists (CI or dev without build)
-const hasBuild = fs.existsSync(NEXT_DIR);
+// Skip all tests if no complete build output exists (e.g. local dev without build)
+const hasBuild = fs.existsSync(path.join(NEXT_DIR, 'build-manifest.json'));
 
 describe.skipIf(!hasBuild)('build integrity', () => {
   // ── Helpers ────────────────────────────────────────────────────────────────
