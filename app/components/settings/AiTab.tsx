@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import type { AiSettings, AgentSettings, ProviderConfig, SettingsData } from './types';
-import { Field, Select, Input, EnvBadge, ApiKeyInput } from './Primitives';
+import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
+import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle } from './Primitives';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
 type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
@@ -15,7 +15,7 @@ interface TestResult {
   code?: ErrorCode;
 }
 
-function errorMessage(t: any, code?: ErrorCode): string {
+function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
   switch (code) {
     case 'auth_error': return t.settings.ai.testKeyAuthError;
     case 'model_not_found': return t.settings.ai.testKeyModelNotFound;
@@ -23,13 +23,6 @@ function errorMessage(t: any, code?: ErrorCode): string {
     case 'network_error': return t.settings.ai.testKeyNetworkError;
     default: return t.settings.ai.testKeyUnknown;
   }
-}
-
-interface AiTabProps {
-  data: SettingsData;
-  updateAi: (patch: Partial<AiSettings>) => void;
-  updateAgent: (patch: Partial<AgentSettings>) => void;
-  t: any;
 }
 
 export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
@@ -262,21 +255,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
                   <div className="text-sm text-foreground">{t.settings.agent.thinking}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{t.settings.agent.thinkingHint}</div>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={data.agent?.enableThinking ?? false}
-                  onClick={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    data.agent?.enableThinking ? 'bg-amber-500' : 'bg-muted'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                      data.agent?.enableThinking ? 'translate-x-4' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                <Toggle checked={data.agent?.enableThinking ?? false} onChange={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })} />
               </div>
 
               {data.agent?.enableThinking && (

@@ -2,15 +2,9 @@
 
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { Copy, Check, RefreshCw, Trash2, Sparkles } from 'lucide-react';
-import type { SettingsData } from './types';
-import { Field, Input, EnvBadge, SectionLabel } from './Primitives';
+import type { KnowledgeTabProps } from './types';
+import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { apiFetch } from '@/lib/api';
-
-interface KnowledgeTabProps {
-  data: SettingsData;
-  setData: React.Dispatch<React.SetStateAction<SettingsData | null>>;
-  t: any;
-}
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
@@ -21,8 +15,8 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [guideDismissed, setGuideDismissed] = useState(false);
 
   useEffect(() => {
-    fetch('/api/setup')
-      .then(r => r.json())
+    // 🟢 MINOR #5: Use apiFetch instead of raw fetch for consistency
+    apiFetch<{ guideState?: { active: boolean; dismissed: boolean } }>('/api/setup')
       .then(d => {
         const gs = d.guideState;
         if (gs) {
@@ -30,7 +24,9 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           setGuideDismissed(!!gs.dismissed);
         }
       })
-      .catch(() => {});
+      .catch(err => {
+        console.error('Failed to fetch guide state:', err);
+      });
   }, []);
 
   const handleGuideToggle = useCallback(() => {
@@ -39,13 +35,16 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
     // If re-enabling, also ensure active is true
     const patch: Record<string, boolean> = { dismissed: newDismissed };
     if (!newDismissed) patch.active = true;
-    fetch('/api/setup', {
+    apiFetch('/api/setup', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ guideState: patch }),
     })
       .then(() => window.dispatchEvent(new Event('guide-state-updated')))
-      .catch(() => setGuideDismissed(!newDismissed)); // rollback on failure
+      .catch(err => {
+        console.error('Failed to update guide state:', err);
+        setGuideDismissed(!newDismissed); // rollback on failure
+      });
   }, [guideDismissed]);
 
   const origin = useSyncExternalStore(
@@ -202,21 +201,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
                 <div className="text-sm text-foreground">{t.guide?.showGuide ?? 'Show getting started guide'}</div>
               </div>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={!guideDismissed}
-              onClick={handleGuideToggle}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                !guideDismissed ? 'bg-amber-500' : 'bg-muted'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                  !guideDismissed ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <Toggle checked={!guideDismissed} onChange={() => handleGuideToggle()} />
           </div>
         </div>
       )}

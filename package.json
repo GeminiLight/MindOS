@@ -73,5 +73,8 @@
   },
   "dependencies": {
     "chokidar": "^5.0.0"
+  },
+  "devDependencies": {
+    "source-map-js": "^1.2.1"
   }
 }

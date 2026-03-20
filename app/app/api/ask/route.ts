@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
+import { Agent, type AgentEvent, type BeforeToolCallContext, type BeforeToolCallResult, type AfterToolCallContext, type AfterToolCallResult } from '@mariozechner/pi-agent-core';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -332,19 +332,20 @@ export async function POST(req: NextRequest) {
       ),
 
       // Write-protection: block writes to protected files
-      beforeToolCall: async (context: any) => {
-        const { toolName, args } = context;
-        if (WRITE_TOOLS.has(toolName)) {
+      beforeToolCall: async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
+        const { toolCall, args } = context;
+        // toolCall is an object with type "toolCall" and contains the tool name and ID
+        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
+        if (toolName && WRITE_TOOLS.has(toolName)) {
           const filePath = (args as any).path ?? (args as any).from_path;
           if (filePath) {
             try {
               assertNotProtected(filePath, 'modified by AI agent');
             } catch (e) {
+              const errorMsg = e instanceof Error ? e.message : String(e);
               return {
-                result: {
-                  content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : String(e)}` }],
-                  details: {},
-                },
+                block: true,
+                reason: `Write-protection error: ${errorMsg}`,
               };
             }
           }
@@ -353,9 +354,10 @@ export async function POST(req: NextRequest) {
       },
 
       // Logging: record all tool executions
-      afterToolCall: async (context: any) => {
+      afterToolCall: async (context: AfterToolCallContext): Promise<AfterToolCallResult | undefined> => {
         const ts = new Date().toISOString();
-        const { toolName, args, result, isError } = context;
+        const { toolCall, args, result, isError } = context;
+        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
         const outputText = result?.content
           ?.filter((p: any) => p.type === 'text')
           .map((p: any) => p.text)
@@ -363,7 +365,7 @@ export async function POST(req: NextRequest) {
         try {
           logAgentOp({
             ts,
-            tool: toolName,
+            tool: toolName ?? 'unknown',
             params: args as Record<string, unknown>,
             result: isError ? 'error' : 'ok',
             message: outputText.slice(0, 200),
