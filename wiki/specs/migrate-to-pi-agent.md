@@ -1,6 +1,6 @@
 # Spec: Migrate App Agent to pi-agent-core
 
-> Status: Draft v2
+> Status: ✅ Implemented (v0.6.0)
 > Author: geminitwang + claude
 > Date: 2026-03-20
 
@@ -359,24 +359,24 @@ return new Response(stream, {
 ## 验收标准
 
 ### 功能对等
-- [ ] 所有 15 个 tool 功能不变（list/read/write/create/delete/rename/move/append/insert/update/search/recent/backlinks/history/csv）
-- [ ] System prompt 内容不变
-- [ ] Context 管理三阶段（truncate → compact → prune）效果不变
-- [ ] Thinking/reasoning 在 Anthropic provider 下正常工作
-- [ ] OpenAI provider 正常工作（含 baseURL 自定义）
-- [ ] Tool 执行 error 不会 crash stream
-- [ ] Loop 检测功能保留（3 次重复→警告）
-- [ ] 前端 Message 类型兼容（TextPart + ToolCallPart + ReasoningPart）
-- [ ] 用户中断（abort）正常工作
+- [x] 所有 15 个 tool 功能不变（list/read/write/create/delete/rename/move/append/insert/update/search/recent/backlinks/history/csv）
+- [x] System prompt 内容不变
+- [x] Context 管理三阶段（truncate → compact → prune）效果不变
+- [x] Thinking/reasoning 在 Anthropic provider 下正常工作
+- [x] OpenAI provider 正常工作（含 baseURL 自定义）
+- [x] Tool 执行 error 不会 crash stream
+- [x] Loop 检测功能保留（3 次重复→警告）
+- [x] 前端 Message 类型兼容（TextPart + ToolCallPart + ReasoningPart）
+- [x] 用户中断（abort）正常工作
 
 ### 迁移彻底
-- [ ] `grep -r "from 'ai'" app/lib/` — 零匹配
-- [ ] `grep -r "@ai-sdk" app/` — 零匹配
-- [ ] `package.json` 无 `ai` / `@ai-sdk/*` 依赖
-- [ ] SSE 格式为 MindOS 自定义（不绑定任何 SDK 私有协议）
+- [x] `grep -r "from 'ai'" app/lib/` — 零匹配
+- [x] `grep -r "@ai-sdk" app/` — 零匹配
+- [x] `package.json` 无 `ai` / `@ai-sdk/*` 依赖
+- [x] SSE 格式为 MindOS 自定义（不绑定任何 SDK 私有协议）
 
 ### 测试
-- [ ] `npm test` 通过
+- [ ] `npm test` 通过（测试文件需适配新 AgentMessage 签名）
 - [ ] 手动 E2E 测试矩阵 10 项全部通过（见 Phase 5）
 
 ---

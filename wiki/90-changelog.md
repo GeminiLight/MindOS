@@ -1,6 +1,39 @@
-<!-- Last verified: 2026-03-18 | Current stage: P1 -->
+<!-- Last verified: 2026-03-20 | Current stage: P1 -->
 
 # 变更日志 (CHANGELOG)
+
+## v0.6.0 — Agent 框架迁移 pi-agent-core + Skill 渐进式加载 v4 (2026-03-20)
+
+### ⚠️ Breaking（内部）
+- 移除 `@ai-sdk/anthropic`、`@ai-sdk/openai`、`ai` 三个依赖
+- SSE 流格式从 AI SDK 私有协议切换为 MindOS 自定义 6 事件格式（`text_delta`、`thinking_delta`、`tool_start`、`tool_end`、`done`、`error`）
+- `getModel()` → `getModelConfig()` 返回 `{ model, modelName, apiKey, provider }`
+
+### 新增
+- **Agent 框架迁移**：Vercel AI SDK → `@mariozechner/pi-agent-core@0.60.0` + `@mariozechner/pi-ai@0.60.0`
+  - 15 个 tool 从 Zod + `tool()` 改写为 TypeBox + `AgentTool` 接口
+  - 新增 `to-agent-messages.ts`：两层消息转换（Frontend → AgentMessage → pi-ai Message）
+  - `transformContext` hook 封装三阶段上下文管理
+  - `beforeToolCall` 写保护 + `afterToolCall` 日志
+  - Loop 检测改为 `subscribe('turn_end')` + `steer()`
+  - Step 限制通过 `abort()` 强制终止
+  - Extended thinking 支持（`thinkingLevel`）
+- **Skill 渐进式加载 v4**：4 文件 → 2 文件（`skill-rules.md` + `user-rules.md`），tool call 从 4-5 次降为 1 次
+  - `mindos start` 自动迁移旧版文件
+
+### 修复（Code Review 12 项）
+- API key 闭包并发安全
+- Loop 检测竞态条件
+- Context compact API 失败 fallback 到 hard prune
+- AgentEvent 类型安全（7 个类型守卫函数）
+- 文件截断显式标志 + 警告
+- OpenAI 自定义端点 API 变体配置
+
+### 依赖变更
+- 移除：`ai`、`@ai-sdk/anthropic`、`@ai-sdk/openai`
+- 新增：`@mariozechner/pi-agent-core`、`@mariozechner/pi-ai`、`@sinclair/typebox`
+
+---
 
 ## v0.5.15 — `mindos uninstall` + daemon 启动修复 + 等待 UX 优化 (2026-03-18)
 

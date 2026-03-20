@@ -6,6 +6,7 @@ import {
   isRootProtected,
   assertWithinRoot,
 } from '@/lib/core/security';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 import path from 'path';
 
 describe('security', () => {
@@ -20,8 +21,14 @@ describe('security', () => {
       expect(resolved).toBe(path.resolve(mindRoot, 'foo/bar.md'));
     });
 
-    it('throws on path traversal with ../', () => {
-      expect(() => resolveSafe(mindRoot, '../../../etc/passwd')).toThrow('Access denied');
+    it('throws MindOSError with PATH_OUTSIDE_ROOT on path traversal', () => {
+      try {
+        resolveSafe(mindRoot, '../../../etc/passwd');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(MindOSError);
+        expect((err as MindOSError).code).toBe(ErrorCodes.PATH_OUTSIDE_ROOT);
+      }
     });
 
     it('throws on path that escapes via symlink-like traversal', () => {
@@ -61,8 +68,14 @@ describe('security', () => {
       expect(isRootProtected('nested/INSTRUCTION.md')).toBe(false);
     });
 
-    it('assertNotProtected throws for INSTRUCTION.md', () => {
-      expect(() => assertNotProtected('INSTRUCTION.md', 'modified')).toThrow('Protected file');
+    it('assertNotProtected throws MindOSError with PROTECTED_FILE for INSTRUCTION.md', () => {
+      try {
+        assertNotProtected('INSTRUCTION.md', 'modified');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(MindOSError);
+        expect((err as MindOSError).code).toBe(ErrorCodes.PROTECTED_FILE);
+      }
     });
 
     it('assertNotProtected passes for normal files', () => {

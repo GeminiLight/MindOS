@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Fuse, { FuseResultMatch } from 'fuse.js';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 import {
   readFile as coreReadFile,
   writeFile as coreWriteFile,
@@ -19,6 +20,7 @@ import {
   isGitRepo as coreIsGitRepo,
   gitLog as coreGitLog,
   gitShowFile as coreGitShowFile,
+  invalidateSearchIndex,
 } from './core';
 import { FileNode } from './core/types';
 import { SearchMatch } from './types';
@@ -53,6 +55,7 @@ function isCacheValid(): boolean {
 export function invalidateCache(): void {
   _cache = null;
   _searchIndex = null;
+  invalidateSearchIndex();
 }
 
 function ensureCache(): FileTreeCache {
@@ -266,9 +269,9 @@ export function updateLines(filePath: string, startIndex: number, endIndex: numb
 
 export function deleteLines(filePath: string, startIndex: number, endIndex: number): void {
   const existing = readLines(filePath);
-  if (startIndex < 0 || endIndex < 0) throw new Error('Invalid line index: indices must be >= 0');
-  if (startIndex > endIndex) throw new Error(`Invalid range: start (${startIndex}) > end (${endIndex})`);
-  if (startIndex >= existing.length) throw new Error(`Invalid line index: start (${startIndex}) >= total lines (${existing.length})`);
+  if (startIndex < 0 || endIndex < 0) throw new MindOSError(ErrorCodes.INVALID_RANGE, 'Invalid line index: indices must be >= 0', { startIndex, endIndex });
+  if (startIndex > endIndex) throw new MindOSError(ErrorCodes.INVALID_RANGE, `Invalid range: start (${startIndex}) > end (${endIndex})`, { startIndex, endIndex });
+  if (startIndex >= existing.length) throw new MindOSError(ErrorCodes.INVALID_RANGE, `Invalid line index: start (${startIndex}) >= total lines (${existing.length})`, { startIndex, totalLines: existing.length });
   existing.splice(startIndex, endIndex - startIndex + 1);
   saveFileContent(filePath, existing.join('\n'));
 }

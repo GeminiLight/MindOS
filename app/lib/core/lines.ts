@@ -1,4 +1,5 @@
 import { readFile, writeFile } from './fs-ops';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 
 /**
  * Reads a file and returns its content split into lines.
@@ -11,9 +12,9 @@ export function readLines(mindRoot: string, filePath: string): string[] {
  * Validates line indices are within bounds.
  */
 function validateLineRange(totalLines: number, start: number, end: number): void {
-  if (start < 0 || end < 0) throw new Error('Invalid line index: indices must be >= 0');
-  if (start > end) throw new Error(`Invalid range: start (${start}) > end (${end})`);
-  if (start >= totalLines) throw new Error(`Invalid line index: start (${start}) >= total lines (${totalLines})`);
+  if (start < 0 || end < 0) throw new MindOSError(ErrorCodes.INVALID_RANGE, 'Invalid line index: indices must be >= 0', { start, end });
+  if (start > end) throw new MindOSError(ErrorCodes.INVALID_RANGE, `Invalid range: start (${start}) > end (${end})`, { start, end });
+  if (start >= totalLines) throw new MindOSError(ErrorCodes.INVALID_RANGE, `Invalid line index: start (${start}) >= total lines (${totalLines})`, { start, totalLines });
 }
 
 /**
@@ -23,7 +24,7 @@ function validateLineRange(totalLines: number, start: number, end: number): void
 export function insertLines(mindRoot: string, filePath: string, afterIndex: number, lines: string[]): void {
   const existing = readLines(mindRoot, filePath);
   if (afterIndex >= existing.length) {
-    throw new Error(`Invalid after_index: ${afterIndex} >= total lines (${existing.length})`);
+    throw new MindOSError(ErrorCodes.INVALID_RANGE, `Invalid after_index: ${afterIndex} >= total lines (${existing.length})`, { afterIndex, totalLines: existing.length });
   }
   const insertAt = afterIndex < 0 ? 0 : afterIndex + 1;
   existing.splice(insertAt, 0, ...lines);
@@ -58,7 +59,7 @@ export function insertAfterHeading(mindRoot: string, filePath: string, heading: 
     const trimmed = l.trim();
     return trimmed === heading || trimmed.replace(/^#+\s*/, '') === heading.replace(/^#+\s*/, '');
   });
-  if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+  if (idx === -1) throw new MindOSError(ErrorCodes.HEADING_NOT_FOUND, `Heading not found: "${heading}"`, { heading });
   let insertAt = idx + 1;
   while (insertAt < lines.length && lines[insertAt].trim() === '') insertAt++;
   insertLines(mindRoot, filePath, insertAt - 1, ['', content]);
@@ -73,7 +74,7 @@ export function updateSection(mindRoot: string, filePath: string, heading: strin
     const trimmed = l.trim();
     return trimmed === heading || trimmed.replace(/^#+\s*/, '') === heading.replace(/^#+\s*/, '');
   });
-  if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+  if (idx === -1) throw new MindOSError(ErrorCodes.HEADING_NOT_FOUND, `Heading not found: "${heading}"`, { heading });
 
   const headingLevel = (lines[idx].match(/^#+/) ?? [''])[0].length;
   let sectionEnd = lines.length - 1;

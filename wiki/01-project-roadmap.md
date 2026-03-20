@@ -1,17 +1,17 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-20 | Current stage: v0.5 -->
 
 # 产品路线图 (Product Roadmap)
 
 ## 总览
 
 ```
-v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)          v0.5 (P2)                v0.6+ (P3-P4)
+v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)          v0.5 (✅ 进行中)          v0.6+ (P2-P4)
 ┌──────────┐           ┌──────────┐           ┌──────────┐           ┌──────────┐           ┌──────────┐
-│ Next.js  │           │ CLI +    │           │ 插件架构 + │           │ Cloud Hub│           │ RAG +    │
-│ MCP Server│  ──────▶  │ 自启 daemon│  ──────▶  │ CLI UX 增强│  ──────▶  │ 桌面安装包│  ──────▶  │ Agent 治理│
-│ 核心编辑器 │           │ Git 自动同步│           │ Lazy Load │           │ Knowledge│           │ 自动化引擎 │
+│ Next.js  │           │ CLI +    │           │ 插件架构 + │           │ Agent 框架│           │ Cloud Hub│
+│ MCP Server│  ──────▶  │ 自启 daemon│  ──────▶  │ CLI UX 增强│  ──────▶  │ Settings │  ──────▶  │ Agent 管理│
+│ 核心编辑器 │           │ Git 自动同步│           │ Lazy Load │           │ i18n 重构 │           │ RAG + 治理│
 └──────────┘           └──────────┘           └──────────┘           └──────────┘           └──────────┘
-开发者 only             开发者 + 终端用户        开发者生态              所有人                  人机共生
+开发者 only             开发者 + 终端用户        开发者生态              框架升级 + 稳定性        所有人 + 人机共生
 ```
 
 **关键原则：** 每阶段独立可用 | 本地存储始终默认 | 优先高频场景
@@ -46,12 +46,29 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 
 ---
 
-## P2 — 非 CLI 用户 + 云端同步 + 生态扩展
+## v0.5 — Agent 框架迁移 + Settings 重构 + 稳定性 🔄 进行中
 
-> 不会用终端的用户也能用；同步不依赖 Git；知识库对外可编程。
+> 底层 Agent 框架升级；Settings 面板模块化；多语言独立管理；关键 bug 修复。
+
+| 里程碑 | 交付 | 状态 |
+|--------|------|------|
+| **pi-agent 框架迁移** | 从 Vercel AI SDK 迁移到 `@mariozechner/pi-agent-core` + `pi-ai` | ✅ v0.5.20 |
+| **Settings 面板重构** | MCP/Skill/Agent 分区组件化（McpTab 拆分为 McpAgentInstall + McpServerStatus + McpSkillsSection） | ✅ v0.5.20 |
+| **i18n 多语言拆分** | `i18n.ts` 拆为独立的 `i18n-en.ts` + `i18n-zh.ts` | ✅ v0.5.21 |
+| **Sidebar 实时刷新** | 三层缓存修复（客户端 router cache + 服务端 revalidatePath + visibilitychange 轮询） | ✅ v0.5.19 |
+| **npx 版本不匹配修复** | `npx next` → 本地 `.bin/next` 绝对路径，防止全局缓存版本冲突 | ✅ v0.5.21 |
+| **测试修复** | tools.test.ts 适配新数组 API（14→0 失败）、context.test.ts 迁移到 pi-ai 类型（7→0 失败） | ✅ v0.5.21 |
+| **测试覆盖率提升** | 新增 jwt/api/setup PATCH 测试，build-integrity 智能跳过 | ✅ v0.5.21 |
+
+---
+
+## P2 — 非 CLI 用户 + Agent 管理 + 生态扩展
+
+> 不会用终端的用户也能用；Agent 状态可视化管理；知识库对外可编程。
 
 | 里程碑 | 交付 | 详情 |
 |--------|------|------|
+| **Agent Dashboard** | 本机 Agent 发现（扫描 ~/.claude/、~/.config/Cursor 等）+ MCP 连接状态 + Agent 运行状态面板 | Settings 新增 Agents Tab，基于目录扫描 + MCP Inspector 思路，无需外部依赖 |
 | **Cloud Hub** | RESTful API + S3/R2 存储 + E2E 加密 | 替代 Git 同步，降低门槛 |
 | **桌面安装包** | macOS .dmg / Windows .msi (Tauri/pkg) | [详情](./64-stage-desktop.md) |
 | **Knowledge Health** | 过期检测、孤立文件、AI 矛盾扫描、完整度评分 | 首页 Health Score 卡片 |
@@ -103,7 +120,14 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 | 首次启动引导页 | ✅ | P1 | 模板选择（EN/ZH/Empty）→ 自动初始化 |
 | PWA 支持 | ✅ | P1 | manifest + service worker + 可安装 |
 | Agent Inspector 增强 | ✅ | P1 | JSON Lines 日志 + 自动记录工具调用 |
+| pi-agent 框架迁移 | ✅ | v0.5 | Vercel AI SDK → pi-agent-core + pi-ai |
+| Settings 面板重构 | ✅ | v0.5 | MCP/Skill/Agent 分区组件化 |
+| i18n 多语言拆分 | ✅ | v0.5 | i18n-en.ts + i18n-zh.ts 独立管理 |
+| Sidebar 实时刷新 | ✅ | v0.5 | 三层缓存修复 + visibilitychange + 30s 轮询 |
+| npx 版本锁定修复 | ✅ | v0.5 | npx next → 本地 .bin/next 绝对路径 |
+| 测试修复 + 覆盖率提升 | ✅ | v0.5 | tools/context 测试迁移 + jwt/setup PATCH 新增 |
 | 局域网自动发现 | 📋 规划 | P1 | [详情](./63-stage-mdns.md) |
+| Agent Dashboard | 📋 规划 | P2 | 本机 Agent 发现 + MCP 状态 + 运行状态面板 |
 | Cloud Hub | 待做 | P2 | RESTful + S3/R2 + E2E 加密 |
 | 桌面安装包 | 📋 规划 | P2 | [详情](./64-stage-desktop.md) |
 | Knowledge Health 仪表盘 | 待做 | P2 | 过期检测、孤立文件、矛盾检测 |

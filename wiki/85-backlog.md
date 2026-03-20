@@ -14,6 +14,9 @@
 
 - [x] **测试文件适配 pi-agent-core**：`__tests__/core/context.test.ts` 和 `__tests__/core/tools.test.ts` 已适配 `AgentMessage` + 新 `compactMessages` 签名。511 tests passing.
 - [x] **App 端 skill-rules.md 注入**：route.ts 从用户知识库 `.agents/skills/{name}/` 读取 `skill-rules.md` + `user-rules.md` 并注入 system prompt。支持中英文切换、空文件跳过、截断标志。详见 `wiki/specs/spec-app-skill-rules-injection.md`
+- [x] **AIP-001 统一错误处理**：`MindOSError` 类 + 12 个 `ErrorCodes` + `apiError()`。core/ 13 处 throw 已迁移，API 统一返回 `{ ok, error: { code, message } }` 格式
+- [x] **AIP-002 性能监控面板**：`MetricsCollector` 单例 + `GET /api/monitoring` + Settings Monitoring tab（系统/应用/知识库/MCP 指标，5s 轮询）
+- [x] **AIP-003 增量搜索索引**：倒排索引 + CJK bigram 分词，搜索候选集缩减后精确匹配。索引与 invalidateCache 联动自动失效
 
 <details><summary>已完成 ✅ (18 项)</summary>
 

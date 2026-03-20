@@ -15,6 +15,8 @@ import {
 import { logAgentOp } from '@/lib/agent/log';
 import { loadSkillRules } from '@/lib/agent/skill-rules';
 import { readSettings } from '@/lib/settings';
+import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
+import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
 import type { Message as FrontendMessage } from '@/lib/types';
 
@@ -161,7 +163,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body', 400);
   }
 
   const { messages, currentFile, attachedFiles, uploadedFiles } = body;
@@ -397,6 +399,7 @@ export async function POST(req: NextRequest) {
 
     // ── SSE Stream ──
     const encoder = new TextEncoder();
+    const requestStartTime = Date.now();
     const stream = new ReadableStream({
       start(controller) {
         function send(event: MindOSSSEvent) {
@@ -420,6 +423,7 @@ export async function POST(req: NextRequest) {
             });
           } else if (isToolExecutionEndEvent(event)) {
             const { toolCallId, output, isError } = getToolExecutionEnd(event);
+            metrics.recordToolExecution();
             send({
               type: 'tool_end',
               toolCallId,
@@ -428,6 +432,12 @@ export async function POST(req: NextRequest) {
             });
           } else if (isTurnEndEvent(event)) {
             stepCount++;
+
+            // Record token usage if available from the turn
+            const turnUsage = (event as any).usage;
+            if (turnUsage && typeof turnUsage.inputTokens === 'number') {
+              metrics.recordTokens(turnUsage.inputTokens, turnUsage.outputTokens ?? 0);
+            }
 
             // Track tool calls for loop detection (lock-free batch update).
             // Deterministic JSON.stringify ensures consistent input comparison.
@@ -468,9 +478,12 @@ export async function POST(req: NextRequest) {
         });
 
         agent.prompt(lastUserContent).then(() => {
+          metrics.recordRequest(Date.now() - requestStartTime);
           send({ type: 'done' });
           controller.close();
         }).catch((err) => {
+          metrics.recordRequest(Date.now() - requestStartTime);
+          metrics.recordError();
           send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
           controller.close();
         });
@@ -487,9 +500,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error('[ask] Failed to initialize model:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to initialize AI model' },
-      { status: 500 },
-    );
+    if (err instanceof MindOSError) {
+      return apiError(err.code, err.message);
+    }
+    return apiError(ErrorCodes.MODEL_INIT_FAILED, err instanceof Error ? err.message : 'Failed to initialize AI model', 500);
   }
 }
