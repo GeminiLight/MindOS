@@ -27,6 +27,15 @@
 
 ## 前端
 
+### AskPanel/SettingsPanel 与 Modal 版本代码重复 ✅ 已解决
+- **现象：** `panels/AskPanel.tsx` 与 `AskModal.tsx` 约 80% 逻辑重复
+- **解决：** 提取 `ask/AskContent.tsx` 和 `settings/SettingsContent.tsx` 共享核心组件。AskModal/AskPanel、SettingsModal/SettingsPanel 各缩减为 ~20 行 thin wrapper。`variant: 'modal' | 'panel'` 控制差异（ESC handler、close 按钮、abort-on-close、尺寸微调）
+- **规则：** 修改 Ask/Settings 逻辑时只改 Content 组件，wrapper 不含业务逻辑
+
+### Logo SVG 组件重复 ✅ 已解决
+- **现象：** Logo SVG 在多个文件中重复定义
+- **解决：** 提取到 `components/Logo.tsx`，接收 `id`（gradient ID 唯一化）和 `className` props。ActivityBar 用 `id="rail"`，移动端 Header 用 `id="mobile"`，Drawer 用 `id="drawer"`
+
 ### 组件拆分时 import 路径
 - **现象：** barrel export 后其他文件 import 路径需要更新
 - **解决：** 拆分后全局 grep 旧 import 路径并替换
@@ -133,6 +142,29 @@
 - **现象：** `subscribe()` 回调的 `AgentEvent` 是 union type，但 `message_update` 等变体的子字段（如 `assistantMessageEvent`）没有在 TS 类型中导出
 - **解决：** 写 type guard 函数（`isTextDeltaEvent()` 等），内部用 `as any` 访问，但使用侧完全类型安全。`as any` 只出现在 guard 内部，不扩散
 - **规则：** 第三方库类型不完整时，用 type guard 隔离 `as any`，不要在业务逻辑中直接 cast
+
+### pi-agent-core 迁移：compact 失败不能静默返回
+
+### pi-ai `getModel()` 返回 undefined 而非 throw — Agent 静默无输出
+- **现象：** Ask AI 发消息后无任何回复，前端提示 "No response from AI"。服务端日志只有 `Step 1/N` 无 text_delta
+- **原因：** `piGetModel('openai', 'claude-sonnet-4-6')` 对不在 registry 中的模型名**返回 `undefined`**，不抛异常。`try { model = piGetModel(...) } catch { /* fallback */ }` 不会进 catch，`model` 变为 `undefined`。后续 `{ ...undefined, api: 'openai-completions' }` 产生残缺对象（缺 `id`/`baseUrl`/`name` 等），pi-ai 的 `detectCompat()` 对 `undefined.includes()` 报错，被 lazy load 的 catch 静默吞掉，agent-loop 收到 `stopReason: "error"` 但不 emit 任何 text 事件
+- **解决：** `piGetModel()` 返回后检查 `if (!resolved) throw new Error('Model not in registry')`，强制走 fallback 手工构造 model 对象
+- **规则：** 调用第三方库函数时，不要假设"失败一定 throw"。检查返回值是否为 `undefined`/`null`，防御性处理
+- **文件：** `app/lib/agent/model.ts`
+
+### pi-ai openai-completions compat 配置 — 自定义代理必须设 compat flags
+- **现象：** 配了 OpenAI 兼容代理（baseUrl），Agent 请求到达代理但因参数不兼容返回空
+- **原因：** pi-ai 的 `openai-completions` provider 默认启用 `store: false`、`developer` role、`max_completion_tokens`、`stream_options` 等，多数代理不支持
+- **解决：** `model.ts` 检测 `hasCustomBase` 时自动设保守 compat：`supportsStore: false, supportsDeveloperRole: false, supportsUsageInStreaming: false, maxTokensField: 'max_tokens'`
+- **规则：** 自定义 OpenAI 代理默认走最保守兼容配置。只有标准 `api.openai.com` 才用完整特性
+- **文件：** `app/lib/agent/model.ts`
+
+### pi-ai openai-completions vs openai-responses — 代理 API 选择
+- **现象：** 配了 OpenAI 兼容代理，Agent 请求 `/responses` 端点被 403 拒绝
+- **原因：** pi-ai 默认用 `openai-responses` API（请求 `/responses`），多数代理只支持 `/chat/completions`
+- **解决：** `model.ts` 检测 `hasCustomBase` 时默认用 `openai-completions`（对应 `/chat/completions`）
+- **规则：** 有自定义 baseUrl → `openai-completions`；无 baseUrl（直连 OpenAI）→ `openai-responses`
+- **文件：** `app/lib/agent/model.ts`
 
 ### pi-agent-core 迁移：compact 失败不能静默返回
 - **现象：** `compactMessages()` 调用 `complete()` 失败时直接返回未压缩的消息。如果上下文已超 70%，后续调用大概率超 token limit → 不可预测行为
@@ -266,6 +298,35 @@
 - **文件：** `package.json`, `bin/lib/build.js`
 
 ## 变更质量 checklist（通用）
+
+### 第三方库返回值必须做 null/undefined 检查（不能只 try-catch）
+- **案例：** `pi-ai` 的 `getModel('openai', 'claude-sonnet-4-6')` 对未知模型返回 `undefined`，不抛异常。`try { model = getModel(...) } catch {}` 不进 catch，`model` 变成 `undefined`。后续 `{ ...undefined }` 产生残缺对象，5 层调用链后静默失败，用户只看到 "No response from AI"
+- **排查耗时：** ~2 小时。从 API 连通性 → API variant → compat flags → Turbopack bundling → provider 注册 → lazy load → 最终定位到一行 `getModel` 返回值
+- **规则：**
+  1. 调用第三方库函数后，**同时检查异常和返回值**：`const result = lib.fn(); if (!result) throw new Error(...)`
+  2. 对关键路径（LLM 调用、认证、配置加载），失败时必须有**用户可见的错误信息**，不能 resolve 空结果
+  3. 引入或升级第三方依赖后，在 `npm run dev` 中做一次**端到端手动验证**（不只是跑单元测试），特别是涉及运行时动态行为的包
+- **防御模式：**
+  ```typescript
+  // ❌ 只靠 try-catch
+  try { model = getModel(provider, name); } catch { model = fallback(); }
+
+  // ✅ try-catch + 返回值检查
+  try {
+    const resolved = getModel(provider, name);
+    if (!resolved) throw new Error('not in registry');
+    model = resolved;
+  } catch { model = fallback(); }
+  ```
+
+### 静默失败链条的排查方法
+- **现象：** 功能不工作但无报错，日志只有正常流程信息
+- **排查步骤：**
+  1. 在调用链**最外层**加事件全量打印（确认收到了哪些事件、缺了哪些）
+  2. 在关键中间层加 `console.error`（特别是 `.catch` 块和 error event handler）
+  3. 对第三方库，**直接 patch `node_modules` 加日志**比猜测快 10 倍——定位后再还原
+  4. 不要假设"编译通过 = 运行正常"——Turbopack 编译产物的运行时行为可能与源码不同
+- **教训：** 本次 bug 的 5 层静默链：`getModel → undefined` → `spread undefined → 残缺 model` → `detectCompat → .includes() throw` → `lazy load catch → error event` → `agent-loop error case → 空 message_end`。每一层都有"合理的"错误处理，但组合起来就是完全静默
 
 ### 加新 UI 分支前，检查旧 UI 是否需要移除
 - **案例：** 非空目录新增提示框，但旧的 amber 警告行未移除，用户看到两条重复提示

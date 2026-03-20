@@ -16,7 +16,7 @@ export const en = {
     createToActivate: 'Create {file} to activate',
     shortcuts: {
       searchFiles: 'Search files',
-      askAI: 'Ask AI',
+      askAI: 'MindOS Agent',
       editFile: 'Edit file',
       save: 'Save',
       settings: 'Settings',
@@ -30,7 +30,7 @@ export const en = {
   },
   sidebar: {
     searchTitle: 'Search (⌘K)',
-    askTitle: 'Ask AI (⌘/)',
+    askTitle: 'MindOS Agent (⌘/)',
     settingsTitle: 'Settings (⌘,)',
     collapseTitle: 'Collapse sidebar',
     expandTitle: 'Expand sidebar',
@@ -104,7 +104,7 @@ export const en = {
   },
   settings: {
     title: 'Settings',
-    tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'Knowledge Base', sync: 'Sync', mcp: 'MCP', plugins: 'Plugins', shortcuts: 'Shortcuts', monitoring: 'Monitoring', agents: 'Agents' },
+    tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'General', sync: 'Sync', mcp: 'MCP & Skills', plugins: 'Plugins', shortcuts: 'Shortcuts', monitoring: 'Monitoring', agents: 'Agents' },
     ai: {
       provider: 'Provider',
       model: 'Model',
@@ -323,12 +323,12 @@ export const en = {
   },
   shortcuts: [
     { keys: ['⌘', 'K'], description: 'Search' },
-    { keys: ['⌘', '/'], description: 'Ask AI' },
+    { keys: ['⌘', '/'], description: 'MindOS Agent' },
     { keys: ['⌘', ','], description: 'Settings' },
     { keys: ['E'], description: 'Edit current file' },
     { keys: ['⌘', 'S'], description: 'Save' },
     { keys: ['Esc'], description: 'Cancel edit / close modal' },
-    { keys: ['@'], description: 'Attach file in Ask AI' },
+    { keys: ['@'], description: 'Attach file in MindOS Agent' },
   ],
   login: {
     tagline: 'You think here, Agents act there.',
@@ -468,7 +468,7 @@ export const en = {
     welcomeTitle: 'Welcome to MindOS!',
     welcomeDesc: 'Setup is complete. Start by asking AI a question, browsing your knowledge base, or configuring MCP agents.',
     welcomeLinkReconfigure: 'Reconfigure',
-    welcomeLinkAskAI: 'Ask AI',
+    welcomeLinkAskAI: 'MindOS Agent',
     welcomeLinkMCP: 'MCP Settings',
   },
   guide: {

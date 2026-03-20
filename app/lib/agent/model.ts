@@ -22,20 +22,28 @@ export function getModelConfig(): {
   if (cfg.provider === 'openai') {
     const modelName = cfg.openaiModel;
     let model: Model<any>;
-    let apiVariant: string = 'openai-responses'; // Default to responses API
 
-    // Allow customization of API variant if using custom endpoint
-    // Check if config specifies an alternative API type (for non-standard endpoints)
+    // API variant: 'openai-completions' = /chat/completions (widest compatibility),
+    // 'openai-responses' = /responses (OpenAI native). Custom proxies (baseUrl set)
+    // almost always only support chat completions, so default to that when baseUrl is set.
+    const hasCustomBase = !!cfg.openaiBaseUrl;
+    const defaultApi = hasCustomBase ? 'openai-completions' : 'openai-responses';
     const customApiVariant = (cfg as any).openaiApiVariant; // May exist in extended config
 
     try {
-      model = piGetModel('openai', modelName as any);
+      const resolved = piGetModel('openai', modelName as any);
+      if (!resolved) throw new Error('Model not in registry');
+      model = resolved;
+      // If user has a custom baseUrl, override API to completions for compatibility
+      if (hasCustomBase && !customApiVariant) {
+        model = { ...model, api: defaultApi };
+      }
     } catch {
       // Model not in pi-ai registry — construct manually for custom/proxy endpoints
       model = {
         id: modelName,
         name: modelName,
-        api: (customApiVariant ?? apiVariant) as any,
+        api: (customApiVariant ?? defaultApi) as any,
         provider: 'openai',
         baseUrl: 'https://api.openai.com/v1',
         reasoning: false,
@@ -46,10 +54,23 @@ export function getModelConfig(): {
       };
     }
 
-    // Override baseUrl if user configured a custom endpoint
-    if (cfg.openaiBaseUrl) {
-      model = { ...model, baseUrl: cfg.openaiBaseUrl };
-      // Also allow API variant override for custom endpoints
+    // For custom proxy endpoints, set conservative compat flags.
+    // Most proxies (Azure, Bedrock relays, corporate gateways) only support
+    // a subset of OpenAI's features. These defaults prevent silent failures.
+    if (hasCustomBase) {
+      model = {
+        ...model,
+        baseUrl: cfg.openaiBaseUrl,
+        compat: {
+          ...(model as any).compat,
+          supportsStore: false,
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: false,
+          supportsUsageInStreaming: false,
+          supportsStrictMode: false,
+          maxTokensField: 'max_tokens' as const,
+        },
+      };
       if (customApiVariant) {
         model = { ...model, api: customApiVariant };
       }
@@ -63,7 +84,9 @@ export function getModelConfig(): {
   let model: Model<any>;
 
   try {
-    model = piGetModel('anthropic', modelName as any);
+    const resolved = piGetModel('anthropic', modelName as any);
+    if (!resolved) throw new Error('Model not in registry');
+    model = resolved;
   } catch {
     // Unknown Anthropic model — construct manually
     model = {

@@ -41,7 +41,7 @@ export const zh = {
     createToActivate: '创建 {file} 以启用此插件',
     shortcuts: {
       searchFiles: '搜索文件',
-      askAI: '问 AI',
+      askAI: 'MindOS Agent',
       editFile: '编辑文件',
       save: '保存',
       settings: '设置',
@@ -55,7 +55,7 @@ export const zh = {
   },
   sidebar: {
     searchTitle: '搜索 (⌘K)',
-    askTitle: '问 AI (⌘/)',
+    askTitle: 'MindOS Agent (⌘/)',
     settingsTitle: '设置 (⌘,)',
     collapseTitle: '收起侧栏',
     expandTitle: '展开侧栏',
@@ -129,7 +129,7 @@ export const zh = {
   },
   settings: {
     title: '设置',
-    tabs: { ai: 'AI', appearance: '外观', knowledge: '知识库', sync: '同步', mcp: 'MCP', plugins: '插件', shortcuts: '快捷键', monitoring: '监控', agents: 'Agents' },
+    tabs: { ai: 'AI', appearance: '外观', knowledge: '通用', sync: '同步', mcp: 'MCP & Skills', plugins: '插件', shortcuts: '快捷键', monitoring: '监控', agents: 'Agents' },
     ai: {
       provider: '服务商',
       model: '模型',
@@ -348,7 +348,7 @@ export const zh = {
   },
   shortcuts: [
     { keys: ['⌘', 'K'], description: '搜索' },
-    { keys: ['⌘', '/'], description: '问 AI' },
+    { keys: ['⌘', '/'], description: 'MindOS Agent' },
     { keys: ['⌘', ','], description: '设置' },
     { keys: ['E'], description: '编辑当前文件' },
     { keys: ['⌘', 'S'], description: '保存' },
@@ -493,7 +493,7 @@ export const zh = {
     welcomeTitle: '欢迎使用 MindOS！',
     welcomeDesc: '初始化完成。可以开始向 AI 提问、浏览知识库，或配置 MCP Agent。',
     welcomeLinkReconfigure: '重新配置',
-    welcomeLinkAskAI: '问 AI',
+    welcomeLinkAskAI: 'MindOS Agent',
     welcomeLinkMCP: 'MCP 设置',
   },
   guide: {

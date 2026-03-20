@@ -57,7 +57,9 @@
     "!assets/images",
     "!mcp/node_modules",
     "!mcp/dist",
-    "!mcp/package-lock.json"
+    "!mcp/package-lock.json",
+    "!mcp/*.tgz",
+    "!app/package-lock.json"
   ],
   "scripts": {
     "setup": "node scripts/setup.js",

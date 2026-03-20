@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
-import { Copy, Check, RefreshCw, Trash2, Sparkles } from 'lucide-react';
+import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive } from 'lucide-react';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { apiFetch } from '@/lib/api';
+import { formatBytes, formatUptime } from '@/lib/format';
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
@@ -204,6 +205,119 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             <Toggle checked={!guideDismissed} onChange={() => handleGuideToggle()} />
           </div>
         </div>
+      )}
+
+      {/* System Monitoring — collapsible */}
+      <MonitoringSection />
+    </div>
+  );
+}
+
+/* ── Inline Monitoring Section ── */
+
+interface MonitoringData {
+  system: {
+    uptimeMs: number;
+    memory: { heapUsed: number; heapTotal: number; rss: number };
+    nodeVersion: string;
+  };
+  application: {
+    agentRequests: number;
+    toolExecutions: number;
+    totalTokens: { input: number; output: number };
+    avgResponseTimeMs: number;
+    errors: number;
+  };
+  knowledgeBase: {
+    root: string;
+    fileCount: number;
+    totalSizeBytes: number;
+  };
+  mcp: { running: boolean; port: number };
+}
+
+function MonitoringSection() {
+  const [expanded, setExpanded] = useState(false);
+  const [data, setData] = useState<MonitoringData | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await apiFetch<MonitoringData>('/api/monitoring', { timeout: 5000 });
+      setData(d);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  // Fetch on first expand, then refresh every 10s while expanded
+  const hasFetched = useRef(false);
+  useEffect(() => {
+    if (!expanded) { hasFetched.current = false; return; }
+    if (!hasFetched.current) { fetchData(); hasFetched.current = true; }
+    const id = setInterval(fetchData, 10_000);
+    return () => clearInterval(id);
+  }, [expanded, fetchData]);
+
+  return (
+    <div className="border-t border-border pt-5">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <Cpu size={12} />
+        System Monitoring
+        {loading && <Loader2 size={10} className="animate-spin ml-1" />}
+      </button>
+
+      {expanded && data && (
+        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+          <div>
+            <span className="text-muted-foreground">Heap</span>
+            <span className="ml-2 tabular-nums">{formatBytes(data.system.memory.heapUsed)} / {formatBytes(data.system.memory.heapTotal)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">RSS</span>
+            <span className="ml-2 tabular-nums">{formatBytes(data.system.memory.rss)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Uptime</span>
+            <span className="ml-2 tabular-nums">{formatUptime(data.system.uptimeMs)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Node</span>
+            <span className="ml-2">{data.system.nodeVersion}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Requests</span>
+            <span className="ml-2 tabular-nums">{data.application.agentRequests}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Tool Calls</span>
+            <span className="ml-2 tabular-nums">{data.application.toolExecutions}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Tokens</span>
+            <span className="ml-2 tabular-nums">{(data.application.totalTokens.input + data.application.totalTokens.output).toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Files</span>
+            <span className="ml-2 tabular-nums">{data.knowledgeBase.fileCount} ({formatBytes(data.knowledgeBase.totalSizeBytes)})</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">MCP</span>
+            <span className="ml-2">{data.mcp.running ? `Running :${data.mcp.port}` : 'Stopped'}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Errors</span>
+            <span className="ml-2 tabular-nums">{data.application.errors}</span>
+          </div>
+        </div>
+      )}
+
+      {expanded && !data && !loading && (
+        <p className="mt-2 text-xs text-muted-foreground">Failed to load monitoring data</p>
       )}
     </div>
   );

@@ -77,15 +77,17 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
 
   return (
     <aside
-      className="hidden xl:block fixed right-0 z-10"
+      className="hidden xl:block fixed z-10"
       style={{
         top: TOPBAR_H,
         height: `calc(100vh - ${TOPBAR_H}px)`,
         // Always reserve full width so content margin doesn't jump
         width: NAV_W,
+        // Shift right when Ask AI panel is open (CSS var injected by SidebarLayout)
+        right: 'var(--right-panel-width, 0px)',
         // Slide the entire panel off the right edge when collapsed
         transform: collapsed ? `translateX(${NAV_W}px)` : 'translateX(0)',
-        transition: 'transform 200ms ease-in-out',
+        transition: 'transform 200ms ease-in-out, right 200ms ease-out',
       }}
     >
       {/* Collapse / expand button — tab attached to left edge of the panel */}

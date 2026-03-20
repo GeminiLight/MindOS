@@ -24,13 +24,13 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
           <span key={i} className="flex items-center gap-1">
             <ChevronRight size={12} className="text-muted-foreground/50" />
             {isLast ? (
-              <span className="flex items-center gap-1.5 text-foreground font-medium" suppressHydrationWarning>
+              <span className="flex items-center gap-1.5 text-foreground font-medium">
                 <FileTypeIcon name={part} />
-                {part}
+                <span suppressHydrationWarning>{part}</span>
               </span>
             ) : (
-              <Link href={href} className="hover:text-foreground transition-colors truncate max-w-[200px]" suppressHydrationWarning>
-                {part}
+              <Link href={href} className="hover:text-foreground transition-colors truncate max-w-[200px]">
+                <span suppressHydrationWarning>{part}</span>
               </Link>
             )}
           </span>
