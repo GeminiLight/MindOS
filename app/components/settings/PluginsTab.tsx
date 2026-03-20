@@ -2,12 +2,8 @@
 
 import { Puzzle } from 'lucide-react';
 import { getAllRenderers, setRendererEnabled } from '@/lib/renderers/registry';
-
-interface PluginsTabProps {
-  pluginStates: Record<string, boolean>;
-  setPluginStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  t: any;
-}
+import { Toggle } from './Primitives';
+import type { PluginsTabProps } from './types';
 
 export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps) {
   return (
@@ -58,28 +54,9 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                   </div>
 
                   {isCore ? (
-                    <span
-                      className="shrink-0 w-9 h-5 rounded-full bg-amber-600 relative cursor-not-allowed opacity-60"
-                      title={t.settings.plugins.coreHint ?? 'Core renderer — always enabled'}
-                    >
-                      <span className="absolute top-[3px] left-[18px] w-3.5 h-3.5 rounded-full shadow-sm bg-white" />
-                    </span>
+                    <Toggle checked={true} disabled />
                   ) : (
-                    <button
-                      onClick={() => {
-                        const next = !enabled;
-                        setRendererEnabled(renderer.id, next);
-                        setPluginStates(s => ({ ...s, [renderer.id]: next }));
-                      }}
-                      role="switch"
-                      aria-checked={enabled}
-                      className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${enabled ? 'bg-amber-600' : 'bg-muted border border-border'}`}
-                      title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled}
-                    >
-                      <span
-                        className={`absolute top-[3px] w-3.5 h-3.5 rounded-full shadow-sm transition-all ${enabled ? 'left-[18px] bg-white' : 'left-[3px] bg-muted-foreground/50'}`}
-                      />
-                    </button>
+                    <Toggle checked={enabled} onChange={(next) => { setRendererEnabled(renderer.id, next); setPluginStates(s => ({ ...s, [renderer.id]: next })); }} title={enabled ? t.settings.plugins.enabled : t.settings.plugins.disabled} />
                   )}
                 </div>
               </div>

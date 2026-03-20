@@ -1,107 +1,139 @@
 export const dynamic = 'force-dynamic';
-import { streamText, stepCountIs, type ModelMessage } from 'ai';
+import { Agent, type AgentEvent, type BeforeToolCallContext, type BeforeToolCallResult, type AfterToolCallContext, type AfterToolCallResult } from '@mariozechner/pi-agent-core';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
-import { getModel, knowledgeBaseTools, truncate, AGENT_SYSTEM_PROMPT, estimateTokens, estimateStringTokens, getContextLimit, needsCompact, truncateToolOutputs, compactMessages, hardPrune } from '@/lib/agent';
-import { effectiveAiConfig, readSettings } from '@/lib/settings';
-import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart } from '@/lib/types';
+import { getModelConfig } from '@/lib/agent/model';
+import { knowledgeBaseTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
+import { AGENT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
+import { toAgentMessages } from '@/lib/agent/to-agent-messages';
+import {
+  estimateTokens, estimateStringTokens, getContextLimit,
+  createTransformContext,
+} from '@/lib/agent/context';
+import { logAgentOp } from '@/lib/agent/log';
+import { readSettings } from '@/lib/settings';
+import { assertNotProtected } from '@/lib/core';
+import type { Message as FrontendMessage } from '@/lib/types';
 
-/**
- * Convert frontend Message[] (with parts containing tool calls + results)
- * into AI SDK ModelMessage[] that streamText expects.
- *
- * Frontend format:
- *   { role: 'assistant', content: '...', parts: [TextPart, ToolCallPart(with output/state)] }
- *
- * AI SDK format:
- *   { role: 'assistant', content: [TextPart, ToolCallPart(no output)] }
- *   { role: 'tool', content: [ToolResultPart] }  // one per completed tool call
- */
-function convertToModelMessages(messages: FrontendMessage[]): ModelMessage[] {
-  const result: ModelMessage[] = [];
+// ---------------------------------------------------------------------------
+// MindOS SSE format — 6 event types (front-back contract)
+// ---------------------------------------------------------------------------
 
-  for (const msg of messages) {
-    if (msg.role === 'user') {
-      result.push({ role: 'user', content: msg.content });
-      continue;
-    }
+type MindOSSSEvent =
+  | { type: 'text_delta'; delta: string }
+  | { type: 'thinking_delta'; delta: string }
+  | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown }
+  | { type: 'tool_end'; toolCallId: string; output: string; isError: boolean }
+  | { type: 'done'; usage?: { input: number; output: number } }
+  | { type: 'error'; message: string };
 
-    // Skip error placeholder messages from frontend
-    if (msg.content.startsWith('__error__')) continue;
+// ---------------------------------------------------------------------------
+// Type Guards for AgentEvent variants (safe event handling)
+// ---------------------------------------------------------------------------
 
-    // Assistant message
-    if (!msg.parts || msg.parts.length === 0) {
-      // Plain text assistant message — no tool calls
-      if (msg.content) {
-        result.push({ role: 'assistant', content: msg.content });
-      }
-      continue;
-    }
-
-    // Build assistant message content array (text parts + tool call parts)
-    const assistantContent: Array<
-      { type: 'text'; text: string } |
-      { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
-    > = [];
-    const completedToolCalls: FrontendToolCallPart[] = [];
-
-    for (const part of msg.parts) {
-      if (part.type === 'text') {
-        if (part.text) {
-          assistantContent.push({ type: 'text', text: part.text });
-        }
-      } else if (part.type === 'tool-call') {
-        assistantContent.push({
-          type: 'tool-call',
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          input: part.input ?? {},
-        });
-        // Always emit a tool result for every tool call. Orphaned tool calls
-        // (running/pending from interrupted streams) get an empty result;
-        // without one the API rejects the request.
-        completedToolCalls.push(part);
-      }
-      // 'reasoning' parts are display-only; not sent back to model
-    }
-
-    if (assistantContent.length > 0) {
-      result.push({ role: 'assistant', content: assistantContent });
-    }
-
-    // Add tool result messages for completed tool calls
-    if (completedToolCalls.length > 0) {
-      result.push({
-        role: 'tool',
-        content: completedToolCalls.map(tc => ({
-          type: 'tool-result' as const,
-          toolCallId: tc.toolCallId,
-          toolName: tc.toolName,
-          output: { type: 'text' as const, value: tc.output ?? '' },
-        })),
-      });
-    }
-  }
-
-  return result;
+function isTextDeltaEvent(e: AgentEvent): boolean {
+  return e.type === 'message_update' && (e as any).assistantMessageEvent?.type === 'text_delta';
 }
 
-function readKnowledgeFile(filePath: string): { ok: boolean; content: string; error?: string } {
+function getTextDelta(e: AgentEvent): string {
+  return (e as any).assistantMessageEvent?.delta ?? '';
+}
+
+function isThinkingDeltaEvent(e: AgentEvent): boolean {
+  return e.type === 'message_update' && (e as any).assistantMessageEvent?.type === 'thinking_delta';
+}
+
+function getThinkingDelta(e: AgentEvent): string {
+  return (e as any).assistantMessageEvent?.delta ?? '';
+}
+
+function isToolExecutionStartEvent(e: AgentEvent): boolean {
+  return e.type === 'tool_execution_start';
+}
+
+function getToolExecutionStart(e: AgentEvent): { toolCallId: string; toolName: string; args: unknown } {
+  const evt = e as any;
+  return {
+    toolCallId: evt.toolCallId ?? '',
+    toolName: evt.toolName ?? 'unknown',
+    args: evt.args ?? {},
+  };
+}
+
+function isToolExecutionEndEvent(e: AgentEvent): boolean {
+  return e.type === 'tool_execution_end';
+}
+
+function getToolExecutionEnd(e: AgentEvent): { toolCallId: string; output: string; isError: boolean } {
+  const evt = e as any;
+  const outputText = evt.result?.content
+    ?.filter((p: any) => p.type === 'text')
+    .map((p: any) => p.text)
+    .join('') ?? '';
+  return {
+    toolCallId: evt.toolCallId ?? '',
+    output: outputText,
+    isError: !!evt.isError,
+  };
+}
+
+function isTurnEndEvent(e: AgentEvent): boolean {
+  return e.type === 'turn_end';
+}
+
+function getTurnEndData(e: AgentEvent): { toolResults: Array<{ toolName: string; content: unknown }> } {
+  return {
+    toolResults: ((e as any).toolResults as any[]) ?? [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function readKnowledgeFile(filePath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
   try {
-    return { ok: true, content: truncate(getFileContent(filePath)) };
+    const raw = getFileContent(filePath);
+    if (raw.length > 20_000) {
+      return {
+        ok: true,
+        content: truncate(raw),
+        truncated: true,
+        error: undefined,
+      };
+    }
+    return { ok: true, content: raw, truncated: false };
   } catch (err) {
-    return { ok: false, content: '', error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      content: '',
+      truncated: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
-function readAbsoluteFile(absPath: string): { ok: boolean; content: string; error?: string } {
+function readAbsoluteFile(absPath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
   try {
     const raw = fs.readFileSync(absPath, 'utf-8');
-    return { ok: true, content: truncate(raw) };
+    if (raw.length > 20_000) {
+      return {
+        ok: true,
+        content: truncate(raw),
+        truncated: true,
+        error: undefined,
+      };
+    }
+    return { ok: true, content: raw, truncated: false };
   } catch (err) {
-    return { ok: false, content: '', error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      content: '',
+      truncated: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -112,6 +144,10 @@ function dirnameOf(filePath?: string): string | null {
   if (idx <= 0) return null;
   return normalized.slice(0, idx);
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/ask
+// ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
   let body: {
@@ -130,8 +166,6 @@ export async function POST(req: NextRequest) {
   const { messages, currentFile, attachedFiles, uploadedFiles } = body;
 
   // Read agent config from settings
-  // NOTE: readSettings() is also called inside getModel() → effectiveAiConfig().
-  // Acceptable duplication — both are sync fs reads with identical results.
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
   const stepLimit = Number.isFinite(body.maxSteps)
@@ -142,6 +176,9 @@ export async function POST(req: NextRequest) {
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
   // Auto-load skill + bootstrap context for each request.
+  // TODO (optimization): Consider caching bootstrap files with TTL to reduce per-request IO overhead.
+  // Current behavior: 8 synchronous file reads per request. For users with large knowledge bases,
+  // this adds ~10-50ms latency. Mitigation: Cache with 5min TTL or lazy-load on-demand.
   const skillPath = path.resolve(process.cwd(), 'data/skills/mindos/SKILL.md');
   const skill = readAbsoluteFile(skillPath);
 
@@ -157,21 +194,31 @@ export async function POST(req: NextRequest) {
     target_config_md: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.md`) : null,
   };
 
-  // Only report failures — when everything loads fine, a single summary line suffices.
+  // Only report failures + truncation warnings
   const initFailures: string[] = [];
+  const truncationWarnings: string[] = [];
   if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
+  if (skill.ok && skill.truncated) truncationWarnings.push('skill.mindos was truncated');
   if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
+  if (bootstrap.instruction.ok && bootstrap.instruction.truncated) truncationWarnings.push('bootstrap.instruction was truncated');
   if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
+  if (bootstrap.index.ok && bootstrap.index.truncated) truncationWarnings.push('bootstrap.index was truncated');
   if (!bootstrap.config_json.ok) initFailures.push(`bootstrap.config_json: failed (${bootstrap.config_json.error})`);
+  if (bootstrap.config_json.ok && bootstrap.config_json.truncated) truncationWarnings.push('bootstrap.config_json was truncated');
   if (!bootstrap.config_md.ok) initFailures.push(`bootstrap.config_md: failed (${bootstrap.config_md.error})`);
+  if (bootstrap.config_md.ok && bootstrap.config_md.truncated) truncationWarnings.push('bootstrap.config_md was truncated');
   if (bootstrap.target_readme && !bootstrap.target_readme.ok) initFailures.push(`bootstrap.target_readme: failed (${bootstrap.target_readme.error})`);
+  if (bootstrap.target_readme?.ok && bootstrap.target_readme.truncated) truncationWarnings.push('bootstrap.target_readme was truncated');
   if (bootstrap.target_instruction && !bootstrap.target_instruction.ok) initFailures.push(`bootstrap.target_instruction: failed (${bootstrap.target_instruction.error})`);
+  if (bootstrap.target_instruction?.ok && bootstrap.target_instruction.truncated) truncationWarnings.push('bootstrap.target_instruction was truncated');
   if (bootstrap.target_config_json && !bootstrap.target_config_json.ok) initFailures.push(`bootstrap.target_config_json: failed (${bootstrap.target_config_json.error})`);
+  if (bootstrap.target_config_json?.ok && bootstrap.target_config_json.truncated) truncationWarnings.push('bootstrap.target_config_json was truncated');
   if (bootstrap.target_config_md && !bootstrap.target_config_md.ok) initFailures.push(`bootstrap.target_config_md: failed (${bootstrap.target_config_md.error})`);
+  if (bootstrap.target_config_md?.ok && bootstrap.target_config_md.truncated) truncationWarnings.push('bootstrap.target_config_md was truncated');
 
   const initStatus = initFailures.length === 0
-    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`
-    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`;
+    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? ` ⚠️ ${truncationWarnings.length} files truncated` : ''}`
+    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? `\n⚠️ Warnings:\n${truncationWarnings.join('\n')}` : ''}`;
 
   const initContextBlocks: string[] = [];
   if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
@@ -190,13 +237,13 @@ export async function POST(req: NextRequest) {
   const hasAttached = Array.isArray(attachedFiles) && attachedFiles.length > 0;
 
   if (hasAttached) {
-    for (const filePath of attachedFiles) {
+    for (const filePath of attachedFiles!) {
       if (seen.has(filePath)) continue;
       seen.add(filePath);
       try {
         const content = truncate(getFileContent(filePath));
         contextParts.push(`## Attached: ${filePath}\n\n${content}`);
-      } catch {}
+      } catch { /* ignore missing files */ }
     }
   }
 
@@ -205,11 +252,10 @@ export async function POST(req: NextRequest) {
     try {
       const content = truncate(getFileContent(currentFile));
       contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
-    } catch {}
+    } catch { /* ignore */ }
   }
 
-  // Uploaded files go into a SEPARATE top-level section so the Agent
-  // treats them with high priority and never tries to look them up via tools.
+  // Uploaded files
   const uploadedParts: string[] = [];
   if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
     for (const f of uploadedFiles.slice(0, 8)) {
@@ -242,97 +288,187 @@ export async function POST(req: NextRequest) {
   const systemPrompt = promptParts.join('\n\n');
 
   try {
-    const model = getModel();
-    const cfg = effectiveAiConfig();
-    const modelName = cfg.provider === 'openai' ? cfg.openaiModel : cfg.anthropicModel;
-    let modelMessages = convertToModelMessages(messages);
+    const { model, modelName, apiKey, provider } = getModelConfig();
 
-    // Phase 3: Context management pipeline
-    // 1. Truncate tool outputs in historical messages
-    modelMessages = truncateToolOutputs(modelMessages);
+    // Convert frontend messages to AgentMessage[]
+    const agentMessages = toAgentMessages(messages);
 
-    const preTokens = estimateTokens(modelMessages);
-    const sysTokens = estimateStringTokens(systemPrompt);
-    const ctxLimit = getContextLimit(modelName);
-    console.log(`[ask] Context: ~${preTokens + sysTokens} tokens (messages=${preTokens}, system=${sysTokens}), limit=${ctxLimit}`);
+    // Extract the last user message for agent.prompt()
+    const lastUserContent = messages.length > 0 && messages[messages.length - 1].role === 'user'
+      ? messages[messages.length - 1].content
+      : '';
 
-    // 2. Compact if >70% context limit (skip if user disabled)
-    if (contextStrategy === 'auto' && needsCompact(modelMessages, systemPrompt, modelName)) {
-      console.log('[ask] Context >70% limit, compacting...');
-      const result = await compactMessages(modelMessages, model);
-      modelMessages = result.messages;
-      if (result.compacted) {
-        const postTokens = estimateTokens(modelMessages);
-        console.log(`[ask] After compact: ~${postTokens + sysTokens} tokens`);
-      } else {
-        console.log('[ask] Compact skipped (too few messages), hard prune will handle overflow if needed');
-      }
-    }
+    // History = all messages except the last user message (agent.prompt adds it)
+    const historyMessages = agentMessages.slice(0, -1);
 
-    // 3. Hard prune if still >90% context limit
-    modelMessages = hardPrune(modelMessages, systemPrompt, modelName);
+    // Capture API key for this request — safe since each POST creates a new Agent instance.
+    // Even though JS closures are lexically scoped, being explicit guards against future refactors.
+    const requestApiKey = apiKey;
 
-    // Phase 2: Step monitoring + loop detection
+    // ── Loop detection state ──
     const stepHistory: Array<{ tool: string; input: string }> = [];
-    let loopDetected = false;
-    let loopCooldown = 0; // skip detection for N steps after warning
+    let stepCount = 0;
+    let loopCooldown = 0;
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: modelMessages,
-      tools: knowledgeBaseTools,
-      stopWhen: stepCountIs(stepLimit),
-      ...(enableThinking && cfg.provider === 'anthropic' ? {
-        providerOptions: {
-          anthropic: {
-            thinking: { type: 'enabled', budgetTokens: thinkingBudget },
-          },
-        },
+    // ── Create Agent (per-request lifecycle) ──
+    const agent = new Agent({
+      initialState: {
+        systemPrompt,
+        model,
+        thinkingLevel: (enableThinking && provider === 'anthropic') ? 'medium' : 'off',
+        tools: knowledgeBaseTools,
+        messages: historyMessages,
+      },
+      getApiKey: async () => requestApiKey,
+      toolExecution: 'parallel',
+
+      // Context management: truncate → compact → prune
+      transformContext: createTransformContext(
+        systemPrompt,
+        modelName,
+        () => model,
+        apiKey,
+        contextStrategy,
+      ),
+
+      // Write-protection: block writes to protected files
+      beforeToolCall: async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
+        const { toolCall, args } = context;
+        // toolCall is an object with type "toolCall" and contains the tool name and ID
+        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
+        if (toolName && WRITE_TOOLS.has(toolName)) {
+          const filePath = (args as any).path ?? (args as any).from_path;
+          if (filePath) {
+            try {
+              assertNotProtected(filePath, 'modified by AI agent');
+            } catch (e) {
+              const errorMsg = e instanceof Error ? e.message : String(e);
+              return {
+                block: true,
+                reason: `Write-protection error: ${errorMsg}`,
+              };
+            }
+          }
+        }
+        return undefined;
+      },
+
+      // Logging: record all tool executions
+      afterToolCall: async (context: AfterToolCallContext): Promise<AfterToolCallResult | undefined> => {
+        const ts = new Date().toISOString();
+        const { toolCall, args, result, isError } = context;
+        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
+        const outputText = result?.content
+          ?.filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('') ?? '';
+        try {
+          logAgentOp({
+            ts,
+            tool: toolName ?? 'unknown',
+            params: args as Record<string, unknown>,
+            result: isError ? 'error' : 'ok',
+            message: outputText.slice(0, 200),
+          });
+        } catch { /* logging must never kill the stream */ }
+        return undefined;
+      },
+
+      ...(enableThinking && provider === 'anthropic' ? {
+        thinkingBudgets: { medium: thinkingBudget },
       } : {}),
+    });
 
-      onStepFinish: ({ toolCalls, usage }) => {
-        if (toolCalls) {
-          for (const tc of toolCalls) {
-            stepHistory.push({ tool: tc.toolName, input: JSON.stringify(tc.input) });
+    // ── SSE Stream ──
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        function send(event: MindOSSSEvent) {
+          try {
+            controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
+          } catch { /* controller may be closed */ }
+        }
+
+        agent.subscribe((event: AgentEvent) => {
+          if (isTextDeltaEvent(event)) {
+            send({ type: 'text_delta', delta: getTextDelta(event) });
+          } else if (isThinkingDeltaEvent(event)) {
+            send({ type: 'thinking_delta', delta: getThinkingDelta(event) });
+          } else if (isToolExecutionStartEvent(event)) {
+            const { toolCallId, toolName, args } = getToolExecutionStart(event);
+            send({
+              type: 'tool_start',
+              toolCallId,
+              toolName,
+              args,
+            });
+          } else if (isToolExecutionEndEvent(event)) {
+            const { toolCallId, output, isError } = getToolExecutionEnd(event);
+            send({
+              type: 'tool_end',
+              toolCallId,
+              output,
+              isError,
+            });
+          } else if (isTurnEndEvent(event)) {
+            stepCount++;
+
+            // Track tool calls for loop detection (lock-free batch update).
+            // Deterministic JSON.stringify ensures consistent input comparison.
+            const { toolResults } = getTurnEndData(event);
+            if (Array.isArray(toolResults) && toolResults.length > 0) {
+              const newEntries = toolResults.map(tr => ({
+                tool: tr.toolName ?? 'unknown',
+                input: JSON.stringify(tr.content, null, 0), // Deterministic (no whitespace)
+              }));
+              stepHistory.push(...newEntries);
+            }
+
+            // Loop detection: same tool + same args 3 times in a row.
+            // Only trigger if we have 3+ history entries (prevent false positives on first turn).
+            const LOOP_DETECTION_THRESHOLD = 3;
+            if (loopCooldown > 0) {
+              loopCooldown--;
+            } else if (stepHistory.length >= LOOP_DETECTION_THRESHOLD) {
+              const lastN = stepHistory.slice(-LOOP_DETECTION_THRESHOLD);
+              if (lastN.every(s => s.tool === lastN[0].tool && s.input === lastN[0].input)) {
+                loopCooldown = 3;
+                // TODO (metrics): Track loop detection rate — metrics.increment('agent.loop_detected', { model: modelName })
+                agent.steer({
+                  role: 'user',
+                  content: '[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.',
+                  timestamp: Date.now(),
+                } as any);
+              }
+            }
+
+            // Step limit enforcement
+            if (stepCount >= stepLimit) {
+              agent.abort();
+            }
+
+            console.log(`[ask] Step ${stepCount}/${stepLimit}`);
           }
-        }
-        // Loop detection: same tool + same args 3 times in a row
-        // Skip detection during cooldown to avoid repeated warnings
-        if (loopCooldown > 0) {
-          loopCooldown--;
-        } else if (stepHistory.length >= 3) {
-          const last3 = stepHistory.slice(-3);
-          if (last3.every(s => s.tool === last3[0].tool && s.input === last3[0].input)) {
-            loopDetected = true;
-          }
-        }
-        console.log(`[ask] Step ${stepHistory.length}/${stepLimit}, tokens=${usage?.totalTokens ?? '?'}`);
-      },
+        });
 
-      prepareStep: ({ messages: stepMessages }) => {
-        if (loopDetected) {
-          loopDetected = false;
-          loopCooldown = 3; // suppress re-detection for 3 steps
-          return {
-            messages: [
-              ...stepMessages,
-              {
-                role: 'user' as const,
-                content: '[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.',
-              },
-            ],
-          };
-        }
-        return {}; // no modification
-      },
-
-      onError: ({ error }) => {
-        console.error('[ask] Stream error:', error);
+        agent.prompt(lastUserContent).then(() => {
+          send({ type: 'done' });
+          controller.close();
+        }).catch((err) => {
+          send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+          controller.close();
+        });
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
   } catch (err) {
     console.error('[ask] Failed to initialize model:', err);
     return NextResponse.json(
