@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Puzzle } from 'lucide-react';
+import { X, Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Puzzle, Activity, Users } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { getAllRenderers, loadDisabledState, isRendererEnabled } from '@/lib/renderers/registry';
 import { apiFetch } from '@/lib/api';
@@ -14,6 +14,8 @@ import { KnowledgeTab } from './settings/KnowledgeTab';
 import { PluginsTab } from './settings/PluginsTab';
 import { SyncTab } from './settings/SyncTab';
 import { McpTab } from './settings/McpTab';
+import { MonitoringTab } from './settings/MonitoringTab';
+import { AgentsTab } from './settings/AgentsTab';
 
 interface SettingsModalProps {
   open: boolean;
@@ -147,6 +149,8 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={13} /> },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP', icon: <Plug size={13} /> },
     { id: 'plugins', label: t.settings.tabs.plugins, icon: <Puzzle size={13} /> },
+    { id: 'monitoring', label: t.settings.tabs.monitoring, icon: <Activity size={13} /> },
+    { id: 'agents', label: t.settings.tabs.agents ?? 'Agents', icon: <Users size={13} /> },
   ];
 
   return (
@@ -197,7 +201,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               <p className="text-sm text-destructive font-medium">Failed to load settings</p>
               <p className="text-xs text-muted-foreground">Check that the server is running and AUTH_TOKEN is configured correctly.</p>
             </div>
-          ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' ? (
+          ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' && tab !== 'agents' ? (
             <div className="flex justify-center py-8">
               <Loader2 size={18} className="animate-spin text-muted-foreground" />
             </div>
@@ -209,6 +213,8 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} />}
               {tab === 'sync' && <SyncTab t={t} />}
               {tab === 'mcp' && <McpTab t={t} />}
+              {tab === 'monitoring' && <MonitoringTab t={t} />}
+              {tab === 'agents' && <AgentsTab t={t} />}
             </>
           )}
         </div>

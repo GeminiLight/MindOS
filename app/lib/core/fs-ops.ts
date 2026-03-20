@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { resolveSafe, assertWithinRoot } from './security';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 
 /**
  * Reads the content of a file given a relative path from mindRoot.
@@ -35,7 +36,7 @@ export function writeFile(mindRoot: string, filePath: string, content: string): 
 export function createFile(mindRoot: string, filePath: string, initialContent = ''): void {
   const resolved = resolveSafe(mindRoot, filePath);
   if (fs.existsSync(resolved)) {
-    throw new Error(`File already exists: ${filePath}`);
+    throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, `File already exists: ${filePath}`, { filePath });
   }
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   fs.writeFileSync(resolved, initialContent, 'utf-8');
@@ -47,7 +48,7 @@ export function createFile(mindRoot: string, filePath: string, initialContent = 
 export function deleteFile(mindRoot: string, filePath: string): void {
   const resolved = resolveSafe(mindRoot, filePath);
   if (!fs.existsSync(resolved)) {
-    throw new Error(`File not found: ${filePath}`);
+    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `File not found: ${filePath}`, { filePath });
   }
   fs.unlinkSync(resolved);
 }
@@ -59,7 +60,7 @@ export function deleteFile(mindRoot: string, filePath: string): void {
  */
 export function renameFile(mindRoot: string, oldPath: string, newName: string): string {
   if (newName.includes('/') || newName.includes('\\')) {
-    throw new Error('Invalid filename: must not contain path separators');
+    throw new MindOSError(ErrorCodes.INVALID_PATH, 'Invalid filename: must not contain path separators', { newName });
   }
   const root = path.resolve(mindRoot);
   const oldResolved = path.resolve(path.join(root, oldPath));
@@ -70,7 +71,7 @@ export function renameFile(mindRoot: string, oldPath: string, newName: string): 
   assertWithinRoot(newResolved, root);
 
   if (fs.existsSync(newResolved)) {
-    throw new Error('A file with that name already exists');
+    throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, 'A file with that name already exists', { newName });
   }
   fs.renameSync(oldResolved, newResolved);
   return path.relative(root, newResolved);
@@ -88,8 +89,8 @@ export function moveFile(
 ): { newPath: string; affectedFiles: string[] } {
   const fromResolved = resolveSafe(mindRoot, fromPath);
   const toResolved = resolveSafe(mindRoot, toPath);
-  if (!fs.existsSync(fromResolved)) throw new Error(`Source not found: ${fromPath}`);
-  if (fs.existsSync(toResolved)) throw new Error(`Destination already exists: ${toPath}`);
+  if (!fs.existsSync(fromResolved)) throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Source not found: ${fromPath}`, { fromPath });
+  if (fs.existsSync(toResolved)) throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, `Destination already exists: ${toPath}`, { toPath });
   fs.mkdirSync(path.dirname(toResolved), { recursive: true });
   fs.renameSync(fromResolved, toResolved);
   const backlinks = findBacklinksFn(mindRoot, fromPath);

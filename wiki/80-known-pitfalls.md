@@ -92,6 +92,10 @@
 - **现象：** Agent 通过 MCP 误修改了系统内核文件
 - **解决：** `isRootProtected()` + `assertNotProtected()` 硬编码保护
 
+### 搜索索引失效必须与文件缓存联动
+- **现象：** 写操作后搜索结果过时（索引未失效）
+- **规则：** 所有文件写操作都通过 `lib/fs.ts` 的 `invalidateCache()` 触发，该函数同时清除文件树缓存、Fuse.js 搜索缓存和 Core 倒排索引。新增写操作入口必须调用 `invalidateCache()`，不能只清部分缓存
+
 ### 字符截断
 - **现象：** 大文件读取超过 LLM context
 - **解决：** 单文件读取上限 25,000 字符 + `truncate()` 工具函数
@@ -124,6 +128,26 @@
 - **现象：** 用户中断时，代码只检查 `!content.trim()` 判断消息是否为空。但 UIMessageStream 下消息可能有 tool call parts 但空 text content
 - **解决：** 改为 `const hasContent = last.content.trim() || (last.parts && last.parts.length > 0)`
 - **规则：** UIMessageStream 后判断消息"是否有内容"必须同时检查 `content` 和 `parts`
+
+### pi-agent-core 迁移：AgentEvent 类型不完整
+- **现象：** `subscribe()` 回调的 `AgentEvent` 是 union type，但 `message_update` 等变体的子字段（如 `assistantMessageEvent`）没有在 TS 类型中导出
+- **解决：** 写 type guard 函数（`isTextDeltaEvent()` 等），内部用 `as any` 访问，但使用侧完全类型安全。`as any` 只出现在 guard 内部，不扩散
+- **规则：** 第三方库类型不完整时，用 type guard 隔离 `as any`，不要在业务逻辑中直接 cast
+
+### pi-agent-core 迁移：compact 失败不能静默返回
+- **现象：** `compactMessages()` 调用 `complete()` 失败时直接返回未压缩的消息。如果上下文已超 70%，后续调用大概率超 token limit → 不可预测行为
+- **解决：** 失败时 fallback 到 `hardPrune()`，pruning 也失败才 throw
+- **规则：** 上下文管理的 error path 必须保证出口 token 数 ≤ limit。不能"原样返回"——原样可能就是超限的
+
+### pi-agent-core 迁移：AssistantMessage.usage 字段结构变化
+- **现象：** 构造历史 AssistantMessage 时 `usage` 字段需要包含 `totalTokens` 和 `cost` 子对象，否则 TS 报错
+- **解决：** 补全所有必需字段：`{ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }`
+- **规则：** 构造 pi-ai Message 对象时，即使是历史占位消息，也必须满足完整类型签名。用 `satisfies` 约束
+
+### pi-agent-core 迁移：ToolCall 字段名与 AI SDK 不同
+- **现象：** AI SDK 用 `toolCallId` / `toolName` / `input`，pi-agent-core 用 `id` / `name` / `arguments`
+- **解决：** `toAgentMessages()` 中做字段映射（`type: 'toolCall', id: part.toolCallId, name: part.toolName, arguments: part.input`）
+- **规则：** 跨 SDK 迁移时逐字段对比类型定义，不要假设字段名相同
 
 ## 进程生命周期
 
@@ -275,6 +299,13 @@
 - **规则：** 加 `disabled` 前先确认 guard 的状态值在当前渲染上下文中是否可达。不可达的 guard 是 dead code，增加阅读负担且暗示错误的心智模型
 
 ## 云同步 (Sync)
+
+### Turbopack 无法解析动态 import() 路径变量
+- **现象：** `instrumentation.ts` 用 `await import(syncModule)` 加载 sync.js，Next.js 16 (Turbopack) 启动时报 `Cannot find module as expression is too dynamic`
+- **原因：** `/* webpackIgnore: true */` 注解只对 webpack 有效，Turbopack 不识别。Turbopack 在编译阶段尝试静态解析 `import(variable)` 表达式，变量路径无法解析
+- **解决：** 改用 `createRequire()` + `require()` 绕过 bundler 静态分析：`const req = createRequire(syncModule); const { startSyncDaemon } = req(syncModule);`
+- **规则：** 在 Next.js 16+ (Turbopack 默认) 中，动态加载外部 JS 模块（路径在运行时确定）不要用 `import()`，用 `module.createRequire()` 完全绕过 bundler
+- **文件：** `app/instrumentation.ts`
 
 ### Turbopack 无法 bundle chokidar 等 native 模块
 - **现象：** `instrumentation.ts` 直接 `import('../bin/lib/sync.js')` 会被 Turbopack 扫描，chokidar（含 native 绑定）解析失败

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { resolveSafe } from './security';
+import { MindOSError, ErrorCodes } from '@/lib/errors';
 
 /**
  * Appends a single row to a CSV file with RFC 4180 escaping.
@@ -9,7 +10,7 @@ import { resolveSafe } from './security';
  */
 export function appendCsvRow(mindRoot: string, filePath: string, row: string[]): { newRowCount: number } {
   const resolved = resolveSafe(mindRoot, filePath);
-  if (!filePath.endsWith('.csv')) throw new Error('Only .csv files support row append');
+  if (!filePath.endsWith('.csv')) throw new MindOSError(ErrorCodes.INVALID_FILE_TYPE, 'Only .csv files support row append', { filePath });
 
   const escaped = row.map((cell) => {
     if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
