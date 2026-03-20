@@ -13,6 +13,7 @@ import {
   createTransformContext,
 } from '@/lib/agent/context';
 import { logAgentOp } from '@/lib/agent/log';
+import { loadSkillRules } from '@/lib/agent/skill-rules';
 import { readSettings } from '@/lib/settings';
 import { assertNotProtected } from '@/lib/core';
 import type { Message as FrontendMessage } from '@/lib/types';
@@ -176,11 +177,17 @@ export async function POST(req: NextRequest) {
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
   // Auto-load skill + bootstrap context for each request.
-  // TODO (optimization): Consider caching bootstrap files with TTL to reduce per-request IO overhead.
-  // Current behavior: 8 synchronous file reads per request. For users with large knowledge bases,
-  // this adds ~10-50ms latency. Mitigation: Cache with 5min TTL or lazy-load on-demand.
-  const skillPath = path.resolve(process.cwd(), 'data/skills/mindos/SKILL.md');
+  // 1. SKILL.md — static trigger + protocol (always loaded)
+  // 2. skill-rules.md — user's knowledge base operating rules (if exists)
+  // 3. user-rules.md — user's personalized rules (if exists)
+  const isZh = serverSettings.disabledSkills?.includes('mindos') ?? false;
+  const skillDirName = isZh ? 'mindos-zh' : 'mindos';
+  const skillPath = path.resolve(process.cwd(), `data/skills/${skillDirName}/SKILL.md`);
   const skill = readAbsoluteFile(skillPath);
+
+  // Progressive skill loading: read skill-rules + user-rules from knowledge base
+  const mindRoot = getMindRoot();
+  const { skillRules, userRules } = loadSkillRules(mindRoot, skillDirName);
 
   const targetDir = dirnameOf(currentFile);
   const bootstrap = {
@@ -199,6 +206,8 @@ export async function POST(req: NextRequest) {
   const truncationWarnings: string[] = [];
   if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
   if (skill.ok && skill.truncated) truncationWarnings.push('skill.mindos was truncated');
+  if (skillRules.ok && skillRules.truncated) truncationWarnings.push('skill-rules.md was truncated');
+  if (userRules.ok && userRules.truncated) truncationWarnings.push('user-rules.md was truncated');
   if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
   if (bootstrap.instruction.ok && bootstrap.instruction.truncated) truncationWarnings.push('bootstrap.instruction was truncated');
   if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
@@ -222,6 +231,13 @@ export async function POST(req: NextRequest) {
 
   const initContextBlocks: string[] = [];
   if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
+  // Progressive skill loading: inject skill-rules and user-rules after SKILL.md
+  if (skillRules.ok && !skillRules.empty) {
+    initContextBlocks.push(`## skill_rules\n\nOperating rules loaded from knowledge base (.agents/skills/${skillDirName}/skill-rules.md):\n\n${skillRules.content}`);
+  }
+  if (userRules.ok && !userRules.empty) {
+    initContextBlocks.push(`## user_rules\n\nUser personalization rules (.agents/skills/${skillDirName}/user-rules.md):\n\n${userRules.content}`);
+  }
   if (bootstrap.instruction.ok) initContextBlocks.push(`## bootstrap_instruction\n\n${bootstrap.instruction.content}`);
   if (bootstrap.index.ok) initContextBlocks.push(`## bootstrap_index\n\n${bootstrap.index.content}`);
   if (bootstrap.config_json.ok) initContextBlocks.push(`## bootstrap_config_json\n\n${bootstrap.config_json.content}`);
