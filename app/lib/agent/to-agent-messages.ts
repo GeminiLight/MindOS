@@ -17,6 +17,9 @@ import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart }
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { UserMessage, AssistantMessage, ToolResultMessage } from '@mariozechner/pi-ai';
 
+// Re-export for convenience
+export type { AgentMessage } from '@mariozechner/pi-agent-core';
+
 export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
   const result: AgentMessage[] = [];
 
