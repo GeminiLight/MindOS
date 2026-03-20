@@ -102,20 +102,6 @@ async function installAgents(
   return updated;
 }
 
-/** Phase 3: Install skill to agents. Returns result. */
-async function installSkill(
-  template: string,
-  agentKeys: string[],
-): Promise<{ ok?: boolean; skill?: string; error?: string }> {
-  const skillName = template === 'zh' ? 'mindos-zh' : 'mindos';
-  const res = await fetch('/api/mcp/install-skill', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ skill: skillName, agents: agentKeys }),
-  });
-  return await res.json();
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function SetupWizard() {
@@ -318,15 +304,8 @@ export default function SetupWizard() {
       }
     }
 
-    // Phase 3: Install skill
-    setSetupPhase('skill');
-    try {
-      const skillData = await installSkill(state.template, agentKeys);
-      setSkillInstallResult(skillData);
-    } catch (e) {
-      console.warn('[SetupWizard] skill install failed:', e);
-      setSkillInstallResult({ error: 'Failed to install skill' });
-    }
+    // Phase 3: Skill is now built into SKILL.md — no install needed.
+    // user-skill-rules.md will be created on first preference capture.
 
     setSubmitting(false);
     setCompleted(true);
