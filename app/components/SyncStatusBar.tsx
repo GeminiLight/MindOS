@@ -91,10 +91,79 @@ export function useSyncStatus() {
   return { status, loaded, fetchStatus };
 }
 
-export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncStatusBarProps) {
-  const { status, loaded, fetchStatus } = useSyncStatus();
+/** Shared hook for the "Sync Now" action — avoids duplicating sync logic in SyncStatusBar & SyncPopover */
+export function useSyncAction(refreshFn: () => Promise<void>) {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null);
+
+  const syncNow = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      await apiFetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'now' }),
+      });
+      await refreshFn();
+      setSyncResult('success');
+    } catch {
+      await refreshFn();
+      setSyncResult('error');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 2500);
+    }
+  }, [syncing, refreshFn]);
+
+  return { syncing, syncResult, syncNow };
+}
+
+/** Shared status label formatter — used by SyncStatusBar and SyncPopover */
+export function getSyncLabel(
+  level: StatusLevel,
+  status: SyncStatus | null,
+  syncT?: Record<string, string>,
+): { label: string; tooltip: string } {
+  switch (level) {
+    case 'syncing': {
+      const l = syncT?.syncing ?? 'Syncing...';
+      return { label: l, tooltip: l };
+    }
+    case 'synced': {
+      const l = `${syncT?.synced ?? 'Synced'} · ${timeAgo(status?.lastSync)}`;
+      return { label: l, tooltip: l };
+    }
+    case 'unpushed': {
+      const n = parseInt(status?.unpushed || '0', 10);
+      return {
+        label: `${n} ${syncT?.unpushed ?? 'awaiting push'}`,
+        tooltip: syncT?.unpushedHint ?? `${n} commit(s) not yet pushed to remote`,
+      };
+    }
+    case 'conflicts': {
+      const n = status?.conflicts?.length || 0;
+      return {
+        label: `${n} ${syncT?.conflicts ?? 'conflicts'}`,
+        tooltip: syncT?.conflictsHint ?? `${n} file(s) have merge conflicts — resolve in Settings > Sync`,
+      };
+    }
+    case 'error':
+      return {
+        label: syncT?.syncError ?? 'Sync error',
+        tooltip: status?.lastError || (syncT?.syncError ?? 'Sync error'),
+      };
+    default: {
+      const l = syncT?.syncOff ?? 'Sync off';
+      return { label: l, tooltip: l };
+    }
+  }
+}
+
+export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncStatusBarProps) {
+  const { status, loaded, fetchStatus } = useSyncStatus();
+  const { syncing, syncResult, syncNow } = useSyncAction(fetchStatus);
   const [toast, setToast] = useState<string | null>(null);
   const prevLevelRef = useRef<StatusLevel>('off');
   const [hintDismissed, setHintDismissed] = useState(() => {
@@ -124,26 +193,9 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
     }
   }, [status, loaded, syncing, t]);
 
-  const handleSyncNow = async (e: React.MouseEvent) => {
+  const handleSyncNow = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (syncing) return;
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      await apiFetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'now' }),
-      });
-      await fetchStatus();
-      setSyncResult('success');                       // #2 — flash feedback
-    } catch {
-      await fetchStatus();
-      setSyncResult('error');                         // #2
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncResult(null), 2500);    // #2 — auto-clear
-    }
+    syncNow();
   };
 
   if (!loaded || collapsed) return null;
@@ -180,38 +232,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
   }
 
   const syncT = (t as any).sidebar?.sync;
-  const unpushedCount = parseInt(status?.unpushed || '0', 10);
-  const conflictCount = status?.conflicts?.length || 0;
-
-  let label: string;
-  let tooltip: string;
-  switch (level) {
-    case 'syncing':
-      label = syncT?.syncing ?? 'Syncing...';
-      tooltip = label;
-      break;
-    case 'synced':
-      label = `${syncT?.synced ?? 'Synced'} · ${timeAgo(status?.lastSync)}`;
-      tooltip = label;
-      break;
-    case 'unpushed':
-      // #4 — clearer wording
-      label = `${unpushedCount} ${syncT?.unpushed ?? 'awaiting push'}`;
-      tooltip = syncT?.unpushedHint ?? `${unpushedCount} commit(s) not yet pushed to remote`;
-      break;
-    case 'conflicts':
-      label = `${conflictCount} ${syncT?.conflicts ?? 'conflicts'}`;
-      tooltip = syncT?.conflictsHint ?? `${conflictCount} file(s) have merge conflicts — resolve in Settings > Sync`;
-      break;
-    case 'error':
-      label = syncT?.syncError ?? 'Sync error';
-      // #5 — show actual error message on hover
-      tooltip = status?.lastError || label;
-      break;
-    default:
-      label = syncT?.syncOff ?? 'Sync off';
-      tooltip = label;
-  }
+  const { label, tooltip } = getSyncLabel(level, status, syncT);
 
   return (
     // #3 — fade-in via animate-in

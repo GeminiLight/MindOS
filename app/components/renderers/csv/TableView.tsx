@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { TableConfig } from './types';
 import { serializeCSV } from './types';
@@ -102,8 +102,8 @@ export function TableView({ headers, rows, cfg, saveAction }: {
             </tr>
           </thead>
           <tbody>
-            {sections.map(section => (
-              <>
+            {sections.map((section, si) => (
+              <React.Fragment key={section.key ?? `section-${si}`}>
                 {section.key !== null && (
                   <tr key={`grp-${section.key}`}>
                     <td colSpan={visibleIndices.length + 1} className="px-4 py-1.5"
@@ -137,7 +137,7 @@ export function TableView({ headers, rows, cfg, saveAction }: {
                     </tr>
                   );
                 })}
-              </>
+              </React.Fragment>
             ))}
             {showAdd && (
               <AddRowTr headers={headers} visibleIndices={visibleIndices} onAdd={addRow} onCancel={() => setShowAdd(false)} />

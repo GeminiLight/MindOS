@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       index: tryRead('README.md'),
       config_json: tryRead('CONFIG.json'),
       config_md: tryRead('CONFIG.md'),
+      user_skill_rules: tryRead('user-skill-rules.md'),
     };
 
     if (targetDir) {

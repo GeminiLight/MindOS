@@ -4,9 +4,10 @@ import SetupWizard from '@/components/SetupWizard';
 
 export const dynamic = 'force-dynamic';
 
-export default function SetupPage({ searchParams }: { searchParams: { force?: string } }) {
+export default async function SetupPage({ searchParams }: { searchParams: Promise<{ force?: string }> }) {
   const settings = readSettings();
-  const force = searchParams.force === '1';
+  const { force: forceParam } = await searchParams;
+  const force = forceParam === '1';
   if (!settings.setupPending && !force) redirect('/');
   return <SetupWizard />;
 }
