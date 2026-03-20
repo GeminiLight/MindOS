@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-18 | Current stage: P1 -->
+<!-- Last verified: 2026-03-20 | Current stage: P1 -->
 
 # Backlog
 
@@ -6,12 +6,7 @@
 
 ## Bug
 
-- [x] **`mindos update` 端口硬编码**：重启后健康检查轮询 `localhost:3000`，但用户实际端口可能不是 3000，导致"did not come back up in time"误报。修复：直接从 config 文件读 `port` 字段；顺带将 `waitForHttp` 探测路径从 `/` 改为 `/api/health` — v0.5.2
-- [x] **进程生命周期 7-bug 链**：stop/restart 模块连环 bug（PID 不完整、端口清理跳过、env 继承覆盖、config 新旧端口不分、lsof 环境差异、ss 子串误匹配、health 被 auth 拦截）。详见 `wiki/81-postmortem-process-lifecycle.md` — v0.5.7
-- [x] **Onboard check-port 自回环误报端口占用**：`http://localhost:3013/setup` 配置端口时，3013 被报为"已被占用"。原因：server-to-self HTTP 回环在 Next.js 单线程模式下超时。修复：从 `req.nextUrl.port` 直接判断 self，跳过网络自检。详见 `wiki/80-known-pitfalls.md`
-- [x] **云同步 P0 可靠性/安全 6 项修复**：O1 instrumentation.ts daemon 自启动 + O2 进程退出 flush + O3 push 失败重试 + O4 token 安全统一 + O5 .gitignore 自动创建 + bonus `now` action 冲突处理统一。详见 `wiki/specs/spec-kb-cloud-sync.md` 优化路线图 P0 节
-- [x] **Git Sync 可靠性 4 项修复**：B1 credential approve 假成功 → 加 fill 验证 + fallback；B2 首次 push 无 upstream → `push -u origin HEAD`；B3 冲突文件写入失败标记 `noBackup`；B4 config/state 原子写入。详见 `wiki/specs/spec-sync-reliability.md`
-- [x] **systemd daemon install 后不启动服务**：`systemctl --user enable` 只创建开机自启 symlink，不启动。launchd `bootstrap` 会自动启动，但 systemd 需要显式 `start`。导致 `mindos start --daemon` 在 Linux 上永远超时 — v0.5.15
+- [x] **Agent 框架迁移 Vercel AI SDK → pi-agent-core** — 完成 6 阶段迁移（Phase 0-5）。Spec v2 所有 6 个设计缺陷已修复。涉及 7 文件改写 + 完整 SSE 协议重定义。详见 `wiki/specs/migrate-to-pi-agent.md` — v0.6.0
 
 ## 技术债
 
