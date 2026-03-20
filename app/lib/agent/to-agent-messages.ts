@@ -47,7 +47,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
           api: 'anthropic-messages' as any,
           provider: 'anthropic' as any,
           model: '',
-          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
           stopReason: 'stop',
           timestamp: Date.now(),
         } satisfies AssistantMessage as AgentMessage);
@@ -67,9 +67,9 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
       } else if (part.type === 'tool-call') {
         assistantContent.push({
           type: 'toolCall' as any,
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          args: part.input ?? {},
+          id: part.toolCallId,
+          name: part.toolName,
+          arguments: part.input ?? {},
         });
         toolCalls.push(part);
       }
@@ -83,7 +83,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
         api: 'anthropic-messages' as any,
         provider: 'anthropic' as any,
         model: '',
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
         stopReason: toolCalls.length > 0 ? 'toolUse' : 'stop',
         timestamp: Date.now(),
       } satisfies AssistantMessage as AgentMessage);
