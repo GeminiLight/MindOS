@@ -10,9 +10,9 @@ import ThinkingBlock from './ThinkingBlock';
 
 function AssistantMessage({ content, isStreaming }: { content: string; isStreaming: boolean }) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none text-foreground
+    <div className="prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground
       prose-p:my-1 prose-p:leading-relaxed
-      prose-headings:font-semibold prose-headings:my-2
+      prose-headings:font-semibold prose-headings:my-2 prose-headings:text-[13px]
       prose-ul:my-1 prose-li:my-0.5
       prose-ol:my-1
       prose-code:text-[0.8em] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none

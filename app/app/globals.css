@@ -212,6 +212,20 @@ body {
 .prose img { max-width: 100%; border-radius: 6px; border: 1px solid var(--prose-code-border); }
 .prose hr { border: none; border-top: 1px solid var(--prose-border); margin: 2.5em 0; }
 
+/* Ask Panel — compact prose for side panel chat bubbles */
+.prose.prose-panel {
+  font-size: 0.8125rem !important;
+  line-height: 1.6;
+}
+.prose.prose-panel h1, .prose.prose-panel h2, .prose.prose-panel h3, .prose.prose-panel h4 {
+  font-size: 0.8125rem !important;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.prose.prose-panel p { margin-bottom: 0.6em; }
+.prose.prose-panel pre { padding: 0.6em 0.8em; margin: 0.8em 0; }
+.prose.prose-panel pre code { font-size: 0.78em; }
+
 :root {
   --prose-body: #3a3730;
   --prose-heading: #1c1a17;

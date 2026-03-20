@@ -12,6 +12,8 @@ interface FileTreeProps {
   nodes: FileNode[];
   depth?: number;
   onNavigate?: () => void;
+  /** When set, directories with depth <= this value open, others close. null = no override (manual control). */
+  maxOpenDepth?: number | null;
 }
 
 function getIcon(node: FileNode) {
@@ -85,8 +87,9 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
   );
 }
 
-function DirectoryNode({ node, depth, currentPath, onNavigate }: {
+function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
+  maxOpenDepth?: number | null;
 }) {
   const router = useRouter();
   const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
@@ -100,6 +103,20 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
   const { t } = useLocale();
 
   const toggle = useCallback(() => setOpen(v => !v), []);
+
+  // React to maxOpenDepth changes from parent
+  const prevMaxOpenDepth = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    if (maxOpenDepth === null || maxOpenDepth === undefined) {
+      prevMaxOpenDepth.current = maxOpenDepth;
+      return;
+    }
+    // Only react when value actually changes
+    if (prevMaxOpenDepth.current !== maxOpenDepth) {
+      setOpen(depth <= maxOpenDepth);
+      prevMaxOpenDepth.current = maxOpenDepth;
+    }
+  }, [maxOpenDepth, depth]);
 
   useEffect(() => {
     return () => {
@@ -228,7 +245,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate }: {
         style={{ maxHeight: open ? '9999px' : '0px' }}
       >
         {node.children && (
-          <FileTree nodes={node.children} depth={depth + 1} onNavigate={onNavigate} />
+          <FileTree nodes={node.children} depth={depth + 1} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
         )}
         {showNewFile && (
           <NewFileInline
@@ -342,7 +359,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   );
 }
 
-export default function FileTree({ nodes, depth = 0, onNavigate }: FileTreeProps) {
+export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth }: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
 
@@ -359,7 +376,7 @@ export default function FileTree({ nodes, depth = 0, onNavigate }: FileTreeProps
     <div className="flex flex-col gap-0.5">
       {nodes.map((node) =>
         node.type === 'directory' ? (
-          <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} />
+          <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
         ) : (
           <FileNodeItem key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} />
         )
