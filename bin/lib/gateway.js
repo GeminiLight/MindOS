@@ -124,13 +124,15 @@ export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label
   for (let i = 0; i < retries; i++) {
     try {
       const { request } = await import('node:http');
-      const ok = await new Promise((resolve) => {
-        const req = request({ hostname: '127.0.0.1', port, path: '/api/health', method: 'GET', timeout: 1500 },
+      // Try both 127.0.0.1 and localhost — Next.js may bind differently
+      const tryHost = async (hostname) => new Promise((resolve) => {
+        const req = request({ hostname, port, path: '/api/health', method: 'GET', timeout: 5000 },
           (res) => { res.resume(); resolve(res.statusCode < 500); });
         req.on('error', () => resolve(false));
         req.on('timeout', () => { req.destroy(); resolve(false); });
         req.end();
       });
+      const ok = await tryHost('127.0.0.1') || await tryHost('localhost');
       if (ok) {
         process.stdout.write(`\r\x1b[K`);
         process.stdout.write(`  ${green('\u2714')} ${label} ready ${dim(`(${elapsed()})`)}\n`);

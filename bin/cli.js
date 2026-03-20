@@ -245,7 +245,7 @@ const commands = {
         // Do NOT call start() here — kickstart -k would kill the just-started process,
         // causing a port-conflict race condition with KeepAlive restart loops.
         console.log(dim('  (First run may take a few minutes to install dependencies and build the app.)'));
-        const ready = await waitForHttp(Number(webPort), { retries: 120, intervalMs: 2000, label: 'Web UI', logFile: LOG_PATH });
+        const ready = await waitForHttp(Number(webPort), { retries: 180, intervalMs: 2000, label: 'Web UI', logFile: LOG_PATH });
         if (!ready) {
           console.error(red('\n✘ Service started but Web UI did not become ready in time.'));
           console.error(dim('  Check logs with: mindos logs\n'));
