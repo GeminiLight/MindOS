@@ -35,7 +35,7 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
       <Sparkles size={16} className="relative z-10 shrink-0" />
       <span className="
         relative z-10
-        group-hover:max-w-[120px]
+        max-w-0 group-hover:max-w-[120px]
         opacity-0 group-hover:opacity-100
         transition-all duration-200 ease-out
         whitespace-nowrap overflow-hidden
