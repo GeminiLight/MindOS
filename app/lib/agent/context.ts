@@ -183,6 +183,8 @@ export async function compactMessages(
   messages: AgentMessage[],
   model: Model<any>,
   apiKey: string,
+  systemPrompt: string,
+  modelName: string,
 ): Promise<{ messages: AgentMessage[]; compacted: boolean }> {
   if (messages.length < 6) {
     return { messages, compacted: false };
@@ -256,8 +258,15 @@ export async function compactMessages(
       compacted: true,
     };
   } catch (err) {
-    console.error('[ask] Compact failed, using uncompacted messages:', err);
-    return { messages, compacted: false };
+    // API failure: fall back to hard prune instead of risking context overflow
+    console.warn('[ask] Compact failed, applying hard prune as fallback:', err);
+    const pruned = hardPrune(messages, systemPrompt, modelName);
+    if (pruned.length < messages.length) {
+      console.log(`[ask] Hard prune fallback succeeded (${messages.length} → ${pruned.length} messages)`);
+      return { messages: pruned, compacted: false };
+    }
+    // If pruning also can't help, let it bubble up so request fails safely
+    throw new Error(`Context compaction failed and pruning insufficient: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -348,13 +357,19 @@ export function createTransformContext(
     // 2. Compact if >70% context limit (skip if user disabled)
     if (contextStrategy === 'auto' && needsCompact(result, systemPrompt, modelName)) {
       console.log('[ask] Context >70% limit, compacting...');
-      const compactResult = await compactMessages(result, getCompactModel(), apiKey);
+      const compactResult = await compactMessages(
+        result,
+        getCompactModel(),
+        apiKey,
+        systemPrompt,
+        modelName,
+      );
       result = compactResult.messages;
       if (compactResult.compacted) {
         const postTokens = estimateTokens(result);
         console.log(`[ask] After compact: ~${postTokens + sysTokens} tokens`);
       } else {
-        console.log('[ask] Compact skipped (too few messages), hard prune will handle overflow if needed');
+        console.log('[ask] Compact skipped (too few messages or fallback used), hard prune will handle overflow if needed');
       }
     }
 

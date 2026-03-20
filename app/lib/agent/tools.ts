@@ -15,6 +15,12 @@ export function truncate(content: string): string {
   return content.slice(0, MAX_FILE_CHARS) + `\n\n[...truncated — file is ${content.length} chars, showing first ${MAX_FILE_CHARS}]`;
 }
 
+// ─── Helper: format tool error consistently ────────────────────────────────
+
+function formatToolError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // ─── Helper: build a text-only AgentToolResult ──────────────────────────────
 
 function textResult(text: string): AgentToolResult<Record<string, never>> {
@@ -29,8 +35,7 @@ function safeExecute<T>(
     try {
       return await fn(toolCallId, params, signal);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return textResult(`Error: ${msg}`);
+      return textResult(`Error: ${formatToolError(e)}`);
     }
   };
 }

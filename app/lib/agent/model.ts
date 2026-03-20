@@ -7,6 +7,7 @@ import { effectiveAiConfig } from '@/lib/settings';
  * - Anthropic: uses getModel() from pi-ai registry directly.
  * - OpenAI: uses getModel() then overrides baseUrl if custom endpoint is configured.
  *   Falls back to constructing a Model literal for unknown model IDs.
+ *   Custom API variant can be specified for non-standard endpoints.
  *
  * Returns { model, modelName, apiKey } — Agent needs model + apiKey via getApiKey hook.
  */
@@ -21,6 +22,11 @@ export function getModelConfig(): {
   if (cfg.provider === 'openai') {
     const modelName = cfg.openaiModel;
     let model: Model<any>;
+    let apiVariant: string = 'openai-responses'; // Default to responses API
+
+    // Allow customization of API variant if using custom endpoint
+    // Check if config specifies an alternative API type (for non-standard endpoints)
+    const customApiVariant = (cfg as any).openaiApiVariant; // May exist in extended config
 
     try {
       model = piGetModel('openai', modelName as any);
@@ -29,7 +35,7 @@ export function getModelConfig(): {
       model = {
         id: modelName,
         name: modelName,
-        api: 'openai-completions' as const,
+        api: (customApiVariant ?? apiVariant) as any,
         provider: 'openai',
         baseUrl: 'https://api.openai.com/v1',
         reasoning: false,
@@ -43,6 +49,10 @@ export function getModelConfig(): {
     // Override baseUrl if user configured a custom endpoint
     if (cfg.openaiBaseUrl) {
       model = { ...model, baseUrl: cfg.openaiBaseUrl };
+      // Also allow API variant override for custom endpoints
+      if (customApiVariant) {
+        model = { ...model, api: customApiVariant };
+      }
     }
 
     return { model, modelName, apiKey: cfg.openaiApiKey, provider: 'openai' };

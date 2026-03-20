@@ -30,23 +30,110 @@ type MindOSSSEvent =
   | { type: 'error'; message: string };
 
 // ---------------------------------------------------------------------------
+// Type Guards for AgentEvent variants (safe event handling)
+// ---------------------------------------------------------------------------
+
+function isTextDeltaEvent(e: AgentEvent): boolean {
+  return e.type === 'message_update' && (e as any).assistantMessageEvent?.type === 'text_delta';
+}
+
+function getTextDelta(e: AgentEvent): string {
+  return (e as any).assistantMessageEvent?.delta ?? '';
+}
+
+function isThinkingDeltaEvent(e: AgentEvent): boolean {
+  return e.type === 'message_update' && (e as any).assistantMessageEvent?.type === 'thinking_delta';
+}
+
+function getThinkingDelta(e: AgentEvent): string {
+  return (e as any).assistantMessageEvent?.delta ?? '';
+}
+
+function isToolExecutionStartEvent(e: AgentEvent): boolean {
+  return e.type === 'tool_execution_start';
+}
+
+function getToolExecutionStart(e: AgentEvent): { toolCallId: string; toolName: string; args: unknown } {
+  const evt = e as any;
+  return {
+    toolCallId: evt.toolCallId ?? '',
+    toolName: evt.toolName ?? 'unknown',
+    args: evt.args ?? {},
+  };
+}
+
+function isToolExecutionEndEvent(e: AgentEvent): boolean {
+  return e.type === 'tool_execution_end';
+}
+
+function getToolExecutionEnd(e: AgentEvent): { toolCallId: string; output: string; isError: boolean } {
+  const evt = e as any;
+  const outputText = evt.result?.content
+    ?.filter((p: any) => p.type === 'text')
+    .map((p: any) => p.text)
+    .join('') ?? '';
+  return {
+    toolCallId: evt.toolCallId ?? '',
+    output: outputText,
+    isError: !!evt.isError,
+  };
+}
+
+function isTurnEndEvent(e: AgentEvent): boolean {
+  return e.type === 'turn_end';
+}
+
+function getTurnEndData(e: AgentEvent): { toolResults: Array<{ toolName: string; content: unknown }> } {
+  return {
+    toolResults: ((e as any).toolResults as any[]) ?? [],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function readKnowledgeFile(filePath: string): { ok: boolean; content: string; error?: string } {
+function readKnowledgeFile(filePath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
   try {
-    return { ok: true, content: truncate(getFileContent(filePath)) };
+    const raw = getFileContent(filePath);
+    if (raw.length > 20_000) {
+      return {
+        ok: true,
+        content: truncate(raw),
+        truncated: true,
+        error: undefined,
+      };
+    }
+    return { ok: true, content: raw, truncated: false };
   } catch (err) {
-    return { ok: false, content: '', error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      content: '',
+      truncated: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
-function readAbsoluteFile(absPath: string): { ok: boolean; content: string; error?: string } {
+function readAbsoluteFile(absPath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
   try {
     const raw = fs.readFileSync(absPath, 'utf-8');
-    return { ok: true, content: truncate(raw) };
+    if (raw.length > 20_000) {
+      return {
+        ok: true,
+        content: truncate(raw),
+        truncated: true,
+        error: undefined,
+      };
+    }
+    return { ok: true, content: raw, truncated: false };
   } catch (err) {
-    return { ok: false, content: '', error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      content: '',
+      truncated: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -89,6 +176,9 @@ export async function POST(req: NextRequest) {
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
   // Auto-load skill + bootstrap context for each request.
+  // TODO (optimization): Consider caching bootstrap files with TTL to reduce per-request IO overhead.
+  // Current behavior: 8 synchronous file reads per request. For users with large knowledge bases,
+  // this adds ~10-50ms latency. Mitigation: Cache with 5min TTL or lazy-load on-demand.
   const skillPath = path.resolve(process.cwd(), 'data/skills/mindos/SKILL.md');
   const skill = readAbsoluteFile(skillPath);
 
@@ -104,21 +194,31 @@ export async function POST(req: NextRequest) {
     target_config_md: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.md`) : null,
   };
 
-  // Only report failures
+  // Only report failures + truncation warnings
   const initFailures: string[] = [];
+  const truncationWarnings: string[] = [];
   if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
+  if (skill.ok && skill.truncated) truncationWarnings.push('skill.mindos was truncated');
   if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
+  if (bootstrap.instruction.ok && bootstrap.instruction.truncated) truncationWarnings.push('bootstrap.instruction was truncated');
   if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
+  if (bootstrap.index.ok && bootstrap.index.truncated) truncationWarnings.push('bootstrap.index was truncated');
   if (!bootstrap.config_json.ok) initFailures.push(`bootstrap.config_json: failed (${bootstrap.config_json.error})`);
+  if (bootstrap.config_json.ok && bootstrap.config_json.truncated) truncationWarnings.push('bootstrap.config_json was truncated');
   if (!bootstrap.config_md.ok) initFailures.push(`bootstrap.config_md: failed (${bootstrap.config_md.error})`);
+  if (bootstrap.config_md.ok && bootstrap.config_md.truncated) truncationWarnings.push('bootstrap.config_md was truncated');
   if (bootstrap.target_readme && !bootstrap.target_readme.ok) initFailures.push(`bootstrap.target_readme: failed (${bootstrap.target_readme.error})`);
+  if (bootstrap.target_readme?.ok && bootstrap.target_readme.truncated) truncationWarnings.push('bootstrap.target_readme was truncated');
   if (bootstrap.target_instruction && !bootstrap.target_instruction.ok) initFailures.push(`bootstrap.target_instruction: failed (${bootstrap.target_instruction.error})`);
+  if (bootstrap.target_instruction?.ok && bootstrap.target_instruction.truncated) truncationWarnings.push('bootstrap.target_instruction was truncated');
   if (bootstrap.target_config_json && !bootstrap.target_config_json.ok) initFailures.push(`bootstrap.target_config_json: failed (${bootstrap.target_config_json.error})`);
+  if (bootstrap.target_config_json?.ok && bootstrap.target_config_json.truncated) truncationWarnings.push('bootstrap.target_config_json was truncated');
   if (bootstrap.target_config_md && !bootstrap.target_config_md.ok) initFailures.push(`bootstrap.target_config_md: failed (${bootstrap.target_config_md.error})`);
+  if (bootstrap.target_config_md?.ok && bootstrap.target_config_md.truncated) truncationWarnings.push('bootstrap.target_config_md was truncated');
 
   const initStatus = initFailures.length === 0
-    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`
-    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}`;
+    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? ` ⚠️ ${truncationWarnings.length} files truncated` : ''}`
+    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? `\n⚠️ Warnings:\n${truncationWarnings.join('\n')}` : ''}`;
 
   const initContextBlocks: string[] = [];
   if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
@@ -201,6 +301,10 @@ export async function POST(req: NextRequest) {
     // History = all messages except the last user message (agent.prompt adds it)
     const historyMessages = agentMessages.slice(0, -1);
 
+    // Capture API key for this request — safe since each POST creates a new Agent instance.
+    // Even though JS closures are lexically scoped, being explicit guards against future refactors.
+    const requestApiKey = apiKey;
+
     // ── Loop detection state ──
     const stepHistory: Array<{ tool: string; input: string }> = [];
     let stepCount = 0;
@@ -215,7 +319,7 @@ export async function POST(req: NextRequest) {
         tools: knowledgeBaseTools,
         messages: historyMessages,
       },
-      getApiKey: async () => apiKey,
+      getApiKey: async () => requestApiKey,
       toolExecution: 'parallel',
 
       // Context management: truncate → compact → prune
@@ -228,7 +332,7 @@ export async function POST(req: NextRequest) {
       ),
 
       // Write-protection: block writes to protected files
-      beforeToolCall: async (context) => {
+      beforeToolCall: async (context: any) => {
         const { toolName, args } = context;
         if (WRITE_TOOLS.has(toolName)) {
           const filePath = (args as any).path ?? (args as any).from_path;
@@ -249,7 +353,7 @@ export async function POST(req: NextRequest) {
       },
 
       // Logging: record all tool executions
-      afterToolCall: async (context) => {
+      afterToolCall: async (context: any) => {
         const ts = new Date().toISOString();
         const { toolName, args, result, isError } = context;
         const outputText = result?.content
@@ -284,52 +388,50 @@ export async function POST(req: NextRequest) {
         }
 
         agent.subscribe((event: AgentEvent) => {
-          if (event.type === 'message_update') {
-            const e = (event as any).assistantMessageEvent;
-            if (!e) return;
-            if (e.type === 'text_delta') {
-              send({ type: 'text_delta', delta: e.delta });
-            } else if (e.type === 'thinking_delta') {
-              send({ type: 'thinking_delta', delta: e.delta });
-            }
-          } else if (event.type === 'tool_execution_start') {
-            const e = event as any;
+          if (isTextDeltaEvent(event)) {
+            send({ type: 'text_delta', delta: getTextDelta(event) });
+          } else if (isThinkingDeltaEvent(event)) {
+            send({ type: 'thinking_delta', delta: getThinkingDelta(event) });
+          } else if (isToolExecutionStartEvent(event)) {
+            const { toolCallId, toolName, args } = getToolExecutionStart(event);
             send({
               type: 'tool_start',
-              toolCallId: e.toolCallId,
-              toolName: e.toolName,
-              args: e.args,
+              toolCallId,
+              toolName,
+              args,
             });
-          } else if (event.type === 'tool_execution_end') {
-            const e = event as any;
-            const outputText = e.result?.content
-              ?.filter((p: any) => p.type === 'text')
-              .map((p: any) => p.text)
-              .join('') ?? '';
+          } else if (isToolExecutionEndEvent(event)) {
+            const { toolCallId, output, isError } = getToolExecutionEnd(event);
             send({
               type: 'tool_end',
-              toolCallId: e.toolCallId,
-              output: outputText,
-              isError: !!e.isError,
+              toolCallId,
+              output,
+              isError,
             });
-          } else if (event.type === 'turn_end') {
+          } else if (isTurnEndEvent(event)) {
             stepCount++;
 
-            // Track tool calls for loop detection
-            const e = event as any;
-            if (e.toolResults && Array.isArray(e.toolResults)) {
-              for (const tr of e.toolResults) {
-                stepHistory.push({ tool: tr.toolName, input: JSON.stringify(tr.content) });
-              }
+            // Track tool calls for loop detection (lock-free batch update).
+            // Deterministic JSON.stringify ensures consistent input comparison.
+            const { toolResults } = getTurnEndData(event);
+            if (Array.isArray(toolResults) && toolResults.length > 0) {
+              const newEntries = toolResults.map(tr => ({
+                tool: tr.toolName ?? 'unknown',
+                input: JSON.stringify(tr.content, null, 0), // Deterministic (no whitespace)
+              }));
+              stepHistory.push(...newEntries);
             }
 
-            // Loop detection: same tool + same args 3 times in a row
+            // Loop detection: same tool + same args 3 times in a row.
+            // Only trigger if we have 3+ history entries (prevent false positives on first turn).
+            const LOOP_DETECTION_THRESHOLD = 3;
             if (loopCooldown > 0) {
               loopCooldown--;
-            } else if (stepHistory.length >= 3) {
-              const last3 = stepHistory.slice(-3);
-              if (last3.every(s => s.tool === last3[0].tool && s.input === last3[0].input)) {
+            } else if (stepHistory.length >= LOOP_DETECTION_THRESHOLD) {
+              const lastN = stepHistory.slice(-LOOP_DETECTION_THRESHOLD);
+              if (lastN.every(s => s.tool === lastN[0].tool && s.input === lastN[0].input)) {
                 loopCooldown = 3;
+                // TODO (metrics): Track loop detection rate — metrics.increment('agent.loop_detected', { model: modelName })
                 agent.steer({
                   role: 'user',
                   content: '[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.',
