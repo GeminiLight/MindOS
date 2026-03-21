@@ -18,6 +18,67 @@ echo "🧪 Running tests..."
 npm test
 echo ""
 
+# 3. Smoke test: pack → install in temp dir → verify CLI works
+echo "🔍 Smoke testing package..."
+SMOKE_DIR=$(mktemp -d)
+TARBALL=$(npm pack --pack-destination "$SMOKE_DIR" 2>/dev/null | tail -1)
+TARBALL_PATH="$SMOKE_DIR/$TARBALL"
+
+if [ ! -f "$TARBALL_PATH" ]; then
+  echo "❌ npm pack failed — tarball not found"
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+
+TARBALL_SIZE=$(du -sh "$TARBALL_PATH" | cut -f1)
+echo "   📦 Tarball: $TARBALL ($TARBALL_SIZE)"
+
+# Install from tarball in isolation (production deps only)
+cd "$SMOKE_DIR"
+npm init -y --silent >/dev/null 2>&1
+npm install "$TARBALL_PATH" --ignore-scripts >/dev/null 2>&1
+
+# Verify bin entry exists and is executable
+if [ ! -f "$SMOKE_DIR/node_modules/.bin/mindos" ]; then
+  echo "❌ 'mindos' binary not found after install"
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+
+# Verify --version works
+INSTALLED_VERSION=$("$SMOKE_DIR/node_modules/.bin/mindos" --version 2>&1 || true)
+if [ -z "$INSTALLED_VERSION" ]; then
+  echo "❌ 'mindos --version' returned empty"
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+echo "   ✅ mindos --version → $INSTALLED_VERSION"
+
+# Verify --help works (exits 0, produces output)
+HELP_OUTPUT=$("$SMOKE_DIR/node_modules/.bin/mindos" --help 2>&1 || true)
+if ! echo "$HELP_OUTPUT" | grep -qi "mindos"; then
+  echo "❌ 'mindos --help' did not produce expected output"
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+echo "   ✅ mindos --help works"
+
+# Verify key files are present in the installed package
+for f in bin/cli.js app/package.json app/next.config.ts skills/mindos/SKILL.md; do
+  if [ ! -f "$SMOKE_DIR/node_modules/@geminilight/mindos/$f" ]; then
+    echo "❌ Missing file in package: $f"
+    rm -rf "$SMOKE_DIR"
+    exit 1
+  fi
+done
+echo "   ✅ Key files present"
+
+# Cleanup
+rm -rf "$SMOKE_DIR"
+cd - >/dev/null
+echo "   🟢 Smoke test passed"
+echo ""
+
 # 3. Bump version (creates commit + tag automatically)
 echo "📦 Bumping version ($BUMP)..."
 npm version "$BUMP" -m "%s"
