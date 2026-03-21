@@ -1,24 +1,26 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Plug, Copy, Check, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plug, Copy, Check, ChevronDown, Monitor, Globe, Code } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { McpStatus, AgentInfo, McpServerStatusProps } from './types';
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 
 function CopyButton({ text, label, copiedLabel }: { text: string; label: string; copiedLabel?: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
+  const handleCopy = useCallback(async () => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard unavailable */ }
-  };
+    }
+  }, [text]);
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0 relative z-10"
     >
       {copied ? <Check size={11} /> : <Copy size={11} />}
       {copied ? (copiedLabel ?? 'Copied!') : label}
@@ -28,60 +30,91 @@ function CopyButton({ text, label, copiedLabel }: { text: string; label: string;
 
 /* ── Config Snippet Generator ─────────────────────────────────── */
 
-function generateConfigSnippet(
-  agent: AgentInfo,
-  status: McpStatus,
-  token?: string,
-): { snippet: string; path: string } {
-  const isRunning = status.running;
+interface ConfigSnippet {
+  /** Snippet with full token — for clipboard copy */
+  snippet: string;
+  /** Snippet with masked token — for display in UI */
+  displaySnippet: string;
+  path: string;
+}
 
-  // Determine entry (stdio vs http)
+function generateStdioSnippet(agent: AgentInfo): ConfigSnippet {
   const stdioEntry: Record<string, unknown> = { type: 'stdio', command: 'mindos', args: ['mcp'] };
-  const httpEntry: Record<string, unknown> = { url: status.endpoint };
-  if (token) httpEntry.headers = { Authorization: `Bearer ${token}` };
-  const entry = isRunning ? httpEntry : stdioEntry;
 
-  // TOML format (Codex)
   if (agent.format === 'toml') {
-    const lines: string[] = [`[${agent.configKey}.mindos]`];
-    if (isRunning) {
-      lines.push(`type = "http"`);
-      lines.push(`url = "${status.endpoint}"`);
-      if (token) {
+    const lines = [
+      `[${agent.configKey}.mindos]`,
+      `command = "mindos"`,
+      `args = ["mcp"]`,
+      '',
+      `[${agent.configKey}.mindos.env]`,
+      `MCP_TRANSPORT = "stdio"`,
+    ];
+    const s = lines.join('\n');
+    return { snippet: s, displaySnippet: s, path: agent.globalPath };
+  }
+
+  if (agent.globalNestedKey) {
+    const s = JSON.stringify({ [agent.configKey]: { mindos: stdioEntry } }, null, 2);
+    return { snippet: s, displaySnippet: s, path: agent.projectPath ?? agent.globalPath };
+  }
+
+  const s = JSON.stringify({ [agent.configKey]: { mindos: stdioEntry } }, null, 2);
+  return { snippet: s, displaySnippet: s, path: agent.globalPath };
+}
+
+function generateHttpSnippet(
+  agent: AgentInfo,
+  endpoint: string,
+  token?: string,
+  maskedToken?: string,
+): ConfigSnippet {
+  // Full token for copy
+  const httpEntry: Record<string, unknown> = { url: endpoint };
+  if (token) httpEntry.headers = { Authorization: `Bearer ${token}` };
+
+  // Masked token for display
+  const displayEntry: Record<string, unknown> = { url: endpoint };
+  if (maskedToken) displayEntry.headers = { Authorization: `Bearer ${maskedToken}` };
+
+  const buildSnippet = (entry: Record<string, unknown>) => {
+    if (agent.format === 'toml') {
+      const lines = [
+        `[${agent.configKey}.mindos]`,
+        `type = "http"`,
+        `url = "${endpoint}"`,
+      ];
+      const authVal = (entry.headers as Record<string, string>)?.Authorization;
+      if (authVal) {
         lines.push('');
         lines.push(`[${agent.configKey}.mindos.headers]`);
-        lines.push(`Authorization = "Bearer ${token}"`);
+        lines.push(`Authorization = "${authVal}"`);
       }
-    } else {
-      lines.push(`command = "mindos"`);
-      lines.push(`args = ["mcp"]`);
-      lines.push('');
-      lines.push(`[${agent.configKey}.mindos.env]`);
-      lines.push(`MCP_TRANSPORT = "stdio"`);
+      return lines.join('\n');
     }
-    return { snippet: lines.join('\n'), path: agent.globalPath };
-  }
 
-  // JSON with globalNestedKey (VS Code project-level uses flat key)
-  if (agent.globalNestedKey) {
-    // project-level: flat key structure
-    const projectSnippet = JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
-    return { snippet: projectSnippet, path: agent.projectPath ?? agent.globalPath };
-  }
+    if (agent.globalNestedKey) {
+      return JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
+    }
 
-  // Standard JSON
-  const snippet = JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
-  return { snippet, path: agent.globalPath };
+    return JSON.stringify({ [agent.configKey]: { mindos: entry } }, null, 2);
+  };
+
+  return {
+    snippet: buildSnippet(httpEntry),
+    displaySnippet: buildSnippet(token ? displayEntry : httpEntry),
+    path: agent.format === 'toml' ? agent.globalPath : (agent.globalNestedKey ? (agent.projectPath ?? agent.globalPath) : agent.globalPath),
+  };
 }
 
 /* ── MCP Server Status ─────────────────────────────────────────── */
 
 export default function ServerStatus({ status, agents, t }: McpServerStatusProps) {
   const m = t.settings?.mcp;
-  const [expanded, setExpanded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [mode, setMode] = useState<'stdio' | 'http'>('stdio');
+  const [showSnippet, setShowSnippet] = useState(false);
 
-  // Auto-select first installed or first detected agent
   useEffect(() => {
     if (agents.length > 0 && !selectedAgent) {
       const first = agents.find(a => a.installed) ?? agents.find(a => a.present) ?? agents[0];
@@ -89,84 +122,147 @@ export default function ServerStatus({ status, agents, t }: McpServerStatusProps
     }
   }, [agents, selectedAgent]);
 
+  useEffect(() => {
+    if (status?.endpoint && !status.endpoint.includes('127.0.0.1') && !status.endpoint.includes('localhost')) {
+      setMode('http');
+    }
+  }, [status?.endpoint]);
+
   if (!status) return null;
 
   const currentAgent = agents.find(a => a.key === selectedAgent);
-  // 🟡 MINOR #9: Memoize snippet generation to avoid recomputing on every render
-  const snippetResult = useMemo(() => currentAgent ? generateConfigSnippet(currentAgent, status) : null, [currentAgent, status]);
+
+  const snippetResult = useMemo(() => {
+    if (!currentAgent) return null;
+    if (mode === 'stdio') return generateStdioSnippet(currentAgent);
+    return generateHttpSnippet(currentAgent, status.endpoint, status.authToken, status.maskedToken);
+  }, [currentAgent, status, mode]);
+
+  const isRemote = status.endpoint && !status.endpoint.includes('127.0.0.1') && !status.endpoint.includes('localhost');
 
   return (
     <div>
-      {/* Summary line — always visible */}
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 text-xs"
-      >
-        <Plug size={14} className="text-muted-foreground shrink-0" />
-        <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${status.running ? 'bg-success' : 'bg-muted-foreground'}`} />
-        <span className="text-foreground font-medium">
-          {status.running ? (m?.running ?? 'Running') : (m?.stopped ?? 'Stopped')}
-        </span>
-        {status.running && (
-          <>
-            <span className="text-muted-foreground">·</span>
-            <span className="font-mono text-muted-foreground">{status.transport.toUpperCase()}</span>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground">{m?.toolsRegistered ? m.toolsRegistered(status.toolCount) : `${status.toolCount} tools`}</span>
-            <span className="text-muted-foreground">·</span>
-            <span className={status.authConfigured ? 'text-success' : 'text-muted-foreground'}>
-              {status.authConfigured ? (m?.authSet ?? 'Token set') : (m?.authNotSet ?? 'No token')}
-            </span>
-          </>
-        )}
-        <ChevronDown size={12} className={`ml-auto text-muted-foreground transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} />
-      </button>
+      <h3 className="text-sm font-medium text-foreground mb-3">{m?.serverTitle ?? 'MCP Server'}</h3>
 
-      {/* Expanded details */}
-      {expanded && (
-        <div className="pt-3 mt-3 border-t border-border space-y-3">
-          {/* Endpoint + copy */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground shrink-0">{m?.endpoint ?? 'Endpoint'}</span>
-            <span className="font-mono text-foreground truncate">{status.endpoint}</span>
-            <CopyButton text={status.endpoint} label={m?.copyEndpoint ?? 'Copy'} copiedLabel={m?.copied} />
-          </div>
-
-          {/* Quick Setup */}
-          {agents.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground shrink-0">{m?.configureFor ?? 'Configure for'}</span>
-                <select
-                  value={selectedAgent}
-                  onChange={e => setSelectedAgent(e.target.value)}
-                  className="text-xs px-2 py-1 rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  {agents.map(a => (
-                    <option key={a.key} value={a.key}>
-                      {a.name}{a.installed ? ' ✓' : a.present ? ' ·' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {snippetResult && (
-                <>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground shrink-0">{m?.configPath ?? 'Config path'}</span>
-                    <span className="font-mono text-foreground text-2xs">{snippetResult.path}</span>
-                  </div>
-                  <pre className="text-xs font-mono bg-muted/50 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre">
-                    {snippetResult.snippet}
-                  </pre>
-                  <CopyButton text={snippetResult.snippet} label={m?.copyConfig ?? 'Copy Config'} copiedLabel={m?.copied} />
-                </>
-              )}
-            </div>
+      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+        {/* Status line */}
+        <div className="flex items-center gap-2.5 text-xs">
+          <Plug size={14} className="text-muted-foreground shrink-0" />
+          <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${status.running ? 'bg-success' : 'bg-muted-foreground'}`} />
+          <span className="text-foreground font-medium">
+            {status.running ? (m?.running ?? 'Running') : (m?.stopped ?? 'Stopped')}
+          </span>
+          {status.running && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="font-mono text-muted-foreground">{status.transport.toUpperCase()}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">{m?.toolsRegistered ? m.toolsRegistered(status.toolCount) : `${status.toolCount} tools`}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className={status.authConfigured ? 'text-success' : 'text-muted-foreground'}>
+                {status.authConfigured ? (m?.authSet ?? 'Token set') : (m?.authNotSet ?? 'No token')}
+              </span>
+            </>
           )}
         </div>
-      )}
+
+        {/* Endpoint + copy */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground shrink-0">{m?.endpoint ?? 'Endpoint'}</span>
+          <span className="font-mono text-foreground truncate">{status.endpoint}</span>
+          <CopyButton text={status.endpoint} label={m?.copyEndpoint ?? 'Copy'} copiedLabel={m?.copied} />
+        </div>
+
+        {/* Quick Setup */}
+        {agents.length > 0 && (
+          <div className="pt-2 border-t border-border space-y-2.5">
+            {/* Agent selector + transport mode toggle */}
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <span className="text-muted-foreground shrink-0">{m?.configureFor ?? 'Configure for'}</span>
+              <select
+                value={selectedAgent}
+                onChange={e => setSelectedAgent(e.target.value)}
+                className="text-xs px-2 py-1 rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {agents.map(a => (
+                  <option key={a.key} value={a.key}>
+                    {a.name}{a.installed ? ' ✓' : a.present ? ' ·' : ''}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex items-center rounded-md border border-border overflow-hidden ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setMode('stdio')}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
+                    mode === 'stdio'
+                      ? 'bg-muted text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  title={m?.transportLocalHint ?? 'Local — same machine as MindOS server'}
+                >
+                  <Monitor size={11} />
+                  {m?.transportLocal ?? 'Local'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('http')}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
+                    mode === 'http'
+                      ? 'bg-muted text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  title={m?.transportRemoteHint ?? 'Remote — connect from another device via HTTP'}
+                >
+                  <Globe size={11} />
+                  {m?.transportRemote ?? 'Remote'}
+                </button>
+              </div>
+            </div>
+
+            {/* Hint for remote mode */}
+            {mode === 'http' && (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isRemote
+                  ? (m?.remoteDetectedHint ?? 'Uses your current remote IP. Ensure the MCP port is accessible from the target device.')
+                  : (m?.remoteManualHint ?? 'Tip: access MindOS from a remote device to auto-detect the correct IP, or replace 127.0.0.1 with your server\'s LAN IP.')}
+                {!status.authConfigured && (
+                  <span className="text-amber-500 ml-1">{m?.noAuthWarning ?? '⚠ No auth token set — configure one in Settings → General for secure remote access.'}</span>
+                )}
+              </p>
+            )}
+
+            {/* Copy config + show JSON toggle */}
+            {snippetResult && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  {/* Copy button uses full token (snippetResult.snippet) */}
+                  <CopyButton text={snippetResult.snippet} label={m?.copyConfig ?? 'Copy Config'} copiedLabel={m?.copied} />
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-mono text-muted-foreground text-[11px] truncate">{snippetResult.path}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSnippet(!showSnippet)}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                  >
+                    <Code size={10} />
+                    {showSnippet ? (m?.hideJson ?? 'Hide JSON') : (m?.showJson ?? 'Show JSON')}
+                    <ChevronDown size={10} className={`transition-transform ${showSnippet ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Display snippet uses masked token */}
+                {showSnippet && (
+                  <pre className="text-xs font-mono bg-muted/50 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre select-all">
+                    {snippetResult.displaySnippet}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

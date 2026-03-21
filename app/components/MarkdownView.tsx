@@ -7,6 +7,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
@@ -16,9 +17,11 @@ interface MarkdownViewProps {
 function CopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(code).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     });
   }, [code]);
 

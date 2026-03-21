@@ -42,10 +42,8 @@ export function McpTab({ t }: McpTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* MCP Server Status — compact card */}
-      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
-        <ServerStatus status={mcpStatus} agents={agents} t={t} />
-      </div>
+      {/* MCP Server Status */}
+      <ServerStatus status={mcpStatus} agents={agents} t={t} />
 
       {/* Skills */}
       <div>
