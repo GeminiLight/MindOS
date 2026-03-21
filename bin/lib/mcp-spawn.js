@@ -1,7 +1,7 @@
 import { execSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ROOT } from './constants.js';
+import { ROOT, CONFIG_PATH } from './constants.js';
 import { bold, red, yellow } from './colors.js';
 import { npmInstall } from './utils.js';
 
@@ -14,11 +14,21 @@ export function spawnMcp(verbose = false) {
     console.log(yellow('Installing MCP dependencies (first run)...\n'));
     npmInstall(resolve(ROOT, 'mcp'), '--no-workspaces');
   }
+
+  // Read AUTH_TOKEN directly from config to avoid stale system env overriding
+  // the user's configured token. Config is the source of truth for auth.
+  let configAuthToken;
+  try {
+    const cfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    configAuthToken = cfg.authToken;
+  } catch { /* config may not exist yet */ }
+
   const env = {
     ...process.env,
     MCP_PORT: mcpPort,
     MCP_HOST: process.env.MCP_HOST || '0.0.0.0',
     MINDOS_URL: process.env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
+    ...(configAuthToken ? { AUTH_TOKEN: configAuthToken } : {}),
     ...(verbose ? { MCP_VERBOSE: '1' } : {}),
   };
   const child = spawn('npx', ['tsx', 'src/index.ts'], {
