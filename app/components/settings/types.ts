@@ -58,6 +58,8 @@ export interface McpStatus {
   port: number;
   toolCount: number;
   authConfigured: boolean;
+  maskedToken?: string;
+  authToken?: string;
 }
 
 export interface AgentInfo {
