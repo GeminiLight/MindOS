@@ -7,6 +7,8 @@ function detectSystemLang(env: Record<string, string | undefined> = process.env 
   const vars = [env.LANG, env.LC_ALL, env.LC_MESSAGES, env.LANGUAGE]
     .filter(Boolean).join(' ').toLowerCase();
   if (vars.includes('zh')) return 'zh';
+  // If any env var is set, trust it — don't fall through to Intl
+  if (vars.length > 0) return 'en';
   try {
     const locale = Intl.DateTimeFormat().resolvedOptions().locale;
     if (locale.toLowerCase().startsWith('zh')) return 'zh';

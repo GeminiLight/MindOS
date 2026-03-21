@@ -194,6 +194,8 @@ function detectSystemLang() {
     process.env.LANGUAGE,
   ].filter(Boolean).join(' ').toLowerCase();
   if (vars.includes('zh')) return 'zh';
+  // If any env var is set, trust it — don't fall through to Intl
+  if (vars.length > 0) return 'en';
 
   // Fallback: Intl API (works on Windows where LANG is often unset)
   try {
