@@ -223,14 +223,20 @@ export default function ServerStatus({ status, agents, t }: McpServerStatusProps
 
             {/* Hint for remote mode */}
             {mode === 'http' && (
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {isRemote
-                  ? (m?.remoteDetectedHint ?? 'Uses your current remote IP. Ensure the MCP port is accessible from the target device.')
-                  : (m?.remoteManualHint ?? 'Tip: access MindOS from a remote device to auto-detect the correct IP, or replace 127.0.0.1 with your server\'s LAN IP.')}
+              <div className="text-[11px] text-muted-foreground leading-relaxed space-y-1">
+                <p>
+                  {isRemote
+                    ? (m?.remoteDetectedHint ?? 'Using your current remote IP.')
+                    : (m?.remoteManualHint ?? 'Replace 127.0.0.1 with your server\'s public or LAN IP.')}
+                </p>
+                <p>
+                  {(m?.remoteSteps ?? 'To connect from another device: ① Open port {port} in firewall/security group ② Use the config below in your Agent ③ For public networks, consider SSH tunnel for encryption.')
+                    .replace('{port}', String(status.port))}
+                </p>
                 {!status.authConfigured && (
-                  <span className="text-amber-500 ml-1">{m?.noAuthWarning ?? '⚠ No auth token set — configure one in Settings → General for secure remote access.'}</span>
+                  <p className="text-amber-500">{m?.noAuthWarning ?? '⚠ No auth token — set one in Settings → General before enabling remote access.'}</p>
                 )}
-              </p>
+              </div>
             )}
 
             {/* Copy config + show JSON toggle */}
