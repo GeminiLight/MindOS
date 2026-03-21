@@ -385,6 +385,7 @@ export const zh = {
   },
   updateBanner: {
     newVersion: (latest: string, current: string) => `MindOS v${latest} 可用（当前 v${current}）`,
+    updateNow: '更新',
     runUpdate: '终端运行',
     orSee: '或',
     releaseNotes: '查看更新说明',
@@ -554,5 +555,92 @@ export const zh = {
         { hint: '下一步：试试把经验沉淀为 SOP →', prompt: '帮我把这次对话的经验沉淀到 MindOS，形成可复用的工作流。' },
       ],
     },
+  },
+  explore: {
+    title: '探索使用场景',
+    subtitle: '发现 MindOS 能帮你做什么 — 选一个场景，立即体验。',
+    tryIt: '试一试',
+    categories: {
+      'getting-started': '快速上手',
+      'cross-agent': '跨 Agent',
+      'knowledge-evolution': '知识演进',
+      'advanced': '高级',
+    },
+    all: '全部',
+    c1: {
+      title: '注入身份',
+      desc: '让所有 AI Agent 一次认识你 — 偏好、技术栈、沟通风格。',
+      prompt: '读一下我的 MindOS 知识库，帮我把自我介绍写进 Profile。',
+    },
+    c2: {
+      title: '注入信息',
+      desc: '一句话归档文章、会议纪要或网页到知识库，全局可搜。',
+      prompt: '帮我把这篇文章的要点整理到 MindOS 里。',
+    },
+    c3: {
+      title: '跨 Agent 切换',
+      desc: '在 MindOS 写方案，在 Claude Code 写代码，在 Cursor 优化 — 零重复。',
+      prompt: '帮我按 MindOS 里的 XXX 方案开始写代码。',
+    },
+    c4: {
+      title: '经验→SOP',
+      desc: '把踩坑经验沉淀为可复用的工作流，下次 3 分钟搞定。',
+      prompt: '帮我把这次对话的经验沉淀到 MindOS，形成可复用的工作流。',
+    },
+    c5: {
+      title: '手机记灵感',
+      desc: '随手记下灵感，MindOS 自动归档、拆任务、多 Agent 接力执行。',
+      prompt: '帮我把这个想法整理到 MindOS，拆解成可执行的子任务。',
+    },
+    c6: {
+      title: '项目冷启动',
+      desc: '4 分钟搭建新项目 — Profile 和 SOP 自动引导脚手架。',
+      prompt: '帮我按 MindOS 里的 Startup SOP 启动一个新项目。',
+    },
+    c7: {
+      title: '调研入库',
+      desc: '让 Agent 替你跑腿调研竞品或话题，结果结构化入库。',
+      prompt: '帮我调研 X、Y、Z 这几个产品，结果写入 MindOS 产品库。',
+    },
+    c8: {
+      title: '人脉管理',
+      desc: '记录对话、自动生成跟进待办，每个联系人都有完整上下文。',
+      prompt: '我今天和 XXX 聊了这些内容，帮我更新到 MindOS 并生成跟进待办。',
+    },
+    c9: {
+      title: '审计纠偏',
+      desc: '审查 Agent 记了什么，一处修正，全局生效。',
+      prompt: '帮我检查 MindOS Profile 里的技术栈偏好是否正确，有错误帮我修正。',
+    },
+  },
+  walkthrough: {
+    step: (current: number, total: number) => `${current} / ${total}`,
+    next: '下一步',
+    back: '上一步',
+    skip: '跳过引导',
+    done: '完成',
+    exploreCta: '探索更多用法 →',
+    steps: [
+      {
+        title: '导航栏',
+        body: '这是你的 Activity Bar — 在这里切换文件、搜索、插件和 Agent。',
+      },
+      {
+        title: '你的知识库',
+        body: '在文件面板中浏览和管理你的笔记、画像和项目。',
+      },
+      {
+        title: 'AI 对话',
+        body: '和了解你整个知识库的 AI 对话。随时按 ⌘/ 启动。',
+      },
+      {
+        title: '快速搜索',
+        body: '按 ⌘K 即可搜索所有笔记，瞬间找到任何文件。',
+      },
+      {
+        title: '设置',
+        body: '在这里配置 AI 服务商、MCP 连接、同步和外观。',
+      },
+    ],
   },
 } as const satisfies Widen<typeof en>;

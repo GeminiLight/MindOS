@@ -17,10 +17,12 @@ import SyncPopover from './panels/SyncPopover';
 import SearchModal from './SearchModal';
 import AskModal from './AskModal';
 import SettingsModal from './SettingsModal';
+import KeyboardShortcuts from './KeyboardShortcuts';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { useAskModal } from '@/hooks/useAskModal';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
+import { WalkthroughProvider } from './walkthrough';
 import type { Tab } from './settings/types';
 
 interface SidebarLayoutProps {
@@ -177,6 +179,17 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     try { localStorage.setItem('rail-expanded', String(expanded)); } catch {}
   }, []);
 
+  // Listen for cross-component "open settings" events (e.g. from UpdateBanner)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail?.tab;
+      if (tab) setSettingsTab(tab);
+      setSettingsOpen(true);
+    };
+    window.addEventListener('mindos:open-settings', handler);
+    return () => window.removeEventListener('mindos:open-settings', handler);
+  }, []);
+
   // Bridge useAskModal store → right Ask panel or popup
   useEffect(() => {
     if (askModal.open) {
@@ -290,6 +303,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   const effectivePanelWidth = panelWidth ?? (activePanel ? PANEL_WIDTH[activePanel] : 280);
 
   return (
+    <WalkthroughProvider>
     <>
       {/* Skip link */}
       <a
@@ -335,7 +349,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
             active={activePanel === 'agents'}
             maximized={panelMaximized}
             onMaximize={handlePanelMaximize}
-            onOpenSettings={openSettingsTab}
           />
         </div>
       </Panel>
@@ -367,6 +380,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
       {/* ── Ask AI FAB (desktop only — toggles right panel or popup) ── */}
       <AskFab onToggle={toggleAskPanel} askPanelOpen={askPanelOpen || desktopAskPopupOpen} />
+
+      {/* ── Keyboard Shortcuts (⌘?) ── */}
+      <KeyboardShortcuts />
 
       {/* ── Settings Modal (desktop overlay — does not affect panel) ── */}
       <SettingsModal
@@ -455,5 +471,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         }
       `}</style>
     </>
+    </WalkthroughProvider>
   );
 }
