@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus } from './types';
 import { TOTAL_STEPS, STEP_KB, STEP_PORTS, STEP_AGENTS } from './constants';
 import StepKB from './StepKB';
@@ -229,7 +230,7 @@ export default function SetupWizard() {
   }, []);
 
   const copyToken = useCallback(() => {
-    navigator.clipboard.writeText(state.authToken).catch(() => { /* clipboard unavailable in insecure context */ });
+    copyToClipboard(state.authToken).catch(() => {});
     setTokenCopied(true);
     setTimeout(() => setTokenCopied(false), 2000);
   }, [state.authToken]);

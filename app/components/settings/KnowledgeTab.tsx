@@ -5,6 +5,7 @@ import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Lo
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { formatBytes, formatUptime } from '@/lib/format';
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
@@ -85,9 +86,11 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   function handleCopy() {
     const text = revealedToken ?? data.authToken ?? '';
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(text).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     });
   }
 

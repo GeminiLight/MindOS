@@ -17,3 +17,9 @@ export function formatUptime(ms: number): string {
   const d = Math.floor(h / 24);
   return `${d}d ${h % 24}h`;
 }
+
+/** Mask a token for display: show first 4 and last 4 chars, middle replaced with bullets */
+export function maskToken(token: string): string {
+  if (token.length <= 12) return '••••';
+  return `${token.slice(0, 4)}••••${token.slice(-4)}`;
+}
