@@ -30,9 +30,9 @@ export async function POST() {
     });
     child.unref();
 
-    // Give a brief moment for the response before the update may kill us
-    setTimeout(() => process.exit(0), 3000);
-
+    // Unlike /api/restart, we do NOT process.exit() here.
+    // `mindos update` will npm install first (30s+), then restart which
+    // kills this process. Exiting early would break the response.
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
