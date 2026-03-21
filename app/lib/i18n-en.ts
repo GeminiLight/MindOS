@@ -360,9 +360,10 @@ export const en = {
   },
   updateBanner: {
     newVersion: (latest: string, current: string) => `MindOS v${latest} available (current: v${current})`,
+    updateNow: 'Update',
     runUpdate: 'Run',
     orSee: 'or',
-    releaseNotes: 'view release notes',
+    releaseNotes: 'release notes',
   },
   setup: {
     stepTitles: ['Knowledge Base', 'AI Provider', 'Ports', 'Security', 'Agent Tools', 'Review'],
@@ -529,5 +530,92 @@ export const en = {
         { hint: 'Next: try turning experience into a reusable SOP →', prompt: 'Help me distill this conversation into a reusable workflow in MindOS.' },
       ],
     },
+  },
+  explore: {
+    title: 'Explore Use Cases',
+    subtitle: 'Discover what you can do with MindOS — pick a scenario and try it now.',
+    tryIt: 'Try it',
+    categories: {
+      'getting-started': 'Getting Started',
+      'cross-agent': 'Cross-Agent',
+      'knowledge-evolution': 'Knowledge Evolution',
+      'advanced': 'Advanced',
+    },
+    all: 'All',
+    c1: {
+      title: 'Inject Your Identity',
+      desc: 'Tell all AI agents who you are — preferences, tech stack, communication style — in one shot.',
+      prompt: 'Read my MindOS knowledge base and help me write a self-introduction into Profile.',
+    },
+    c2: {
+      title: 'Save Information',
+      desc: 'Archive articles, meeting notes, or web pages into your knowledge base with one prompt.',
+      prompt: 'Help me save the key points from this article into MindOS.',
+    },
+    c3: {
+      title: 'Cross-Agent Handoff',
+      desc: 'Start a plan in MindOS, continue coding in Claude Code, refine in Cursor — zero context loss.',
+      prompt: 'Help me start coding based on the plan in MindOS.',
+    },
+    c4: {
+      title: 'Experience → SOP',
+      desc: 'Turn hard-won debugging sessions into reusable workflows that prevent future mistakes.',
+      prompt: 'Help me distill this conversation into a reusable workflow in MindOS.',
+    },
+    c5: {
+      title: 'Capture Ideas on the Go',
+      desc: 'Jot down an inspiration on your phone — MindOS archives, decomposes, and assigns to agents.',
+      prompt: 'Help me organize this idea into MindOS and break it into actionable sub-tasks.',
+    },
+    c6: {
+      title: 'Project Cold Start',
+      desc: 'Spin up a new project in 4 minutes — your profile and SOPs guide the scaffolding automatically.',
+      prompt: 'Help me start a new project following the Startup SOP in MindOS.',
+    },
+    c7: {
+      title: 'Research & Archive',
+      desc: 'Let agents research competitors or topics for you, then file structured results in your KB.',
+      prompt: 'Help me research X, Y, Z products and save results to the MindOS product library.',
+    },
+    c8: {
+      title: 'Network Management',
+      desc: 'Log conversations with contacts, auto-generate follow-up TODOs, and keep full context.',
+      prompt: 'I met with someone today — update MindOS Connections and create follow-up TODOs.',
+    },
+    c9: {
+      title: 'Audit & Correct',
+      desc: 'Review what agents know about you, fix mistakes in one place, and all agents update instantly.',
+      prompt: 'Check my MindOS Profile for accuracy and correct any errors.',
+    },
+  },
+  walkthrough: {
+    step: (current: number, total: number) => `${current} of ${total}`,
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip tour',
+    done: 'Done',
+    exploreCta: 'Explore what you can do →',
+    steps: [
+      {
+        title: 'Navigation',
+        body: 'This is your Activity Bar — switch between Files, Search, Plugins, and Agents from here.',
+      },
+      {
+        title: 'Your Knowledge Base',
+        body: 'Browse and organize your notes, profiles, and projects in the file panel.',
+      },
+      {
+        title: 'Ask AI',
+        body: 'Chat with an AI that knows your entire knowledge base. Press ⌘/ anytime.',
+      },
+      {
+        title: 'Quick Search',
+        body: 'Find any file instantly with ⌘K — search across all your notes.',
+      },
+      {
+        title: 'Settings',
+        body: 'Configure AI providers, MCP connections, sync, and appearance here.',
+      },
+    ],
   },
 } as const;

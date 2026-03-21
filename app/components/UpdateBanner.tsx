@@ -45,6 +45,11 @@ export default function UpdateBanner() {
     setInfo(null);
   };
 
+  const handleOpenUpdate = () => {
+    // Fire custom event — SidebarLayout listens and opens Settings → Update tab
+    window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'update' } }));
+  };
+
   const updateT = t.updateBanner;
 
   return (
@@ -58,32 +63,23 @@ export default function UpdateBanner() {
             ? updateT.newVersion(info.latest, info.current)
             : `MindOS v${info.latest} available (current: v${info.current})`}
         </span>
-        <span className="text-muted-foreground">
-          {updateT?.runUpdate ?? 'Run'}{' '}
-          <code className="px-1 py-0.5 rounded bg-muted font-mono text-xs">mindos update</code>
+        <button
+          onClick={handleOpenUpdate}
+          className="px-2 py-0.5 rounded-md text-xs font-medium text-white transition-colors hover:opacity-90"
+          style={{ background: 'var(--amber)' }}
+        >
+          {updateT?.updateNow ?? 'Update'}
+        </button>
+        <span className="text-muted-foreground hidden sm:inline">
           {updateT?.orSee ? (
             <>
-              {' '}{updateT.orSee}{' '}
-              <a
-                href="https://github.com/GeminiLight/mindos/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground transition-colors"
-              >
-                {updateT.releaseNotes}
-              </a>
+              {updateT.orSee}{' '}
+              <a href="https://github.com/GeminiLight/mindos/releases" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">{updateT.releaseNotes}</a>
             </>
           ) : (
             <>
-              {' '}or{' '}
-              <a
-                href="https://github.com/GeminiLight/mindos/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground transition-colors"
-              >
-                view release notes
-              </a>
+              or{' '}
+              <a href="https://github.com/GeminiLight/mindos/releases" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">release notes</a>
             </>
           )}
         </span>
