@@ -25,7 +25,7 @@ import { z } from "zod";
 const BASE_URL       = process.env.MINDOS_URL      ?? "http://localhost:3456";
 const AUTH_TOKEN     = process.env.AUTH_TOKEN;
 const MCP_TRANSPORT  = process.env.MCP_TRANSPORT   ?? "http";    // "http" | "stdio"
-const MCP_HOST       = process.env.MCP_HOST        ?? "127.0.0.1";
+const MCP_HOST       = process.env.MCP_HOST        ?? "0.0.0.0";
 const MCP_PORT       = parseInt(process.env.MCP_PORT ?? "8781", 10);
 const MCP_ENDPOINT   = process.env.MCP_ENDPOINT    ?? "/mcp";
 const CHARACTER_LIMIT = 25_000;
@@ -510,7 +510,8 @@ async function main() {
 
     const httpServer = createServer(expressApp as Parameters<typeof createServer>[1]);
     httpServer.listen(MCP_PORT, MCP_HOST, () => {
-      console.error(`MindOS MCP server (HTTP) listening on http://${MCP_HOST}:${MCP_PORT}${MCP_ENDPOINT}`);
+      const displayHost = MCP_HOST === '0.0.0.0' ? '127.0.0.1' : MCP_HOST;
+      console.error(`MindOS MCP server (HTTP) listening on http://${displayHost}:${MCP_PORT}${MCP_ENDPOINT}`);
       console.error(`API backend: ${BASE_URL}`);
     });
   } else {
