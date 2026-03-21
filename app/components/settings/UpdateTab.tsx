@@ -60,27 +60,18 @@ export function UpdateTab() {
     }
 
     // Poll for version change (server will restart with new version)
-    const startTime = Date.now();
     pollRef.current = setInterval(async () => {
       try {
         const data = await apiFetch<UpdateInfo>('/api/update-check');
         if (data.current !== originalVersion.current) {
-          // Version changed → update succeeded
           clearInterval(pollRef.current);
           clearTimeout(timeoutRef.current);
           setInfo(data);
           setState('updated');
-          // Auto reload after brief celebration
           setTimeout(() => window.location.reload(), 2000);
-          return;
         }
       } catch {
         // Server still restarting — keep polling
-      }
-
-      if (Date.now() - startTime > POLL_TIMEOUT) {
-        clearInterval(pollRef.current);
-        setState('timeout');
       }
     }, POLL_INTERVAL);
 
