@@ -1,6 +1,6 @@
 {
   "name": "@geminilight/mindos",
-  "version": "0.5.27",
+  "version": "0.5.28",
   "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
   "keywords": [
     "mindos",

@@ -33,7 +33,7 @@ export interface SettingsData {
   envValues?: Record<string, string>;
 }
 
-export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'sync';
+export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'sync' | 'update';
 
 export const CONTENT_WIDTHS = [
   { value: '680px', label: 'Narrow (680px)' },
