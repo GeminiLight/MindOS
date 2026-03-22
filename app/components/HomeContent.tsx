@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown, Compass } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime } from '@/lib/utils';
@@ -94,6 +94,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
           <button
             onClick={triggerAsk}
             title="⌘/"
+            data-walkthrough="ask-button"
             className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 hover:border-amber-500/50 hover:bg-amber-500/8"
             style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
           >
@@ -152,6 +153,16 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
+          </Link>
+          <Link
+            href="/explore"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5"
+            style={{
+              color: 'var(--amber)',
+            }}
+          >
+            <Compass size={14} />
+            <span>{t.explore.title}</span>
           </Link>
         </div>
 
