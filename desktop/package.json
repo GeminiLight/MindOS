@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "MindOS Desktop — Local-first knowledge base for AI Agents",
   "private": true,
-  "main": "dist-electron/main.js",
+"main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -23,7 +23,7 @@
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
-    "electron-vite": "^3.0.0",
+    "electron-vite": "^1.0.29",
     "typescript": "^5.6.0"
   }
 }

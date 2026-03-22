@@ -1,15 +1,17 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
 import { resolve } from 'path';
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
     build: {
-      outDir: 'dist-electron',
+      outDir: 'dist-electron/main',
       rollupOptions: {
         input: {
-          main: resolve(__dirname, 'src/main.ts'),
-          'connect-window': resolve(__dirname, 'src/connect-window.ts'),
+          index: resolve(__dirname, 'src/main.ts'),
+        },
+        output: {
+          entryFileNames: 'main.js',
+          format: 'cjs',
         },
       },
     },
@@ -20,18 +22,18 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     build: {
-      outDir: 'dist-electron',
+      outDir: 'dist-electron/preload',
       rollupOptions: {
         input: {
-          preload: resolve(__dirname, 'src/preload.ts'),
+          index: resolve(__dirname, 'src/preload.ts'),
           'connect-preload': resolve(__dirname, 'src/connect-preload.ts'),
+        },
+        output: {
+          entryFileNames: '[name].js',
+          format: 'cjs',
         },
       },
     },
   },
-  // No renderer config — we don't have a renderer entry.
-  // Main window loads Next.js via loadURL('http://localhost:3456').
-  // Connect window loads a local HTML file directly.
 });
