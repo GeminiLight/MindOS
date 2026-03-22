@@ -18,7 +18,19 @@ echo "🧪 Running tests..."
 npm test
 echo ""
 
-# 3. Smoke test: pack → install in temp dir → verify CLI works
+# 3. Verify Next.js build
+echo "🔨 Verifying Next.js build..."
+cd app
+if npx next build 2>&1 | tail -5; then
+  echo "   ✅ Next.js build succeeded"
+else
+  echo "❌ Next.js build failed"
+  exit 1
+fi
+cd ..
+echo ""
+
+# 4. Smoke test: pack → install in temp dir → verify CLI works
 echo "🔍 Smoke testing package..."
 SMOKE_DIR=$(mktemp -d)
 TARBALL=$(npm pack --pack-destination "$SMOKE_DIR" 2>/dev/null | tail -1)
@@ -79,20 +91,20 @@ cd - >/dev/null
 echo "   🟢 Smoke test passed"
 echo ""
 
-# 3. Bump version (creates commit + tag automatically)
+# 5. Bump version (creates commit + tag automatically)
 echo "📦 Bumping version ($BUMP)..."
 npm version "$BUMP" -m "%s"
 VERSION="v$(node -p "require('./package.json').version")"
 echo "   Version: $VERSION"
 echo ""
 
-# 4. Push commit + tag
+# 6. Push commit + tag
 echo "🚀 Pushing to origin..."
 git push origin main
 git push origin "$VERSION"
 echo ""
 
-# 5. Wait for CI
+# 7. Wait for CI
 # Flow: tag push → sync-to-mindos (syncs code + tag to public repo) → public repo publish-npm
 if command -v gh &>/dev/null; then
   echo "⏳ Waiting for sync → publish pipeline..."
