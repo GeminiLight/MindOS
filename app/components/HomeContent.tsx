@@ -88,10 +88,14 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
 }
 
 const FILES_PER_GROUP = 3;
+const SPACES_PER_ROW = 6;   // 3 cols × 2 rows on desktop, show 1 row initially
+const PLUGINS_INITIAL = 6;
 
 export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
+  const [showAllSpaces, setShowAllSpaces] = useState(false);
+  const [showAllPlugins, setShowAllPlugins] = useState(false);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
 
   const suggestions = t.ask?.suggestions ?? [
@@ -207,7 +211,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         <section className="mb-8">
           <SectionTitle icon={<Puzzle size={13} />}>{t.home.plugins}</SectionTitle>
           <div className="flex flex-wrap gap-2">
-            {availablePlugins.map(r => (
+            {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
               <Link
                 key={r.id}
                 href={`/view/${encodePath(r.entryPath!)}`}
@@ -218,6 +222,15 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               </Link>
             ))}
           </div>
+          {availablePlugins.length > PLUGINS_INITIAL && (
+            <button
+              onClick={() => setShowAllPlugins(v => !v)}
+              className="flex items-center gap-1.5 mt-2 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
+            >
+              <ChevronDown size={12} className={`transition-transform duration-200 ${showAllPlugins ? 'rotate-180' : ''}`} />
+              <span>{showAllPlugins ? t.home.showLess : t.home.showMore}</span>
+            </button>
+          )}
         </section>
       )}
 
@@ -226,7 +239,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         <section className="mb-8">
           <SectionTitle icon={<Brain size={13} />}>{t.home.spaces}</SectionTitle>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {spaceList.map(s => {
+            {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
               const emoji = extractEmoji(s.name);
               const label = stripEmoji(s.name);
               const isEmpty = s.fileCount === 0;
@@ -258,6 +271,15 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               );
             })}
           </div>
+          {spaceList.length > SPACES_PER_ROW && (
+            <button
+              onClick={() => setShowAllSpaces(v => !v)}
+              className="flex items-center gap-1.5 mt-2 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
+            >
+              <ChevronDown size={12} className={`transition-transform duration-200 ${showAllSpaces ? 'rotate-180' : ''}`} />
+              <span>{showAllSpaces ? t.home.showLess : t.home.showMore}</span>
+            </button>
+          )}
         </section>
       )}
 
