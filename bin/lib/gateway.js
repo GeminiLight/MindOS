@@ -1,12 +1,47 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync, openSync, readSync, closeSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN, CONFIG_PATH } from './constants.js';
 import { green, red, dim, cyan, yellow } from './colors.js';
 import { isPortInUse } from './port.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Dynamically resolve the current mindos CLI path.
+ * This is needed because CLI_PATH is evaluated at module load time,
+ * but after `npm install -g @geminilight/mindos@latest`, the path may have changed.
+ */
+function getCurrentCliPath() {
+  try {
+    // Try to find mindos in PATH
+    const mindosBin = execSync('which mindos', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    if (mindosBin) {
+      // mindos is usually a symlink, resolve it
+      try {
+        const realPath = execSync(`readlink -f "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        if (realPath && existsSync(realPath)) {
+          return realPath;
+        }
+      } catch {
+        // readlink -f not available on macOS, fallback to realpath
+        try {
+          const realPath = execSync(`realpath "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+          if (realPath && existsSync(realPath)) {
+            return realPath;
+          }
+        } catch {}
+      }
+      // Fallback: use the symlink target itself
+      if (existsSync(mindosBin)) {
+        return mindosBin;
+      }
+    }
+  } catch {}
+  // Fallback to static CLI_PATH if dynamic resolution fails
+  return CLI_PATH;
+}
 
 /** Rotate log file when it exceeds 2 MB. Keeps at most one .old backup. */
 function rotateLogs() {
@@ -169,6 +204,7 @@ const systemd = {
     ensureMindosDir();
     rotateLogs();
     const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
+    const cliPath = getCurrentCliPath();
     const unit = [
       '[Unit]',
       'Description=MindOS app + MCP server',
@@ -176,7 +212,7 @@ const systemd = {
       '',
       '[Service]',
       'Type=simple',
-      `ExecStart=${NODE_BIN} ${CLI_PATH} start`,
+      `ExecStart=${NODE_BIN} ${cliPath} start`,
       'Restart=on-failure',
       'RestartSec=3',
       `Environment=HOME=${homedir()}`,
@@ -253,6 +289,7 @@ const launchd = {
     ensureMindosDir();
     rotateLogs();
     const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
+    const cliPath = getCurrentCliPath();
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -261,7 +298,7 @@ const launchd = {
   <key>ProgramArguments</key>
   <array>
     <string>${NODE_BIN}</string>
-    <string>${CLI_PATH}</string>
+    <string>${cliPath}</string>
     <string>start</string>
   </array>
   <key>RunAtLoad</key><true/>

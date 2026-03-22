@@ -54,6 +54,183 @@ export function setActiveRemoteConnection(address: string | null): void {
 }
 
 /**
+ * Show mode selection window (initial run)
+ * Returns 'local' | 'remote' | null
+ */
+export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'local' | 'remote' | null> {
+  return new Promise((resolve) => {
+    const modeWin = new BrowserWindow({
+      width: 480,
+      height: 580,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      parent: parentWindow || undefined,
+      modal: !!parentWindow,
+      title: 'MindOS - Mode Selection',
+      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      webPreferences: {
+        preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+      show: false,
+    });
+
+    modeWin.once('ready-to-show', () => modeWin.show());
+
+    // Load same HTML - the page will detect mode selection state
+    const htmlPath = path.join(__dirname, '..', 'src', 'connect.html');
+    modeWin.loadFile(htmlPath, { query: { modeSelect: 'true' } }).catch(() => {
+      // Fallback for packaged app
+      modeWin.loadFile(path.join(__dirname, 'connect.html'), { query: { modeSelect: 'true' } });
+    });
+
+    let resolved = false;
+
+    // ── IPC Handlers ──
+
+    // Check if Node.js is available
+    ipcMain.handle('connect:check-node', () => {
+      const { getNodePath } = require('./main');
+      return !!getNodePath();
+    });
+
+// Check if MindOS CLI is installed
+    ipcMain.handle('connect:check-mindos', () => {
+      const { execSync } = require('child_process');
+      const { getNodePath } = require('./main');
+      const nodePath = getNodePath();
+      if (!nodePath) return false;
+
+      try {
+        // Try to run `mindos --version`
+        execSync('mindos --version', { encoding: 'utf-8', timeout: 5000 });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    // Auto-install MindOS CLI
+    ipcMain.handle('connect:install-mindos', async () => {
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const path = require('path');
+      const execAsync = promisify(exec);
+
+      // Get Node.js path and derive npm path
+      const { getNodePath } = require('./main');
+      const nodePath = getNodePath();
+
+      if (!nodePath) {
+        return { success: false, error: 'Node.js not found' };
+      }
+
+      // Determine npm path based on node path
+      const isWin = process.platform === 'win32';
+      const nodeDir = path.dirname(nodePath);
+      const npmCmd = isWin
+        ? path.join(nodeDir, 'npm.cmd')
+        : path.join(nodeDir, '..', 'bin', 'npm');
+
+      // Use the npm from the Node.js installation
+      const npmPath = npmCmd;
+
+      try {
+        // Use npm to install @geminilight/mindos globally
+        const { stdout, stderr } = await execAsync(`"${npmPath}" install -g @geminilight/mindos`, {
+          timeout: 120000, // 2 minutes timeout
+          encoding: 'utf-8',
+        });
+
+        // Verify installation
+        try {
+          await execAsync('mindos --version', { timeout: 5000 });
+          return { success: true, output: stdout || 'Installation completed' };
+        } catch {
+          return { success: false, error: 'Installation verification failed - mindos command not found in PATH' };
+        }
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err.message || 'Installation failed',
+          stderr: err.stderr,
+        };
+      }
+    });
+
+    ipcMain.handle('connect:select-mode', (_: unknown, mode: 'local' | 'remote') => {
+      resolved = true;
+      resolve(mode);
+      modeWin.close();
+      return true;
+    });
+
+    ipcMain.handle('connect:show-node-dialog', async () => {
+      const { dialog, shell } = require('electron');
+      const result = await dialog.showMessageBox(modeWin, {
+        type: 'warning',
+        title: i18n[detectLang()].nodeRequiredTitle,
+        message: i18n[detectLang()].nodeRequiredMessage,
+        detail: i18n[detectLang()].nodeRequiredOptions,
+        buttons: [
+          i18n[detectLang()].downloadNode,
+          i18n[detectLang()].switchRemoteBtn,
+          i18n[detectLang()].cancel
+        ],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (result.response === 0) return 'install';
+      if (result.response === 1) return 'remote';
+      return 'cancel';
+    });
+
+    ipcMain.handle('connect:open-nodejs', () => {
+      const { shell } = require('electron');
+      shell.openExternal('https://nodejs.org/');
+    });
+
+// Cleanup
+    modeWin.on('closed', () => {
+      ipcMain.removeHandler('connect:check-node');
+      ipcMain.removeHandler('connect:check-mindos');
+      ipcMain.removeHandler('connect:install-mindos');
+      ipcMain.removeHandler('connect:select-mode');
+      ipcMain.removeHandler('connect:show-node-dialog');
+      ipcMain.removeHandler('connect:open-nodejs');
+      if (!resolved) resolve(null);
+    });
+  });
+}
+
+// Simple i18n helper for Electron dialog
+function detectLang(): 'zh' | 'en' {
+  const appLocale = require('electron').app.getLocale();
+  return appLocale?.startsWith('zh') ? 'zh' : 'en';
+}
+
+const i18n = {
+  zh: {
+    nodeRequiredTitle: '需要 Node.js',
+    nodeRequiredMessage: 'Node.js ≥20 是运行本地模式的必需依赖。',
+    nodeRequiredOptions: '您可以：\n• 从 nodejs.org 安装（推荐）\n• 切换到远程模式',
+    downloadNode: '下载 Node.js',
+    switchRemoteBtn: '切换到远程模式',
+    cancel: '取消',
+  },
+  en: {
+    nodeRequiredTitle: 'Node.js Required',
+    nodeRequiredMessage: 'Node.js ≥20 is required to run MindOS locally.',
+    nodeRequiredOptions: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode',
+    downloadNode: 'Download Node.js',
+    switchRemoteBtn: 'Switch to Remote Mode',
+    cancel: 'Cancel',
+  }
+};
+
+/**
  * Show the connect window and resolve with the authenticated server URL.
  * Returns null if the user cancels or switches to local mode.
  */
@@ -70,7 +247,7 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       title: 'Connect to MindOS',
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       webPreferences: {
-preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
+        preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
         nodeIntegration: false,
         contextIsolation: true,
       },
