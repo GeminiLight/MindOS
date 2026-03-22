@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-17 | Current stage: P1 -->
+<!-- Last verified: 2026-03-22 | Current stage: P1 -->
 
 # 踩坑记录 (Known Pitfalls)
 

@@ -75,7 +75,7 @@ body {
   --ring: var(--amber);
   --radius: 0.5rem;
   --amber: #c8873a;
-  --amber-dim: rgba(200, 135, 58, 0.12);
+  --amber-dim: rgba(200, 135, 58, 0.18);
   --amber-subtle: rgba(200, 135, 30, 0.08);
   --amber-foreground: #131210;
   --success: #7aad80;
@@ -110,7 +110,7 @@ body {
   --input: rgba(232, 228, 220, 0.1);
   --ring: var(--amber);
   --amber: #d4954a;
-  --amber-dim: rgba(212, 149, 74, 0.12);
+  --amber-dim: rgba(212, 149, 74, 0.20);
   --amber-subtle: rgba(212, 149, 74, 0.10);
   --amber-foreground: #131210;
   --success: #7aad80;
@@ -299,6 +299,10 @@ body {
   background: rgba(10, 9, 6, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+.dark .modal-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
 }
 
 /* Micro type scale: text-2xs = 10px (between nothing and text-xs 12px) */

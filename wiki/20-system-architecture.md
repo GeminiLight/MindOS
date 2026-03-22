@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-22 | Current stage: P1 -->
 
 # MindOS 系统架构 (System Architecture)
 
@@ -72,7 +72,7 @@ sop_note/
 
 **技术栈：** Next.js 16 (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui + TipTap + CodeMirror 6 + Vercel AI SDK
 
-**API Routes (16)：**
+**API Routes (30+)：**
 
 | 端点 | 功能 |
 |------|------|
@@ -86,19 +86,50 @@ sop_note/
 | `GET /api/files` | 文件树 |
 | `GET /api/git` | Git 操作 |
 | `GET /api/graph` | 知识图谱 (nodes + edges) |
+| `GET /api/health` | 健康检查 |
 | `GET /api/init` | 初始化状态 |
+| `GET /api/monitoring` | 性能监控数据 |
 | `GET /api/recent-files` | 最近修改 |
+| `POST /api/restart` | 重启服务 |
 | `GET /api/search?q=` | 全文搜索 |
 | `GET/PUT /api/settings` | 应用设置 |
 | `POST /api/settings/reset-token` | Token 重置 |
+| `POST /api/settings/test-key` | API密钥测试 |
+| `GET /api/skills` | Skills列表 |
 | `POST /api/sync` | Git 同步操作 |
+| `GET /api/update` | 更新操作 |
+| `GET /api/update-check` | 检查更新 |
+| `GET /api/mcp/agents` | MCP Agent列表 |
+| `POST /api/mcp/install` | MCP安装 |
+| `POST /api/mcp/install-skill` | Skill安装 |
+| `GET /api/mcp/status` | MCP状态 |
+| `GET /api/setup` | 安装设置 |
+| `POST /api/setup/check-path` | 路径检查 |
+| `POST /api/setup/check-port` | 端口检查 |
+| `POST /api/setup/generate-token` | 生成Token |
+| `GET /api/setup/ls` | 列出目录 |
 
 **核心组件拆分：**
 
 | 组件 | 拆分前 | 拆分后 |
 |------|--------|--------|
-| CsvRenderer | 693 行 | 68 行 + 6 子文件 (csv/，无 barrel export) |
-| SettingsModal | 588 行 | 182 行 + 8 子文件 (settings/，无 barrel export) |
+| CsvRenderer | 693 行 | 71 行 + 6 子文件 (csv/types.ts, EditableCell.tsx, TableView.tsx, GalleryView.tsx, BoardView.tsx, ConfigPanel.tsx) |
+| SettingsModal | 588 行 | 347 行 (SettingsContent.tsx) + 14 子文件 (settings/types.ts, Primitives.tsx, AiTab.tsx, AppearanceTab.tsx, KnowledgeTab.tsx, SyncTab.tsx, McpTab.tsx, UpdateTab.tsx, AgentsTab.tsx, McpAgentInstall.tsx, McpSkillsSection.tsx, MonitoringTab.tsx, PluginsTab.tsx, ShortcutsTab.tsx) |
+
+**插件渲染器 (10个)：**
+
+| 渲染器 | 功能 | 主文件 | 大小 |
+|--------|------|--------|------|
+| agent-inspector | Agent调用记录查看 | AgentInspectorRenderer.tsx | 11.74 KB |
+| backlinks | 反向链接展示 | BacklinksRenderer.tsx | 5.56 KB |
+| config | 配置文件渲染 | ConfigRenderer.tsx | 9.49 KB |
+| csv | CSV表格/看板/画廊视图 | CsvRenderer.tsx + 6子文件 | 3.27 KB (主文件) |
+| diff | 文件差异对比 | DiffRenderer.tsx | 12.76 KB |
+| graph | 知识图谱可视化 | GraphRenderer.tsx | 13.27 KB |
+| summary | 内容摘要 | SummaryRenderer.tsx | 9.48 KB |
+| timeline | 时间线视图 | TimelineRenderer.tsx | 8.28 KB |
+| todo | 待办事项看板 | TodoRenderer.tsx | 14.81 KB |
+| workflow | 工作流执行器 | WorkflowRenderer.tsx | 15.74 KB |
 
 **安全：** middleware.ts Bearer Token 认证，同源浏览器免认证。
 

@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: ALL COMPLETE (v0.4.0) -->
+<!-- Last verified: 2026-03-22 | Current stage: ALL COMPLETE (v0.4.0) -->
 
 # 插件架构设计 (Plugin Architecture)
 

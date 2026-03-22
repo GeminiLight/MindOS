@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-20 | Current stage: P1 -->
+<!-- Last verified: 2026-03-22 | Current stage: P1 -->
 
 # 页面设计 (Page Design)
 
