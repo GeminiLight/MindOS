@@ -1,6 +1,8 @@
 'use client';
 
+import { AlertCircle } from 'lucide-react';
 import AskContent from '@/components/ask/AskContent';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 
 const DEFAULT_WIDTH = 380;
@@ -47,16 +49,29 @@ export default function RightAskPanel({
       role="complementary"
       aria-label="MindOS Agent panel"
     >
-      <AskContent
-        visible={open}
-        variant="panel"
-        currentFile={open ? currentFile : undefined}
-        initialMessage={initialMessage}
-        onFirstMessage={onFirstMessage}
-        onClose={onClose}
-        askMode={askMode}
-        onModeSwitch={onModeSwitch}
-      />
+      <ErrorBoundary fallback={
+        <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
+          <AlertCircle size={20} className="text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">AI panel encountered an error.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            Reload page
+          </button>
+        </div>
+      }>
+        <AskContent
+          visible={open}
+          variant="panel"
+          currentFile={open ? currentFile : undefined}
+          initialMessage={initialMessage}
+          onFirstMessage={onFirstMessage}
+          onClose={onClose}
+          askMode={askMode}
+          onModeSwitch={onModeSwitch}
+        />
+      </ErrorBoundary>
 
       {/* Drag resize handle — LEFT edge */}
       <div

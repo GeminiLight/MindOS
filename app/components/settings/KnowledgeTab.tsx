@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
-import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw } from 'lucide-react';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { apiFetch } from '@/lib/api';
@@ -48,6 +48,27 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
         setGuideDismissed(!newDismissed); // rollback on failure
       });
   }, [guideDismissed]);
+
+  const handleRestartWalkthrough = useCallback(() => {
+    apiFetch('/api/setup', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guideState: {
+          active: true,
+          dismissed: false,
+          walkthroughStep: 0,
+          walkthroughDismissed: false,
+        },
+      }),
+    })
+      .then(() => {
+        setGuideActive(true);
+        setGuideDismissed(false);
+        window.dispatchEvent(new Event('guide-state-updated'));
+      })
+      .catch(err => console.error('Failed to restart walkthrough:', err));
+  }, []);
 
   const origin = useSyncExternalStore(
     () => () => {},
@@ -207,6 +228,13 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             </div>
             <Toggle checked={!guideDismissed} onChange={() => handleGuideToggle()} />
           </div>
+          <button
+            onClick={handleRestartWalkthrough}
+            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <RotateCcw size={12} />
+            {k.restartWalkthrough ?? 'Restart walkthrough'}
+          </button>
         </div>
       )}
 

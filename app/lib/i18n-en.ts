@@ -234,6 +234,7 @@ export const en = {
       authTokenClear: 'Clear token',
       authTokenResetConfirm: 'Regenerate token? All existing MCP clients will need to update their config.',
       authTokenMcpPort: 'MCP port',
+      restartWalkthrough: 'Restart walkthrough',
     },
     sync: {
       emptyTitle: 'Cross-device Sync',

@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-17 | Current stage: P1 -->
+<!-- Last verified: 2026-03-22 | Current stage: P1 -->
 
 # 设计原则 (Design Principle)
 

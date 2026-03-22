@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: 规划 -->
+<!-- Last verified: 2026-03-22 | Current stage: 规划 -->
 
 # Stage 12 — 深度 RAG：语义搜索 + 智能上下文注入
 

@@ -259,6 +259,7 @@ export const zh = {
       authTokenClear: '清除令牌',
       authTokenResetConfirm: '重新生成令牌？所有 MCP 客户端配置都需要更新。',
       authTokenMcpPort: 'MCP 端口',
+      restartWalkthrough: '重新开始引导',
     },
     sync: {
       emptyTitle: '跨设备同步',

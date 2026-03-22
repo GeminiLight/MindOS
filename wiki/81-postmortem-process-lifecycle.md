@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-17 -->
+<!-- Last verified: 2026-03-22 -->
 
 # 进程生命周期 Bug 根因分析
 

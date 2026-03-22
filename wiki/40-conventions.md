@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: P1 -->
+<!-- Last verified: 2026-03-22 | Current stage: P1 -->
 
 # 编码约定 (Conventions)
 

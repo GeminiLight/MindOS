@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-14 | Current stage: 规划 -->
+<!-- Last verified: 2026-03-22 | Current stage: 规划 -->
 
 # Stage 13 — 局域网自动发现 (mDNS/Bonjour)
 
