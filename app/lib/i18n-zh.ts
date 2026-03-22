@@ -130,6 +130,20 @@ export const zh = {
       connect: '连接',
       installing: '安装中...',
       install: (name: string) => `安装 ${name}`,
+      // Snippet section
+      copyConfig: '复制配置',
+      copied: '已复制!',
+      transportLocal: '本地',
+      transportRemote: '远程',
+      configPath: '配置路径',
+      noAuthWarning: '未设置 Token — 请在高级配置中设置',
+      // Skills section
+      skillsTitle: 'Skills',
+      skillsActive: '已启用',
+      builtinSkills: '内置',
+      newSkill: '+ 新建',
+      // Footer
+      advancedConfig: '高级配置 →',
     },
     plugins: {
       title: '插件',
@@ -138,6 +152,10 @@ export const zh = {
       core: '核心',
       coreDisabled: '核心插件 — 不可禁用',
       footer: '插件用于自定义文件渲染方式。核心插件不可禁用。',
+      ready: '就绪 — 点击打开',
+      disabled: '已禁用',
+      noFile: '入口文件不存在',
+      createFile: '创建 {file} 以激活',
     },
   },
   shortcutPanel: {
