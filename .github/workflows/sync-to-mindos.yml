@@ -10,9 +10,12 @@ on:
     branches: [main]
     tags:
       - 'v*.*.*'
+      - 'desktop-v*'
     paths:
       - 'app/**'
       - 'mcp/**'
+      - 'desktop/**'
+      - 'shared/**'
       - 'skills/**'
       - 'templates/**'
       - 'assets/**'
@@ -74,6 +77,8 @@ jobs:
 
           rsync -av --delete --exclude='node_modules' --exclude='.next' app/ /tmp/mindos/app/
           rsync -av --delete --exclude='node_modules' mcp/ /tmp/mindos/mcp/
+          [ -d desktop/ ] && rsync -av --delete --exclude='node_modules' --exclude='dist' --exclude='dist-electron' --exclude='dist-renderer' desktop/ /tmp/mindos/desktop/
+          [ -d shared/ ] && rsync -av --delete --exclude='dist' shared/ /tmp/mindos/shared/
           [ -d skills/ ] && rsync -av --delete --exclude='node_modules' skills/ /tmp/mindos/skills/
           [ -d templates/ ] && rsync -av --delete templates/ /tmp/mindos/templates/
           [ -d assets/ ] && rsync -av --delete assets/ /tmp/mindos/assets/
@@ -171,8 +176,8 @@ jobs:
             git push origin gh-pages
           fi
 
-          # === 4. Sync version tag to public repo + trigger npm publish ===
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          # === 4. Sync version tag to public repo + trigger workflows ===
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
             echo "Syncing tag ${TAG} to public repo..."
             cd /tmp/mindos
@@ -186,15 +191,25 @@ jobs:
               echo "Tag ${TAG} already exists on public repo, skipping."
             fi
 
-            # Trigger publish workflow via GitHub API.
-            # Use ref=main (where the workflow file lives), pass tag as input.
-            # Tags pushed by PAT don't auto-trigger workflows (GitHub anti-loop).
-            echo "Triggering npm publish workflow on GeminiLight/MindOS..."
-            curl -sf -X POST \
-              -H "Authorization: token ${PAT}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/GeminiLight/MindOS/actions/workflows/publish-npm.yml/dispatches" \
-              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"${TAG}\"}}" \
-              && echo "✅ Publish workflow dispatched for ${TAG}" \
-              || echo "⚠️ Failed to dispatch publish workflow — check PAT permissions"
+            if [[ "${TAG}" == desktop-v* ]]; then
+              # Desktop tag → trigger desktop build workflow
+              echo "Triggering desktop build workflow on GeminiLight/MindOS..."
+              curl -sf -X POST \
+                -H "Authorization: token ${PAT}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/GeminiLight/MindOS/actions/workflows/build-desktop.yml/dispatches" \
+                -d "{\"ref\":\"main\"}" \
+                && echo "✅ Desktop build dispatched for ${TAG}" \
+                || echo "⚠️ Failed to dispatch desktop build — check PAT permissions"
+            elif [[ "${TAG}" == v* ]]; then
+              # npm version tag → trigger npm publish
+              echo "Triggering npm publish workflow on GeminiLight/MindOS..."
+              curl -sf -X POST \
+                -H "Authorization: token ${PAT}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/GeminiLight/MindOS/actions/workflows/publish-npm.yml/dispatches" \
+                -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"${TAG}\"}}" \
+                && echo "✅ Publish workflow dispatched for ${TAG}" \
+                || echo "⚠️ Failed to dispatch publish workflow — check PAT permissions"
+            fi
           fi

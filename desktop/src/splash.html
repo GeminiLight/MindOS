@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindOS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #1a1815;
+      color: #e8e0d4;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+    .logo {
+      font-size: 48px;
+      font-weight: 700;
+      color: #c8873a;
+      margin-bottom: 16px;
+      font-family: 'Lora', serif;
+    }
+    .tagline {
+      font-size: 14px;
+      color: #a09080;
+      margin-bottom: 40px;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(200, 135, 58, 0.2);
+      border-top-color: #c8873a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status {
+      margin-top: 16px;
+      font-size: 12px;
+      color: #a09080;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">∞ MindOS</div>
+  <p class="tagline">Human Thinks Here, Agent Acts There.</p>
+  <div class="spinner"></div>
+  <p class="status" id="status">Starting services...</p>
+</body>
+</html>

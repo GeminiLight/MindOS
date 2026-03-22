@@ -44,3 +44,12 @@ assets/capture-demo.mjs
 assets/package-lock.json
 assets/package.json
 assets/demo-flow.html
+
+# Electron desktop
+desktop/dist/
+desktop/dist-electron/
+desktop/dist-renderer/
+desktop/node_modules/
+
+# Shared SDK build
+shared/dist/

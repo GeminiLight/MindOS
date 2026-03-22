@@ -1,0 +1,8 @@
+{
+  "name": "mindos-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "connection.ts",
+  "types": "connection.ts"
+}
