@@ -234,20 +234,23 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                 <Link
                   key={s.name}
                   href={`/view/${encodePath(s.path)}`}
-                  className={`flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
+                  className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
                     isEmpty
                       ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
                       : 'border-border hover:border-amber-500/30 hover:bg-muted/40'
                   }`}
                 >
                   {emoji ? (
-                    <span className="text-lg leading-none shrink-0" suppressHydrationWarning>{emoji}</span>
+                    <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
                   ) : (
-                    <Folder size={16} className="shrink-0 text-[var(--amber)]" />
+                    <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
                   )}
                   <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                    <span className="text-xs text-muted-foreground opacity-60">
+                    {s.description && (
+                      <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{s.description}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
                       {t.home.nFiles(s.fileCount)}
                     </span>
                   </div>
