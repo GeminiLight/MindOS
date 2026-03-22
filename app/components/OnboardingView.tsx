@@ -80,7 +80,7 @@ export default function OnboardingView() {
           className="max-w-2xl mx-auto mb-6 flex items-center gap-2.5 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/5 text-sm text-destructive"
         >
           <AlertCircle size={16} className="shrink-0" />
-          <span className="flex-1">{ob.initError ?? 'Initialization failed. Please try again.'} ({error})</span>
+          <span className="flex-1">{ob.initError ?? 'Initialization failed. Please try again.'}</span>
           <button
             onClick={() => setError(null)}
             className="text-xs underline shrink-0 hover:opacity-80"

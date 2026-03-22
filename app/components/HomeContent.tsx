@@ -81,7 +81,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
             className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-amber-500/50 hover:bg-amber-500/8"
           >
             <Sparkles size={15} className="shrink-0 text-[var(--amber)]" />
-            <span className="text-sm flex-1 text-left text-foreground" aria-live="polite" aria-atomic="true">
+            <span className="text-sm flex-1 text-left text-foreground">
               {suggestions[suggestionIdx]}
             </span>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber)]">
@@ -215,8 +215,7 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
               >
                 <ChevronDown
                   size={12}
-                  className="transition-transform duration-200"
-                  style={{ transform: showAll ? 'rotate(180deg)' : undefined }}
+                  className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`}
                 />
                 <span>{showAll ? t.home.showLess : t.home.showMore}</span>
               </button>
