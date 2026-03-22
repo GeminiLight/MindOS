@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime } from '@/lib/utils';
@@ -64,6 +64,29 @@ function groupBySpace(recent: RecentFile[], spaces: SpaceInfo[]): { groups: Spac
   return { groups, rootFiles };
 }
 
+/** Extract leading emoji from a directory name, e.g. "📝 Notes" → "📝" */
+function extractEmoji(name: string): string {
+  const match = name.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u);
+  return match?.[0] ?? '';
+}
+
+/** Strip leading emoji+space from name for display, e.g. "📝 Notes" → "Notes" */
+function stripEmoji(name: string): string {
+  return name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || name;
+}
+
+/* ── Section Title component (shared across all three sections) ── */
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <span className="text-[var(--amber)]">{icon}</span>
+      <h2 className="text-xs font-semibold uppercase tracking-[0.08em] font-display text-muted-foreground">
+        {children}
+      </h2>
+    </div>
+  );
+}
+
 const FILES_PER_GROUP = 3;
 
 export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
@@ -99,19 +122,15 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
 
   const lastFile = recent[0];
 
-  // Group recent files by Space — fallback to flat timeline if no groups
+  // Group recent files by Space
   const spaceList = spaces ?? [];
   const { groups, rootFiles } = useMemo(() => groupBySpace(recent, spaceList), [recent, spaceList]);
-  const useGroupedView = groups.length > 0;
-
-  // For "All Spaces" row: spaces not in active groups
-  const activeSpaceNames = new Set(groups.map(g => g.space));
-  const inactiveSpaces = spaceList.filter(s => !activeSpaceNames.has(s.name));
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-12">
       <GuideCard onNavigate={(path) => { window.location.href = `/view/${encodeURIComponent(path)}`; }} />
-      {/* Hero */}
+
+      {/* ── Hero ── */}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-5 rounded-full bg-[var(--amber)]" />
@@ -125,7 +144,6 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
 
         {/* AI-first command bar */}
         <div className="w-full max-w-[620px] flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-4">
-          {/* Ask AI (primary) */}
           <button
             onClick={triggerAsk}
             title="⌘/"
@@ -140,8 +158,6 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               ⌘/
             </kbd>
           </button>
-
-          {/* Search files (secondary) */}
           <button
             onClick={triggerSearch}
             title="⌘K"
@@ -184,43 +200,77 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             <span>{t.explore.title}</span>
           </Link>
         </div>
+      </div>
 
-        {/* Plugin quick-access chips — only show available plugins */}
-        {availablePlugins.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-3 pl-4">
+      {/* ── Section 1: Plugins ── */}
+      {availablePlugins.length > 0 && (
+        <section className="mb-8">
+          <SectionTitle icon={<Puzzle size={13} />}>{t.home.plugins}</SectionTitle>
+          <div className="flex flex-wrap gap-2">
             {availablePlugins.map(r => (
               <Link
                 key={r.id}
                 href={`/view/${encodePath(r.entryPath!)}`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground transition-all duration-100 hover:bg-muted/60"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-amber-500/30 hover:bg-muted/60"
               >
                 <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
-                <span>{r.name}</span>
+                <span className="font-medium text-foreground">{r.name}</span>
               </Link>
             ))}
           </div>
-        )}
-      </div>
+        </section>
+      )}
 
-      {/* Recently Active — Space-grouped timeline (with flat fallback) */}
+      {/* ── Section 2: Spaces ── */}
+      {spaceList.length > 0 && (
+        <section className="mb-8">
+          <SectionTitle icon={<Brain size={13} />}>{t.home.spaces}</SectionTitle>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {spaceList.map(s => {
+              const emoji = extractEmoji(s.name);
+              const label = stripEmoji(s.name);
+              const isEmpty = s.fileCount === 0;
+              return (
+                <Link
+                  key={s.name}
+                  href={`/view/${encodePath(s.path)}`}
+                  className={`flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
+                    isEmpty
+                      ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                      : 'border-border hover:border-amber-500/30 hover:bg-muted/40'
+                  }`}
+                >
+                  {emoji ? (
+                    <span className="text-lg leading-none shrink-0" suppressHydrationWarning>{emoji}</span>
+                  ) : (
+                    <Folder size={16} className="shrink-0 text-[var(--amber)]" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                    <span className="text-xs text-muted-foreground opacity-60">
+                      {t.home.nFiles(s.fileCount)}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 3: Recently Edited ── */}
       {recent.length > 0 && (
         <section className="mb-12">
-          <div className="flex items-center gap-2 mb-5">
-            <Clock size={13} className="text-[var(--amber)]" />
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] font-display text-muted-foreground">
-              {useGroupedView ? t.home.recentlyActive : t.home.recentlyModified}
-            </h2>
-          </div>
+          <SectionTitle icon={<Clock size={13} />}>{t.home.recentlyEdited}</SectionTitle>
 
-          {useGroupedView ? (
-            /* ── Space-Grouped View ── */
+          {groups.length > 0 ? (
+            /* Space-Grouped View */
             <div className="flex flex-col gap-4">
               {groups.map((group) => {
                 const visibleFiles = showAll ? group.files : group.files.slice(0, FILES_PER_GROUP);
                 const hasMoreFiles = group.files.length > FILES_PER_GROUP;
                 return (
                   <div key={group.space}>
-                    {/* Space header row */}
                     <Link
                       href={`/view/${encodePath(group.spacePath)}`}
                       className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
@@ -238,13 +288,10 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         </span>
                       )}
                     </Link>
-
-                    {/* Files in this Space */}
                     <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
                       {visibleFiles.map(({ path: filePath, mtime }) => {
                         const isCSV = filePath.endsWith('.csv');
                         const name = filePath.split('/').pop() || filePath;
-                        // Show path relative to Space (strip first dir)
                         const subPath = filePath.split('/').slice(1, -1).join('/');
                         return (
                           <Link
@@ -300,52 +347,20 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                 </div>
               )}
 
-              {/* Show more / less toggle */}
+              {/* Show more / less */}
               {groups.some(g => g.files.length > FILES_PER_GROUP) && (
                 <button
                   onClick={() => setShowAll(v => !v)}
                   aria-expanded={showAll}
                   className="flex items-center gap-1.5 mt-1 ml-1 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
                 >
-                  <ChevronDown
-                    size={12}
-                    className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`}
-                  />
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`} />
                   <span>{showAll ? t.home.showLess : t.home.showMore}</span>
                 </button>
               )}
-
-              {/* All Spaces row */}
-              {spaceList.length > 0 && (
-                <div className="mt-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Compass size={11} className="text-muted-foreground opacity-60" />
-                    <span className="text-xs font-semibold uppercase tracking-[0.08em] font-display text-muted-foreground opacity-60">
-                      {t.home.allSpaces}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {spaceList.map(s => {
-                      const isActive = activeSpaceNames.has(s.name);
-                      return (
-                        <Link
-                          key={s.name}
-                          href={`/view/${encodePath(s.path)}`}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-100 hover:bg-muted/60 ${
-                            isActive ? 'text-foreground' : 'text-muted-foreground opacity-50'
-                          }`}
-                        >
-                          <span suppressHydrationWarning>{s.name}</span>
-                          <span className="text-2xs opacity-60">({s.fileCount})</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
-            /* ── Flat Timeline Fallback ── */
+            /* Flat Timeline Fallback */
             <div className="relative pl-4">
               <div className="absolute left-0 top-1 bottom-1 w-px bg-border" />
               <div className="flex flex-col gap-0.5">
@@ -389,10 +404,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                   aria-expanded={showAll}
                   className="flex items-center gap-1.5 mt-2 ml-3 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
                 >
-                  <ChevronDown
-                    size={12}
-                    className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`}
-                  />
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`} />
                   <span>{showAll ? t.home.showLess : t.home.showMore}</span>
                 </button>
               )}
