@@ -1,0 +1,100 @@
+'use client';
+
+import { useState } from 'react';
+import { useLocale } from '@/lib/LocaleContext';
+import { useCases, categories, type UseCaseCategory } from './use-cases';
+import UseCaseCard from './UseCaseCard';
+
+export default function ExploreContent() {
+  const { t } = useLocale();
+  const e = t.explore;
+  const [activeCategory, setActiveCategory] = useState<UseCaseCategory | 'all'>('all');
+
+  const filtered = activeCategory === 'all'
+    ? useCases
+    : useCases.filter(uc => uc.category === activeCategory);
+
+  /** Type-safe lookup for use case i18n data by id */
+  const getUseCaseText = (id: string): { title: string; desc: string; prompt: string } | undefined => {
+    const map: Record<string, { title: string; desc: string; prompt: string }> = {
+      c1: e.c1, c2: e.c2, c3: e.c3, c4: e.c4, c5: e.c5,
+      c6: e.c6, c7: e.c7, c8: e.c8, c9: e.c9,
+    };
+    return map[id];
+  };
+
+  return (
+    <div className="content-width px-4 md:px-6 py-8 md:py-12">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-1 h-5 rounded-full" style={{ background: 'var(--amber)' }} />
+          <h1
+            className="text-2xl font-semibold tracking-tight font-display"
+            style={{ color: 'var(--foreground)' }}
+          >
+            {e.title}
+          </h1>
+        </div>
+        <p
+          className="text-sm leading-relaxed"
+          style={{ color: 'var(--muted-foreground)', paddingLeft: '1rem' }}
+        >
+          {e.subtitle}
+        </p>
+      </div>
+
+      {/* Category tabs */}
+      <div className="flex flex-wrap gap-2 mb-6" style={{ paddingLeft: '1rem' }}>
+        <CategoryChip
+          label={e.all}
+          active={activeCategory === 'all'}
+          onClick={() => setActiveCategory('all')}
+        />
+        {categories.map(cat => (
+          <CategoryChip
+            key={cat}
+            label={(e.categories as Record<string, string>)[cat]}
+            active={activeCategory === cat}
+            onClick={() => setActiveCategory(cat)}
+          />
+        ))}
+      </div>
+
+      {/* Card grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" style={{ paddingLeft: '1rem' }}>
+        {filtered.map(uc => {
+          const data = getUseCaseText(uc.id);
+          if (!data) return null;
+          return (
+            <UseCaseCard
+              key={uc.id}
+              icon={uc.icon}
+              title={data.title}
+              description={data.desc}
+              prompt={data.prompt}
+              tryItLabel={e.tryIt}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150
+        ${active
+          ? 'text-[var(--amber)] bg-[var(--amber-dim)]'
+          : 'text-[var(--muted-foreground)] bg-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/80'
+        }
+      `}
+    >
+      {label}
+    </button>
+  );
+}
