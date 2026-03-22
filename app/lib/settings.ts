@@ -32,6 +32,8 @@ export interface GuideState {
   step1Done: boolean;     // 至少浏览过 1 个文件
   askedAI: boolean;       // 至少发过 1 条 AI 消息
   nextStepIndex: number;  // 0=C2, 1=C3, 2=C4, 3=全部完成
+  walkthroughStep?: number;     // -1=not started, 0-4=current step, 5=completed
+  walkthroughDismissed?: boolean; // user skipped walkthrough
 }
 
 export interface ServerSettings {
@@ -143,6 +145,8 @@ function parseGuideState(raw: unknown): GuideState | undefined {
     step1Done: obj.step1Done === true,
     askedAI: obj.askedAI === true,
     nextStepIndex: typeof obj.nextStepIndex === 'number' ? obj.nextStepIndex : 0,
+    walkthroughStep: typeof obj.walkthroughStep === 'number' ? obj.walkthroughStep : undefined,
+    walkthroughDismissed: obj.walkthroughDismissed === true ? true : undefined,
   };
 }
 

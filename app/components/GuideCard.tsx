@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Sparkles, FolderOpen, MessageCircle, RefreshCw, Check, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
+import { walkthroughSteps } from './walkthrough/steps';
 import type { GuideState } from '@/lib/settings';
 
 const DIR_ICONS: Record<string, string> = {
@@ -47,20 +49,18 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
   useEffect(() => {
     fetchGuideState();
 
-    // ?welcome=1 → first visit, auto-expand explore task
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('welcome') === '1') {
+    // Listen for walkthrough-triggered first visit (WalkthroughProvider owns ?welcome=1 detection)
+    const handleFirstVisit = () => {
       setIsFirstVisit(true);
-      const url = new URL(window.location.href);
-      url.searchParams.delete('welcome');
-      window.history.replaceState({}, '', url.pathname + (url.search || ''));
-    }
+    };
+    window.addEventListener('mindos:first-visit', handleFirstVisit);
 
     // Re-fetch when guide state is updated (e.g. after AskFab patches askedAI)
     const handleGuideUpdate = () => fetchGuideState();
     window.addEventListener('focus', handleGuideUpdate);
     window.addEventListener('guide-state-updated', handleGuideUpdate);
     return () => {
+      window.removeEventListener('mindos:first-visit', handleFirstVisit);
       window.removeEventListener('focus', handleGuideUpdate);
       window.removeEventListener('guide-state-updated', handleGuideUpdate);
     };
@@ -147,6 +147,13 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
   // Don't render if no active guide
   if (!guideState) return null;
 
+  // Hide GuideCard while walkthrough is active
+  const walkthroughActive = guideState.walkthroughStep !== undefined
+    && guideState.walkthroughStep >= 0
+    && guideState.walkthroughStep < walkthroughSteps.length
+    && !guideState.walkthroughDismissed;
+  if (walkthroughActive) return null;
+
   const step1Done = guideState.step1Done;
   const step2Done = guideState.askedAI;
   const allDone = step1Done && step2Done;
@@ -164,6 +171,13 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
         <span className="text-sm font-semibold flex-1" style={{ color: 'var(--foreground)' }}>
           ✨ {g.done.titleFinal}
         </span>
+        <Link
+          href="/explore"
+          className="text-xs font-medium transition-colors hover:opacity-80"
+          style={{ color: 'var(--amber)' }}
+        >
+          {t.walkthrough.exploreCta}
+        </Link>
         <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors"
           style={{ color: 'var(--muted-foreground)' }}>
           <X size={14} />
