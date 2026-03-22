@@ -36,4 +36,19 @@ export default defineConfig({
       },
     },
   },
+  renderer: {
+    root: resolve(__dirname, 'src'),
+    build: {
+      outDir: 'dist-electron/renderer',
+      rollupOptions: {
+        input: {
+          'connect-renderer': resolve(__dirname, 'src/connect-renderer.ts'),
+        },
+        output: {
+          entryFileNames: '[name].js',
+          format: 'iife',
+        },
+      },
+    },
+  },
 });

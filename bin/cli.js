@@ -39,7 +39,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, cpSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -50,7 +50,7 @@ import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
 const NEXT_BIN = resolve(ROOT, 'app', 'node_modules', '.bin', 'next');
 import { run, npmInstall } from './lib/utils.js';
 import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
-import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
+import { needsBuild, writeBuildStamp, cleanNextDir, ensureAppDeps } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
@@ -59,6 +59,72 @@ import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
 import { mcpInstall } from './lib/mcp-install.js';
 import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Dynamically resolve the new ROOT after `npm install -g`.
+ * This is needed because constants are evaluated at module load time.
+ */
+function getUpdatedRoot() {
+  try {
+    const mindosBin = execSync('which mindos', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    if (mindosBin) {
+      // mindos bin is usually at <root>/bin/cli.js or a symlink to it
+      let cliPath;
+      try {
+        cliPath = execSync(`readlink -f "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      } catch {
+        try {
+          cliPath = execSync(`realpath "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        } catch {
+          cliPath = mindosBin;
+        }
+      }
+      if (cliPath) {
+        // cliPath is like /path/to/node_modules/@geminilight/mindos/bin/cli.js
+        // ROOT is /path/to/node_modules/@geminilight/mindos
+        return resolve(dirname(cliPath), '..');
+      }
+    }
+  } catch {}
+  // Fallback to static ROOT
+  return ROOT;
+}
+
+/**
+ * Build the app in the given root if the build stamp doesn't match the package version.
+ * Used by `mindos update` to pre-build before restarting the daemon.
+ */
+function buildIfNeeded(newRoot) {
+  const newBuildStamp = resolve(newRoot, 'app', '.next', '.mindos-build-version');
+  const newNextBin = resolve(newRoot, 'app', 'node_modules', '.bin', 'next');
+
+  let needBuild = true;
+  try {
+    const builtVersion = readFileSync(newBuildStamp, 'utf-8').trim();
+    const pkgVersion = JSON.parse(readFileSync(resolve(newRoot, 'package.json'), 'utf-8')).version;
+    needBuild = builtVersion !== pkgVersion;
+  } catch {
+    needBuild = true;
+  }
+
+  if (!needBuild) return;
+
+  console.log(yellow('\n  Building MindOS (version change detected)...\n'));
+  const appPkg = resolve(newRoot, 'app', 'package.json');
+  if (existsSync(appPkg)) {
+    run('npm install', resolve(newRoot, 'app'));
+  }
+  const nextDir = resolve(newRoot, 'app', '.next');
+  if (existsSync(nextDir)) {
+    run(`rm -rf "${nextDir}"`, newRoot);
+  }
+  run('node scripts/gen-renderer-index.js', newRoot);
+  run(`${newNextBin} build`, resolve(newRoot, 'app'));
+  const version = JSON.parse(readFileSync(resolve(newRoot, 'package.json'), 'utf-8')).version;
+  writeFileSync(newBuildStamp, version, 'utf-8');
+}
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
@@ -665,8 +731,13 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     }
 
     if (daemonRunning) {
-      console.log(cyan('\n  Daemon is running — restarting to apply the new version...'));
+      console.log(cyan('\n  Daemon is running — stopping to apply the new version...'));
       await runGatewayCommand('stop');
+
+      // After npm install -g, resolve the new installation path and pre-build
+      const newRoot = getUpdatedRoot();
+      buildIfNeeded(newRoot);
+
       await runGatewayCommand('install');
       // install() starts the service:
       //   - systemd: daemon-reload + enable + start
@@ -694,13 +765,16 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         process.exit(1);
       }
     } else {
+      // Non-daemon mode: build in foreground for better UX
+      buildIfNeeded(getUpdatedRoot());
+
       console.log(`\n${green('✔')} ${bold(`Updated: ${currentVersion} → ${newVersion}`)}`);
-      console.log(dim('  Run `mindos start` — it will rebuild automatically.'));
+      console.log(dim('  Run `mindos start` to start the updated version.'));
       console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
     }
   },
 
-  // ── uninstall ──────────────────────────────────────────────────────────────
+  // ── uninstall ───────────────────────────────────────────────────────────────
   uninstall: async () => {
     const readline = await import('node:readline');
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });

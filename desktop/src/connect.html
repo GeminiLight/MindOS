@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Connect to MindOS</title>
+  <title>MindOS - 选择连接模式 / Choose Connection Mode</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -49,9 +49,7 @@
     }
 
     /* Recent servers */
-    .recent {
-      margin-bottom: 20px;
-    }
+    .recent { margin-bottom: 20px; }
     .recent-label {
       font-size: 11px;
       font-weight: 600;
@@ -146,13 +144,8 @@
       outline: none;
       transition: border-color 0.15s;
     }
-    input:focus {
-      border-color: var(--amber);
-    }
-    input::placeholder {
-      color: var(--text-muted);
-      opacity: 0.5;
-    }
+    input:focus { border-color: var(--amber); }
+    input::placeholder { color: var(--text-muted); opacity: 0.5; }
     .field { margin-bottom: 14px; }
 
     .test-btn {
@@ -210,6 +203,58 @@
     }
     .hint strong { color: var(--text); font-weight: 500; }
 
+    /* Mode Selection Screen */
+    .mode-selection { text-align: center; }
+    .mode-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 24px 0;
+    }
+    .mode-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 16px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .mode-card:hover {
+      border-color: var(--amber);
+      background: var(--amber-dim);
+    }
+    .mode-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .mode-info h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .mode-info p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .mode-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
     .switch-mode {
       display: block;
       width: 100%;
@@ -229,6 +274,99 @@
       border-color: var(--text-muted);
     }
 
+    /* Language Switcher */
+    .lang-switcher {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 4px;
+    }
+    .lang-btn {
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-btn:hover {
+      border-color: var(--amber);
+      color: var(--text);
+    }
+    .lang-btn.active {
+      background: var(--amber);
+      color: #fff;
+      border-color: var(--amber);
+    }
+
+    /* Setup helper */
+    .setup-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 10px 20px;
+      border: 1px solid var(--amber);
+      border-radius: var(--radius);
+      background: var(--amber-dim);
+      color: var(--amber);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .setup-btn:hover {
+      background: var(--amber);
+      color: #fff;
+    }
+    .setup-section {
+      margin-top: 20px;
+      padding: 16px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      background: rgba(0,0,0,0.2);
+    }
+    .setup-section h4 {
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .setup-section p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .setup-section code {
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .install-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--card);
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .install-progress.success {
+      color: var(--success);
+      background: rgba(74, 222, 128, 0.1);
+    }
+    .install-progress.error {
+      color: var(--error);
+      background: rgba(248, 113, 113, 0.1);
+    }
+
     .hidden { display: none !important; }
     .spinner {
       width: 14px;
@@ -243,207 +381,97 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="brand">
-      <h1>∞ MindOS</h1>
-      <p>Connect to your server</p>
-    </div>
-
-    <!-- Recent servers -->
-    <div id="recent-section" class="recent hidden">
-      <div class="recent-label">Recent Servers</div>
-      <div id="recent-list"></div>
-    </div>
-
-    <div id="divider" class="divider hidden"><span>or connect to a new server</span></div>
-
-    <!-- Address input -->
-    <div class="field">
-      <label for="address">Server Address</label>
-      <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
-      <button id="test-btn" class="test-btn" onclick="handleTest()">Test Connection</button>
-    </div>
-
-    <!-- Status -->
-    <div id="status" class="status-bar hidden"></div>
-
-    <!-- Password (shown when authRequired) -->
-    <div id="password-section" class="field hidden">
-      <label for="password">Password</label>
-      <input id="password" type="password" placeholder="Enter server password" />
-    </div>
-
-    <!-- Connect button -->
-    <button id="connect-btn" class="connect-btn hidden" onclick="handleConnect()" disabled>Connect</button>
-
-    <!-- Hint -->
-    <div class="hint">
-      💡 Find your server address and password in <strong>MindOS Settings</strong> on the host machine.
-    </div>
-
-    <!-- Switch to local -->
-    <button class="switch-mode" onclick="switchToLocal()">← Switch to Local mode</button>
+  <div class="lang-switcher">
+    <button class="lang-btn active" onclick="setLang('zh')" id="lang-zh">中文</button>
+    <button class="lang-btn" onclick="setLang('en')" id="lang-en">EN</button>
   </div>
 
-  <script>
-    // IPC bridge — exposed by preload
-    const ipc = window.mindosConnect || {};
+  <div class="container">
+    <!-- Mode Selection Screen -->
+    <div id="mode-selection" class="mode-selection">
+      <div class="brand">
+        <h1>∞ MindOS</h1>
+        <p data-i18n="subtitle">选择连接模式</p>
+      </div>
 
-    let testResult = null;
-    let recentConnections = [];
-
-    // ── Init ──
-    async function init() {
-      try {
-        recentConnections = await ipc.getRecentConnections?.() || [];
-        renderRecent();
-      } catch {}
-    }
-
-    function renderRecent() {
-      const section = document.getElementById('recent-section');
-      const list = document.getElementById('recent-list');
-      const divider = document.getElementById('divider');
-
-      if (recentConnections.length === 0) {
-        section.classList.add('hidden');
-        divider.classList.add('hidden');
-        return;
-      }
-
-      section.classList.remove('hidden');
-      divider.classList.remove('hidden');
-      list.innerHTML = '';
-
-      for (const conn of recentConnections) {
-        const item = document.createElement('div');
-        item.className = 'recent-item';
-        item.innerHTML = `
-          <div class="recent-dot"></div>
-          <div class="recent-info">
-            <div class="recent-label-text">${conn.label || conn.address}</div>
-            <div class="recent-address">${conn.address}</div>
+      <div class="mode-cards">
+        <div class="mode-card" onclick="selectMode('local')">
+          <div class="mode-icon">⚡</div>
+          <div class="mode-info">
+            <h3 data-i18n="localTitle">本地模式 / Local Mode</h3>
+            <p data-i18n="localDesc">在本机运行 MindOS，需要安装 Node.js</p>
+            <p class="mode-sub" data-i18n="localSub">推荐：个人使用或开发测试</p>
           </div>
-          <button class="recent-forget" data-addr="${conn.address}">Forget</button>
-        `;
-        item.addEventListener('click', (e) => {
-          if (e.target.classList.contains('recent-forget')) {
-            e.stopPropagation();
-            handleForget(conn.address);
-            return;
-          }
-          document.getElementById('address').value = conn.address;
-          handleTest();
-        });
-        list.appendChild(item);
-      }
-    }
+        </div>
 
-    async function handleForget(address) {
-      await ipc.removeConnection?.(address);
-      recentConnections = recentConnections.filter(c => c.address !== address);
-      renderRecent();
-    }
+        <div class="mode-card" onclick="selectMode('remote')">
+          <div class="mode-icon">🌐</div>
+          <div class="mode-info">
+            <h3 data-i18n="remoteTitle">远程模式 / Remote Mode</h3>
+            <p data-i18n="remoteDesc">连接到远程 MindOS 服务器</p>
+            <p class="mode-sub" data-i18n="remoteSub">推荐：团队协作或服务器部署</p>
+          </div>
+        </div>
+      </div>
 
-    // ── Test Connection ──
-    async function handleTest() {
-      const addr = document.getElementById('address').value.trim();
-      if (!addr) return;
+      <!-- Setup section for local mode — shown when MindOS CLI not found -->
+      <div class="setup-section" id="local-setup" style="display:none;">
+        <h4>📦 缺少 MindOS CLI</h4>
+        <p>Desktop已内置 Node.js，只需一键安装 MindOS CLI 即可使用本地模式</p>
+        <button class="setup-btn" id="install-btn" onclick="installMindOS(event)">
+          自动安装 MindOS CLI
+        </button>
+        <div id="install-status" class="hidden"></div>
+        <button class="setup-btn" id="retry-btn" onclick="checkNodeAgain()" style="display:none; margin-top:12px;">
+          启动本地模式
+        </button>
+      </div>
+    </div>
 
-      const btn = document.getElementById('test-btn');
-      const status = document.getElementById('status');
-      const pwSection = document.getElementById('password-section');
-      const connectBtn = document.getElementById('connect-btn');
+    <!-- Remote Connection Screen (hidden initially) -->
+    <div id="remote-screen" class="hidden">
+      <div class="brand">
+        <h1>∞ MindOS</h1>
+        <p data-i18n="connectServer">连接到服务器 / Connect to Server</p>
+      </div>
 
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Testing...';
-      status.classList.remove('hidden');
-      status.className = 'status-bar info';
-      status.textContent = 'Connecting...';
+      <!-- Recent servers -->
+      <div id="recent-section" class="recent hidden">
+        <div class="recent-label" data-i18n="recentServers">最近连接的服务器 / Recent Servers</div>
+        <div id="recent-list"></div>
+      </div>
 
-      try {
-        testResult = await ipc.testConnection(addr);
-      } catch (err) {
-        testResult = { status: 'error', error: String(err) };
-      }
+      <div id="divider" class="divider hidden"><span data-i18n="orConnect">或连接新服务器 / or connect to a new server</span></div>
 
-      btn.disabled = false;
-      btn.textContent = 'Test Connection';
+      <!-- Address input -->
+      <div class="field">
+        <label for="address" data-i18n="serverAddress">服务器地址 / Server Address</label>
+        <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
+        <button id="test-btn" class="test-btn" onclick="handleTest()" data-i18n="testConnection">测试连接 / Test Connection</button>
+      </div>
 
-      if (testResult.status === 'online') {
-        status.className = 'status-bar success';
-        const version = testResult.version ? ` · v${testResult.version}` : '';
-        const auth = testResult.authRequired ? ' · Password required' : '';
-        status.textContent = `✓ Online${version}${auth}`;
+      <!-- Status -->
+      <div id="status" class="status-bar hidden"></div>
 
-        if (testResult.authRequired) {
-          pwSection.classList.remove('hidden');
-          document.getElementById('password').focus();
-        } else {
-          pwSection.classList.add('hidden');
-        }
-        connectBtn.classList.remove('hidden');
-        connectBtn.disabled = false;
-      } else if (testResult.status === 'not-mindos') {
-        status.className = 'status-bar error';
-        status.textContent = '⚠ Not a MindOS server';
-        connectBtn.classList.add('hidden');
-      } else {
-        status.className = 'status-bar error';
-        status.textContent = `✗ ${testResult.error || 'Cannot reach server'}`;
-        connectBtn.classList.add('hidden');
-      }
-    }
+      <!-- Password (shown when authRequired) -->
+      <div id="password-section" class="field hidden">
+        <label for="password" data-i18n="password">密码 / Password</label>
+        <input id="password" type="password" data-i18n-placeholder="enterPassword" placeholder="输入服务器密码 / Enter server password" />
+      </div>
 
-    // ── Connect ──
-    async function handleConnect() {
-      const addr = document.getElementById('address').value.trim();
-      const pw = document.getElementById('password').value;
-      const btn = document.getElementById('connect-btn');
-      const status = document.getElementById('status');
+      <!-- Connect button -->
+      <button id="connect-btn" class="connect-btn hidden" onclick="handleConnect()" disabled data-i18n="connect">连接 / Connect</button>
 
-      if (!addr || !testResult || testResult.status !== 'online') return;
-      if (testResult.authRequired && !pw) {
-        document.getElementById('password').focus();
-        return;
-      }
+      <!-- Hint -->
+      <div class="hint" data-i18n="hint">
+        💡 在主机上的 <strong>MindOS 设置</strong> 中查看服务器地址和密码
+      </div>
 
-      btn.disabled = true;
-      btn.textContent = 'Connecting...';
+      <!-- Switch to local -->
+      <button class="switch-mode" onclick="switchToLocal()" data-i18n="switchLocal">← 切换到本地模式 / Switch to Local Mode</button>
+    </div>
+  </div>
 
-      try {
-        const result = await ipc.connect(addr, pw || null);
-        if (result.ok) {
-          // Success — main process will load the URL
-          btn.textContent = 'Connected!';
-        } else {
-          status.className = 'status-bar error';
-          status.textContent = result.error || 'Connection failed';
-          btn.disabled = false;
-          btn.textContent = 'Connect';
-        }
-      } catch (err) {
-        status.className = 'status-bar error';
-        status.textContent = `Error: ${err.message || err}`;
-        btn.disabled = false;
-        btn.textContent = 'Connect';
-      }
-    }
-
-    // ── Switch mode ──
-    function switchToLocal() {
-      ipc.switchToLocal?.();
-    }
-
-    // ── Enter key handlers ──
-    document.getElementById('address').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') handleTest();
-    });
-    document.getElementById('password').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') handleConnect();
-    });
-
-    init();
-  </script>
+  <script src="../dist-electron/renderer/connect-renderer.js"></script>
 </body>
 </html>
