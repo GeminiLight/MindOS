@@ -32,10 +32,6 @@ mac:
   category: public.app-category.productivity
   icon: src/icons/icon.png
   target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
     - target: zip
       arch:
         - x64
@@ -49,10 +45,11 @@ win:
       arch:
         - x64
         - arm64
-  nsis:
-    oneClick: false
-    perMachine: false
-    allowToChangeInstallationDirectory: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
 
 linux:
   icon: src/icons/icon.png
