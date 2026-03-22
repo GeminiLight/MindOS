@@ -27,7 +27,7 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
         ${askPanelOpen ? 'opacity-0 pointer-events-none translate-y-2' : 'opacity-100 translate-y-0'}
       `}
       style={{
-        background: 'linear-gradient(135deg, #b07c2e 0%, #c8873a 50%, #d4943f 100%)',
+        background: 'linear-gradient(135deg, var(--amber), color-mix(in srgb, var(--amber) 80%, white))',
       }}
       title="MindOS Agent (⌘/)"
       aria-label="MindOS Agent"
