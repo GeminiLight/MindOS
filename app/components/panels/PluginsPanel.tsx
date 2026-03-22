@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getAllRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';
 import PanelHeader from './PanelHeader';
+import { useLocale } from '@/lib/LocaleContext';
 
 interface PluginsPanelProps {
   active: boolean;
@@ -16,6 +17,8 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
   const [mounted, setMounted] = useState(false);
   const [, forceUpdate] = useState(0);
   const router = useRouter();
+  const { t } = useLocale();
+  const p = t.panels.plugins;
 
   // Defer renderer reads to client only — avoids hydration mismatch
   useEffect(() => {
@@ -35,14 +38,14 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       {/* Header */}
-      <PanelHeader title="Plugins" maximized={maximized} onMaximize={onMaximize}>
-        <span className="text-2xs text-muted-foreground">{enabledCount}/{renderers.length} active</span>
+      <PanelHeader title={p.title} maximized={maximized} onMaximize={onMaximize}>
+        <span className="text-2xs text-muted-foreground">{enabledCount}/{renderers.length} {p.active}</span>
       </PanelHeader>
 
       {/* Plugin list */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {mounted && renderers.length === 0 && (
-          <p className="px-4 py-8 text-sm text-muted-foreground text-center">No plugins registered</p>
+          <p className="px-4 py-8 text-sm text-muted-foreground text-center">{p.noPlugins}</p>
         )}
         {renderers.map(r => {
           const enabled = isRendererEnabled(r.id);
@@ -57,7 +60,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
                   <span className="text-base shrink-0">{r.icon}</span>
                   <span className="text-sm font-medium text-foreground truncate">{r.name}</span>
                   {r.core && (
-                    <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">Core</span>
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
                   )}
                 </div>
                 <Toggle
@@ -65,7 +68,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
                   onChange={(v) => handleToggle(r.id, v)}
                   size="sm"
                   disabled={r.core}
-                  title={r.core ? 'Core plugin — cannot be disabled' : undefined}
+                  title={r.core ? p.coreDisabled : undefined}
                 />
               </div>
 
@@ -98,7 +101,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
       {/* Footer info */}
       <div className="px-4 py-2 border-t border-border shrink-0">
         <p className="text-2xs text-muted-foreground">
-          Plugins customize how files render. Core plugins cannot be disabled.
+          {p.footer}
         </p>
       </div>
     </div>
