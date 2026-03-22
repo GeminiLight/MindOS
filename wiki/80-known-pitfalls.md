@@ -459,3 +459,31 @@
 - **规则：** 组件超 300 行 → 考虑拆子组件。超 500 行 → 必须拆。自定义 hook 超 100 行 → 考虑拆
 - **案例：** SidebarLayout 479→314（拆出 useLeftPanel + useAskPanel）| McpSkillsSection 595→359（拆出 McpSkillRow + McpSkillCreateForm）
 - **注意：** 拆分后主组件仍保留编排职责（orchestrator pattern），子组件通过 callback props 通信
+
+## Electron / 桌面端
+
+### SameSite=None 必须搭配 Secure
+- **现象：** 跨域 auth cookie 被浏览器静默丢弃
+- **原因：** Chrome 80+ 规范要求 `SameSite=None` 必须同时有 `Secure` 标志，但 HTTP 环境不能设 `Secure`
+- **解决：** 跨域 + HTTPS 才用 `SameSite=None; Secure`，否则用 `SameSite=Lax`
+- **规则：** 任何涉及跨域 cookie 的改动，必须测试 HTTP 和 HTTPS 两种场景
+
+### CORS Origin Echo 必须配 Allowlist
+- **现象：** 直接 echo 请求的 Origin header + `Allow-Credentials: true` = 任意站点可发凭据请求
+- **解决：** 在 `/api/auth` 中维护 `ALLOWED_ORIGIN_PATTERNS` 正则数组，只有匹配的 Origin 才返回 CORS headers
+- **规则：** 绝不 echo `*` + credentials；绝不无条件 echo origin + credentials
+
+### Electron before-quit 不 await async handler
+- **现象：** `app.on('before-quit', async () => { await cleanup() })` 中 cleanup 未完成进程就退出了
+- **解决：** 用 `e.preventDefault()` 阻止退出，完成清理后手动 `app.exit(0)`
+- **规则：** Electron 的 app 事件不 await promise，需要手动控制退出时序
+
+### Electron 打包后 npx 不在 PATH
+- **现象：** 打包后 spawn `npx tsx ...` 报 ENOENT
+- **原因：** Electron 打包后不加载 shell profile，PATH 中没有 npm/npx
+- **规则：** 子进程用绝对路径的 node 二进制执行，或手动 resolve npx 路径
+
+### 端口检测用 bind 而非 connect
+- **现象：** TCP connect 方式检测端口，防火墙 drop 包导致 ETIMEDOUT 误判为"端口被占用"
+- **解决：** 改用 `net.createServer().listen(port)` 尝试绑定，EADDRINUSE = 被占，成功绑定后 close = 空闲
+- **规则：** 判断端口是否可用只用 bind 模式

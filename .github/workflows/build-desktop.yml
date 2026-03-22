@@ -1,0 +1,77 @@
+name: Build Desktop
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GitHub Releases'
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            arch: universal
+          - os: windows-latest
+            platform: win
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Install root + workspace dependencies
+      - name: Install root dependencies
+        run: npm install --workspaces=false
+
+      - name: Install app dependencies
+        run: cd app && npm install
+
+      - name: Install MCP dependencies
+        run: cd mcp && npm install
+
+      - name: Install desktop dependencies
+        run: cd desktop && npm install
+
+      # Build Next.js (required — packaged in the app)
+      - name: Build Next.js
+        run: cd app && npx next build
+
+      # Build Electron (compile TS → JS)
+      - name: Build Electron
+        run: cd desktop && npm run build
+
+      # Package for the target platform
+      - name: Package (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd desktop && npm run dist:${{ matrix.platform }}
+
+      # Upload artifacts (always, even if not publishing)
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindos-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.exe
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+          if-no-files-found: warn

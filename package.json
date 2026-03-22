@@ -24,7 +24,9 @@
   },
   "workspaces": [
     "app",
-    "mcp"
+    "mcp",
+    "shared",
+    "desktop"
   ],
   "files": [
     "app/",
