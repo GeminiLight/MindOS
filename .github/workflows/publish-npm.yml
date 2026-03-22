@@ -1,14 +1,10 @@
-name: Publish to npm (fallback)
+name: Publish to npm
 
-# Primary npm publish now happens on GeminiLight/MindOS (public repo).
-# This workflow is a fallback — only triggers on manual dispatch.
-# Tags are synced to public repo by sync-to-mindos.yml → triggers publish there.
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Version tag to publish (e.g. v0.5.30)'
-        required: true
+  push:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -20,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          ref: ${{ github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,16 +24,10 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Verify package version matches tag
+      - name: Verify version
         run: |
-          PKG_VERSION="v$(node -p "require('./package.json').version")"
-          TAG_VERSION="${{ github.event.inputs.tag }}"
-          echo "Package version: ${PKG_VERSION}"
-          echo "Tag version:     ${TAG_VERSION}"
-          if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "::error::Version mismatch: package.json has ${PKG_VERSION} but tag is ${TAG_VERSION}"
-            exit 1
-          fi
+          echo "Package: v$(node -p "require('./package.json').version")"
+          echo "Tag: ${GITHUB_REF_NAME}"
 
       - name: Publish to npm
         run: npm publish --access public
