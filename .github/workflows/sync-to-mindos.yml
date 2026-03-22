@@ -21,6 +21,7 @@ on:
       - 'scripts/**'
       - 'tests/**'
       - 'wiki/**'
+      - '.github/workflows/**'
       - 'AGENTS.md'
       - 'README.md'
       - 'README_zh.md'
@@ -79,6 +80,15 @@ jobs:
           [ -d bin/ ] && rsync -av --delete bin/ /tmp/mindos/bin/
           [ -d scripts/ ] && rsync -av --delete scripts/ /tmp/mindos/scripts/
           [ -d tests/ ] && rsync -av --delete tests/ /tmp/mindos/tests/
+
+          # Sync CI workflows (publish-npm.yml etc.) — exclude sync-to-mindos itself
+          mkdir -p /tmp/mindos/.github/workflows
+          for wf in .github/workflows/*.yml; do
+            wf_name=$(basename "$wf")
+            [ "$wf_name" = "sync-to-mindos.yml" ] && continue
+            [ "$wf_name" = "ci.yml" ] && continue
+            cp "$wf" /tmp/mindos/.github/workflows/
+          done
           [ -d wiki/ ] && rsync -av --delete \
             --exclude='02-business-model.md' \
             --exclude='03-technical-pillars.md' \
