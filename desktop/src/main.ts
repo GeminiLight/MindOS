@@ -66,7 +66,7 @@ function invalidateConfig(): void {
  * Tries: env var → NVM default → common system paths → shell detection.
  * Returns null if not found, allowing caller to handle gracefully.
  */
-function getNodePath(): string | null {
+export function getNodePath(): string | null {
   // 1. Explicit env var
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
     return process.env.MINDOS_NODE_BIN;
@@ -258,18 +258,11 @@ preload: path.join(__dirname, '..', 'preload', 'preload.js'),
   return win;
 }
 
-// ── Mode Selection Dialog ──
-async function askMode(): Promise<'local' | 'remote'> {
-  const result = await dialog.showMessageBox({
-    type: 'question',
-    title: 'MindOS',
-    message: 'How would you like to use MindOS?',
-    detail: 'Local: Run MindOS on this machine.\nRemote: Connect to a MindOS server.',
-    buttons: ['⚡ Local', '🌐 Remote'],
-    defaultId: 0,
-    cancelId: 0,
-  });
-  return result.response === 1 ? 'remote' : 'local';
+// ── Show Mode Selection Window ──
+async function showModeSelection(): Promise<'local' | 'remote' | null> {
+  // Import and use the enhanced connect window for mode selection
+  const { showModeSelectWindow } = await import('./connect-window');
+  return showModeSelectWindow(mainWindow || undefined);
 }
 
 // ── Local Mode ──
@@ -413,9 +406,19 @@ app.whenReady().then(async () => {
   const config = loadConfig();
   currentMode = config.desktopMode || 'local';
 
-  // First run: ask user
+  // First run: show mode selection window
   if (!config.desktopMode && !existsSync(CONFIG_PATH)) {
-    currentMode = await askMode();
+    const selectedMode = await showModeSelection();
+    if (selectedMode) {
+      currentMode = selectedMode;
+      // Save the user's choice
+      require('fs').mkdirSync(CONFIG_DIR, { recursive: true });
+      require('fs').writeFileSync(CONFIG_PATH, JSON.stringify({ desktopMode: currentMode }, null, 2));
+      cachedConfig = { desktopMode: currentMode };
+    } else {
+      // User cancelled - default to local
+      currentMode = 'local';
+    }
   }
 
   mainWindow = createWindow();
