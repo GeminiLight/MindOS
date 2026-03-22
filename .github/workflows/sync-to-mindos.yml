@@ -91,8 +91,18 @@ jobs:
             cp "$wf" /tmp/mindos/.github/workflows/
           done
           [ -d wiki/ ] && rsync -av --delete \
+            --exclude='00-product-proposal.md' \
+            --exclude='01-project-roadmap.md' \
             --exclude='02-business-model.md' \
             --exclude='03-technical-pillars.md' \
+            --exclude='85-backlog.md' \
+            --exclude='project-status-report.md' \
+            --exclude='implementation-roadmap.md' \
+            --exclude='architecture-review-summary.md' \
+            --exclude='ui-audit-*.md' \
+            --exclude='discussions/' \
+            --exclude='specs/spec-electron-desktop-app.md' \
+            --exclude='specs/spec-capacitor-mobile-app.md' \
             wiki/ /tmp/mindos/wiki/
 
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore
