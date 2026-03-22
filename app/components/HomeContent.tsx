@@ -248,7 +248,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                   <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium truncate block text-foreground">{label}</span>
                     {s.description && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{s.description}</span>
+                      <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
                     )}
                     <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
                       {t.home.nFiles(s.fileCount)}
