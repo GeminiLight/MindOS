@@ -8,6 +8,10 @@ export const en = {
   },
   home: {
     recentlyModified: 'Recently Modified',
+    recentlyActive: 'Recently Active',
+    allSpaces: 'All Spaces',
+    nFiles: (n: number) => `${n} file${n === 1 ? '' : 's'}`,
+    other: 'Other',
     continueEditing: 'Continue editing',
     newNote: 'New Notes',
     plugins: 'Plugins',

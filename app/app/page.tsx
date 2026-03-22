@@ -1,11 +1,38 @@
 import { redirect } from 'next/navigation';
 import { readSettings } from '@/lib/settings';
-import { getRecentlyModified, getFileContent } from '@/lib/fs';
+import { getRecentlyModified, getFileContent, getFileTree } from '@/lib/fs';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 import HomeContent from '@/components/HomeContent';
+import type { FileNode } from '@/lib/core/types';
 
 export const dynamic = 'force-dynamic';
+
+export interface SpaceInfo {
+  name: string;
+  path: string;
+  fileCount: number;
+}
+
+function countFiles(node: FileNode): number {
+  if (node.type === 'file') return 1;
+  return (node.children ?? []).reduce((sum, c) => sum + countFiles(c), 0);
+}
+
+function getTopLevelDirs(): SpaceInfo[] {
+  try {
+    const tree = getFileTree();
+    return tree
+      .filter(n => n.type === 'directory' && !n.name.startsWith('.'))
+      .map(n => ({
+        name: n.name,
+        path: n.path + '/',
+        fileCount: countFiles(n),
+      }));
+  } catch {
+    return [];
+  }
+}
 
 function getExistingFiles(paths: string[]): string[] {
   return paths.filter(p => {
@@ -30,5 +57,7 @@ export default function HomePage() {
     .filter((p): p is string => !!p);
   const existingFiles = getExistingFiles(entryPaths);
 
-  return <HomeContent recent={recent} existingFiles={existingFiles} />;
+  const spaces = getTopLevelDirs();
+
+  return <HomeContent recent={recent} existingFiles={existingFiles} spaces={spaces} />;
 }
