@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
-import type { McpStatus, AgentInfo, McpTabProps } from './types';
-import ServerStatus from './McpServerStatus';
+import { useMcpDataOptional } from '@/hooks/useMcpData';
+import type { McpTabProps } from './types';
 import AgentInstall from './McpAgentInstall';
 import SkillsSection from './McpSkillsSection';
 
@@ -12,25 +10,10 @@ export type { McpStatus, AgentInfo, SkillInfo, McpTabProps } from './types';
 /* ── Main McpTab ───────────────────────────────────────────────── */
 
 export function McpTab({ t }: McpTabProps) {
-  const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const mcp = useMcpDataOptional();
+  const m = t.settings?.mcp;
 
-  const fetchAll = useCallback(async () => {
-    try {
-      const [statusData, agentsData] = await Promise.all([
-        apiFetch<McpStatus>('/api/mcp/status'),
-        apiFetch<{ agents: AgentInfo[] }>('/api/mcp/agents'),
-      ]);
-      setMcpStatus(statusData);
-      setAgents(agentsData.agents);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  if (loading) {
+  if (!mcp || mcp.loading) {
     return (
       <div className="flex justify-center py-8">
         <Loader2 size={18} className="animate-spin text-muted-foreground" />
@@ -38,23 +21,38 @@ export function McpTab({ t }: McpTabProps) {
     );
   }
 
-  const m = t.settings?.mcp;
-
   return (
     <div className="space-y-6">
-      {/* MCP Server Status */}
-      <ServerStatus status={mcpStatus} agents={agents} t={t} />
+      {/* Server status summary (minimal — full status is in sidebar AgentsPanel) */}
+      {mcp.status && (
+        <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+          <div className="flex items-center gap-2.5 text-xs">
+            <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${mcp.status.running ? 'bg-success' : 'bg-muted-foreground'}`} />
+            <span className="text-foreground font-medium">
+              {mcp.status.running ? (m?.running ?? 'Running') : (m?.stopped ?? 'Stopped')}
+            </span>
+            {mcp.status.running && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="font-mono text-muted-foreground">{mcp.status.endpoint}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground">{mcp.status.toolCount} tools</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* Skills */}
+      {/* Skills (full CRUD — search, edit, delete, create, language switch) */}
       <div>
         <h3 className="text-sm font-medium text-foreground mb-3">{m?.skillsTitle ?? 'Skills'}</h3>
         <SkillsSection t={t} />
       </div>
 
-      {/* Agent Configuration */}
+      {/* Batch Agent Install */}
       <div>
         <h3 className="text-sm font-medium text-foreground mb-3">{m?.agentsTitle ?? 'Agent Configuration'}</h3>
-        <AgentInstall agents={agents} t={t} onRefresh={fetchAll} />
+        <AgentInstall agents={mcp.agents} t={t} onRefresh={mcp.refresh} />
       </div>
     </div>
   );
