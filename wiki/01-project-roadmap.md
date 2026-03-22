@@ -65,6 +65,7 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 | **增量搜索索引** | 倒排索引 + CJK bigram 分词，与 invalidateCache 联动 | ✅ v0.5.22 |
 | **首页 Plugins 展示优化** | 卡片展示 description + tags，消除重复映射，不可用 plugin 创建引导 | ✅ v0.5.22 |
 | **文件/目录视图 UX 优化** | 目录卡片密度分层 + Breadcrumb 文件图标 + ⌘F 文档内搜索 | ✅ v0.5.22 |
+| **首次使用引导 (I5)** | GuideCard 替换 WelcomeBanner，3 任务卡片 + 交互式完成追踪 + C2→C4 渐进推荐 + guideState 持久化 | ✅ |
 
 ---
 
@@ -137,6 +138,7 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 | Monitoring Tab | ✅ | v0.5 | 系统/应用/知识库/MCP 指标仪表盘 |
 | 统一错误处理 | ✅ | v0.5 | MindOSError + ErrorCodes + apiError() |
 | 增量搜索索引 | ✅ | v0.5 | 倒排索引 + CJK bigram + invalidateCache 联动 |
+| 首次使用引导 | ✅ | v0.5 | GuideCard 3 任务卡片 + 渐进推荐 + guideState 持久化 |
 | Cloud Hub | 待做 | P2 | RESTful + S3/R2 + E2E 加密 |
 | 桌面安装包 | 📋 规划 | P2 | [详情](./64-stage-desktop.md) |
 | Knowledge Health 仪表盘 | 待做 | P2 | 过期检测、孤立文件、矛盾检测 |
