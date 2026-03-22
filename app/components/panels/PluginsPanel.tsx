@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAllRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';
@@ -27,25 +27,25 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
     setMounted(true);
   }, []);
 
-  // Check which entry files exist (once on mount + when active)
+  // Check which entry files exist — fetch once on mount, cache result
+  const fetchedRef = useRef(false);
   useEffect(() => {
-    if (!mounted || !active) return;
+    if (!mounted || fetchedRef.current) return;
+    fetchedRef.current = true;
     const entryPaths = getAllRenderers()
       .map(r => r.entryPath)
       .filter((p): p is string => !!p);
     if (entryPaths.length === 0) return;
 
-    // Check each file via HEAD-like GET — lightweight
-    Promise.all(
-      entryPaths.map(path =>
-        fetch(`/api/file?path=${encodeURIComponent(path)}`, { method: 'GET' })
-          .then(r => r.ok ? path : null)
-          .catch(() => null)
-      )
-    ).then(results => {
-      setExistingFiles(new Set(results.filter((p): p is string => p !== null)));
-    });
-  }, [mounted, active]);
+    // Single request: fetch all file paths and check which entry paths exist
+    fetch('/api/files')
+      .then(r => r.ok ? r.json() : [])
+      .then((allPaths: string[]) => {
+        const pathSet = new Set(allPaths);
+        setExistingFiles(new Set(entryPaths.filter(p => pathSet.has(p))));
+      })
+      .catch(() => {});
+  }, [mounted]);
 
   const renderers = mounted ? getAllRenderers() : [];
   const enabledCount = mounted ? renderers.filter(r => isRendererEnabled(r.id)).length : 0;
@@ -86,7 +86,9 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
                 ${!enabled ? 'opacity-50' : ''}
               `}
               onClick={canOpen ? () => handleOpen(r.entryPath!) : undefined}
+              onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(r.entryPath!); } } : undefined}
               role={canOpen ? 'link' : undefined}
+              tabIndex={canOpen ? 0 : undefined}
             >
               {/* Top row: status dot + icon + name + toggle */}
               <div className="flex items-center justify-between gap-2">
