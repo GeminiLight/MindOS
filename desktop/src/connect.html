@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect to MindOS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #1a1815;
+      --card: #211f1b;
+      --border: #3a352d;
+      --text: #e8e0d4;
+      --text-muted: #a09080;
+      --amber: #c8873a;
+      --amber-dim: rgba(200,135,58,0.15);
+      --success: #4ade80;
+      --error: #f87171;
+      --radius: 12px;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container {
+      width: 100%;
+      max-width: 420px;
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .brand h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--amber);
+      font-family: 'Lora', Georgia, serif;
+    }
+    .brand p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Recent servers */
+    .recent {
+      margin-bottom: 20px;
+    }
+    .recent-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .recent-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .recent-item:hover {
+      border-color: var(--amber);
+      background: var(--amber-dim);
+    }
+    .recent-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .recent-dot.online { background: var(--success); }
+    .recent-info { flex: 1; min-width: 0; }
+    .recent-label-text {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .recent-address {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .recent-forget {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .recent-forget:hover {
+      color: var(--error);
+      background: rgba(248,113,113,0.1);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Form */
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+      color: var(--text);
+      font-size: 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus {
+      border-color: var(--amber);
+    }
+    input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+    .field { margin-bottom: 14px; }
+
+    .test-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      margin-top: 8px;
+    }
+    .test-btn:hover { border-color: var(--amber); }
+    .test-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin: 12px 0;
+      background: var(--amber-dim);
+    }
+    .status-bar.success { color: var(--success); }
+    .status-bar.error { color: var(--error); }
+    .status-bar.info { color: var(--text-muted); }
+
+    .connect-btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--amber);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 8px;
+    }
+    .connect-btn:hover { opacity: 0.9; }
+    .connect-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .hint {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .hint strong { color: var(--text); font-weight: 500; }
+
+    .switch-mode {
+      display: block;
+      width: 100%;
+      text-align: center;
+      margin-top: 20px;
+      padding: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .switch-mode:hover {
+      color: var(--text);
+      border-color: var(--text-muted);
+    }
+
+    .hidden { display: none !important; }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(200,135,58,0.3);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">
+      <h1>∞ MindOS</h1>
+      <p>Connect to your server</p>
+    </div>
+
+    <!-- Recent servers -->
+    <div id="recent-section" class="recent hidden">
+      <div class="recent-label">Recent Servers</div>
+      <div id="recent-list"></div>
+    </div>
+
+    <div id="divider" class="divider hidden"><span>or connect to a new server</span></div>
+
+    <!-- Address input -->
+    <div class="field">
+      <label for="address">Server Address</label>
+      <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
+      <button id="test-btn" class="test-btn" onclick="handleTest()">Test Connection</button>
+    </div>
+
+    <!-- Status -->
+    <div id="status" class="status-bar hidden"></div>
+
+    <!-- Password (shown when authRequired) -->
+    <div id="password-section" class="field hidden">
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="Enter server password" />
+    </div>
+
+    <!-- Connect button -->
+    <button id="connect-btn" class="connect-btn hidden" onclick="handleConnect()" disabled>Connect</button>
+
+    <!-- Hint -->
+    <div class="hint">
+      💡 Find your server address and password in <strong>MindOS Settings</strong> on the host machine.
+    </div>
+
+    <!-- Switch to local -->
+    <button class="switch-mode" onclick="switchToLocal()">← Switch to Local mode</button>
+  </div>
+
+  <script>
+    // IPC bridge — exposed by preload
+    const ipc = window.mindosConnect || {};
+
+    let testResult = null;
+    let recentConnections = [];
+
+    // ── Init ──
+    async function init() {
+      try {
+        recentConnections = await ipc.getRecentConnections?.() || [];
+        renderRecent();
+      } catch {}
+    }
+
+    function renderRecent() {
+      const section = document.getElementById('recent-section');
+      const list = document.getElementById('recent-list');
+      const divider = document.getElementById('divider');
+
+      if (recentConnections.length === 0) {
+        section.classList.add('hidden');
+        divider.classList.add('hidden');
+        return;
+      }
+
+      section.classList.remove('hidden');
+      divider.classList.remove('hidden');
+      list.innerHTML = '';
+
+      for (const conn of recentConnections) {
+        const item = document.createElement('div');
+        item.className = 'recent-item';
+        item.innerHTML = `
+          <div class="recent-dot"></div>
+          <div class="recent-info">
+            <div class="recent-label-text">${conn.label || conn.address}</div>
+            <div class="recent-address">${conn.address}</div>
+          </div>
+          <button class="recent-forget" data-addr="${conn.address}">Forget</button>
+        `;
+        item.addEventListener('click', (e) => {
+          if (e.target.classList.contains('recent-forget')) {
+            e.stopPropagation();
+            handleForget(conn.address);
+            return;
+          }
+          document.getElementById('address').value = conn.address;
+          handleTest();
+        });
+        list.appendChild(item);
+      }
+    }
+
+    async function handleForget(address) {
+      await ipc.removeConnection?.(address);
+      recentConnections = recentConnections.filter(c => c.address !== address);
+      renderRecent();
+    }
+
+    // ── Test Connection ──
+    async function handleTest() {
+      const addr = document.getElementById('address').value.trim();
+      if (!addr) return;
+
+      const btn = document.getElementById('test-btn');
+      const status = document.getElementById('status');
+      const pwSection = document.getElementById('password-section');
+      const connectBtn = document.getElementById('connect-btn');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Testing...';
+      status.classList.remove('hidden');
+      status.className = 'status-bar info';
+      status.textContent = 'Connecting...';
+
+      try {
+        testResult = await ipc.testConnection(addr);
+      } catch (err) {
+        testResult = { status: 'error', error: String(err) };
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Test Connection';
+
+      if (testResult.status === 'online') {
+        status.className = 'status-bar success';
+        const version = testResult.version ? ` · v${testResult.version}` : '';
+        const auth = testResult.authRequired ? ' · Password required' : '';
+        status.textContent = `✓ Online${version}${auth}`;
+
+        if (testResult.authRequired) {
+          pwSection.classList.remove('hidden');
+          document.getElementById('password').focus();
+        } else {
+          pwSection.classList.add('hidden');
+        }
+        connectBtn.classList.remove('hidden');
+        connectBtn.disabled = false;
+      } else if (testResult.status === 'not-mindos') {
+        status.className = 'status-bar error';
+        status.textContent = '⚠ Not a MindOS server';
+        connectBtn.classList.add('hidden');
+      } else {
+        status.className = 'status-bar error';
+        status.textContent = `✗ ${testResult.error || 'Cannot reach server'}`;
+        connectBtn.classList.add('hidden');
+      }
+    }
+
+    // ── Connect ──
+    async function handleConnect() {
+      const addr = document.getElementById('address').value.trim();
+      const pw = document.getElementById('password').value;
+      const btn = document.getElementById('connect-btn');
+      const status = document.getElementById('status');
+
+      if (!addr || !testResult || testResult.status !== 'online') return;
+      if (testResult.authRequired && !pw) {
+        document.getElementById('password').focus();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+
+      try {
+        const result = await ipc.connect(addr, pw || null);
+        if (result.ok) {
+          // Success — main process will load the URL
+          btn.textContent = 'Connected!';
+        } else {
+          status.className = 'status-bar error';
+          status.textContent = result.error || 'Connection failed';
+          btn.disabled = false;
+          btn.textContent = 'Connect';
+        }
+      } catch (err) {
+        status.className = 'status-bar error';
+        status.textContent = `Error: ${err.message || err}`;
+        btn.disabled = false;
+        btn.textContent = 'Connect';
+      }
+    }
+
+    // ── Switch mode ──
+    function switchToLocal() {
+      ipc.switchToLocal?.();
+    }
+
+    // ── Enter key handlers ──
+    document.getElementById('address').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleTest();
+    });
+    document.getElementById('password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleConnect();
+    });
+
+    init();
+  </script>
+</body>
+</html>
