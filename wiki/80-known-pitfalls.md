@@ -431,3 +431,31 @@
 - **解决：** try `--prefer-offline` → catch 后回退到 `npm install`（不带 offline flag）。缓存命中时仍享受离线加速，缓存缺失时自动联网
 - **规则：** `--prefer-offline` 仅作为优化手段，不能出现在唯一安装路径上。必须有在线回退
 - **文件：** `bin/lib/mcp-spawn.js`、`bin/cli.js`、`bin/lib/build.js`
+
+## 架构 & 设计模式
+
+### inline style 绕过设计系统
+- **现象：** `style={{ color: 'var(--foreground)' }}` 在组件中大量使用，全局调色值时不受 Tailwind 影响
+- **解决：** 批量替换为 Tailwind class（`text-foreground`、`bg-card`、`border-border` 等）。72→2 处
+- **规则：** 优先用 Tailwind 语义 class > `text-[var(--xxx)]` arbitrary value > inline style。inline style 仅用于动态计算值（如条件渲染不同 background）或 CSS var() 带 fallback（Tailwind 不支持）
+- **对照表：** `color: var(--foreground)` → `text-foreground` | `background: var(--card)` → `bg-card` | `borderColor: var(--border)` → `border-border` | `color: var(--amber)` → `text-[var(--amber)]`
+
+### auto-rotating 内容不加 aria-live
+- **现象：** 给自动轮播内容加 `aria-live="polite"` 导致屏幕阅读器每 3.5s 打断用户
+- **规则：** WCAG 2.2.2 要求 auto-updating 内容可暂停。auto-rotating carousel 不应用 `aria-live`，除非提供暂停机制
+- **文件：** `HomeContent.tsx` 建议轮播
+
+### CSS var() + fallback 无法用 Tailwind arbitrary value
+- **现象：** `bg-[var(--amber-subtle,rgba(200,135,30,0.08))]` 在 Tailwind 中解析出错
+- **解决：** 在 globals.css 中定义 `--amber-subtle`（:root + .dark），然后用 `bg-[var(--amber-subtle)]`
+- **规则：** 需要 CSS var + fallback 时，先在 globals.css 定义变量，再用 Tailwind arbitrary value 引用
+
+### Context Provider 嵌套层数控制
+- **现状：** 4 层（LocaleProvider → WalkthroughProvider → McpProvider → SidebarLayout）
+- **规则：** ≤6 层可接受，超过时考虑 Zustand/Jotai 替代。当前用 `useMemo` 包裹 context value 缓解 re-render
+- **监控：** 用 React DevTools Profiler 检查 Context 引起的不必要 re-render
+
+### 大组件拆分阈值
+- **规则：** 组件超 300 行 → 考虑拆子组件。超 500 行 → 必须拆。自定义 hook 超 100 行 → 考虑拆
+- **案例：** SidebarLayout 479→314（拆出 useLeftPanel + useAskPanel）| McpSkillsSection 595→359（拆出 McpSkillRow + McpSkillCreateForm）
+- **注意：** 拆分后主组件仍保留编排职责（orchestrator pattern），子组件通过 callback props 通信
