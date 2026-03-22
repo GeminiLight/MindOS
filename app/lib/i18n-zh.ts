@@ -60,7 +60,7 @@ export const zh = {
     },
   },
   sidebar: {
-    files: '文件',
+    files: '空间',
     search: '搜索',
     searchTitle: '搜索',
     askTitle: 'MindOS Agent',
