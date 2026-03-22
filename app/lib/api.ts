@@ -29,14 +29,30 @@ export async function apiFetch<T>(url: string, opts: ApiFetchOptions = {}): Prom
 
   let controller: AbortController | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let removeExternalAbortListener: (() => void) | undefined;
 
-  if (timeout > 0) {
+  if (timeout > 0 || externalSignal) {
     controller = new AbortController();
-    timeoutId = setTimeout(() => controller!.abort(), timeout);
   }
 
-  // Merge external signal if provided
-  const signal = externalSignal ?? controller?.signal;
+  if (timeout > 0 && controller) {
+    timeoutId = setTimeout(() => controller.abort(), timeout);
+  }
+
+  // Bridge caller-provided AbortSignal so both timeout and external cancel work.
+  if (externalSignal && controller) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      const onAbort = () => controller?.abort();
+      externalSignal.addEventListener('abort', onAbort, { once: true });
+      removeExternalAbortListener = () => {
+        externalSignal.removeEventListener('abort', onAbort);
+      };
+    }
+  }
+
+  const signal = controller?.signal ?? externalSignal;
 
   try {
     const res = await fetch(url, { ...fetchOpts, signal });
@@ -60,5 +76,6 @@ export async function apiFetch<T>(url: string, opts: ApiFetchOptions = {}): Prom
     return (await res.json()) as T;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
+    if (removeExternalAbortListener) removeExternalAbortListener();
   }
 }
