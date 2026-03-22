@@ -31,11 +31,7 @@ export default defineConfig({
       },
     },
   },
-  renderer: {
-    // No renderer build — we load the Next.js server via loadURL
-    // connect.html is loaded directly as a local file
-    build: {
-      outDir: 'dist-renderer',
-    },
-  },
+  // No renderer config — we don't have a renderer entry.
+  // Main window loads Next.js via loadURL('http://localhost:3456').
+  // Connect window loads a local HTML file directly.
 });
