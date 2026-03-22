@@ -3,6 +3,7 @@
 import { useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
@@ -32,9 +33,11 @@ interface RailButtonProps {
   buttonRef?: React.Ref<HTMLButtonElement>;
   /** Optional overlay badge (e.g. status dot) rendered inside the button */
   badge?: React.ReactNode;
+  /** Optional data-walkthrough attribute for interactive walkthrough targeting */
+  walkthroughId?: string;
 }
 
-function RailButton({ icon, label, shortcut, active = false, expanded, onClick, buttonRef, badge }: RailButtonProps) {
+function RailButton({ icon, label, shortcut, active = false, expanded, onClick, buttonRef, badge, walkthroughId }: RailButtonProps) {
   return (
     <button
       ref={buttonRef}
@@ -42,6 +45,7 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
       aria-pressed={active}
       aria-label={label}
       title={expanded ? undefined : (shortcut ? `${label} (${shortcut})` : label)}
+      data-walkthrough={walkthroughId}
       className={`
         relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 rounded-md transition-colors
         ${active
@@ -79,6 +83,7 @@ export default function ActivityBar({
 }: ActivityBarProps) {
   const lastClickRef = useRef(0);
   const syncBtnRef = useRef<HTMLButtonElement>(null);
+  const { t } = useLocale();
 
   /** Debounce rapid clicks (300ms) — shared across all Rail buttons */
   const debounced = useCallback((fn: () => void) => {
@@ -109,6 +114,7 @@ export default function ActivityBar({
       role="toolbar"
       aria-label="Navigation"
       aria-orientation="vertical"
+      data-walkthrough="activity-bar"
     >
       {/* Content wrapper — overflow-hidden prevents text flash during width transitions */}
       <div className="flex flex-col h-full w-full overflow-hidden">
@@ -126,10 +132,10 @@ export default function ActivityBar({
 
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
-          <RailButton icon={<FolderTree size={18} />} label="Files" active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} />
-          <RailButton icon={<Search size={18} />} label="Search" shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
-          <RailButton icon={<Blocks size={18} />} label="Plugins" active={activePanel === 'plugins'} expanded={expanded} onClick={() => toggle('plugins')} />
-          <RailButton icon={<Bot size={18} />} label="Agents" active={activePanel === 'agents'} expanded={expanded} onClick={() => toggle('agents')} />
+          <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
+          <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} walkthroughId="search-button" />
+          <RailButton icon={<Blocks size={18} />} label={t.sidebar.plugins} active={activePanel === 'plugins'} expanded={expanded} onClick={() => toggle('plugins')} />
+          <RailButton icon={<Bot size={18} />} label={t.sidebar.agents} active={activePanel === 'agents'} expanded={expanded} onClick={() => toggle('agents')} />
         </div>
 
         {/* ── Spacer ── */}
@@ -140,14 +146,15 @@ export default function ActivityBar({
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton
             icon={<Settings size={18} />}
-            label="Settings"
+            label={t.sidebar.settingsTitle}
             shortcut="⌘,"
             expanded={expanded}
             onClick={() => debounced(onSettingsClick)}
+            walkthroughId="settings-button"
           />
           <RailButton
             icon={<RefreshCw size={18} />}
-            label="Sync"
+            label={t.sidebar.syncLabel}
             expanded={expanded}
             buttonRef={syncBtnRef}
             badge={syncBadge}

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SectionLabel } from './Primitives';
+import { useLocale } from '@/lib/LocaleContext';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
 type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
@@ -287,6 +288,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
 /* ── Ask AI Display Mode (localStorage-based, no server roundtrip) ── */
 
 function AskDisplayMode() {
+  const { t } = useLocale();
   const [mode, setMode] = useState<'panel' | 'popup'>('panel');
 
   useEffect(() => {
@@ -308,10 +310,10 @@ function AskDisplayMode() {
     <div className="pt-3 border-t border-border">
       <SectionLabel>MindOS Agent</SectionLabel>
       <div className="space-y-4">
-        <Field label="Display Mode" hint="Side panel stays docked on the right. Popup opens a floating dialog.">
+        <Field label={t.settings.askDisplayMode?.label ?? 'Display Mode'} hint={t.settings.askDisplayMode?.hint ?? 'Side panel stays docked on the right. Popup opens a floating dialog.'}>
           <Select value={mode} onChange={e => handleChange(e.target.value)}>
-            <option value="panel">Side Panel</option>
-            <option value="popup">Popup</option>
+            <option value="panel">{t.settings.askDisplayMode?.panel ?? 'Side Panel'}</option>
+            <option value="popup">{t.settings.askDisplayMode?.popup ?? 'Popup'}</option>
           </Select>
         </Field>
       </div>
