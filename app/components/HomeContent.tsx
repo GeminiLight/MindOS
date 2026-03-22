@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, Puzzle, ArrowRight, FilePlus, Search, ChevronDown, Compass } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
@@ -27,8 +27,6 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
-  const [hintId, setHintId] = useState<string | null>(null);
-  const hintTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   const suggestions = t.ask?.suggestions ?? [
     'Summarize this document',
@@ -44,15 +42,6 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
     return () => clearInterval(interval);
   }, [suggestions.length]);
 
-  // Cleanup hint timer on unmount
-  useEffect(() => () => { if (hintTimer.current) clearTimeout(hintTimer.current); }, []);
-
-  function showHint(id: string) {
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    setHintId(id);
-    hintTimer.current = setTimeout(() => setHintId(null), 3000);
-  }
-
   const existingSet = new Set(existingFiles ?? []);
 
   // Empty knowledge base → show onboarding
@@ -62,9 +51,9 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
 
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
-  // Only show renderers with an entryPath on the home page grid.
-  // Opt-in renderers (like Graph) have no entryPath and are toggled from the view toolbar.
+  // Only show renderers that are available (have entryPath + file exists) as quick-access chips
   const renderers = getAllRenderers().filter(r => r.entryPath);
+  const availablePlugins = renderers.filter(r => r.entryPath && existingSet.has(r.entryPath));
 
   const lastFile = recent[0];
 
@@ -166,89 +155,23 @@ export default function HomeContent({ recent, existingFiles }: { recent: RecentF
           </Link>
         </div>
 
+        {/* Plugin quick-access chips — only show available plugins */}
+        {availablePlugins.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3" style={{ paddingLeft: '1rem' }}>
+            {availablePlugins.map(r => (
+              <Link
+                key={r.id}
+                href={`/view/${encodePath(r.entryPath!)}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-100 hover:bg-muted/60"
+                style={{ color: 'var(--muted-foreground)' }}
+              >
+                <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
+                <span>{r.name}</span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Plugins */}
-      {renderers.length > 0 && (
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <Puzzle size={13} style={{ color: 'var(--amber)' }} />
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] font-display" style={{ color: 'var(--muted-foreground)' }}>
-              {t.home.plugins}
-            </h2>
-            <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.65 }}>
-              {renderers.length}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
-            {renderers.map((r) => {
-              const entryPath = r.entryPath ?? null;
-              const available = !entryPath || existingSet.has(entryPath);
-
-              if (!available) {
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => showHint(r.id)}
-                    className="group flex flex-col gap-1.5 px-3.5 py-3 rounded-lg border transition-all opacity-60 cursor-pointer hover:opacity-80 text-left"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
-                      <span className="text-xs font-semibold truncate font-display" style={{ color: 'var(--foreground)' }}>
-                        {r.name}
-                      </span>
-                    </div>
-                    <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
-                      {r.description}
-                    </p>
-                    {hintId === r.id ? (
-                      <p className="text-2xs animate-in" style={{ color: 'var(--amber)' }} role="status">
-                        {(t.home.createToActivate ?? 'Create {file} to activate').replace('{file}', entryPath ?? '')}
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {r.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              }
-
-              return (
-                <Link
-                  key={r.id}
-                  href={entryPath ? `/view/${encodePath(entryPath)}` : '#'}
-                  className="group flex flex-col gap-1.5 px-3.5 py-3 rounded-lg border transition-all hover:border-amber-500/30 hover:bg-muted/50"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base leading-none shrink-0" suppressHydrationWarning>{r.icon}</span>
-                    <span className="text-xs font-semibold truncate font-display" style={{ color: 'var(--foreground)' }}>
-                      {r.name}
-                    </span>
-                  </div>
-                  <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>
-                    {r.description}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {r.tags.slice(0, 3).map(tag => (
-                      <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Recently modified — timeline feed */}
       {recent.length > 0 && (() => {

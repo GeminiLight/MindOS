@@ -105,6 +105,20 @@ export const en = {
       connect: 'Connect',
       installing: 'Installing...',
       install: (name: string) => `Install ${name}`,
+      // Snippet section
+      copyConfig: 'Copy Config',
+      copied: 'Copied!',
+      transportLocal: 'Local',
+      transportRemote: 'Remote',
+      configPath: 'Config path',
+      noAuthWarning: 'No auth token — set in Advanced Config',
+      // Skills section
+      skillsTitle: 'Skills',
+      skillsActive: 'active',
+      builtinSkills: 'Built-in',
+      newSkill: '+ New',
+      // Footer
+      advancedConfig: 'Advanced Config →',
     },
     plugins: {
       title: 'Plugins',
@@ -113,6 +127,10 @@ export const en = {
       core: 'Core',
       coreDisabled: 'Core plugin — cannot be disabled',
       footer: 'Plugins customize how files render. Core plugins cannot be disabled.',
+      ready: 'Ready — click to open',
+      disabled: 'Disabled',
+      noFile: 'Entry file not found',
+      createFile: 'Create {file} to activate',
     },
   },
   shortcutPanel: {

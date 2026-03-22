@@ -6,6 +6,7 @@ import {
   Trash2, Plus, X, Search, Pencil,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useMcpDataOptional } from '@/hooks/useMcpData';
 import { Toggle } from './Primitives';
 import dynamic from 'next/dynamic';
 import type { SkillInfo, McpSkillsSectionProps } from './types';
@@ -83,6 +84,7 @@ const SKILL_TEMPLATES: Record<string, (name: string) => string> = {
 
 export default function SkillsSection({ t }: McpSkillsSectionProps) {
   const m = t.settings?.mcp;
+  const mcp = useMcpDataOptional();
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -131,6 +133,13 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
   const builtinSkills = useMemo(() => filtered.filter(s => s.source === 'builtin'), [filtered]);
 
   const handleToggle = async (name: string, enabled: boolean) => {
+    // Delegate to McpProvider when available — single API call, no event storm
+    if (mcp) {
+      await mcp.toggleSkill(name, enabled);
+      setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled } : s));
+      return;
+    }
+    // Fallback: direct API call (no McpProvider context)
     try {
       await apiFetch('/api/skills', {
         method: 'POST',
@@ -160,6 +169,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
       if (expanded === name) setExpanded(null);
       setLoadErrors(prev => { const next = { ...prev }; delete next[name]; return next; });
       fetchSkills();
+      window.dispatchEvent(new Event('mindos:skills-changed'));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to delete skill';
       console.error('handleDelete error:', msg);
@@ -212,6 +222,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
       setFullContent(prev => ({ ...prev, [name]: editContent }));
       setEditing(null);
       fetchSkills(); // refresh description from updated frontmatter
+      window.dispatchEvent(new Event('mindos:skills-changed'));
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : 'Failed to save skill');
     } finally {
@@ -247,6 +258,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
       setNewName('');
       setNewContent('');
       fetchSkills();
+      window.dispatchEvent(new Event('mindos:skills-changed'));
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create skill');
     } finally {

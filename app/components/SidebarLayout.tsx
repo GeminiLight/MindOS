@@ -23,6 +23,7 @@ import { useAskModal } from '@/hooks/useAskModal';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
 import { WalkthroughProvider } from './walkthrough';
+import McpProvider from '@/hooks/useMcpData';
 import type { Tab } from './settings/types';
 
 interface SidebarLayoutProps {
@@ -304,6 +305,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
   return (
     <WalkthroughProvider>
+    <McpProvider>
     <>
       {/* Skip link */}
       <a
@@ -471,6 +473,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         }
       `}</style>
     </>
+    </McpProvider>
     </WalkthroughProvider>
   );
 }
