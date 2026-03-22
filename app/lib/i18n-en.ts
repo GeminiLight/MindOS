@@ -419,6 +419,8 @@ export const en = {
     importHint: 'Already have notes? Set MIND_ROOT to your existing directory in Settings.',
     syncHint: 'Want cross-device sync? Run',
     syncHintSuffix: 'in the terminal after setup.',
+    initError: 'Initialization failed. Please try again.',
+    dismiss: 'Dismiss',
   },
   shortcuts: [
     { keys: ['⌘', 'K'], description: 'Search' },
