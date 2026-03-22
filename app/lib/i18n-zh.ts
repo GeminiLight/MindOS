@@ -444,6 +444,8 @@ export const zh = {
     importHint: '已有笔记？在设置中将 MIND_ROOT 指向已有目录即可。',
     syncHint: '需要跨设备同步？完成初始化后在终端运行',
     syncHintSuffix: '即可。',
+    initError: '初始化失败，请重试。',
+    dismiss: '关闭',
   },
   shortcuts: [
     { keys: ['⌘', 'K'], description: '搜索' },
