@@ -33,6 +33,10 @@ export const zh = {
   },
   home: {
     recentlyModified: '最近修改',
+    recentlyActive: '最近活跃',
+    allSpaces: '所有空间',
+    nFiles: (n: number) => `${n} 个文件`,
+    other: '其他',
     continueEditing: '继续编辑',
     newNote: '新建笔记',
     plugins: '插件',

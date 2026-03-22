@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveSafe, assertWithinRoot } from './security';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
+import { scaffoldIfNewSpace } from './space-scaffold';
 
 /**
  * Reads the content of a file given a relative path from mindRoot.
@@ -40,6 +41,7 @@ export function createFile(mindRoot: string, filePath: string, initialContent = 
   }
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   fs.writeFileSync(resolved, initialContent, 'utf-8');
+  scaffoldIfNewSpace(mindRoot, filePath);
 }
 
 /**
