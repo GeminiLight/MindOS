@@ -39,7 +39,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, cpSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -50,7 +50,7 @@ import { bold, dim, cyan, green, red, yellow } from './lib/colors.js';
 const NEXT_BIN = resolve(ROOT, 'app', 'node_modules', '.bin', 'next');
 import { run, npmInstall } from './lib/utils.js';
 import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
-import { needsBuild, writeBuildStamp, clearBuildLock, cleanNextDir, ensureAppDeps } from './lib/build.js';
+import { needsBuild, writeBuildStamp, cleanNextDir, ensureAppDeps } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
