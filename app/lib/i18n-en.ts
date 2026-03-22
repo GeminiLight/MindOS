@@ -35,7 +35,7 @@ export const en = {
     },
   },
   sidebar: {
-    files: 'Files',
+    files: 'Spaces',
     search: 'Search',
     searchTitle: 'Search',
     askTitle: 'MindOS Agent',
