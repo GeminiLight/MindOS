@@ -3,8 +3,8 @@ export const en = {
     relatedFiles: 'Related Files',
   },
   app: {
-    tagline: 'Personal knowledge OS — browse, edit, and query your second brain.',
-    footer: 'MindOS · personal knowledge OS',
+    tagline: 'You think here, Agents act there.',
+    footer: 'MindOS · human-agent collaborative mind system',
   },
   home: {
     recentlyModified: 'Recently Modified',
@@ -14,6 +14,11 @@ export const en = {
     spaces: 'Spaces',
     nFiles: (n: number) => `${n} file${n === 1 ? '' : 's'}`,
     other: 'Other',
+    newSpace: 'New Space',
+    spaceName: 'Space name',
+    spaceDescription: 'What is this space for?',
+    createSpace: 'Create',
+    cancelCreate: 'Cancel',
     continueEditing: 'Continue editing',
     newNote: 'New Notes',
     plugins: 'Plugins',

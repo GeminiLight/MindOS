@@ -28,8 +28,8 @@ export const zh = {
     relatedFiles: '关联视图',
   },
   app: {
-    tagline: '个人知识操作系统 — 浏览、编辑并查询你的第二大脑。',
-    footer: 'MindOS · 个人知识操作系统',
+    tagline: '你在此思考，Agent 依此行动。',
+    footer: 'MindOS · 人机共生知识系统',
   },
   home: {
     recentlyModified: '最近修改',
@@ -39,6 +39,11 @@ export const zh = {
     spaces: '心智空间',
     nFiles: (n: number) => `${n} 个文件`,
     other: '其他',
+    newSpace: '新建空间',
+    spaceName: '空间名称',
+    spaceDescription: '这个空间用来做什么？',
+    createSpace: '创建',
+    cancelCreate: '取消',
     continueEditing: '继续编辑',
     newNote: '新建笔记',
     plugins: '插件',
