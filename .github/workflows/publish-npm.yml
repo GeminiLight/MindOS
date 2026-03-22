@@ -1,10 +1,14 @@
-name: Publish to npm
+name: Publish to npm (fallback)
 
-# Trigger on version tags: v0.1.0, v1.2.3, etc.
+# Primary npm publish now happens on GeminiLight/MindOS (public repo).
+# This workflow is a fallback — only triggers on manual dispatch.
+# Tags are synced to public repo by sync-to-mindos.yml → triggers publish there.
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to publish (e.g. v0.5.30)'
+        required: true
 
 permissions:
   contents: read
@@ -15,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,12 +31,11 @@ jobs:
       - name: Verify package version matches tag
         run: |
           PKG_VERSION="v$(node -p "require('./package.json').version")"
-          TAG_VERSION="${GITHUB_REF_NAME}"
+          TAG_VERSION="${{ github.event.inputs.tag }}"
           echo "Package version: ${PKG_VERSION}"
           echo "Tag version:     ${TAG_VERSION}"
           if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
             echo "::error::Version mismatch: package.json has ${PKG_VERSION} but tag is ${TAG_VERSION}"
-            echo "::error::Run: npm version <patch|minor|major> and commit before tagging."
             exit 1
           fi
 

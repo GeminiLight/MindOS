@@ -1,10 +1,15 @@
 name: Sync to MindOS
 
-# 手动触发 或 push 到 main 时自动触发
+# Trigger on:
+# - push to main (code changes)
+# - version tags (to sync tag → public repo → npm publish)
+# - manual dispatch
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags:
+      - 'v*.*.*'
     paths:
       - 'app/**'
       - 'mcp/**'
@@ -20,6 +25,7 @@ on:
       - 'README.md'
       - 'README_zh.md'
       - '.env.local.example'
+      - 'package.json'
       - 'package-lock.json'
 
 permissions:
@@ -143,4 +149,20 @@ jobs:
           else
             git commit -m "deploy: ${DEV_MSG}"
             git push origin gh-pages
+          fi
+
+          # === 4. Sync version tag to public repo (triggers npm publish there) ===
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            echo "Syncing tag ${TAG} to public repo..."
+            cd /tmp/mindos
+            git fetch origin --tags 2>/dev/null || true
+            # Only push if tag doesn't already exist on public
+            if ! git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+              git tag "${TAG}"
+              git push origin "${TAG}"
+              echo "✅ Tag ${TAG} pushed to GeminiLight/MindOS"
+            else
+              echo "Tag ${TAG} already exists on public repo, skipping."
+            fi
           fi
