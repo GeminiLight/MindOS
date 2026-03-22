@@ -46,7 +46,7 @@ v0.1 (P0 ✅)              v0.2 (P1 ✅)              v0.3-0.4 (P1 ✅)         
 
 ---
 
-## v0.5 — Agent 框架迁移 + Settings 重构 + 稳定性 🔄 进行中
+## v0.5 — Agent 框架迁移 + Settings 重构 + 稳定性 ✅
 
 > 底层 Agent 框架升级；Settings 面板模块化；多语言独立管理；关键 bug 修复。
 
