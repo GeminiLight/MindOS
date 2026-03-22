@@ -8,6 +8,9 @@ import FileTree from './FileTree';
 import SyncStatusBar from './SyncStatusBar';
 import PanelHeader from './panels/PanelHeader';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
+import { useLocale } from '@/lib/LocaleContext';
+
+const noop = () => {};
 
 /** Compute the maximum directory depth of a file tree */
 function getMaxDepth(nodes: FileNode[], current = 0): number {
@@ -68,6 +71,8 @@ export default function Panel({
   const defaultWidth = activePanel ? DEFAULT_PANEL_WIDTH[activePanel] : 280;
   const width = maximized ? undefined : (panelWidth ?? defaultWidth);
 
+  const { t } = useLocale();
+
   // File tree depth control: null = manual (no override), number = forced max open depth
   const [maxOpenDepth, setMaxOpenDepth] = useState<number | null>(null);
   const treeMaxDepth = useMemo(() => getMaxDepth(fileTree), [fileTree]);
@@ -79,8 +84,8 @@ export default function Panel({
     maxWidthRatio: MAX_PANEL_WIDTH_RATIO,
     direction: 'right',
     disabled: maximized,
-    onResize: onWidthChange ?? (() => {}),
-    onResizeEnd: onWidthCommit ?? (() => {}),
+    onResize: onWidthChange ?? noop,
+    onResizeEnd: onWidthCommit ?? noop,
   });
 
   return (
@@ -97,7 +102,7 @@ export default function Panel({
     >
       {/* Files panel — always mounted to preserve tree expand/collapse state */}
       <div className={`flex flex-col h-full ${activePanel === 'files' ? '' : 'hidden'}`}>
-        <PanelHeader title="Files">
+        <PanelHeader title={t.sidebar.files}>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => setMaxOpenDepth(prev => {
@@ -105,8 +110,8 @@ export default function Panel({
                 return Math.max(-1, current - 1);
               })}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Collapse one level"
-              title="Collapse one level"
+              aria-label={t.sidebar.collapseLevel}
+              title={t.sidebar.collapseLevel}
             >
               <ChevronsDownUp size={13} />
             </button>
@@ -120,8 +125,8 @@ export default function Panel({
                 return next;
               })}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Expand one level"
-              title="Expand one level"
+              aria-label={t.sidebar.expandLevel}
+              title={t.sidebar.expandLevel}
             >
               <ChevronsUpDown size={13} />
             </button>
