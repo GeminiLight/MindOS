@@ -211,7 +211,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { installed: false };
 
-  for (const [scope, cfgPath] of [['global', agent.global], ['project', agent.project]] as const) {
+  for (const [scopeType, cfgPath] of [['global', agent.global], ['project', agent.project]] as [string, string | null][]) {
     if (!cfgPath) continue;
     const absPath = expandHome(cfgPath);
     if (!fs.existsSync(absPath)) continue;
@@ -220,10 +220,10 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
       // Handle TOML format (e.g., codex)
       if (agent.format === 'toml') {
         const result = parseTomlMcpEntry(content, agent.key, 'mindos');
-        if (result.found) {
+        if (result.found && result.entry) {
           const entry = result.entry;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-          return { installed: true, scope, transport, configPath: cfgPath };
+          return { installed: true, scope: scopeType, transport, configPath: cfgPath };
         }
       } else {
         // JSON format (default)
@@ -232,7 +232,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
         if (servers?.mindos) {
           const entry = servers.mindos;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-          return { installed: true, scope, transport, configPath: cfgPath };
+          return { installed: true, scope: scopeType, transport, configPath: cfgPath };
         }
       }
     } catch { /* ignore parse errors */ }
