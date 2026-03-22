@@ -81,12 +81,13 @@ jobs:
           [ -d scripts/ ] && rsync -av --delete scripts/ /tmp/mindos/scripts/
           [ -d tests/ ] && rsync -av --delete tests/ /tmp/mindos/tests/
 
-          # Sync CI workflows (publish-npm.yml etc.) — exclude sync-to-mindos itself
+          # Sync CI workflows — only specific files, skip private-repo-only ones
           mkdir -p /tmp/mindos/.github/workflows
           for wf in .github/workflows/*.yml; do
             wf_name=$(basename "$wf")
-            [ "$wf_name" = "sync-to-mindos.yml" ] && continue
-            [ "$wf_name" = "ci.yml" ] && continue
+            case "$wf_name" in
+              sync-to-mindos.yml|ci.yml|publish-npm.yml) continue ;;
+            esac
             cp "$wf" /tmp/mindos/.github/workflows/
           done
           [ -d wiki/ ] && rsync -av --delete \
