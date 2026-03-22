@@ -2,6 +2,10 @@ name: Publish to npm
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to publish'
+        required: true
   push:
     tags:
       - 'v*.*.*'
@@ -13,10 +17,19 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ steps.tag.outputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,8 +39,13 @@ jobs:
 
       - name: Verify version
         run: |
-          echo "Package: v$(node -p "require('./package.json').version")"
-          echo "Tag: ${GITHUB_REF_NAME}"
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "Package: ${PKG_VERSION} | Tag: ${TAG}"
+          if [ "${PKG_VERSION}" != "${TAG}" ]; then
+            echo "::error::Version mismatch: ${PKG_VERSION} vs ${TAG}"
+            exit 1
+          fi
 
       - name: Publish to npm
         run: npm publish --access public
