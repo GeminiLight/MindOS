@@ -2,8 +2,9 @@
   "name": "mindos-desktop",
   "version": "0.1.0",
   "description": "MindOS Desktop — Local-first knowledge base for AI Agents",
+  "author": "MindOS Team",
   "private": true,
-"main": "dist-electron/main/main.js",
+  "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

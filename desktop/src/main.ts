@@ -63,9 +63,10 @@ function invalidateConfig(): void {
 
 /**
  * Resolve the absolute path to node binary.
- * Tries: env var → NVM default → common system paths → `which node`.
+ * Tries: env var → NVM default → common system paths → shell detection.
+ * Returns null if not found, allowing caller to handle gracefully.
  */
-function getNodePath(): string {
+function getNodePath(): string | null {
   // 1. Explicit env var
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
     return process.env.MINDOS_NODE_BIN;
@@ -76,7 +77,23 @@ function getNodePath(): string {
   const nvmCurrent = path.join(home, '.nvm', 'current', 'bin', 'node');
   if (existsSync(nvmCurrent)) return nvmCurrent;
 
-  // 3. fnm
+  // 3. NVM: try direct version directories (common on macOS)
+  const nvmVersionsDir = path.join(home, '.nvm', 'versions', 'node');
+  try {
+    // Find the latest version directory
+    const fs = require('fs');
+    if (existsSync(nvmVersionsDir)) {
+      const versions = fs.readdirSync(nvmVersionsDir)
+        .filter((v: string) => v.startsWith('v'))
+        .sort().reverse();
+      for (const ver of versions) {
+        const nodePath = path.join(nvmVersionsDir, ver, 'bin', 'node');
+        if (existsSync(nodePath)) return nodePath;
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 4. fnm
   const fnmDir = process.env.FNM_DIR || path.join(home, '.fnm');
   try {
     const fnmAliases = path.join(fnmDir, 'aliases', 'default');
@@ -87,23 +104,60 @@ function getNodePath(): string {
     }
   } catch { /* ignore */ }
 
-  // 4. Common system paths
+  // 5. Common system paths (including Intel Homebrew)
   const systemPaths = [
-    '/usr/local/bin/node',
-    '/usr/bin/node',
-    '/opt/homebrew/bin/node',  // Apple Silicon Homebrew
+    '/usr/local/bin/node',           // Intel Homebrew
+    '/opt/homebrew/bin/node',        // Apple Silicon Homebrew
+    '/usr/bin/node',                 // System
+    '/opt/local/bin/node',           // MacPorts
+    path.join(home, '.local/share/fnm/node'), // fnm direct
   ];
   for (const p of systemPaths) {
     if (existsSync(p)) return p;
   }
 
-  // 5. `which node` (works if shell profile loaded)
+  // 6. Try shell detection with proper PATH
+  const shells = ['/bin/zsh', '/bin/bash', '/bin/sh'];
+  for (const shell of shells) {
+    if (!existsSync(shell)) continue;
+    try {
+      // Run shell as login shell to load profile
+      const result = execSync(
+        `${shell} -il -c "which node" 2>/dev/null`,
+        { encoding: 'utf-8', timeout: 5000, env: process.env }
+      ).trim();
+      if (result && existsSync(result)) return result;
+    } catch { /* ignore */ }
+  }
+
+  // 7. Last resort: `which node`
   try {
     const result = execSync('which node', { encoding: 'utf-8', timeout: 3000 }).trim();
     if (result && existsSync(result)) return result;
   } catch { /* ignore */ }
 
-  throw new Error('Node.js ≥20 required. Install from https://nodejs.org');
+  // Return null instead of throwing, let caller handle gracefully
+  return null;
+}
+
+/**
+ * Show dialog when Node.js is required but not found.
+ * Returns false if user cancels or chooses remote mode.
+ */
+async function showNodeRequiredDialog(): Promise<'install' | 'remote' | 'cancel'> {
+  const result = await dialog.showMessageBox(mainWindow || undefined, {
+    type: 'warning',
+    title: 'Node.js Required',
+    message: 'Node.js ≥20 is required to run MindOS locally.',
+    detail: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode to connect to a MindOS server',
+    buttons: ['Open nodejs.org', 'Switch to Remote', 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+  });
+
+  if (result.response === 0) return 'install';
+  if (result.response === 1) return 'remote';
+  return 'cancel';
 }
 
 /**
@@ -219,10 +273,26 @@ async function askMode(): Promise<'local' | 'remote'> {
 }
 
 // ── Local Mode ──
-async function startLocalMode(): Promise<string> {
+async function startLocalMode(): Promise<string | null> {
   const config = loadConfig();
   const projectRoot = getProjectRoot();
   const nodePath = getNodePath();
+
+  // Check if Node.js is available
+  if (!nodePath) {
+    const choice = await showNodeRequiredDialog();
+    if (choice === 'install') {
+      shell.openExternal('https://nodejs.org/');
+    }
+    if (choice === 'remote') {
+      // Switch to remote mode
+      currentMode = 'remote';
+      invalidateConfig();
+      return startRemoteMode();
+    }
+    return null;
+  }
+
   const npxPath = getNpxPath(nodePath);
 
   // Check CLI conflict
