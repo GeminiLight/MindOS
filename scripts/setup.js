@@ -186,14 +186,18 @@ function write(s) { process.stdout.write(s); }
 // ── State ─────────────────────────────────────────────────────────────────────
 
 function detectSystemLang() {
-  // Check env vars first (Linux / macOS / WSL)
-  const vars = [
-    process.env.LANG,
+  // Check env vars by precedence (LC_ALL > LC_MESSAGES > LANG > LANGUAGE)
+  // For LANGUAGE, only use the first entry before ':' (it's a priority list)
+  const candidates = [
     process.env.LC_ALL,
     process.env.LC_MESSAGES,
-    process.env.LANGUAGE,
-  ].filter(Boolean).join(' ').toLowerCase();
-  if (vars.includes('zh')) return 'zh';
+    process.env.LANG,
+    ...(process.env.LANGUAGE ? [process.env.LANGUAGE.split(':')[0]] : []),
+  ];
+  const first = candidates.find(Boolean);
+  if (first) {
+    return first.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  }
 
   // Fallback: Intl API (works on Windows where LANG is often unset)
   try {
