@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAllRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';
@@ -16,6 +16,7 @@ interface PluginsPanelProps {
 export default function PluginsPanel({ active, maximized, onMaximize }: PluginsPanelProps) {
   const [mounted, setMounted] = useState(false);
   const [, forceUpdate] = useState(0);
+  const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set());
   const router = useRouter();
   const { t } = useLocale();
   const p = t.panels.plugins;
@@ -26,14 +27,38 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
     setMounted(true);
   }, []);
 
+  // Check which entry files exist (once on mount + when active)
+  useEffect(() => {
+    if (!mounted || !active) return;
+    const entryPaths = getAllRenderers()
+      .map(r => r.entryPath)
+      .filter((p): p is string => !!p);
+    if (entryPaths.length === 0) return;
+
+    // Check each file via HEAD-like GET — lightweight
+    Promise.all(
+      entryPaths.map(path =>
+        fetch(`/api/file?path=${encodeURIComponent(path)}`, { method: 'GET' })
+          .then(r => r.ok ? path : null)
+          .catch(() => null)
+      )
+    ).then(results => {
+      setExistingFiles(new Set(results.filter((p): p is string => p !== null)));
+    });
+  }, [mounted, active]);
+
   const renderers = mounted ? getAllRenderers() : [];
   const enabledCount = mounted ? renderers.filter(r => isRendererEnabled(r.id)).length : 0;
 
-  const handleToggle = (id: string, enabled: boolean) => {
+  const handleToggle = useCallback((id: string, enabled: boolean) => {
     setRendererEnabled(id, enabled);
     forceUpdate(n => n + 1);
     window.dispatchEvent(new Event('renderer-state-changed'));
-  };
+  }, []);
+
+  const handleOpen = useCallback((entryPath: string) => {
+    router.push(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
+  }, [router]);
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
@@ -49,48 +74,80 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
         )}
         {renderers.map(r => {
           const enabled = isRendererEnabled(r.id);
+          const fileExists = r.entryPath ? existingFiles.has(r.entryPath) : false;
+          const canOpen = enabled && r.entryPath && fileExists;
+
           return (
             <div
               key={r.id}
-              className="px-4 py-3 border-b border-border/50 hover:bg-muted/30 transition-colors"
+              className={`
+                px-4 py-3 border-b border-border/50 transition-colors
+                ${canOpen ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20'}
+                ${!enabled ? 'opacity-50' : ''}
+              `}
+              onClick={canOpen ? () => handleOpen(r.entryPath!) : undefined}
+              role={canOpen ? 'link' : undefined}
             >
-              {/* Top row: icon + name + toggle */}
+              {/* Top row: status dot + icon + name + toggle */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-base shrink-0">{r.icon}</span>
+                  {/* Status dot */}
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{
+                      background: !enabled
+                        ? 'var(--muted-foreground)'
+                        : canOpen
+                          ? 'var(--success)'
+                          : 'var(--border)',
+                    }}
+                    title={
+                      !enabled
+                        ? p.disabled ?? 'Disabled'
+                        : canOpen
+                          ? p.ready ?? 'Ready'
+                          : p.noFile ?? 'File not found'
+                    }
+                  />
+                  <span className="text-base shrink-0" suppressHydrationWarning>{r.icon}</span>
                   <span className="text-sm font-medium text-foreground truncate">{r.name}</span>
                   {r.core && (
                     <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
                   )}
                 </div>
-                <Toggle
-                  checked={enabled}
-                  onChange={(v) => handleToggle(r.id, v)}
-                  size="sm"
-                  disabled={r.core}
-                  title={r.core ? p.coreDisabled : undefined}
-                />
+                {/* Toggle — stop propagation to prevent row click */}
+                <div onClick={e => e.stopPropagation()}>
+                  <Toggle
+                    checked={enabled}
+                    onChange={(v) => handleToggle(r.id, v)}
+                    size="sm"
+                    disabled={r.core}
+                    title={r.core ? p.coreDisabled : undefined}
+                  />
+                </div>
               </div>
 
               {/* Description */}
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed pl-[30px]">
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed pl-[34px]">
                 {r.description}
               </p>
 
-              {/* Tags + entry path */}
-              <div className="mt-1.5 flex items-center gap-1.5 pl-[30px] flex-wrap">
+              {/* Tags + status hint */}
+              <div className="mt-1.5 flex items-center gap-1.5 pl-[34px] flex-wrap">
                 {r.tags.slice(0, 3).map(tag => (
                   <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
                     {tag}
                   </span>
                 ))}
-                {r.entryPath && enabled && (
-                  <button
-                    onClick={() => router.push(`/view/${r.entryPath!.split('/').map(encodeURIComponent).join('/')}`)}
-                    className="text-2xs px-1.5 py-0.5 rounded-full text-[var(--amber)] hover:bg-[var(--amber-dim)] transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                  >
+                {r.entryPath && enabled && !fileExists && (
+                  <span className="text-2xs" style={{ color: 'var(--amber)' }}>
+                    {(p.createFile ?? 'Create {file}').replace('{file}', r.entryPath)}
+                  </span>
+                )}
+                {canOpen && (
+                  <span className="text-2xs" style={{ color: 'var(--amber)' }}>
                     → {r.entryPath}
-                  </button>
+                  </span>
                 )}
               </div>
             </div>
