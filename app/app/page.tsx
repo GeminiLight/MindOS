@@ -12,11 +12,27 @@ export interface SpaceInfo {
   name: string;
   path: string;
   fileCount: number;
+  description: string;  // first paragraph from README.md (after title)
 }
 
 function countFiles(node: FileNode): number {
   if (node.type === 'file') return 1;
   return (node.children ?? []).reduce((sum, c) => sum + countFiles(c), 0);
+}
+
+/** Extract the first non-empty paragraph after the title from a README.md */
+function extractDescription(spacePath: string): string {
+  try {
+    const content = getFileContent(spacePath + 'README.md');
+    const lines = content.split('\n');
+    // Skip title line (# ...) and blank lines, return first non-empty non-heading line
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      return trimmed;
+    }
+  } catch { /* README.md doesn't exist */ }
+  return '';
 }
 
 function getTopLevelDirs(): SpaceInfo[] {
@@ -28,6 +44,7 @@ function getTopLevelDirs(): SpaceInfo[] {
         name: n.name,
         path: n.path + '/',
         fileCount: countFiles(n),
+        description: extractDescription(n.path + '/'),
       }));
   } catch {
     return [];
