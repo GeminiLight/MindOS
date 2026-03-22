@@ -151,7 +151,7 @@ jobs:
             git push origin gh-pages
           fi
 
-          # === 4. Sync version tag to public repo (triggers npm publish there) ===
+          # === 4. Sync version tag to public repo + trigger npm publish ===
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
             echo "Syncing tag ${TAG} to public repo..."
@@ -165,4 +165,15 @@ jobs:
             else
               echo "Tag ${TAG} already exists on public repo, skipping."
             fi
+
+            # Trigger publish workflow via GitHub API (tags pushed by PAT don't
+            # auto-trigger workflows in the same repo — GitHub anti-loop policy)
+            echo "Triggering npm publish workflow on GeminiLight/MindOS..."
+            curl -s -X POST \
+              -H "Authorization: token ${PAT}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/GeminiLight/MindOS/actions/workflows/publish-npm.yml/dispatches" \
+              -d "{\"ref\":\"${TAG}\"}" \
+              && echo "✅ Publish workflow dispatched for ${TAG}" \
+              || echo "⚠️ Failed to dispatch publish workflow"
           fi
