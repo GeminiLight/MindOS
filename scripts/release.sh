@@ -92,26 +92,33 @@ git push origin main
 git push origin "$VERSION"
 echo ""
 
-# 5. Wait for CI (if gh is available)
+# 5. Wait for CI
+# Flow: tag push → sync-to-mindos (syncs code + tag to public repo) → public repo publish-npm
 if command -v gh &>/dev/null; then
-  echo "⏳ Waiting for CI publish workflow..."
+  echo "⏳ Waiting for sync → publish pipeline..."
+  echo "   mindos-dev tag push → sync-to-mindos → GeminiLight/MindOS tag → npm publish"
   TIMEOUT=120
   ELAPSED=0
   RUN_ID=""
 
-  # Wait for the workflow run to appear
+  # Watch the sync workflow on mindos-dev
   while [ -z "$RUN_ID" ] && [ "$ELAPSED" -lt 30 ]; do
     sleep 3
     ELAPSED=$((ELAPSED + 3))
-    RUN_ID=$(gh run list --workflow=publish-npm.yml --limit=1 --json databaseId,headBranch --jq ".[0].databaseId" 2>/dev/null || true)
+    RUN_ID=$(gh run list --workflow=sync-to-mindos.yml --limit=1 --json databaseId,headBranch --jq ".[0].databaseId" 2>/dev/null || true)
   done
 
   if [ -n "$RUN_ID" ]; then
-    gh run watch "$RUN_ID" --exit-status && echo "✅ Published $VERSION to npm" || echo "❌ CI failed — check: gh run view $RUN_ID --log"
+    gh run watch "$RUN_ID" --exit-status && echo "✅ Synced $VERSION to GeminiLight/MindOS" || echo "❌ Sync failed — check: gh run view $RUN_ID --log"
+    echo "   npm publish will be triggered on GeminiLight/MindOS."
+    echo "   Check: https://github.com/GeminiLight/MindOS/actions"
   else
-    echo "⚠️  Could not find CI run. Check manually: https://github.com/GeminiLight/mindos-dev/actions"
+    echo "⚠️  Could not find CI run. Check manually:"
+    echo "   Sync:    https://github.com/GeminiLight/mindos-dev/actions"
+    echo "   Publish: https://github.com/GeminiLight/MindOS/actions"
   fi
 else
-  echo "💡 Install 'gh' CLI to auto-watch CI status."
-  echo "   Check publish status: https://github.com/GeminiLight/mindos-dev/actions"
+  echo "💡 Release pipeline: mindos-dev → sync → GeminiLight/MindOS → npm publish"
+  echo "   Check sync:    https://github.com/GeminiLight/mindos-dev/actions"
+  echo "   Check publish: https://github.com/GeminiLight/MindOS/actions"
 fi
