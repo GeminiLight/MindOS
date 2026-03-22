@@ -137,7 +137,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} /> },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
-    { id: 'update', label: 'Update', icon: <Download size={iconSize} /> },
+    { id: 'update', label: t.settings.tabs.update ?? 'Update', icon: <Download size={iconSize} /> },
   ];
 
   const activeTabLabel = TABS.find(t2 => t2.id === tab)?.label ?? '';

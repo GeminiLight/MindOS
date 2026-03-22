@@ -46,8 +46,10 @@ export default function UpdateBanner() {
   };
 
   const handleOpenUpdate = () => {
-    // Fire custom event — SidebarLayout listens and opens Settings → Update tab
     window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'update' } }));
+    // Dismiss banner once user engages with Update tab
+    localStorage.setItem('mindos_update_dismissed', info.latest);
+    setInfo(null);
   };
 
   const updateT = t.updateBanner;

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useLocale } from '@/lib/LocaleContext';
 
 interface UpdateInfo {
   current: string;
@@ -17,6 +18,8 @@ const POLL_INTERVAL = 5_000;
 const POLL_TIMEOUT = 4 * 60 * 1000; // 4 minutes
 
 export function UpdateTab() {
+  const { t } = useLocale();
+  const u = t.settings.update;
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [state, setState] = useState<UpdateState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -34,14 +37,12 @@ export function UpdateTab() {
       setState('idle');
     } catch {
       setState('error');
-      setErrorMsg('Failed to check for updates. Check your network connection.');
+      setErrorMsg(u?.error ?? 'Failed to check for updates.');
     }
-  }, []);
+  }, [u]);
 
-  // Check on mount
   useEffect(() => { checkUpdate(); }, [checkUpdate]);
 
-  // Cleanup intervals on unmount
   useEffect(() => {
     return () => {
       clearInterval(pollRef.current);
@@ -56,10 +57,9 @@ export function UpdateTab() {
     try {
       await apiFetch('/api/update', { method: 'POST' });
     } catch {
-      // Expected — server may die during update. Continue polling.
+      // Expected — server may die during update
     }
 
-    // Poll for version change (server will restart with new version)
     pollRef.current = setInterval(async () => {
       try {
         const data = await apiFetch<UpdateInfo>('/api/update-check');
@@ -71,7 +71,7 @@ export function UpdateTab() {
           setTimeout(() => window.location.reload(), 2000);
         }
       } catch {
-        // Server still restarting — keep polling
+        // Server still restarting
       }
     }, POLL_INTERVAL);
 
@@ -88,31 +88,28 @@ export function UpdateTab() {
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-foreground">MindOS</span>
           {info && (
-            <span className="text-xs font-mono text-muted-foreground">
-              v{info.current}
-            </span>
+            <span className="text-xs font-mono text-muted-foreground">v{info.current}</span>
           )}
         </div>
 
-        {/* Status */}
         {state === 'checking' && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 size={13} className="animate-spin" />
-            Checking for updates...
+            {u?.checking ?? 'Checking for updates...'}
           </div>
         )}
 
         {state === 'idle' && info && !info.hasUpdate && (
           <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 size={13} />
-            You&apos;re up to date
+            {u?.upToDate ?? "You're up to date"}
           </div>
         )}
 
         {state === 'idle' && info?.hasUpdate && (
           <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
             <Download size={13} />
-            Update available: v{info.current} → v{info.latest}
+            {u?.available ? u.available(info.current, info.latest) : `Update available: v${info.current} → v${info.latest}`}
           </div>
         )}
 
@@ -120,10 +117,10 @@ export function UpdateTab() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
               <Loader2 size={13} className="animate-spin" />
-              Updating MindOS... The server will restart shortly.
+              {u?.updating ?? 'Updating MindOS... The server will restart shortly.'}
             </div>
             <p className="text-2xs text-muted-foreground">
-              This may take 1–3 minutes. Do not close this page.
+              {u?.updatingHint ?? 'This may take 1–3 minutes. Do not close this page.'}
             </p>
           </div>
         )}
@@ -131,7 +128,7 @@ export function UpdateTab() {
         {state === 'updated' && (
           <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 size={13} />
-            Updated successfully! Reloading...
+            {u?.updated ?? 'Updated successfully! Reloading...'}
           </div>
         )}
 
@@ -139,10 +136,10 @@ export function UpdateTab() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertCircle size={13} />
-              Update may still be in progress.
+              {u?.timeout ?? 'Update may still be in progress.'}
             </div>
             <p className="text-2xs text-muted-foreground">
-              Check your terminal: <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos logs</code>
+              {u?.timeoutHint ?? 'Check your terminal:'} <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos logs</code>
             </p>
           </div>
         )}
@@ -163,7 +160,7 @@ export function UpdateTab() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RefreshCw size={12} className={state === 'checking' ? 'animate-spin' : ''} />
-          Check for Updates
+          {u?.checkButton ?? 'Check for Updates'}
         </button>
 
         {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
@@ -173,7 +170,7 @@ export function UpdateTab() {
             style={{ background: 'var(--amber)' }}
           >
             <Download size={12} />
-            Update to v{info.latest}
+            {u?.updateButton ? u.updateButton(info.latest) : `Update to v${info.latest}`}
           </button>
         )}
       </div>
@@ -187,10 +184,10 @@ export function UpdateTab() {
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ExternalLink size={12} />
-          View release notes
+          {u?.releaseNotes ?? 'View release notes'}
         </a>
         <p className="text-2xs text-muted-foreground/60">
-          Updates are installed via npm. Equivalent to running <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos update</code> in your terminal.
+          {u?.hint ?? 'Updates are installed via npm. Equivalent to running'} <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos update</code> {u?.inTerminal ?? 'in your terminal.'}
         </p>
       </div>
     </div>
