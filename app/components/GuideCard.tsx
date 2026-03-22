@@ -15,10 +15,6 @@ const DIR_ICONS: Record<string, string> = {
 
 const EMPTY_FILES = ['INSTRUCTION.md', 'README.md', 'CONFIG.json'];
 
-/* Shared amber-subtle background — used as inline style because Tailwind can't handle
-   CSS var() with fallback in arbitrary values: bg-[var(--amber-subtle,rgba(...))] breaks. */
-const amberSubtleBg = 'var(--amber-subtle, rgba(200,135,30,0.08))';
-
 interface GuideCardProps {
   /** Called when user clicks a file/dir to open it in FileView */
   onNavigate?: (path: string) => void;
@@ -155,8 +151,7 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
   // After all next-steps done → final state (auto-dismisses after 8s)
   if (allDone && allNextDone) {
     return (
-      <div className="mb-6 rounded-xl border border-[var(--amber)] px-5 py-4 flex items-center gap-3 animate-in fade-in duration-300"
-        style={{ background: amberSubtleBg }}>
+      <div className="mb-6 rounded-xl border border-[var(--amber)] px-5 py-4 flex items-center gap-3 animate-in fade-in duration-300 bg-[var(--amber-subtle)]">
         <Sparkles size={16} className="animate-spin-slow text-[var(--amber)]" />
         <span className="text-sm font-semibold flex-1 text-foreground">
           ✨ {g.done.titleFinal}
@@ -178,8 +173,7 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
   if (allDone) {
     const step = nextSteps[nextIdx];
     return (
-      <div className="mb-6 rounded-xl border border-[var(--amber)] px-5 py-4 animate-in fade-in duration-300"
-        style={{ background: amberSubtleBg }}>
+      <div className="mb-6 rounded-xl border border-[var(--amber)] px-5 py-4 animate-in fade-in duration-300 bg-[var(--amber-subtle)]">
         <div className="flex items-center gap-3">
           <Sparkles size={16} className="text-[var(--amber)]" />
           <span className="text-sm font-semibold flex-1 text-foreground">
@@ -204,8 +198,7 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
 
   // Main guide card with 3 tasks
   return (
-    <div className="mb-6 rounded-xl border border-[var(--amber)] overflow-hidden"
-      style={{ background: amberSubtleBg }}>
+    <div className="mb-6 rounded-xl border border-[var(--amber)] overflow-hidden bg-[var(--amber-subtle)]">
 
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-4 pb-2">
