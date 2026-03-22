@@ -1,14 +1,14 @@
 name: Publish to npm
 
+# Only triggered via workflow_dispatch from sync-to-mindos pipeline.
+# Do NOT add push/tags trigger — PAT-pushed tags also fire it, causing
+# duplicate publish attempts (first succeeds, second gets 403).
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: 'Version tag to publish'
         required: true
-  push:
-    tags:
-      - 'v*.*.*'
 
 permissions:
   contents: read
