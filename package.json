@@ -22,10 +22,6 @@
   "bin": {
     "mindos": "bin/cli.js"
   },
-  "workspaces": [
-    "app",
-    "mcp"
-  ],
   "files": [
     "app/",
     "mcp/",

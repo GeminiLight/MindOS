@@ -216,17 +216,96 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
     const absPath = expandHome(cfgPath);
     if (!fs.existsSync(absPath)) continue;
     try {
-      const config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
-      const servers = config[agent.key];
-      if (servers?.mindos) {
-        const entry = servers.mindos;
-        const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-        return { installed: true, scope, transport, configPath: cfgPath };
+      const content = fs.readFileSync(absPath, 'utf-8');
+      // Handle TOML format (e.g., codex)
+      if (agent.format === 'toml') {
+        const result = parseTomlMcpEntry(content, agent.key, 'mindos');
+        if (result.found) {
+          const entry = result.entry;
+          const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
+          return { installed: true, scope, transport, configPath: cfgPath };
+        }
+      } else {
+        // JSON format (default)
+        const config = JSON.parse(content);
+        const servers = config[agent.key];
+        if (servers?.mindos) {
+          const entry = servers.mindos;
+          const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
+          return { installed: true, scope, transport, configPath: cfgPath };
+        }
       }
     } catch { /* ignore parse errors */ }
   }
 
   return { installed: false };
+}
+
+// Parse TOML to find MCP server entry without external library
+function parseTomlMcpEntry(content: string, sectionKey: string, serverName: string): { found: boolean; entry?: { type?: string; url?: string } } {
+  const lines = content.split('\n');
+  const targetSection = `[${sectionKey}.${serverName}]`;
+  const genericSection = `[${sectionKey}]`;
+
+  let inTargetSection = false;
+  let inGenericSection = false;
+  let foundInGeneric = false;
+  let entry: { type?: string; url?: string } = {};
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Check for section headers
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      // Save previous section result if we were in the target
+      if (inTargetSection && (entry.type || entry.url)) {
+        return { found: true, entry };
+      }
+      if (foundInGeneric && (entry.type || entry.url)) {
+        return { found: true, entry };
+      }
+
+      inTargetSection = trimmed === targetSection;
+      inGenericSection = trimmed === genericSection;
+      foundInGeneric = false;
+      entry = {};
+      continue;
+    }
+
+    // Parse key-value pairs
+    const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*(.+)$/);
+    if (match) {
+      const [, key, rawValue] = match;
+      // Remove quotes from value
+      const value = rawValue.replace(/^["'](.+)["']$/, '$1');
+
+      if (inTargetSection) {
+        if (key === 'type') entry.type = value;
+        if (key === 'url') entry.url = value;
+      } else if (inGenericSection && key === serverName) {
+        // Check if it's a table reference like mindos = { type = "stdio" }
+        const tableMatch = rawValue.match(/\{\s*type\s*=\s*["']([^"']+)["'].*?\}/);
+        if (tableMatch) {
+          entry.type = tableMatch[1];
+        }
+        const urlMatch = rawValue.match(/url\s*=\s*["']([^"']+)["']/);
+        if (urlMatch) {
+          entry.url = urlMatch[1];
+        }
+        foundInGeneric = true;
+      }
+    }
+  }
+
+  // Check at end of file
+  if (inTargetSection && (entry.type || entry.url)) {
+    return { found: true, entry };
+  }
+  if (foundInGeneric && (entry.type || entry.url)) {
+    return { found: true, entry };
+  }
+
+  return { found: false };
 }
 
 /* ── Agent Presence Detection ──────────────────────────────────────────── */

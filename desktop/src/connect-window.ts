@@ -70,7 +70,7 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       title: 'Connect to MindOS',
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       webPreferences: {
-        preload: path.join(__dirname, 'connect-preload.js'),
+preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
         nodeIntegration: false,
         contextIsolation: true,
       },
