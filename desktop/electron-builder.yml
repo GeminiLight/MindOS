@@ -1,0 +1,67 @@
+appId: com.mindos.desktop
+productName: MindOS
+copyright: Copyright © 2026 MindOS
+
+directories:
+  buildResources: src/icons
+  output: dist
+
+files:
+  - dist-electron/**/*
+  - src/connect.html
+  - src/splash.html
+  - src/icons/**/*
+  - ../app/.next/**/*
+  - ../app/public/**/*
+  - ../app/package.json
+  - ../app/node_modules/**/*
+  - ../mcp/src/**/*
+  - ../mcp/package.json
+  - ../mcp/node_modules/**/*
+  - ../shared/**/*.ts
+  - ../bin/**/*
+  - ../templates/**/*
+  - ../skills/**/*
+  - ../scripts/gen-renderer-index.js
+  - "!**/node_modules/.cache"
+  - "!**/.turbo"
+  - "!**/__tests__/**"
+  - "!**/test/**"
+
+mac:
+  category: public.app-category.productivity
+  icon: src/icons/icon.png
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+
+win:
+  icon: src/icons/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  nsis:
+    oneClick: false
+    perMachine: false
+    allowToChangeInstallationDirectory: true
+
+linux:
+  icon: src/icons/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Office
+
+publish:
+  provider: github
+  owner: GeminiLight
+  repo: MindOS
