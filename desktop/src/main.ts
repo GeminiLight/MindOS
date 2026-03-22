@@ -176,7 +176,7 @@ function createWindow(): BrowserWindow {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 12 } : undefined,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
