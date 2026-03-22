@@ -34,7 +34,9 @@ export const zh = {
   home: {
     recentlyModified: '最近修改',
     recentlyActive: '最近活跃',
+    recentlyEdited: '最近编辑',
     allSpaces: '所有空间',
+    spaces: '心智空间',
     nFiles: (n: number) => `${n} 个文件`,
     other: '其他',
     continueEditing: '继续编辑',
