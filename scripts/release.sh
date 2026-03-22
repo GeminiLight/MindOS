@@ -28,6 +28,8 @@ else
   exit 1
 fi
 cd ..
+# Restore any files modified by next build (e.g. next-env.d.ts)
+git checkout -- . 2>/dev/null || true
 echo ""
 
 # 4. Smoke test: pack → install in temp dir → verify CLI works
