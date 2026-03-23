@@ -680,6 +680,7 @@ export const en = {
       'memory-sync': 'Memory Sync',
       'auto-execute': 'Auto Execute',
       'experience-evolution': 'Experience Evolution',
+      'human-insights': 'Human Insights',
       'audit-control': 'Audit & Control',
     },
     scenarios: {
