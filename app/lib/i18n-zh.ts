@@ -273,6 +273,7 @@ export const zh = {
       readingFont: '正文字体',
       contentWidth: '内容宽度',
       colorTheme: '颜色主题',
+      system: '系统',
       dark: '深色',
       light: '浅色',
       language: '语言',

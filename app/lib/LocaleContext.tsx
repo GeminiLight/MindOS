@@ -15,10 +15,13 @@ const LocaleContext = createContext<LocaleContextValue>({
   t: messages['en'],
 });
 
-/** Read locale from localStorage (canonical client source) */
+/** Read locale from localStorage (canonical client source), resolving 'system' */
 function getLocaleSnapshot(): Locale {
   const saved = localStorage.getItem('locale');
-  return saved === 'zh' ? 'zh' : 'en';
+  if (saved === 'zh') return 'zh';
+  if (saved === 'en') return 'en';
+  // 'system' or null — detect from browser
+  return navigator.language.startsWith('zh') ? 'zh' : 'en';
 }
 
 interface LocaleProviderProps {
@@ -39,8 +42,7 @@ export function LocaleProvider({ children, ssrLocale = 'en' }: LocaleProviderPro
   );
 
   const setLocale = (l: Locale) => {
-    localStorage.setItem('locale', l);
-    // Sync cookie so next SSR render matches
+    // Only write resolved locale to cookie + html lang (not localStorage — caller manages that)
     document.cookie = `locale=${l};path=/;max-age=31536000;SameSite=Lax`;
     document.documentElement.lang = l === 'zh' ? 'zh' : 'en';
     window.dispatchEvent(new Event('mindos-locale-change'));
