@@ -446,6 +446,7 @@ export const en = {
       available: (current: string, latest: string) => `Update available: v${current} → v${latest}`,
       updating: 'Updating MindOS... The server will restart shortly.',
       updatingHint: 'This may take 1–3 minutes. Do not close this page.',
+      serverRestarting: 'Server is restarting, please wait...',
       updated: 'Updated successfully! Reloading...',
       timeout: 'Update may still be in progress.',
       timeoutHint: 'The server may need more time to rebuild. Try refreshing.',

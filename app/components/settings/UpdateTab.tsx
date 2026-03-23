@@ -58,6 +58,7 @@ export function UpdateTab() {
   const [errorMsg, setErrorMsg] = useState('');
   const [stages, setStages] = useState<StageInfo[]>([]);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [serverDown, setServerDown] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const originalVersion = useRef<string>('');
@@ -83,12 +84,24 @@ export function UpdateTab() {
     clearTimeout(timeoutRef.current);
   }, []);
 
+  /** Mark update complete: clear badge, set state, schedule reload. */
+  const completeUpdate = useCallback((data: UpdateInfo) => {
+    cleanup();
+    setInfo(data);
+    setState('updated');
+    localStorage.removeItem('mindos_update_latest');
+    localStorage.removeItem('mindos_update_dismissed');
+    window.dispatchEvent(new Event('mindos:update-dismissed'));
+    setTimeout(() => window.location.reload(), 2000);
+  }, [cleanup]);
+
   useEffect(() => cleanup, [cleanup]);
 
   const handleUpdate = useCallback(async () => {
     setState('updating');
     setErrorMsg('');
     setUpdateError(null);
+    setServerDown(false);
     setStages([
       { id: 'downloading', status: 'pending' },
       { id: 'skills',      status: 'pending' },
@@ -107,6 +120,7 @@ export function UpdateTab() {
       // Try status endpoint first (may fail when server is restarting)
       try {
         const status = await apiFetch<UpdateStatus>('/api/update-status', { timeout: 5000 });
+        setServerDown(false);
 
         if (status.stages?.length > 0) {
           setStages(status.stages);
@@ -124,24 +138,19 @@ export function UpdateTab() {
           try {
             const data = await apiFetch<UpdateInfo>('/api/update-check');
             if (data.current !== originalVersion.current) {
-              cleanup();
-              setInfo(data);
-              setState('updated');
-              setTimeout(() => window.location.reload(), 2000);
+              completeUpdate(data);
               return;
             }
           } catch { /* new server may not be fully ready */ }
         }
       } catch {
         // Server restarting — also try update-check as fallback
+        setServerDown(true);
         try {
           const data = await apiFetch<UpdateInfo>('/api/update-check', { timeout: 5000 });
           if (data.current !== originalVersion.current) {
-            cleanup();
             setStages(prev => prev.map(s => ({ ...s, status: 'done' as const })));
-            setInfo(data);
-            setState('updated');
-            setTimeout(() => window.location.reload(), 2000);
+            completeUpdate(data);
           }
         } catch {
           // Both endpoints down — server still restarting
@@ -153,7 +162,7 @@ export function UpdateTab() {
       cleanup();
       setState('timeout');
     }, POLL_TIMEOUT);
-  }, [cleanup]);
+  }, [cleanup, completeUpdate]);
 
   const handleRetry = useCallback(() => {
     setUpdateError(null);
@@ -219,7 +228,9 @@ export function UpdateTab() {
             </div>
 
             <p className="text-2xs text-muted-foreground">
-              {u?.updatingHint ?? 'This may take 1–3 minutes. Do not close this page.'}
+              {serverDown
+                ? (u?.serverRestarting ?? 'Server is restarting, please wait...')
+                : (u?.updatingHint ?? 'This may take 1–3 minutes. Do not close this page.')}
             </p>
           </div>
         )}
