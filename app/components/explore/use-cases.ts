@@ -1,5 +1,5 @@
 /** Capability axis — maps to product pillars */
-export type UseCaseCategory = 'memory-sync' | 'auto-execute' | 'experience-evolution' | 'audit-control';
+export type UseCaseCategory = 'memory-sync' | 'auto-execute' | 'experience-evolution' | 'human-insights' | 'audit-control';
 
 /** Scenario axis — maps to user journey phase */
 export type UseCaseScenario = 'first-day' | 'daily' | 'project' | 'advanced';
@@ -19,6 +19,7 @@ export interface UseCase {
  *   memory-sync         — Record once, all Agents know
  *   auto-execute        — One sentence, auto-execute
  *   experience-evolution — Gets smarter with use
+ *   human-insights      — Understand and manage relationships
  *   audit-control       — You have final say
  *
  * Scenario (journey axis):
@@ -35,7 +36,7 @@ export const useCases: UseCase[] = [
   { id: 'c5', icon: '💡', category: 'auto-execute',         scenario: 'daily' },
   { id: 'c6', icon: '🚀', category: 'auto-execute',         scenario: 'project' },
   { id: 'c7', icon: '🔍', category: 'auto-execute',         scenario: 'project' },
-  { id: 'c8', icon: '🤝', category: 'experience-evolution', scenario: 'daily' },
+  { id: 'c8', icon: '🤝', category: 'human-insights',       scenario: 'daily' },
   { id: 'c9', icon: '🛡️', category: 'audit-control',       scenario: 'advanced' },
 ];
 
@@ -43,6 +44,7 @@ export const categories: UseCaseCategory[] = [
   'memory-sync',
   'auto-execute',
   'experience-evolution',
+  'human-insights',
   'audit-control',
 ];
 
