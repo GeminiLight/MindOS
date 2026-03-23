@@ -1,16 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Loader2 } from 'lucide-react';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
-import { useRouter } from 'next/navigation';
-import { createSpaceAction } from '@/lib/actions';
+import CreateSpaceModal from './CreateSpaceModal';
 import type { SpaceInfo } from '@/app/page';
 
 interface RecentFile {
@@ -78,22 +77,35 @@ function stripEmoji(name: string): string {
 }
 
 /* ── Section Title component (shared across all three sections) ── */
-function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+interface SectionTitleProps {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  /** Item count badge — only rendered when > 0 */
+  count?: number;
+  /** Right-aligned action slot (e.g. "View all" button) */
+  action?: React.ReactNode;
+}
+
+function SectionTitle({ icon, children, count, action }: SectionTitleProps) {
   return (
     <div className="flex items-center gap-2 mb-4">
       <span className="text-[var(--amber)]">{icon}</span>
-      <h2 className="text-xs font-semibold uppercase tracking-[0.08em] font-display text-muted-foreground">
+      <h2 className="text-sm font-semibold font-display text-foreground">
         {children}
       </h2>
+      {count != null && count > 0 && (
+        <span className="text-xs tabular-nums text-muted-foreground font-display">{count}</span>
+      )}
+      {action ? <div className="ml-auto">{action}</div> : null}
     </div>
   );
 }
 
 const FILES_PER_GROUP = 3;
 const SPACES_PER_ROW = 6;   // 3 cols × 2 rows on desktop, show 1 row initially
-const PLUGINS_INITIAL = 6;
+const PLUGINS_INITIAL = 4;
 
-export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
+export default function HomeContent({ recent, existingFiles, spaces, dirPaths }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[]; dirPaths?: string[] }) {
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
   const [showAllSpaces, setShowAllSpaces] = useState(false);
@@ -208,10 +220,88 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
       </div>
 
-      {/* ── Section 1: Plugins ── */}
+      {/* ── Section 1: Spaces ── */}
+      <section className="mb-8">
+        <SectionTitle
+          icon={<Brain size={13} />}
+          count={spaceList.length > 0 ? spaceList.length : undefined}
+          action={<CreateSpaceButton t={t} />}
+        >
+          {t.home.spaces}
+        </SectionTitle>
+        {spaceList.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
+                const emoji = extractEmoji(s.name);
+                const label = stripEmoji(s.name);
+                const isEmpty = s.fileCount === 0;
+                return (
+                  <Link
+                    key={s.name}
+                    href={`/view/${encodePath(s.path)}`}
+                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
+                      isEmpty
+                        ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                        : 'border-border hover:border-amber-500/30 hover:bg-muted/40'
+                    }`}
+                  >
+                    {emoji ? (
+                      <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
+                    ) : (
+                      <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                      {s.description && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
+                        {t.home.nFiles(s.fileCount)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            {spaceList.length > SPACES_PER_ROW && (
+              <button
+                onClick={() => setShowAllSpaces(v => !v)}
+                className="flex items-center gap-1.5 mt-2 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
+              >
+                <ChevronDown size={12} className={`transition-transform duration-200 ${showAllSpaces ? 'rotate-180' : ''}`} />
+                <span>{showAllSpaces ? t.home.showLess : t.home.showMore}</span>
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground py-2">
+            {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
+          </p>
+        )}
+        <CreateSpaceModal t={t} dirPaths={dirPaths ?? []} />
+      </section>
+
+      {/* ── Section 2: Extensions ── */}
       {availablePlugins.length > 0 && (
         <section className="mb-8">
-          <SectionTitle icon={<Puzzle size={13} />}>{t.home.plugins}</SectionTitle>
+          <SectionTitle
+            icon={<Puzzle size={13} />}
+            count={availablePlugins.length}
+            action={
+              availablePlugins.length > PLUGINS_INITIAL ? (
+                <button
+                  onClick={() => setShowAllPlugins(v => !v)}
+                  className="flex items-center gap-1 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
+                >
+                  <span>{showAllPlugins ? t.home.showLess : t.home.viewAll}</span>
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAllPlugins ? 'rotate-180' : ''}`} />
+                </button>
+              ) : undefined
+            }
+          >
+            {t.home.plugins}
+          </SectionTitle>
           <div className="flex flex-wrap gap-2">
             {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
               <Link
@@ -224,85 +314,13 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               </Link>
             ))}
           </div>
-          {availablePlugins.length > PLUGINS_INITIAL && (
-            <button
-              onClick={() => setShowAllPlugins(v => !v)}
-              className="flex items-center gap-1.5 mt-2 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-            >
-              <ChevronDown size={12} className={`transition-transform duration-200 ${showAllPlugins ? 'rotate-180' : ''}`} />
-              <span>{showAllPlugins ? t.home.showLess : t.home.showMore}</span>
-            </button>
-          )}
-        </section>
-      )}
-
-      {/* ── Section 2: Spaces ── */}
-      {spaceList.length > 0 ? (
-        <section className="mb-8">
-          <SectionTitle icon={<Brain size={13} />}>{t.home.spaces}</SectionTitle>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-              const emoji = extractEmoji(s.name);
-              const label = stripEmoji(s.name);
-              const isEmpty = s.fileCount === 0;
-              return (
-                <Link
-                  key={s.name}
-                  href={`/view/${encodePath(s.path)}`}
-                  className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
-                    isEmpty
-                      ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                      : 'border-border hover:border-amber-500/30 hover:bg-muted/40'
-                  }`}
-                >
-                  {emoji ? (
-                    <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                  ) : (
-                    <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                    {s.description && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                    )}
-                    <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
-                      {t.home.nFiles(s.fileCount)}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-            {/* Show "+" card inline only when it won't be orphaned on its own row */}
-            {(showAllSpaces || spaceList.length < SPACES_PER_ROW) && <CreateSpaceCard t={t} />}
-          </div>
-          {spaceList.length > SPACES_PER_ROW && (
-            <div className="flex items-center gap-3 mt-2">
-              <button
-                onClick={() => setShowAllSpaces(v => !v)}
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-              >
-                <ChevronDown size={12} className={`transition-transform duration-200 ${showAllSpaces ? 'rotate-180' : ''}`} />
-                <span>{showAllSpaces ? t.home.showLess : t.home.showMore}</span>
-              </button>
-              {/* When collapsed and "+" card is hidden from grid, show as text link */}
-              {!showAllSpaces && <CreateSpaceTextLink t={t} />}
-            </div>
-          )}
-        </section>
-      ) : (
-        /* Show create card even when no spaces exist */
-        <section className="mb-8">
-          <SectionTitle icon={<Brain size={13} />}>{t.home.spaces}</SectionTitle>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <CreateSpaceCard t={t} />
-          </div>
         </section>
       )}
 
       {/* ── Section 3: Recently Edited ── */}
       {recent.length > 0 && (
         <section className="mb-12">
-          <SectionTitle icon={<Clock size={13} />}>{t.home.recentlyEdited}</SectionTitle>
+          <SectionTitle icon={<Clock size={13} />} count={recent.length}>{t.home.recentlyEdited}</SectionTitle>
 
           {groups.length > 0 ? (
             /* Space-Grouped View */
@@ -463,150 +481,16 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   );
 }
 
-/* ── Create Space inline card ── */
-function CreateSpaceCard({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const open = useCallback(() => {
-    setEditing(true);
-    setError('');
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }, []);
-
-  const close = useCallback(() => {
-    setEditing(false);
-    setName('');
-    setDescription('');
-    setError('');
-  }, []);
-
-  const handleCreate = useCallback(async () => {
-    if (!name.trim() || loading) return;
-    setLoading(true);
-    setError('');
-    const result = await createSpaceAction(name, description);
-    setLoading(false);
-    if (result.success) {
-      close();
-      router.refresh();
-    } else {
-      setError(result.error ?? 'Failed to create space');
-    }
-  }, [name, description, loading, close, router]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') close();
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCreate(); }
-  }, [close, handleCreate]);
-
-  if (!editing) {
-    return (
-      <button
-        onClick={open}
-        aria-label={t.home.newSpace}
-        className="flex items-center justify-center gap-2 px-3.5 py-3 rounded-xl border border-dashed border-border/50 text-muted-foreground opacity-60 transition-all duration-150 hover:opacity-100 hover:border-amber-500/30 cursor-pointer"
-      >
-        <Plus size={16} />
-        <span className="text-sm font-medium">{t.home.newSpace}</span>
-      </button>
-    );
-  }
-
+/* ── Create Space: title-bar button ── */
+function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
   return (
-    <div className="flex flex-col gap-2 px-3.5 py-3 rounded-xl border border-[var(--amber)] bg-[var(--amber-subtle)]" onKeyDown={handleKeyDown}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={name}
-        onChange={e => { setName(e.target.value); setError(''); }}
-        placeholder={t.home.spaceName}
-        maxLength={80}
-        className="text-sm font-medium bg-transparent border-b border-border pb-1 outline-none placeholder:text-muted-foreground/50 text-foreground focus:border-[var(--amber)]"
-      />
-      <input
-        type="text"
-        value={description}
-        onChange={e => setDescription(e.target.value)}
-        placeholder={t.home.spaceDescription}
-        maxLength={200}
-        className="text-xs bg-transparent border-b border-border/50 pb-1 outline-none placeholder:text-muted-foreground/40 text-muted-foreground focus:border-[var(--amber)]"
-      />
-      {error && <span className="text-xs text-error">{error}</span>}
-      <div className="flex items-center gap-2 mt-1">
-        <button
-          onClick={handleCreate}
-          disabled={!name.trim() || loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading && <Loader2 size={12} className="animate-spin" />}
-          {t.home.createSpace}
-        </button>
-        <button
-          onClick={close}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
-        >
-          {t.home.cancelCreate}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Compact "+ New Space" text link shown next to "Show more" when grid is collapsed */
-function CreateSpaceTextLink({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  if (!editing) {
-    return (
-      <button
-        onClick={() => { setEditing(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-        className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--amber)] cursor-pointer"
-      >
-        <Plus size={11} />
-        <span>{t.home.newSpace}</span>
-      </button>
-    );
-  }
-
-  return (
-    <form
-      className="flex items-center gap-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!name.trim() || loading) return;
-        setLoading(true);
-        const result = await createSpaceAction(name, '');
-        setLoading(false);
-        if (result.success) { setEditing(false); setName(''); router.refresh(); }
-      }}
+    <button
+      onClick={() => window.dispatchEvent(new Event('mindos:create-space'))}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90 cursor-pointer"
     >
-      <input
-        ref={inputRef}
-        type="text"
-        value={name}
-        onChange={e => setName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setName(''); } }}
-        placeholder={t.home.spaceName}
-        maxLength={80}
-        className="text-xs bg-transparent border-b border-border pb-0.5 outline-none w-28 placeholder:text-muted-foreground/40 text-foreground focus:border-[var(--amber)]"
-      />
-      <button
-        type="submit"
-        disabled={!name.trim() || loading}
-        className="text-xs font-medium text-[var(--amber)] disabled:opacity-40"
-      >
-        {loading ? '...' : t.home.createSpace}
-      </button>
-    </form>
+      <Plus size={12} />
+      <span>{t.home.newSpace}</span>
+    </button>
   );
 }
+

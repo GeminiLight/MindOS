@@ -27,9 +27,8 @@ mac:
   hardenedRuntime: true
 
 asar: true
-asarUnpack:
-  - src/connect.html
-  - src/splash.html
+# No asarUnpack needed — loadFile() reads from asar directly,
+# and keeping HTML inside asar preserves relative script paths.
 
 win:
   icon: src/icons/icon.ico

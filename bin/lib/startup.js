@@ -4,6 +4,7 @@ import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, yellow } from './colors.js';
 import { getSyncStatus } from './sync.js';
 import { checkForUpdate, printUpdateHint } from './update-check.js';
+import { runSkillCheck } from './skill-check.js';
 
 export function getLocalIP() {
   try {
@@ -70,6 +71,9 @@ export async function printStartupInfo(webPort, mcpPort) {
     new Promise(r => setTimeout(() => r(null), 4000)),
   ]);
   if (latestVersion) printUpdateHint(latestVersion);
+
+  // Skill version check (best-effort, non-blocking)
+  await runSkillCheck();
 
   console.log(`${'─'.repeat(53)}\n`);
 }
