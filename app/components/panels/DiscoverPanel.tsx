@@ -118,7 +118,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
       <PanelHeader title={d.title} maximized={maximized} onMaximize={onMaximize} />
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Use Cases */}
-        <Section icon={<span className="text-xs">🎯</span>} title={d.useCases} count={useCases.length}>
+        <Section icon={<span className="text-xs" suppressHydrationWarning>🎯</span>} title={d.useCases} count={useCases.length}>
           <div className="flex flex-col">
             {useCases.map(uc => {
               const data = getUseCaseText(uc.id);
