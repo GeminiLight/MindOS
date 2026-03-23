@@ -46,8 +46,9 @@ export async function renameFileAction(oldPath: string, newName: string): Promis
  */
 export async function createSpaceAction(
   name: string,
-  description: string
-): Promise<{ success: boolean; error?: string }> {
+  description: string,
+  parentPath: string = ''
+): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
     const trimmed = name.trim();
     if (!trimmed) return { success: false, error: 'Space name is required' };
@@ -55,15 +56,25 @@ export async function createSpaceAction(
       return { success: false, error: 'Space name must not contain path separators' };
     }
 
+    // Sanitize parentPath — reject traversal attempts
+    const cleanParent = parentPath.replace(/\/+$/, '').trim();
+    if (cleanParent.includes('..') || cleanParent.startsWith('/') || cleanParent.includes('\\')) {
+      return { success: false, error: 'Invalid parent path' };
+    }
+
+    // Build full path: parentPath + name
+    const prefix = cleanParent ? cleanParent + '/' : '';
+    const fullPath = `${prefix}${trimmed}`;
+
     // Strip emoji for clean title in README content
     const cleanName = trimmed.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || trimmed;
     const desc = description.trim() || '(Describe the purpose and usage of this space.)';
-    const readmeContent = `# ${cleanName}\n\n${desc}\n\n## 📁 Structure\n\n\`\`\`bash\n${trimmed}/\n├── INSTRUCTION.md\n├── README.md\n└── (your files here)\n\`\`\`\n\n## 💡 Usage\n\n(Add usage guidelines for this space.)\n`;
+    const readmeContent = `# ${cleanName}\n\n${desc}\n\n## 📁 Structure\n\n\`\`\`bash\n${fullPath}/\n├── INSTRUCTION.md\n├── README.md\n└── (your files here)\n\`\`\`\n\n## 💡 Usage\n\n(Add usage guidelines for this space.)\n`;
 
     // createFile triggers scaffoldIfNewSpace → auto-generates INSTRUCTION.md
-    createFile(`${trimmed}/README.md`, readmeContent);
+    createFile(`${fullPath}/README.md`, readmeContent);
     revalidatePath('/', 'layout');
-    return { success: true };
+    return { success: true, path: fullPath };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to create space';
     // Make "already exists" error more user-friendly

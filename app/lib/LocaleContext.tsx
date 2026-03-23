@@ -15,12 +15,19 @@ const LocaleContext = createContext<LocaleContextValue>({
   t: messages['en'],
 });
 
+/** Read locale from localStorage (canonical client source) */
 function getLocaleSnapshot(): Locale {
   const saved = localStorage.getItem('locale');
   return saved === 'zh' ? 'zh' : 'en';
 }
 
-export function LocaleProvider({ children }: { children: ReactNode }) {
+interface LocaleProviderProps {
+  children: ReactNode;
+  /** Locale read from cookie on the server — ensures SSR matches client hydration */
+  ssrLocale?: Locale;
+}
+
+export function LocaleProvider({ children, ssrLocale = 'en' }: LocaleProviderProps) {
   const locale = useSyncExternalStore(
     (onStoreChange) => {
       const listener = () => onStoreChange();
@@ -28,11 +35,14 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       return () => window.removeEventListener('mindos-locale-change', listener);
     },
     getLocaleSnapshot,
-    () => 'en' as Locale,
+    () => ssrLocale,
   );
 
   const setLocale = (l: Locale) => {
     localStorage.setItem('locale', l);
+    // Sync cookie so next SSR render matches
+    document.cookie = `locale=${l};path=/;max-age=31536000;SameSite=Lax`;
+    document.documentElement.lang = l === 'zh' ? 'zh' : 'en';
     window.dispatchEvent(new Event('mindos-locale-change'));
   };
 

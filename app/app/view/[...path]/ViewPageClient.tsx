@@ -15,6 +15,8 @@ import TableOfContents from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
 import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
+import { useLocale } from '@/lib/LocaleContext';
+import DirPicker from '@/components/DirPicker';
 import '@/lib/renderers/index'; // registers all renderers
 
 interface ViewPageClientProps {
@@ -40,6 +42,7 @@ export default function ViewPageClient({
   draftDirectories = [],
   createDraftAction,
 }: ViewPageClientProps) {
+  const { t } = useLocale();
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -304,27 +307,25 @@ export default function ViewPageClient({
         {editing ? (
           <div className="content-width xl:mr-[220px]">
             {isDraft && showSaveAs && (
-              <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col md:flex-row md:items-end gap-2">
-                <div className="flex-1 min-w-[180px]">
-                  <label className="text-xs text-muted-foreground">Directory</label>
-                  <select
-                    value={saveDir}
-                    onChange={(e) => setSaveDir(e.target.value)}
-                    className="mt-1 w-full px-2 py-1.5 text-sm bg-background border border-border rounded text-foreground"
-                  >
-                    <option value="">/</option>
-                    {draftDirectories.map((dir) => (
-                      <option key={dir} value={dir}>{dir}</option>
-                    ))}
-                  </select>
+              <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">{t.view?.saveDirectory ?? 'Directory'}</label>
+                  <div className="mt-1">
+                    <DirPicker
+                      dirPaths={draftDirectories}
+                      value={saveDir}
+                      onChange={setSaveDir}
+                      rootLabel={t.home?.rootLevel ?? 'Root'}
+                    />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs text-muted-foreground">File name</label>
+                <div>
+                  <label className="text-xs text-muted-foreground">{t.view?.saveFileName ?? 'File name'}</label>
                   <input
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
-                    className="mt-1 w-full px-2 py-1.5 text-sm bg-background border border-border rounded text-foreground"
+                    className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     placeholder="Untitled.md"
                   />
                 </div>

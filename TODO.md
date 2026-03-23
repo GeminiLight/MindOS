@@ -1,5 +1,14 @@
 ## PENDING
 
+curl -L -o ~/Downloads/MindOS-0.1.0-arm64-mac.zip 'http://21.6.243.108:8080/desktop/dist/MindOS-0.1.0-arm64-mac.zip' 
+
+cd ~/Downloads && unzip MindOS-0.1.0-arm64-mac.zip && open MindOS-0.1.0-arm64.dmg 
+
+
+帮我在Rail的智能体下方，加一个新的icon，叫做探索 Discover，里面包括使用案例、插件市场、技能市场
+
+我很好奇，为什么桌面端已经不包括mindos app mcp等，为什么还是很大呢
+
 1. 现在模版下面有很多一级目录，其实是用户的一些Space，并且需要INTRUCTION.md来自动管理。新建一个新的一级目录也需要自动创建，帮我想想怎么提升用户体验。
 
 
