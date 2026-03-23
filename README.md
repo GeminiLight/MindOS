@@ -15,6 +15,8 @@
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/dw/@geminilight/mindos.svg?style=for-the-badge&color=10b981" alt="npm downloads"></a>
+  <a href="https://github.com/GeminiLight/MindOS/stargazers"><img src="https://img.shields.io/github/stars/GeminiLight/MindOS.svg?style=for-the-badge&color=f59e0b" alt="GitHub Stars"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-Group-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -84,14 +86,15 @@ All that experience from your conversations — gone the moment you close the wi
 
 - **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
 - **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
+- **Backlinks View**: displays all files that reference the current file, helping you understand how a note fits into the knowledge network.
 - **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
+- **Desktop App**: native macOS/Windows/Linux app with system tray, auto-start, and local process management.
 
 <details>
 <summary><strong>Coming Soon</strong></summary>
 
 - [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
 - [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
-- [ ] Backlinks View: display all files that reference the current file, helping you understand how a note fits into the knowledge network
 - [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
 
 </details>
@@ -131,84 +134,10 @@ npm link   # registers the `mindos` command globally
 mindos onboard
 ```
 
-The setup wizard will guide you through:
-1. Knowledge base path → default `~/MindOS`
-2. Choose template (en / zh / empty / custom)
-3. Ports (Web UI + MCP)
-4. Auth token (auto-generated or passphrase-seeded)
-5. Web UI password (optional)
-6. AI Provider (Anthropic / OpenAI) + API Key — or **skip** to configure later via `mindos config set`
-7. Start mode — **Background service** (recommended, auto-starts on boot) or Foreground
-
-Config is saved to `~/.mindos/config.json` automatically.
-
-<!-- For Agents: Before running setup, if the user has not provided LLM configuration, ask them:
-1. AI Provider — `anthropic` or `openai` (compatible)?
-2. API Key — the key for the chosen provider
-3. Custom Base URL? — only needed for proxies or OpenAI-compatible endpoints; skip if using official API
-4. Model ID — or use the default
-Or skip the wizard and edit `~/.mindos/config.json` manually (see Config Reference below).
--->
-
-<details>
-<summary>Config Reference (~/.mindos/config.json)</summary>
-
-```json
-{
-  "mindRoot": "~/MindOS",
-  "port": 3456,
-  "mcpPort": 8781,
-  "authToken": "",
-  "webPassword": "",
-  "startMode": "daemon",
-  "ai": {
-    "provider": "anthropic",
-    "providers": {
-      "anthropic": { "apiKey": "sk-ant-...", "model": "claude-sonnet-4-6" },
-      "openai":    { "apiKey": "sk-...",     "model": "gpt-5.4", "baseUrl": "" }
-    }
-  },
-  "sync": {
-    "enabled": true,
-    "provider": "git",
-    "remote": "origin",
-    "branch": "main",
-    "autoCommitInterval": 30,
-    "autoPullInterval": 300
-  }
-}
-```
-
-| Field | Default | Description |
-| :--- | :--- | :--- |
-| `mindRoot` | `~/MindOS` | **Required**. Absolute path to the knowledge base root. |
-| `port` | `3456` | Optional. Web app port. |
-| `mcpPort` | `8781` | Optional. MCP server port. |
-| `authToken` | — | Optional. Protects App `/api/*` and MCP `/mcp` with bearer token auth. For Agent / MCP clients. Recommended when exposed to a network. |
-| `webPassword` | — | Optional. Protects the web UI with a login page. For browser access. Independent from `authToken`. |
-| `startMode` | `start` | Start mode: `daemon` (background service, auto-starts on boot), `start` (foreground), or `dev`. |
-| `ai.provider` | `anthropic` | Active provider: `anthropic` or `openai`. |
-| `ai.providers.anthropic.apiKey` | — | Anthropic API key. |
-| `ai.providers.anthropic.model` | `claude-sonnet-4-6` | Anthropic model ID. |
-| `ai.providers.openai.apiKey` | — | OpenAI API key. |
-| `ai.providers.openai.model` | `gpt-5.4` | OpenAI model ID. |
-| `ai.providers.openai.baseUrl` | — | Optional. Custom endpoint for proxy or OpenAI-compatible APIs. |
-| `sync.enabled` | `false` | Enable/disable automatic Git sync. |
-| `sync.provider` | `git` | Sync provider (currently only `git`). |
-| `sync.remote` | `origin` | Git remote name. |
-| `sync.branch` | `main` | Git branch to sync. |
-| `sync.autoCommitInterval` | `30` | Seconds after file change to auto-commit+push. |
-| `sync.autoPullInterval` | `300` | Seconds between auto-pull from remote. |
-
-Multiple providers can be configured simultaneously — switch between them by changing `ai.provider`. Shell env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) take precedence over config file values.
-
-</details>
-
-> [!NOTE]
-> If you want the MindOS GUI to be reachable from other devices, make sure the port is open in firewall/security-group settings and bound to an accessible host/network interface.
+The setup wizard guides you through knowledge base path, template, ports, auth, AI provider, and start mode — all with sensible defaults. Config is saved to `~/.mindos/config.json`. See **[docs/en/configuration.md](docs/en/configuration.md)** for all fields.
 
 > [!TIP]
-> If you chose "Background service" during onboard, MindOS is installed as a background OS service and starts automatically — no need to run `mindos start` manually. Run `mindos update` to upgrade to the latest version.
+> Choose "Background service" during onboard for auto-start on boot. Run `mindos update` anytime to upgrade.
 
 Open the Web UI in your browser:
 
@@ -228,123 +157,23 @@ mindos open
 
 ### 4. Make Any Agent Ready (MCP + Skills)
 
-#### 4.1 Configure MindOS MCP
-
-<!-- For Agents: Register MindOS MCP as global (user-level) config by default, so all projects share the same knowledge base. -->
-
-Run one command to auto-install MCP config into your Agent:
+**MCP** (connection) — one command to auto-install:
 
 ```bash
-mindos mcp install
+mindos mcp install        # interactive
+mindos mcp install -g -y  # one-shot, global scope
 ```
 
-Supports Claude Code, Cursor, Windsurf, Cline, Trae, Gemini CLI, and more — interactively guides you through agent, scope, transport, and token.
-
-**Local (Agent and MindOS on the same machine)**
-
-Use `stdio` transport — no server process needed, most reliable:
+**Skills** (workflow) — install one based on your language:
 
 ```bash
-# Interactive
-mindos mcp install
-
-# One-shot, global scope (shared across all projects)
-mindos mcp install -g -y
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y      # English
+npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   # Chinese
 ```
 
-**Remote (Agent on a different machine)**
-
-Use `http` transport — MindOS must be running (`mindos start`) on the remote machine:
-
-```bash
-mindos mcp install--transport http --url http://<server-ip>:8781/mcp --token your-token -g
-```
-
-> [!NOTE]
-> For remote access, ensure port `8781` is open in your firewall/security-group.
-
-> Add `-g` to install globally — MCP config is shared across all projects instead of the current directory only.
-
-> The MCP port defaults to `8781`. To use a different port, run `mindos onboard` and set `mcpPort`.
-
-<details>
-<summary>Manual config (JSON snippets)</summary>
-
-**Local via stdio** (no server process needed):
-
-```json
-{
-  "mcpServers": {
-    "mindos": {
-      "type": "stdio",
-      "command": "mindos",
-      "args": ["mcp"],
-      "env": { "MCP_TRANSPORT": "stdio" }
-    }
-  }
-}
-```
-
-**Local via URL:**
-
-```json
-{
-  "mcpServers": {
-    "mindos": {
-      "url": "http://localhost:8781/mcp",
-      "headers": { "Authorization": "Bearer your-token" }
-    }
-  }
-}
-```
-
-**Remote:**
-
-```json
-{
-  "mcpServers": {
-    "mindos": {
-      "url": "http://<server-ip>:8781/mcp",
-      "headers": { "Authorization": "Bearer your-token" }
-    }
-  }
-}
-```
-
-Each Agent stores config in a different file — see the **MCP Config Path** column in the [Supported Agents](#-supported-agents) table for exact paths.
-
-</details>
-
-#### 4.2 Install MindOS Skills
-
-| Skill | Description |
-|-------|-------------|
-| `mindos` | Knowledge base operation guide (English) — read/write notes, search, manage SOPs, maintain Profiles |
-| `mindos-zh` | Knowledge base operation guide (Chinese) — same capabilities, Chinese interface |
-
-Install one skill only (choose based on your preferred language):
-
-```bash
-# English
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y
-
-# Chinese (optional)
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y
-```
-
-MCP = connection capability, Skills = workflow capability. Enabling both gives the complete MindOS agent experience.
-
-#### 4.3 Common Pitfalls
-
-- Only MCP, no Skills: tools are callable, but best-practice workflows are missing.
-- Only Skills, no MCP: workflow guidance exists, but the Agent cannot operate your local knowledge base.
-- `MIND_ROOT` is not an absolute path: MCP tool calls will fail.
-- No `authToken` set: your API and MCP server are exposed on the network without protection.
-- No `webPassword` set: anyone who can reach your server can access the web UI.
+> For remote access, manual JSON config, and common pitfalls, see **[docs/en/supported-agents.md](docs/en/supported-agents.md)**.
 
 ## ⚙️ How It Works
-
-A fleeting idea becomes shared intelligence through three interlocking loops:
 
 ```mermaid
 graph LR
@@ -367,42 +196,30 @@ graph LR
 
 > **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
 
-**Collaboration Loop (Human + Multi-Agent)**
-
-1. Human reviews and updates notes/SOPs in the MindOS GUI (single source of truth).
-2. Other Agent clients (OpenClaw, Claude Code, Cursor, etc.) connect through MCP and read the same memory/context.
-3. With Skills enabled, those Agents execute workflows and SOP tasks in a guided way.
-4. Execution results are written back to MindOS so humans can audit and refine continuously.
-
-**Who is this for?**
-
-- **Independent Developer** — Store personal SOPs, tech stack preferences, and project context in MindOS. Any Agent instantly inherits your work habits.
-- **Knowledge Worker** — Manage research materials with bi-directional links. Your AI assistant answers questions grounded in your full context, not generic knowledge.
-- **Team Collaboration** — Share a MindOS knowledge base across team members as a single source of truth. Humans and Agents read from the same playbook, keeping everyone aligned.
-- **Automated Agent Operations** — Write standard workflows as Agent-Ready documents. Agents execute directly, humans audit the results.
-
 ---
 
 ## 🤝 Supported Agents
 
-| Agent | MCP | Skills | MCP Config Path |
-|:------|:---:|:------:|:----------------|
-| MindOS Agent | ✅ | ✅ | Built-in (no config needed) |
-| OpenClaw | ✅ | ✅ | `~/.openclaw/openclaw.json` or `~/.openclaw/mcp.json` |
-| Claude Desktop | ✅ | ✅ | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Claude Code | ✅ | ✅ | `~/.claude.json` (global) or `.mcp.json` (project) |
-| CodeBuddy | ✅ | ✅ | `~/.claude-internal/.claude.json` (global) |
-| Cursor | ✅ | ✅ | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) |
-| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` |
-| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
-| Trae | ✅ | ✅ | `~/.trae/mcp.json` (global) or `.trae/mcp.json` (project) |
-| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) |
-| GitHub Copilot | ✅ | ✅ | `.vscode/mcp.json` (project) or VS Code User `settings.json` (global) |
-| iFlow | ✅ | ✅ | iFlow platform MCP configuration panel |
+> Full list with MCP config paths and manual setup: **[docs/en/supported-agents.md](docs/en/supported-agents.md)**
+
+| Agent | MCP | Skills |
+|:------|:---:|:------:|
+| MindOS Agent | ✅ | ✅ |
+| OpenClaw | ✅ | ✅ |
+| Claude Desktop / Code | ✅ | ✅ |
+| CodeBuddy | ✅ | ✅ |
+| Cursor | ✅ | ✅ |
+| Windsurf | ✅ | ✅ |
+| Cline | ✅ | ✅ |
+| Trae | ✅ | ✅ |
+| Gemini CLI | ✅ | ✅ |
+| GitHub Copilot | ✅ | ✅ |
+| iFlow | ✅ | ✅ |
 
 ---
 
-## 📁 Project Structure
+<details>
+<summary><strong>📁 Project Structure</strong></summary>
 
 ```bash
 MindOS/
@@ -420,56 +237,24 @@ MindOS/
 └── mind/             # Your private knowledge base (default: ~/MindOS/mind, customizable on onboard)
 ```
 
----
+</details>
 
 ## ⌨️ CLI Commands
+
+> Full command reference: **[docs/en/cli-commands.md](docs/en/cli-commands.md)**
 
 | Command | Description |
 | :--- | :--- |
 | `mindos onboard` | Interactive setup (config, template, start mode) |
-| `mindos start` | Start app + MCP server (foreground, production mode) |
-| `mindos start --daemon` | Install + start as a background OS service (survives terminal close, auto-restarts on crash) |
-| `mindos dev` | Start app + MCP server (dev mode, hot reload) |
-| `mindos dev --turbopack` | Dev mode with Turbopack (faster HMR) |
-| `mindos open` | Open the Web UI in the default browser |
-| `mindos stop` | Stop running MindOS processes |
-| `mindos restart` | Stop then start again |
-| `mindos build` | Manually build for production |
-| `mindos mcp` | Start MCP server only |
-| `mindos token` | Show auth token and per-agent MCP config snippets |
-| `mindos sync` | Show sync status (alias for `sync status`) |
-| `mindos sync init` | Interactive setup for Git remote sync |
-| `mindos sync status` | Show sync status: last sync, unpushed commits, conflicts |
-| `mindos sync now` | Manually trigger a full sync (commit + push + pull) |
-| `mindos sync on` | Enable automatic sync |
-| `mindos sync off` | Disable automatic sync |
-| `mindos sync conflicts` | List unresolved conflict files |
-| `mindos gateway install` | Install background service (systemd on Linux, LaunchAgent on macOS) |
-| `mindos gateway uninstall` | Remove background service |
-| `mindos gateway start` | Start the background service |
-| `mindos gateway stop` | Stop the background service |
-| `mindos gateway status` | Show background service status |
-| `mindos gateway logs` | Tail background service logs |
-| `mindos doctor` | Health check (config, ports, build, daemon status) |
-| `mindos update` | Update MindOS to the latest version |
-| `mindos uninstall` | Fully uninstall MindOS (stop, remove daemon, npm uninstall) |
-| `mindos logs` | Tail service logs (`~/.mindos/mindos.log`) |
-| `mindos config show` | Print current config (API keys masked) |
-| `mindos config validate` | Validate config file |
-| `mindos config set <key> <val>` | Update a single config field |
-| `mindos` | Start using the mode saved in `~/.mindos/config.json` |
+| `mindos start` | Start app + MCP server (foreground) |
+| `mindos start --daemon` | Start as background OS service |
+| `mindos open` | Open Web UI in browser |
+| `mindos mcp install` | Auto-install MCP config into your Agent |
+| `mindos sync init` | Setup Git remote sync |
+| `mindos update` | Update to latest version |
+| `mindos doctor` | Health check |
 
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Function |
-| :--- | :--- |
-| `⌘ + K` | Global Search |
-| `⌘ + /` | Call AI Assistant / Sidebar |
-| `E` | Press `E` in View mode to quickly enter Edit mode |
-| `⌘ + S` | Save current edit |
-| `Esc` | Cancel edit / Close dialog |
+**Keyboard shortcuts:** `⌘K` Search · `⌘/` AI Assistant · `E` Edit · `⌘S` Save · `Esc` Close
 
 ---
 
