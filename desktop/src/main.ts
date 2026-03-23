@@ -14,6 +14,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { spawn as spawnChild } from 'child_process';
 import { ProcessManager } from './process-manager';
 import { findAvailablePort } from './port-finder';
 import { createTray, updateTrayMenu, type TrayCallbacks } from './tray';
@@ -46,6 +47,9 @@ let processManager: ProcessManager | null = null;
 let connectionMonitor: ConnectionMonitor | null = null;
 let isQuitting = false;
 let currentMode: 'local' | 'remote' = 'local';
+let currentWebPort: number | undefined;
+let currentMcpPort: number | undefined;
+let currentRemoteAddress: string | undefined;
 let cachedConfig: MindOSConfig | null = null;
 
 // ── Config ──
@@ -244,11 +248,54 @@ async function startLocalMode(): Promise<string | null> {
     return `http://127.0.0.1:${conflict.webPort}`;
   }
 
+  // 4. Ensure app is built (first run or after update — npm package has no .next)
+  const appDir = path.join(projectRoot, 'app');
+  const nextDir = path.join(appDir, '.next');
+  if (!existsSync(nextDir)) {
+    splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
+    try {
+      const enrichedEnv = getEnrichedEnv(nodePath);
+      // Install app dependencies
+      const npmBin = path.join(path.dirname(nodePath), 'npm');
+      if (existsSync(npmBin) && existsSync(path.join(appDir, 'package.json'))) {
+        await spawnWithEnv(npmBin, ['install'], appDir, enrichedEnv, 300000);
+      }
+      // Generate renderer index (needed before build)
+      const genScript = path.join(projectRoot, 'scripts', 'gen-renderer-index.js');
+      if (existsSync(genScript)) {
+        await spawnWithEnv(nodePath, [genScript], projectRoot, enrichedEnv, 30000);
+      }
+      // Run next build
+      const nextBin = path.join(appDir, 'node_modules', '.bin', 'next');
+      const buildBin = existsSync(nextBin) ? nextBin : npxPath;
+      const buildArgs = existsSync(nextBin) ? ['build'] : ['next', 'build'];
+      await spawnWithEnv(buildBin, buildArgs, appDir, enrichedEnv, 600000);
+      // Write build version stamp
+      try {
+        const version = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf-8')).version;
+        writeFileSync(path.join(nextDir, '.mindos-build-version'), version, 'utf-8');
+      } catch { /* non-critical */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      splashStatus({
+        error: zh ? `构建失败: ${msg}` : `Build failed: ${msg}`,
+        actions: [
+          { id: 'retry', label: 'retry', primary: true },
+          { id: 'switch-remote', label: 'switchRemote' },
+          { id: 'quit', label: 'quit' },
+        ],
+      });
+      return null;
+    }
+  }
+
   splashStatus({ status: 'starting' });
 
-  // 4. Find ports + spawn
+  // 5. Find ports + spawn
   const webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
   const mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
+  currentWebPort = webPort;
+  currentMcpPort = mcpPort;
 
   processManager = new ProcessManager({
     nodePath, npxPath, projectRoot, webPort, mcpPort,
@@ -278,7 +325,7 @@ async function startLocalMode(): Promise<string | null> {
   });
 
   processManager.on('status-change', (status: string) => {
-    updateTrayMenu(currentMode, status as 'starting' | 'running' | 'error', undefined, webPort, mcpPort);
+    refreshTray(status as 'starting' | 'running' | 'error');
   });
 
   try {
@@ -319,6 +366,7 @@ async function startRemoteMode(): Promise<string | null> {
                 body: JSON.stringify({ password }),
               });
               if (res.ok) {
+                currentRemoteAddress = savedAddress;
                 splashStatus({ status: 'ready', done: true });
                 return savedAddress;
               }
@@ -326,6 +374,7 @@ async function startRemoteMode(): Promise<string | null> {
           }
           // No password or auth failed → show connect window
         } else {
+          currentRemoteAddress = savedAddress;
           splashStatus({ status: 'ready', done: true });
           return savedAddress;
         }
@@ -344,6 +393,28 @@ function navigator_lang(): 'zh' | 'en' {
   return locale?.startsWith('zh') ? 'zh' : 'en';
 }
 
+/** Update tray with current state — always includes ports/address */
+function refreshTray(status: 'starting' | 'running' | 'error'): void {
+  updateTrayMenu(currentMode, status, currentRemoteAddress, currentWebPort, currentMcpPort);
+}
+
+/** Spawn a process with enriched env, wait for exit. Rejects on non-zero or timeout. */
+function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawnChild(bin, args, { cwd, env, stdio: 'ignore' });
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error(`${path.basename(bin)} ${args[0] || ''} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+    proc.on('exit', (code: number | null) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`${path.basename(bin)} ${args[0] || ''} exited with code ${code}`));
+    });
+    proc.on('error', (err: Error) => { clearTimeout(timer); reject(err); });
+  });
+}
+
 // ── Tray Action: Switch Mode (show selection window, then switch if different) ──
 
 async function handleChangeMode(): Promise<void> {
@@ -360,9 +431,10 @@ async function handleSwitchServer(): Promise<void> {
   if (!url) return; // user cancelled
 
   if (connectionMonitor) connectionMonitor.stop();
+  currentRemoteAddress = url;
   setupConnectionMonitor(url);
   mainWindow?.loadURL(url);
-  updateTrayMenu('remote', 'running', url);
+  refreshTray('running');
 }
 
 // ── Core: switch from current mode to target mode with preheat ──
@@ -385,7 +457,8 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   const oldCM = connectionMonitor;
   processManager = null;
   connectionMonitor = null;
-  if (targetMode === 'local') clearActiveTunnel(); // clean SSH tunnel when switching to local
+  if (targetMode === 'local') { clearActiveTunnel(); currentRemoteAddress = undefined; }
+  else { currentWebPort = undefined; currentMcpPort = undefined; }
   currentMode = targetMode;
   invalidateConfig();
 
@@ -403,7 +476,7 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   if (url) {
     saveDesktopMode(targetMode);
     mainWindow.loadURL(url);
-    updateTrayMenu(targetMode, 'running');
+    refreshTray('running');
     if (oldPM) oldPM.stop().catch(() => {});
     if (oldCM) oldCM.stop();
   } else {
@@ -412,7 +485,7 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
     processManager = oldPM;
     connectionMonitor = oldCM;
     await removeOverlay('mindos-switch-overlay');
-    updateTrayMenu(oldMode, processManager ? 'running' : 'error');
+    refreshTray(processManager ? 'running' : 'error');
   }
 }
 
@@ -434,14 +507,14 @@ async function handleRestartServices(): Promise<void> {
     if (processManager) {
       // Desktop owns the processes — restart them
       await processManager.restart();
-      updateTrayMenu('local', 'running');
+      refreshTray('running');
       mainWindow?.reload();
     } else {
       // Connected to external CLI — do a full re-launch
       const url = await startLocalMode();
       if (url && mainWindow) {
         mainWindow.loadURL(url);
-        updateTrayMenu('local', 'running');
+        refreshTray('running');
       }
     }
   } catch (err) {
@@ -515,7 +588,7 @@ function setupConnectionMonitor(url: string): void {
   connectionMonitor = new ConnectionMonitor(url, {
     onLost: () => {
       mainWindow?.webContents.send('connection-lost');
-      updateTrayMenu('remote', 'error');
+      refreshTray('error');
       // Inject reconnection overlay
       const zh = navigator_lang() === 'zh';
       injectOverlay('mindos-disconnect-overlay', `
@@ -532,7 +605,7 @@ function setupConnectionMonitor(url: string): void {
       mainWindow?.webContents.send('connection-restored');
       removeOverlay('mindos-disconnect-overlay');
       mainWindow?.reload();
-      updateTrayMenu('remote', 'running');
+      refreshTray('running');
     },
   });
   connectionMonitor.start();
@@ -608,7 +681,7 @@ async function bootApp(): Promise<void> {
     setupUpdater();
   }
 
-  updateTrayMenu(currentMode, 'running');
+  refreshTray('running');
   mainWindow.loadURL(url);
 
   // Wait for content to load, then show main + hide splash
