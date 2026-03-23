@@ -24,6 +24,7 @@ import { ConnectionMonitor } from './connection-monitor';
 import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
 import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
+import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 
 // ── Constants ──
 const APP_ROOT = app.getAppPath();
@@ -179,35 +180,58 @@ function checkCliConflict(): { running: boolean; webPort?: number; mcpPort?: num
 
 async function startLocalMode(): Promise<string | null> {
   const config = loadConfig();
+  const zh = navigator_lang() === 'zh';
 
   splashStatus({ status: 'detecting' });
 
-  // 1. Node.js check
-  const nodePath = await getNodePath();
+  // 1. Node.js check — auto-download if missing
+  let nodePath = await getNodePath();
   if (!nodePath) {
-    splashStatus({
-      error: navigator_lang() === 'zh' ? '未检测到 Node.js' : 'Node.js not found',
-      actions: [
-        { id: 'install-node', label: 'Open nodejs.org', primary: true },
-        { id: 'switch-remote', label: 'switchRemote' },
-        { id: 'quit', label: 'quit' },
-      ],
-    });
-    return null;
+    splashStatus({ message: zh ? '正在下载 Node.js 运行环境...' : 'Downloading Node.js runtime...' });
+    try {
+      nodePath = await downloadNode((percent, status) => {
+        if (status === 'downloading') {
+          splashStatus({ message: zh ? `正在下载 Node.js... ${percent}%` : `Downloading Node.js... ${percent}%` });
+        } else if (status === 'extracting') {
+          splashStatus({ message: zh ? '正在安装 Node.js...' : 'Installing Node.js...' });
+        }
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      splashStatus({
+        error: zh ? `Node.js 下载失败: ${msg}` : `Node.js download failed: ${msg}`,
+        actions: [
+          { id: 'retry', label: 'retry', primary: true },
+          { id: 'switch-remote', label: 'switchRemote' },
+          { id: 'quit', label: 'quit' },
+        ],
+      });
+      return null;
+    }
   }
 
-  // 2. MindOS install check
-  const projectRoot = await getMindosInstallPath(nodePath);
+  // 2. MindOS install check — auto-install if missing
+  let projectRoot = await getMindosInstallPath(nodePath);
   if (!projectRoot) {
-    splashStatus({
-      error: navigator_lang() === 'zh' ? '未检测到 MindOS CLI\n请运行: npm install -g @geminilight/mindos' : 'MindOS CLI not found\nRun: npm install -g @geminilight/mindos',
-      actions: [
-        { id: 'retry', label: 'retry', primary: true },
-        { id: 'switch-remote', label: 'switchRemote' },
-        { id: 'quit', label: 'quit' },
-      ],
-    });
-    return null;
+    splashStatus({ message: zh ? '正在安装 MindOS...' : 'Installing MindOS...' });
+    try {
+      projectRoot = await installMindosWithPrivateNode(nodePath, (status) => {
+        if (status === 'installing') {
+          splashStatus({ message: zh ? '正在安装 MindOS（首次约需 1-2 分钟）...' : 'Installing MindOS (first time, ~1-2 min)...' });
+        }
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      splashStatus({
+        error: zh ? `MindOS 安装失败: ${msg}` : `MindOS install failed: ${msg}`,
+        actions: [
+          { id: 'retry', label: 'retry', primary: true },
+          { id: 'switch-remote', label: 'switchRemote' },
+          { id: 'quit', label: 'quit' },
+        ],
+      });
+      return null;
+    }
   }
 
   const npxPath = getNpxPath(nodePath);
@@ -395,7 +419,7 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
 // ── Tray Action: Restart Services ──
 
 async function handleRestartServices(): Promise<void> {
-  if (currentMode !== 'local' || !processManager) return;
+  if (currentMode !== 'local') return;
   const zh = navigator_lang() === 'zh';
 
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -407,11 +431,22 @@ async function handleRestartServices(): Promise<void> {
   }
 
   try {
-    await processManager.restart();
-    updateTrayMenu('local', 'running');
-    mainWindow?.reload();
+    if (processManager) {
+      // Desktop owns the processes — restart them
+      await processManager.restart();
+      updateTrayMenu('local', 'running');
+      mainWindow?.reload();
+    } else {
+      // Connected to external CLI — do a full re-launch
+      const url = await startLocalMode();
+      if (url && mainWindow) {
+        mainWindow.loadURL(url);
+        updateTrayMenu('local', 'running');
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    await removeOverlay('mindos-switch-overlay');
     dialog.showErrorBox(zh ? '重启失败' : 'Restart Failed', msg);
   }
 }
