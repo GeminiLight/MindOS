@@ -118,6 +118,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
     'memory-sync': '🧠',
     'auto-execute': '⚡',
     'experience-evolution': '🔁',
+    'human-insights': '🤝',
     'audit-control': '🛡️',
   };
 

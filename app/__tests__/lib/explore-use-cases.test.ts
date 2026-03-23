@@ -20,12 +20,13 @@ describe('explore/use-cases', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('defines exactly 4 categories', () => {
-    expect(categories).toHaveLength(4);
+  it('defines exactly 5 categories', () => {
+    expect(categories).toHaveLength(5);
     expect(categories).toEqual([
       'memory-sync',
       'auto-execute',
       'experience-evolution',
+      'human-insights',
       'audit-control',
     ]);
   });
