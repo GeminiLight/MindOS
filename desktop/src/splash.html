@@ -1,10 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MindOS</title>
   <style>
+    /* Design system tokens (dark mode) — mirrors app/app/globals.css .dark */
+    :root {
+      --background: #131210;
+      --foreground: #e8e4dc;
+      --muted-foreground: #8a8275;
+      --amber: #d4954a;
+      --amber-dim: rgba(212, 149, 74, 0.20);
+      --radius: 0.5rem;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       display: flex;
@@ -12,27 +22,27 @@
       align-items: center;
       justify-content: center;
       height: 100vh;
-      background: #1a1815;
-      color: #e8e0d4;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     }
     .logo {
       font-size: 48px;
       font-weight: 700;
-      color: #c8873a;
+      color: var(--amber);
       margin-bottom: 16px;
-      font-family: 'Lora', serif;
+      font-family: 'Lora', Georgia, serif;
     }
     .tagline {
       font-size: 14px;
-      color: #a09080;
+      color: var(--muted-foreground);
       margin-bottom: 40px;
     }
     .spinner {
       width: 24px;
       height: 24px;
-      border: 2px solid rgba(200, 135, 58, 0.2);
-      border-top-color: #c8873a;
+      border: 2px solid var(--amber-dim);
+      border-top-color: var(--amber);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -42,7 +52,7 @@
     .status {
       margin-top: 16px;
       font-size: 12px;
-      color: #a09080;
+      color: var(--muted-foreground);
     }
   </style>
 </head>

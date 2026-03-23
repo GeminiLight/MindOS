@@ -1,0 +1,61 @@
+import type { I18nKeys } from './zh';
+
+export const en: Record<I18nKeys, string> = {
+  // Mode selection
+  subtitle: 'Choose Connection Mode',
+  localTitle: 'Local Mode / 本地模式',
+  localDesc: 'Run MindOS on this machine, requires Node.js',
+  localSub: 'Recommended for: personal use or development',
+  remoteTitle: 'Remote Mode / 远程模式',
+  remoteDesc: 'Connect to a remote MindOS server',
+  remoteSub: 'Recommended for: team collaboration or server deployment',
+  // Remote connection screen
+  connectServer: 'Connect to Server / 连接到服务器',
+  recentServers: 'Recent Servers / 最近连接的服务器',
+  orConnect: 'or connect to a new server / 或连接新服务器',
+  serverAddress: 'Server Address / 服务器地址',
+  testConnection: 'Test Connection / 测试连接',
+  password: 'Password / 密码',
+  enterPassword: 'Enter server password / 输入服务器密码',
+  connect: 'Connect / 连接',
+  hint: '💡 Find your server address and password in <strong>MindOS Settings</strong> on the host machine.',
+  switchLocal: '← Switch to Local Mode',
+  switchRemote: '← Switch to Remote Mode',
+  forgot: 'Forget',
+  // Connection states
+  connecting: 'Connecting...',
+  online: '✓ Online',
+  passwordRequired: '· Password required',
+  notMindos: '⚠ Not a MindOS server',
+  cannotReach: 'Cannot reach server',
+  incorrectPassword: 'Incorrect password',
+  connectionFailed: 'Connection failed',
+  connected: 'Connected!',
+  // Setup / CLI missing
+  missingCli: '📦 MindOS CLI Not Found',
+  missingCliDesc: 'Install the MindOS CLI with one click to use local mode (requires Node.js ≥18).',
+  installBtn: 'Install MindOS CLI',
+  retryLocal: 'Start Local Mode',
+  // Build section
+  cliInstalled: '🔨 MindOS CLI Installed',
+  cliInstalledDesc: 'MindOS CLI is installed but not yet built. Click below to build automatically:',
+  buildBtn: 'Build MindOS CLI',
+  building: 'Building...',
+  buildingDesc: '⏳ Building MindOS, please wait (approx. 1–3 minutes)...',
+  buildSuccess: '✅ MindOS built successfully!',
+  retryBuild: 'Retry Build',
+  buildFailed: '❌ Build failed',
+  buildError: '❌ Build error',
+  // Install flow
+  installing: 'Installing...',
+  installingDesc: '⏳ Downloading and installing @geminilight/mindos, please wait (approx. 1–2 minutes)...',
+  installSuccess: '✅ MindOS CLI installed successfully!',
+  retryInstall: 'Retry Install',
+  installFailed: '❌ Installation failed',
+  installError: '❌ Installation error',
+  // Environment check
+  checking: '🔍 Checking...',
+  missingNode: '❌ Node.js still not found',
+  envReady: '✅ Environment ready! Starting...',
+  missingCliStill: '❌ MindOS CLI still not found',
+};
