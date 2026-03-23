@@ -5,7 +5,7 @@
 <h1 align="center">MindOS</h1>
 
 <p align="center">
-  <strong>Human Thinks Here, Agent Acts There.</strong>
+  <strong>Human Thinks Here, Agents Act There.</strong>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by Agents. **Share your brain with every AI — auditable, correctable, and more YOU with every use.**
+MindOS is where you think, and where your AI agents act — a local-first knowledge base shared between you and every AI you use. **Share your brain with every AI — every thought grows.**
 
 ---
 

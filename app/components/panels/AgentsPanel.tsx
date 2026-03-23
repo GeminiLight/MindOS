@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
-import { Loader2, RefreshCw, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Copy, Check, Monitor, Globe, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, RefreshCw, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
-import { generateSnippet } from '@/lib/mcp-snippets';
-import { copyToClipboard } from '@/lib/clipboard';
 import { Toggle } from '../settings/Primitives';
-import type { AgentInfo, McpStatus, SkillInfo } from '../settings/types';
+import type { AgentInfo, SkillInfo } from '../settings/types';
 import PanelHeader from './PanelHeader';
 
 interface AgentsPanelProps {
@@ -22,17 +20,12 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
   const mcp = useMcpData();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [showBuiltinSkills, setShowBuiltinSkills] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await mcp.refresh();
     setRefreshing(false);
-  };
-
-  const toggleAgent = (key: string) => {
-    setExpandedAgent(prev => prev === key ? null : key);
   };
 
   const connected = mcp.agents.filter(a => a.present && a.installed);
@@ -102,9 +95,6 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
                       key={agent.key}
                       agent={agent}
                       agentStatus="connected"
-                      mcpStatus={mcp.status}
-                      expanded={expandedAgent === agent.key}
-                      onToggle={() => toggleAgent(agent.key)}
                       onInstallAgent={mcp.installAgent}
                       t={p}
                     />
@@ -123,9 +113,6 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
                       key={agent.key}
                       agent={agent}
                       agentStatus="detected"
-                      mcpStatus={mcp.status}
-                      expanded={expandedAgent === agent.key}
-                      onToggle={() => toggleAgent(agent.key)}
                       onInstallAgent={mcp.installAgent}
                       t={p}
                     />
@@ -149,9 +136,6 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
                         key={agent.key}
                         agent={agent}
                         agentStatus="notFound"
-                        mcpStatus={mcp.status}
-                        expanded={expandedAgent === agent.key}
-                        onToggle={() => toggleAgent(agent.key)}
                         onInstallAgent={mcp.installAgent}
                         t={p}
                       />
@@ -239,129 +223,55 @@ function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (name: stri
   );
 }
 
-/* ── Agent Card ── */
+/* ── Agent Card (compact — no snippet, config viewing is in Settings) ── */
 
-function AgentCard({ agent, agentStatus, mcpStatus, expanded, onToggle, onInstallAgent, t }: {
+function AgentCard({ agent, agentStatus, onInstallAgent, t }: {
   agent: AgentInfo;
   agentStatus: 'connected' | 'detected' | 'notFound';
-  mcpStatus: McpStatus | null;
-  expanded: boolean;
-  onToggle: () => void;
-  onInstallAgent: (key: string, opts?: { scope?: string; transport?: string }) => Promise<boolean>;
+  onInstallAgent: (key: string) => Promise<boolean>;
   t: Record<string, any>;
 }) {
-  const [transport, setTransport] = useState<'stdio' | 'http'>('stdio');
-  const [copied, setCopied] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const dot = agentStatus === 'connected' ? 'bg-emerald-500' : agentStatus === 'detected' ? 'bg-amber-500' : 'bg-zinc-400';
 
-  const snippet = useMemo(() => generateSnippet(agent, mcpStatus, transport), [agent, mcpStatus, transport]);
-
-  const handleCopy = useCallback(async () => {
-    const ok = await copyToClipboard(snippet.snippet);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [snippet.snippet]);
-
   const handleInstall = async () => {
     setInstalling(true);
     setResult(null);
     const ok = await onInstallAgent(agent.key);
-    if (ok) {
-      setResult({ type: 'success', text: `${agent.name} ${t.connected}` });
-    } else {
-      setResult({ type: 'error', text: 'Install failed' });
-    }
+    setResult(ok
+      ? { type: 'success', text: `${agent.name} ${t.connected}` }
+      : { type: 'error', text: 'Install failed' });
     setInstalling(false);
   };
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card/30 overflow-hidden">
-      {/* Header row — always clickable to expand */}
-      <button
-        onClick={onToggle}
-        className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-muted/30 transition-colors text-left"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-          <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
-          {agentStatus === 'connected' && agent.transport && (
-            <span className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{agent.transport}</span>
-          )}
-        </div>
-        {expanded ? <ChevronDown size={10} className="text-muted-foreground shrink-0" /> : <ChevronRight size={10} className="text-muted-foreground shrink-0" />}
-      </button>
+    <div className="rounded-lg border border-border/60 bg-card/30 px-3 py-2 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+        <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
+        {agentStatus === 'connected' && agent.transport && (
+          <span className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{agent.transport}</span>
+        )}
+      </div>
 
-      {/* Expanded: snippet + actions */}
-      {expanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-border/40 space-y-2.5">
-          {/* Detected: Connect button */}
-          {agentStatus === 'detected' && (
-            <>
-              <button onClick={handleInstall} disabled={installing}
-                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-2xs rounded-md font-medium text-white disabled:opacity-50 transition-colors"
-                style={{ background: 'var(--amber)' }}>
-                {installing ? <Loader2 size={11} className="animate-spin" /> : null}
-                {installing ? t.installing : t.install(agent.name)}
-              </button>
-              {result && (
-                <div className={`flex items-center gap-1.5 text-2xs ${result.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                  {result.type === 'success' ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
-                  {result.text}
-                </div>
-              )}
-            </>
-          )}
+      {/* Detected: Install button */}
+      {agentStatus === 'detected' && (
+        <button onClick={handleInstall} disabled={installing}
+          className="flex items-center gap-1 px-2 py-1 text-2xs rounded-md font-medium text-white disabled:opacity-50 transition-colors shrink-0"
+          style={{ background: 'var(--amber)' }}>
+          {installing ? <Loader2 size={10} className="animate-spin" /> : null}
+          {installing ? t.installing : t.install(agent.name)}
+        </button>
+      )}
 
-          {/* Transport toggle */}
-          <div className="flex items-center rounded-md border border-border overflow-hidden w-fit">
-            <button
-              onClick={() => setTransport('stdio')}
-              className={`flex items-center gap-1 px-2 py-1 text-2xs transition-colors ${
-                transport === 'stdio' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Monitor size={10} />
-              {t.transportLocal}
-            </button>
-            <button
-              onClick={() => setTransport('http')}
-              className={`flex items-center gap-1 px-2 py-1 text-2xs transition-colors ${
-                transport === 'http' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Globe size={10} />
-              {t.transportRemote}
-            </button>
-          </div>
-
-          {/* No auth warning for HTTP */}
-          {transport === 'http' && mcpStatus && !mcpStatus.authConfigured && (
-            <p className="text-2xs" style={{ color: 'var(--amber)' }}>{t.noAuthWarning}</p>
-          )}
-
-          {/* Config snippet */}
-          <pre className="text-[10px] font-mono bg-muted/50 border border-border rounded-lg p-2.5 overflow-x-auto whitespace-pre select-all max-h-[200px] overflow-y-auto">
-            {snippet.displaySnippet}
-          </pre>
-
-          {/* Copy + path */}
-          <div className="flex items-center gap-2 text-2xs">
-            <button
-              onClick={handleCopy}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            >
-              {copied ? <Check size={10} /> : <Copy size={10} />}
-              {copied ? t.copied : t.copyConfig}
-            </button>
-            <span className="text-muted-foreground">→</span>
-            <span className="font-mono text-muted-foreground truncate">{snippet.path}</span>
-          </div>
-        </div>
+      {/* Install result */}
+      {result && (
+        <span className={`flex items-center gap-1 text-2xs shrink-0 ${result.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+          {result.type === 'success' ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+          {result.text}
+        </span>
       )}
     </div>
   );

@@ -61,8 +61,8 @@ describe('detectAgentPresence', () => {
     expect(detectAgentPresence('cline')).toBe(true);
   });
 
-  it('detects codebuddy via claude-internal CLI', () => {
-    mockExecSync.mockReturnValue(Buffer.from('/usr/local/bin/claude-internal'));
+  it('detects codebuddy via codebuddy CLI', () => {
+    mockExecSync.mockReturnValue(Buffer.from('/usr/local/bin/codebuddy'));
     existsSyncSpy.mockReturnValue(false);
     expect(detectAgentPresence('codebuddy')).toBe(true);
   });
