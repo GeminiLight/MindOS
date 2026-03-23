@@ -11,7 +11,7 @@
  * 2. Start new mode in background
  * 3. Success → loadURL new mode; Failure → remove overlay, keep old mode
  */
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { ProcessManager } from './process-manager';
@@ -21,7 +21,7 @@ import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { restoreWindowState, saveWindowState } from './window-state';
 import { setupUpdater } from './updater';
 import { ConnectionMonitor } from './connection-monitor';
-import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loadPassword } from './connect-window';
+import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
 import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 
@@ -45,7 +45,6 @@ let processManager: ProcessManager | null = null;
 let connectionMonitor: ConnectionMonitor | null = null;
 let isQuitting = false;
 let currentMode: 'local' | 'remote' = 'local';
-let currentUrl: string | null = null;
 let cachedConfig: MindOSConfig | null = null;
 
 // ── Config ──
@@ -236,19 +235,26 @@ async function startLocalMode(): Promise<string | null> {
   });
 
   let crashDialogShown = false;
+  let mcpFailed = false;
+
   processManager.on('crash', (which: string, count: number) => {
-    if (count >= 3 && !crashDialogShown) {
+    if (which === 'mcp' && count >= 3) {
+      mcpFailed = true;
+      // Update tray to show MCP is down but overall status stays 'running' if web is OK
+      updateTrayMenu(currentMode, 'running', undefined, webPort, mcpPort);
+    }
+    if (which === 'web' && count >= 3 && !crashDialogShown) {
       crashDialogShown = true;
       const zh = navigator_lang() === 'zh';
       dialog.showErrorBox(
         zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
-        zh ? `${which} 服务连续崩溃 3 次。请检查 Node.js 环境后重启。` : `The ${which} server crashed 3 times. Please check your Node.js environment and restart.`
+        zh ? 'Web 服务连续崩溃 3 次。请检查 Node.js 环境后重启。' : 'The web server crashed 3 times. Please check your Node.js environment and restart.'
       );
     }
   });
 
   processManager.on('status-change', (status: string) => {
-    updateTrayMenu(currentMode, status as 'starting' | 'running' | 'error', webPort, mcpPort);
+    updateTrayMenu(currentMode, status as 'starting' | 'running' | 'error', undefined, webPort, mcpPort);
   });
 
   try {
@@ -314,55 +320,54 @@ function navigator_lang(): 'zh' | 'en' {
   return locale?.startsWith('zh') ? 'zh' : 'en';
 }
 
-// ── Tray Action: Change Mode (re-show mode selection window) ──
+// ── Tray Action: Switch Mode (show selection window, then switch if different) ──
 
 async function handleChangeMode(): Promise<void> {
   const selectedMode = await showModeSelectWindow();
-  if (!selectedMode) return; // user cancelled
+  if (!selectedMode || selectedMode === currentMode) return;
 
-  // If same mode, do nothing
-  if (selectedMode === currentMode) return;
-
-  // Save the new preference
-  saveDesktopMode(selectedMode);
-
-  // Use the existing switch logic (preheat + overlay)
-  // But first set the target mode correctly
-  // handleSwitchMode toggles, so we temporarily set currentMode
-  // so the toggle lands on the right target
-  currentMode = selectedMode === 'local' ? 'remote' : 'local';
-  await handleSwitchMode();
+  await switchToMode(selectedMode);
 }
 
-// ── Tray Action: Switch Mode (direct toggle local↔remote) ──
+// ── Tray Action: Switch Server (remote mode — show connect window) ──
 
-async function handleSwitchMode(): Promise<void> {
+async function handleSwitchServer(): Promise<void> {
+  const url = await showConnectWindow();
+  if (!url) return; // user cancelled
+
+  if (connectionMonitor) connectionMonitor.stop();
+  setupConnectionMonitor(url);
+  mainWindow?.loadURL(url);
+  updateTrayMenu('remote', 'running', url);
+}
+
+// ── Core: switch from current mode to target mode with preheat ──
+
+async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   const oldMode = currentMode;
-  const newMode = oldMode === 'local' ? 'remote' : 'local';
   const zh = navigator_lang() === 'zh';
 
-  // 1. Inject overlay — old content stays visible underneath
+  // 1. Overlay on current content
   await injectOverlay('mindos-switch-overlay', `
     <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:system-ui;color:white;font-size:16px;backdrop-filter:blur(4px)">
       ${zh ? '正在切换...' : 'Switching...'}
     </div>
   `);
 
-  // 2. Keep old processes alive — start new mode in parallel (preheat)
-  const oldProcessManager = processManager;
-  const oldConnectionMonitor = connectionMonitor;
+  // 2. Preheat: keep old alive, start new
+  const oldPM = processManager;
+  const oldCM = connectionMonitor;
   processManager = null;
   connectionMonitor = null;
-
-  currentMode = newMode;
+  if (targetMode === 'local') clearActiveTunnel(); // clean SSH tunnel when switching to local
+  currentMode = targetMode;
   invalidateConfig();
 
-  // 3. Start new mode (old still running)
   let url: string | null = null;
   try {
-    if (newMode === 'local') {
+    if (targetMode === 'local') {
       url = await startLocalMode();
     } else {
       url = await startRemoteMode();
@@ -370,25 +375,20 @@ async function handleSwitchMode(): Promise<void> {
     }
   } catch { /* handled below */ }
 
-  // 4. Apply result
+  // 3. Apply
   if (url) {
-    saveDesktopMode(newMode);
-    currentUrl = url;
+    saveDesktopMode(targetMode);
     mainWindow.loadURL(url);
-    updateTrayMenu(newMode, 'running');
-    // Stop old mode after switching
-    if (oldProcessManager) oldProcessManager.stop().catch(() => {});
-    if (oldConnectionMonitor) oldConnectionMonitor.stop();
+    updateTrayMenu(targetMode, 'running');
+    if (oldPM) oldPM.stop().catch(() => {});
+    if (oldCM) oldCM.stop();
   } else {
-    // Failed — revert
+    // Revert silently
     currentMode = oldMode;
-    processManager = oldProcessManager;
-    connectionMonitor = oldConnectionMonitor;
+    processManager = oldPM;
+    connectionMonitor = oldCM;
     await removeOverlay('mindos-switch-overlay');
-    dialog.showErrorBox(
-      zh ? '切换失败' : 'Switch Failed',
-      zh ? '无法启动新模式，已恢复原连接。' : 'Could not start new mode. Restored previous connection.'
-    );
+    updateTrayMenu(oldMode, processManager ? 'running' : 'error');
   }
 }
 
@@ -419,13 +419,13 @@ async function handleRestartServices(): Promise<void> {
 // ── Tray Callbacks ──
 
 const trayCallbacks: TrayCallbacks = {
-  onSwitchMode: handleSwitchMode,
   onChangeMode: handleChangeMode,
   onOpenMindRoot: () => {
     const config = loadConfig();
     shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
   },
   onRestartServices: handleRestartServices,
+  onSwitchServer: handleSwitchServer,
 };
 
 // ── IPC Handlers ──
@@ -442,9 +442,10 @@ function setupIPC(): void {
     shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
   });
 
-  ipcMain.handle('switch-mode', () => handleSwitchMode());
+  ipcMain.handle('switch-mode', () => handleChangeMode());
   ipcMain.handle('change-mode', () => handleChangeMode());
   ipcMain.handle('restart-services', () => handleRestartServices());
+  ipcMain.handle('switch-server', () => handleSwitchServer());
 }
 
 // ── Connection Monitor ──
@@ -487,7 +488,7 @@ function setupConnectionMonitor(url: string): void {
           <div style="color:#e8e4dc;font-size:18px;margin-bottom:8px">${zh ? '⚠ 与服务器的连接已断开' : '⚠ Connection Lost'}</div>
           <div style="color:#8a8275;font-size:13px;margin-bottom:20px">${zh ? '正在尝试重新连接...' : 'Attempting to reconnect...'}</div>
           <div style="display:flex;gap:8px">
-            <button onclick="window.mindosDesktop?.switchMode()" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(232,228,220,0.15);background:rgba(255,255,255,0.08);color:#e8e4dc;font-size:13px;cursor:pointer">${zh ? '切换到本地模式' : 'Switch to Local'}</button>
+            <button onclick="window.mindos?.switchMode()" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(232,228,220,0.15);background:rgba(255,255,255,0.08);color:#e8e4dc;font-size:13px;cursor:pointer">${zh ? '切换到本地模式' : 'Switch to Local'}</button>
           </div>
         </div>
       `);
@@ -516,12 +517,7 @@ async function handleSplashAction(actionId: string): Promise<void> {
       await bootApp();
       break;
     case 'retry':
-      // Reset splash and retry current mode
       splashStatus({ status: 'detecting' });
-      if (splashWindow) {
-        // Re-show progress
-        splashWindow.webContents.send('splash:status', { status: 'detecting' });
-      }
       await bootApp();
       break;
     case 'quit':
@@ -567,8 +563,6 @@ async function bootApp(): Promise<void> {
   }
 
   if (!url) return; // splash is showing error + actions, wait for user
-
-  currentUrl = url;
 
   // Create main window
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -639,6 +633,7 @@ app.on('before-quit', (e) => {
     const cleanup = async () => {
       if (processManager) await processManager.stop();
       if (connectionMonitor) connectionMonitor.stop();
+      clearActiveTunnel();
       app.exit(0);
     };
     cleanup();

@@ -65,7 +65,7 @@
 </head>
 <body>
   <div class="logo">∞ MindOS</div>
-  <p class="tagline">Human–Agent Knowledge Base</p>
+  <p class="tagline" id="tagline"></p>
   <div class="progress-wrap" id="progress"><div class="progress-bar" id="bar"></div></div>
   <p class="status" id="status"></p>
   <div class="actions hidden" id="actions"></div>
@@ -82,6 +82,7 @@
     // i18n
     const i = {
       zh: {
+        tagline: '人机协作知识系统',
         detecting: '正在检测环境...',
         starting: '正在启动服务...',
         connecting: '正在连接服务器...',
@@ -96,6 +97,7 @@
         selectMode: '请选择模式',
       },
       en: {
+        tagline: 'Human–Agent Collaborative Mind System',
         detecting: 'Detecting environment...',
         starting: 'Starting services...',
         connecting: 'Connecting to server...',
@@ -111,6 +113,9 @@
       },
     };
     const t = (key) => i[lang]?.[key] || i.en[key] || key;
+
+    // Set tagline
+    document.getElementById('tagline').textContent = t('tagline');
 
     // Listen for status updates from main process
     if (window.mindosSplash) {

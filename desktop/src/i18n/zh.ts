@@ -56,6 +56,18 @@ export const zh = {
   missingNode: '❌ 未检测到 Node.js',
   envReady: '✅ 环境就绪，正在启动...',
   missingCliStill: '❌ 未检测到 MindOS CLI',
+  // SSH tunnel
+  sshTab: '🔒 SSH 隧道',
+  httpTab: '🌐 直连',
+  sshHost: 'SSH Host',
+  sshPort: 'MindOS 端口',
+  sshConnect: '连接',
+  sshConnecting: '正在建立隧道...',
+  sshSuccess: '✓ 隧道已建立',
+  sshFailed: '隧道建立失败',
+  sshNoConfig: '💡 有 ~/.ssh/config 时将自动列出可选 Host',
+  sshNoSsh: '未检测到 SSH',
+  sshSelectHost: 'user@hostname 或 SSH Host 别名',
 } as const;
 
 export type I18nKeys = keyof typeof zh;

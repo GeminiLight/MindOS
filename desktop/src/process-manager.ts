@@ -251,7 +251,11 @@ export class ProcessManager extends EventEmitter {
           this.setupCrashHandler(newProc, which);
         }, delay);
       } else {
-        this.emit('status-change', 'error');
+        // Only mark overall status as 'error' if web crashes
+        // MCP crash is a degraded state, not a fatal error
+        if (which === 'web') {
+          this.emit('status-change', 'error');
+        }
       }
     };
 
