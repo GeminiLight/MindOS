@@ -62,6 +62,7 @@
 - [x] **SidebarLayout 拆 hooks** — 479→314 行，抽取 `useLeftPanel` (81 行) + `useAskPanel` (117 行)，15+ state 分离为 2 个独立 hook
 - [x] **McpSkillsSection 拆子组件** — 595→359 行，抽取 `McpSkillRow` (145 行) + `McpSkillCreateForm` (178 行)
 - [x] **补测试** — walkthrough-steps (4 cases) + explore-use-cases (7 cases) + i18n-new-keys (10 cases)，总计 50 文件 598 测试
+- [x] **I15：Discover 探索面板** — Activity Bar 新增 Discover 入口（Compass 图标），面板含使用案例（9 个，点击触发 Ask AI）+ 插件市场/技能市场占位。[spec](./specs/spec-discover-panel.md)
 
 ### 🟡 中优先
 
