@@ -16,9 +16,11 @@ const { join } = require('path');
 const { execSync } = require('child_process');
 
 const postcssDir = join('node_modules', 'next', 'node_modules', 'postcss');
-const depsDir = join(postcssDir, 'node_modules');
+// Check for an actual dependency, not just the node_modules directory
+// (npm sometimes leaves an empty node_modules with only .bin and .package-lock.json)
+const marker = join(postcssDir, 'node_modules', 'source-map-js');
 
-if (existsSync(postcssDir) && !existsSync(depsDir)) {
+if (existsSync(postcssDir) && !existsSync(marker)) {
   try {
     execSync('npm install --no-save --install-strategy=nested', {
       cwd: postcssDir,

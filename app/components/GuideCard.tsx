@@ -5,22 +5,26 @@ import { X, Sparkles, FolderOpen, MessageCircle, RefreshCw, Check, ChevronRight 
 import Link from 'next/link';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
+import { extractEmoji, stripEmoji } from '@/lib/utils';
 import { walkthroughSteps } from './walkthrough/steps';
 import type { GuideState } from '@/lib/settings';
+import type { SpaceInfo } from '@/app/page';
 
-const DIR_ICONS: Record<string, string> = {
-  profile: '👤', notes: '📝', connections: '🔗',
-  workflows: '🔄', resources: '📚', projects: '🚀',
-};
-
-const EMPTY_FILES = ['INSTRUCTION.md', 'README.md', 'CONFIG.json'];
+interface RecentFile {
+  path: string;
+  mtime: number;
+}
 
 interface GuideCardProps {
   /** Called when user clicks a file/dir to open it in FileView */
   onNavigate?: (path: string) => void;
+  /** Existing spaces for dynamic directory listing */
+  spaces?: SpaceInfo[];
+  /** Recent files for empty-template fallback */
+  recentFiles?: RecentFile[];
 }
 
-export default function GuideCard({ onNavigate }: GuideCardProps) {
+export default function GuideCard({ onNavigate, spaces = [], recentFiles = [] }: GuideCardProps) {
   const { t } = useLocale();
   const g = t.guide;
 
@@ -228,29 +232,37 @@ export default function GuideCard({ onNavigate }: GuideCardProps) {
 
             {isEmptyTemplate ? (
               <div className="flex flex-col gap-1.5">
-                {EMPTY_FILES.map(file => (
-                  <button key={file} onClick={() => handleFileOpen(file)}
-                    className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50">
-                    📄 {(g.kb.emptyFiles as Record<string, string>)[file.split('.')[0].toLowerCase()] || file}
-                  </button>
-                ))}
-                <p className="text-xs mt-2 text-muted-foreground opacity-70">
-                  {g.kb.emptyHint}
-                </p>
+                {recentFiles.length > 0 ? (
+                  recentFiles.map(file => {
+                    const fileName = file.path.split('/').pop() || file.path;
+                    return (
+                      <button key={file.path} onClick={() => handleFileOpen(file.path)}
+                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50 truncate">
+                        📄 {fileName}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-muted-foreground">{g.kb.emptyHint}</p>
+                )}
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {Object.entries(DIR_ICONS).map(([key, icon]) => (
-                    <button key={key} onClick={() => handleFileOpen(key.charAt(0).toUpperCase() + key.slice(1))}
-                      className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50">
-                      <span className="mr-1.5">{icon}</span>
-                      <span className="capitalize">{key}</span>
-                      <span className="block text-2xs mt-0.5 text-muted-foreground">
-                        {(g.kb.dirs as Record<string, string>)[key]}
-                      </span>
-                    </button>
-                  ))}
+                  {spaces.slice(0, 6).map(s => {
+                    const emoji = extractEmoji(s.name);
+                    const label = stripEmoji(s.name);
+                    return (
+                      <button key={s.name} onClick={() => handleFileOpen(s.path)}
+                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50">
+                        <span className="mr-1.5">{emoji || '📁'}</span>
+                        <span>{label}</span>
+                        <span className="block text-2xs mt-0.5 text-muted-foreground">
+                          {t.home.nFiles(s.fileCount)}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className="text-xs mt-3 text-[var(--amber)]">
                   💡 {g.kb.instructionHint}

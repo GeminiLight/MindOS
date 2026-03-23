@@ -74,17 +74,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  let body: { id?: string };
+  let body: { id?: string; ids?: string[] };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const id = body.id;
-  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  // Support both single id and bulk ids
+  const idsToDelete = body.ids ?? (body.id ? [body.id] : []);
+  if (idsToDelete.length === 0) return NextResponse.json({ error: 'id or ids is required' }, { status: 400 });
 
-  const sessions = readSessions().filter((s) => s.id !== id);
+  const deleteSet = new Set(idsToDelete);
+  const sessions = readSessions().filter((s) => !deleteSet.has(s.id));
   writeSessions(sessions);
   return NextResponse.json({ ok: true });
 }

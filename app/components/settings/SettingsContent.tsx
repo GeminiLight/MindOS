@@ -153,8 +153,8 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={iconSize} /> },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP & Skills', icon: <Plug size={iconSize} /> },
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} /> },
-    { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
+    { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
     { id: 'update', label: t.settings.tabs.update ?? 'Update', icon: <Download size={iconSize} />, badge: hasUpdate },
   ];
 

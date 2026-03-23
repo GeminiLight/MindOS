@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink, Circle } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
 
@@ -11,18 +11,53 @@ interface UpdateInfo {
   hasUpdate: boolean;
 }
 
+interface StageInfo {
+  id: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+}
+
+interface UpdateStatus {
+  stage: string;
+  stages: StageInfo[];
+  error: string | null;
+  version: { from: string | null; to: string | null } | null;
+  startedAt: string | null;
+}
+
 type UpdateState = 'idle' | 'checking' | 'updating' | 'updated' | 'error' | 'timeout';
 
 const CHANGELOG_URL = 'https://github.com/GeminiLight/MindOS/releases';
-const POLL_INTERVAL = 5_000;
-const POLL_TIMEOUT = 4 * 60 * 1000; // 4 minutes
+const POLL_INTERVAL = 3_000;
+const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+const STAGE_LABELS: Record<string, { en: string; zh: string }> = {
+  downloading: { en: 'Downloading update', zh: '下载更新' },
+  skills:      { en: 'Updating skills', zh: '更新 Skills' },
+  rebuilding:  { en: 'Rebuilding app', zh: '重新构建应用' },
+  restarting:  { en: 'Restarting server', zh: '重启服务' },
+};
+
+function StageIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'done':
+      return <CheckCircle2 size={14} className="text-success shrink-0" />;
+    case 'running':
+      return <Loader2 size={14} className="animate-spin shrink-0" style={{ color: 'var(--amber)' }} />;
+    case 'failed':
+      return <AlertCircle size={14} className="text-destructive shrink-0" />;
+    default:
+      return <Circle size={14} className="text-muted-foreground/40 shrink-0" />;
+  }
+}
 
 export function UpdateTab() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const u = t.settings.update;
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [state, setState] = useState<UpdateState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [stages, setStages] = useState<StageInfo[]>([]);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const originalVersion = useRef<string>('');
@@ -43,16 +78,23 @@ export function UpdateTab() {
 
   useEffect(() => { checkUpdate(); }, [checkUpdate]);
 
-  useEffect(() => {
-    return () => {
-      clearInterval(pollRef.current);
-      clearTimeout(timeoutRef.current);
-    };
+  const cleanup = useCallback(() => {
+    clearInterval(pollRef.current);
+    clearTimeout(timeoutRef.current);
   }, []);
+
+  useEffect(() => cleanup, [cleanup]);
 
   const handleUpdate = useCallback(async () => {
     setState('updating');
     setErrorMsg('');
+    setUpdateError(null);
+    setStages([
+      { id: 'downloading', status: 'pending' },
+      { id: 'skills',      status: 'pending' },
+      { id: 'rebuilding',  status: 'pending' },
+      { id: 'restarting',  status: 'pending' },
+    ]);
 
     try {
       await apiFetch('/api/update', { method: 'POST' });
@@ -60,26 +102,67 @@ export function UpdateTab() {
       // Expected — server may die during update
     }
 
+    // Poll update-status for stage progress
     pollRef.current = setInterval(async () => {
+      // Try status endpoint first (may fail when server is restarting)
       try {
-        const data = await apiFetch<UpdateInfo>('/api/update-check');
-        if (data.current !== originalVersion.current) {
-          clearInterval(pollRef.current);
-          clearTimeout(timeoutRef.current);
-          setInfo(data);
-          setState('updated');
-          setTimeout(() => window.location.reload(), 2000);
+        const status = await apiFetch<UpdateStatus>('/api/update-status', { timeout: 5000 });
+
+        if (status.stages?.length > 0) {
+          setStages(status.stages);
+        }
+
+        if (status.stage === 'failed') {
+          cleanup();
+          setUpdateError(status.error || 'Update failed');
+          setState('error');
+          return;
+        }
+
+        if (status.stage === 'done') {
+          // Verify version actually changed
+          try {
+            const data = await apiFetch<UpdateInfo>('/api/update-check');
+            if (data.current !== originalVersion.current) {
+              cleanup();
+              setInfo(data);
+              setState('updated');
+              setTimeout(() => window.location.reload(), 2000);
+              return;
+            }
+          } catch { /* new server may not be fully ready */ }
         }
       } catch {
-        // Server still restarting
+        // Server restarting — also try update-check as fallback
+        try {
+          const data = await apiFetch<UpdateInfo>('/api/update-check', { timeout: 5000 });
+          if (data.current !== originalVersion.current) {
+            cleanup();
+            setStages(prev => prev.map(s => ({ ...s, status: 'done' as const })));
+            setInfo(data);
+            setState('updated');
+            setTimeout(() => window.location.reload(), 2000);
+          }
+        } catch {
+          // Both endpoints down — server still restarting
+        }
       }
     }, POLL_INTERVAL);
 
     timeoutRef.current = setTimeout(() => {
-      clearInterval(pollRef.current);
+      cleanup();
       setState('timeout');
     }, POLL_TIMEOUT);
-  }, []);
+  }, [cleanup]);
+
+  const handleRetry = useCallback(() => {
+    setUpdateError(null);
+    handleUpdate();
+  }, [handleUpdate]);
+
+  const lang = locale === 'zh' ? 'zh' : 'en';
+  const doneCount = stages.filter(s => s.status === 'done').length;
+  const progress = stages.length > 0 ? Math.round((doneCount / stages.length) * 100) : 0;
 
   return (
     <div className="space-y-5">
@@ -114,11 +197,27 @@ export function UpdateTab() {
         )}
 
         {state === 'updating' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
-              <Loader2 size={13} className="animate-spin" />
-              {u?.updating ?? 'Updating MindOS... The server will restart shortly.'}
+          <div className="space-y-3">
+            {/* Stage list */}
+            <div className="space-y-1.5">
+              {stages.map((s) => (
+                <div key={s.id} className="flex items-center gap-2 text-xs">
+                  <StageIcon status={s.status} />
+                  <span className={s.status === 'pending' ? 'text-muted-foreground/50' : s.status === 'running' ? 'text-foreground' : 'text-muted-foreground'}>
+                    {STAGE_LABELS[s.id]?.[lang] ?? s.id}
+                  </span>
+                </div>
+              ))}
             </div>
+
+            {/* Progress bar */}
+            <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${Math.max(progress, 5)}%`, background: 'var(--amber)' }}
+              />
+            </div>
+
             <p className="text-2xs text-muted-foreground">
               {u?.updatingHint ?? 'This may take 1–3 minutes. Do not close this page.'}
             </p>
@@ -133,21 +232,39 @@ export function UpdateTab() {
         )}
 
         {state === 'timeout' && (
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertCircle size={13} />
               {u?.timeout ?? 'Update may still be in progress.'}
             </div>
             <p className="text-2xs text-muted-foreground">
-              {u?.timeoutHint ?? 'Check your terminal:'} <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos logs</code>
+              {u?.timeoutHint ?? 'The server may need more time to rebuild. Try refreshing.'}
             </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <RefreshCw size={12} />
+              {u?.refreshButton ?? 'Refresh Page'}
+            </button>
           </div>
         )}
 
         {state === 'error' && (
-          <div className="flex items-center gap-2 text-xs text-destructive">
-            <AlertCircle size={13} />
-            {errorMsg}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-destructive">
+              <AlertCircle size={13} />
+              {updateError || errorMsg}
+            </div>
+            {updateError && (
+              <button
+                onClick={handleRetry}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <RefreshCw size={12} />
+                {u?.retryButton ?? 'Retry Update'}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -267,7 +267,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setShowHistory(v => !v)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Session history">
+          <button type="button" onClick={() => setShowHistory(v => !v)} aria-pressed={showHistory} className={`p-1 rounded transition-colors ${showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title="Session history">
             <History size={iconSize} />
           </button>
           <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="New session">
@@ -284,7 +284,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             </button>
           )}
           {onClose && (
-            <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
+            <button type="button" onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
               <X size={isPanel ? iconSize : 15} />
             </button>
           )}
@@ -297,6 +297,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           activeSessionId={session.activeSessionId}
           onLoad={handleLoadSession}
           onDelete={session.deleteSession}
+          onClearAll={session.clearAllSessions}
+          labels={{
+            title: t.ask.sessionHistory ?? 'Session History',
+            clearAll: t.ask.clearAll ?? 'Clear all',
+            confirmClear: t.ask.confirmClear ?? 'Confirm clear?',
+            noSessions: t.ask.noSessions ?? 'No saved sessions.',
+          }}
         />
       )}
 
@@ -400,7 +407,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               <StopCircle size={inputIconSize} />
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim()} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0" style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}>
+            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
               <Send size={isPanel ? 13 : 14} />
             </button>
           )}
