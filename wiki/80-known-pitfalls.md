@@ -27,6 +27,14 @@
 
 ## 前端
 
+### Emoji Hydration Mismatch（Twemoji 浏览器扩展）
+- **现象：** SSR 渲染的 emoji 文本（如 `🎯`、`🚀`）在客户端被 Twemoji 等浏览器扩展替换为 `<img>` 元素，触发 React hydration error：`Hydration failed because the server rendered text didn't match the client`
+- **原因：** 浏览器扩展在 React hydration 之前修改 DOM，将 emoji 文本节点替换为 `<img src="...twemoji...">`，导致 SSR HTML 与客户端 DOM 不一致
+- **已踩坑位置：** HomeContent.tsx Space 卡片描述（v1）、DiscoverPanel.tsx Section icon（v2）、UseCaseCard.tsx emoji icon
+- **解决：** 所有包含 emoji 的 `<span>` 必须加 `suppressHydrationWarning`
+- **规则：** 凡是 JSX 中直接渲染 emoji 字符的元素，**一律加 `suppressHydrationWarning`**。新增 emoji 渲染时必须检查此规则，不要等报错再修
+- **检查方法：** `grep -rn 'emoji\|📝\|🎯\|🚀\|👤\|📥\|🔄\|🔁\|💡\|🤝\|🛡️\|🧩\|⚡\|🧠\|🕐' --include='*.tsx' | grep -v suppressHydrationWarning`
+
 ### AskPanel/SettingsPanel 与 Modal 版本代码重复 ✅ 已解决
 - **现象：** `panels/AskPanel.tsx` 与 `AskModal.tsx` 约 80% 逻辑重复
 - **解决：** 提取 `ask/AskContent.tsx` 和 `settings/SettingsContent.tsx` 共享核心组件。AskModal/AskPanel、SettingsModal/SettingsPanel 各缩减为 ~20 行 thin wrapper。`variant: 'modal' | 'panel'` 控制差异（ESC handler、close 按钮、abort-on-close、尺寸微调）
@@ -485,10 +493,24 @@
 - **解决：** 用 `e.preventDefault()` 阻止退出，完成清理后手动 `app.exit(0)`
 - **规则：** Electron 的 app 事件不 await promise，需要手动控制退出时序
 
-### Electron 打包后 npx 不在 PATH
-- **现象：** 打包后 spawn `npx tsx ...` 报 ENOENT
-- **原因：** Electron 打包后不加载 shell profile，PATH 中没有 npm/npx
-- **规则：** 子进程用绝对路径的 node 二进制执行，或手动 resolve npx 路径
+### Electron 打包后 npx/npm 不在 PATH
+- **现象：** 打包后 `exec('npm root -g')` / `exec('npm install ...')` 报 `/bin/sh: npm: command not found`
+- **原因：** Electron 打包后 `process.env.PATH` 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，不包含 `/usr/local/bin`、`/opt/homebrew/bin`、nvm/fnm 路径
+- **解决：** (1) `node-detect.ts` 中 `enrichedPath()` 函数注入 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.nvm/current/bin` 等常见路径 (2) 所有 `exec()` / `spawn()` 调用传入 `env: { PATH: enrichedPath(nodeBinDir) }` (3) `getMindosInstallPath()` 先用已知 node 路径旁边的 npm 执行 `npm root -g`，再扫描常见全局路径做兜底
+- **规则：** Electron 打包应用中执行任何 shell 命令，必须手动构造 PATH，不能依赖 `process.env.PATH`
+- **文件：** `desktop/src/node-detect.ts`、`desktop/src/connect-window.ts`
+
+### Electron modal + hidden titlebar = macOS 死锁
+- **现象：** `modal: true` + `parent: mainWindow`（`titleBarStyle: 'hidden'`）→ 主窗口交通灯不可点击，模态窗口关不掉
+- **原因：** macOS 上 `titleBarStyle: 'hidden'` 的窗口交通灯在 webContents 区域内，被 modal 子窗口遮挡
+- **解决：** 配置/连接窗口改为独立窗口（去掉 `parent`/`modal`），使用 `titleBarStyle: 'default'` 保证交通灯可用
+- **规则：** Electron macOS 上永远不要把 modal 窗口挂载到 `titleBarStyle: 'hidden'` 的 parent 上
+
+### Electron mainWindow 白框闪烁
+- **现象：** 模式选择对话框背后出现一个大白框（空白主窗口）
+- **原因：** `createWindow()` 在 URL 获取前执行，`ready-to-show` 事件让空窗口提前显示
+- **解决：** 先完成模式选择 + URL 获取，最后才 `createWindow()` + `loadURL()` + `show()`
+- **规则：** 主窗口延迟到有内容可显示时才创建
 
 ### 端口检测用 bind 而非 connect
 - **现象：** TCP connect 方式检测端口，防火墙 drop 包导致 ETIMEDOUT 误判为"端口被占用"
