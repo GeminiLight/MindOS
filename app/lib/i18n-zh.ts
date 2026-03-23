@@ -136,6 +136,10 @@ export const zh = {
       '这篇文档的核心要点是什么？',
       '查找与这个主题相关的笔记',
     ],
+    sessionHistory: '对话历史',
+    clearAll: '清除全部',
+    confirmClear: '确认清除？',
+    noSessions: '暂无历史对话。',
   },
   panels: {
     agents: {
@@ -471,6 +475,7 @@ export const zh = {
       timeout: '更新可能仍在进行中。',
       timeoutHint: '服务器可能需要更多时间重新构建，请尝试刷新页面。',
       refreshButton: '刷新页面',
+      retryButton: '重试更新',
       error: '检查更新失败，请检查网络连接。',
       checkButton: '检查更新',
       updateButton: (version: string) => `更新到 v${version}`,
@@ -697,12 +702,20 @@ export const zh = {
     subtitle: '发现 MindOS 能帮你做什么 — 选一个场景，立即体验。',
     tryIt: '试一试',
     categories: {
-      'getting-started': '快速上手',
-      'cross-agent': '跨 Agent',
-      'knowledge-evolution': '知识演进',
+      'memory-sync': '记忆同步',
+      'auto-execute': '自动执行',
+      'experience-evolution': '经验进化',
+      'audit-control': '审计纠错',
+    },
+    scenarios: {
+      'first-day': '初次使用',
+      'daily': '日常工作',
+      'project': '项目协作',
       'advanced': '高级',
     },
     all: '全部',
+    byCapability: '按能力',
+    byScenario: '按场景',
     c1: {
       title: '注入身份',
       desc: '让所有 AI Agent 一次认识你 — 偏好、技术栈、沟通风格。',

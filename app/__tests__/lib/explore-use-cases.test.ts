@@ -1,16 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { useCases, categories, type UseCaseCategory } from '@/components/explore/use-cases';
+import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from '@/components/explore/use-cases';
 
 describe('explore/use-cases', () => {
   it('defines 9 use cases (C1-C9)', () => {
     expect(useCases).toHaveLength(9);
   });
 
-  it('each use case has id, icon, and valid category', () => {
+  it('each use case has id, icon, valid category, and valid scenario', () => {
     for (const uc of useCases) {
       expect(uc.id).toMatch(/^c[1-9]$/);
       expect(uc.icon).toBeTruthy();
       expect(categories).toContain(uc.category);
+      expect(scenarios).toContain(uc.scenario);
     }
   });
 
@@ -22,9 +23,19 @@ describe('explore/use-cases', () => {
   it('defines exactly 4 categories', () => {
     expect(categories).toHaveLength(4);
     expect(categories).toEqual([
-      'getting-started',
-      'cross-agent',
-      'knowledge-evolution',
+      'memory-sync',
+      'auto-execute',
+      'experience-evolution',
+      'audit-control',
+    ]);
+  });
+
+  it('defines exactly 4 scenarios', () => {
+    expect(scenarios).toHaveLength(4);
+    expect(scenarios).toEqual([
+      'first-day',
+      'daily',
+      'project',
       'advanced',
     ]);
   });
@@ -36,12 +47,22 @@ describe('explore/use-cases', () => {
     }
   });
 
-  it('C1 and C2 are in getting-started', () => {
-    expect(useCases.find(u => u.id === 'c1')?.category).toBe('getting-started');
-    expect(useCases.find(u => u.id === 'c2')?.category).toBe('getting-started');
+  it('every scenario has at least one use case', () => {
+    for (const sc of scenarios) {
+      const count = useCases.filter(u => u.scenario === sc).length;
+      expect(count).toBeGreaterThan(0);
+    }
   });
 
-  it('C9 is in advanced', () => {
-    expect(useCases.find(u => u.id === 'c9')?.category).toBe('advanced');
+  it('C1 is memory-sync + first-day', () => {
+    const c1 = useCases.find(u => u.id === 'c1');
+    expect(c1?.category).toBe('memory-sync');
+    expect(c1?.scenario).toBe('first-day');
+  });
+
+  it('C9 is audit-control + advanced', () => {
+    const c9 = useCases.find(u => u.id === 'c9');
+    expect(c9?.category).toBe('audit-control');
+    expect(c9?.scenario).toBe('advanced');
   });
 });
