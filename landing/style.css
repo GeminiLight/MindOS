@@ -847,6 +847,10 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 .qs-tab-icon {
     font-size: 1.4rem;
     line-height: 1;
+    color: var(--fg);
+}
+.qs-tab-icon svg {
+    color: inherit;
 }
 .qs-tab-info {
     display: flex;
@@ -881,110 +885,213 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 }
 
 /* ── Desktop Download Hero ── */
-.qs-download-hero {
+/* === Download Cards Layout === */
+.qs-download-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+@media (max-width: 900px) {
+    .qs-download-cards {
+        grid-template-columns: 1fr;
+    }
+}
+.qs-download-simple {
     display: flex;
-    flex-direction: column;
-    gap: 1.75rem;
-    padding: 2rem;
-    border-radius: 20px;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+}
+.qs-dl-simple-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--card-bg);
     backdrop-filter: blur(10px);
-    position: relative;
-    overflow: hidden;
+    color: var(--fg);
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s var(--ease-out-expo);
 }
-.qs-download-hero::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0.6;
+.qs-dl-simple-btn:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
-.qs-platform-group {
+.qs-dl-simple-btn.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 8px 24px rgba(212, 149, 74, 0.2);
+    background: rgba(212, 149, 74, 0.08);
+}
+
+/* Keep old styles for JS compatibility */
+.qs-dl-card {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s var(--ease-out-expo);
 }
-.qs-platform-group + .qs-platform-group {
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+.qs-dl-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
-.qs-platform-header {
+.qs-dl-card-header {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    font-size: 0.95rem;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.qs-dl-card-icon {
+    opacity: 0.85;
+    color: var(--fg);
+}
+.qs-dl-card-name {
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--fg);
 }
-.qs-platform-icon {
-    opacity: 0.7;
-}
-.qs-download-buttons {
+.qs-dl-card-btn {
     display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-.qs-dl-btn {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.85rem 1.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.9rem 1.25rem;
     border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--muted);
     color: var(--fg);
-    text-decoration: none;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.9rem;
     transition: all 0.3s var(--ease-out-expo);
-    min-width: 180px;
 }
-.qs-dl-btn:hover {
-    border-color: var(--border-hover);
-    background: var(--accent-dim);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(212, 149, 74, 0.12);
-}
-.qs-dl-btn--primary {
+.qs-dl-card-btn:hover {
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
-    box-shadow: 0 4px 16px rgba(212, 149, 74, 0.25);
+    box-shadow: 0 8px 24px rgba(212, 149, 74, 0.3);
 }
-.qs-dl-btn--primary:hover {
-    box-shadow: 0 8px 30px rgba(212, 149, 74, 0.4);
+.qs-dl-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 12px 40px rgba(212, 149, 74, 0.2);
 }
-.qs-dl-btn-main {
+.qs-dl-card.active .qs-dl-card-btn {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* === Security Notice (macOS) === */
+.qs-security-notice {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 10px;
+    background: rgba(224, 108, 108, 0.08);
+    border: 1px solid rgba(224, 108, 108, 0.2);
+    cursor: pointer;
+    transition: all 0.3s var(--ease-out-expo);
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+}
+.qs-security-notice.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    max-height: 200px;
+    margin-top: 1rem;
+}
+.qs-security-notice:hover {
+    background: rgba(224, 108, 108, 0.12);
+    border-color: rgba(224, 108, 108, 0.35);
+}
+body.light .qs-security-notice {
+    background: rgba(224, 108, 108, 0.06);
+}
+.qs-security-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-.qs-dl-btn-sub {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-    opacity: 0.6;
-    margin-left: 1.6rem;
-}
-.qs-platform-hint {
-    display: flex;
-    align-items: flex-start;
     gap: 0.4rem;
     font-size: 0.75rem;
-    color: var(--muted-fg);
-    line-height: 1.5;
-    margin-top: 0.25rem;
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 0.5rem;
 }
-.qs-platform-hint code {
-    font-family: 'IBM Plex Mono', monospace;
+.qs-security-content {
     font-size: 0.7rem;
-    padding: 0.1rem 0.35rem;
-    border-radius: 4px;
+    color: var(--muted-fg);
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+.qs-security-cmd {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
     background: var(--muted);
     border: 1px solid var(--border);
+    color: var(--fg);
+    word-break: break-all;
+}
+.qs-copy-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+    color: var(--muted-fg);
+    opacity: 0.7;
+}
+.qs-security-notice:hover .qs-copy-hint {
+    opacity: 1;
     color: var(--accent);
 }
+.qs-security-notice.copied .qs-copy-hint {
+    color: var(--success);
+}
+.qs-security-notice.copied .qs-copy-hint::after {
+    content: ' ✓';
+}
+
+/* === Help Icon (macOS card) === */
+.qs-dl-help {
+    margin-left: auto;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.qs-dl-help:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(212, 149, 74, 0.4);
+}
+
+/* Legacy styles (kept for compatibility) */
+.qs-download-hero { display: none; }
+.qs-platform-group { display: none; }
+.qs-dl-btn { display: none; }
+.qs-platform-hint { display: none; }
 .qs-phase-header {
     display: flex;
     align-items: flex-start;
@@ -1148,7 +1255,11 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 }
 .qs-prompt-badge {
     display: flex; align-items: center; gap: 0.4rem;
-    font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--muted-fg); letter-spacing: 0.08em;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--fg); letter-spacing: 0.08em;
+}
+.qs-prompt-badge svg {
+    color: var(--accent);
+    opacity: 0.9;
 }
 .qs-copy-btn {
     background: var(--muted); border: none; color: var(--muted-fg);

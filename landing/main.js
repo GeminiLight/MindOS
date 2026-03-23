@@ -37,6 +37,73 @@ window.switchQsTab = function(tabId) {
     document.getElementById(`qs-${tabId}`)?.classList.add('qs-tab-content--active');
 };
 
+/* --- Platform Detection & Highlight --- */
+function detectPlatformAndHighlight() {
+    const ua = navigator.userAgent.toLowerCase();
+    const platform = navigator.platform.toLowerCase();
+    
+    // Detect OS
+    let os = '';
+    if (ua.indexOf('win') !== -1 || platform.indexOf('win') !== -1) {
+        os = 'windows';
+    } else if (ua.indexOf('mac') !== -1 || platform.indexOf('mac') !== -1) {
+        os = 'macos';
+    } else if (ua.indexOf('linux') !== -1 || platform.indexOf('linux') !== -1) {
+        os = 'linux';
+    }
+    
+    // Handle architecture detection
+    if (os === 'macos') {
+        detectMacArch().then(isARM => {
+            const targetCardId = isARM ? 'macos-silicon-card' : 'macos-intel-card';
+            highlightCard(targetCardId);
+        });
+    } else if (os === 'windows') {
+        highlightCard('windows-card');
+    } else if (os === 'linux') {
+        highlightCard('linux-card');
+    }
+}
+
+// Helper: Async Apple Silicon detection
+function detectMacArch() {
+    return new Promise((resolve) => {
+        // Method 1: Try high entropy values API (Chrome/Edge)
+        if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+            navigator.userAgentData.getHighEntropyValues(['architecture']).then(data => {
+                resolve(data.architecture === 'arm' || data.architecture === 'arm64');
+            }).catch(() => {
+                resolve(fallbackMacArchDetect());
+            });
+        } else {
+            resolve(fallbackMacArchDetect());
+        }
+    });
+}
+
+// Fallback: Use less reliable methods
+function fallbackMacArchDetect() {
+    const ua = navigator.userAgent.toLowerCase();
+    // Check for explicit ARM markers
+    if (ua.indexOf('arm') !== -1 || ua.indexOf('aarch64') !== -1) return true;
+    // Apple Silicon Macs typically don't have Intel/x64 in UA for recent browsers
+    if (ua.indexOf('intel') !== -1 || ua.indexOf('x86_64') !== -1) return false;
+    // Default: prefer ARM (Apple Silicon) as it's more common now
+    return true;
+}
+
+function highlightCard(cardId) {
+    if (!cardId) return;
+    const card = document.getElementById(cardId);
+    if (card) {
+        card.classList.add('active');
+        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+    }
+}
+
+// Run platform detection on page load
+detectPlatformAndHighlight();
+
 /* --- Quickstart: Agent Copy Button --- */
 const agentCopyBtn = document.getElementById('copy-agent-btn');
 const agentCopyBtnLabel = '<span data-zh>复制</span><span data-en>Copy</span>';
@@ -385,3 +452,37 @@ function drawDfArrows() {
 
 drawDfArrows();
 window.addEventListener('resize', drawDfArrows);
+
+// Copy security command for macOS first launch
+function copySecurityCommand(element) {
+    const cmd = element.querySelector('.qs-security-cmd').textContent;
+    navigator.clipboard.writeText(cmd).then(() => {
+        element.classList.add('copied');
+        setTimeout(() => element.classList.remove('copied'), 2000);
+    }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = cmd;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            element.classList.add('copied');
+            setTimeout(() => element.classList.remove('copied'), 2000);
+        } catch (e) {
+            console.error('Copy failed', e);
+        }
+        document.body.removeChild(textarea);
+    });
+}
+
+/* --- Toggle macOS Security Notice --- */
+function toggleMacSec(event) {
+    if (event) event.stopPropagation();
+    const notice = document.getElementById('macos-security');
+    if (notice) {
+        notice.classList.toggle('show');
+    }
+}
