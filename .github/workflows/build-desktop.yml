@@ -57,7 +57,6 @@ jobs:
           name: mindos-desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             desktop/dist/*.dmg
-            desktop/dist/*.zip
             desktop/dist/*.exe
             desktop/dist/*.AppImage
             desktop/dist/*.deb
