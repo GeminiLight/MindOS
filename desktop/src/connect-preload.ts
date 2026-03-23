@@ -16,8 +16,13 @@ contextBridge.exposeInMainWorld('mindosConnect', {
 
   // Connection management
   getRecentConnections: () => ipcRenderer.invoke('connect:get-recent'),
+  getSavedPassword: (address: string) => ipcRenderer.invoke('connect:get-saved-password', address),
   testConnection: (address: string) => ipcRenderer.invoke('connect:test', address),
   connect: (address: string, password: string | null) => ipcRenderer.invoke('connect:connect', address, password),
   removeConnection: (address: string) => ipcRenderer.invoke('connect:remove', address),
   switchToLocal: () => ipcRenderer.invoke('connect:switch-local'),
+
+  // SSH tunnel
+  getSshHosts: () => ipcRenderer.invoke('connect:ssh-hosts'),
+  connectSsh: (host: string, remotePort: number) => ipcRenderer.invoke('connect:ssh-connect', host, remotePort),
 });

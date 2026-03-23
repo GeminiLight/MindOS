@@ -28,6 +28,9 @@ function getIpc() {
     connect: (address: string, password: string | null) => Promise<{ ok: boolean; error?: string }>;
     removeConnection: (address: string) => Promise<void>;
     switchToLocal: () => Promise<void>;
+    // SSH
+    getSshHosts: () => Promise<{ available: boolean; hosts: Array<{ name: string; hostname?: string; user?: string }> }>;
+    connectSsh: (host: string, remotePort: number) => Promise<{ ok: boolean; url?: string; error?: string; authRequired?: boolean }>;
   } | undefined;
 }
 
@@ -506,11 +509,122 @@ function init(): void {
     if ((e as KeyboardEvent).key === 'Enter') void handleConnect();
   });
 
+  // ── SSH / HTTP tab switching ──
+  $('tab-ssh')?.addEventListener('click', () => {
+    $('tab-ssh')?.classList.add('active');
+    $('tab-http')?.classList.remove('active');
+    $('ssh-panel')?.classList.remove('hidden');
+    $('http-panel')?.classList.add('hidden');
+  });
+  $('tab-http')?.addEventListener('click', () => {
+    $('tab-http')?.classList.add('active');
+    $('tab-ssh')?.classList.remove('active');
+    $('http-panel')?.classList.remove('hidden');
+    $('ssh-panel')?.classList.add('hidden');
+    void loadRecentConnections();
+  });
+
+  // Load SSH hosts when remote screen shows
+  void loadSshHosts();
+
+  // SSH host input — Enter to connect
+  $('ssh-host-input')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void handleSshConnect();
+  });
+  $('ssh-port')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void handleSshConnect();
+  });
+
+  // SSH connect button
+  $('ssh-connect-btn')?.addEventListener('click', () => void handleSshConnect());
+
   // Apply initial language
   const savedLang = (() => {
     try { return localStorage.getItem('mindos-lang'); } catch { return null; }
   })() || detectSystemLang();
   switchLang(savedLang as Lang);
+}
+
+// ── SSH Functions ──
+
+async function loadSshHosts(): Promise<void> {
+  const ipc = getIpc();
+  if (!ipc) return;
+
+  const datalist = $('ssh-host-list') as HTMLDataListElement;
+  const note = $('ssh-note');
+  if (!datalist) return;
+
+  try {
+    const result = await ipc.getSshHosts();
+
+    if (!result.available) {
+      // SSH not available — hide SSH tab, default to HTTP
+      $('tab-ssh')?.classList.add('hidden');
+      $('tab-http')?.classList.add('active');
+      $('ssh-panel')?.classList.add('hidden');
+      $('http-panel')?.classList.remove('hidden');
+      return;
+    }
+
+    // Populate datalist suggestions from ~/.ssh/config (may be empty)
+    datalist.innerHTML = '';
+    for (const host of result.hosts) {
+      const opt = document.createElement('option');
+      opt.value = host.name;
+      opt.label = host.hostname
+        ? `${host.name} — ${host.user ? host.user + '@' : ''}${host.hostname}`
+        : host.name;
+      datalist.appendChild(opt);
+    }
+
+    if (result.hosts.length === 0 && note) {
+      note.textContent = t('sshNoConfig');
+    }
+  } catch (err) {
+    console.error('[MindOS] Failed to load SSH hosts:', err);
+  }
+}
+
+async function handleSshConnect(): Promise<void> {
+  const ipc = getIpc();
+  if (!ipc) return;
+
+  const hostInput = $('ssh-host-input') as HTMLInputElement;
+  const portInput = $('ssh-port') as HTMLInputElement;
+  const btn = $('ssh-connect-btn') as HTMLButtonElement;
+  const status = $('ssh-status') as HTMLElement;
+
+  const host = hostInput?.value.trim();
+  const port = parseInt(portInput?.value || '3456', 10);
+  if (!host) { hostInput?.focus(); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> ${t('sshConnecting')}`;
+  status.classList.remove('hidden');
+  status.className = 'status-bar info';
+  status.textContent = t('sshConnecting');
+
+  try {
+    const result = await ipc.connectSsh(host, port);
+
+    if (result.ok) {
+      status.className = 'status-bar success';
+      status.textContent = t('sshSuccess');
+      btn.textContent = t('connected');
+      // Window will close automatically (IPC handler calls resolve + close)
+    } else {
+      status.className = 'status-bar error';
+      status.textContent = `${t('sshFailed')}: ${result.error}`;
+      btn.disabled = false;
+      btn.textContent = t('sshConnect');
+    }
+  } catch (err) {
+    status.className = 'status-bar error';
+    status.textContent = `${t('sshFailed')}: ${err instanceof Error ? err.message : String(err)}`;
+    btn.disabled = false;
+    btn.textContent = t('sshConnect');
+  }
 }
 
 // Start
