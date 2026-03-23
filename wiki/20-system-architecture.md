@@ -29,7 +29,7 @@
 ## 目录结构
 
 ```
-sop_note/
+mindos/
 ├── app/                        # Next.js 16 前端
 │   ├── app/                    # App Router 页面 + API Routes
 │   ├── components/             # UI 组件
