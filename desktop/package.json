@@ -1,10 +1,10 @@
 {
   "name": "mindos-desktop",
   "version": "0.1.0",
-  "description": "MindOS Desktop — Local-first knowledge base for AI Agents",
+  "description": "MindOS Desktop — Human-Agent collaborative knowledge base",
   "author": {
     "name": "MindOS Team",
-    "email": "team@mindos.dev"
+    "email": "tianfuwang.cs@gmail.com"
   },
   "homepage": "https://github.com/GeminiLight/MindOS",
   "private": true,
