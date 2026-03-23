@@ -13,7 +13,8 @@ describe('i18n explore keys', () => {
     expect(e.tryIt).toBeTruthy();
   });
 
-  it('has all 5 category labels', () => {
+  it('has all 6 category labels', () => {
+    expect(e.categories['knowledge-management']).toBeTruthy();
     expect(e.categories['memory-sync']).toBeTruthy();
     expect(e.categories['auto-execute']).toBeTruthy();
     expect(e.categories['experience-evolution']).toBeTruthy();

@@ -20,9 +20,10 @@ describe('explore/use-cases', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('defines exactly 5 categories', () => {
-    expect(categories).toHaveLength(5);
+  it('defines exactly 6 categories', () => {
+    expect(categories).toHaveLength(6);
     expect(categories).toEqual([
+      'knowledge-management',
       'memory-sync',
       'auto-execute',
       'experience-evolution',
