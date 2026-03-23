@@ -2,17 +2,20 @@
 
 import { useState } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
-import { useCases, categories, type UseCaseCategory } from './use-cases';
+import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from './use-cases';
 import UseCaseCard from './UseCaseCard';
 
 export default function ExploreContent() {
   const { t } = useLocale();
   const e = t.explore;
   const [activeCategory, setActiveCategory] = useState<UseCaseCategory | 'all'>('all');
+  const [activeScenario, setActiveScenario] = useState<UseCaseScenario | 'all'>('all');
 
-  const filtered = activeCategory === 'all'
-    ? useCases
-    : useCases.filter(uc => uc.category === activeCategory);
+  const filtered = useCases.filter(uc => {
+    if (activeCategory !== 'all' && uc.category !== activeCategory) return false;
+    if (activeScenario !== 'all' && uc.scenario !== activeScenario) return false;
+    return true;
+  });
 
   /** Type-safe lookup for use case i18n data by id */
   const getUseCaseText = (id: string): { title: string; desc: string; prompt: string } | undefined => {
@@ -44,21 +47,42 @@ export default function ExploreContent() {
         </p>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex flex-wrap gap-2 mb-6" style={{ paddingLeft: '1rem' }}>
-        <CategoryChip
-          label={e.all}
-          active={activeCategory === 'all'}
-          onClick={() => setActiveCategory('all')}
-        />
-        {categories.map(cat => (
-          <CategoryChip
-            key={cat}
-            label={(e.categories as Record<string, string>)[cat]}
-            active={activeCategory === cat}
-            onClick={() => setActiveCategory(cat)}
+      {/* Dual-axis filter */}
+      <div className="space-y-3 mb-6" style={{ paddingLeft: '1rem' }}>
+        {/* Capability axis */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-2xs text-muted-foreground uppercase tracking-wider font-medium w-16 shrink-0">{e.byCapability}</span>
+          <FilterChip
+            label={e.all}
+            active={activeCategory === 'all'}
+            onClick={() => setActiveCategory('all')}
           />
-        ))}
+          {categories.map(cat => (
+            <FilterChip
+              key={cat}
+              label={(e.categories as Record<string, string>)[cat]}
+              active={activeCategory === cat}
+              onClick={() => setActiveCategory(cat)}
+            />
+          ))}
+        </div>
+        {/* Scenario axis */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-2xs text-muted-foreground uppercase tracking-wider font-medium w-16 shrink-0">{e.byScenario}</span>
+          <FilterChip
+            label={e.all}
+            active={activeScenario === 'all'}
+            onClick={() => setActiveScenario('all')}
+          />
+          {scenarios.map(sc => (
+            <FilterChip
+              key={sc}
+              label={(e.scenarios as Record<string, string>)[sc]}
+              active={activeScenario === sc}
+              onClick={() => setActiveScenario(sc)}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Card grid */}
@@ -78,11 +102,18 @@ export default function ExploreContent() {
           );
         })}
       </div>
+
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-12" style={{ paddingLeft: '1rem' }}>
+          No use cases match the current filters.
+        </p>
+      )}
     </div>
   );
 }
 
-function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}

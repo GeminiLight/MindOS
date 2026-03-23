@@ -111,6 +111,10 @@ export const en = {
       'What are the key points?',
       'Find related notes on this topic',
     ],
+    sessionHistory: 'Session History',
+    clearAll: 'Clear all',
+    confirmClear: 'Confirm clear?',
+    noSessions: 'No saved sessions.',
   },
   panels: {
     agents: {
@@ -446,6 +450,7 @@ export const en = {
       timeout: 'Update may still be in progress.',
       timeoutHint: 'The server may need more time to rebuild. Try refreshing.',
       refreshButton: 'Refresh Page',
+      retryButton: 'Retry Update',
       error: 'Failed to check for updates. Check your network connection.',
       checkButton: 'Check for Updates',
       updateButton: (version: string) => `Update to v${version}`,
@@ -672,12 +677,20 @@ export const en = {
     subtitle: 'Discover what you can do with MindOS — pick a scenario and try it now.',
     tryIt: 'Try it',
     categories: {
-      'getting-started': 'Getting Started',
-      'cross-agent': 'Cross-Agent',
-      'knowledge-evolution': 'Knowledge Evolution',
+      'memory-sync': 'Memory Sync',
+      'auto-execute': 'Auto Execute',
+      'experience-evolution': 'Experience Evolution',
+      'audit-control': 'Audit & Control',
+    },
+    scenarios: {
+      'first-day': 'First Day',
+      'daily': 'Daily Work',
+      'project': 'Project Work',
       'advanced': 'Advanced',
     },
     all: 'All',
+    byCapability: 'By Capability',
+    byScenario: 'By Scenario',
     c1: {
       title: 'Inject Your Identity',
       desc: 'Tell all AI agents who you are — preferences, tech stack, communication style — in one shot.',

@@ -14,10 +14,17 @@ describe('i18n explore keys', () => {
   });
 
   it('has all 4 category labels', () => {
-    expect(e.categories['getting-started']).toBeTruthy();
-    expect(e.categories['cross-agent']).toBeTruthy();
-    expect(e.categories['knowledge-evolution']).toBeTruthy();
-    expect(e.categories['advanced']).toBeTruthy();
+    expect(e.categories['memory-sync']).toBeTruthy();
+    expect(e.categories['auto-execute']).toBeTruthy();
+    expect(e.categories['experience-evolution']).toBeTruthy();
+    expect(e.categories['audit-control']).toBeTruthy();
+  });
+
+  it('has all 4 scenario labels', () => {
+    expect(e.scenarios['first-day']).toBeTruthy();
+    expect(e.scenarios['daily']).toBeTruthy();
+    expect(e.scenarios['project']).toBeTruthy();
+    expect(e.scenarios['advanced']).toBeTruthy();
   });
 
   it('has c1-c9 each with title, desc, prompt', () => {
