@@ -67,3 +67,27 @@ jobs:
             desktop/dist/*.AppImage
             desktop/dist/*.deb
           if-no-files-found: warn
+
+      # Collect version info
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(cd desktop && node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      # Publish to GitHub Releases
+      - name: Publish to GitHub Releases
+        if: inputs.publish == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
+          name: ${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
+          files: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
