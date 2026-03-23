@@ -314,16 +314,52 @@ async function startLocalMode(): Promise<string | null> {
   processManager.on('crash', (which: string, count: number) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
-      // Update tray to show MCP is down but overall status stays 'running' if web is OK
       updateTrayMenu(currentMode, 'running', undefined, webPort, mcpPort);
     }
     if (which === 'web' && count >= 3 && !crashDialogShown) {
-      crashDialogShown = true;
-      const zh = navigator_lang() === 'zh';
-      dialog.showErrorBox(
-        zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
-        zh ? 'Web 服务连续崩溃 3 次。请检查 Node.js 环境后重启。' : 'The web server crashed 3 times. Please check your Node.js environment and restart.'
-      );
+      // Check if MindOS update is in progress — don't show crash dialog during update
+      const updateStatusPath = path.join(CONFIG_DIR, 'update-status.json');
+      let isUpdating = false;
+      try {
+        if (existsSync(updateStatusPath)) {
+          const status = JSON.parse(readFileSync(updateStatusPath, 'utf-8'));
+          isUpdating = status.stage && status.stage !== 'done' && status.stage !== 'failed';
+        }
+      } catch { /* ignore */ }
+
+      if (isUpdating) {
+        // Update in progress — inject overlay and wait for new server
+        const zh = navigator_lang() === 'zh';
+        injectOverlay('mindos-update-overlay', `
+          <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.7);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui;backdrop-filter:blur(8px)">
+            <div style="width:28px;height:28px;border:3px solid rgba(212,149,74,0.3);border-top-color:#d4954a;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px"></div>
+            <div style="color:#e8e4dc;font-size:18px;font-weight:600">${zh ? 'MindOS 正在更新...' : 'MindOS is Updating...'}</div>
+            <div style="color:#8a8275;font-size:13px;margin-top:6px;text-align:center;max-width:300px;line-height:1.5">${zh ? '服务正在重启，完成后将自动刷新。' : 'Server is restarting. Will auto-reload when ready.'}</div>
+            <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+          </div>
+        `);
+        refreshTray('starting');
+        // Poll for server recovery
+        const recoveryPoll = setInterval(async () => {
+          try {
+            const res = await fetch(`http://127.0.0.1:${webPort}/api/health`, { signal: AbortSignal.timeout(3000) });
+            if (res.ok) {
+              clearInterval(recoveryPoll);
+              mainWindow?.reload();
+              refreshTray('running');
+            }
+          } catch { /* still down */ }
+        }, 3000);
+        // Timeout after 5 minutes
+        setTimeout(() => clearInterval(recoveryPoll), 300000);
+      } else {
+        crashDialogShown = true;
+        const zh = navigator_lang() === 'zh';
+        dialog.showErrorBox(
+          zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
+          zh ? 'Web 服务连续崩溃 3 次。请检查 Node.js 环境后重启。' : 'The web server crashed 3 times. Please check your Node.js environment and restart.'
+        );
+      }
     }
   });
 

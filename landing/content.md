@@ -549,37 +549,78 @@
 
 - **Section Tag**: 07. QUICKSTART
 - **Headline**
-  - zh: 30 秒安装，一句话上手
-  - en: 30-Second Setup. One Prompt to Start.
+  - zh: 30 秒开始
+  - en: Get Started in 30 Seconds
 
-### Phase 1: Install
+### Install Method Selector
+
+- **Sub**
+  - zh: 选择你的方式
+  - en: Choose Your Way
+
+| Tab | Icon | zh Label | en Label | zh Tag | en Tag | Default |
+|-----|------|----------|----------|--------|--------|---------|
+| desktop | 🖥️ | 桌面端 | Desktop App | 最简单 | Simplest | ✅ expanded |
+| web-cli | 🌐 | Web + CLI | Web + CLI | 最灵活 | Most flexible | collapsed |
+
+### Tab: Desktop
 
 - **Title**
-  - zh: 发给你的 Agent，自动安装一切
-  - en: Send to Your Agent — Auto-Install Everything
+  - zh: 下载桌面端
+  - en: Download Desktop App
+
+#### macOS
+
+| Variant | zh Label | en Label | File | URL |
+|---------|----------|----------|------|-----|
+| Apple Silicon | Apple Silicon (M1/M2/M3/M4) | Apple Silicon (M1/M2/M3/M4) | MindOS-mac-arm64.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.dmg` |
+| Intel | Intel | Intel | MindOS-mac-x64.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-x64.dmg` |
+
+- **macOS Hint**
+  - zh: 首次打开：右键 → 打开，或运行 `xattr -cr /Applications/MindOS.app`
+  - en: First launch: right-click → Open, or run `xattr -cr /Applications/MindOS.app`
+
+#### Windows
+
+| Variant | zh Label | en Label | File | URL |
+|---------|----------|----------|------|-----|
+| Windows | Windows (x64) | Windows (x64) | MindOS-win-x64.exe | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-win-x64.exe` |
+
+#### Linux
+
+| Variant | zh Label | en Label | File | URL |
+|---------|----------|----------|------|-----|
+| AppImage | Linux (AppImage) | Linux (AppImage) | MindOS-linux-x64.AppImage | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-linux-x64.AppImage` |
+
+### Tab: Web + CLI
+
+- **Title**
+  - zh: 一行命令，浏览器即用
+  - en: One Command, Browser Ready
 - **Sub**
-  - zh: 适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…
-  - en: Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…
-- **CLI Card** (divider + copyable card, matches Agent Prompt card style)
-  - Divider: zh: —— 或手动安装 —— / en: —— or install manually ——
+  - zh: 安装后自动启动 Web GUI，也可发给 Agent 自动完成全部配置。
+  - en: Auto-launches Web GUI after install. Or send the prompt to your Agent for hands-free setup.
+
+- **CLI Card**
   - Badge: CLI
   - Command: `npm i -g @geminilight/mindos && mindos onboard`
   - Copy Button: zh: 复制 / 已复制 / en: Copy / Copied!
-- **Badge**
-  - zh: 安装 Prompt
-  - en: Install Prompt
-- **Copy Button**
-  - zh: 复制 / 已复制
-  - en: Copy / Copied!
-- **Install Prompt**
-  - zh: 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
-  - en: Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
 - **Auto Steps**
-  - zh: 克隆仓库 → 初始化模板 → 配置环境 → 注册 MCP → 安装 Skills
-  - en: Clone repo → Init template → Configure env → Register MCP → Install Skills
-- **Agent Badges**: Claude Code · Cursor · Cline · Windsurf · CodeBuddy · Trae · Gemini CLI
+  - zh: 安装 → 初始化模板 → 配置环境 → 注册 MCP → 安装 Skills
+  - en: Install → Init template → Configure env → Register MCP → Install Skills
 
-### Phase 2: Try It Now
+- **Or Divider**
+  - zh: —— 或发给你的 Agent ——
+  - en: —— or send to your Agent ——
+
+- **Agent Prompt Card**
+  - Badge: zh: 安装 Prompt / en: Install Prompt
+  - Copy Button: zh: 复制 / 已复制 / en: Copy / Copied!
+  - Prompt zh: 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
+  - Prompt en: Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
+  - Agent Badges: Claude Code · Cursor · Cline · Windsurf · CodeBuddy · Trae · Gemini CLI
+
+### Try It Now
 
 - **Title**
   - zh: 安装完成？试试这些

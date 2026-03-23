@@ -29,6 +29,14 @@ document.querySelectorAll('.compare-tab').forEach(tab => {
 document.getElementById('theme-toggle').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(state.theme); });
 document.getElementById('lang-toggle').addEventListener('click', () => { state.lang = state.lang === 'zh' ? 'en' : 'zh'; applyLang(state.lang); });
 
+/* --- Quickstart: Install Method Tabs --- */
+window.switchQsTab = function(tabId) {
+    document.querySelectorAll('.qs-tab').forEach(t => t.classList.remove('qs-tab--active'));
+    document.querySelectorAll('.qs-tab-content').forEach(c => c.classList.remove('qs-tab-content--active'));
+    document.querySelector(`.qs-tab[data-tab="${tabId}"]`)?.classList.add('qs-tab--active');
+    document.getElementById(`qs-${tabId}`)?.classList.add('qs-tab-content--active');
+};
+
 /* --- Quickstart: Agent Copy Button --- */
 const agentCopyBtn = document.getElementById('copy-agent-btn');
 const agentCopyBtnLabel = '<span data-zh>复制</span><span data-en>Copy</span>';

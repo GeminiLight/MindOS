@@ -1053,75 +1053,157 @@
         <div class="container">
             <div class="section-header">
                 <span class="mono">07. QUICKSTART</span>
-                <h2 data-zh>30 秒安装，一句话上手</h2><h2 data-en>30-Second Setup. One Prompt to Start.</h2>
+                <h2 data-zh>30 秒开始</h2><h2 data-en>Get Started in 30 Seconds</h2>
             </div>
 
-            <!-- Phase 1: Install -->
-            <div class="qs-phase animate-up">
-                <div class="qs-phase-header">
-                    <span class="qs-phase-num">1</span>
-                    <div>
-                        <h3 data-zh>发给你的 Agent，自动安装一切</h3><h3 data-en>Send to Your Agent — Auto-Install Everything</h3>
-                        <p class="qs-phase-sub" data-zh>适用于任意支持 MCP 的 Agent：Claude Code、Cursor、Cline、Windsurf…</p>
-                        <p class="qs-phase-sub" data-en>Works with any MCP-capable Agent: Claude Code, Cursor, Cline, Windsurf…</p>
-                    </div>
-                </div>
-                <div class="qs-prompt-card">
-                    <div class="qs-prompt-bar">
-                        <div class="qs-terminal-meta">
-                            <div class="qs-prompt-badge">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                                <span data-zh>安装 Prompt</span><span data-en>Install Prompt</span>
-                            </div>
-                        </div>
-                        <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
-                    </div>
-                    <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1rem; line-height: 1.7; padding: 1.25rem;">
-                        <span data-zh>帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</span>
-                        <span data-en>Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.</span>
-                    </div>
-                </div>
-                <div class="qs-or-divider" style="text-align:center;margin:1rem 0;opacity:0.5;font-size:0.85rem;letter-spacing:0.1em;">
-                    <span data-zh>—— 或手动安装 ——</span><span data-en>—— or install manually ——</span>
-                </div>
-                <div class="qs-prompt-card">
-                    <div class="qs-prompt-bar">
-                        <div class="qs-terminal-meta">
-                            <div class="qs-prompt-badge">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                                <span>CLI</span>
-                            </div>
-                        </div>
-                        <button class="qs-copy-btn" id="copy-cli-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
-                    </div>
-                    <div class="qs-prompt-body" id="cli-install-text" style="font-size: 0.95rem; line-height: 1.7; padding: 1.25rem; font-family: 'IBM Plex Mono', ui-monospace, monospace;">
-                        npm i -g @geminilight/mindos && mindos onboard
-                    </div>
-                </div>
-                <div class="qs-auto-steps">
-                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>克隆仓库</span><span data-en>Clone repo</span></span>
-                    <span class="qs-auto-arrow">→</span>
-                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>初始化模板</span><span data-en>Init template</span></span>
-                    <span class="qs-auto-arrow">→</span>
-                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>配置环境</span><span data-en>Configure env</span></span>
-                    <span class="qs-auto-arrow">→</span>
-                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>注册 MCP</span><span data-en>Register MCP</span></span>
-                    <span class="qs-auto-arrow">→</span>
-                    <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>安装 Skills</span><span data-en>Install Skills</span></span>
-                </div>
-                <div class="qs-agent-badges">
-                    <span class="qs-badge">Claude Code</span>
-                    <span class="qs-badge">Cursor</span>
-                    <span class="qs-badge">Cline</span>
-                    <span class="qs-badge">Windsurf</span>
-                    <span class="qs-badge">CodeBuddy</span>
-                    <span class="qs-badge">Trae</span>
-                    <span class="qs-badge">Gemini CLI</span>
+            <!-- Install Method Selector -->
+            <div class="qs-method-selector">
+                <p class="qs-method-sub" data-zh>选择你的方式</p>
+                <p class="qs-method-sub" data-en>Choose Your Way</p>
+                <div class="qs-tabs">
+                    <button class="qs-tab qs-tab--active" data-tab="desktop" onclick="switchQsTab('desktop')">
+                        <span class="qs-tab-icon">🖥️</span>
+                        <span class="qs-tab-info">
+                            <span class="qs-tab-label" data-zh>桌面端</span><span class="qs-tab-label" data-en>Desktop App</span>
+                            <span class="qs-tab-tag" data-zh>最简单</span><span class="qs-tab-tag" data-en>Simplest</span>
+                        </span>
+                    </button>
+                    <button class="qs-tab" data-tab="web-cli" onclick="switchQsTab('web-cli')">
+                        <span class="qs-tab-icon">🌐</span>
+                        <span class="qs-tab-info">
+                            <span class="qs-tab-label" data-zh>Web + CLI</span><span class="qs-tab-label" data-en>Web + CLI</span>
+                            <span class="qs-tab-tag" data-zh>最灵活</span><span class="qs-tab-tag" data-en>Most flexible</span>
+                        </span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Phase 2: Try It Now -->
-            <div class="qs-phase animate-up" style="animation-delay: 0.15s;">
+            <!-- Tab: Desktop -->
+            <div class="qs-tab-content qs-tab-content--active" id="qs-desktop">
+                <div class="qs-download-hero">
+                    <!-- macOS -->
+                    <div class="qs-platform-group">
+                        <div class="qs-platform-header">
+                            <svg class="qs-platform-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                            <span>macOS</span>
+                        </div>
+                        <div class="qs-download-buttons">
+                            <a href="https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.dmg" class="qs-dl-btn qs-dl-btn--primary">
+                                <span class="qs-dl-btn-main">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Apple Silicon
+                                </span>
+                                <span class="qs-dl-btn-sub">M1 / M2 / M3 / M4</span>
+                            </a>
+                            <a href="https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-x64.dmg" class="qs-dl-btn">
+                                <span class="qs-dl-btn-main">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Intel
+                                </span>
+                                <span class="qs-dl-btn-sub">x86_64</span>
+                            </a>
+                        </div>
+                        <p class="qs-platform-hint">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            <span data-zh>首次打开：右键 → 打开，或运行 <code>xattr -cr /Applications/MindOS.app</code></span>
+                            <span data-en>First launch: right-click → Open, or run <code>xattr -cr /Applications/MindOS.app</code></span>
+                        </p>
+                    </div>
+                    <!-- Windows -->
+                    <div class="qs-platform-group">
+                        <div class="qs-platform-header">
+                            <svg class="qs-platform-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                            <span>Windows</span>
+                        </div>
+                        <div class="qs-download-buttons">
+                            <a href="https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-win-x64.exe" class="qs-dl-btn">
+                                <span class="qs-dl-btn-main">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Windows x64
+                                </span>
+                                <span class="qs-dl-btn-sub">.exe</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- Linux -->
+                    <div class="qs-platform-group">
+                        <div class="qs-platform-header">
+                            <svg class="qs-platform-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                            <span>Linux</span>
+                        </div>
+                        <div class="qs-download-buttons">
+                            <a href="https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-linux-x64.AppImage" class="qs-dl-btn">
+                                <span class="qs-dl-btn-main">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Linux x64
+                                </span>
+                                <span class="qs-dl-btn-sub">AppImage</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Web + CLI -->
+            <div class="qs-tab-content" id="qs-web-cli">
+                <div class="qs-phase animate-up">
+                    <div class="qs-prompt-card">
+                        <div class="qs-prompt-bar">
+                            <div class="qs-terminal-meta">
+                                <div class="qs-prompt-badge">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                    <span>CLI</span>
+                                </div>
+                            </div>
+                            <button class="qs-copy-btn" id="copy-cli-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
+                        </div>
+                        <div class="qs-prompt-body" id="cli-install-text" style="font-size: 0.95rem; line-height: 1.7; padding: 1.25rem; font-family: 'IBM Plex Mono', ui-monospace, monospace;">
+                            npm i -g @geminilight/mindos && mindos onboard
+                        </div>
+                    </div>
+                    <div class="qs-auto-steps">
+                        <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>安装</span><span data-en>Install</span></span>
+                        <span class="qs-auto-arrow">→</span>
+                        <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>初始化模板</span><span data-en>Init template</span></span>
+                        <span class="qs-auto-arrow">→</span>
+                        <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>配置环境</span><span data-en>Configure env</span></span>
+                        <span class="qs-auto-arrow">→</span>
+                        <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>注册 MCP</span><span data-en>Register MCP</span></span>
+                        <span class="qs-auto-arrow">→</span>
+                        <span class="qs-auto-step"><span class="qs-auto-dot"></span><span data-zh>安装 Skills</span><span data-en>Install Skills</span></span>
+                    </div>
+                    <div class="qs-or-divider" style="text-align:center;margin:1.25rem 0;opacity:0.5;font-size:0.85rem;letter-spacing:0.1em;">
+                        <span data-zh>—— 或发给你的 Agent ——</span><span data-en>—— or send to your Agent ——</span>
+                    </div>
+                    <div class="qs-prompt-card">
+                        <div class="qs-prompt-bar">
+                            <div class="qs-terminal-meta">
+                                <div class="qs-prompt-badge">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                    <span data-zh>安装 Prompt</span><span data-en>Install Prompt</span>
+                                </div>
+                            </div>
+                            <button class="qs-copy-btn" id="copy-agent-btn"><span data-zh>复制</span><span data-en>Copy</span></button>
+                        </div>
+                        <div class="qs-prompt-body" id="agent-prompt-text" style="font-size: 1rem; line-height: 1.7; padding: 1.25rem;">
+                            <span data-zh>帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</span>
+                            <span data-en>Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.</span>
+                        </div>
+                    </div>
+                    <div class="qs-agent-badges">
+                        <span class="qs-badge">Claude Code</span>
+                        <span class="qs-badge">Cursor</span>
+                        <span class="qs-badge">Cline</span>
+                        <span class="qs-badge">Windsurf</span>
+                        <span class="qs-badge">CodeBuddy</span>
+                        <span class="qs-badge">Trae</span>
+                        <span class="qs-badge">Gemini CLI</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Try It Now (always visible) -->
+            <div class="qs-phase animate-up" style="animation-delay: 0.15s; margin-top: 2.5rem;">
                 <div class="qs-phase-header">
                     <span class="qs-phase-num">2</span>
                     <div>

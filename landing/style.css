@@ -804,6 +804,187 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     max-width: 760px;
     margin: 0 auto 2.5rem;
 }
+
+/* ── Install Method Selector ── */
+.qs-method-selector {
+    max-width: 760px;
+    margin: 0 auto 2rem;
+    text-align: center;
+}
+.qs-method-sub {
+    font-size: 0.9rem;
+    color: var(--muted-fg);
+    margin-bottom: 1.25rem;
+}
+.qs-tabs {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+}
+.qs-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1.5rem;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    transition: all 0.35s var(--ease-out-expo);
+    text-align: left;
+    min-width: 180px;
+}
+.qs-tab:hover {
+    border-color: var(--border-hover);
+    background: var(--accent-dim);
+}
+.qs-tab--active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    box-shadow: 0 0 0 1px rgba(212, 149, 74, 0.2), 0 8px 24px rgba(212, 149, 74, 0.1);
+}
+.qs-tab-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+.qs-tab-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.qs-tab-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+.qs-tab-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+}
+
+/* ── Tab Content ── */
+.qs-tab-content {
+    display: none;
+    max-width: 760px;
+    margin: 0 auto;
+    animation: qs-fade-in 0.4s var(--ease-out-expo);
+}
+.qs-tab-content--active {
+    display: block;
+}
+@keyframes qs-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Desktop Download Hero ── */
+.qs-download-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    padding: 2rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+}
+.qs-download-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.6;
+}
+.qs-platform-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.qs-platform-group + .qs-platform-group {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+.qs-platform-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--fg);
+}
+.qs-platform-icon {
+    opacity: 0.7;
+}
+.qs-download-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.qs-dl-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.85rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--fg);
+    text-decoration: none;
+    transition: all 0.3s var(--ease-out-expo);
+    min-width: 180px;
+}
+.qs-dl-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--accent-dim);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(212, 149, 74, 0.12);
+}
+.qs-dl-btn--primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(212, 149, 74, 0.25);
+}
+.qs-dl-btn--primary:hover {
+    box-shadow: 0 8px 30px rgba(212, 149, 74, 0.4);
+}
+.qs-dl-btn-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.qs-dl-btn-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    margin-left: 1.6rem;
+}
+.qs-platform-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--muted-fg);
+    line-height: 1.5;
+    margin-top: 0.25rem;
+}
+.qs-platform-hint code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    color: var(--accent);
+}
 .qs-phase-header {
     display: flex;
     align-items: flex-start;
@@ -1108,6 +1289,11 @@ html[lang="zh"] #quickstart .qs-path-sub { letter-spacing: 0.005em; }
     .feat-grid { grid-template-columns: 1fr; }
     .qs-dual { grid-template-columns: 1fr; }
     .qs-try-grid { grid-template-columns: 1fr; }
+    .qs-tabs { flex-direction: column; gap: 0.5rem; }
+    .qs-tab { min-width: 0; width: 100%; }
+    .qs-download-hero { padding: 1.25rem; }
+    .qs-download-buttons { flex-direction: column; }
+    .qs-dl-btn { min-width: 0; width: 100%; }
     .qs-auto-steps { gap: 0.3rem; font-size: 0.7rem; }
     .qs-path-header { padding: 1.15rem 1.1rem; gap: 0.75rem; }
     .qs-default-badge { align-self: flex-start; margin-top: 0.1rem; }

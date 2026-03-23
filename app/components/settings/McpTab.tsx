@@ -219,6 +219,32 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
 
       {currentAgent && (
         <>
+          {/* Agent status badge */}
+          <div className="flex items-center gap-2">
+            {currentAgent.present && currentAgent.installed ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                {m?.tagConnected ?? 'Connected'}
+              </span>
+            ) : currentAgent.present && !currentAgent.installed ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium" style={{ background: 'var(--amber-subtle, rgba(200,135,58,0.1))', color: 'var(--amber)' }}>
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--amber)' }} />
+                {m?.tagDetected ?? 'Detected — not configured'}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-muted text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
+                {m?.tagNotInstalled ?? 'Not installed'}
+              </span>
+            )}
+            {currentAgent.transport && (
+              <span className="px-1.5 py-0.5 rounded text-2xs bg-muted text-muted-foreground">{currentAgent.transport}</span>
+            )}
+            {currentAgent.scope && (
+              <span className="px-1.5 py-0.5 rounded text-2xs bg-muted text-muted-foreground">{currentAgent.scope}</span>
+            )}
+          </div>
+
           {/* Transport toggle */}
           <div className="flex items-center rounded-lg border border-border overflow-hidden w-fit">
             <button

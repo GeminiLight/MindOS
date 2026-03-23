@@ -352,6 +352,8 @@ export const en = {
       skillBuiltin: 'Built-in',
       skillUser: 'Custom',
       addSkill: '+ Add Skill',
+      cliInstallHint: 'Install via CLI:',
+      skillPathHint: 'Skill files installed at:',
       deleteSkill: 'Delete',
       editSkill: 'Edit',
       saveSkill: 'Save',

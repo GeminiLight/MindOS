@@ -29,6 +29,7 @@ type UpdateState = 'idle' | 'checking' | 'updating' | 'updated' | 'error' | 'tim
 const CHANGELOG_URL = 'https://github.com/GeminiLight/MindOS/releases';
 const POLL_INTERVAL = 3_000;
 const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const UPDATE_STATE_KEY = 'mindos_update_in_progress';
 
 const STAGE_LABELS: Record<string, { en: string; zh: string }> = {
   downloading: { en: 'Downloading update', zh: '下载更新' },
@@ -77,8 +78,6 @@ export function UpdateTab() {
     }
   }, [u]);
 
-  useEffect(() => { checkUpdate(); }, [checkUpdate]);
-
   const cleanup = useCallback(() => {
     clearInterval(pollRef.current);
     clearTimeout(timeoutRef.current);
@@ -91,9 +90,86 @@ export function UpdateTab() {
     setState('updated');
     localStorage.removeItem('mindos_update_latest');
     localStorage.removeItem('mindos_update_dismissed');
+    localStorage.removeItem(UPDATE_STATE_KEY);
     window.dispatchEvent(new Event('mindos:update-dismissed'));
     setTimeout(() => window.location.reload(), 2000);
   }, [cleanup]);
+
+  /** Start polling for update progress */
+  const startPolling = useCallback(() => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await apiFetch<UpdateStatus>('/api/update-status', { timeout: 5000 });
+        setServerDown(false);
+
+        if (status.stages?.length > 0) {
+          setStages(status.stages);
+        }
+
+        if (status.stage === 'failed') {
+          cleanup();
+          localStorage.removeItem(UPDATE_STATE_KEY);
+          setUpdateError(status.error || 'Update failed');
+          setState('error');
+          return;
+        }
+
+        if (status.stage === 'done') {
+          try {
+            const data = await apiFetch<UpdateInfo>('/api/update-check');
+            if (data.current !== originalVersion.current) {
+              completeUpdate(data);
+              return;
+            }
+          } catch { /* new server may not be fully ready */ }
+        }
+      } catch {
+        // Server restarting — try update-check as fallback
+        setServerDown(true);
+        try {
+          const data = await apiFetch<UpdateInfo>('/api/update-check', { timeout: 5000 });
+          if (data.current && data.current !== originalVersion.current) {
+            setStages(prev => prev.map(s => ({ ...s, status: 'done' as const })));
+            completeUpdate(data);
+          }
+        } catch {
+          // Both endpoints down — server still restarting
+        }
+      }
+    }, POLL_INTERVAL);
+
+    timeoutRef.current = setTimeout(() => {
+      cleanup();
+      localStorage.removeItem(UPDATE_STATE_KEY);
+      setState('timeout');
+    }, POLL_TIMEOUT);
+  }, [cleanup, completeUpdate]);
+
+  // On mount: check if an update was in progress (survives page reload / white screen)
+  useEffect(() => {
+    const savedState = localStorage.getItem(UPDATE_STATE_KEY);
+    if (savedState) {
+      try {
+        const { originalVer } = JSON.parse(savedState);
+        originalVersion.current = originalVer;
+        setState('updating');
+        setServerDown(true);
+        setStages([
+          { id: 'downloading', status: 'done' },
+          { id: 'skills',      status: 'done' },
+          { id: 'rebuilding',  status: 'done' },
+          { id: 'restarting',  status: 'running' },
+        ]);
+        startPolling();
+      } catch {
+        localStorage.removeItem(UPDATE_STATE_KEY);
+        checkUpdate();
+      }
+    } else {
+      checkUpdate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => cleanup, [cleanup]);
 
@@ -109,60 +185,22 @@ export function UpdateTab() {
       { id: 'restarting',  status: 'pending' },
     ]);
 
+    // Persist update state to localStorage — survives process restart / page reload
+    localStorage.setItem(UPDATE_STATE_KEY, JSON.stringify({
+      originalVer: originalVersion.current || info?.current,
+      startedAt: Date.now(),
+    }));
+    // Notify UpdateOverlay (same-tab, storage event doesn't fire for same-tab writes)
+    window.dispatchEvent(new Event('mindos:update-started'));
+
     try {
       await apiFetch('/api/update', { method: 'POST' });
     } catch {
       // Expected — server may die during update
     }
 
-    // Poll update-status for stage progress
-    pollRef.current = setInterval(async () => {
-      // Try status endpoint first (may fail when server is restarting)
-      try {
-        const status = await apiFetch<UpdateStatus>('/api/update-status', { timeout: 5000 });
-        setServerDown(false);
-
-        if (status.stages?.length > 0) {
-          setStages(status.stages);
-        }
-
-        if (status.stage === 'failed') {
-          cleanup();
-          setUpdateError(status.error || 'Update failed');
-          setState('error');
-          return;
-        }
-
-        if (status.stage === 'done') {
-          // Verify version actually changed
-          try {
-            const data = await apiFetch<UpdateInfo>('/api/update-check');
-            if (data.current !== originalVersion.current) {
-              completeUpdate(data);
-              return;
-            }
-          } catch { /* new server may not be fully ready */ }
-        }
-      } catch {
-        // Server restarting — also try update-check as fallback
-        setServerDown(true);
-        try {
-          const data = await apiFetch<UpdateInfo>('/api/update-check', { timeout: 5000 });
-          if (data.current !== originalVersion.current) {
-            setStages(prev => prev.map(s => ({ ...s, status: 'done' as const })));
-            completeUpdate(data);
-          }
-        } catch {
-          // Both endpoints down — server still restarting
-        }
-      }
-    }, POLL_INTERVAL);
-
-    timeoutRef.current = setTimeout(() => {
-      cleanup();
-      setState('timeout');
-    }, POLL_TIMEOUT);
-  }, [cleanup, completeUpdate]);
+    startPolling();
+  }, [startPolling, info]);
 
   const handleRetry = useCallback(() => {
     setUpdateError(null);
