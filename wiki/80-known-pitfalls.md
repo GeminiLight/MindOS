@@ -105,6 +105,14 @@
 
 ## MCP
 
+### JSONC 配置文件导致 Agent 安装失败
+- **现象：** Cursor Agent 安装时报 `SyntaxError: Unexpected token '/', "// { // "... is not valid JSON`
+- **原因：** Cursor、Windsurf、Cline 等 VS Code 系编辑器的 MCP 配置文件是 JSONC 格式（允许 `//` 单行注释和 `/* */` 块注释），但代码用 `JSON.parse()` 解析，遇到注释直接崩
+- **影响范围：** 6 处读取 Agent 配置文件的位置（`mcp-agents.ts` 检测、`install/route.ts` GUI 安装、`mcp-install.js` CLI 安装 ×2、`setup.js` onboard ×2）
+- **解决：** 新增 `parseJsonc()` 工具函数，用正则先剥离注释再 `JSON.parse()`。正则 `/"(?:\\"|[^"])*"|(\/\/.*$)/gm` 确保不误伤字符串内的 `//`
+- **规则：** 凡是读取第三方编辑器配置文件的地方，一律用 `parseJsonc()` 而非 `JSON.parse()`。VS Code 生态的配置文件默认是 JSONC，不是严格 JSON
+- **文件：** `app/lib/mcp-agents.ts`、`app/app/api/mcp/install/route.ts`、`bin/lib/mcp-install.js`、`bin/lib/utils.js`、`scripts/setup.js`
+
 ### Codex TOML 配置解析失败
 - **现象：** 配置代理时 trae 和 Claude Code 正常工作，codex 报 `SyntaxError: Unexpected token 'm', "model = "g"... is not valid JSON`
 - **原因：** codex 的配置文件是 TOML 格式（`~/.codex/config.toml`），但 `detectInstalled()` 函数对所有 agent 都使用 `JSON.parse()` 解析，导致 TOML 内容解析失败
