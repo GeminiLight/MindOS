@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-MindOS 是一个**人机协同心智系统**——基于本地优先的协作知识库，让你的笔记、工作流、个人上下文既对人类阅读友好，也能直接被 Agent 调用和执行。**和所有 AI 共享你的大脑——可审计、可修正、越用越是你。**
+MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和所有 AI 共享的本地知识库。**每次思考，都在生长。**
 
 ---
 

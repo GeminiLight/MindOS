@@ -100,11 +100,11 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
   'codebuddy': {
     name: 'CodeBuddy',
     project: null,
-    global: '~/.claude-internal/.claude.json',
+    global: '~/.codebuddy/mcp.json',
     key: 'mcpServers',
     preferredTransport: 'stdio',
-    presenceCli: 'claude-internal',
-    presenceDirs: ['~/.claude-internal/'],
+    presenceCli: 'codebuddy',
+    presenceDirs: ['~/.codebuddy/'],
   },
   'iflow-cli': {
     name: 'iFlow CLI',
