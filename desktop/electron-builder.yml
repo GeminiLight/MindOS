@@ -27,6 +27,9 @@ mac:
   hardenedRuntime: true
 
 asar: true
+asarUnpack:
+  - src/connect.html
+  - src/splash.html
 
 win:
   icon: src/icons/icon.ico
