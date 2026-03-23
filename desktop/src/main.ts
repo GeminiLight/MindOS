@@ -50,6 +50,7 @@ let currentMode: 'local' | 'remote' = 'local';
 let currentWebPort: number | undefined;
 let currentMcpPort: number | undefined;
 let currentRemoteAddress: string | undefined;
+let isFirstRun = false;
 let cachedConfig: MindOSConfig | null = null;
 
 // ── Config ──
@@ -255,17 +256,19 @@ async function startLocalMode(): Promise<string | null> {
     splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
-      // Install app dependencies
+      // Step 4a: Install app dependencies
       const npmBin = path.join(path.dirname(nodePath), 'npm');
       if (existsSync(npmBin) && existsSync(path.join(appDir, 'package.json'))) {
+        splashStatus({ message: zh ? '正在安装依赖...' : 'Installing dependencies...' });
         await spawnWithEnv(npmBin, ['install'], appDir, enrichedEnv, 300000);
       }
-      // Generate renderer index (needed before build)
+      // Step 4b: Generate renderer index (needed before build)
       const genScript = path.join(projectRoot, 'scripts', 'gen-renderer-index.js');
       if (existsSync(genScript)) {
         await spawnWithEnv(nodePath, [genScript], projectRoot, enrichedEnv, 30000);
       }
-      // Run next build
+      // Step 4c: Run next build
+      splashStatus({ message: zh ? '正在编译前端（约需 1-2 分钟）...' : 'Compiling frontend (~1-2 min)...' });
       const nextBin = path.join(appDir, 'node_modules', '.bin', 'next');
       const buildBin = existsSync(nextBin) ? nextBin : npxPath;
       const buildArgs = existsSync(nextBin) ? ['build'] : ['next', 'build'];
@@ -401,15 +404,21 @@ function refreshTray(status: 'starting' | 'running' | 'error'): void {
 /** Spawn a process with enriched env, wait for exit. Rejects on non-zero or timeout. */
 function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawnChild(bin, args, { cwd, env, stdio: 'ignore' });
+    const proc = spawnChild(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+
+    // Log last output for diagnostics on failure
+    let lastOutput = '';
+    proc.stdout?.on('data', (d: Buffer) => { lastOutput = d.toString().trim().split('\n').pop() || ''; });
+    proc.stderr?.on('data', (d: Buffer) => { lastOutput = d.toString().trim().split('\n').pop() || ''; });
+
     const timer = setTimeout(() => {
       proc.kill('SIGKILL');
-      reject(new Error(`${path.basename(bin)} ${args[0] || ''} timed out after ${Math.round(timeoutMs / 1000)}s`));
+      reject(new Error(`${path.basename(bin)} ${args[0] || ''} timed out after ${Math.round(timeoutMs / 1000)}s\nLast output: ${lastOutput}`));
     }, timeoutMs);
     proc.on('exit', (code: number | null) => {
       clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new Error(`${path.basename(bin)} ${args[0] || ''} exited with code ${code}`));
+      if (code === 0 || code === null) resolve();
+      else reject(new Error(`${path.basename(bin)} ${args[0] || ''} exited with code ${code}\n${lastOutput}`));
     });
     proc.on('error', (err: Error) => { clearTimeout(timer); reject(err); });
   });
@@ -682,7 +691,11 @@ async function bootApp(): Promise<void> {
   }
 
   refreshTray('running');
-  mainWindow.loadURL(url);
+
+  // First run → go to onboard setup wizard; subsequent → normal page
+  const loadUrl = isFirstRun ? `${url}/setup?force=1` : url;
+  isFirstRun = false; // only once
+  mainWindow.loadURL(loadUrl);
 
   // Wait for content to load, then show main + hide splash
   mainWindow.webContents.once('did-finish-load', () => {
@@ -711,18 +724,12 @@ app.whenReady().then(async () => {
   // Register splash action handler
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
 
-  // 2. First run → mode selection
-  if (!config.desktopMode && !existsSync(CONFIG_PATH)) {
-    closeSplash();
-    const selectedMode = await showModeSelectWindow();
-    if (selectedMode) {
-      currentMode = selectedMode;
-      saveDesktopMode(selectedMode);
-    } else {
-      currentMode = 'local';
-    }
-    // Re-create splash for boot
-    splashWindow = createSplash();
+  // 2. First run detection
+  isFirstRun = !config.desktopMode && !existsSync(CONFIG_PATH);
+  if (isFirstRun) {
+    // Default to local for first run — user will go through onboard wizard
+    currentMode = 'local';
+    saveDesktopMode('local');
   }
 
   // 3. Boot
