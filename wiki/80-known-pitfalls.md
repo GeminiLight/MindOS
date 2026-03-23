@@ -109,7 +109,7 @@
 - **现象：** 配置代理时 trae 和 Claude Code 正常工作，codex 报 `SyntaxError: Unexpected token 'm', "model = "g"... is not valid JSON`
 - **原因：** codex 的配置文件是 TOML 格式（`~/.codex/config.toml`），但 `detectInstalled()` 函数对所有 agent 都使用 `JSON.parse()` 解析，导致 TOML 内容解析失败
 - **解决：** 在 `detectInstalled()` 中增加 `agent.format === 'toml'` 的判断分支，使用逐行扫描方式解析 TOML 文件中的 MCP 服务器配置；新增 `parseTomlMcpEntry()` 辅助函数处理 TOML 格式
-- **代码：** [app/lib/mcp-agents.ts](file:///data/home/geminitwang/code/sop_note/app/lib/mcp-agents.ts)
+- **代码：** [app/lib/mcp-agents.ts](file:///data/home/geminitwang/code/mindos/app/lib/mcp-agents.ts)
 - **规则：** 新增 agent 时必须考虑其配置文件格式（JSON/TOML/JSONC），所有解析逻辑需要按格式分别处理
 
 ### INSTRUCTION.md 写保护
