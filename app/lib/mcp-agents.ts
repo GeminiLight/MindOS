@@ -4,7 +4,8 @@ import os from 'os';
 import { execSync } from 'child_process';
 
 /** Parse JSONC — strips single-line (//) and block comments before JSON.parse */
-function parseJsonc(text: string): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseJsonc(text: string): any {
   // Strip single-line comments (not inside strings)
   let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
   // Strip block comments
