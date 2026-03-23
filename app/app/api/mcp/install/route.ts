@@ -4,6 +4,13 @@ import fs from 'fs';
 import path from 'path';
 import { MCP_AGENTS, expandHome } from '@/lib/mcp-agents';
 
+/** Parse JSONC — strips single-line (//) and block comments before JSON.parse */
+function parseJsonc(text: string): Record<string, unknown> {
+  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
+  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+  return JSON.parse(stripped);
+}
+
 interface AgentInstallItem {
   key: string;
   scope: 'project' | 'global';
@@ -92,7 +99,7 @@ export async function POST(req: NextRequest) {
         // Read existing config
         let config: Record<string, unknown> = {};
         if (fs.existsSync(absPath)) {
-          config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
+          config = parseJsonc(fs.readFileSync(absPath, 'utf-8'));
         }
 
         // Merge — only touch mcpServers.mindos

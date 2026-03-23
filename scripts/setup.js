@@ -598,6 +598,13 @@ function expandHomePath(p) {
   return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
 }
 
+/** Parse JSONC (JSON with // and /* */ comments) — for VS Code-based editor configs */
+function parseJsonc(text) {
+  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
+  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+  return JSON.parse(stripped);
+}
+
 /** Detect if an agent already has mindos configured (for pre-selection). */
 function isAgentInstalled(agentKey) {
   const agent = MCP_AGENTS[agentKey];
@@ -607,7 +614,7 @@ function isAgentInstalled(agentKey) {
     const abs = expandHomePath(cfgPath);
     if (!existsSync(abs)) continue;
     try {
-      const config = JSON.parse(readFileSync(abs, 'utf-8'));
+      const config = parseJsonc(readFileSync(abs, 'utf-8'));
       if (config[agent.key]?.mindos) return true;
     } catch { /* ignore */ }
   }
@@ -720,7 +727,7 @@ async function runMcpInstallStep(mcpPort, authToken) {
     const abs = expandHomePath(cfgPath);
     try {
       let config = {};
-      if (existsSync(abs)) config = JSON.parse(readFileSync(abs, 'utf-8'));
+      if (existsSync(abs)) config = parseJsonc(readFileSync(abs, 'utf-8'));
       if (!config[agent.key]) config[agent.key] = {};
       config[agent.key].mindos = entry;
       const dir = resolve(abs, '..');
