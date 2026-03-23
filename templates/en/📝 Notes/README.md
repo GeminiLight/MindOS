@@ -9,6 +9,7 @@ Quick capture and lightweight notes.
 ├── README.md
 ├── INSTRUCTION.md
 ├── Inbox/
+├── Drafts/
 ├── Waiting/
 ├── Meetings/
 └── Ideas/
@@ -17,6 +18,7 @@ Quick capture and lightweight notes.
 ## Usage
 
 - `Inbox/`: quick capture for unprocessed notes.
+- `Drafts/`: work-in-progress content not yet ready to share or publish.
 - `Waiting/`: items blocked by external dependency or feedback.
 - `Meetings/`: meeting notes, decisions, and action items.
 - `Ideas/`: idea pool for product concepts, topics, and experiments.
