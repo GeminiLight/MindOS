@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, Loader2, X } from 'lucide-react';
+import { Folder, Loader2, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath } from '@/lib/utils';
 import { createSpaceAction } from '@/lib/actions';
+import { apiFetch } from '@/lib/api';
 import DirPicker from './DirPicker';
 
 /* ── Create Space Modal ── */
@@ -20,6 +21,8 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [nameHint, setNameHint] = useState('');
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null); // null = loading
+  const [useAi, setUseAi] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,6 +36,24 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
     return () => window.removeEventListener('mindos:create-space', handler);
   }, []);
 
+  // Check AI availability when modal opens
+  useEffect(() => {
+    if (!open || aiAvailable !== null) return;
+    apiFetch<{ ai?: { provider?: string; providers?: Record<string, { apiKey?: string }> } }>('/api/settings')
+      .then(data => {
+        const provider = data.ai?.provider ?? '';
+        const providers = data.ai?.providers ?? {};
+        const activeProvider = providers[provider as keyof typeof providers];
+        const hasKey = !!(activeProvider?.apiKey);
+        setAiAvailable(hasKey);
+        setUseAi(hasKey);
+      })
+      .catch(() => {
+        setAiAvailable(false);
+        setUseAi(false);
+      });
+  }, [open, aiAvailable]);
+
   const close = useCallback(() => {
     setOpen(false);
     setName('');
@@ -40,6 +61,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
     setParent('');
     setError('');
     setNameHint('');
+    setAiAvailable(null); // re-check on next open
   }, []);
 
   const validateName = useCallback((val: string) => {
@@ -64,9 +86,26 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
     setError('');
     const trimmed = name.trim();
     const result = await createSpaceAction(trimmed, description, parent);
-    setLoading(false);
     if (result.success) {
       const createdPath = result.path ?? trimmed;
+
+      // If AI is enabled, trigger AI initialization in background
+      if (useAi && aiAvailable) {
+        const isZh = document.documentElement.lang === 'zh';
+        const prompt = isZh
+          ? `初始化新建的心智空间「${trimmed}」，路径为「${createdPath}/」。${description ? `描述：「${description}」。` : ''}请根据空间名称生成有意义的内容：\n1. README.md — 空间用途、结构概览、使用指南\n2. INSTRUCTION.md — AI Agent 在此空间的行为规则\n\n使用可用工具直接写入文件，内容简洁实用。`
+          : `Initialize this new Mind Space "${trimmed}" at "${createdPath}/". ${description ? `Description: "${description}". ` : ''}Generate meaningful content for:\n1. README.md — purpose, structure overview, usage guidelines\n2. INSTRUCTION.md — rules for AI agents operating in this space\n\nWrite directly to the files using available tools. Keep content concise and actionable.`;
+        // Fire and forget — don't block navigation
+        apiFetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }],
+            targetDir: createdPath,
+          }),
+        }).catch(() => { /* AI init is best-effort */ });
+      }
+
       close();
       router.refresh();
       router.push(`/view/${encodePath(createdPath + '/')}`);
@@ -78,7 +117,8 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
         setError(t.home.spaceCreateFailed ?? 'Failed to create space');
       }
     }
-  }, [name, description, parent, loading, close, router, t, validateName]);
+    setLoading(false);
+  }, [name, description, parent, loading, close, router, t, validateName, useAi, aiAvailable]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') close();
@@ -86,6 +126,8 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
   }, [close, handleCreate]);
 
   if (!open) return null;
+
+  const h = t.home;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center" onKeyDown={handleKeyDown}>
@@ -95,31 +137,31 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={t.home.newSpace}
+        aria-label={h.newSpace}
         className="relative w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h3 className="text-sm font-semibold font-display text-foreground">{t.home.newSpace}</h3>
+          <h3 className="text-sm font-semibold font-display text-foreground">{h.newSpace}</h3>
           <button onClick={close} className="p-1 rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <X size={14} />
           </button>
         </div>
         {/* Body */}
         <div className="px-5 pb-5 flex flex-col gap-3">
-          {/* Location — hierarchical browser */}
+          {/* Location */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t.home.spaceLocation ?? 'Location'}</label>
+            <label className="text-xs font-medium text-muted-foreground">{h.spaceLocation ?? 'Location'}</label>
             <DirPicker
               dirPaths={dirPaths}
               value={parent}
               onChange={setParent}
-              rootLabel={t.home.rootLevel ?? 'Root'}
+              rootLabel={h.rootLevel ?? 'Root'}
             />
           </div>
           {/* Name */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t.home.spaceName}</label>
+            <label className="text-xs font-medium text-muted-foreground">{h.spaceName}</label>
             <input
               ref={inputRef}
               type="text"
@@ -138,16 +180,48 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
           {/* Description */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">
-              {t.home.spaceDescription} <span className="opacity-50">({t.home.optional ?? 'optional'})</span>
+              {h.spaceDescription} <span className="opacity-50">({h.optional ?? 'optional'})</span>
             </label>
             <input
               type="text"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder={t.home.spaceDescPlaceholder ?? 'Describe the purpose of this space'}
+              placeholder={h.spaceDescPlaceholder ?? 'Describe the purpose of this space'}
               maxLength={200}
               className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
             />
+          </div>
+          {/* AI initialization toggle */}
+          <div className="flex items-start gap-2.5 px-1 py-1">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={useAi}
+              disabled={!aiAvailable}
+              onClick={() => setUseAi(v => !v)}
+              className={`relative mt-0.5 inline-flex shrink-0 h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+                useAi ? 'bg-amber-500' : 'bg-muted'
+              }`}
+            >
+              <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${useAi ? 'translate-x-3' : 'translate-x-0'}`} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <Sparkles size={12} className="text-[var(--amber)] shrink-0" />
+                <span className="text-xs font-medium text-foreground">{h.aiInit ?? 'AI initialize content'}</span>
+              </div>
+              {aiAvailable === false && (
+                <p className="text-2xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                  <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                  {h.aiInitNoKey ?? 'Configure an API key in Settings → AI to enable'}
+                </p>
+              )}
+              {aiAvailable && useAi && (
+                <p className="text-2xs text-muted-foreground mt-0.5">
+                  {h.aiInitHint ?? 'AI will generate README and INSTRUCTION for this space'}
+                </p>
+              )}
+            </div>
           </div>
           {/* Path preview */}
           {fullPathPreview && (
@@ -163,7 +237,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               onClick={close}
               className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
             >
-              {t.home.cancelCreate}
+              {h.cancelCreate}
             </button>
             <button
               onClick={handleCreate}
@@ -171,7 +245,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
-              {t.home.createSpace}
+              {h.createSpace}
             </button>
           </div>
         </div>

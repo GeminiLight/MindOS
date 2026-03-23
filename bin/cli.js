@@ -38,7 +38,7 @@
  *   mindos config validate          — validate config file
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, spawn as nodeSpawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -697,32 +697,41 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
   // ── update ─────────────────────────────────────────────────────────────────
   update: async () => {
+    const { writeUpdateStatus, writeUpdateFailed, clearUpdateStatus } = await import('./lib/update-status.js');
     const currentVersion = (() => {
       try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; }
     })();
     console.log(`\n${bold('⬆  Updating MindOS...')}  ${dim(`(current: ${currentVersion})`)}\n`);
+
+    // Stage 1: Download
+    writeUpdateStatus('downloading', { fromVersion: currentVersion });
     try {
       execSync('npm install -g @geminilight/mindos@latest', { stdio: 'inherit' });
     } catch {
+      writeUpdateFailed('downloading', 'npm install failed', { fromVersion: currentVersion });
       console.error(red('Update failed. Try: npm install -g @geminilight/mindos@latest'));
       process.exit(1);
     }
     if (existsSync(BUILD_STAMP)) rmSync(BUILD_STAMP);
 
-    // Silently update installed skills to match the new package
+    // Resolve the new installation path (after npm install -g, ROOT is stale)
+    const updatedRoot = getUpdatedRoot();
+    const newVersion = (() => {
+      try { return JSON.parse(readFileSync(resolve(updatedRoot, 'package.json'), 'utf-8')).version; } catch { return '?'; }
+    })();
+    const vOpts = { fromVersion: currentVersion, toVersion: newVersion };
+
+    // Stage 2: Skills
+    writeUpdateStatus('skills', vOpts);
     try {
-      const newRoot = getUpdatedRoot();
       const { checkSkillVersions, updateSkill } = await import('./lib/skill-check.js');
-      const mismatches = checkSkillVersions(newRoot);
+      const mismatches = checkSkillVersions(updatedRoot);
       for (const m of mismatches) {
         updateSkill(m.bundledPath, m.installPath);
         console.log(`  ${green('✓')} ${dim(`Skill ${m.name}: v${m.installed} → v${m.bundled}`)}`);
       }
     } catch { /* best-effort */ }
 
-    const newVersion = (() => {
-      try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; }
-    })();
     if (newVersion !== currentVersion) {
       console.log(`\n${green(`✔ Updated ${currentVersion} → ${newVersion}`)}`);
     } else {
@@ -746,10 +755,12 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.log(cyan('\n  Daemon is running — stopping to apply the new version...'));
       await runGatewayCommand('stop');
 
-      // After npm install -g, resolve the new installation path and pre-build
-      const newRoot = getUpdatedRoot();
-      buildIfNeeded(newRoot);
+      // Stage 3: Rebuild
+      writeUpdateStatus('rebuilding', vOpts);
+      buildIfNeeded(updatedRoot);
 
+      // Stage 4: Restart
+      writeUpdateStatus('restarting', vOpts);
       await runGatewayCommand('install');
       // install() starts the service:
       //   - systemd: daemon-reload + enable + start
@@ -772,17 +783,78 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
         console.log(`\n  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}`);
         console.log(`${'─'.repeat(53)}\n`);
+        writeUpdateStatus('done', vOpts);
       } else {
+        writeUpdateFailed('restarting', 'Server did not come back up in time', vOpts);
         console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
         process.exit(1);
       }
     } else {
-      // Non-daemon mode: build in foreground for better UX
-      buildIfNeeded(getUpdatedRoot());
+      // Non-daemon mode: check if a MindOS instance is currently running
+      // (e.g. user started via `mindos start`, or GUI triggered this update).
+      // If so, stop it and restart from the NEW installation path.
+      const updateConfig = (() => {
+        try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
+      })();
+      const webPort = Number(updateConfig.port ?? 3456);
+      const mcpPort = Number(updateConfig.mcpPort ?? 8781);
 
-      console.log(`\n${green('✔')} ${bold(`Updated: ${currentVersion} → ${newVersion}`)}`);
-      console.log(dim('  Run `mindos start` to start the updated version.'));
-      console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
+      const wasRunning = await isPortInUse(webPort) || await isPortInUse(mcpPort);
+
+      if (wasRunning) {
+        console.log(cyan('\n  MindOS is running — restarting to apply the new version...'));
+        stopMindos();
+        // Wait for ports to free (up to 15s)
+        const deadline = Date.now() + 15_000;
+        while (Date.now() < deadline) {
+          const busy = await isPortInUse(webPort) || await isPortInUse(mcpPort);
+          if (!busy) break;
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        // Stage 3: Rebuild
+        writeUpdateStatus('rebuilding', vOpts);
+        buildIfNeeded(updatedRoot);
+
+        // Stage 4: Restart
+        writeUpdateStatus('restarting', vOpts);
+        const newCliPath = resolve(updatedRoot, 'bin', 'cli.js');
+        const childEnv = { ...process.env };
+        delete childEnv.MINDOS_WEB_PORT;
+        delete childEnv.MINDOS_MCP_PORT;
+        delete childEnv.MIND_ROOT;
+        delete childEnv.AUTH_TOKEN;
+        delete childEnv.WEB_PASSWORD;
+        const child = nodeSpawn(
+          process.execPath, [newCliPath, 'start'],
+          { detached: true, stdio: 'ignore', env: childEnv },
+        );
+        child.unref();
+
+        console.log(dim('  (Waiting for Web UI to come back up...)'));
+        const ready = await waitForHttp(webPort, { retries: 120, intervalMs: 2000, label: 'Web UI', logFile: LOG_PATH });
+        if (ready) {
+          const localIP = getLocalIP();
+          console.log(`\n${'─'.repeat(53)}`);
+          console.log(`${green('✔')} ${bold(`MindOS updated: ${currentVersion} → ${newVersion}`)}\n`);
+          console.log(`  ${green('●')} Web UI   ${cyan(`http://localhost:${webPort}`)}`);
+          if (localIP) console.log(`             ${cyan(`http://${localIP}:${webPort}`)}`);
+          console.log(`  ${green('●')} MCP      ${cyan(`http://localhost:${mcpPort}/mcp`)}`);
+          console.log(`\n  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}`);
+          console.log(`${'─'.repeat(53)}\n`);
+          writeUpdateStatus('done', vOpts);
+        } else {
+          writeUpdateFailed('restarting', 'Server did not come back up in time', vOpts);
+          console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
+          process.exit(1);
+        }
+      } else {
+        // No running instance — just build and tell user to start manually
+        buildIfNeeded(updatedRoot);
+        console.log(`\n${green('✔')} ${bold(`Updated: ${currentVersion} → ${newVersion}`)}`);
+        console.log(dim('  Run `mindos start` to start the updated version.'));
+        console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
+      }
     }
   },
 

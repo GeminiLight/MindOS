@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
-import { encodePath, relativeTime } from '@/lib/utils';
+import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import '@/lib/renderers/index'; // registers all renderers
 import OnboardingView from './OnboardingView';
@@ -63,17 +63,6 @@ function groupBySpace(recent: RecentFile[], spaces: SpaceInfo[]): { groups: Spac
 
   const groups = [...groupMap.values()].sort((a, b) => b.latestMtime - a.latestMtime);
   return { groups, rootFiles };
-}
-
-/** Extract leading emoji from a directory name, e.g. "📝 Notes" → "📝" */
-function extractEmoji(name: string): string {
-  const match = name.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u);
-  return match?.[0] ?? '';
-}
-
-/** Strip leading emoji+space from name for display, e.g. "📝 Notes" → "Notes" */
-function stripEmoji(name: string): string {
-  return name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || name;
 }
 
 /* ── Section Title component (shared across all three sections) ── */
@@ -146,7 +135,11 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-12">
-      <GuideCard onNavigate={(path) => { window.location.href = `/view/${encodeURIComponent(path)}`; }} />
+      <GuideCard
+        onNavigate={(path) => { window.location.href = `/view/${encodeURIComponent(path)}`; }}
+        spaces={spaceList}
+        recentFiles={recent.slice(0, 5)}
+      />
 
       {/* ── Hero ── */}
       <div className="mb-10">

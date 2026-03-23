@@ -60,6 +60,18 @@ async function removeSession(id: string): Promise<void> {
   }
 }
 
+async function removeSessions(ids: string[]): Promise<void> {
+  try {
+    await fetch('/api/ask-sessions', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  } catch {
+    // ignore persistence errors
+  }
+}
+
 export function useAskSession(currentFile?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -166,6 +178,17 @@ export function useAskSession(currentFile?: string) {
     [activeSessionId, currentFile, sessions],
   );
 
+  const clearAllSessions = useCallback(() => {
+    const allIds = sessions.map(s => s.id);
+    void removeSessions(allIds);
+
+    const fresh = createSession(currentFile);
+    setActiveSessionId(fresh.id);
+    setMessages([]);
+    setSessions([fresh]);
+    void upsertSession(fresh);
+  }, [currentFile, sessions]);
+
   return {
     messages,
     setMessages,
@@ -177,5 +200,6 @@ export function useAskSession(currentFile?: string) {
     resetSession,
     loadSession,
     deleteSession,
+    clearAllSessions,
   };
 }

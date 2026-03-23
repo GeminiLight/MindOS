@@ -5,6 +5,7 @@ import { bold, dim, cyan, green, yellow } from './colors.js';
 import { getSyncStatus } from './sync.js';
 import { checkForUpdate, printUpdateHint } from './update-check.js';
 import { runSkillCheck } from './skill-check.js';
+import { clearUpdateStatus } from './update-status.js';
 
 export function getLocalIP() {
   try {
@@ -18,6 +19,9 @@ export function getLocalIP() {
 }
 
 export async function printStartupInfo(webPort, mcpPort) {
+  // Clear stale update status from previous update cycles
+  clearUpdateStatus();
+
   // Fire update check immediately (non-blocking)
   const updatePromise = checkForUpdate().catch(() => null);
 

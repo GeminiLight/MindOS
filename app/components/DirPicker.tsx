@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Folder, ChevronDown, ChevronRight } from 'lucide-react';
+import { stripEmoji } from '@/lib/utils';
 
 interface DirPickerProps {
   /** Flat list of all directory paths (e.g. ['Notes', 'Notes/Daily', 'Projects']) */
@@ -48,7 +49,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
   };
 
   const displayLabel = value
-    ? value.split('/').map(s => s.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || s).join(' / ')
+    ? value.split('/').map(s => stripEmoji(s)).join(' / ')
     : '/ ' + rootLabel;
 
   if (!expanded) {

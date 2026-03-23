@@ -32,3 +32,14 @@ export function relativeTime(mtime: number, labels: {
   if (days < 7) return labels.daysAgo(days);
   return new Date(mtime).toLocaleDateString();
 }
+
+/** Extract leading emoji from a string, e.g. "📝 Notes" → "📝" */
+export function extractEmoji(name: string): string {
+  const match = name.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+/u);
+  return match?.[0] ?? '';
+}
+
+/** Strip leading emoji+space from a string, e.g. "📝 Notes" → "Notes" */
+export function stripEmoji(name: string): string {
+  return name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || name;
+}
