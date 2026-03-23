@@ -415,6 +415,8 @@ export const en = {
       mcpServer: 'MCP Server',
       running: 'Running',
       stopped: 'Not running',
+      restarting: 'Restarting...',
+      restart: 'Restart',
       onPort: (port: number) => `on :${port}`,
       refresh: 'Refresh',
       refreshing: 'Refreshing...',

@@ -8,7 +8,7 @@
 
 ## Meta
 
-- **Title**: MindOS — Human-AI Collaborative Mind System
+- **Title**: MindOS — Where You Think, Agents Act
 - **Favicon**: img/logo-square.svg
 
 ---
@@ -32,14 +32,14 @@
 ## Hero
 
 - **Badge**
-  - zh: 人机协同心智系统
-  - en: Human-AI Collaborative Mind System
+  - zh: 你思考的地方，AI 行动的起点
+  - en: Where You Think, Agents Act
 - **Headline**
   - zh: 人类在此思考，Agent 依此行动。
-  - en: Human Thinks Here, Agent Acts There.
+  - en: Human Thinks Here, Agents Act There.
 - **Subhead**
-  - zh: 和所有 AI 共享你的大脑——看得见、改得了、越用越是你。
-  - en: Share your brain with every AI — visible, editable, and more YOU with every use.
+  - zh: 和所有 AI 共享你的大脑——每次思考，都在生长。
+  - en: Share your brain with every AI — every thought grows.
 - **CTA Primary**
   - zh: 开始构建
   - en: Get Started
@@ -57,8 +57,8 @@
   - zh: 人机共享心智
   - en: Human-AI Shared Mind
 - **Subhead**
-  - zh: 记忆不再割裂，行为不再黑箱，经验不再断流。
-  - en: No more fragmented memory, no more black-box behavior, no more lost experience.
+  - zh: 你在思考中塑造 AI，AI 在执行中反哺你。人和 AI，在同一个大脑里共同成长。
+  - en: You shape AI through thinking, AI empowers you through execution. Human and AI, growing together in one shared brain.
 
 ### Pillar 01: Global Sync
 
@@ -69,11 +69,11 @@
   - zh: 换个工具、开个新对话，就要把背景重讲一遍？
   - en: Switch tools or start a new chat, and you have to re-explain everything?
 - **Pain**
-  - zh: 多个 Agent 各记各的，切换工具靠人工搬运上下文 / 每次对话都要重新交代背景，知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
-  - en: Each Agent keeps its own memory — switching tools means manual context transfer / Every conversation starts from scratch, knowledge can't be reused across Agents / Deep personal context scattered — Agents always lack the full picture
+  - zh: 切换工具或开新对话，就要重新搬运上下文——知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
+  - en: Switch tools or start a new chat and you're re-transporting context — knowledge can't be reused across Agents / Deep personal context scattered everywhere — Agents always lack the full picture
 - **Shift**
-  - zh: 内置 MCP Server (20+ 工具)，任意 Agent 零配置直连知识库 / 全阵容 Agent 兼容：OpenClaw, Claude Code, Cursor 等 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
-  - en: Built-in MCP Server (20+ tools) — any Agent connects with zero config / Full-lineup Agent compatible: OpenClaw, Claude Code, Cursor, etc. / Profile, SOPs & project memory: record once, empower all Agents
+  - zh: 内置 MCP Server (20+ 工具)，全阵容 Agent 零配置直连知识库 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
+  - en: Built-in MCP Server (20+ tools) — full-lineup Agents connect with zero config / Profile, SOPs & project memory: record once, empower all Agents
 
 ### Pillar 02: Transparent & Controllable
 
@@ -84,11 +84,11 @@
   - zh: Agent 在记忆你，但记了什么、记对没有？
   - en: Your Agent is memorizing you — but what exactly did it remember, and is it right?
 - **Pain**
-  - zh: Agent 的"记忆"锁在系统黑箱中，人类完全不可见 / 中间推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
-  - en: Agent memory locked in black boxes — fully invisible to humans / Intermediate reasoning can't be audited or traced back / Hallucinations compound unchecked, eroding trust over time
+  - zh: Agent 的"记忆"锁在黑箱中，推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
+  - en: Agent memory locked in black boxes — reasoning can't be audited, errors can't be traced or corrected / Hallucinations compound unchecked, eroding trust over time
 - **Shift**
-  - zh: 每次检索、反思与执行均通过 MCP 沉淀为本地纯文本 / GUI 工作台提供完整的审查、干预与心智修正界面 / 人类拥有绝对的心智纠偏权，随时校准 Agent 行为
-  - en: Every retrieval, reflection & action saved as local plain text via MCP / GUI workbench provides full audit, intervention & correction interface / Humans hold absolute mind-correction rights — recalibrate Agents anytime
+  - zh: 每次检索、反思与执行均沉淀为本地纯文本，GUI 提供完整的审查与干预界面 / 人类拥有绝对的心智纠偏权，随时校准 Agent 行为
+  - en: Every retrieval, reflection & action saved as local plain text, with a full GUI for audit and intervention / Humans hold absolute mind-correction rights — recalibrate Agents anytime
 
 ### Pillar 03: Symbiotic Evolution
 
@@ -96,14 +96,14 @@
   - zh: 共生演进 — 经验回流为指令
   - en: Symbiotic Evolution — Experience Flows Back as Instructions
 - **Tagline**
-  - zh: 对话里攒下的经验，关掉窗口就散了？
-  - en: All that experience from your conversations — gone the moment you close the window?
+  - zh: 你和 AI 对话了 100 次，这些思考去了哪里？
+  - en: You've thought with AI 100 times — where did all that thinking go?
 - **Pain**
-  - zh: 对话里积累的最佳实践关掉就丢了，无法回流为工作流 / 用了 100 次 Agent，工作流还是第一天的样子 / 人机协作断裂，Agent 每次都从零开始理解上下文
-  - en: Best practices from conversations vanish when the chat closes — no feedback loop / 100 Agent sessions later, workflows are still day-one quality / Human-AI context breaks — Agents restart from zero each time
+  - zh: 你反复向 AI 表达偏好、标准和判断，但下次对话又从零开始——你的思考没有变成 AI 的能力 / AI 不成长，你也没变清晰——思考的过程没有沉淀为你自己的方法论
+  - en: You keep expressing preferences, standards, and judgment to AI, but the next chat starts from zero — your thinking never becomes AI's capability / AI doesn't grow, and neither do you — the thinking process never crystallizes into your own methodology
 - **Shift**
-  - zh: 对话经验自然沉淀为可复用 Skill/SOP，Agent 自动识别并更新关联文件 / 笔记即指令——日常记录天然就是 Agent 可执行的高质量指令 / 人机在同一个 Shared Mind 中相互启发，知识库随使用自我进化
-  - en: Conversation experience auto-distills into reusable Skills/SOPs, Agents auto-update linked files / Notes as Instructions — everyday writing naturally doubles as executable Agent commands / Humans & AI co-inspire within a single Shared Mind, knowledge base self-evolves with use
+  - zh: 每次思考自动沉淀为知识库的一部分——AI 下次更懂你，不再犯同样的错 / 思考的过程迫使你想清楚标准和边界，你的认知也在每次沉淀中变得更锐利
+  - en: Every thought auto-distills into your knowledge base — AI understands you better next time, never repeating the same mistake / The act of thinking forces you to clarify your own standards and boundaries, sharpening your cognition with each iteration
 
 ### Foundation Banner
 
@@ -599,7 +599,7 @@
 ## Footer
 
 - **Branding**
-  - zh: MindOS · 人机协同心智系统
-  - en: MindOS · Human-AI Collaborative Mind System
+  - zh: MindOS · 你思考的地方，AI 行动的起点
+  - en: MindOS · Where You Think, Agents Act
 - **Link**: GitHub
 - **Copyright**: MIT © 2026 GeminiLight

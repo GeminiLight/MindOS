@@ -138,7 +138,7 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     cursor: pointer; transition: all 0.2s;
 }
 .control-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.btn-primary { background: var(--accent); color: #131210 !important; padding: 0.6rem 1.25rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+.btn-primary { background: var(--accent); color: #fff !important; padding: 0.6rem 1.25rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
 
 /* --- HERO --- */
 .hero { text-align: center; padding-top: 14rem; padding-bottom: 6rem; background: radial-gradient(circle at 50% 30%, var(--accent-dim) 0%, transparent 60%); }
@@ -160,7 +160,7 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
 }
 .cta-primary {
     display: inline-flex; align-items: center; gap: 0.5rem;
-    background: var(--accent); color: #131210; padding: 0.85rem 2rem;
+    background: var(--accent); color: #fff; padding: 0.85rem 2rem;
     border-radius: 12px; font-size: 0.95rem; font-weight: 700;
     text-decoration: none; transition: all 0.3s var(--ease-out-expo);
     box-shadow: 0 4px 20px rgba(212, 149, 74, 0.3);
@@ -823,7 +823,7 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     height: 2rem;
     border-radius: 50%;
     background: var(--accent);
-    color: #131210;
+    color: #fff;
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 700;
     font-size: 0.85rem;

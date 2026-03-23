@@ -440,6 +440,8 @@ export const zh = {
       mcpServer: 'MCP 服务器',
       running: '运行中',
       stopped: '未运行',
+      restarting: '重启中...',
+      restart: '重启',
       onPort: (port: number) => `端口 :${port}`,
       refresh: '刷新',
       refreshing: '刷新中...',
