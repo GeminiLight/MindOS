@@ -1,14 +1,14 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'plugins' | 'agents';
+export type PanelId = 'files' | 'search' | 'plugins' | 'agents' | 'discover';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -85,6 +85,28 @@ export default function ActivityBar({
   const syncBtnRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
 
+  // Update available badge — check localStorage for persisted state
+  const [hasUpdate, setHasUpdate] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const dismissed = localStorage.getItem('mindos_update_dismissed');
+    const latest = localStorage.getItem('mindos_update_latest');
+    return !!latest && latest !== dismissed;
+  });
+  useEffect(() => {
+    const onAvail = (e: Event) => {
+      const latest = (e as CustomEvent).detail?.latest;
+      if (latest) localStorage.setItem('mindos_update_latest', latest);
+      setHasUpdate(true);
+    };
+    const onDismiss = () => setHasUpdate(false);
+    window.addEventListener('mindos:update-available', onAvail);
+    window.addEventListener('mindos:update-dismissed', onDismiss);
+    return () => {
+      window.removeEventListener('mindos:update-available', onAvail);
+      window.removeEventListener('mindos:update-dismissed', onDismiss);
+    };
+  }, []);
+
   /** Debounce rapid clicks (300ms) — shared across all Rail buttons */
   const debounced = useCallback((fn: () => void) => {
     const now = Date.now();
@@ -136,6 +158,7 @@ export default function ActivityBar({
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} walkthroughId="search-button" />
           <RailButton icon={<Blocks size={18} />} label={t.sidebar.plugins} active={activePanel === 'plugins'} expanded={expanded} onClick={() => toggle('plugins')} />
           <RailButton icon={<Bot size={18} />} label={t.sidebar.agents} active={activePanel === 'agents'} expanded={expanded} onClick={() => toggle('agents')} />
+          <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => toggle('discover')} />
         </div>
 
         {/* ── Spacer ── */}
@@ -151,6 +174,9 @@ export default function ActivityBar({
             expanded={expanded}
             onClick={() => debounced(onSettingsClick)}
             walkthroughId="settings-button"
+            badge={hasUpdate ? (
+              <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-error`} />
+            ) : undefined}
           />
           <RailButton
             icon={<RefreshCw size={18} />}

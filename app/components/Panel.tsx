@@ -28,6 +28,7 @@ const DEFAULT_PANEL_WIDTH: Record<PanelId, number> = {
   search: 280,
   plugins: 280,
   agents: 280,
+  discover: 280,
 };
 
 const MIN_PANEL_WIDTH = 240;
