@@ -705,7 +705,7 @@ export const zh = {
       'memory-sync': '记忆同步',
       'auto-execute': '自动执行',
       'experience-evolution': '经验进化',
-      'human-insights': '人际洞察',
+      'human-insights': '人类洞察',
       'audit-control': '审计纠错',
     },
     scenarios: {
