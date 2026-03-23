@@ -471,6 +471,7 @@ export const zh = {
       available: (current: string, latest: string) => `有新版本可用：v${current} → v${latest}`,
       updating: '正在更新 MindOS，服务器即将重启...',
       updatingHint: '预计 1–3 分钟，请勿关闭此页面。',
+      serverRestarting: '服务正在重启，请稍候...',
       updated: '更新成功！正在刷新...',
       timeout: '更新可能仍在进行中。',
       timeoutHint: '服务器可能需要更多时间重新构建，请尝试刷新页面。',

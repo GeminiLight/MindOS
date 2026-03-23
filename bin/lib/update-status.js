@@ -9,35 +9,18 @@ const STAGE_ORDER = ['downloading', 'skills', 'rebuilding', 'restarting'];
 /**
  * Write update progress to ~/.mindos/update-status.json.
  *
- * @param {'downloading'|'skills'|'rebuilding'|'restarting'|'done'|'failed'} stage
+ * @param {'downloading'|'skills'|'rebuilding'|'restarting'|'done'} stage
  * @param {{ error?: string, fromVersion?: string, toVersion?: string }} [opts]
  */
 export function writeUpdateStatus(stage, opts = {}) {
   const stages = STAGE_ORDER.map((id) => {
     const idx = STAGE_ORDER.indexOf(id);
     const currentIdx = STAGE_ORDER.indexOf(stage);
-    let status = 'pending';
-    if (stage === 'done' || stage === 'failed') {
-      // done: all stages done; failed: stages up to current are done, current is failed
-      if (stage === 'done') {
-        status = 'done';
-      } else {
-        // For 'failed', we don't know which stage failed from just 'failed'
-        // So we keep whatever was last written — this function is called per-stage
-        status = 'pending';
-      }
-    } else if (idx < currentIdx) {
-      status = 'done';
-    } else if (idx === currentIdx) {
-      status = 'running';
-    }
-    return { id, status };
+    if (stage === 'done') return { id, status: 'done' };
+    if (idx < currentIdx) return { id, status: 'done' };
+    if (idx === currentIdx) return { id, status: 'running' };
+    return { id, status: 'pending' };
   });
-
-  // For 'done', mark all as done
-  if (stage === 'done') {
-    stages.forEach((s) => { s.status = 'done'; });
-  }
 
   const data = {
     stage,
