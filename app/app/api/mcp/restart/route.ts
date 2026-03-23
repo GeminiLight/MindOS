@@ -64,8 +64,8 @@ export async function POST() {
       return NextResponse.json({ error: 'MCP dependencies not installed' }, { status: 500 });
     }
 
-    const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
+    const env = {
+      ...process.env,
       MCP_PORT: String(mcpPort),
       MCP_HOST: process.env.MCP_HOST || '0.0.0.0',
       MINDOS_URL: process.env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
