@@ -747,7 +747,7 @@ async function runMcpInstallStep(mcpPort, authToken) {
 /* ── Skill auto-install ────────────────────────────────────────────────────── */
 
 const UNIVERSAL_AGENTS = new Set([
-  'amp', 'cline', 'codex', 'cursor', 'gemini-cli',
+  'cline', 'codex', 'cursor', 'gemini-cli',
   'github-copilot', 'kimi-cli', 'opencode', 'warp',
 ]);
 const SKILL_UNSUPPORTED = new Set(['claude-desktop']);
