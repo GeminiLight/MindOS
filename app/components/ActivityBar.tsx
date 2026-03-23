@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
@@ -20,6 +20,7 @@ interface ActivityBarProps {
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
   onSettingsClick: () => void;
+  onHelpClick: () => void;
   onSyncClick: (rect: DOMRect) => void;
 }
 
@@ -79,6 +80,7 @@ export default function ActivityBar({
   expanded,
   onExpandedChange,
   onSettingsClick,
+  onHelpClick,
   onSyncClick,
 }: ActivityBarProps) {
   const lastClickRef = useRef(0);
@@ -167,6 +169,12 @@ export default function ActivityBar({
         {/* ── Bottom: Action buttons (not panel toggles) ── */}
         <div className={`${expanded ? 'mx-3' : 'mx-auto w-6'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
+          <RailButton
+            icon={<HelpCircle size={18} />}
+            label={t.sidebar.help}
+            expanded={expanded}
+            onClick={() => debounced(onHelpClick)}
+          />
           <RailButton
             icon={<Settings size={18} />}
             label={t.sidebar.settingsTitle}

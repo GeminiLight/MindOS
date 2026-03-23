@@ -118,7 +118,8 @@ export default function GuideCard({ onNavigate, spaces = [], recentFiles = [] }:
   }, [guideState, g, patchGuide]);
 
   const handleSyncClick = useCallback(() => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true }));
+    // Open settings directly to the Sync tab (SidebarLayout listens for this event)
+    window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'sync' } }));
   }, []);
 
   // Auto-dismiss final state after 8 seconds
