@@ -16,7 +16,7 @@ Electron 桌面客户端
 Linux 服务器只能打包 `.zip` 格式，无法创建 `.dmg`：
 
 ```bash
-cd ~/code/sop_note/desktop
+cd ~/code/mindos/desktop
 ./scripts/build-linux.sh
 ```
 
@@ -29,7 +29,7 @@ cd ~/code/sop_note/desktop
 在你的 Mac 电脑上运行，默认**启用签名**：
 
 ```bash
-cd ~/code/sop_note/desktop
+cd ~/code/mindos/desktop
 
 # 默认：签名构建（需要 Apple Developer ID 证书）
 ./scripts/build-mac.sh
