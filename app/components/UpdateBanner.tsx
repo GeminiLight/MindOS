@@ -23,7 +23,15 @@ export default function UpdateBanner() {
     const timer = setTimeout(async () => {
       try {
         const data = await apiFetch<{ hasUpdate: boolean; latest: string; current: string }>('/api/update-check');
-        if (!data.hasUpdate) return;
+        if (!data.hasUpdate) {
+          // Clean up stale badge state from a previous update cycle
+          if (localStorage.getItem('mindos_update_latest')) {
+            localStorage.removeItem('mindos_update_latest');
+            localStorage.removeItem('mindos_update_dismissed');
+            window.dispatchEvent(new Event('mindos:update-dismissed'));
+          }
+          return;
+        }
 
         const dismissed = localStorage.getItem('mindos_update_dismissed');
         if (data.latest === dismissed) return;
