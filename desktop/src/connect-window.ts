@@ -119,6 +119,122 @@ function safeHandle(channel: string, handler: (...args: any[]) => any): void {
 }
 
 /**
+ * Register SSH tunnel + remote connection IPC handlers.
+ * Shared between showModeSelectWindow and showConnectWindow
+ * because both can display the remote connection screen.
+ */
+function registerSshHandlers(
+  resolvedRef: { value: boolean },
+  resolve: (url: string | null) => void,
+  win: { close: () => void },
+): void {
+  safeHandle('connect:get-recent', () => {
+    const connections = getConnections();
+    return connections.map(c => ({
+      ...c,
+      hasPassword: !!loadPassword(c.address),
+    }));
+  });
+
+  safeHandle('connect:get-saved-password', (_: unknown, address: string) => {
+    return loadPassword(address);
+  });
+
+  safeHandle('connect:test', async (_: unknown, address: string) => {
+    return testConnection(address);
+  });
+
+  safeHandle('connect:connect', async (_: unknown, address: string, password: string | null) => {
+    const url = normalizeAddress(address);
+    if (!url) return { ok: false, error: 'Invalid address' };
+
+    if (password) {
+      try {
+        const res = await fetch(`${url}/api/auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        if (!res.ok) return { ok: false, error: 'Incorrect password' };
+      } catch (err) {
+        return { ok: false, error: `Auth failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+
+    saveConnection({
+      address: url,
+      lastConnected: new Date().toISOString(),
+      authMethod: password ? 'password' : 'token',
+    });
+    if (password) savePassword(url, password);
+    setActiveRemoteConnection(url);
+
+    resolvedRef.value = true;
+    resolve(url);
+    win.close();
+    return { ok: true };
+  });
+
+  safeHandle('connect:remove', (_: unknown, address: string) => {
+    removeConnection(address);
+    removePassword(address);
+  });
+
+  safeHandle('connect:switch-local', () => {
+    resolvedRef.value = true;
+    resolve(null);
+    win.close();
+  });
+
+  safeHandle('connect:ssh-hosts', async () => {
+    const available = await isSshAvailable();
+    if (!available) return { available: false, hosts: [] };
+    const hosts = parseSshConfig();
+    return { available: true, hosts };
+  });
+
+  safeHandle('connect:ssh-connect', async (_: unknown, host: string, remotePort: number) => {
+    try {
+      if (activeTunnel) { await activeTunnel.stop(); activeTunnel = null; }
+
+      const localPort = await findAvailablePort(remotePort);
+      const tunnel = new SshTunnel(host, localPort, remotePort);
+      await tunnel.start();
+      activeTunnel = tunnel;
+
+      const result = await testConnection(`http://localhost:${localPort}`);
+      if (result.status !== 'online') {
+        await tunnel.stop();
+        activeTunnel = null;
+        return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
+      }
+
+      const url = `http://localhost:${localPort}`;
+      saveConnection({
+        address: `ssh://${host}:${remotePort}`,
+        label: `${host} (SSH)`,
+        lastConnected: new Date().toISOString(),
+        authMethod: 'token',
+      });
+      setActiveRemoteConnection(url);
+
+      resolvedRef.value = true;
+      resolve(url);
+      win.close();
+      return { ok: true, url, authRequired: result.authRequired };
+    } catch (err: any) {
+      return { ok: false, error: err.message || 'SSH tunnel failed' };
+    }
+  });
+}
+
+/** Channels registered by registerSshHandlers — for cleanup */
+const REMOTE_CHANNELS = [
+  'connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect',
+  'connect:remove', 'connect:switch-local', 'connect:ssh-hosts', 'connect:ssh-connect',
+];
+
+/**
  * Show mode selection window (initial run)
  * Returns 'local' | 'remote' | null
  */
@@ -148,7 +264,7 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       console.error('[MindOS] Failed to load connect.html for mode selection:', err);
     });
 
-    let resolved = false;
+    const resolvedRef = { value: false };
 
     // ── IPC Handlers ──
 
@@ -228,7 +344,7 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     });
 
     safeHandle('connect:select-mode', (_: unknown, mode: 'local' | 'remote') => {
-      resolved = true;
+      resolvedRef.value = true;
       resolve(mode);
       modeWin.close();
       return true;
@@ -294,14 +410,18 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       }
     });
 
+    // ── SSH handlers (needed when user switches to remote screen within mode selection) ──
+    registerSshHandlers(resolvedRef, resolve as (v: string | null) => void, { close: () => modeWin.close() });
+
     // Cleanup
     modeWin.on('closed', () => {
       ['connect:check-node', 'connect:check-mindos-status', 'connect:build-mindos',
        'connect:get-mindos-path', 'connect:install-mindos', 'connect:select-mode',
-       'connect:show-node-dialog', 'connect:open-nodejs'].forEach(ch => {
+       'connect:show-node-dialog', 'connect:open-nodejs',
+       ...REMOTE_CHANNELS].forEach(ch => {
         try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
       });
-      if (!resolved) resolve(null);
+      if (!resolvedRef.value) resolve(null);
     });
   });
 }
@@ -359,124 +479,17 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       console.error('[MindOS] Failed to load connect.html for remote connection:', err);
     });
 
-    let resolved = false;
+    const resolvedRef = { value: false };
 
-    // ── IPC handlers (scoped to this window) ──
-    safeHandle('connect:get-recent', () => {
-      // Include saved password availability info
-      const connections = getConnections();
-      return connections.map(c => ({
-        ...c,
-        hasPassword: !!loadPassword(c.address),
-      }));
-    });
-
-    safeHandle('connect:get-saved-password', (_: unknown, address: string) => {
-      return loadPassword(address);
-    });
-
-    safeHandle('connect:test', async (_: unknown, address: string) => {
-      return testConnection(address);
-    });
-
-    safeHandle('connect:connect', async (_: unknown, address: string, password: string | null) => {
-      const url = normalizeAddress(address);
-      if (!url) return { ok: false, error: 'Invalid address' };
-
-      // If password required, attempt auth
-      if (password) {
-        try {
-          const res = await fetch(`${url}/api/auth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password }),
-          });
-          if (!res.ok) return { ok: false, error: 'Incorrect password' };
-        } catch (err) {
-          return { ok: false, error: `Auth failed: ${err instanceof Error ? err.message : String(err)}` };
-        }
-      }
-
-      // Save connection + encrypted password
-      saveConnection({
-        address: url,
-        lastConnected: new Date().toISOString(),
-        authMethod: password ? 'password' : 'token',
-      });
-      if (password) savePassword(url, password);
-      setActiveRemoteConnection(url);
-
-      resolved = true;
-      resolve(url);
-      connectWin.close();
-      return { ok: true };
-    });
-
-    safeHandle('connect:remove', (_: unknown, address: string) => {
-      removeConnection(address);
-      removePassword(address);
-    });
-
-    safeHandle('connect:switch-local', () => {
-      resolved = true;
-      resolve(null);
-      connectWin.close();
-    });
-
-    // ── SSH tunnel handlers ──
-
-    safeHandle('connect:ssh-hosts', async () => {
-      const available = await isSshAvailable();
-      if (!available) return { available: false, hosts: [] };
-      const hosts = parseSshConfig();
-      return { available: true, hosts };
-    });
-
-    safeHandle('connect:ssh-connect', async (_: unknown, host: string, remotePort: number) => {
-      try {
-        // Clean up any existing tunnel
-        if (activeTunnel) { await activeTunnel.stop(); activeTunnel = null; }
-
-        const localPort = await findAvailablePort(remotePort);
-        const tunnel = new SshTunnel(host, localPort, remotePort);
-        await tunnel.start();
-        activeTunnel = tunnel;
-
-        // Test that MindOS is actually running on the other end
-        const result = await testConnection(`http://localhost:${localPort}`);
-        if (result.status !== 'online') {
-          await tunnel.stop();
-          activeTunnel = null;
-          return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
-        }
-
-        // Save as active connection
-        const url = `http://localhost:${localPort}`;
-        saveConnection({
-          address: `ssh://${host}:${remotePort}`,
-          label: `${host} (SSH)`,
-          lastConnected: new Date().toISOString(),
-          authMethod: 'token',
-        });
-        setActiveRemoteConnection(url);
-
-        resolved = true;
-        resolve(url);
-        connectWin.close();
-        return { ok: true, url, authRequired: result.authRequired };
-      } catch (err: any) {
-        return { ok: false, error: err.message || 'SSH tunnel failed' };
-      }
-    });
+    // Register all remote connection handlers (shared with mode select window)
+    registerSshHandlers(resolvedRef, resolve, { close: () => connectWin.close() });
 
     // Cleanup on close
     connectWin.on('closed', () => {
-      ['connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect',
-       'connect:remove', 'connect:switch-local', 'connect:ssh-hosts', 'connect:ssh-connect']
-      .forEach(ch => {
+      REMOTE_CHANNELS.forEach(ch => {
         try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
       });
-      if (!resolved) resolve(null);
+      if (!resolvedRef.value) resolve(null);
     });
   });
 }
