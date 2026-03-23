@@ -11,6 +11,7 @@ import Logo from './Logo';
 import SearchPanel from './panels/SearchPanel';
 import PluginsPanel from './panels/PluginsPanel';
 import AgentsPanel from './panels/AgentsPanel';
+import DiscoverPanel from './panels/DiscoverPanel';
 import RightAskPanel from './RightAskPanel';
 import AskFab from './AskFab';
 import SyncPopover from './panels/SyncPopover';
@@ -210,6 +211,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'agents' ? '' : 'hidden'}`}>
           <AgentsPanel active={lp.activePanel === 'agents'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
+        </div>
+        <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
+          <DiscoverPanel active={lp.activePanel === 'discover'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
       </Panel>
 
