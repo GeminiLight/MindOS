@@ -2,24 +2,68 @@
  * Connect Window — local BrowserWindow for remote mode server configuration.
  * Loads connect.html and bridges IPC to shared/connection SDK.
  */
-import { BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
 import path from 'path';
 import Store from 'electron-store';
 import { testConnection, normalizeAddress } from '../../shared/connection';
 import type { SavedConnection } from '../../shared/connection';
+import { getNodePath, getMindosInstallPath, getEnrichedEnv } from './node-detect';
+
+/**
+ * Resolve paths relative to the app root.
+ * - Dev: app.getAppPath() → desktop/ (where package.json lives)
+ * - Production: app.getAppPath() → <resources>/app.asar
+ * Both have src/connect.html and dist-electron/ at root level.
+ */
+const APP_ROOT = app.getAppPath();
+const HTML_PATH = path.join(APP_ROOT, 'src', 'connect.html');
+const PRELOAD_PATH = path.join(APP_ROOT, 'dist-electron', 'preload', 'connect-preload.js');
 
 const MAX_CONNECTIONS = 5;
 
 const store = new Store<{
   remoteConnections: SavedConnection[];
   remoteActiveConnection: string | null;
+  /** Encrypted passwords keyed by server address */
+  encryptedPasswords: Record<string, string>;
 }>({
   name: 'mindos-connections',
   defaults: {
     remoteConnections: [],
     remoteActiveConnection: null,
+    encryptedPasswords: {},
   },
 });
+
+// ── Password encryption ──
+
+function savePassword(address: string, password: string): void {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  try {
+    const encrypted = safeStorage.encryptString(password).toString('base64');
+    const passwords = store.get('encryptedPasswords');
+    passwords[address] = encrypted;
+    store.set('encryptedPasswords', passwords);
+  } catch { /* encryption not available */ }
+}
+
+export function loadPassword(address: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  try {
+    const passwords = store.get('encryptedPasswords');
+    const encrypted = passwords[address];
+    if (!encrypted) return null;
+    return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+  } catch { return null; }
+}
+
+function removePassword(address: string): void {
+  try {
+    const passwords = store.get('encryptedPasswords');
+    delete passwords[address];
+    store.set('encryptedPasswords', passwords);
+  } catch { /* ignore */ }
+}
 
 // ── Storage operations ──
 function getConnections(): SavedConnection[] {
@@ -76,12 +120,12 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       resizable: false,
       minimizable: false,
       maximizable: false,
-      parent: parentWindow || undefined,
-      modal: !!parentWindow,
-      title: 'MindOS - Mode Selection',
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      // Independent window — not modal, not parented.
+      // Modal + hidden titlebar on parent = dead lock on macOS.
+      title: 'MindOS',
+      titleBarStyle: 'default',
       webPreferences: {
-        preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
+        preload: PRELOAD_PATH,
         nodeIntegration: false,
         contextIsolation: true,
       },
@@ -90,32 +134,36 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
 
     modeWin.once('ready-to-show', () => modeWin.show());
 
-    // Load same HTML - the page will detect mode selection state
-    const htmlPath = path.join(__dirname, '..', 'src', 'connect.html');
-    modeWin.loadFile(htmlPath, { query: { modeSelect: 'true' } }).catch(() => {
-      // Fallback for packaged app
-      modeWin.loadFile(path.join(__dirname, 'connect.html'), { query: { modeSelect: 'true' } });
+    modeWin.loadFile(HTML_PATH, { query: { modeSelect: 'true' } }).catch(err => {
+      console.error('[MindOS] Failed to load connect.html for mode selection:', err);
     });
 
     let resolved = false;
 
     // ── IPC Handlers ──
 
-    safeHandle('connect:check-node', () => {
-      const { getNodePath } = require('./main');
-      return !!getNodePath();
+    safeHandle('connect:check-node', async () => {
+      return !!(await getNodePath());
     });
 
-    safeHandle('connect:check-mindos-status', () => {
-      const userMindos = getUserMindosPath();
+    safeHandle('connect:check-mindos-status', async () => {
+      // First find node so we can use its bin dir for npm
+      const nodePath = await getNodePath();
+      const mindosPath = await getMindosInstallPath(nodePath);
 
-      if (!userMindos) {
+      if (!mindosPath) {
         return { status: 'not-installed', path: null };
       }
 
+      // Check build status
+      const fs = require('fs');
+      const p = require('path');
+      const nextDir = p.join(mindosPath, 'app', '.next');
+      const isBuilt = fs.existsSync(nextDir);
+
       return {
-        status: userMindos.isBuilt ? 'ready' : 'installed-not-built',
-        path: userMindos.modulePath,
+        status: isBuilt ? 'ready' : 'installed-not-built',
+        path: mindosPath,
       };
     });
 
@@ -123,21 +171,22 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const fs = require('fs');
-      const path = require('path');
-      const execAsync = promisify(exec);
+      const pathMod = require('path');
+      const execBuild = promisify(exec);
 
       try {
-        // Check if already built (standalone server or .next dir)
-        const standaloneServer = path.join(modulePath, 'app', '.next', 'standalone', 'server.js');
-        const nextDir = path.join(modulePath, 'app', '.next');
+        const standaloneServer = pathMod.join(modulePath, 'app', '.next', 'standalone', 'server.js');
+        const nextDir = pathMod.join(modulePath, 'app', '.next');
         if (fs.existsSync(standaloneServer) || fs.existsSync(nextDir)) {
           return { success: true, output: 'Already built' };
         }
 
-        // Run npm install + build in the module directory
-        const { stdout, stderr } = await execAsync(
+        const nodePath = await getNodePath();
+        const enrichedEnv = getEnrichedEnv(nodePath);
+
+        const { stdout, stderr } = await execBuild(
           'npm install && npm run build',
-          { cwd: modulePath, timeout: 300000, encoding: 'utf-8' }
+          { cwd: modulePath, timeout: 300000, encoding: 'utf-8', env: enrichedEnv }
         );
 
         if (fs.existsSync(nextDir)) {
@@ -154,10 +203,16 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       }
     });
 
-    safeHandle('connect:get-mindos-path', () => {
-      const userMindos = getUserMindosPath();
-      if (userMindos?.isBuilt) {
-        return { path: userMindos.modulePath, source: 'user' };
+    safeHandle('connect:get-mindos-path', async () => {
+      const nodePath = await getNodePath();
+      const mindosPath = await getMindosInstallPath(nodePath);
+      if (mindosPath) {
+        const fs = require('fs');
+        const p = require('path');
+        const nextDir = p.join(mindosPath, 'app', '.next');
+        if (fs.existsSync(nextDir)) {
+          return { path: mindosPath, source: 'user' };
+        }
       }
       return null;
     });
@@ -198,18 +253,20 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     safeHandle('connect:install-mindos', async () => {
       const { exec } = require('child_process');
       const { promisify } = require('util');
-      const execAsync = promisify(exec);
+      const execInstall = promisify(exec);
 
       try {
-        // Install @geminilight/mindos globally
-        const { stdout, stderr } = await execAsync(
+        const nodePath = await getNodePath();
+        const enrichedEnv = getEnrichedEnv(nodePath);
+
+        const { stdout, stderr } = await execInstall(
           'npm install -g @geminilight/mindos@latest',
-          { timeout: 300000, encoding: 'utf-8' }
+          { timeout: 300000, encoding: 'utf-8', env: enrichedEnv }
         );
 
         // Verify installation
-        const userMindos = getUserMindosPath();
-        if (userMindos) {
+        const mindosPath = await getMindosInstallPath(nodePath);
+        if (mindosPath) {
           return { success: true };
         } else {
           return {
@@ -237,33 +294,6 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       if (!resolved) resolve(null);
     });
   });
-}
-
-// ── MindOS detection utilities ──
-
-/**
- * Detect user local MindOS installation
- * Returns module path and build status
- */
-function getUserMindosPath(): { modulePath: string; isBuilt: boolean } | null {
-  const { execSync } = require('child_process');
-  const fs = require('fs');
-  const path = require('path');
-
-  try {
-    const globalRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
-    const modulePath = path.join(globalRoot, '@geminilight', 'mindos');
-
-    if (!fs.existsSync(modulePath)) return null;
-
-    // Build is complete when app/.next exists (standalone or standard)
-    const nextDir = path.join(modulePath, 'app', '.next');
-    const isBuilt = fs.existsSync(nextDir);
-
-    return { modulePath, isBuilt };
-  } catch {
-    return null;
-  }
 }
 
 // Simple i18n helper for Electron dialog
@@ -303,12 +333,10 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       resizable: false,
       minimizable: false,
       maximizable: false,
-      parent: parentWindow || undefined,
-      modal: !!parentWindow,
-      title: 'Connect to MindOS',
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      title: 'MindOS',
+      titleBarStyle: 'default',
       webPreferences: {
-        preload: path.join(__dirname, '..', 'preload', 'connect-preload.js'),
+        preload: PRELOAD_PATH,
         nodeIntegration: false,
         contextIsolation: true,
       },
@@ -317,17 +345,25 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
 
     connectWin.once('ready-to-show', () => connectWin.show());
 
-    // Load local HTML
-    const htmlPath = path.join(__dirname, '..', 'src', 'connect.html');
-    connectWin.loadFile(htmlPath).catch(() => {
-      // Fallback for packaged app
-      connectWin.loadFile(path.join(__dirname, 'connect.html'));
+    connectWin.loadFile(HTML_PATH).catch(err => {
+      console.error('[MindOS] Failed to load connect.html for remote connection:', err);
     });
 
     let resolved = false;
 
     // ── IPC handlers (scoped to this window) ──
-    safeHandle('connect:get-recent', () => getConnections());
+    safeHandle('connect:get-recent', () => {
+      // Include saved password availability info
+      const connections = getConnections();
+      return connections.map(c => ({
+        ...c,
+        hasPassword: !!loadPassword(c.address),
+      }));
+    });
+
+    safeHandle('connect:get-saved-password', (_: unknown, address: string) => {
+      return loadPassword(address);
+    });
 
     safeHandle('connect:test', async (_: unknown, address: string) => {
       return testConnection(address);
@@ -351,12 +387,13 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
         }
       }
 
-      // Save connection
+      // Save connection + encrypted password
       saveConnection({
         address: url,
         lastConnected: new Date().toISOString(),
         authMethod: password ? 'password' : 'token',
       });
+      if (password) savePassword(url, password);
       setActiveRemoteConnection(url);
 
       resolved = true;
@@ -367,6 +404,7 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
 
     safeHandle('connect:remove', (_: unknown, address: string) => {
       removeConnection(address);
+      removePassword(address);
     });
 
     safeHandle('connect:switch-local', () => {
@@ -377,7 +415,7 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
 
     // Cleanup on close
     connectWin.on('closed', () => {
-      ['connect:get-recent', 'connect:test', 'connect:connect', 'connect:remove', 'connect:switch-local']
+      ['connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect', 'connect:remove', 'connect:switch-local']
       .forEach(ch => {
         try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
       });

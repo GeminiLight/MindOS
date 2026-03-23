@@ -32,6 +32,24 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const [contentWidth, setContentWidth] = useState('780px');
   const [dark, setDark] = useState(true);
 
+  // Update available badge on Update tab
+  const [hasUpdate, setHasUpdate] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const dismissed = localStorage.getItem('mindos_update_dismissed');
+    const latest = localStorage.getItem('mindos_update_latest');
+    return !!latest && latest !== dismissed;
+  });
+  useEffect(() => {
+    const onAvail = () => setHasUpdate(true);
+    const onDismiss = () => setHasUpdate(false);
+    window.addEventListener('mindos:update-available', onAvail);
+    window.addEventListener('mindos:update-dismissed', onDismiss);
+    return () => {
+      window.removeEventListener('mindos:update-available', onAvail);
+      window.removeEventListener('mindos:update-dismissed', onDismiss);
+    };
+  }, []);
+
   const isPanel = variant === 'panel';
 
   // Init data when becoming visible
@@ -131,13 +149,13 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const env = data?.envOverrides ?? {};
   const iconSize = isPanel ? 12 : 13;
 
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: boolean }[] = [
     { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={iconSize} /> },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'MCP & Skills', icon: <Plug size={iconSize} /> },
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} /> },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
-    { id: 'update', label: t.settings.tabs.update ?? 'Update', icon: <Download size={iconSize} /> },
+    { id: 'update', label: t.settings.tabs.update ?? 'Update', icon: <Download size={iconSize} />, badge: hasUpdate },
   ];
 
   const activeTabLabel = TABS.find(t2 => t2.id === tab)?.label ?? '';
@@ -233,6 +251,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             >
               {tabItem.icon}
               {tabItem.label}
+              {tabItem.badge && <span className="w-1.5 h-1.5 rounded-full bg-error shrink-0" />}
             </button>
           ))}
         </div>
@@ -283,6 +302,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             >
               {tabItem.icon}
               {tabItem.label}
+              {tabItem.badge && <span className="w-1.5 h-1.5 rounded-full bg-error shrink-0" />}
             </button>
           ))}
         </div>
@@ -314,6 +334,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
                 )}
                 {tabItem.icon}
                 {tabItem.label}
+                {tabItem.badge && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-error shrink-0" />}
               </button>
             ))}
           </nav>

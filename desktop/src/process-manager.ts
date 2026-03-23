@@ -17,6 +17,8 @@ export interface ProcessManagerOptions {
   mindRoot: string;
   authToken?: string;
   verbose?: boolean;
+  /** Enriched env with correct PATH for spawned processes */
+  env?: Record<string, string>;
 }
 
 export class ProcessManager extends EventEmitter {
@@ -109,7 +111,7 @@ export class ProcessManager extends EventEmitter {
   // ── Private ──
 
   private spawnMcp(): ChildProcess {
-    const { npxPath, projectRoot, mcpPort, webPort, authToken, verbose } = this.opts;
+    const { projectRoot, mcpPort, webPort, authToken, verbose } = this.opts;
     const mcpDir = path.join(projectRoot, 'mcp');
 
     if (!existsSync(mcpDir)) {
@@ -129,7 +131,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
+      ...(this.opts.env || process.env as Record<string, string>),
       MCP_PORT: String(mcpPort),
       MCP_HOST: '0.0.0.0',
       MINDOS_URL: `http://127.0.0.1:${webPort}`,
@@ -137,8 +139,12 @@ export class ProcessManager extends EventEmitter {
       ...(verbose ? { MCP_VERBOSE: '1' } : {}),
     };
 
-    // Use resolved npxPath to avoid PATH issues in packaged app
-    return spawn(npxPath, ['tsx', 'src/index.ts'], {
+    // Use local tsx from mcp/node_modules/.bin — don't rely on npx (broken in packaged app)
+    const localTsx = path.join(mcpDir, 'node_modules', '.bin', 'tsx');
+    const tsxBin = existsSync(localTsx) ? localTsx : this.opts.npxPath;
+    const args = existsSync(localTsx) ? ['src/index.ts'] : ['tsx', 'src/index.ts'];
+
+    return spawn(tsxBin, args, {
       cwd: mcpDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -146,7 +152,7 @@ export class ProcessManager extends EventEmitter {
   }
 
   private spawnWeb(): ChildProcess {
-    const { npxPath, projectRoot, webPort, mindRoot } = this.opts;
+    const { projectRoot, webPort, mindRoot } = this.opts;
     const appDir = path.join(projectRoot, 'app');
 
     if (!existsSync(appDir)) {
@@ -156,7 +162,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
+      ...(this.opts.env || process.env as Record<string, string>),
       MINDOS_WEB_PORT: String(webPort),
       MIND_ROOT: mindRoot,
       NODE_ENV: 'production',
@@ -172,8 +178,18 @@ export class ProcessManager extends EventEmitter {
       });
     }
 
-    // Fallback: npx next start
-    return spawn(npxPath, ['next', 'start', '-p', String(webPort)], {
+    // Use local next from app/node_modules/.bin — don't rely on npx
+    const localNext = path.join(appDir, 'node_modules', '.bin', 'next');
+    if (existsSync(localNext)) {
+      return spawn(localNext, ['start', '-p', String(webPort)], {
+        cwd: appDir,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    }
+
+    // Last resort: npx next start
+    return spawn(this.opts.npxPath, ['next', 'start', '-p', String(webPort)], {
       cwd: appDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],

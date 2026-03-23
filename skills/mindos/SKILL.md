@@ -20,7 +20,7 @@ context automatically when present. User rules override default rules on conflic
 
 ---
 
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 # MindOS Operating Rules
 
 ## Core Principles
@@ -47,7 +47,13 @@ Run this sequence before substantive edits:
 - Read nearby `README.md` / `INSTRUCTION.md` when present.
 - Follow local conventions over global assumptions.
 
-4. Execute edits.
+4. Match existing SOPs.
+- If the task is procedural (multi-step, repeatable, or matches a known workflow category):
+  search Workflows/ directory with `mindos_search_notes(scope: "Workflows/")` using task keywords.
+- If a matching SOP is found, read it and follow its steps (adapting as needed).
+- If the SOP's steps diverge from actual execution, propose updating the SOP after task completion.
+
+5. Execute edits.
 
 If required context is missing, continue with best effort and state assumptions explicitly.
 
@@ -135,7 +141,39 @@ Before finishing any operation, verify:
 
 ## Preference Capture
 
-When the user expresses a preference correction during operations (e.g., "don't do X in the future", "next time remember to...", "this should go in... not in..."), append it as a structured rule to `user-skill-rules.md` in the knowledge base root under the appropriate section. Confirm to the user: "Preference recorded."
+### When to capture
+The user expresses a preference correction (e.g., "don't do X", "next time remember to...", "this should go in... not in...").
+
+### Confirm-then-write flow
+1. **First occurrence of a new preference**: propose the rule and target file before writing.
+   - "Record this preference to `user-skill-rules.md`? Rule: _{summary}_"
+   - Write only after user confirms.
+2. **Repeated confirmation on similar category**: after the user confirms the same category of preference 3+ times, auto-write future rules in that category without asking. Add an `auto-confirm: true` flag to the category header in `user-skill-rules.md`.
+3. **User explicitly grants blanket permission** (e.g., "just record preferences directly"): set a top-level `auto-confirm-all: true` flag and skip confirmation for all future captures.
+
+### File location
+- Target: `user-skill-rules.md` in the knowledge base root (read by `mindos_bootstrap` automatically).
+- If the file does not exist, create it with the template below on first confirmed write.
+
+### File template
+```markdown
+# User Skill Rules
+<!-- auto-confirm-all: false -->
+
+## Preferences
+<!-- Group by category. Mark auto-confirm: true on categories confirmed 3+ times. -->
+
+## Suppressed Hooks
+<!-- List post-task hooks the user has opted out of. -->
+```
+
+### Rule format
+Each rule is a bullet under its category:
+```markdown
+### {Category}
+<!-- auto-confirm: false -->
+- {Rule description} — _{date captured}_
+```
 
 ---
 
@@ -179,7 +217,7 @@ For unstructured inputs (meeting notes, braindumps, chat exports) that belong in
 | SOP/workflow execution | Read doc fully -> execute stepwise -> update only affected section |
 | Cross-agent handoff | Read task state + decisions -> continue without re-discovery -> write back progress |
 | Knowledge conflict resolution | Multi-term search for old info -> list all affected files -> present change plan -> update after approval |
-| Distill experience into SOP | Extract procedure -> generalize -> create under Workflows/ with prerequisites, steps, pitfalls |
+| Distill experience into SOP | Extract procedure → generalize → create under Workflows/ using the **SOP template** (see below) with keywords metadata, scenarios, branching steps, exit conditions, and pitfalls |
 | Periodic review/summary | `get_recent`/`get_history` -> read changed files -> categorize -> structured summary |
 | Handoff document synthesis | Identify sources -> read -> synthesize (background, decisions, status, open items) -> place in project dir |
 | Relationship management | Extract updates from notes -> update contact records -> generate next-step strategy |
@@ -187,6 +225,37 @@ For unstructured inputs (meeting notes, braindumps, chat exports) that belong in
 | Project bootstrap | Read preference/stack docs -> scaffold aligned with standards -> record decisions |
 | Code review | Read review standards -> check naming/security/performance -> output actionable findings |
 | Distill cross-agent discussion | Confirm decisions with user -> structure as problem/decision/rationale/next-actions -> minimal write-back |
+
+### SOP Template
+
+When creating a new SOP via "Distill experience into SOP", the file **must** follow this structure:
+
+```markdown
+# SOP: {Title}
+<!-- keywords: {3-5 trigger keywords, English and Chinese} -->
+<!-- last-used: {ISO date} -->
+<!-- created: {ISO date} -->
+
+## Applicable Scenarios
+When to use this SOP. List trigger conditions and prerequisites.
+
+## Steps
+Each step includes:
+1. **Action** — concrete operation
+2. **Branch** — if X do A, if Y do B (mark "none" if no branching)
+3. **Failure handling** — what can go wrong and how to respond
+
+## Exit Conditions
+When is the task complete. When to abort or escalate.
+
+## Pitfall Log
+Known edge cases and lessons learned. Append new entries each time the SOP is executed and a new issue is encountered.
+```
+
+Metadata rules:
+- `keywords` — used by SOP recall search in Startup Protocol step 4. Include both English and Chinese terms.
+- `last-used` — update to today's date each time the SOP is followed.
+- `created` — set once at creation time.
 
 ## Interaction Rules
 
@@ -229,6 +298,11 @@ After completing a task, check the conditions below. If one matches, make a one-
 ### Pattern extraction (priority: low)
 - Condition: 3+ structurally similar operations in the current session.
 - Propose: "This operation repeated multiple times — create an SOP?"
+
+### SOP drift (priority: medium)
+- Condition: task was executed following an existing SOP, but actual steps diverged from documented steps.
+- Propose: "Execution diverged from {SOP file} — update the SOP?"
+- Action: update divergent steps, append new pitfalls, set `<!-- last-used: -->` to today.
 
 ### Conversation retrospective (priority: low)
 - Condition: session >10 turns and involved decisions, trade-offs, or lessons.

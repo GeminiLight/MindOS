@@ -15,7 +15,6 @@ export default function UpdateBanner() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
-    // Don't check for updates on setup or login pages
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
       if (path === '/setup' || path === '/login') return;
@@ -30,10 +29,12 @@ export default function UpdateBanner() {
         if (data.latest === dismissed) return;
 
         setInfo({ latest: data.latest, current: data.current });
+        // Broadcast for ActivityBar & Settings tab badges
+        window.dispatchEvent(new CustomEvent('mindos:update-available', { detail: { latest: data.latest } }));
       } catch {
         // Network error / API failure — silent
       }
-    }, 3000); // Check 3s after page load, don't block first paint
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, []);
@@ -43,53 +44,44 @@ export default function UpdateBanner() {
   const handleDismiss = () => {
     localStorage.setItem('mindos_update_dismissed', info.latest);
     setInfo(null);
+    window.dispatchEvent(new Event('mindos:update-dismissed'));
   };
 
   const handleOpenUpdate = () => {
     window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'update' } }));
-    // Dismiss banner once user engages with Update tab
     localStorage.setItem('mindos_update_dismissed', info.latest);
     setInfo(null);
+    window.dispatchEvent(new Event('mindos:update-dismissed'));
   };
 
-  const updateT = t.updateBanner;
+  const u = t.updateBanner;
 
   return (
-    <div
-      className="flex items-center justify-between gap-3 px-4 py-2 text-xs"
-      style={{ background: 'var(--amber-subtle, rgba(200,135,30,0.08))', borderBottom: '1px solid var(--border)' }}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="font-medium" style={{ color: 'var(--amber)' }}>
-          {updateT?.newVersion
-            ? updateT.newVersion(info.latest, info.current)
+    <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs bg-[var(--amber-subtle)] border-b border-border">
+      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+        <span className="font-medium text-[var(--amber)]">
+          {u?.newVersion
+            ? u.newVersion(info.latest, info.current)
             : `MindOS v${info.latest} available (current: v${info.current})`}
         </span>
         <button
           onClick={handleOpenUpdate}
-          className="px-2 py-0.5 rounded-md text-xs font-medium text-white transition-colors hover:opacity-90"
-          style={{ background: 'var(--amber)' }}
+          className="px-2 py-0.5 rounded-md text-xs font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90"
         >
-          {updateT?.updateNow ?? 'Update'}
+          {u?.updateNow ?? 'Update'}
         </button>
-        <span className="text-muted-foreground hidden sm:inline">
-          {updateT?.orSee ? (
-            <>
-              {updateT.orSee}{' '}
-              <a href="https://github.com/GeminiLight/mindos/releases" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">{updateT.releaseNotes}</a>
-            </>
-          ) : (
-            <>
-              or{' '}
-              <a href="https://github.com/GeminiLight/mindos/releases" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">release notes</a>
-            </>
-          )}
-        </span>
+        <a
+          href="https://github.com/GeminiLight/mindos/releases"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-muted-foreground underline hover:text-foreground transition-colors hidden sm:inline"
+        >
+          {u?.releaseNotes ?? 'Release notes'}
+        </a>
       </div>
       <button
         onClick={handleDismiss}
-        className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
-        style={{ color: 'var(--muted-foreground)' }}
+        className="p-0.5 rounded hover:bg-muted transition-colors shrink-0 text-muted-foreground"
         title="Dismiss"
       >
         <X size={14} />
