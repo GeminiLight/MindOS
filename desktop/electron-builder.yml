@@ -20,11 +20,13 @@ mac:
   category: public.app-category.productivity
   icon: src/icons/icon.png
   target:
-    - target: zip
+    - target: dmg
       arch:
-        - x64
         - arm64
-  hardenedRuntime: true
+        - x64
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
 
 asar: true
 # No asarUnpack needed — loadFile() reads from asar directly,

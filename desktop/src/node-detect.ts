@@ -12,6 +12,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
+import { getPrivateNodePath, isPrivateNodeInstalled } from './node-bootstrap';
 
 const execAsync = promisify(exec);
 
@@ -20,6 +21,7 @@ function enrichedPath(extraBinDir?: string): string {
   const home = app.getPath('home');
   const dirs = [
     extraBinDir,
+    path.join(home, '.mindos', 'node', 'bin'),  // Private MindOS Node.js
     '/usr/local/bin',
     '/opt/homebrew/bin',
     '/opt/local/bin',
@@ -47,6 +49,11 @@ async function execWithPath(cmd: string, opts: { timeout?: number; cwd?: string;
  */
 export async function getNodePath(): Promise<string | null> {
   const home = app.getPath('home');
+
+  // 0. MindOS private Node.js (~/.mindos/node/) — highest priority
+  if (isPrivateNodeInstalled()) {
+    return getPrivateNodePath();
+  }
 
   // 1. Explicit env var (instant)
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
@@ -138,6 +145,8 @@ export async function getMindosInstallPath(nodePath?: string | null): Promise<st
   // Strategy 2: Check common global npm paths directly (no shell needed)
   const home = app.getPath('home');
   const commonGlobalPaths = [
+    // Private MindOS node
+    path.join(home, '.mindos', 'node', 'lib', 'node_modules', '@geminilight', 'mindos'),
     '/usr/local/lib/node_modules/@geminilight/mindos',
     '/opt/homebrew/lib/node_modules/@geminilight/mindos',
     path.join(home, '.npm-global/lib/node_modules/@geminilight/mindos'),
