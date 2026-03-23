@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
-import { expandHome } from './utils.js';
+import { expandHome, parseJsonc } from './utils.js';
 import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
 
 export { MCP_AGENTS };
@@ -194,7 +194,7 @@ export async function mcpInstall() {
           const abs = expandHome(cfgPath);
           if (!existsSync(abs)) continue;
           try {
-            const config = JSON.parse(readFileSync(abs, 'utf-8'));
+            const config = parseJsonc(readFileSync(abs, 'utf-8'));
             if (config[agent.key]?.mindos) { installed = true; break; }
           } catch {}
         }
@@ -313,7 +313,7 @@ export async function mcpInstall() {
     const absPath = expandHome(configPath);
     let config = {};
     if (existsSync(absPath)) {
-      try { config = JSON.parse(readFileSync(absPath, 'utf-8')); } catch {
+      try { config = parseJsonc(readFileSync(absPath, 'utf-8')); } catch {
         console.error(red(`  Failed to parse existing config: ${absPath} — skipping.`));
         continue;
       }
