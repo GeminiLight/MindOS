@@ -12,7 +12,7 @@ export default function ThemeToggle() {
     },
     () => {
       const stored = localStorage.getItem('theme');
-      return stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return stored && stored !== 'system' ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
     },
     () => document.documentElement.classList.contains('dark'),
   );

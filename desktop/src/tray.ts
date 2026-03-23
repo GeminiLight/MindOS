@@ -1,8 +1,8 @@
 /**
  * System tray — mode-aware tray icon and context menu.
- * Generates fallback icon programmatically for Linux and packaged builds.
+ * Uses callbacks to trigger main process actions directly (not via renderer IPC).
  */
-import { Tray, Menu, BrowserWindow, app, nativeImage } from 'electron';
+import { Tray, Menu, BrowserWindow, app, nativeImage, ipcMain } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
 
@@ -11,35 +11,59 @@ let mainWindowRef: BrowserWindow | null = null;
 
 type ServerStatus = 'starting' | 'running' | 'error' | 'stopped';
 
+/** Callbacks from tray menu → main process */
+export interface TrayCallbacks {
+  onSwitchMode: () => Promise<void>;
+  onChangeMode: () => Promise<void>;
+  onOpenMindRoot: () => void;
+  onRestartServices: () => Promise<void>;
+}
+
+let callbacks: TrayCallbacks | null = null;
+
 /** Create a minimal 16x16 amber-colored PNG icon as fallback */
 function createFallbackIcon(): Electron.NativeImage {
-  // Minimal 16x16 RGBA buffer — fill with amber (#c8873a)
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
   for (let i = 0; i < size * size; i++) {
-    // Simple circle mask
     const x = i % size - size / 2;
     const y = Math.floor(i / size) - size / 2;
     const inCircle = x * x + y * y <= (size / 2 - 1) * (size / 2 - 1);
-    buf[i * 4 + 0] = inCircle ? 200 : 0;  // R
-    buf[i * 4 + 1] = inCircle ? 135 : 0;  // G
-    buf[i * 4 + 2] = inCircle ? 58 : 0;   // B
-    buf[i * 4 + 3] = inCircle ? 255 : 0;  // A
+    buf[i * 4 + 0] = inCircle ? 200 : 0;
+    buf[i * 4 + 1] = inCircle ? 135 : 0;
+    buf[i * 4 + 2] = inCircle ? 58 : 0;
+    buf[i * 4 + 3] = inCircle ? 255 : 0;
   }
   return nativeImage.createFromBuffer(buf, { width: size, height: size });
 }
 
 function loadTrayIcon(): Electron.NativeImage {
-  // Try loading from various paths
-  const candidates = [
-    // Development
-    path.join(__dirname, '..', 'src', 'icons', 'icon.png'),
-    // Packaged (files copied to resources)
-    path.join(__dirname, 'icons', 'icon.png'),
-    // resourcesPath (electron-builder extraResources)
-    process.resourcesPath ? path.join(process.resourcesPath, 'icon.png') : '',
-  ].filter(Boolean);
+  const appRoot = app.getAppPath();
 
+  // macOS: use Template image (black + alpha, macOS handles light/dark automatically)
+  // File MUST be named *Template.png for macOS to recognize it
+  if (process.platform === 'darwin') {
+    const templateCandidates = [
+      path.join(appRoot, 'src', 'icons', 'tray-iconTemplate.png'),
+    ];
+    for (const p of templateCandidates) {
+      if (existsSync(p)) {
+        try {
+          // Load the @1x file — Electron auto-picks @2x if present in same dir
+          const img = nativeImage.createFromPath(p);
+          if (!img.isEmpty()) {
+            img.setTemplateImage(true);
+            return img;
+          }
+        } catch { /* try next */ }
+      }
+    }
+  }
+
+  // Windows/Linux: use colored icon, resize to 16x16
+  const candidates = [
+    path.join(appRoot, 'src', 'icons', 'icon.png'),
+  ];
   for (const p of candidates) {
     if (existsSync(p)) {
       try {
@@ -48,12 +72,12 @@ function loadTrayIcon(): Electron.NativeImage {
       } catch { /* try next */ }
     }
   }
-
   return createFallbackIcon();
 }
 
-export function createTray(mainWindow: BrowserWindow): Tray | null {
+export function createTray(mainWindow: BrowserWindow, cbs: TrayCallbacks): Tray | null {
   mainWindowRef = mainWindow;
+  callbacks = cbs;
 
   try {
     const icon = loadTrayIcon();
@@ -68,7 +92,6 @@ export function createTray(mainWindow: BrowserWindow): Tray | null {
     updateTrayMenu('local', 'starting');
     return tray;
   } catch (err) {
-    // Tray creation can fail on Linux without AppIndicator
     console.warn('Failed to create system tray:', err);
     return null;
   }
@@ -83,19 +106,21 @@ export function updateTrayMenu(
 ): void {
   if (!tray || !mainWindowRef) return;
 
+  const zh = app.getLocale()?.startsWith('zh');
   const statusIcon = status === 'running' ? '🟢' : status === 'starting' ? '🟡' : '🔴';
-  const statusLabel = status === 'running' ? 'Running' : status === 'starting' ? 'Starting...' : 'Error';
+  const statusLabel = status === 'running'
+    ? (zh ? '运行中' : 'Running')
+    : status === 'starting'
+    ? (zh ? '启动中...' : 'Starting...')
+    : (zh ? '错误' : 'Error');
 
   const template: Electron.MenuItemConstructorOptions[] = [
     { label: `${statusIcon} MindOS ${statusLabel}`, enabled: false },
     { type: 'separator' },
     {
-      label: 'Open MindOS',
+      label: zh ? '打开 MindOS' : 'Open MindOS',
       accelerator: 'CmdOrCtrl+Shift+M',
-      click: () => {
-        mainWindowRef?.show();
-        mainWindowRef?.focus();
-      },
+      click: () => { mainWindowRef?.show(); mainWindowRef?.focus(); },
     },
     { type: 'separator' },
   ];
@@ -106,34 +131,44 @@ export function updateTrayMenu(
       { label: `MCP Server  ${mcpPort ? `● port ${mcpPort}` : ''}`, enabled: false },
       { type: 'separator' },
       {
-        label: 'Open Knowledge Base',
-        click: () => mainWindowRef?.webContents.send('ipc:open-mindroot'),
+        label: zh ? '打开知识库目录' : 'Open Knowledge Base',
+        click: () => callbacks?.onOpenMindRoot(),
       },
       {
-        label: 'Restart Services',
-        click: () => mainWindowRef?.webContents.send('ipc:restart-services'),
+        label: zh ? '重启服务' : 'Restart Services',
+        click: () => { callbacks?.onRestartServices(); },
       },
       { type: 'separator' },
-      { label: 'Switch to Remote', click: () => mainWindowRef?.webContents.send('ipc:switch-mode') },
+      {
+        label: zh ? '切换到远程模式' : 'Switch to Remote',
+        click: () => { callbacks?.onSwitchMode(); },
+      },
     );
   } else {
     template.push(
-      { label: `Server  ${remoteAddress || 'Not connected'}`, enabled: false },
+      { label: `Server  ${remoteAddress || (zh ? '未连接' : 'Not connected')}`, enabled: false },
       { type: 'separator' },
-      { label: 'Switch Server...', click: () => mainWindowRef?.webContents.send('ipc:switch-server') },
-      { label: 'Disconnect', click: () => mainWindowRef?.webContents.send('ipc:disconnect') },
-      { type: 'separator' },
-      { label: 'Switch to Local', click: () => mainWindowRef?.webContents.send('ipc:switch-mode') },
+      {
+        label: zh ? '切换到本地模式' : 'Switch to Local',
+        click: () => { callbacks?.onSwitchMode(); },
+      },
     );
   }
 
   template.push(
     { type: 'separator' },
-    { label: 'Settings...', click: () => mainWindowRef?.webContents.send('ipc:open-settings') },
-    { label: 'Check for Updates...', click: () => mainWindowRef?.webContents.send('ipc:check-update') },
+    {
+      label: zh ? '重新选择模式...' : 'Change Mode...',
+      click: () => { callbacks?.onChangeMode(); },
+    },
     { type: 'separator' },
     {
-      label: 'Quit MindOS',
+      label: zh ? '检查更新...' : 'Check for Updates...',
+      click: () => mainWindowRef?.webContents.send('ipc:check-update'),
+    },
+    { type: 'separator' },
+    {
+      label: zh ? '退出 MindOS' : 'Quit MindOS',
       accelerator: 'CmdOrCtrl+Q',
       click: () => app.quit(),
     },

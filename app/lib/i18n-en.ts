@@ -248,6 +248,7 @@ export const en = {
       readingFont: 'Reading font',
       contentWidth: 'Content width',
       colorTheme: 'Color theme',
+      system: 'System',
       dark: 'Dark',
       light: 'Light',
       language: 'Language',
