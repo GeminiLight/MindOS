@@ -16,7 +16,7 @@ import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { ProcessManager } from './process-manager';
 import { findAvailablePort } from './port-finder';
-import { createTray, updateTrayMenu } from './tray';
+import { createTray, updateTrayMenu, type TrayCallbacks } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { restoreWindowState, saveWindowState } from './window-state';
 import { setupUpdater } from './updater';
@@ -314,6 +314,120 @@ function navigator_lang(): 'zh' | 'en' {
   return locale?.startsWith('zh') ? 'zh' : 'en';
 }
 
+// ── Tray Action: Change Mode (re-show mode selection window) ──
+
+async function handleChangeMode(): Promise<void> {
+  const selectedMode = await showModeSelectWindow();
+  if (!selectedMode) return; // user cancelled
+
+  // If same mode, do nothing
+  if (selectedMode === currentMode) return;
+
+  // Save the new preference
+  saveDesktopMode(selectedMode);
+
+  // Use the existing switch logic (preheat + overlay)
+  // But first set the target mode correctly
+  // handleSwitchMode toggles, so we temporarily set currentMode
+  // so the toggle lands on the right target
+  currentMode = selectedMode === 'local' ? 'remote' : 'local';
+  await handleSwitchMode();
+}
+
+// ── Tray Action: Switch Mode (direct toggle local↔remote) ──
+
+async function handleSwitchMode(): Promise<void> {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const oldMode = currentMode;
+  const newMode = oldMode === 'local' ? 'remote' : 'local';
+  const zh = navigator_lang() === 'zh';
+
+  // 1. Inject overlay — old content stays visible underneath
+  await injectOverlay('mindos-switch-overlay', `
+    <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:system-ui;color:white;font-size:16px;backdrop-filter:blur(4px)">
+      ${zh ? '正在切换...' : 'Switching...'}
+    </div>
+  `);
+
+  // 2. Keep old processes alive — start new mode in parallel (preheat)
+  const oldProcessManager = processManager;
+  const oldConnectionMonitor = connectionMonitor;
+  processManager = null;
+  connectionMonitor = null;
+
+  currentMode = newMode;
+  invalidateConfig();
+
+  // 3. Start new mode (old still running)
+  let url: string | null = null;
+  try {
+    if (newMode === 'local') {
+      url = await startLocalMode();
+    } else {
+      url = await startRemoteMode();
+      if (url) setupConnectionMonitor(url);
+    }
+  } catch { /* handled below */ }
+
+  // 4. Apply result
+  if (url) {
+    saveDesktopMode(newMode);
+    currentUrl = url;
+    mainWindow.loadURL(url);
+    updateTrayMenu(newMode, 'running');
+    // Stop old mode after switching
+    if (oldProcessManager) oldProcessManager.stop().catch(() => {});
+    if (oldConnectionMonitor) oldConnectionMonitor.stop();
+  } else {
+    // Failed — revert
+    currentMode = oldMode;
+    processManager = oldProcessManager;
+    connectionMonitor = oldConnectionMonitor;
+    await removeOverlay('mindos-switch-overlay');
+    dialog.showErrorBox(
+      zh ? '切换失败' : 'Switch Failed',
+      zh ? '无法启动新模式，已恢复原连接。' : 'Could not start new mode. Restored previous connection.'
+    );
+  }
+}
+
+// ── Tray Action: Restart Services ──
+
+async function handleRestartServices(): Promise<void> {
+  if (currentMode !== 'local' || !processManager) return;
+  const zh = navigator_lang() === 'zh';
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await injectOverlay('mindos-switch-overlay', `
+      <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:system-ui;color:white;font-size:16px;backdrop-filter:blur(4px)">
+        ${zh ? '正在重启...' : 'Restarting...'}
+      </div>
+    `);
+  }
+
+  try {
+    await processManager.restart();
+    updateTrayMenu('local', 'running');
+    mainWindow?.reload();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    dialog.showErrorBox(zh ? '重启失败' : 'Restart Failed', msg);
+  }
+}
+
+// ── Tray Callbacks ──
+
+const trayCallbacks: TrayCallbacks = {
+  onSwitchMode: handleSwitchMode,
+  onChangeMode: handleChangeMode,
+  onOpenMindRoot: () => {
+    const config = loadConfig();
+    shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
+  },
+  onRestartServices: handleRestartServices,
+};
+
 // ── IPC Handlers ──
 
 function setupIPC(): void {
@@ -328,68 +442,9 @@ function setupIPC(): void {
     shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
   });
 
-  // ── Mode switching with preheat: start new BEFORE stopping old ──
-  ipcMain.handle('switch-mode', async () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-
-    const oldMode = currentMode;
-    const newMode = oldMode === 'local' ? 'remote' : 'local';
-    const zh = navigator_lang() === 'zh';
-
-    // 1. Inject overlay — old content stays visible underneath
-    await injectOverlay('mindos-switch-overlay', `
-      <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:system-ui;color:white;font-size:16px;backdrop-filter:blur(4px)">
-        ${zh ? '正在切换...' : 'Switching...'}
-      </div>
-    `);
-
-    // 2. Keep old processes alive — start new mode in parallel
-    //    Save references so we can clean up old after success
-    const oldProcessManager = processManager;
-    const oldConnectionMonitor = connectionMonitor;
-    processManager = null;
-    connectionMonitor = null;
-
-    currentMode = newMode;
-    invalidateConfig();
-
-    // 3. Start new mode (old still running, user can still see old content)
-    let url: string | null = null;
-    try {
-      if (newMode === 'local') {
-        url = await startLocalMode();
-      } else {
-        url = await startRemoteMode();
-        if (url) setupConnectionMonitor(url);
-      }
-    } catch { /* handled below */ }
-
-    // 4. Apply result
-    if (url) {
-      saveDesktopMode(newMode);
-      currentUrl = url;
-      mainWindow.loadURL(url);
-      updateTrayMenu(newMode, 'running');
-
-      // 5. NOW stop old mode (after new URL is loading)
-      if (oldProcessManager) {
-        oldProcessManager.stop().catch(() => {});
-      }
-      if (oldConnectionMonitor) {
-        oldConnectionMonitor.stop();
-      }
-    } else {
-      // Failed — revert: restore old references
-      currentMode = oldMode;
-      processManager = oldProcessManager;
-      connectionMonitor = oldConnectionMonitor;
-      await removeOverlay('mindos-switch-overlay');
-      dialog.showErrorBox(
-        zh ? '切换失败' : 'Switch Failed',
-        zh ? '无法启动新模式，已恢复原连接。' : 'Could not start new mode. Restored previous connection.'
-      );
-    }
-  });
+  ipcMain.handle('switch-mode', () => handleSwitchMode());
+  ipcMain.handle('change-mode', () => handleChangeMode());
+  ipcMain.handle('restart-services', () => handleRestartServices());
 }
 
 // ── Connection Monitor ──
@@ -519,7 +574,7 @@ async function bootApp(): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) {
     mainWindow = createMainWindow();
     setupIPC();
-    createTray(mainWindow);
+    createTray(mainWindow, trayCallbacks);
     registerShortcuts(mainWindow);
     setupUpdater();
   }
