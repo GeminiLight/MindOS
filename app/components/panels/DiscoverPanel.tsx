@@ -115,6 +115,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
 
   /** Category emoji icons */
   const categoryIcons: Record<string, string> = {
+    'knowledge-management': '📚',
     'memory-sync': '🧠',
     'auto-execute': '⚡',
     'experience-evolution': '🔁',
