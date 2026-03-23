@@ -677,6 +677,7 @@ export const en = {
     subtitle: 'Discover what you can do with MindOS — pick a scenario and try it now.',
     tryIt: 'Try it',
     categories: {
+      'knowledge-management': 'Knowledge Management',
       'memory-sync': 'Memory Sync',
       'auto-execute': 'Auto Execute',
       'experience-evolution': 'Experience Evolution',

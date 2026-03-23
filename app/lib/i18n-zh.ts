@@ -702,6 +702,7 @@ export const zh = {
     subtitle: '发现 MindOS 能帮你做什么 — 选一个场景，立即体验。',
     tryIt: '试一试',
     categories: {
+      'knowledge-management': '知识管理',
       'memory-sync': '记忆同步',
       'auto-execute': '自动执行',
       'experience-evolution': '经验进化',
