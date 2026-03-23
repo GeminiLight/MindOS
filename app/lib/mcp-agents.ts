@@ -3,6 +3,15 @@ import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
 
+/** Parse JSONC — strips single-line (//) and block comments before JSON.parse */
+function parseJsonc(text: string): Record<string, unknown> {
+  // Strip single-line comments (not inside strings)
+  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
+  // Strip block comments
+  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+  return JSON.parse(stripped);
+}
+
 export function expandHome(p: string): string {
   return p.startsWith('~/') ? path.resolve(os.homedir(), p.slice(2)) : p;
 }
@@ -227,7 +236,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
         }
       } else {
         // JSON format (default)
-        const config = JSON.parse(content);
+        const config = parseJsonc(content);
         const servers = config[agent.key];
         if (servers?.mindos) {
           const entry = servers.mindos;
