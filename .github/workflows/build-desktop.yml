@@ -1,14 +1,17 @@
 name: Build Desktop
 
 on:
-  push:
-    tags: ['desktop-v*']
   workflow_dispatch:
     inputs:
       publish:
         description: 'Publish to GitHub Releases'
         type: boolean
         default: false
+      tag:
+        description: 'Tag to build (for release name, e.g. desktop-v0.1.0)'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: write
