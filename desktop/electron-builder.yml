@@ -11,18 +11,6 @@ files:
   - src/connect.html
   - src/splash.html
   - src/icons/**/*
-  - ../app/.next/**/*
-  - ../app/public/**/*
-  - ../app/package.json
-  - ../app/node_modules/**/*
-  - ../mcp/src/**/*
-  - ../mcp/package.json
-  - ../mcp/node_modules/**/*
-  - ../shared/**/*.ts
-  - ../bin/**/*
-  - ../templates/**/*
-  - ../skills/**/*
-  - ../scripts/gen-renderer-index.js
   - "!**/node_modules/.cache"
   - "!**/.turbo"
   - "!**/__tests__/**"
@@ -37,6 +25,8 @@ mac:
         - x64
         - arm64
   hardenedRuntime: true
+
+asar: true
 
 win:
   icon: src/icons/icon.ico

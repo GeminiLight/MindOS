@@ -3,12 +3,19 @@
  * Handles mode selection, connection testing, and server connection
  */
 
+import { t, setLang, translations, type Lang, type I18nKeys } from './i18n/index';
+
 // IPC bridge — exposed by preload
 declare global {
   interface Window {
     mindosConnect: {
       checkNode: () => Promise<boolean>;
-      checkMindos: () => Promise<boolean>;
+      checkMindosStatus: () => Promise<{
+        status: 'not-installed' | 'ready' | 'installed-not-built';
+        path: string | null;
+      }>;
+      buildMindos: (modulePath: string) => Promise<{ success: boolean; output?: string; error?: string; stderr?: string }>;
+      getMindosPath: () => Promise<{ path: string; source: 'user' } | null>;
       installMindos: () => Promise<{ success: boolean; output?: string; error?: string; stderr?: string }>;
       selectMode: (mode: 'local' | 'remote') => Promise<boolean>;
       showNodeDialog: () => Promise<'install' | 'remote' | 'cancel'>;
@@ -29,152 +36,146 @@ declare global {
 
 const ipc = window.mindosConnect;
 
-let testResult: {
+type TestResult = {
   status: 'online' | 'not-mindos' | 'error';
   authRequired?: boolean;
   version?: string;
   error?: string;
-} | null = null;
-
-let recentConnections: Array<{ address: string; label?: string }> = [];
-let currentLang: 'zh' | 'en' = 'zh';
-
-// ── i18n Translations ──
-const i18n = {
-  zh: {
-    subtitle: '选择连接模式',
-    localTitle: '本地模式 / Local Mode',
-    localDesc: '在本机运行 MindOS，需要安装 Node.js',
-    localSub: '推荐：个人使用或开发测试',
-    remoteTitle: '远程模式 / Remote Mode',
-    remoteDesc: '连接到远程 MindOS 服务器',
-    remoteSub: '推荐：团队协作或服务器部署',
-    connectServer: '连接到服务器 / Connect to Server',
-    recentServers: '最近连接的服务器 / Recent Servers',
-    orConnect: '或连接新服务器 / or connect to a new server',
-    serverAddress: '服务器地址 / Server Address',
-    testConnection: '测试连接 / Test Connection',
-    password: '密码 / Password',
-    enterPassword: '输入服务器密码 / Enter server password',
-    connect: '连接 / Connect',
-    hint: '💡 在主机上的 <strong>MindOS 设置</strong> 中查看服务器地址和密码',
-    switchLocal: '← 切换到本地模式',
-    switchRemote: '← 切换到远程模式',
-    connecting: '连接中...',
-    online: '✓ 在线',
-    passwordRequired: '· 需要密码',
-    notMindos: '⚠ 不是 MindOS 服务器',
-    cannotReach: '无法连接到服务器',
-    incorrectPassword: '密码错误',
-    connectionFailed: '连接失败',
-    connected: '已连接！',
-    forgot: 'Forget / 忘记',
-  },
-  en: {
-    subtitle: 'Choose Connection Mode',
-    localTitle: 'Local Mode / 本地模式',
-    localDesc: 'Run MindOS on this machine, requires Node.js',
-    localSub: 'Recommended for: personal use or development',
-    remoteTitle: 'Remote Mode / 远程模式',
-    remoteDesc: 'Connect to a remote MindOS server',
-    remoteSub: 'Recommended for: team collaboration or server deployment',
-    connectServer: 'Connect to Server / 连接到服务器',
-    recentServers: 'Recent Servers / 最近连接的服务器',
-    orConnect: 'or connect to a new server / 或连接新服务器',
-    serverAddress: 'Server Address / 服务器地址',
-    testConnection: 'Test Connection / 测试连接',
-    password: 'Password / 密码',
-    enterPassword: 'Enter server password / 输入服务器密码',
-    connect: 'Connect / 连接',
-    hint: '💡 Find your server address and password in <strong>MindOS Settings</strong> on the host machine.',
-    switchLocal: '← Switch to Local Mode',
-    switchRemote: '← Switch to Remote Mode',
-    connecting: 'Connecting...',
-    online: '✓ Online',
-    passwordRequired: '· Password required',
-    notMindos: '⚠ Not a MindOS server',
-    cannotReach: 'Cannot reach server',
-    incorrectPassword: 'Incorrect password',
-    connectionFailed: 'Connection failed',
-    connected: 'Connected!',
-    forgot: 'Forget',
-  }
 };
 
-// ── i18n Helpers ──
-function setLang(lang: 'zh' | 'en'): void {
-  currentLang = lang;
+let testResult: TestResult | null = null;
+let recentConnections: Array<{ address: string; label?: string }> = [];
+
+// ── Language switcher (exposed to HTML onclick) ──
+function switchLang(lang: Lang): void {
+  setLang(lang);
+  localStorage.setItem('mindos-lang', lang);
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   document.getElementById('lang-zh')?.classList.toggle('active', lang === 'zh');
   document.getElementById('lang-en')?.classList.toggle('active', lang === 'en');
 
-  // Update all elements with data-i18n
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n') as keyof typeof i18n.zh;
-    if (i18n[lang][key]) {
-      el.innerHTML = i18n[lang][key];
-    }
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n') as I18nKeys;
+    const text = translations[lang][key];
+    if (text != null) el.innerHTML = text;
   });
 
-  // Update placeholders
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-    const key = el.getAttribute('data-i18n-placeholder') as keyof typeof i18n.zh;
-    if (i18n[lang][key]) {
-      (el as HTMLInputElement).placeholder = i18n[lang][key];
-    }
+  document.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder') as I18nKeys;
+    const text = translations[lang][key];
+    if (text != null) el.placeholder = text;
   });
 }
 
-function t(key: keyof typeof i18n.zh): string {
-  return i18n[currentLang][key] || key;
+// ── IPC helpers ──
+function switchToLocal(): void {
+  void ipc.switchToLocal?.();
+}
+
+function openNodejs(): void {
+  void ipc.openNodejs?.();
 }
 
 // ── Mode Selection ──
 async function selectMode(mode: 'local' | 'remote'): Promise<void> {
   if (mode === 'local') {
-    // Check if Node.js is available
     const nodeAvailable = await ipc.checkNode?.();
-    const mindosAvailable = await ipc.checkMindos?.();
+    if (!nodeAvailable) {
+      const choice = await ipc.showNodeDialog?.() || 'cancel';
+      if (choice === 'remote') {
+        await selectMode('remote');
+      } else if (choice === 'install') {
+        ipc.openNodejs?.();
+      }
+      return;
+    }
 
-    if (!nodeAvailable || !mindosAvailable) {
-      // Show setup guide inline instead of dialog
+    const mindosStatus = await ipc.checkMindosStatus?.();
+
+    if (mindosStatus?.status === 'ready') {
+      ipc.selectMode?.('local');
+    } else if (mindosStatus?.status === 'installed-not-built') {
+      showBuildSection(mindosStatus.path!);
+    } else {
       const setupSection = document.getElementById('local-setup');
       if (setupSection) {
         setupSection.style.display = 'block';
         setupSection.scrollIntoView({ behavior: 'smooth' });
       }
-      return;
     }
-    ipc.selectMode?.('local');
   } else {
     document.getElementById('mode-selection')?.classList.add('hidden');
     document.getElementById('remote-screen')?.classList.remove('hidden');
-    // Load recent connections
     await loadRecentConnections();
   }
 }
 
-async function showNodeRequiredDialog(): Promise<void> {
-  const choice = await ipc.showNodeDialog?.() || 'cancel';
-  if (choice === 'install') {
-    ipc.openNodejs?.();
-  } else if (choice === 'remote') {
-    await selectMode('remote');
+/** Show build section for user's local MindOS that needs building */
+function showBuildSection(modulePath: string): void {
+  const setupSection = document.getElementById('local-setup');
+  if (!setupSection) return;
+
+  // Escape path for safe insertion into an HTML onclick attribute
+  const safePath = modulePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  setupSection.style.display = 'block';
+  setupSection.innerHTML = `
+    <h4>${t('cliInstalled')}</h4>
+    <p>${t('cliInstalledDesc')}</p>
+    <button class="setup-btn" id="build-btn" onclick="buildMindOS('${safePath}')">
+      ${t('buildBtn')}
+    </button>
+    <div id="build-status" class="hidden"></div>
+    <button class="setup-btn" id="retry-btn" onclick="checkNodeAgain()" style="display:none; margin-top:12px;">
+      ${t('retryLocal')}
+    </button>
+  `;
+  setupSection.scrollIntoView({ behavior: 'smooth' });
+}
+
+/** Auto-build user's local MindOS */
+async function buildMindOS(modulePath: string): Promise<void> {
+  const buildBtn = document.getElementById('build-btn') as HTMLButtonElement;
+  const statusEl = document.getElementById('build-status') as HTMLElement;
+  const retryBtn = document.getElementById('retry-btn') as HTMLButtonElement;
+
+  if (!buildBtn || !statusEl) return;
+
+  buildBtn.disabled = true;
+  buildBtn.innerHTML = `<span class="spinner"></span> ${t('building')}`;
+  buildBtn.style.opacity = '0.7';
+  statusEl.classList.remove('hidden');
+  statusEl.className = 'install-progress';
+  statusEl.textContent = t('buildingDesc');
+
+  try {
+    const result = await ipc.buildMindos?.(modulePath);
+
+    if (result?.success) {
+      buildBtn.style.display = 'none';
+      statusEl.className = 'install-progress success';
+      statusEl.textContent = t('buildSuccess');
+      // Auto-proceed: trigger local mode start
+      await checkNodeAgain();
+    } else {
+      buildBtn.disabled = false;
+      buildBtn.style.opacity = '1';
+      buildBtn.innerHTML = t('retryBuild');
+      statusEl.className = 'install-progress error';
+      statusEl.innerHTML = `${t('buildFailed')}: ${result?.error ?? '?'}${result?.stderr ? `<br><small>${result.stderr}</small>` : ''}`;
+    }
+  } catch (err) {
+    buildBtn.disabled = false;
+    buildBtn.style.opacity = '1';
+    buildBtn.innerHTML = t('retryBuild');
+    statusEl.className = 'install-progress error';
+    statusEl.textContent = `${t('buildError')}: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
-
-function switchToLocal(): void {
-  document.getElementById('remote-screen')?.classList.add('hidden');
-  document.getElementById('mode-selection')?.classList.remove('hidden');
-}
-
-/** Open Node.js download page */
-async function openNodejs(): Promise<void> {
-  await ipc.openNodejs?.();
-}
+(window as typeof window & { buildMindOS: typeof buildMindOS }).buildMindOS = buildMindOS;
 
 /** Auto-install MindOS CLI */
 async function installMindOS(event?: Event): Promise<void> {
-  // Prevent event bubbling to parent card
   event?.stopPropagation();
 
   const installBtn = document.getElementById('install-btn') as HTMLButtonElement;
@@ -183,39 +184,36 @@ async function installMindOS(event?: Event): Promise<void> {
 
   if (!installBtn || !statusEl) return;
 
-  // Show installing state
   installBtn.disabled = true;
-  installBtn.innerHTML = `<span class="spinner"></span> 正在安装...`;
+  installBtn.innerHTML = `<span class="spinner"></span> ${t('installing')}`;
   installBtn.style.opacity = '0.7';
   statusEl.classList.remove('hidden');
   statusEl.className = 'install-progress';
-  statusEl.textContent = '⏳ 正在下载并安装 @geminilight/mindos，请稍候（约需1-2分钟）...';
+  statusEl.textContent = t('installingDesc');
 
   try {
     const result = await ipc.installMindos?.();
 
     if (result?.success) {
-      // Installation successful
       installBtn.style.display = 'none';
       statusEl.className = 'install-progress success';
-      statusEl.textContent = '✅ MindOS CLI 安装成功！';
-      retryBtn.style.display = 'inline-flex';
+      statusEl.textContent = t('installSuccess');
+      // Auto-proceed: no need to click "Start Local Mode"
+      await checkNodeAgain();
     } else {
-      // Installation failed
       installBtn.disabled = false;
       installBtn.style.opacity = '1';
-      installBtn.innerHTML = '重试安装';
+      installBtn.innerHTML = t('retryInstall');
       statusEl.className = 'install-progress error';
-      const errorMsg = result?.error || '未知错误';
-      statusEl.innerHTML = `❌ 安装失败: ${errorMsg}${result?.stderr ? `<br><small>${result.stderr}</small>` : ''}`;
+      statusEl.innerHTML = `${t('installFailed')}: ${result?.error ?? '?'}${result?.stderr ? `<br><small>${result.stderr}</small>` : ''}`;
       retryBtn.style.display = 'none';
     }
   } catch (err) {
     installBtn.disabled = false;
     installBtn.style.opacity = '1';
-    installBtn.innerHTML = '重试安装';
+    installBtn.innerHTML = t('retryInstall');
     statusEl.className = 'install-progress error';
-    statusEl.textContent = `❌ 安装出错: ${err instanceof Error ? err.message : String(err)}`;
+    statusEl.textContent = `${t('installError')}: ${err instanceof Error ? err.message : String(err)}`;
     retryBtn.style.display = 'none';
   }
 }
@@ -225,29 +223,23 @@ async function checkNodeAgain(): Promise<void> {
   const setupSection = document.getElementById('local-setup');
   const statusEl = setupSection?.querySelector('h4');
 
-  // Show checking status
-  if (statusEl) {
-    statusEl.textContent = '🔍 检测中... / Checking...';
-  }
+  if (statusEl) statusEl.textContent = t('checking');
 
   const nodeAvailable = await ipc.checkNode?.();
-  const mindosAvailable = await ipc.checkMindos?.();
+  if (!nodeAvailable) {
+    if (statusEl) statusEl.textContent = t('missingNode');
+    return;
+  }
 
-  if (nodeAvailable && mindosAvailable) {
-    // All good, proceed with local mode
-    if (statusEl) {
-      statusEl.textContent = '✅ 环境检测通过！正在启动... / Environment ready! Starting...';
-    }
+  const mindosStatus = await ipc.checkMindosStatus?.();
+
+  if (mindosStatus?.status === 'ready') {
+    if (statusEl) statusEl.textContent = t('envReady');
     await ipc.selectMode?.('local');
+  } else if (mindosStatus?.status === 'installed-not-built') {
+    showBuildSection(mindosStatus.path!);
   } else {
-    // Still not ready, show what's missing
-    const missing: string[] = [];
-    if (!nodeAvailable) missing.push('Node.js');
-    if (!mindosAvailable) missing.push('MindOS CLI');
-
-    if (statusEl) {
-      statusEl.textContent = `❌ 仍未检测到 / Still missing: ${missing.join(', ')}`;
-    }
+    if (statusEl) statusEl.textContent = t('missingCliStill');
   }
 }
 
@@ -338,13 +330,16 @@ async function handleTest(): Promise<void> {
   btn.disabled = false;
   btn.textContent = t('testConnection');
 
-  if (testResult.status === 'online') {
+  // testResult is guaranteed non-null after the try/catch above
+  const result = testResult!;
+
+  if (result.status === 'online') {
     status.className = 'status-bar success';
-    const version = testResult.version ? ` · v${testResult.version}` : '';
-    const auth = testResult.authRequired ? ` · ${t('passwordRequired')}` : '';
+    const version = result.version ? ` · v${result.version}` : '';
+    const auth = result.authRequired ? ` · ${t('passwordRequired')}` : '';
     status.textContent = `${t('online')}${version}${auth}`;
 
-    if (testResult.authRequired) {
+    if (result.authRequired) {
       pwSection?.classList.remove('hidden');
       const pwInput = document.getElementById('password') as HTMLInputElement;
       pwInput?.focus();
@@ -353,13 +348,13 @@ async function handleTest(): Promise<void> {
     }
     connectBtn?.classList.remove('hidden');
     connectBtn.disabled = false;
-  } else if (testResult.status === 'not-mindos') {
+  } else if (result.status === 'not-mindos') {
     status.className = 'status-bar error';
     status.textContent = t('notMindos');
     connectBtn?.classList.add('hidden');
   } else {
     status.className = 'status-bar error';
-    status.textContent = `✗ ${testResult.error || t('cannotReach')}`;
+    status.textContent = `✗ ${result.error || t('cannotReach')}`;
     connectBtn?.classList.add('hidden');
   }
 }
@@ -386,7 +381,6 @@ async function handleConnect(): Promise<void> {
   try {
     const result = await ipc.connect(addr, pw || null);
     if (result.ok) {
-      // Success — main process will load the URL
       btn.textContent = t('connected');
     } else {
       status.className = 'status-bar error';
@@ -404,55 +398,40 @@ async function handleConnect(): Promise<void> {
 
 // ── Init ──
 function init(): void {
-  // Check URL params to see if we're in mode selection or connection screen
   const urlParams = new URLSearchParams(window.location.search);
   const modeSelect = urlParams.get('modeSelect');
 
   if (modeSelect === 'true') {
-    // Show mode selection by default
     document.getElementById('mode-selection')?.classList.remove('hidden');
     document.getElementById('remote-screen')?.classList.add('hidden');
   } else {
-    // Direct connection screen (already configured as remote)
     document.getElementById('mode-selection')?.classList.add('hidden');
     document.getElementById('remote-screen')?.classList.remove('hidden');
     void loadRecentConnections();
   }
 
-  // Setup event listeners
-  const addressInput = document.getElementById('address');
-  const passwordInput = document.getElementById('password');
-
-  addressInput?.addEventListener('keydown', (e) => {
-    if ((e as KeyboardEvent).key === 'Enter') {
-      void handleTest();
-    }
+  document.getElementById('address')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void handleTest();
   });
 
-  passwordInput?.addEventListener('keydown', (e) => {
-    if ((e as KeyboardEvent).key === 'Enter') {
-      void handleConnect();
-    }
+  document.getElementById('password')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void handleConnect();
   });
 
   // Expose functions to global scope for HTML onclick handlers
-  (window as typeof window & {
-    setLang: typeof setLang;
-    selectMode: typeof selectMode;
-    switchToLocal: typeof switchToLocal;
-    openNodejs: typeof openNodejs;
-    checkNodeAgain: typeof checkNodeAgain;
-    installMindOS: typeof installMindOS;
-    handleTest: typeof handleTest;
-    handleConnect: typeof handleConnect;
-  }).setLang = setLang;
-  (window as typeof window & { selectMode: typeof selectMode }).selectMode = selectMode;
-  (window as typeof window & { switchToLocal: typeof switchToLocal }).switchToLocal = switchToLocal;
-  (window as typeof window & { openNodejs: typeof openNodejs }).openNodejs = openNodejs;
-  (window as typeof window & { checkNodeAgain: typeof checkNodeAgain }).checkNodeAgain = checkNodeAgain;
-  (window as typeof window & { installMindOS: typeof installMindOS }).installMindOS = installMindOS;
-  (window as typeof window & { handleTest: typeof handleTest }).handleTest = handleTest;
-  (window as typeof window & { handleConnect: typeof handleConnect }).handleConnect = handleConnect;
+  const g = window as unknown as Record<string, unknown>;
+  g['switchLang']     = switchLang;
+  g['selectMode']     = selectMode;
+  g['switchToLocal']  = switchToLocal;
+  g['openNodejs']     = openNodejs;
+  g['checkNodeAgain'] = checkNodeAgain;
+  g['installMindOS']  = installMindOS;
+  g['handleTest']     = handleTest;
+  g['handleConnect']  = handleConnect;
+
+  // Apply initial language from saved preference (default: zh)
+  const savedLang = (localStorage.getItem('mindos-lang') || 'zh') as 'zh' | 'en';
+  switchLang(savedLang);
 }
 
 // Start
