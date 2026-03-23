@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, ExternalLink, Blocks, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Blocks, Zap, LayoutTemplate } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/LocaleContext';
 import { useCases } from '@/components/explore/use-cases';
@@ -153,6 +153,16 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
           icon={<Zap size={11} />}
           title={d.skillMarket}
           description={d.skillMarketDesc}
+          comingSoonLabel={d.comingSoon}
+        />
+
+        <div className="mx-4 border-t border-border" />
+
+        {/* Space Templates — Coming Soon */}
+        <ComingSoonSection
+          icon={<LayoutTemplate size={11} />}
+          title={d.spaceTemplates}
+          description={d.spaceTemplatesDesc}
           comingSoonLabel={d.comingSoon}
         />
 
