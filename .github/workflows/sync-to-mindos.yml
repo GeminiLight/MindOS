@@ -20,6 +20,7 @@ on:
       - 'templates/**'
       - 'assets/**'
       - 'landing/**'
+      - 'docs/**'
       - 'bin/**'
       - 'scripts/**'
       - 'tests/**'
@@ -85,6 +86,7 @@ jobs:
           [ -d bin/ ] && rsync -av --delete bin/ /tmp/mindos/bin/
           [ -d scripts/ ] && rsync -av --delete scripts/ /tmp/mindos/scripts/
           [ -d tests/ ] && rsync -av --delete tests/ /tmp/mindos/tests/
+          [ -d docs/ ] && rsync -av --delete docs/ /tmp/mindos/docs/
 
           # Sync CI workflows — only specific files, skip private-repo-only ones
           mkdir -p /tmp/mindos/.github/workflows
