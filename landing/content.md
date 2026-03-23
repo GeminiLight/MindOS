@@ -38,8 +38,8 @@
   - zh: 人类在此思考，Agent 依此行动。
   - en: Human Thinks Here, Agent Acts There.
 - **Subhead**
-  - zh: 和所有 AI 共享你的大脑——看得见、改得了、越用越聪明。
-  - en: Share your mind with every AI — visible, editable, and smarter with every use.
+  - zh: 和所有 AI 共享你的大脑——看得见、改得了、越用越是你。
+  - en: Share your brain with every AI — visible, editable, and more YOU with every use.
 - **CTA Primary**
   - zh: 开始构建
   - en: Get Started

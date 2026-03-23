@@ -21,7 +21,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by Agents. **One shared memory layer for all Agents — auditable, correctable, and smarter with every use.**
+MindOS is a **Human-AI Collaborative Mind System**—a local-first knowledge base that ensures your notes, workflows, and personal context are both human-readable and directly executable by Agents. **Share your brain with every AI — auditable, correctable, and more YOU with every use.**
 
 ---
 
