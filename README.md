@@ -40,7 +40,7 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 >
 > **✨ Try it now:** After installation, give these a try:
 > ```
-> Read my MindOS knowledge base, see what's inside, then help me write my self-introduction into Profile.
+> Here's my resume, read it and organize my info into MindOS.
 > ```
 > ```
 > Help me distill the experience from this conversation into MindOS as a reusable SOP.

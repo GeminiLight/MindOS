@@ -631,7 +631,7 @@
 
 | Card | Icon | zh Label | en Label | zh Prompt | en Prompt |
 |------|------|----------|----------|-----------|-----------|
-| 1 | 👤 | 注入身份 | Inject Profile | 读一下我的 MindOS 知识库，看看里面有什么，然后帮我把自我介绍写进 Profile。 | Read my MindOS knowledge base, see what's inside, then help me write my self-introduction into Profile. |
+| 1 | 👤 | 注入身份 | Inject Profile | 这是我的简历，读一下，把我的信息整理到 MindOS 里。 | Here's my resume, read it and organize my info into MindOS. |
 | 2 | 🔄 | 沉淀经验 | Distill SOP | 帮我把这次对话的经验沉淀到 MindOS，形成一个可复用的工作流。 | Help me distill the experience from this conversation into MindOS as a reusable SOP. |
 | 3 | ▶️ | 执行工作流 | Run Workflow | 帮我执行 MindOS 里的 XXX 工作流。 | Help me execute the XXX SOP from MindOS. |
 
