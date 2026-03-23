@@ -14,7 +14,7 @@ export default function ThemeToggle() {
       const stored = localStorage.getItem('theme');
       return stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
     },
-    () => true,
+    () => document.documentElement.classList.contains('dark'),
   );
 
   const toggle = () => {

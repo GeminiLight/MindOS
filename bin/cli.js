@@ -708,6 +708,18 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       process.exit(1);
     }
     if (existsSync(BUILD_STAMP)) rmSync(BUILD_STAMP);
+
+    // Silently update installed skills to match the new package
+    try {
+      const newRoot = getUpdatedRoot();
+      const { checkSkillVersions, updateSkill } = await import('./lib/skill-check.js');
+      const mismatches = checkSkillVersions(newRoot);
+      for (const m of mismatches) {
+        updateSkill(m.bundledPath, m.installPath);
+        console.log(`  ${green('✓')} ${dim(`Skill ${m.name}: v${m.installed} → v${m.bundled}`)}`);
+      }
+    } catch { /* best-effort */ }
+
     const newVersion = (() => {
       try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; }
     })();

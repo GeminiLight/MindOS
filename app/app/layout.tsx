@@ -8,6 +8,8 @@ import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import RegisterSW from './register-sw';
 import UpdateBanner from '@/components/UpdateBanner';
+import { cookies } from 'next/headers';
+import type { Locale } from '@/lib/i18n';
 
 const geistSans = Inter({
   variable: '--font-geist-sans',
@@ -57,7 +59,7 @@ export const viewport = {
   viewportFit: 'cover' as const,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -69,8 +71,12 @@ export default function RootLayout({
     console.error('[RootLayout] Failed to load file tree:', err);
   }
 
+  // Read locale from cookie (set by pre-hydration script) so SSR matches client
+  const cookieStore = await cookies();
+  const ssrLocale: Locale = cookieStore.get('locale')?.value === 'zh' ? 'zh' : 'en';
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={ssrLocale} suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#c8871e" />
         {/* Patch Node.removeChild/insertBefore to swallow errors caused by browser
@@ -84,7 +90,7 @@ export default function RootLayout({
         {/* Apply user appearance settings before first paint, preventing flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme');var dark=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',dark);var cw=localStorage.getItem('content-width');if(cw)document.documentElement.style.setProperty('--content-width-override',cw);var pf=localStorage.getItem('prose-font');var fm={lora:'"Lora", Georgia, serif','ibm-plex-sans':'"IBM Plex Sans", sans-serif',geist:'var(--font-geist-sans), sans-serif','ibm-plex-mono':'"IBM Plex Mono", monospace'};if(pf&&fm[pf])document.documentElement.style.setProperty('--prose-font-override',fm[pf]);}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('theme');var dark=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',dark);var cw=localStorage.getItem('content-width');if(cw)document.documentElement.style.setProperty('--content-width-override',cw);var pf=localStorage.getItem('prose-font');var fm={lora:'"Lora", Georgia, serif','ibm-plex-sans':'"IBM Plex Sans", sans-serif',geist:'var(--font-geist-sans), sans-serif','ibm-plex-mono':'"IBM Plex Mono", monospace'};if(pf&&fm[pf])document.documentElement.style.setProperty('--prose-font-override',fm[pf]);var loc=localStorage.getItem('locale')||'en';document.documentElement.lang=loc==='zh'?'zh':'en';document.cookie='locale='+loc+';path=/;max-age=31536000;SameSite=Lax'}catch(e){}})();`,
           }}
         />
       </head>
@@ -92,7 +98,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexMono.variable} ${ibmPlexSans.variable} ${lora.variable} antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
-        <LocaleProvider>
+        <LocaleProvider ssrLocale={ssrLocale}>
           <UpdateBanner />
           <TooltipProvider delay={300}>
             <ErrorBoundary>
