@@ -1,65 +1,149 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MindOS</title>
   <style>
-    /* Design system tokens (dark mode) — mirrors app/app/globals.css .dark */
     :root {
-      --background: #131210;
-      --foreground: #e8e4dc;
-      --muted-foreground: #8a8275;
-      --amber: #d4954a;
-      --amber-dim: rgba(212, 149, 74, 0.20);
-      --radius: 0.5rem;
+      --bg: #faf9f7; --fg: #1c1a17; --muted: #8a8275;
+      --amber: #c8873a; --amber-dim: rgba(200,135,58,0.12);
+      --amber-fg: #fff; --error: #c85050; --card: #fff;
+      --border: rgba(28,26,23,0.10);
+      color-scheme: light dark;
     }
-
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #131210; --fg: #e8e4dc; --muted: #8a8275;
+        --amber: #d4954a; --amber-dim: rgba(212,149,74,0.20);
+        --amber-fg: #131210; --error: #c85050; --card: #1c1a17;
+        --border: rgba(232,228,220,0.08);
+      }
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background: var(--background);
-      color: var(--foreground);
-      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; background: var(--bg); color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased; -webkit-app-region: drag;
+      user-select: none;
     }
-    .logo {
-      font-size: 48px;
-      font-weight: 700;
-      color: var(--amber);
-      margin-bottom: 16px;
-      font-family: 'Lora', Georgia, serif;
+    .logo { font-size: 36px; font-weight: 700; color: var(--amber); font-family: 'Lora', Georgia, serif; }
+    .tagline { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* Progress bar */
+    .progress-wrap {
+      width: 200px; height: 3px; background: var(--border); border-radius: 2px;
+      margin-top: 32px; overflow: hidden;
     }
-    .tagline {
-      font-size: 14px;
-      color: var(--muted-foreground);
-      margin-bottom: 40px;
+    .progress-bar {
+      width: 40%; height: 100%; background: var(--amber); border-radius: 2px;
+      animation: indeterminate 1.4s ease-in-out infinite;
     }
-    .spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid var(--amber-dim);
-      border-top-color: var(--amber);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    @keyframes indeterminate {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .progress-bar.done { width: 100%; animation: none; transition: width 0.3s; }
+    .progress-wrap.hidden { display: none; }
+
+    /* Status text */
+    .status { margin-top: 12px; font-size: 12px; color: var(--muted); min-height: 18px; transition: color 0.2s; }
+    .status.error { color: var(--error); }
+
+    /* Action buttons (shown on error) */
+    .actions { display: flex; gap: 8px; margin-top: 16px; -webkit-app-region: no-drag; }
+    .actions.hidden { display: none; }
+    .btn {
+      padding: 7px 16px; font-size: 12px; font-weight: 500; border-radius: 8px;
+      cursor: pointer; border: 1px solid var(--border); background: var(--card);
+      color: var(--fg); transition: all 0.15s;
     }
-    .status {
-      margin-top: 16px;
-      font-size: 12px;
-      color: var(--muted-foreground);
-    }
+    .btn:hover { border-color: var(--amber); }
+    .btn.primary { background: var(--amber); color: var(--amber-fg); border-color: var(--amber); }
+    .btn.primary:hover { opacity: 0.9; }
   </style>
 </head>
 <body>
   <div class="logo">∞ MindOS</div>
-  <p class="tagline">Human Thinks Here, Agent Acts There.</p>
-  <div class="spinner"></div>
-  <p class="status" id="status">Starting services...</p>
+  <p class="tagline">Human–Agent Knowledge Base</p>
+  <div class="progress-wrap" id="progress"><div class="progress-bar" id="bar"></div></div>
+  <p class="status" id="status"></p>
+  <div class="actions hidden" id="actions"></div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const progressEl = document.getElementById('progress');
+    const barEl = document.getElementById('bar');
+    const actionsEl = document.getElementById('actions');
+
+    // Detect language
+    const lang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+
+    // i18n
+    const i = {
+      zh: {
+        detecting: '正在检测环境...',
+        starting: '正在启动服务...',
+        connecting: '正在连接服务器...',
+        ready: '就绪',
+        error: '启动失败',
+        retry: '重试',
+        switchRemote: '切换到远程模式',
+        switchLocal: '切换到本地模式',
+        quit: '退出',
+        noNode: '未检测到 Node.js',
+        noMindos: '未检测到 MindOS CLI',
+        selectMode: '请选择模式',
+      },
+      en: {
+        detecting: 'Detecting environment...',
+        starting: 'Starting services...',
+        connecting: 'Connecting to server...',
+        ready: 'Ready',
+        error: 'Startup failed',
+        retry: 'Retry',
+        switchRemote: 'Switch to Remote',
+        switchLocal: 'Switch to Local',
+        quit: 'Quit',
+        noNode: 'Node.js not found',
+        noMindos: 'MindOS CLI not found',
+        selectMode: 'Choose mode',
+      },
+    };
+    const t = (key) => i[lang]?.[key] || i.en[key] || key;
+
+    // Listen for status updates from main process
+    if (window.mindosSplash) {
+      window.mindosSplash.onStatus((data) => {
+        if (data.status) {
+          statusEl.textContent = t(data.status) || data.status;
+          statusEl.classList.toggle('error', data.status === 'error');
+        }
+        if (data.message) {
+          statusEl.textContent = data.message;
+        }
+        if (data.done) {
+          barEl.classList.add('done');
+        }
+        if (data.error) {
+          statusEl.textContent = data.error;
+          statusEl.classList.add('error');
+          progressEl.classList.add('hidden');
+          // Show action buttons
+          actionsEl.classList.remove('hidden');
+          actionsEl.innerHTML = '';
+          if (data.actions) {
+            data.actions.forEach(a => {
+              const btn = document.createElement('button');
+              btn.className = a.primary ? 'btn primary' : 'btn';
+              btn.textContent = t(a.label) || a.label;
+              btn.addEventListener('click', () => window.mindosSplash.action(a.id));
+              actionsEl.appendChild(btn);
+            });
+          }
+        }
+      });
+    }
+  </script>
 </body>
 </html>
