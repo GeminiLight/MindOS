@@ -377,6 +377,8 @@ export const zh = {
       skillBuiltin: '内置',
       skillUser: '自定义',
       addSkill: '+ 添加 Skill',
+      cliInstallHint: '通过命令行安装：',
+      skillPathHint: 'Skill 文件安装路径：',
       deleteSkill: '删除',
       editSkill: '编辑',
       saveSkill: '保存',

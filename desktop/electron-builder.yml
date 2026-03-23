@@ -20,7 +20,7 @@ mac:
   category: public.app-category.productivity
   icon: src/icons/icon.png
   target:
-    - target: zip
+    - target: dmg
       arch:
         - arm64
         - x64

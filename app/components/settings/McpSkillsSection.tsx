@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2, ChevronDown, ChevronRight,
-  Plus, X, Search,
+  Plus, X, Search, Copy, Check,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useMcpDataOptional } from '@/hooks/useMcpData';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { SkillInfo, McpSkillsSectionProps } from './types';
 import SkillRow from './McpSkillRow';
 import SkillCreateForm from './McpSkillCreateForm';
@@ -24,7 +25,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
   const [createError, setCreateError] = useState('');
 
   const [search, setSearch] = useState('');
-  const [builtinCollapsed, setBuiltinCollapsed] = useState(true);
+  const [builtinCollapsed, setBuiltinCollapsed] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editError, setEditError] = useState('');
@@ -354,6 +355,91 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
           {m?.addSkill ?? '+ Add Skill'}
         </button>
       )}
+
+      {/* CLI install hint with agent selector */}
+      <SkillCliHint
+        agents={mcp?.agents ?? []}
+        skillName={(() => {
+          const mindosEnabled = skills.find(s => s.name === 'mindos')?.enabled ?? true;
+          return mindosEnabled ? 'mindos' : 'mindos-zh';
+        })()}
+        m={m}
+      />
+    </div>
+  );
+}
+
+/* ── Skill CLI Install Hint ── */
+
+function SkillCliHint({ agents, skillName, m }: {
+  agents: { key: string; name: string; present?: boolean; installed?: boolean }[];
+  skillName: string;
+  m: Record<string, any> | undefined;
+}) {
+  const [selectedAgent, setSelectedAgent] = useState('claude-code');
+  const [copied, setCopied] = useState(false);
+
+  const cmd = `npx skills add GeminiLight/MindOS --skill ${skillName} -a ${selectedAgent} -g -y`;
+  const skillPath = `~/.agents/skills/${skillName}/SKILL.md`;
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(cmd);
+    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+  };
+
+  // Group agents: connected first, then detected, then not found
+  const connected = agents.filter(a => a.present && a.installed);
+  const detected = agents.filter(a => a.present && !a.installed);
+  const notFound = agents.filter(a => !a.present);
+
+  return (
+    <div className="border-t border-border pt-3 mt-3 space-y-2.5">
+      <p className="text-2xs font-medium text-muted-foreground">
+        {m?.cliInstallHint ?? 'Install via CLI:'}
+      </p>
+
+      {/* Agent selector */}
+      <div className="relative">
+        <select
+          value={selectedAgent}
+          onChange={(e) => setSelectedAgent(e.target.value)}
+          className="w-full appearance-none px-2.5 py-1.5 pr-7 text-2xs rounded-md border border-border bg-background text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {connected.length > 0 && (
+            <optgroup label={m?.connectedGroup ?? 'Connected'}>
+              {connected.map(a => <option key={a.key} value={a.key}>✓ {a.name}</option>)}
+            </optgroup>
+          )}
+          {detected.length > 0 && (
+            <optgroup label={m?.detectedGroup ?? 'Detected'}>
+              {detected.map(a => <option key={a.key} value={a.key}>○ {a.name}</option>)}
+            </optgroup>
+          )}
+          {notFound.length > 0 && (
+            <optgroup label={m?.notFoundGroup ?? 'Not Installed'}>
+              {notFound.map(a => <option key={a.key} value={a.key}>· {a.name}</option>)}
+            </optgroup>
+          )}
+        </select>
+        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+      </div>
+
+      {/* Command */}
+      <div className="flex items-center gap-1.5">
+        <code className="flex-1 text-[10px] font-mono bg-muted/50 border border-border rounded-lg px-2.5 py-2 text-muted-foreground select-all overflow-x-auto whitespace-nowrap">
+          {cmd}
+        </code>
+        <button onClick={handleCopy}
+          className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+        </button>
+      </div>
+
+      {/* Path hint */}
+      <p className="text-2xs text-muted-foreground">
+        {m?.skillPathHint ?? 'Skill files installed at:'}{' '}
+        <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{skillPath}</code>
+      </p>
     </div>
   );
 }

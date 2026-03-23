@@ -5,7 +5,7 @@
 | MindOS Agent | ✅ | ✅ | 内置（无需配置） | 内置（无需配置） |
 | OpenClaw | ✅ | ✅ | `~/.openclaw/openclaw.json` 或 `~/.openclaw/mcp.json` | `skills/`（项目级）或 `~/.openclaw/skills/`（全局） |
 | Claude Code | ✅ | ✅ | `~/.claude.json`（全局）或 `.mcp.json`（项目级） | `.claude/skills/`（项目级）或 `~/.claude/skills/`（全局） |
-| CodeBuddy | ✅ | ✅ | `~/.claude-internal/.claude.json`（全局） | `.codebuddy/skills/`（项目级）或 `~/.codebuddy/skills/`（全局） |
+| CodeBuddy | ✅ | ✅ | `~/.codebuddy/mcp.json`（全局） | `.codebuddy/skills/`（项目级）或 `~/.codebuddy/skills/`（全局） |
 | Cursor | ✅ | ✅ | `~/.cursor/mcp.json`（全局）或 `.cursor/mcp.json`（项目级） | `.cursor/skills/`（项目级）或 `~/.cursor/skills/`（全局） |
 | Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` | `.windsurf/skills/`（项目级）或 `~/.windsurf/skills/`（全局） |
 | Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | `.agents/skills/`（通用路径） |

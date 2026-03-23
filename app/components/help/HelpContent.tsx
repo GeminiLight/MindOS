@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { BookOpen, Rocket, Brain, Keyboard, HelpCircle, Bot, ChevronDown, Copy, Check } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 
@@ -39,7 +39,7 @@ function Section({ icon, title, defaultOpen = false, children }: {
 function StepCard({ step, title, desc }: { step: number; title: string; desc: string }) {
   return (
     <div className="flex gap-4 items-start">
-      <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold font-mono" style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}>
+      <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold font-mono bg-[var(--amber-dim)] text-[var(--amber)]">
         {step}
       </div>
       <div className="min-w-0">
@@ -59,12 +59,12 @@ function PromptBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
     navigator.clipboard.writeText(clean).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    });
+    }).catch(() => {});
   }, [text]);
 
   return (
     <div className="group/prompt mt-2 flex items-start gap-2 bg-background border border-border rounded-md px-3 py-2">
-      <p className="flex-1 text-xs font-mono leading-relaxed" style={{ color: 'var(--amber)' }}>{text}</p>
+      <p className="flex-1 text-xs font-mono leading-relaxed text-[var(--amber)]">{text}</p>
       <button
         onClick={handleCopy}
         className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover/prompt:opacity-100 focus-visible:opacity-100"
@@ -122,8 +122,11 @@ export default function HelpContent() {
   const { t } = useLocale();
   const h = t.help;
 
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
-  const mod = isMac ? '⌘' : 'Ctrl';
+  const [mod, setMod] = useState('⌘');
+  useEffect(() => {
+    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
+    setMod(isMac ? '⌘' : 'Ctrl');
+  }, []);
 
   const shortcuts = useMemo(() => [
     { keys: `${mod} K`, label: h.shortcuts.search },
@@ -141,7 +144,7 @@ export default function HelpContent() {
       {/* ── Header ── */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-1 h-6 rounded-full" style={{ background: 'var(--amber)' }} />
+          <div className="w-1 h-6 rounded-full bg-[var(--amber)]" />
           <h1 className="text-2xl font-bold font-display text-foreground">{h.title}</h1>
         </div>
         <p className="text-muted-foreground text-sm ml-3 mt-1">{h.subtitle}</p>
