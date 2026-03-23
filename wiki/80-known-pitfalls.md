@@ -447,6 +447,27 @@
 - **规则：** `--prefer-offline` 仅作为优化手段，不能出现在唯一安装路径上。必须有在线回退
 - **文件：** `bin/lib/mcp-spawn.js`、`bin/cli.js`、`bin/lib/build.js`
 
+### next@16 内嵌 postcss 缺少嵌套依赖导致 build 失败
+- **现象：** `npm install` 后 `next build` 报 `Module not found: Can't resolve 'source-map-js'`、`'nanoid/non-secure'`、`'picocolors'`
+- **原因：** Next.js 16 内嵌 `postcss@8.4.31`（位于 `next/node_modules/postcss`），它依赖 `nanoid@^3`。但 app 顶层声明了 `nanoid@^5`（大版本不兼容），npm hoisting 把 v5 放在 `app/node_modules/nanoid`，postcss 从自身位置向上查找只能找到 v5——解析失败。`picocolors` 和 `source-map-js` 被 hoisting 到上层后，从 `next/node_modules/postcss/` 的解析路径也找不到
+- **解决：** `app/package.json` 加 `postinstall` 脚本（`scripts/fix-postcss-deps.cjs`），检测 `next/node_modules/postcss/node_modules` 不存在时自动执行 `npm install --no-save --install-strategy=nested` 补装
+- **教训：** 当项目依赖与框架内嵌依赖存在大版本冲突时，npm hoisting 可能导致嵌套包找不到自己的依赖。用 `npm ls <pkg>` 检查是否有 `extraneous` 标记
+- **文件：** `app/package.json`、`scripts/fix-postcss-deps.cjs`
+
+### npm install -g 后 ROOT 常量指向旧包路径
+- **现象：** `mindos update` 执行 `npm install -g @geminilight/mindos@latest` 后，代码中模块加载时计算的 `ROOT`（`constants.js`）仍指向旧安装路径。新包的文件（`package.json`、`skills/`）在新路径下
+- **影响：** 版本检测读旧 `package.json` → 永远显示 "Already on the latest version"；skill check 读旧 `skills/` → 永远无 mismatch
+- **解决：** `getUpdatedRoot()` 通过 `which mindos` + `readlink -f` 解析新安装路径；所有 post-install 操作（版本检测、skill check、buildIfNeeded）统一使用 `updatedRoot` 而非 `ROOT`
+- **规则：** `npm install -g` 后，所有读包内文件的操作必须用动态解析的路径，不能用模块加载时的静态 `ROOT`
+- **文件：** `bin/cli.js`、`bin/lib/skill-check.js`
+
+### GUI 更新在非 daemon 模式下不 restart
+- **现象：** 用户通过 GUI Settings > Update 点击更新，前端一直卡在 "正在更新..."，4 分钟后超时
+- **原因：** GUI 调用 `POST /api/update` → spawn `cli.js update`。`cli.js update` 只在检测到 systemd/launchd daemon 时才自动 restart。非 daemon 模式（用户手动 `mindos start`）走 else 分支，只打印 "Run `mindos start`" 然后退出。旧 Next.js 进程继续运行在旧代码上，前端 poll 的版本号永远不变
+- **解决：** 非 daemon 分支新增端口检测（`isPortInUse`）。如果有实例在跑：`stopMindos()` → 等端口释放 → `buildIfNeeded(updatedRoot)` → spawn 新包的 `cli.js start` → `waitForHttp` 等服务就绪。无实例则保持原行为（只 build + 提示手动启动）
+- **教训：** CLI 命令被 GUI spawn 时，不能假设用户会手动操作。所有被 API route spawn 的 CLI 命令必须自包含（检测 → 清理 → 执行 → 验证）
+- **文件：** `bin/cli.js`、`app/app/api/update/route.ts`
+
 ## 架构 & 设计模式
 
 ### inline style 绕过设计系统

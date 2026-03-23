@@ -58,4 +58,16 @@ export const en: Record<I18nKeys, string> = {
   missingNode: '❌ Node.js not found',
   envReady: '✅ Environment ready! Starting...',
   missingCliStill: '❌ MindOS CLI not found',
+  // SSH tunnel
+  sshTab: '🔒 SSH Tunnel',
+  httpTab: '🌐 Direct',
+  sshHost: 'SSH Host',
+  sshPort: 'MindOS Port',
+  sshConnect: 'Connect',
+  sshConnecting: 'Establishing tunnel...',
+  sshSuccess: '✓ Tunnel established',
+  sshFailed: 'Tunnel failed',
+  sshNoConfig: '💡 Hosts from ~/.ssh/config will appear as suggestions',
+  sshNoSsh: 'SSH not available',
+  sshSelectHost: 'user@hostname or SSH alias',
 };
