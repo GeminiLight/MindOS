@@ -152,6 +152,10 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     setSettingsTab(undefined);
   }, []);
 
+  const handleHelpClick = useCallback(() => {
+    router.push('/help');
+  }, [router]);
+
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
     setSettingsTab(undefined);
@@ -188,6 +192,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         expanded={lp.railExpanded}
         onExpandedChange={handleExpandedChange}
         onSettingsClick={handleSettingsClick}
+        onHelpClick={handleHelpClick}
         onSyncClick={handleSyncClick}
       />
 
