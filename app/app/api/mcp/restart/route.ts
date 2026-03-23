@@ -64,13 +64,13 @@ export async function POST() {
       return NextResponse.json({ error: 'MCP dependencies not installed' }, { status: 500 });
     }
 
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       MCP_PORT: String(mcpPort),
       MCP_HOST: process.env.MCP_HOST || '0.0.0.0',
       MINDOS_URL: process.env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
+      ...(authToken ? { AUTH_TOKEN: authToken } : {}),
     };
-    if (authToken) env.AUTH_TOKEN = authToken;
 
     const child = spawn('npx', ['tsx', 'src/index.ts'], {
       cwd: mcpDir,
