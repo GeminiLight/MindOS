@@ -1,32 +1,35 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MindOS - 选择连接模式 / Choose Connection Mode</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Design system tokens (dark mode) — mirrors app/app/globals.css .dark */
     :root {
-      --bg: #1a1815;
-      --card: #211f1b;
-      --border: #3a352d;
-      --text: #e8e0d4;
-      --text-muted: #a09080;
-      --amber: #c8873a;
-      --amber-dim: rgba(200,135,58,0.15);
-      --success: #4ade80;
-      --error: #f87171;
-      --radius: 12px;
+      --background: #131210;
+      --foreground: #e8e4dc;
+      --card: #1c1a17;
+      --border: rgba(232, 228, 220, 0.08);
+      --muted-foreground: #8a8275;
+      --amber: #d4954a;
+      --amber-dim: rgba(212, 149, 74, 0.20);
+      --amber-foreground: #131210;
+      --success: #7aad80;
+      --error: #c85050;
+      --radius: 0.75rem;
     }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 24px;
+      padding: 44px 24px 24px;
     }
     .container {
       width: 100%;
@@ -44,7 +47,7 @@
     }
     .brand p {
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       margin-top: 6px;
     }
 
@@ -55,7 +58,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       margin-bottom: 8px;
     }
     .recent-item {
@@ -91,12 +94,12 @@
     }
     .recent-address {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       font-family: 'IBM Plex Mono', monospace;
     }
     .recent-forget {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       background: none;
       border: none;
       cursor: pointer;
@@ -106,7 +109,7 @@
     }
     .recent-forget:hover {
       color: var(--error);
-      background: rgba(248,113,113,0.1);
+      background: rgba(200,80,80,0.12);
     }
 
     .divider {
@@ -114,7 +117,7 @@
       align-items: center;
       gap: 12px;
       margin: 20px 0;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       font-size: 11px;
     }
     .divider::before, .divider::after {
@@ -129,7 +132,7 @@
       display: block;
       font-size: 12px;
       font-weight: 500;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       margin-bottom: 6px;
     }
     input {
@@ -138,14 +141,14 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--card);
-      color: var(--text);
+      color: var(--foreground);
       font-size: 14px;
       font-family: 'IBM Plex Mono', monospace;
       outline: none;
       transition: border-color 0.15s;
     }
     input:focus { border-color: var(--amber); }
-    input::placeholder { color: var(--text-muted); opacity: 0.5; }
+    input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
     .field { margin-bottom: 14px; }
 
     .test-btn {
@@ -156,7 +159,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--card);
-      color: var(--text);
+      color: var(--foreground);
       font-size: 13px;
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
@@ -177,7 +180,7 @@
     }
     .status-bar.success { color: var(--success); }
     .status-bar.error { color: var(--error); }
-    .status-bar.info { color: var(--text-muted); }
+    .status-bar.info { color: var(--muted-foreground); }
 
     .connect-btn {
       width: 100%;
@@ -185,7 +188,7 @@
       border: none;
       border-radius: var(--radius);
       background: var(--amber);
-      color: #fff;
+      color: var(--amber-foreground);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
@@ -198,10 +201,10 @@
     .hint {
       margin-top: 16px;
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       line-height: 1.5;
     }
-    .hint strong { color: var(--text); font-weight: 500; }
+    .hint strong { color: var(--foreground); font-weight: 500; }
 
     /* Mode Selection Screen */
     .mode-selection { text-align: center; }
@@ -231,7 +234,7 @@
       width: 48px;
       height: 48px;
       border-radius: var(--radius);
-      background: var(--bg);
+      background: var(--background);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -241,17 +244,17 @@
     .mode-info h3 {
       font-size: 16px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--foreground);
       margin-bottom: 4px;
     }
     .mode-info p {
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       line-height: 1.4;
     }
     .mode-sub {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       margin-top: 2px;
     }
 
@@ -262,7 +265,7 @@
       margin-top: 20px;
       padding: 10px;
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       background: none;
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -270,8 +273,8 @@
       transition: color 0.15s, border-color 0.15s;
     }
     .switch-mode:hover {
-      color: var(--text);
-      border-color: var(--text-muted);
+      color: var(--foreground);
+      border-color: var(--muted-foreground);
     }
 
     /* Language Switcher */
@@ -285,7 +288,7 @@
     .lang-btn {
       padding: 4px 10px;
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -294,11 +297,11 @@
     }
     .lang-btn:hover {
       border-color: var(--amber);
-      color: var(--text);
+      color: var(--foreground);
     }
     .lang-btn.active {
       background: var(--amber);
-      color: #fff;
+      color: var(--amber-foreground);
       border-color: var(--amber);
     }
 
@@ -320,7 +323,7 @@
     }
     .setup-btn:hover {
       background: var(--amber);
-      color: #fff;
+      color: var(--amber-foreground);
     }
     .setup-section {
       margin-top: 20px;
@@ -331,18 +334,18 @@
     }
     .setup-section h4 {
       font-size: 14px;
-      color: var(--text);
+      color: var(--foreground);
       margin-bottom: 12px;
     }
     .setup-section p {
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
       margin-bottom: 8px;
       line-height: 1.5;
     }
     .setup-section code {
       font-family: 'IBM Plex Mono', monospace;
-      background: var(--bg);
+      background: var(--background);
       padding: 2px 6px;
       border-radius: 4px;
       font-size: 11px;
@@ -356,7 +359,7 @@
       background: var(--card);
       border-radius: var(--radius);
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--muted-foreground);
     }
     .install-progress.success {
       color: var(--success);
@@ -371,7 +374,7 @@
     .spinner {
       width: 14px;
       height: 14px;
-      border: 2px solid rgba(200,135,58,0.3);
+      border: 2px solid var(--amber-dim);
       border-top-color: var(--amber);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
@@ -382,8 +385,8 @@
 </head>
 <body>
   <div class="lang-switcher">
-    <button class="lang-btn active" onclick="setLang('zh')" id="lang-zh">中文</button>
-    <button class="lang-btn" onclick="setLang('en')" id="lang-en">EN</button>
+    <button class="lang-btn active" onclick="switchLang('zh')" id="lang-zh">中文</button>
+    <button class="lang-btn" onclick="switchLang('en')" id="lang-en">EN</button>
   </div>
 
   <div class="container">
@@ -416,13 +419,13 @@
 
       <!-- Setup section for local mode — shown when MindOS CLI not found -->
       <div class="setup-section" id="local-setup" style="display:none;">
-        <h4>📦 缺少 MindOS CLI</h4>
-        <p>Desktop已内置 Node.js，只需一键安装 MindOS CLI 即可使用本地模式</p>
-        <button class="setup-btn" id="install-btn" onclick="installMindOS(event)">
+        <h4 data-i18n="missingCli">📦 缺少 MindOS CLI</h4>
+        <p data-i18n="missingCliDesc">一键安装 MindOS CLI 即可使用本地模式（需要 Node.js ≥18）</p>
+        <button class="setup-btn" id="install-btn" onclick="installMindOS(event)" data-i18n="installBtn">
           自动安装 MindOS CLI
         </button>
         <div id="install-status" class="hidden"></div>
-        <button class="setup-btn" id="retry-btn" onclick="checkNodeAgain()" style="display:none; margin-top:12px;">
+        <button class="setup-btn" id="retry-btn" onclick="checkNodeAgain()" data-i18n="retryLocal" style="display:none; margin-top:12px;">
           启动本地模式
         </button>
       </div>

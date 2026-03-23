@@ -53,6 +53,17 @@ export function setActiveRemoteConnection(address: string | null): void {
   store.set('remoteActiveConnection', address);
 }
 
+// ── IPC handlers registration helpers ──
+
+function safeHandle(channel: string, handler: (...args: any[]) => any): void {
+  try {
+    ipcMain.removeHandler(channel);
+  } catch {
+    // Channel might not exist yet, ignore
+  }
+  ipcMain.handle(channel, handler);
+}
+
 /**
  * Show mode selection window (initial run)
  * Returns 'local' | 'remote' | null
@@ -90,86 +101,77 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
 
     // ── IPC Handlers ──
 
-    // Check if Node.js is available
-    ipcMain.handle('connect:check-node', () => {
+    safeHandle('connect:check-node', () => {
       const { getNodePath } = require('./main');
       return !!getNodePath();
     });
 
-// Check if MindOS CLI is installed
-    ipcMain.handle('connect:check-mindos', () => {
-      const { execSync } = require('child_process');
-      const { getNodePath } = require('./main');
-      const nodePath = getNodePath();
-      if (!nodePath) return false;
+    safeHandle('connect:check-mindos-status', () => {
+      const userMindos = getUserMindosPath();
 
-      try {
-        // Try to run `mindos --version`
-        execSync('mindos --version', { encoding: 'utf-8', timeout: 5000 });
-        return true;
-      } catch {
-        return false;
+      if (!userMindos) {
+        return { status: 'not-installed', path: null };
       }
+
+      return {
+        status: userMindos.isBuilt ? 'ready' : 'installed-not-built',
+        path: userMindos.modulePath,
+      };
     });
 
-    // Auto-install MindOS CLI
-    ipcMain.handle('connect:install-mindos', async () => {
+    safeHandle('connect:build-mindos', async (_: unknown, modulePath: string) => {
       const { exec } = require('child_process');
       const { promisify } = require('util');
+      const fs = require('fs');
       const path = require('path');
       const execAsync = promisify(exec);
 
-      // Get Node.js path and derive npm path
-      const { getNodePath } = require('./main');
-      const nodePath = getNodePath();
-
-      if (!nodePath) {
-        return { success: false, error: 'Node.js not found' };
-      }
-
-      // Determine npm path based on node path
-      const isWin = process.platform === 'win32';
-      const nodeDir = path.dirname(nodePath);
-      const npmCmd = isWin
-        ? path.join(nodeDir, 'npm.cmd')
-        : path.join(nodeDir, '..', 'bin', 'npm');
-
-      // Use the npm from the Node.js installation
-      const npmPath = npmCmd;
-
       try {
-        // Use npm to install @geminilight/mindos globally
-        const { stdout, stderr } = await execAsync(`"${npmPath}" install -g @geminilight/mindos`, {
-          timeout: 120000, // 2 minutes timeout
-          encoding: 'utf-8',
-        });
+        // Check if already built (standalone server or .next dir)
+        const standaloneServer = path.join(modulePath, 'app', '.next', 'standalone', 'server.js');
+        const nextDir = path.join(modulePath, 'app', '.next');
+        if (fs.existsSync(standaloneServer) || fs.existsSync(nextDir)) {
+          return { success: true, output: 'Already built' };
+        }
 
-        // Verify installation
-        try {
-          await execAsync('mindos --version', { timeout: 5000 });
-          return { success: true, output: stdout || 'Installation completed' };
-        } catch {
-          return { success: false, error: 'Installation verification failed - mindos command not found in PATH' };
+        // Run npm install + build in the module directory
+        const { stdout, stderr } = await execAsync(
+          'npm install && npm run build',
+          { cwd: modulePath, timeout: 300000, encoding: 'utf-8' }
+        );
+
+        if (fs.existsSync(nextDir)) {
+          return { success: true, output: stdout || 'Build completed' };
+        } else {
+          return { success: false, error: 'Build completed but app/.next not found', stderr };
         }
       } catch (err: any) {
         return {
           success: false,
-          error: err.message || 'Installation failed',
+          error: err.message || 'Build failed',
           stderr: err.stderr,
         };
       }
     });
 
-    ipcMain.handle('connect:select-mode', (_: unknown, mode: 'local' | 'remote') => {
+    safeHandle('connect:get-mindos-path', () => {
+      const userMindos = getUserMindosPath();
+      if (userMindos?.isBuilt) {
+        return { path: userMindos.modulePath, source: 'user' };
+      }
+      return null;
+    });
+
+    safeHandle('connect:select-mode', (_: unknown, mode: 'local' | 'remote') => {
       resolved = true;
       resolve(mode);
       modeWin.close();
       return true;
     });
 
-    ipcMain.handle('connect:show-node-dialog', async () => {
-      const { dialog, shell } = require('electron');
-      const result = await dialog.showMessageBox(modeWin, {
+    safeHandle('connect:show-node-dialog', async () => {
+      const { dialog } = require('electron');
+      const result = await dialog.showMessageBox(modeWin as BrowserWindow, {
         type: 'warning',
         title: i18n[detectLang()].nodeRequiredTitle,
         message: i18n[detectLang()].nodeRequiredMessage,
@@ -187,22 +189,81 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       return 'cancel';
     });
 
-    ipcMain.handle('connect:open-nodejs', () => {
+    safeHandle('connect:open-nodejs', () => {
       const { shell } = require('electron');
       shell.openExternal('https://nodejs.org/');
     });
 
-// Cleanup
+    // Auto-install MindOS CLI
+    safeHandle('connect:install-mindos', async () => {
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+
+      try {
+        // Install @geminilight/mindos globally
+        const { stdout, stderr } = await execAsync(
+          'npm install -g @geminilight/mindos@latest',
+          { timeout: 300000, encoding: 'utf-8' }
+        );
+
+        // Verify installation
+        const userMindos = getUserMindosPath();
+        if (userMindos) {
+          return { success: true };
+        } else {
+          return {
+            success: false,
+            error: 'Installation may have succeeded but could not be verified. Please restart Desktop.',
+            stderr
+          };
+        }
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err.message || 'Installation failed',
+          stderr: err.stderr
+        };
+      }
+    });
+
+    // Cleanup
     modeWin.on('closed', () => {
-      ipcMain.removeHandler('connect:check-node');
-      ipcMain.removeHandler('connect:check-mindos');
-      ipcMain.removeHandler('connect:install-mindos');
-      ipcMain.removeHandler('connect:select-mode');
-      ipcMain.removeHandler('connect:show-node-dialog');
-      ipcMain.removeHandler('connect:open-nodejs');
+      ['connect:check-node', 'connect:check-mindos-status', 'connect:build-mindos',
+       'connect:get-mindos-path', 'connect:install-mindos', 'connect:select-mode',
+       'connect:show-node-dialog', 'connect:open-nodejs'].forEach(ch => {
+        try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
+      });
       if (!resolved) resolve(null);
     });
   });
+}
+
+// ── MindOS detection utilities ──
+
+/**
+ * Detect user local MindOS installation
+ * Returns module path and build status
+ */
+function getUserMindosPath(): { modulePath: string; isBuilt: boolean } | null {
+  const { execSync } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    const globalRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
+    const modulePath = path.join(globalRoot, '@geminilight', 'mindos');
+
+    if (!fs.existsSync(modulePath)) return null;
+
+    // Build is complete when app/.next exists (standalone or standard)
+    const nextDir = path.join(modulePath, 'app', '.next');
+    const isBuilt = fs.existsSync(nextDir);
+
+    return { modulePath, isBuilt };
+  } catch {
+    return null;
+  }
 }
 
 // Simple i18n helper for Electron dialog
@@ -214,7 +275,7 @@ function detectLang(): 'zh' | 'en' {
 const i18n = {
   zh: {
     nodeRequiredTitle: '需要 Node.js',
-    nodeRequiredMessage: 'Node.js ≥20 是运行本地模式的必需依赖。',
+    nodeRequiredMessage: 'Node.js ≥18 是运行本地模式的必需依赖。',
     nodeRequiredOptions: '您可以：\n• 从 nodejs.org 安装（推荐）\n• 切换到远程模式',
     downloadNode: '下载 Node.js',
     switchRemoteBtn: '切换到远程模式',
@@ -222,7 +283,7 @@ const i18n = {
   },
   en: {
     nodeRequiredTitle: 'Node.js Required',
-    nodeRequiredMessage: 'Node.js ≥20 is required to run MindOS locally.',
+    nodeRequiredMessage: 'Node.js ≥18 is required to run MindOS locally.',
     nodeRequiredOptions: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode',
     downloadNode: 'Download Node.js',
     switchRemoteBtn: 'Switch to Remote Mode',
@@ -266,13 +327,13 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
     let resolved = false;
 
     // ── IPC handlers (scoped to this window) ──
-    const handleGetRecent = () => getConnections();
+    safeHandle('connect:get-recent', () => getConnections());
 
-    const handleTestConnection = async (_: unknown, address: string) => {
+    safeHandle('connect:test', async (_: unknown, address: string) => {
       return testConnection(address);
-    };
+    });
 
-    const handleConnect = async (_: unknown, address: string, password: string | null) => {
+    safeHandle('connect:connect', async (_: unknown, address: string, password: string | null) => {
       const url = normalizeAddress(address);
       if (!url) return { ok: false, error: 'Invalid address' };
 
@@ -302,32 +363,24 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       resolve(url);
       connectWin.close();
       return { ok: true };
-    };
+    });
 
-    const handleRemoveConnection = (_: unknown, address: string) => {
+    safeHandle('connect:remove', (_: unknown, address: string) => {
       removeConnection(address);
-    };
+    });
 
-    const handleSwitchToLocal = () => {
+    safeHandle('connect:switch-local', () => {
       resolved = true;
       resolve(null); // null signals "switch to local"
       connectWin.close();
-    };
-
-    // Register handlers
-    ipcMain.handle('connect:get-recent', handleGetRecent);
-    ipcMain.handle('connect:test', handleTestConnection);
-    ipcMain.handle('connect:connect', handleConnect);
-    ipcMain.handle('connect:remove', handleRemoveConnection);
-    ipcMain.handle('connect:switch-local', handleSwitchToLocal);
+    });
 
     // Cleanup on close
     connectWin.on('closed', () => {
-      ipcMain.removeHandler('connect:get-recent');
-      ipcMain.removeHandler('connect:test');
-      ipcMain.removeHandler('connect:connect');
-      ipcMain.removeHandler('connect:remove');
-      ipcMain.removeHandler('connect:switch-local');
+      ['connect:get-recent', 'connect:test', 'connect:connect', 'connect:remove', 'connect:switch-local']
+      .forEach(ch => {
+        try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
+      });
       if (!resolved) resolve(null);
     });
   });

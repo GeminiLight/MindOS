@@ -2,7 +2,7 @@
  * MindOS Desktop — Electron Main Process
  *
  * Supports two modes:
- * - Local: spawn Next.js + MCP on this machine
+ * - Local: spawn Next.js + MCP from user's npm-installed @geminilight/mindos
  * - Remote: connect to a remote MindOS server
  */
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
@@ -80,7 +80,6 @@ export function getNodePath(): string | null {
   // 3. NVM: try direct version directories (common on macOS)
   const nvmVersionsDir = path.join(home, '.nvm', 'versions', 'node');
   try {
-    // Find the latest version directory
     const fs = require('fs');
     if (existsSync(nvmVersionsDir)) {
       const versions = fs.readdirSync(nvmVersionsDir)
@@ -104,60 +103,51 @@ export function getNodePath(): string | null {
     }
   } catch { /* ignore */ }
 
-  // 5. Common system paths (including Intel Homebrew)
+  // 5. Common system paths
   const systemPaths = [
     '/usr/local/bin/node',           // Intel Homebrew
     '/opt/homebrew/bin/node',        // Apple Silicon Homebrew
     '/usr/bin/node',                 // System
     '/opt/local/bin/node',           // MacPorts
-    path.join(home, '.local/share/fnm/node'), // fnm direct
+    path.join(home, '.local/share/fnm/node'),
   ];
   for (const p of systemPaths) {
     if (existsSync(p)) return p;
   }
 
-  // 6. Try shell detection with proper PATH
+  // 6. Shell login detection (picks up nvm/fnm via profile)
   const shells = ['/bin/zsh', '/bin/bash', '/bin/sh'];
-  for (const shell of shells) {
-    if (!existsSync(shell)) continue;
+  for (const sh of shells) {
+    if (!existsSync(sh)) continue;
     try {
-      // Run shell as login shell to load profile
       const result = execSync(
-        `${shell} -il -c "which node" 2>/dev/null`,
+        `${sh} -il -c "which node" 2>/dev/null`,
         { encoding: 'utf-8', timeout: 5000, env: process.env }
       ).trim();
       if (result && existsSync(result)) return result;
     } catch { /* ignore */ }
   }
 
-  // 7. Last resort: `which node`
+  // 7. Last resort
   try {
     const result = execSync('which node', { encoding: 'utf-8', timeout: 3000 }).trim();
     if (result && existsSync(result)) return result;
   } catch { /* ignore */ }
 
-  // Return null instead of throwing, let caller handle gracefully
   return null;
 }
 
 /**
- * Show dialog when Node.js is required but not found.
- * Returns false if user cancels or chooses remote mode.
+ * Resolve npm global root and return the @geminilight/mindos module path.
+ * Returns null if not installed.
  */
-async function showNodeRequiredDialog(): Promise<'install' | 'remote' | 'cancel'> {
-  const result = await dialog.showMessageBox(mainWindow || undefined, {
-    type: 'warning',
-    title: 'Node.js Required',
-    message: 'Node.js ≥20 is required to run MindOS locally.',
-    detail: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode to connect to a MindOS server',
-    buttons: ['Open nodejs.org', 'Switch to Remote', 'Cancel'],
-    defaultId: 0,
-    cancelId: 2,
-  });
-
-  if (result.response === 0) return 'install';
-  if (result.response === 1) return 'remote';
-  return 'cancel';
+export function getMindosInstallPath(): string | null {
+  try {
+    const globalRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
+    const modulePath = path.join(globalRoot, '@geminilight', 'mindos');
+    if (existsSync(modulePath)) return modulePath;
+  } catch { /* ignore */ }
+  return null;
 }
 
 /**
@@ -168,7 +158,6 @@ function getNpxPath(nodePath: string): string {
   const binDir = path.dirname(nodePath);
   const npx = path.join(binDir, 'npx');
   if (existsSync(npx)) return npx;
-  // Fallback: try system npx
   try {
     const result = execSync('which npx', { encoding: 'utf-8', timeout: 3000 }).trim();
     if (result && existsSync(result)) return result;
@@ -176,16 +165,33 @@ function getNpxPath(nodePath: string): string {
   return 'npx'; // last resort
 }
 
-function getProjectRoot(): string {
-  // In development: __dirname is desktop/dist-electron
-  // In production: resources/app/desktop/dist-electron
-  const devRoot = path.resolve(__dirname, '..', '..');
-  if (existsSync(path.join(devRoot, 'package.json'))) return devRoot;
-  // Packaged app
-  if (process.resourcesPath) {
-    return path.resolve(process.resourcesPath, 'app');
-  }
-  return devRoot;
+/**
+ * Show dialog when Node.js is required but not found.
+ */
+async function showNodeRequiredDialog(): Promise<'install' | 'remote' | 'cancel'> {
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Node.js Required',
+        message: 'Node.js ≥18 is required to run MindOS locally.',
+        detail: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode to connect to a MindOS server',
+        buttons: ['Open nodejs.org', 'Switch to Remote', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+      })
+    : await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Node.js Required',
+        message: 'Node.js ≥18 is required to run MindOS locally.',
+        detail: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode to connect to a MindOS server',
+        buttons: ['Open nodejs.org', 'Switch to Remote', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+      });
+
+  if (result.response === 0) return 'install';
+  if (result.response === 1) return 'remote';
+  return 'cancel';
 }
 
 // ── CLI Conflict Detection ──
@@ -200,7 +206,7 @@ function checkCliConflict(): { running: boolean; webPort?: number; mcpPort?: num
 
     for (const pid of pids) {
       try {
-        process.kill(pid, 0); // Check if alive (signal 0 = test only)
+        process.kill(pid, 0);
         const config = loadConfig();
         return {
           running: true,
@@ -227,17 +233,16 @@ function createWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 600,
     title: 'MindOS',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 12 } : undefined,
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
     webPreferences: {
-preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
     show: false,
   });
 
-  // Restore maximized state
   if (savedState?.maximized) {
     win.maximize();
   }
@@ -260,25 +265,20 @@ preload: path.join(__dirname, '..', 'preload', 'preload.js'),
 
 // ── Show Mode Selection Window ──
 async function showModeSelection(): Promise<'local' | 'remote' | null> {
-  // Import and use the enhanced connect window for mode selection
   const { showModeSelectWindow } = await import('./connect-window');
-  return showModeSelectWindow(mainWindow || undefined);
+  return showModeSelectWindow(mainWindow ?? undefined);
 }
 
 // ── Local Mode ──
 async function startLocalMode(): Promise<string | null> {
   const config = loadConfig();
-  const projectRoot = getProjectRoot();
-  const nodePath = getNodePath();
 
-  // Check if Node.js is available
+  // 1. Node.js check
+  const nodePath = getNodePath();
   if (!nodePath) {
     const choice = await showNodeRequiredDialog();
-    if (choice === 'install') {
-      shell.openExternal('https://nodejs.org/');
-    }
+    if (choice === 'install') shell.openExternal('https://nodejs.org/');
     if (choice === 'remote') {
-      // Switch to remote mode
       currentMode = 'remote';
       invalidateConfig();
       return startRemoteMode();
@@ -286,9 +286,16 @@ async function startLocalMode(): Promise<string | null> {
     return null;
   }
 
+  // 2. MindOS install check
+  const projectRoot = getMindosInstallPath();
+  if (!projectRoot) {
+    // Not installed — show mode selection window to guide install
+    return null;
+  }
+
   const npxPath = getNpxPath(nodePath);
 
-  // Check CLI conflict
+  // 3. CLI conflict check
   const conflict = checkCliConflict();
   if (conflict.running) {
     const result = await dialog.showMessageBox({
@@ -303,7 +310,6 @@ async function startLocalMode(): Promise<string | null> {
       return `http://127.0.0.1:${conflict.webPort}`;
     }
 
-    // Kill CLI processes
     try {
       const pids = readFileSync(PID_PATH, 'utf-8').trim().split('\n').map(Number).filter(Boolean);
       for (const pid of pids) {
@@ -313,11 +319,11 @@ async function startLocalMode(): Promise<string | null> {
     } catch { /* ignore */ }
   }
 
-  // Find available ports
+  // 4. Find available ports
   const webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
   const mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
 
-  // Spawn processes
+  // 5. Spawn processes
   processManager = new ProcessManager({
     nodePath,
     npxPath,
@@ -348,19 +354,32 @@ async function startLocalMode(): Promise<string | null> {
 
 // ── Remote Mode ──
 async function startRemoteMode(): Promise<string | null> {
-  // Try saved connection first (auto-reconnect)
   const savedAddress = getActiveRemoteConnection();
   if (savedAddress) {
     try {
       const result = await testConnection(savedAddress);
-      if (result.status === 'online') {
-        return savedAddress;
-      }
+      if (result.status === 'online') return savedAddress;
     } catch { /* fall through to connect window */ }
   }
-
-  // Show the full connect window
   return showConnectWindow(mainWindow || undefined);
+}
+
+// ── Connection Monitor Setup ──
+function setupConnectionMonitor(url: string): void {
+  if (connectionMonitor) connectionMonitor.stop();
+  connectionMonitor = new ConnectionMonitor(url, {
+    onLost: () => {
+      mainWindow?.webContents.send('connection-lost');
+      updateTrayMenu('remote', 'error');
+    },
+    onRestored: () => {
+      mainWindow?.webContents.send('connection-restored');
+      mainWindow?.reload();
+      updateTrayMenu('remote', 'running');
+    },
+  });
+  connectionMonitor.start();
+  updateTrayMenu('remote', 'running');
 }
 
 // ── IPC Handlers ──
@@ -379,7 +398,7 @@ function setupIPC(): void {
 
   ipcMain.handle('switch-mode', async () => {
     const newMode = currentMode === 'local' ? 'remote' : 'local';
-    // Cleanup current mode
+
     if (currentMode === 'local' && processManager) {
       await processManager.stop();
       processManager = null;
@@ -392,12 +411,27 @@ function setupIPC(): void {
     currentMode = newMode;
     invalidateConfig();
 
-    const url = currentMode === 'local'
-      ? await startLocalMode()
-      : await startRemoteMode();
-    if (url && mainWindow) {
-      mainWindow.loadURL(url);
+    let url: string | null = null;
+
+    if (currentMode === 'local') {
+      url = await startLocalMode();
+      if (!url) {
+        const selectedMode = await showModeSelection();
+        if (selectedMode) {
+          currentMode = selectedMode;
+          require('fs').mkdirSync(CONFIG_DIR, { recursive: true });
+          require('fs').writeFileSync(CONFIG_PATH, JSON.stringify({ desktopMode: currentMode }, null, 2));
+          cachedConfig = { desktopMode: currentMode };
+          url = currentMode === 'local' ? await startLocalMode() : await startRemoteMode();
+          if (currentMode === 'remote' && url) setupConnectionMonitor(url);
+        }
+      }
+    } else {
+      url = await startRemoteMode();
+      if (url) setupConnectionMonitor(url);
     }
+
+    if (url && mainWindow) mainWindow.loadURL(url);
   });
 }
 
@@ -411,18 +445,15 @@ app.whenReady().then(async () => {
     const selectedMode = await showModeSelection();
     if (selectedMode) {
       currentMode = selectedMode;
-      // Save the user's choice
       require('fs').mkdirSync(CONFIG_DIR, { recursive: true });
       require('fs').writeFileSync(CONFIG_PATH, JSON.stringify({ desktopMode: currentMode }, null, 2));
       cachedConfig = { desktopMode: currentMode };
     } else {
-      // User cancelled - default to local
       currentMode = 'local';
     }
   }
 
   mainWindow = createWindow();
-
   setupIPC();
   createTray(mainWindow);
   const shortcutsOk = registerShortcuts(mainWindow);
@@ -437,24 +468,25 @@ app.whenReady().then(async () => {
     if (currentMode === 'local') {
       updateTrayMenu('local', 'starting');
       url = await startLocalMode();
-      updateTrayMenu('local', 'running');
+      if (url) {
+        updateTrayMenu('local', 'running');
+      } else {
+        // MindOS not installed — show mode selection to guide install or switch
+        updateTrayMenu('local', 'error');
+        const selectedMode = await showModeSelection();
+        if (selectedMode) {
+          currentMode = selectedMode;
+          require('fs').mkdirSync(CONFIG_DIR, { recursive: true });
+          require('fs').writeFileSync(CONFIG_PATH, JSON.stringify({ desktopMode: currentMode }, null, 2));
+          cachedConfig = { desktopMode: currentMode };
+          url = currentMode === 'local' ? await startLocalMode() : await startRemoteMode();
+          if (currentMode === 'remote' && url) setupConnectionMonitor(url);
+          if (url) updateTrayMenu(currentMode, 'running');
+        }
+      }
     } else {
       url = await startRemoteMode();
-      if (url) {
-        connectionMonitor = new ConnectionMonitor(url, {
-          onLost: () => {
-            mainWindow?.webContents.send('connection-lost');
-            updateTrayMenu('remote', 'error');
-          },
-          onRestored: () => {
-            mainWindow?.webContents.send('connection-restored');
-            mainWindow?.reload();
-            updateTrayMenu('remote', 'running');
-          },
-        });
-        connectionMonitor.start();
-        updateTrayMenu('remote', 'running');
-      }
+      if (url) setupConnectionMonitor(url);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -469,27 +501,20 @@ app.whenReady().then(async () => {
   }
 });
 
-// macOS: keep app running when all windows closed
 app.on('window-all-closed', () => {
   // Tray keeps the app alive on all platforms
-  // On Linux without tray support, user must Quit via other means
 });
 
 app.on('activate', () => {
   if (mainWindow) mainWindow.show();
 });
 
-// Quit handler — properly await async cleanup before exit
 app.on('before-quit', (e) => {
   if (!isQuitting) {
     e.preventDefault();
     isQuitting = true;
     unregisterShortcuts();
-
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      saveWindowState(mainWindow);
-    }
-
+    if (mainWindow && !mainWindow.isDestroyed()) saveWindowState(mainWindow);
     const cleanup = async () => {
       if (processManager) await processManager.stop();
       if (connectionMonitor) connectionMonitor.stop();

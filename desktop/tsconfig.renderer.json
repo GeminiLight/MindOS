@@ -3,19 +3,16 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "outDir": "dist-electron",
+    "outDir": "dist-electron/renderer",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "baseUrl": ".",
-    "paths": {
-      "shared/*": ["../shared/*"]
-    },
-    "lib": ["ES2022"]
+    "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*.ts", "../shared/**/*.ts"],
-  "exclude": ["node_modules", "dist", "dist-electron", "src/*-renderer.ts"]
+  "include": ["src/*-renderer.ts"],
+  "exclude": ["node_modules"]
 }

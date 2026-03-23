@@ -112,6 +112,12 @@ export class ProcessManager extends EventEmitter {
     const { npxPath, projectRoot, mcpPort, webPort, authToken, verbose } = this.opts;
     const mcpDir = path.join(projectRoot, 'mcp');
 
+    if (!existsSync(mcpDir)) {
+      throw new Error(
+        `MCP directory not found: ${mcpDir}\nPlease ensure @geminilight/mindos is installed: npm install -g @geminilight/mindos`
+      );
+    }
+
     // Read auth token from config if not provided
     let token = authToken;
     if (!token) {
@@ -142,6 +148,12 @@ export class ProcessManager extends EventEmitter {
   private spawnWeb(): ChildProcess {
     const { npxPath, projectRoot, webPort, mindRoot } = this.opts;
     const appDir = path.join(projectRoot, 'app');
+
+    if (!existsSync(appDir)) {
+      throw new Error(
+        `App directory not found: ${appDir}\nPlease ensure @geminilight/mindos is installed: npm install -g @geminilight/mindos`
+      );
+    }
 
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,

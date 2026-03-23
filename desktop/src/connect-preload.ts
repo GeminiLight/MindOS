@@ -6,7 +6,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('mindosConnect', {
   // Mode selection
   checkNode: () => ipcRenderer.invoke('connect:check-node'),
-  checkMindos: () => ipcRenderer.invoke('connect:check-mindos'),
+  checkMindosStatus: () => ipcRenderer.invoke('connect:check-mindos-status'),
+  buildMindos: (modulePath: string) => ipcRenderer.invoke('connect:build-mindos', modulePath),
+  getMindosPath: () => ipcRenderer.invoke('connect:get-mindos-path'),
   installMindos: () => ipcRenderer.invoke('connect:install-mindos'),
   selectMode: (mode: 'local' | 'remote') => ipcRenderer.invoke('connect:select-mode', mode),
   showNodeDialog: () => ipcRenderer.invoke('connect:show-node-dialog'),

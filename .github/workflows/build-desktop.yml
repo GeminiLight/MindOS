@@ -36,22 +36,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Install root + workspace dependencies
-      - name: Install root dependencies
-        run: npm install --workspaces=false
-
-      - name: Install app dependencies
-        run: cd app && npm install
-
-      - name: Install MCP dependencies
-        run: cd mcp && npm install
-
+      # Install desktop dependencies only (app/mcp are not bundled)
       - name: Install desktop dependencies
         run: cd desktop && npm install
-
-      # Build Next.js (required — packaged in the app)
-      - name: Build Next.js
-        run: cd app && npx next build
 
       # Build Electron (compile TS → JS)
       - name: Build Electron

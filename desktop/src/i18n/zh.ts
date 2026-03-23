@@ -1,0 +1,61 @@
+export const zh = {
+  // Mode selection
+  subtitle: '选择连接模式',
+  localTitle: '本地模式 / Local Mode',
+  localDesc: '在本机运行 MindOS，需要安装 Node.js',
+  localSub: '推荐：个人使用或开发测试',
+  remoteTitle: '远程模式 / Remote Mode',
+  remoteDesc: '连接到远程 MindOS 服务器',
+  remoteSub: '推荐：团队协作或服务器部署',
+  // Remote connection screen
+  connectServer: '连接到服务器 / Connect to Server',
+  recentServers: '最近连接的服务器 / Recent Servers',
+  orConnect: '或连接新服务器 / or connect to a new server',
+  serverAddress: '服务器地址 / Server Address',
+  testConnection: '测试连接 / Test Connection',
+  password: '密码 / Password',
+  enterPassword: '输入服务器密码 / Enter server password',
+  connect: '连接 / Connect',
+  hint: '💡 在主机上的 <strong>MindOS 设置</strong> 中查看服务器地址和密码',
+  switchLocal: '← 切换到本地模式',
+  switchRemote: '← 切换到远程模式',
+  forgot: 'Forget / 忘记',
+  // Connection states
+  connecting: '连接中...',
+  online: '✓ 在线',
+  passwordRequired: '· 需要密码',
+  notMindos: '⚠ 不是 MindOS 服务器',
+  cannotReach: '无法连接到服务器',
+  incorrectPassword: '密码错误',
+  connectionFailed: '连接失败',
+  connected: '已连接！',
+  // Setup / CLI missing
+  missingCli: '📦 缺少 MindOS CLI',
+  missingCliDesc: '一键安装 MindOS CLI 即可使用本地模式（需要 Node.js ≥18）',
+  installBtn: '自动安装 MindOS CLI',
+  retryLocal: '启动本地模式',
+  // Build section
+  cliInstalled: '🔨 MindOS CLI 已安装',
+  cliInstalledDesc: '检测到您已安装 MindOS CLI，但尚未构建。点击下方按钮自动构建：',
+  buildBtn: '构建 MindOS CLI',
+  building: '正在构建...',
+  buildingDesc: '⏳ 正在构建 MindOS，请稍候（约需 1–3 分钟）...',
+  buildSuccess: '✅ MindOS 构建成功！',
+  retryBuild: '重试构建',
+  buildFailed: '❌ 构建失败',
+  buildError: '❌ 构建出错',
+  // Install flow
+  installing: '正在安装...',
+  installingDesc: '⏳ 正在下载并安装 @geminilight/mindos，请稍候（约需 1–2 分钟）...',
+  installSuccess: '✅ MindOS CLI 安装成功！',
+  retryInstall: '重试安装',
+  installFailed: '❌ 安装失败',
+  installError: '❌ 安装出错',
+  // Environment check
+  checking: '🔍 检测中...',
+  missingNode: '❌ 仍未检测到 Node.js',
+  envReady: '✅ 环境检测通过！正在启动...',
+  missingCliStill: '❌ 仍未检测到 MindOS CLI',
+} as const;
+
+export type I18nKeys = keyof typeof zh;
