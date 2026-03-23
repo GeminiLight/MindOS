@@ -8,6 +8,16 @@ import Store from 'electron-store';
 import { testConnection, normalizeAddress } from '../../shared/connection';
 import type { SavedConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getEnrichedEnv } from './node-detect';
+import { parseSshConfig, isSshAvailable, SshTunnel } from './ssh-tunnel';
+import { findAvailablePort } from './port-finder';
+
+// Active SSH tunnel (shared across windows)
+let activeTunnel: SshTunnel | null = null;
+
+export function getActiveTunnel(): SshTunnel | null { return activeTunnel; }
+export function clearActiveTunnel(): void {
+  if (activeTunnel) { activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+}
 
 /**
  * Resolve paths relative to the app root.
@@ -409,13 +419,60 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
 
     safeHandle('connect:switch-local', () => {
       resolved = true;
-      resolve(null); // null signals "switch to local"
+      resolve(null);
       connectWin.close();
+    });
+
+    // ── SSH tunnel handlers ──
+
+    safeHandle('connect:ssh-hosts', async () => {
+      const available = await isSshAvailable();
+      if (!available) return { available: false, hosts: [] };
+      const hosts = parseSshConfig();
+      return { available: true, hosts };
+    });
+
+    safeHandle('connect:ssh-connect', async (_: unknown, host: string, remotePort: number) => {
+      try {
+        // Clean up any existing tunnel
+        if (activeTunnel) { await activeTunnel.stop(); activeTunnel = null; }
+
+        const localPort = await findAvailablePort(remotePort);
+        const tunnel = new SshTunnel(host, localPort, remotePort);
+        await tunnel.start();
+        activeTunnel = tunnel;
+
+        // Test that MindOS is actually running on the other end
+        const result = await testConnection(`http://localhost:${localPort}`);
+        if (result.status !== 'online') {
+          await tunnel.stop();
+          activeTunnel = null;
+          return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
+        }
+
+        // Save as active connection
+        const url = `http://localhost:${localPort}`;
+        saveConnection({
+          address: `ssh://${host}:${remotePort}`,
+          label: `${host} (SSH)`,
+          lastConnected: new Date().toISOString(),
+          authMethod: 'token',
+        });
+        setActiveRemoteConnection(url);
+
+        resolved = true;
+        resolve(url);
+        connectWin.close();
+        return { ok: true, url, authRequired: result.authRequired };
+      } catch (err: any) {
+        return { ok: false, error: err.message || 'SSH tunnel failed' };
+      }
     });
 
     // Cleanup on close
     connectWin.on('closed', () => {
-      ['connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect', 'connect:remove', 'connect:switch-local']
+      ['connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect',
+       'connect:remove', 'connect:switch-local', 'connect:ssh-hosts', 'connect:ssh-connect']
       .forEach(ch => {
         try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
       });

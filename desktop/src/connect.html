@@ -328,6 +328,26 @@
       display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Connection tabs ── */
+    .conn-tabs {
+      display: flex; gap: 4px; margin-bottom: 16px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 3px;
+    }
+    .conn-tab {
+      flex: 1; padding: 7px 0; text-align: center;
+      font-size: 12px; font-weight: 500; border: none;
+      background: transparent; color: var(--muted-foreground);
+      border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .conn-tab:hover { color: var(--foreground); }
+    .conn-tab.active { background: var(--amber); color: var(--amber-foreground); }
+
+    .ssh-note {
+      font-size: 11px; color: var(--muted-foreground);
+      margin-top: 8px; line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -381,35 +401,60 @@
         <p data-i18n="connectServer"></p>
       </div>
 
-      <!-- Recent servers -->
-      <div id="recent-section" class="recent hidden">
-        <div class="recent-label" data-i18n="recentServers"></div>
-        <div id="recent-list"></div>
+      <!-- Connection method tabs -->
+      <div class="conn-tabs">
+        <button class="conn-tab active" id="tab-ssh" data-i18n="sshTab"></button>
+        <button class="conn-tab" id="tab-http" data-i18n="httpTab"></button>
       </div>
 
-      <div id="divider" class="divider hidden"><span data-i18n="orConnect"></span></div>
-
-      <!-- Address input -->
-      <div class="field">
-        <label for="address" data-i18n="serverAddress"></label>
-        <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
-        <button id="test-btn" class="test-btn" data-i18n="testConnection"></button>
+      <!-- SSH Panel -->
+      <div id="ssh-panel">
+        <div class="field">
+          <label data-i18n="sshHost"></label>
+          <input id="ssh-host-input" type="text" placeholder="user@hostname" autocomplete="off" spellcheck="false" list="ssh-host-list" data-i18n-placeholder="sshSelectHost" />
+          <datalist id="ssh-host-list"></datalist>
+        </div>
+        <div class="field">
+          <label data-i18n="sshPort"></label>
+          <input id="ssh-port" type="number" value="3456" min="1" max="65535" style="font-family:ui-monospace,'SF Mono',monospace" />
+        </div>
+        <div id="ssh-status" class="status-bar hidden"></div>
+        <button id="ssh-connect-btn" class="connect-btn" data-i18n="sshConnect"></button>
+        <p class="ssh-note" id="ssh-note"></p>
       </div>
 
-      <!-- Status -->
-      <div id="status" class="status-bar hidden"></div>
+      <!-- HTTP Panel (hidden when SSH tab active) -->
+      <div id="http-panel" class="hidden">
+        <!-- Recent servers -->
+        <div id="recent-section" class="recent hidden">
+          <div class="recent-label" data-i18n="recentServers"></div>
+          <div id="recent-list"></div>
+        </div>
 
-      <!-- Password (shown when authRequired) -->
-      <div id="password-section" class="field hidden">
-        <label for="password" data-i18n="password"></label>
-        <input id="password" type="password" data-i18n-placeholder="enterPassword" placeholder="" />
+        <div id="divider" class="divider hidden"><span data-i18n="orConnect"></span></div>
+
+        <!-- Address input -->
+        <div class="field">
+          <label for="address" data-i18n="serverAddress"></label>
+          <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
+          <button id="test-btn" class="test-btn" data-i18n="testConnection"></button>
+        </div>
+
+        <!-- Status -->
+        <div id="status" class="status-bar hidden"></div>
+
+        <!-- Password (shown when authRequired) -->
+        <div id="password-section" class="field hidden">
+          <label for="password" data-i18n="password"></label>
+          <input id="password" type="password" data-i18n-placeholder="enterPassword" placeholder="" />
+        </div>
+
+        <!-- Connect button -->
+        <button id="connect-btn" class="connect-btn hidden" disabled data-i18n="connect"></button>
+
+        <!-- Hint -->
+        <div class="hint" data-i18n="hint"></div>
       </div>
-
-      <!-- Connect button -->
-      <button id="connect-btn" class="connect-btn hidden" disabled data-i18n="connect"></button>
-
-      <!-- Hint -->
-      <div class="hint" data-i18n="hint"></div>
 
       <!-- Switch to local -->
       <button class="switch-mode" data-i18n="switchLocal"></button>

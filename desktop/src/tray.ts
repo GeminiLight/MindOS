@@ -2,7 +2,7 @@
  * System tray — mode-aware tray icon and context menu.
  * Uses callbacks to trigger main process actions directly (not via renderer IPC).
  */
-import { Tray, Menu, BrowserWindow, app, nativeImage, ipcMain } from 'electron';
+import { Tray, Menu, BrowserWindow, app, nativeImage } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
 
@@ -13,10 +13,10 @@ type ServerStatus = 'starting' | 'running' | 'error' | 'stopped';
 
 /** Callbacks from tray menu → main process */
 export interface TrayCallbacks {
-  onSwitchMode: () => Promise<void>;
   onChangeMode: () => Promise<void>;
   onOpenMindRoot: () => void;
   onRestartServices: () => Promise<void>;
+  onSwitchServer: () => Promise<void>;
 }
 
 let callbacks: TrayCallbacks | null = null;
@@ -41,36 +41,23 @@ function loadTrayIcon(): Electron.NativeImage {
   const appRoot = app.getAppPath();
 
   // macOS: use Template image (black + alpha, macOS handles light/dark automatically)
-  // File MUST be named *Template.png for macOS to recognize it
   if (process.platform === 'darwin') {
-    const templateCandidates = [
-      path.join(appRoot, 'src', 'icons', 'tray-iconTemplate.png'),
-    ];
-    for (const p of templateCandidates) {
-      if (existsSync(p)) {
-        try {
-          // Load the @1x file — Electron auto-picks @2x if present in same dir
-          const img = nativeImage.createFromPath(p);
-          if (!img.isEmpty()) {
-            img.setTemplateImage(true);
-            return img;
-          }
-        } catch { /* try next */ }
-      }
-    }
-  }
-
-  // Windows/Linux: use colored icon, resize to 16x16
-  const candidates = [
-    path.join(appRoot, 'src', 'icons', 'icon.png'),
-  ];
-  for (const p of candidates) {
+    const p = path.join(appRoot, 'src', 'icons', 'tray-iconTemplate.png');
     if (existsSync(p)) {
       try {
         const img = nativeImage.createFromPath(p);
-        if (!img.isEmpty()) return img.resize({ width: 16, height: 16 });
-      } catch { /* try next */ }
+        if (!img.isEmpty()) { img.setTemplateImage(true); return img; }
+      } catch { /* fallback */ }
     }
+  }
+
+  // Windows/Linux: use colored icon
+  const p = path.join(appRoot, 'src', 'icons', 'icon.png');
+  if (existsSync(p)) {
+    try {
+      const img = nativeImage.createFromPath(p);
+      if (!img.isEmpty()) return img.resize({ width: 16, height: 16 });
+    } catch { /* fallback */ }
   }
   return createFallbackIcon();
 }
@@ -83,12 +70,7 @@ export function createTray(mainWindow: BrowserWindow, cbs: TrayCallbacks): Tray 
     const icon = loadTrayIcon();
     tray = new Tray(icon);
     tray.setToolTip('MindOS');
-
-    tray.on('click', () => {
-      mainWindow.show();
-      mainWindow.focus();
-    });
-
+    tray.on('click', () => { mainWindow.show(); mainWindow.focus(); });
     updateTrayMenu('local', 'starting');
     return tray;
   } catch (err) {
@@ -100,9 +82,9 @@ export function createTray(mainWindow: BrowserWindow, cbs: TrayCallbacks): Tray 
 export function updateTrayMenu(
   mode: 'local' | 'remote',
   status: ServerStatus,
+  remoteAddress?: string,
   webPort?: number,
   mcpPort?: number,
-  remoteAddress?: string,
 ): void {
   if (!tray || !mainWindowRef) return;
 
@@ -114,59 +96,62 @@ export function updateTrayMenu(
     ? (zh ? '启动中...' : 'Starting...')
     : (zh ? '错误' : 'Error');
 
+  const modeLabel = mode === 'local'
+    ? (zh ? '本地模式' : 'Local')
+    : (remoteAddress || (zh ? '远程模式' : 'Remote'));
+
   const template: Electron.MenuItemConstructorOptions[] = [
-    { label: `${statusIcon} MindOS ${statusLabel}`, enabled: false },
+    // ── Status ──
+    { label: `${statusIcon} MindOS · ${modeLabel}`, enabled: false },
     { type: 'separator' },
+
+    // ── Daily use ──
     {
       label: zh ? '打开 MindOS' : 'Open MindOS',
       accelerator: 'CmdOrCtrl+Shift+M',
       click: () => { mainWindowRef?.show(); mainWindowRef?.focus(); },
     },
+    {
+      label: zh ? '打开知识库目录' : 'Open Knowledge Base',
+      click: () => callbacks?.onOpenMindRoot(),
+    },
     { type: 'separator' },
   ];
 
+  // ── Mode-specific actions ──
   if (mode === 'local') {
-    template.push(
-      { label: `Web Server  ${webPort ? `● port ${webPort}` : ''}`, enabled: false },
-      { label: `MCP Server  ${mcpPort ? `● port ${mcpPort}` : ''}`, enabled: false },
-      { type: 'separator' },
-      {
-        label: zh ? '打开知识库目录' : 'Open Knowledge Base',
-        click: () => callbacks?.onOpenMindRoot(),
-      },
-      {
-        label: zh ? '重启服务' : 'Restart Services',
-        click: () => { callbacks?.onRestartServices(); },
-      },
-      { type: 'separator' },
-      {
-        label: zh ? '切换到远程模式' : 'Switch to Remote',
-        click: () => { callbacks?.onSwitchMode(); },
-      },
-    );
+    if (webPort || mcpPort) {
+      template.push(
+        { label: `Web ${webPort ? `· port ${webPort}` : ''}`, enabled: false },
+        { label: `MCP ${mcpPort ? `· port ${mcpPort}` : ''}`, enabled: false },
+        { type: 'separator' },
+      );
+    }
+    template.push({
+      label: zh ? '重启服务' : 'Restart Services',
+      click: () => { callbacks?.onRestartServices(); },
+    });
   } else {
-    template.push(
-      { label: `Server  ${remoteAddress || (zh ? '未连接' : 'Not connected')}`, enabled: false },
-      { type: 'separator' },
-      {
-        label: zh ? '切换到本地模式' : 'Switch to Local',
-        click: () => { callbacks?.onSwitchMode(); },
-      },
-    );
+    if (remoteAddress) {
+      template.push(
+        { label: `Server · ${remoteAddress}`, enabled: false },
+        { type: 'separator' },
+      );
+    }
+    template.push({
+      label: zh ? '更换服务器...' : 'Switch Server...',
+      click: () => { callbacks?.onSwitchServer(); },
+    });
   }
 
   template.push(
-    { type: 'separator' },
     {
-      label: zh ? '重新选择模式...' : 'Change Mode...',
+      label: zh ? '切换模式...' : 'Switch Mode...',
       click: () => { callbacks?.onChangeMode(); },
     },
     { type: 'separator' },
-    {
-      label: zh ? '检查更新...' : 'Check for Updates...',
-      click: () => mainWindowRef?.webContents.send('ipc:check-update'),
-    },
-    { type: 'separator' },
+
+    // ── Exit ──
     {
       label: zh ? '退出 MindOS' : 'Quit MindOS',
       accelerator: 'CmdOrCtrl+Q',
