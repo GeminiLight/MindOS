@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronDown, ChevronRight, ExternalLink, Blocks, Zap, LayoutTemplate } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/LocaleContext';
-import { useCases, categories } from '@/components/explore/use-cases';
+import { useCases } from '@/components/explore/use-cases';
 import { openAskModal } from '@/hooks/useAskModal';
 
 interface DiscoverPanelProps {
@@ -113,51 +113,30 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
     return map[id];
   };
 
-  /** Category emoji icons */
-  const categoryIcons: Record<string, string> = {
-    'knowledge-management': '📚',
-    'memory-sync': '🧠',
-    'auto-execute': '⚡',
-    'experience-evolution': '🔁',
-    'human-insights': '🤝',
-    'audit-control': '🛡️',
-  };
-
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={d.title} maximized={maximized} onMaximize={onMaximize} />
       <div className="flex-1 overflow-y-auto min-h-0">
-        {/* Use Cases grouped by category */}
-        {categories.map(cat => {
-          const items = useCases.filter(uc => uc.category === cat);
-          const catLabel = (e.categories as Record<string, string>)[cat] || cat;
-          return (
-            <div key={cat}>
-              <Section
-                icon={<span className="text-xs" suppressHydrationWarning>{categoryIcons[cat]}</span>}
-                title={catLabel}
-                count={items.length}
-              >
-                <div className="flex flex-col">
-                  {items.map(uc => {
-                    const data = getUseCaseText(uc.id);
-                    if (!data) return null;
-                    return (
-                      <UseCaseRow
-                        key={uc.id}
-                        icon={uc.icon}
-                        title={data.title}
-                        prompt={data.prompt}
-                        tryLabel={d.tryIt}
-                      />
-                    );
-                  })}
-                </div>
-              </Section>
-              <div className="mx-4 border-t border-border" />
-            </div>
-          );
-        })}
+        {/* Use Cases — flat list */}
+        <Section icon={<span className="text-xs" suppressHydrationWarning>🎯</span>} title={d.useCases} count={useCases.length}>
+          <div className="flex flex-col">
+            {useCases.map(uc => {
+              const data = getUseCaseText(uc.id);
+              if (!data) return null;
+              return (
+                <UseCaseRow
+                  key={uc.id}
+                  icon={uc.icon}
+                  title={data.title}
+                  prompt={data.prompt}
+                  tryLabel={d.tryIt}
+                />
+              );
+            })}
+          </div>
+        </Section>
+
+        <div className="mx-4 border-t border-border" />
 
         {/* Plugin Market — Coming Soon */}
         <ComingSoonSection
