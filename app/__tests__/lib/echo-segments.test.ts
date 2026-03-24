@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultEchoSegment,
+  ECHO_SEGMENT_HREF,
   ECHO_SEGMENT_IDS,
   ECHO_SEGMENT_ORDER,
   isEchoSegment,
@@ -40,5 +41,11 @@ describe('echo-segments', () => {
 
   it('index redirect path is /echo/<default>', () => {
     expect(`/echo/${defaultEchoSegment()}`).toBe('/echo/about-you');
+  });
+
+  it('ECHO_SEGMENT_HREF covers every segment with /echo/ prefix', () => {
+    for (const id of ECHO_SEGMENT_IDS) {
+      expect(ECHO_SEGMENT_HREF[id]).toMatch(new RegExp(`^/echo/${id.replace(/-/g, '\\-')}$`));
+    }
   });
 });

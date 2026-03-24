@@ -225,6 +225,7 @@ export const zh = {
     breadcrumbNav: '面包屑导航',
     parent: '回响',
     heroKicker: '回响',
+    segmentNavAria: '回响模块',
     snapshotBadge: '本地 · 私密',
     factsHeading: '所见',
     emptyFactsTitle: '尚无内容',
