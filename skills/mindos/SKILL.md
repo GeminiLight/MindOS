@@ -2,6 +2,8 @@
 name: mindos
 description: >
   MindOS knowledge base operation guide, only for agent tasks on files inside the MindOS knowledge base.
+  Explains core concepts: Space (partitions by how you think), Instruction (agent-wide rules, often in INSTRUCTION.md),
+  Skill (how agents read/write/organize the KB via SKILL.md packages). Notes can embody Instructions and Skills.
   Trigger only when the target files are inside the MindOS knowledge base directory.
   Typical requests: "update notes", "search knowledge base", "organize files", "execute SOP",
   "review with our standards", "handoff to another agent", "sync decisions", "append CSV",
@@ -20,8 +22,18 @@ context automatically when present. User rules override default rules on conflic
 
 ---
 
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 # MindOS Operating Rules
+
+## MindOS concepts
+
+Shared vocabulary for the knowledge base and connected agents:
+
+- **Space** — Knowledge partitions organized the way you think. You decide the structure, and AI agents follow it to read, write, and manage automatically.
+- **Instruction** — A rules file that all AI agents obey. You write the boundaries once, and every agent connected to your knowledge base follows them.
+- **Skill** — Teaches agents how to operate your knowledge base — reading, writing, organizing. Agents don't guess; they follow the skills you've installed.
+
+**Notes as Instruction and Skill** — Instructions and Skills are usually expressed as Markdown in your tree (e.g. root or directory `INSTRUCTION.md`, `SKILL.md` under a skill folder). A note is not only free-form text: it can be the governance layer agents must follow (Instruction) or a procedure package agents load to execute (Skill).
 
 ## Core Principles
 

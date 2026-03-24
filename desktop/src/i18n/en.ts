@@ -70,4 +70,9 @@ export const en: Record<I18nKeys, string> = {
   sshNoConfig: '💡 Hosts from ~/.ssh/config will appear as suggestions',
   sshNoSsh: 'SSH not available',
   sshSelectHost: 'user@hostname or SSH alias',
+  // Toolbar (theme / language)
+  themeTooltipLight: 'Theme: light',
+  themeTooltipDark: 'Theme: dark',
+  langTooltipZh: 'Language: Chinese',
+  langTooltipEn: 'Language: English',
 };

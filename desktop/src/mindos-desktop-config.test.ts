@@ -30,8 +30,8 @@ describe('localBrowseNeedsSetupWizard', () => {
     expect(localBrowseNeedsSetupWizard({ setupPending: true, mindRoot: '/ok' })).toBe(true);
   });
 
-  it('true when no mindRoot and no sopRoot', () => {
-    expect(localBrowseNeedsSetupWizard({ desktopMode: 'local' })).toBe(true);
+  it('false when no mindRoot if setupPending is not true', () => {
+    expect(localBrowseNeedsSetupWizard({ desktopMode: 'local' })).toBe(false);
   });
 
   it('false when mindRoot set and not setupPending', () => {
@@ -48,7 +48,11 @@ describe('shouldSeedWebSetupPendingForLocal', () => {
     expect(shouldSeedWebSetupPendingForLocal('remote', {})).toBe(false);
   });
 
-  it('true for local with empty roots', () => {
-    expect(shouldSeedWebSetupPendingForLocal('local', {})).toBe(true);
+  it('false for local with empty roots (Next defaults mind root; do not force setupPending)', () => {
+    expect(shouldSeedWebSetupPendingForLocal('local', {})).toBe(false);
+  });
+
+  it('true for local when setupPending already true', () => {
+    expect(shouldSeedWebSetupPendingForLocal('local', { setupPending: true })).toBe(true);
   });
 });

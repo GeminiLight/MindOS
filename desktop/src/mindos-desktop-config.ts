@@ -1,6 +1,8 @@
 /**
- * Shared rules for when Desktop should open the web setup wizard.
- * Keep in sync with app/lib/settings.ts (mindRoot ?? sopRoot, setupPending).
+ * When Desktop should open `/setup?force=1` after local server is up.
+ * Align with Next app shell routes: redirect to /setup only when `setupPending === true`
+ * (see e.g. app/app/page.tsx). Empty mindRoot alone does not force setup — Next uses
+ * effectiveSopRoot() → ~/MindOS/mind by default.
  */
 export interface MindosDesktopConfigShape {
   mindRoot?: string;
@@ -19,14 +21,15 @@ export function getEffectiveMindRootFromConfig(j: MindosDesktopConfigShape): str
 
 /** True → Desktop should load `/setup?force=1` for local server base URL. */
 export function localBrowseNeedsSetupWizard(j: MindosDesktopConfigShape): boolean {
-  if (j.setupPending === true) return true;
-  return getEffectiveMindRootFromConfig(j) === '';
+  return j.setupPending === true;
 }
 
+/** When saving desktopMode=local, whether to set `setupPending: true` on first merge. */
 export function shouldSeedWebSetupPendingForLocal(
   mode: 'local' | 'remote',
   existing: MindosDesktopConfigShape,
 ): boolean {
   if (mode !== 'local') return false;
-  return localBrowseNeedsSetupWizard(existing);
+  // Do not infer from empty mindRoot — that forced /setup even after user cleared setupPending.
+  return existing.setupPending === true;
 }
