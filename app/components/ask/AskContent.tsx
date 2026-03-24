@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { Sparkles, Send, AtSign, Paperclip, StopCircle, RotateCcw, History, X, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { Message } from '@/lib/types';
@@ -21,6 +21,27 @@ const PANEL_COMPOSER_MIN = 84;
 const PANEL_COMPOSER_MAX_ABS = 440;
 const PANEL_COMPOSER_MAX_VIEW = 0.48;
 const PANEL_COMPOSER_KEY_STEP = 24;
+/** 输入框随内容增高，超过此行数后在框内滚动（与常见 IM 一致） */
+const PANEL_TEXTAREA_MAX_VISIBLE_LINES = 8;
+
+function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number, availableHeight?: number): void {
+  const style = getComputedStyle(el);
+  const parsedLh = parseFloat(style.lineHeight);
+  const parsedFs = parseFloat(style.fontSize);
+  const fontSize = Number.isFinite(parsedFs) ? parsedFs : 14;
+  const lineHeight = Number.isFinite(parsedLh) ? parsedLh : fontSize * 1.375;
+  const pad =
+    (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
+    (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
+  let maxH = lineHeight * maxVisibleLines + pad;
+  if (availableHeight && Number.isFinite(availableHeight) && availableHeight > 0) {
+    maxH = Math.min(maxH, availableHeight);
+  }
+  if (!Number.isFinite(maxH) || maxH <= 0) return;
+  el.style.height = '0px';
+  const next = Math.min(el.scrollHeight, maxH);
+  el.style.height = `${Number.isFinite(next) ? next : maxH}px`;
+}
 
 function panelComposerMaxForViewport(): number {
   if (typeof window === 'undefined') return PANEL_COMPOSER_MAX_ABS;
@@ -67,9 +88,17 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
 
-  const [panelComposerHeight, setPanelComposerHeight] = useState(readStoredPanelComposerHeight);
+  const [panelComposerHeight, setPanelComposerHeight] = useState(PANEL_COMPOSER_DEFAULT);
   const panelComposerHRef = useRef(panelComposerHeight);
   panelComposerHRef.current = panelComposerHeight;
+
+  useEffect(() => {
+    const stored = readStoredPanelComposerHeight();
+    if (stored !== PANEL_COMPOSER_DEFAULT) {
+      setPanelComposerHeight(stored);
+      panelComposerHRef.current = stored;
+    }
+  }, []);
 
   const getPanelComposerHeight = useCallback(() => panelComposerHRef.current, []);
   const persistPanelComposerHeight = useCallback((h: number) => {
@@ -89,7 +118,11 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     persist: persistPanelComposerHeight,
   });
 
-  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(panelComposerMaxForViewport);
+  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(PANEL_COMPOSER_MAX_ABS);
+
+  useEffect(() => {
+    setPanelComposerViewportMax(panelComposerMaxForViewport());
+  }, []);
 
   const applyPanelComposerClampAndPersist = useCallback(() => {
     const maxH = panelComposerMaxForViewport();
@@ -195,10 +228,27 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     return () => window.removeEventListener('resize', applyPanelComposerClampAndPersist);
   }, [isPanel, applyPanelComposerClampAndPersist]);
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useLayoutEffect(() => {
+    if (!isPanel || !visible) return;
+    const el = inputRef.current;
+    if (!el || !(el instanceof HTMLTextAreaElement)) return;
+    const form = formRef.current;
+    const availableH = form ? form.clientHeight - 40 : undefined;
+    syncPanelTextareaToContent(el, PANEL_TEXTAREA_MAX_VISIBLE_LINES, availableH);
+  }, [input, isPanel, isLoading, visible, panelComposerHeight]);
+
+  const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInputChange = useCallback((val: string) => {
     setInput(val);
-    mention.updateMentionFromInput(val);
+    if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+    mentionTimerRef.current = setTimeout(() => mention.updateMentionFromInput(val), 80);
   }, [mention]);
+
+  useEffect(() => {
+    return () => { if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current); };
+  }, []);
 
   const selectMention = useCallback((filePath: string) => {
     const atIdx = input.lastIndexOf('@');
@@ -498,6 +548,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           )}
 
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className={cn(
               'flex',
@@ -551,7 +602,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               placeholder={t.ask.placeholder}
               disabled={isLoading}
               rows={1}
-              className="min-h-0 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none transition-[height] duration-75 disabled:opacity-50"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
             />
           ) : (
             <input
@@ -596,15 +647,6 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           <span suppressHydrationWarning>
             <kbd className="font-mono">⇧</kbd>
             <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
-          </span>
-        ) : null}
-        {isPanel ? (
-          <span
-            className="hidden sm:inline"
-            suppressHydrationWarning
-            title={`${t.ask.panelComposerResize} · ${t.ask.panelComposerResetHint} · ${t.ask.panelComposerKeyboard}`}
-          >
-            <kbd className="font-mono">↕</kbd> {t.ask.panelComposerFooter}
           </span>
         ) : null}
         <span suppressHydrationWarning>

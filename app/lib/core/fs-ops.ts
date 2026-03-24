@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveSafe, assertWithinRoot } from './security';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
-import { scaffoldIfNewSpace } from './space-scaffold';
+import { scaffoldIfNewSpace, cleanDirName, INSTRUCTION_TEMPLATE, README_TEMPLATE } from './space-scaffold';
 
 /**
  * Reads the content of a file given a relative path from mindRoot.
@@ -53,6 +53,48 @@ export function deleteFile(mindRoot: string, filePath: string): void {
     throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `File not found: ${filePath}`, { filePath });
   }
   fs.unlinkSync(resolved);
+}
+
+/**
+ * Recursively deletes a directory and all its contents.
+ * Throws if the path does not exist, is outside mindRoot, or is not a directory.
+ */
+export function deleteDirectory(mindRoot: string, dirPath: string): void {
+  const resolved = resolveSafe(mindRoot, dirPath);
+  if (!fs.existsSync(resolved)) {
+    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Directory not found: ${dirPath}`, { dirPath });
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, `Not a directory: ${dirPath}`, { dirPath });
+  }
+  fs.rmSync(resolved, { recursive: true, force: true });
+}
+
+/**
+ * Converts an existing directory into a Space by creating INSTRUCTION.md
+ * (and README.md if missing). Idempotent — skips files that already exist.
+ */
+export function convertToSpace(mindRoot: string, dirPath: string): void {
+  const resolved = resolveSafe(mindRoot, dirPath);
+  if (!fs.existsSync(resolved)) {
+    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Directory not found: ${dirPath}`, { dirPath });
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, `Not a directory: ${dirPath}`, { dirPath });
+  }
+
+  const dirName = path.basename(resolved);
+  const name = cleanDirName(dirName);
+
+  const instructionPath = path.join(resolved, 'INSTRUCTION.md');
+  if (!fs.existsSync(instructionPath)) {
+    fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(name), 'utf-8');
+  }
+
+  const readmePath = path.join(resolved, 'README.md');
+  if (!fs.existsSync(readmePath)) {
+    fs.writeFileSync(readmePath, README_TEMPLATE(name), 'utf-8');
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getFileContent, saveFileContent, isDirectory, getDirEntries, createFile, getFileTree } from '@/lib/fs';
+import { getFileContent, saveFileContent, isDirectory, getDirEntries, createFile, getFileTree, getSpacePreview } from '@/lib/fs';
 import type { FileNode } from '@/lib/types';
 import ViewPageClient from './ViewPageClient';
 import DirView from '@/components/DirView';
@@ -24,10 +24,10 @@ export default async function ViewPage({ params }: PageProps) {
   const { path: segments } = await params;
   const filePath = segments.map(decodeURIComponent).join('/');
 
-  // Directory: show folder listing
   if (isDirectory(filePath)) {
     const entries = getDirEntries(filePath);
-    return <DirView dirPath={filePath} entries={entries} />;
+    const spacePreview = getSpacePreview(filePath);
+    return <DirView dirPath={filePath} entries={entries} spacePreview={spacePreview} />;
   }
 
   const extension = filePath.split('.').pop()?.toLowerCase() || '';
