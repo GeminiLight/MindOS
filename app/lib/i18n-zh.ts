@@ -727,7 +727,7 @@ export const zh = {
     c1: {
       title: '注入身份',
       desc: '让所有 AI Agent 一次认识你 — 偏好、技术栈、沟通风格。',
-      prompt: '读一下我的 MindOS 知识库，帮我把自我介绍写进 Profile。',
+prompt: '这是我的简历，读一下，把我的信息整理到 MindOS 里。',
     },
     c2: {
       title: '注入信息',
@@ -830,7 +830,7 @@ export const zh = {
       title: '在 AI Agent 中使用 MindOS',
       intro: '通过 MCP 连接 Agent（Claude Code、Cursor、Windsurf 等）后，直接用自然语言对话即可。Agent 能自动读写你的知识库，不需要特殊指令。以下是最常见的使用场景：',
       scenarios: [
-        { emoji: '🪪', title: '注入身份', desc: '让所有 AI Agent 一次认识你——偏好、技术栈、沟通风格。', prompt: '"这是我的简历，读一下，帮我把身份、技能和偏好整理到 MindOS Profile 里。"' },
+        { emoji: '🪪', title: '注入身份', desc: '让所有 AI Agent 一次认识你——偏好、技术栈、沟通风格。', prompt: '"这是我的简历，读一下，把我的信息整理到 MindOS 里。"' },
         { emoji: '🔄', title: '跨 Agent 切换', desc: '在 GPT 里聊想法，到 Claude Code 去执行——上下文零丢失。', prompt: '"帮我把刚才的对话整理到 MindOS。"\n"读一下 MindOS 里的方案，帮我开始写代码。"' },
         { emoji: '📋', title: '经验→SOP', desc: '把踩坑经验沉淀为可复用的工作流，下次 3 分钟搞定。', prompt: '"帮我把这次对话的经验沉淀到 MindOS，形成可复用的工作流。"' },
         { emoji: '🚀', title: '项目冷启动', desc: '几分钟搭建新项目——Profile 和 SOP 自动引导脚手架。', prompt: '"帮我按 MindOS 里的 Startup SOP 启动一个新项目。"' },
