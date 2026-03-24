@@ -18,17 +18,21 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "electron-store": "^10.0.0",
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "semver": "^7.6.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/semver": "^7.5.8",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "electron-vite": "^1.0.29",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.6"
   }
 }

@@ -529,6 +529,11 @@
 - **规则：** Electron 打包应用中执行任何 shell 命令，必须手动构造 PATH，不能依赖 `process.env.PATH`
 - **文件：** `desktop/src/node-detect.ts`、`desktop/src/connect-window.ts`
 
+### Desktop 本地模式：`mindos.pid` 存活时绕过 Bundled/User 择优
+- **现象：** 配置了 `mindosRuntimePolicy` 或内置 `mindos-runtime`，仍连上「旧」Web
+- **原因：** `checkCliConflict()` 发现 `~/.mindos/mindos.pid` 对应进程仍存活时，`startLocalMode` **直接返回已有 URL**，不创建 `ProcessManager`，也不应用 `resolveLocalMindOsProjectRoot` 的结果
+- **规则：** 排障时先看是否已有 `mindos start`/CLI 占用端口；与 spec `spec-desktop-bundled-mindos.md`「CLI 短路」一致
+
 ### Electron modal + hidden titlebar = macOS 死锁
 - **现象：** `modal: true` + `parent: mainWindow`（`titleBarStyle: 'hidden'`）→ 主窗口交通灯不可点击，模态窗口关不掉
 - **原因：** macOS 上 `titleBarStyle: 'hidden'` 的窗口交通灯在 webContents 区域内，被 modal 子窗口遮挡
