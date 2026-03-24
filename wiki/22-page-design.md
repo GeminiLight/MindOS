@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-03-24 | Current stage: P1 -->
 
 # 页面设计 (Page Design)
 
@@ -36,6 +36,14 @@
 │ └──────┘ │                                                  │
 ├──────────┴──────────────────────────────────────────────────┤
 ```
+
+### Activity Bar + 左侧面板（md+）
+
+桌面端左侧由 **48px Rail（Activity Bar）** 与 **可切换 Panel（默认宽约 280px，可拖拽调宽）** 组成。上文 ASCII 中的「Sidebar」在实现上对应 **Rail + 当前 Panel 内容** 占用的总宽度（约 48px + 280px 量级）。
+
+**Rail 中部按钮顺序（上 → 下）**：空间（文件树）→ **回响 Echo** → 搜索（⌘K）→ 插件 → 智能体 → 探索。底部为帮助、同步、设置等（不切换主 Panel）。
+
+**Panel 子视图**：`FileTree`、`EchoPanel`、`SearchPanel`、`PluginsPanel`、`AgentsPanel`、`DiscoverPanel`。回响无独立路由：内容为「与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长」等自我向模块（不导流首页、Guide、探索）。规格见 `wiki/specs/spec-echo-panel.md`、`wiki/specs/spec-activity-bar-layout.md`、`wiki/specs/spec-discover-panel.md`。
 
 ### 移动端 (<768px)
 
@@ -81,10 +89,12 @@ Drawer (triggered by ☰):
 
 | 路由 | 页面 | 组件入口 | 说明 |
 |------|------|---------|------|
-| `/` | 首页 | `HomeContent` | 最近文件、插件网格、AI 入口 |
+| `/` | 首页 | `HomeContent` | 最近文件、插件网格、AI 入口；GuideCard |
+| `/explore` | 探索 | `app/explore/page.tsx` | 使用案例与分类；Discover 侧栏可入 |
 | `/view/[...path]` | 查看/编辑 | `ViewPageClient` | Markdown/CSV/JSON 查看+编辑 |
 | `/setup` | 初始化向导 | `Setup` | 8 步 Wizard |
 | `/login` | 登录 | `LoginPage` | Web 密码认证 |
+| `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
 
 ---
 
@@ -443,9 +453,11 @@ Step 8: Review   →  总览确认 → 完成
 | z-index | 30 |
 | 过渡 | `transition-transform duration-300` |
 
+桌面端完整左侧栏 = **Activity Bar**（见上节）+ **本 Panel 容器**。移动端 Drawer 内仍为「Header + FileTree + Sync」式结构，无 Rail。
+
 **Header 区**：Logo + 品牌名 + 动作按钮（Search / Settings / Collapse）
 
-**FileTree 区**：`overflow-y-auto`，占据 `flex-1`。层级缩进，文件夹展开/折叠。文件图标按类型区分（📄md / 📊csv / 📁dir）。当前文件高亮。
+**FileTree 区**（`activePanel === 'files'` 时）：`overflow-y-auto`，占据 `flex-1`。层级缩进，文件夹展开/折叠。文件图标按类型区分（📄md / 📊csv / 📁dir）。当前文件高亮。
 
 **SyncStatusBar**：底部 sticky，显示同步状态。健康指示灯（绿/黄/红 dot）。点击打开 Settings > Sync tab。
 
@@ -538,7 +550,7 @@ MindOS 通过 Renderer Registry 支持可插拔的内容渲染器。
 
 | 改动 | 说明 | 预估 |
 |------|------|------|
-| Activity Bar + Panel 布局重构 | 左侧新增 48px Rail（Logo + Files/Search/AI + Settings/Sync），Sidebar 改为可切换 Panel。AI 对话、搜索、设置从 Modal 变为 Panel，不遮盖内容。移动端不变。详见 `wiki/specs/spec-activity-bar-layout.md` | 3-4d |
+| Activity Bar + Panel 布局重构 | 左侧 48px Rail（Logo + 空间/回响/搜索/插件/智能体/探索 + 底部 Help/Sync/Settings）+ 可切换 Panel，与主内容并排。AI 对话、搜索等多为 Panel/右侧栏形态。移动端 Drawer 不变。回响见 `wiki/specs/spec-echo-panel.md`。详见 `wiki/specs/spec-activity-bar-layout.md` | 3-4d |
 
 ### P1 — 日常效率
 
