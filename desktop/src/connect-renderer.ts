@@ -47,13 +47,122 @@ let recentConnections: Array<{ address: string; label?: string }> = [];
 // ── Helpers ──
 function $(id: string): HTMLElement | null { return document.getElementById(id); }
 
-// ── Language ──
-function switchLang(lang: Lang): void {
+// ── Theme / language preferences (default: follow system; no flicker — head script + connect-hydrating) ──
+type ThemePreference = 'system' | 'light' | 'dark';
+type LangPreference = 'system' | Lang;
+
+const ICON_SUN =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+const ICON_MOON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+
+function getThemePreference(): ThemePreference {
+  try {
+    const v = localStorage.getItem('mindos-connect-theme');
+    if (v === 'light' || v === 'dark') return v;
+  } catch { /* sandboxed */ }
+  return 'system';
+}
+
+function applyThemeToDom(pref: ThemePreference): void {
+  try {
+    if (pref === 'system') localStorage.removeItem('mindos-connect-theme');
+    else localStorage.setItem('mindos-connect-theme', pref);
+  } catch { /* sandboxed */ }
+  if (pref === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else if (pref === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+}
+
+/** Resolved appearance (system uses OS preference). */
+function getEffectiveColorScheme(): 'light' | 'dark' {
+  const pref = getThemePreference();
+  if (pref === 'light') return 'light';
+  if (pref === 'dark') return 'dark';
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+/** Toggle only light ↔ dark. Default (no storage) follows system until first click. */
+function toggleTheme(): void {
+  const pref = getThemePreference();
+  const next: 'light' | 'dark' =
+    pref === 'system'
+      ? (getEffectiveColorScheme() === 'dark' ? 'light' : 'dark')
+      : pref === 'light'
+        ? 'dark'
+        : 'light';
+  applyThemeToDom(next);
+  syncThemeIcon();
+  updateToolbarAccessibility();
+}
+
+function syncThemeIcon(): void {
+  const btn = $('btn-theme');
+  if (!btn) return;
+  btn.innerHTML = getEffectiveColorScheme() === 'dark' ? ICON_MOON : ICON_SUN;
+}
+
+function getLangPreference(): LangPreference {
+  try {
+    const v = localStorage.getItem('mindos-lang');
+    if (v === 'zh' || v === 'en') return v;
+    if (v === 'system') return 'system';
+  } catch { /* sandboxed */ }
+  return 'system';
+}
+
+function resolveLang(pref: LangPreference): Lang {
+  if (pref === 'zh' || pref === 'en') return pref;
+  return detectSystemLang();
+}
+
+/** Toggle only 中文 ↔ English. Default (no storage) follows system until first click. */
+function toggleLang(): void {
+  const resolved = resolveLang(getLangPreference());
+  const next: Lang = resolved === 'zh' ? 'en' : 'zh';
+  try {
+    localStorage.setItem('mindos-lang', next);
+  } catch { /* sandboxed */ }
+  applyI18n(next);
+  syncLangIcon();
+  updateToolbarAccessibility();
+}
+
+function syncLangIcon(): void {
+  const btn = $('btn-lang');
+  if (!btn) return;
+  const resolved = resolveLang(getLangPreference());
+  btn.innerHTML =
+    resolved === 'zh'
+      ? '<span class="lang-glyph" aria-hidden="true">文</span>'
+      : '<span class="lang-glyph" aria-hidden="true">A</span>';
+}
+
+function updateToolbarAccessibility(): void {
+  const scheme = getEffectiveColorScheme();
+  const resolved = resolveLang(getLangPreference());
+  const themeBtn = $('btn-theme');
+  const langBtn = $('btn-lang');
+  if (themeBtn) {
+    const tip = scheme === 'light' ? t('themeTooltipLight') : t('themeTooltipDark');
+    (themeBtn as HTMLButtonElement).title = tip;
+    themeBtn.setAttribute('aria-label', tip);
+  }
+  if (langBtn) {
+    const tip = resolved === 'zh' ? t('langTooltipZh') : t('langTooltipEn');
+    (langBtn as HTMLButtonElement).title = tip;
+    langBtn.setAttribute('aria-label', tip);
+  }
+}
+
+// ── Language (UI strings) ──
+function applyI18n(lang: Lang): void {
   setLang(lang);
-  try { localStorage.setItem('mindos-lang', lang); } catch { /* sandboxed */ }
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-  $('lang-zh')?.classList.toggle('active', lang === 'zh');
-  $('lang-en')?.classList.toggle('active', lang === 'en');
 
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n') as I18nKeys;
@@ -140,8 +249,7 @@ async function selectMode(mode: 'local' | 'remote'): Promise<void> {
         const setupSection = $('local-setup');
         if (setupSection) {
           setupSection.style.display = 'block';
-          const lang = (() => { try { return localStorage.getItem('mindos-lang'); } catch { return null; } })() || detectSystemLang();
-          switchLang(lang as Lang);
+          applyI18n(resolveLang(getLangPreference()));
           setupSection.scrollIntoView({ behavior: 'smooth' });
         }
       }
@@ -469,9 +577,8 @@ function init(): void {
 
   // ── Bind ALL events via addEventListener (no inline onclick) ──
 
-  // Language switcher
-  $('lang-zh')?.addEventListener('click', () => switchLang('zh'));
-  $('lang-en')?.addEventListener('click', () => switchLang('en'));
+  $('btn-theme')?.addEventListener('click', () => toggleTheme());
+  $('btn-lang')?.addEventListener('click', () => toggleLang());
 
   // Mode cards
   document.querySelectorAll('.mode-card').forEach((card, idx) => {
@@ -538,11 +645,33 @@ function init(): void {
   // SSH connect button
   $('ssh-connect-btn')?.addEventListener('click', () => void handleSshConnect());
 
-  // Apply initial language
-  const savedLang = (() => {
-    try { return localStorage.getItem('mindos-lang'); } catch { return null; }
-  })() || detectSystemLang();
-  switchLang(savedLang as Lang);
+  const langPref = getLangPreference();
+  applyI18n(resolveLang(langPref));
+  syncThemeIcon();
+  syncLangIcon();
+  updateToolbarAccessibility();
+
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (getThemePreference() === 'system') {
+        syncThemeIcon();
+        updateToolbarAccessibility();
+      }
+    });
+  } catch { /* older WebKit */ }
+
+  window.addEventListener('languagechange', () => {
+    if (getLangPreference() !== 'system') return;
+    applyI18n(resolveLang('system'));
+    syncLangIcon();
+    updateToolbarAccessibility();
+  });
+
+  const finishHydrate = (): void => {
+    document.documentElement.classList.remove('connect-hydrating');
+  };
+  requestAnimationFrame(finishHydrate);
+  setTimeout(finishHydrate, 400);
 }
 
 // ── SSH Functions ──

@@ -135,3 +135,21 @@ describe('i18n echo panel', () => {
     }
   });
 });
+
+describe('i18n ask panel composer', () => {
+  const keys = ['panelComposerResize', 'panelComposerFooter', 'panelComposerResetHint', 'panelComposerKeyboard'] as const;
+
+  it('en has panel composer UX strings', () => {
+    const a = en.ask;
+    for (const k of keys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+  });
+
+  it('zh mirrors panel composer UX strings', () => {
+    const a = zh.ask;
+    for (const k of keys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+  });
+});
