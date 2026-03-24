@@ -295,4 +295,47 @@ describe('POST /api/file', () => {
     const res = await POST(post({ op: 'append_csv', path: 'data.csv', row: [] }));
     expect(res.status).toBe(400);
   });
+
+  it('create_space creates README and INSTRUCTION for new space', async () => {
+    invalidateCache();
+    const res = await POST(
+      post({
+        op: 'create_space',
+        path: '_',
+        name: 'ApiSpace',
+        description: 'from api test',
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.path).toBe('ApiSpace');
+    expect(fs.existsSync(path.join(root(), 'ApiSpace', 'README.md'))).toBe(true);
+    expect(fs.existsSync(path.join(root(), 'ApiSpace', 'INSTRUCTION.md'))).toBe(true);
+  });
+
+  it('create_space returns error for empty name', async () => {
+    const res = await POST(post({ op: 'create_space', path: '_', name: '   ' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('missing or empty name');
+  });
+
+  it('rename_space renames a top-level directory', async () => {
+    fs.mkdirSync(path.join(root(), 'RSOld'), { recursive: true });
+    seedFile('RSOld/note.md', 'x');
+    invalidateCache();
+    const res = await POST(post({ op: 'rename_space', path: 'RSOld', new_name: 'RSNew' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(path.normalize(body.newPath as string)).toBe(path.normalize('RSNew'));
+    expect(fs.existsSync(path.join(root(), 'RSNew', 'note.md'))).toBe(true);
+  });
+
+  it('rename_space rejects file path', async () => {
+    seedFile('notadir.md', 'x');
+    invalidateCache();
+    const res = await POST(post({ op: 'rename_space', path: 'notadir.md', new_name: 'Y' }));
+    expect(res.status).toBe(500);
+  });
 });

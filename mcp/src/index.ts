@@ -173,6 +173,56 @@ server.registerTool("mindos_create_file", {
   } catch (e) { logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
+// ── mindos_create_space ─────────────────────────────────────────────────────
+
+server.registerTool("mindos_create_space", {
+  title: "Create Mind Space",
+  description:
+    "Create a new Mind Space (top-level or under parent_path): directory + README.md + INSTRUCTION.md scaffold. Use this instead of create_file when adding a new cognitive zone to the knowledge base.",
+  inputSchema: z.object({
+    name: z.string().min(1).describe("Space directory name (no path separators)"),
+    description: z.string().default("").describe("Short purpose text stored in README.md"),
+    parent_path: z.string().default("").describe("Optional parent directory under MIND_ROOT (empty = top-level Space)"),
+  }),
+}, async ({ name, description, parent_path }) => {
+  try {
+    const json = await post("/api/file", {
+      op: "create_space",
+      path: "_",
+      name,
+      description,
+      parent_path,
+    });
+    const p = json.path as string;
+    logOp("mindos_create_space", { name, parent_path }, "ok", p);
+    return ok(`Created Mind Space at "${p}"`);
+  } catch (e) {
+    logOp("mindos_create_space", { name, parent_path }, "error", String(e));
+    return error(String(e));
+  }
+});
+
+// ── mindos_rename_space ─────────────────────────────────────────────────────
+
+server.registerTool("mindos_rename_space", {
+  title: "Rename Mind Space",
+  description:
+    "Rename a Space directory (relative path to the folder, e.g. Notes or Work/Notes). Only the final folder name changes; new_name must be a single segment. Does not rewrite links inside files.",
+  inputSchema: z.object({
+    path: z.string().min(1).describe("Relative path to the space directory to rename"),
+    new_name: z.string().min(1).describe("New folder name only (no slashes)"),
+  }),
+}, async ({ path: spacePath, new_name }) => {
+  try {
+    const json = await post("/api/file", { op: "rename_space", path: spacePath, new_name });
+    logOp("mindos_rename_space", { path: spacePath, new_name }, "ok", String(json.newPath));
+    return ok(`Renamed space "${spacePath}" → "${json.newPath}"`);
+  } catch (e) {
+    logOp("mindos_rename_space", { path: spacePath, new_name }, "error", String(e));
+    return error(String(e));
+  }
+});
+
 // ── mindos_delete_file ──────────────────────────────────────────────────────
 
 server.registerTool("mindos_delete_file", {

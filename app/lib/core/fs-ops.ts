@@ -80,6 +80,41 @@ export function renameFile(mindRoot: string, oldPath: string, newName: string): 
 }
 
 /**
+ * Renames a directory (Mind Space) under mindRoot. `newName` must be a single segment (no `/` or `\\`).
+ * Does not rewrite links inside markdown files.
+ */
+export function renameSpaceDirectory(mindRoot: string, spacePath: string, newName: string): string {
+  const trimmedName = newName.trim();
+  if (!trimmedName || trimmedName.includes('/') || trimmedName.includes('\\')) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, 'Invalid space name: must not contain path separators', { newName });
+  }
+  const normalized = spacePath.replace(/\/+$/g, '').trim();
+  if (!normalized) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, 'Space path is required', { spacePath });
+  }
+
+  const root = path.resolve(mindRoot);
+  const oldResolved = resolveSafe(mindRoot, normalized);
+  if (!fs.existsSync(oldResolved)) {
+    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Space not found: ${normalized}`, { spacePath: normalized });
+  }
+  if (!fs.statSync(oldResolved).isDirectory()) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, `Not a directory: ${normalized}`, { spacePath: normalized });
+  }
+
+  const parentDir = path.dirname(oldResolved);
+  const newResolved = path.join(parentDir, trimmedName);
+  assertWithinRoot(newResolved, root);
+
+  if (fs.existsSync(newResolved)) {
+    throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, 'A space with that name already exists', { newName: trimmedName });
+  }
+
+  fs.renameSync(oldResolved, newResolved);
+  return path.relative(root, newResolved);
+}
+
+/**
  * Moves a file from one path to another within mindRoot.
  * Returns the new path and a list of files that referenced the old path.
  */
