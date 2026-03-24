@@ -88,9 +88,17 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
 
-  const [panelComposerHeight, setPanelComposerHeight] = useState(readStoredPanelComposerHeight);
+  const [panelComposerHeight, setPanelComposerHeight] = useState(PANEL_COMPOSER_DEFAULT);
   const panelComposerHRef = useRef(panelComposerHeight);
   panelComposerHRef.current = panelComposerHeight;
+
+  useEffect(() => {
+    const stored = readStoredPanelComposerHeight();
+    if (stored !== PANEL_COMPOSER_DEFAULT) {
+      setPanelComposerHeight(stored);
+      panelComposerHRef.current = stored;
+    }
+  }, []);
 
   const getPanelComposerHeight = useCallback(() => panelComposerHRef.current, []);
   const persistPanelComposerHeight = useCallback((h: number) => {
