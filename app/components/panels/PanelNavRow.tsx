@@ -24,23 +24,32 @@ export function PanelNavRow({
 }) {
   const content = (
     <>
-      <span className="flex items-center justify-center w-7 h-7 rounded-md bg-muted shrink-0">{icon}</span>
-      <span className="text-sm font-medium text-foreground flex-1 text-left">{title}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">{icon}</span>
+      <span className="flex-1 text-left text-sm font-medium text-foreground">{title}</span>
       {badge}
-      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+      <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
     </>
   );
 
+  const showRail = Boolean(active && href);
+
   const className = cn(
-    'flex items-center gap-3 px-4 py-2.5 transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    active
-      ? 'bg-accent/50 text-foreground cursor-default'
-      : 'hover:bg-muted/50 cursor-pointer',
+    'relative flex items-center gap-3 py-2.5 transition-colors duration-150 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    showRail ? 'bg-[var(--amber-dim)]/40 pl-3.5 pr-4 text-foreground' : 'px-4',
+    href && !showRail && 'cursor-pointer hover:bg-muted/50',
+    showRail && 'cursor-default',
+    !href && 'cursor-pointer hover:bg-muted/50',
   );
 
   if (href) {
     return (
       <Link href={href} className={className} aria-current={active ? 'page' : undefined}>
+        {showRail ? (
+          <span
+            className="pointer-events-none absolute bottom-[22%] left-0 top-[22%] w-0.5 rounded-r-full bg-[var(--amber)]"
+            aria-hidden
+          />
+        ) : null}
         {content}
       </Link>
     );

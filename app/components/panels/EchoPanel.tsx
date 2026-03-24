@@ -42,20 +42,15 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={e.title} maximized={maximized} onMaximize={onMaximize} />
       <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="py-1 flex flex-col">
+        <div className="flex flex-col py-1">
           {ECHO_SEGMENT_ORDER.map((segment) => {
             const row = rowBySegment[segment];
             const href = SEGMENT_HREF[segment];
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <div key={segment} className="border-b border-border/60 last:border-b-0">
-                <PanelNavRow
-                  href={href}
-                  icon={row.icon}
-                  title={row.title}
-                  active={isActive}
-                />
-                <p className="text-2xs text-muted-foreground leading-relaxed px-4 pb-2.5 pl-[3.25rem] -mt-1">
+                <PanelNavRow href={href} icon={row.icon} title={row.title} active={isActive} />
+                <p className="-mt-0.5 px-4 pb-3 pl-[3.25rem] font-sans text-2xs leading-relaxed text-muted-foreground">
                   {row.hint}
                 </p>
               </div>

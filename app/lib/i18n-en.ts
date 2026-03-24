@@ -206,6 +206,8 @@ export const en = {
   echoPages: {
     breadcrumbNav: 'Breadcrumb',
     parent: 'Echo',
+    heroKicker: 'Echo',
+    snapshotBadge: 'Local · private',
     factsHeading: 'Snapshot',
     emptyFactsTitle: 'Nothing here yet',
     emptyFactsBody:
