@@ -213,7 +213,10 @@ export const en = {
     insightHint:
       'When enabled, only the items listed above are sent as context. There is no full-library upload by default.',
     generateInsight: 'Generate insight',
-    generateInsightDisabled: 'Configure AI in Settings — generation arrives in a later update.',
+    generateInsightNoAi: 'Add an API key under Settings → AI (or set env vars), then refresh this page.',
+    insightGenerating: 'Generating…',
+    insightErrorPrefix: 'Something went wrong:',
+    insightRetry: 'Try again',
     continueAgent: 'Continue in MindOS Agent',
     continuedDrafts: 'Drafts',
     continuedTodos: 'Open loops',

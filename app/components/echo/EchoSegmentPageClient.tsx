@@ -1,16 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { EchoSegment } from '@/lib/echo-segments';
+import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
+import type { Locale } from '@/lib/i18n';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';
-import {
-  EchoCollapsibleInsight,
-  EchoContinuedGroups,
-  EchoFactSnapshot,
-} from './EchoPageSections';
+import { EchoInsightCollapsible } from './EchoInsightCollapsible';
+import { EchoContinuedGroups, EchoFactSnapshot } from './EchoPageSections';
 
 const STORAGE_DAILY = 'mindos-echo-daily-line';
 const STORAGE_GROWTH = 'mindos-echo-growth-intent';
@@ -53,7 +52,7 @@ const cardSectionClass =
   'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6';
 
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const p = t.echoPages;
   const echo = t.panels.echo;
   const title = segmentTitle(segment, echo);
@@ -96,6 +95,44 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     openAskModal(p.dailyAskPrefill(dailyLine), 'user');
   }, [dailyLine, p, persistDaily]);
 
+  const openSegmentAsk = useCallback(() => {
+    openAskModal(`${p.parent} / ${title}\n\n`, 'user');
+  }, [p.parent, title]);
+
+  const insightUserPrompt = useMemo(
+    () =>
+      buildEchoInsightUserPrompt({
+        locale: locale as Locale,
+        segment,
+        segmentTitle: title,
+        factsHeading: p.factsHeading,
+        emptyTitle: p.emptyFactsTitle,
+        emptyBody: p.emptyFactsBody,
+        continuedDrafts: p.continuedDrafts,
+        continuedTodos: p.continuedTodos,
+        subEmptyHint: p.subEmptyHint,
+        dailyLineLabel: p.dailyLineLabel,
+        dailyLine,
+        growthIntentLabel: p.growthIntentLabel,
+        growthIntent,
+      }),
+    [
+      locale,
+      segment,
+      title,
+      p.factsHeading,
+      p.emptyFactsTitle,
+      p.emptyFactsBody,
+      p.continuedDrafts,
+      p.continuedTodos,
+      p.subEmptyHint,
+      p.dailyLineLabel,
+      dailyLine,
+      p.growthIntentLabel,
+      growthIntent,
+    ],
+  );
+
   const primaryBtnClass =
     'inline-flex items-center rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const secondaryBtnClass =
@@ -125,12 +162,24 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           snapshotBadge={p.snapshotBadge}
           emptyTitle={p.emptyFactsTitle}
           emptyBody={p.emptyFactsBody}
+          actions={
+            segment === 'about-you' ? (
+              <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
+                {p.continueAgent}
+              </button>
+            ) : undefined
+          }
         />
         {segment === 'continued' ? (
           <EchoContinuedGroups
             draftsLabel={p.continuedDrafts}
             todosLabel={p.continuedTodos}
             subEmptyHint={p.subEmptyHint}
+            footer={
+              <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
+                {p.continueAgent}
+              </button>
+            }
           />
         ) : null}
       </div>
@@ -172,6 +221,11 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             className={`${inputClass} min-h-[6.5rem]`}
           />
           <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.growthSavedNote}</p>
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
+              {p.continueAgent}
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -186,28 +240,25 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             {p.pastYouAnother}
           </button>
           <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.pastYouDisabledHint}</p>
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
+              {p.continueAgent}
+            </button>
+          </div>
         </section>
       ) : null}
 
-      {segment !== 'daily' ? (
-        <div className="mt-6 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => openAskModal(`${p.parent} / ${title}\n\n`, 'user')}
-            className={secondaryBtnClass}
-          >
-            {p.continueAgent}
-          </button>
-        </div>
-      ) : null}
-
-      <EchoCollapsibleInsight
+      <EchoInsightCollapsible
         title={p.insightTitle}
         showLabel={p.insightShow}
         hideLabel={p.insightHide}
         hint={p.insightHint}
         generateLabel={p.generateInsight}
-        disabledHint={p.generateInsightDisabled}
+        noAiHint={p.generateInsightNoAi}
+        generatingLabel={p.insightGenerating}
+        errorPrefix={p.insightErrorPrefix}
+        retryLabel={p.insightRetry}
+        userPrompt={insightUserPrompt}
       />
     </article>
   );

@@ -3,7 +3,15 @@ import { en } from '@/lib/i18n-en';
 import { zh } from '@/lib/i18n-zh';
 
 /** Visual polish strings; en/zh must stay in sync (see spec-echo-visual-polish.md). */
-const VISUAL_KEYS = ['heroKicker', 'segmentNavAria', 'snapshotBadge'] as const;
+const VISUAL_KEYS = [
+  'heroKicker',
+  'segmentNavAria',
+  'snapshotBadge',
+  'generateInsightNoAi',
+  'insightGenerating',
+  'insightErrorPrefix',
+  'insightRetry',
+] as const;
 
 describe('echoPages visual polish i18n', () => {
   it('en defines all visual keys', () => {
