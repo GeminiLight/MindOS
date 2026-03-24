@@ -115,11 +115,17 @@ function shouldSeedWebSetupPending(mode: 'local' | 'remote', existing: MindOSCon
   return !hasMindRoot;
 }
 
-/** When local server is up, open setup wizard if onboarding not finished (same flag as Next app). */
+/**
+ * When local server is up, open setup wizard if web onboarding is not done.
+ * Matches Next `readSettings`: `setupPending`, and legacy Desktop-only files that only
+ * set `desktopMode` without `mindRoot` (would load `/` and white-screen).
+ */
 function resolveLocalMindOsBrowseUrl(baseUrl: string): string {
   const u = baseUrl.replace(/\/$/, '');
   const j = readMindOsConfigFileUncached();
-  if (j.setupPending === true) {
+  const mr = j.mindRoot;
+  const hasMindRoot = typeof mr === 'string' && mr.trim() !== '';
+  if (j.setupPending === true || !hasMindRoot) {
     return `${u}/setup?force=1`;
   }
   return u;
