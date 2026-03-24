@@ -25,8 +25,13 @@ import {
   gitShowFile as coreGitShowFile,
   invalidateSearchIndex,
   summarizeTopLevelSpaces,
+  appendContentChange as coreAppendContentChange,
+  listContentChanges as coreListContentChanges,
+  markContentChangesSeen as coreMarkContentChangesSeen,
+  getContentChangeSummary as coreGetContentChangeSummary,
 } from './core';
 import type { MindSpaceSummary } from './core';
+import type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary } from './core';
 import { FileNode, SpacePreview } from './core/types';
 import { SearchMatch } from './types';
 import { effectiveSopRoot } from './settings';
@@ -188,6 +193,22 @@ export function getFileTree(): FileNode[] {
 /** Top-level Mind Spaces (same cached tree as home Spaces grid). */
 export function listMindSpaces(): MindSpaceSummary[] {
   return summarizeTopLevelSpaces(getMindRoot(), ensureCache().tree);
+}
+
+export function appendContentChange(input: ContentChangeInput): ContentChangeEvent {
+  return coreAppendContentChange(getMindRoot(), input);
+}
+
+export function listContentChanges(options: { path?: string; limit?: number } = {}): ContentChangeEvent[] {
+  return coreListContentChanges(getMindRoot(), options);
+}
+
+export function markContentChangesSeen(): void {
+  coreMarkContentChangesSeen(getMindRoot());
+}
+
+export function getContentChangeSummary(): ContentChangeSummary {
+  return coreGetContentChangeSummary(getMindRoot());
 }
 
 /** Returns space preview (INSTRUCTION + README excerpts) for a directory, or null if not a space. */
@@ -544,6 +565,7 @@ export function gitShowFile(filePath: string, commit: string): string {
 import type { BacklinkEntry } from './core/types';
 export type { BacklinkEntry } from './core/types';
 export type { MindSpaceSummary } from './core';
+export type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary, ContentChangeSource } from './core';
 
 export function findBacklinks(targetPath: string): BacklinkEntry[] {
   return coreFindBacklinks(getMindRoot(), targetPath);

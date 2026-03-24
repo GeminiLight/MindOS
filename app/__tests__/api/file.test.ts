@@ -106,6 +106,23 @@ describe('POST /api/file', () => {
     expect(content).toBe('hello');
   });
 
+  it('save_file records a structured change event in JSON log', async () => {
+    const res = await POST(post({ op: 'save_file', path: 'logged.md', content: 'v1' }));
+    expect(res.status).toBe(200);
+
+    const logPath = path.join(root(), '.mindos', 'change-log.json');
+    expect(fs.existsSync(logPath)).toBe(true);
+
+    const log = JSON.parse(fs.readFileSync(logPath, 'utf-8')) as {
+      events: Array<{ op: string; path: string; after?: string }>;
+    };
+    expect(Array.isArray(log.events)).toBe(true);
+    expect(log.events.length).toBeGreaterThan(0);
+    expect(log.events[0].op).toBe('save_file');
+    expect(log.events[0].path).toBe('logged.md');
+    expect(log.events[0].after).toContain('v1');
+  });
+
   it('save_file returns error if content missing', async () => {
     const res = await POST(post({ op: 'save_file', path: 'x.md' }));
     expect(res.status).toBe(400);

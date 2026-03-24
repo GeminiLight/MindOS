@@ -34,6 +34,11 @@
 - **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
 - **解决：** `prepare` 在 `mcp/` 写入 `.mindos-npm-ci-platform`（如 `linux-x64`）；`ProcessManager.start()` 调用 `ensureBundledMcpNodeModules()`：与 `process.platform-arch` 不一致（或启发式发现错误 `@esbuild/*`）时删掉 `mcp/node_modules` 并在本机再跑 `npm ci --omit=dev`（用 Desktop 自带的 Node）；根本方案也可改为在目标 OS 上执行 `prepare-mindos-runtime`
 
+### Diff 仅做插件入口，用户看不到全局变化
+- **现象：** 只有打开 `Agent-Diff.md` 才能看到差异；普通编辑流里不知道哪里变了、何时变了
+- **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒
+- **解决：** 升级为主程序能力：统一写入 `.mindos/change-log.json`，提供 `/api/changes`（summary/list/mark_seen）、全局提醒条与 `/changes` 下钻视图；Diff 插件仅作兼容，不再是主入口
+
 ## CLI
 
 ### npm 全局安装缺 node_modules
