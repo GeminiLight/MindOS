@@ -28,6 +28,13 @@ else
   exit 1
 fi
 cd ..
+echo "🩺 Verifying standalone server (/api/health)..."
+if node scripts/verify-standalone.mjs; then
+  echo "   ✅ Standalone smoke OK"
+else
+  echo "❌ Standalone verify failed (trace / serverExternalPackages?)"
+  exit 1
+fi
 # Restore any files modified by next build (e.g. next-env.d.ts)
 git checkout -- . 2>/dev/null || true
 echo ""

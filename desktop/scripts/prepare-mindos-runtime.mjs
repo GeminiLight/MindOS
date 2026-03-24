@@ -5,9 +5,13 @@
  *
  *   MINDOS_BUNDLE_SOURCE=/path/to/mindos-repo node scripts/prepare-mindos-runtime.mjs
  *
+ * Optional env:
+ *   SKIP_MCP_NPM_CI=1 — do not run `npm ci --omit=dev` under copied mcp/ (offline / air-gapped)
+ *
  * @see wiki/specs/spec-desktop-bundled-mindos.md
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
+import { spawnSync } from 'child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -58,6 +62,26 @@ copyTree('package.json');
 copyTree('LICENSE');
 copyAppForBundledRuntime(appDir, path.join(dest, 'app'));
 copyTree('mcp');
+
+const destMcp = path.join(dest, 'mcp');
+const mcpLock = path.join(destMcp, 'package-lock.json');
+if (process.env.SKIP_MCP_NPM_CI === '1') {
+  console.warn('[prepare-mindos-runtime] SKIP_MCP_NPM_CI=1 — leaving mcp/node_modules as copied from source');
+} else if (!existsSync(mcpLock)) {
+  console.warn('[prepare-mindos-runtime] mcp/package-lock.json missing — skip npm ci (keep copied node_modules)');
+} else {
+  rmSync(path.join(destMcp, 'node_modules'), { recursive: true, force: true });
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const r = spawnSync(npmCmd, ['ci', '--omit=dev'], {
+    cwd: destMcp,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_ENV: 'production' },
+  });
+  if (r.status !== 0) {
+    fail('mcp npm ci --omit=dev failed (set SKIP_MCP_NPM_CI=1 to skip)');
+  }
+}
+
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');
 }

@@ -16,6 +16,8 @@ To ship a **runnable** built-in MindOS (so users can run without `npm i -g`):
 
 4. Then `npm run dist` (or your platform script).
 
-The prepared **`app/`** does **not** include root **`app/node_modules`** (standalone carries traced deps). If you skip step 1–3, only this README may be packaged; **prefer-newer** will fall back to the global install as before.
+The prepared **`app/`** does **not** include root **`app/node_modules`** (standalone carries traced deps). After copying **`mcp/`**, the script runs **`npm ci --omit=dev`** in the destination `mcp/` (requires network). Set **`SKIP_MCP_NPM_CI=1`** to skip (offline / keep source tree’s `node_modules`). Runtime **`tsx`** lives in `mcp` production dependencies so the local `mcp/node_modules/.bin/tsx` path still works.
+
+If you skip step 1–3, only this README may be packaged; **prefer-newer** will fall back to the global install as before.
 
 See `wiki/specs/spec-desktop-bundled-mindos.md` and `wiki/specs/spec-desktop-standalone-runtime.md`.
