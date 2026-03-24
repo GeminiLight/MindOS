@@ -110,3 +110,34 @@ describe('i18n agents panel hub', () => {
     }
   });
 });
+
+describe('i18n echo panel', () => {
+  const echoKeys = [
+    'title',
+    'aboutYouTitle',
+    'aboutYouHint',
+    'continuedTitle',
+    'continuedHint',
+    'dailyEchoTitle',
+    'dailyEchoHint',
+    'pastYouTitle',
+    'pastYouHint',
+    'intentGrowthTitle',
+    'intentGrowthHint',
+    'comingSoon',
+  ] as const;
+
+  it('en has all echo keys', () => {
+    const e = en.panels.echo;
+    for (const k of echoKeys) {
+      expect((e as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+  });
+
+  it('zh mirrors all echo keys', () => {
+    const e = zh.panels.echo;
+    for (const k of echoKeys) {
+      expect((e as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+  });
+});
