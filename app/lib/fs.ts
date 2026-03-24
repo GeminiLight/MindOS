@@ -26,7 +26,7 @@ import {
   summarizeTopLevelSpaces,
 } from './core';
 import type { MindSpaceSummary } from './core';
-import { FileNode } from './core/types';
+import { FileNode, SpacePreview } from './core/types';
 import { SearchMatch } from './types';
 import { effectiveSopRoot } from './settings';
 
@@ -187,6 +187,15 @@ export function getFileTree(): FileNode[] {
 /** Top-level Mind Spaces (same cached tree as home Spaces grid). */
 export function listMindSpaces(): MindSpaceSummary[] {
   return summarizeTopLevelSpaces(getMindRoot(), ensureCache().tree);
+}
+
+/** Returns space preview (INSTRUCTION + README excerpts) for a directory, or null if not a space. */
+export function getSpacePreview(dirPath: string): SpacePreview | null {
+  const root = getMindRoot();
+  const abs = path.join(root, dirPath);
+  const instructionPath = path.join(abs, 'INSTRUCTION.md');
+  if (!fs.existsSync(instructionPath)) return null;
+  return buildSpacePreview(abs);
 }
 
 /** Returns cached list of all file paths (relative to MIND_ROOT). */

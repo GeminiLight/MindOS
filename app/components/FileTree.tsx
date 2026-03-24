@@ -6,7 +6,7 @@ import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
-  Trash2, Pencil, Layers, ScrollText, BookOpen,
+  Trash2, Pencil, Layers, ScrollText,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
@@ -46,109 +46,6 @@ function filterVisibleNodes(nodes: FileNode[], parentIsSpace: boolean): FileNode
     if (!parentIsSpace && node.name === 'README.md') return false;
     return true;
   });
-}
-
-// ─── SpaceHeader ──────────────────────────────────────────────────────────────
-
-function SpacePreviewCard({ icon, title, lines, viewAllLabel, onViewAll }: {
-  icon: React.ReactNode;
-  title: string;
-  lines: string[];
-  viewAllLabel: string;
-  onViewAll: () => void;
-}) {
-  if (lines.length === 0) return null;
-  return (
-    <div className="bg-muted/30 border border-border/40 rounded-md px-2.5 py-2">
-      <div className="flex items-center gap-1 mb-1">
-        {icon}
-        <span className="text-xs font-medium text-muted-foreground">{title}</span>
-      </div>
-      <div className="space-y-0.5">
-        {lines.map((line, i) => (
-          <p key={i} className="text-xs text-muted-foreground/80 leading-relaxed truncate">
-            · {line}
-          </p>
-        ))}
-      </div>
-      <div className="flex justify-end mt-1">
-        <button
-          onClick={(e) => { e.stopPropagation(); onViewAll(); }}
-          className="text-xs hover:underline cursor-pointer transition-colors"
-          style={{ color: 'var(--amber)' }}
-        >
-          {viewAllLabel}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SpaceHeader({ preview, spacePath, depth }: {
-  preview: FileNode['spacePreview'];
-  spacePath: string;
-  depth: number;
-}) {
-  const router = useRouter();
-  const { t } = useLocale();
-
-  if (!preview) return null;
-  const hasRules = preview.instructionLines.length > 0;
-  const hasAbout = preview.readmeLines.length > 0;
-  if (!hasRules && !hasAbout) return null;
-
-  const bothCards = hasRules && hasAbout;
-
-  const content = (
-    <div className="flex flex-col gap-1.5">
-      {hasRules && (
-        <SpacePreviewCard
-          icon={<ScrollText size={12} className="text-muted-foreground shrink-0" />}
-          title={t.fileTree.rules}
-          lines={preview.instructionLines}
-          viewAllLabel={t.fileTree.viewAll}
-          onViewAll={() => router.push(`/view/${encodePath(`${spacePath}/INSTRUCTION.md`)}`)}
-        />
-      )}
-      {hasAbout && (
-        <SpacePreviewCard
-          icon={<BookOpen size={12} className="text-muted-foreground shrink-0" />}
-          title={t.fileTree.about}
-          lines={preview.readmeLines}
-          viewAllLabel={t.fileTree.viewAll}
-          onViewAll={() => router.push(`/view/${encodePath(`${spacePath}/README.md`)}`)}
-        />
-      )}
-    </div>
-  );
-
-  const paddingLeft = (depth + 1) * 12 + 8;
-
-  if (!bothCards) {
-    return (
-      <div className="mb-1.5 pr-2" style={{ paddingLeft: `${paddingLeft}px` }}>
-        {content}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="relative mb-1.5 pr-2 group/header"
-      style={{ paddingLeft: `${paddingLeft}px` }}
-    >
-      <div
-        className="max-h-[140px] overflow-y-auto scroll-smooth"
-        style={{ overscrollBehavior: 'contain' }}
-      >
-        {content}
-      </div>
-      <div
-        className="absolute bottom-0 left-0 right-0 h-2 pointer-events-none"
-        style={{ background: 'linear-gradient(transparent, var(--card))' }}
-      />
-    </div>
-  );
 }
 
 // ─── SpaceContextMenu ─────────────────────────────────────────────────────────
@@ -486,9 +383,6 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           ...(showBorder ? { borderColor: 'color-mix(in srgb, var(--amber) 30%, transparent)' } : {}),
         }}
       >
-        {open && isSpace && node.spacePreview && (
-          <SpaceHeader preview={node.spacePreview} spacePath={node.path} depth={showBorder ? 0 : depth} />
-        )}
         {node.children && (
           <FileTree
             nodes={node.children}
