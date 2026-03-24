@@ -174,13 +174,14 @@ export const zh = {
       // Footer
       advancedConfig: '高级配置 →',
       navOverview: '总览',
-      navMcp: 'MCP 与技能',
+      navMcp: 'MCP',
       navSkills: '技能',
-      navUsage: '使用与帮助',
-      navInsights: '智能体洞察',
       rosterLabel: '当前环境',
       notFoundDetail: '本机未检测到该智能体客户端。请安装后刷新列表。',
       skillsEmptyHint: '请在「MCP 与技能」设置中启用或编辑 Skills。',
+      backToList: '返回',
+      agentDetailTransport: '传输方式',
+      agentDetailSnippet: '配置片段',
     },
     plugins: {
       title: '插件',

@@ -86,11 +86,12 @@ describe('i18n agents panel hub', () => {
     'navOverview',
     'navMcp',
     'navSkills',
-    'navUsage',
-    'navInsights',
     'rosterLabel',
     'notFoundDetail',
     'skillsEmptyHint',
+    'backToList',
+    'agentDetailTransport',
+    'agentDetailSnippet',
   ] as const;
 
   it('en has all hub keys', () => {

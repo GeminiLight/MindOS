@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
 import type { McpContextValue } from '@/hooks/useMcpData';
-import AgentsPanelAgentRow, { type AgentsPanelAgentRowCopy } from './AgentsPanelAgentRow';
+import AgentsPanelAgentListRow, { type AgentsPanelAgentListRowCopy } from './AgentsPanelAgentListRow';
 
 type AgentsCopy = {
   rosterLabel: string;
@@ -16,10 +16,9 @@ export function AgentsPanelAgentGroups({
   connected,
   detected,
   notFound,
-  openAgentKey,
-  toggleAgentRow,
+  onOpenDetail,
   mcp,
-  agentCopy,
+  listCopy,
   showNotDetected,
   setShowNotDetected,
   p,
@@ -27,10 +26,9 @@ export function AgentsPanelAgentGroups({
   connected: AgentInfo[];
   detected: AgentInfo[];
   notFound: AgentInfo[];
-  openAgentKey: string | null;
-  toggleAgentRow: (key: string) => void;
-  mcp: Pick<McpContextValue, 'status' | 'installAgent'>;
-  agentCopy: AgentsPanelAgentRowCopy;
+  onOpenDetail: (key: string) => void;
+  mcp: Pick<McpContextValue, 'installAgent'>;
+  listCopy: AgentsPanelAgentListRowCopy;
   showNotDetected: boolean;
   setShowNotDetected: (v: boolean | ((prev: boolean) => boolean)) => void;
   p: AgentsCopy;
@@ -47,15 +45,13 @@ export function AgentsPanelAgentGroups({
           </h3>
           <div className="space-y-1.5">
             {connected.map(agent => (
-              <AgentsPanelAgentRow
+              <AgentsPanelAgentListRow
                 key={agent.key}
                 agent={agent}
                 agentStatus="connected"
-                expanded={openAgentKey === agent.key}
-                onToggleExpand={() => toggleAgentRow(agent.key)}
+                onOpenDetail={() => onOpenDetail(agent.key)}
                 onInstallAgent={mcp.installAgent}
-                mcpStatus={mcp.status}
-                copy={agentCopy}
+                copy={listCopy}
               />
             ))}
           </div>
@@ -69,15 +65,13 @@ export function AgentsPanelAgentGroups({
           </h3>
           <div className="space-y-1.5">
             {detected.map(agent => (
-              <AgentsPanelAgentRow
+              <AgentsPanelAgentListRow
                 key={agent.key}
                 agent={agent}
                 agentStatus="detected"
-                expanded={openAgentKey === agent.key}
-                onToggleExpand={() => toggleAgentRow(agent.key)}
+                onOpenDetail={() => onOpenDetail(agent.key)}
                 onInstallAgent={mcp.installAgent}
-                mcpStatus={mcp.status}
-                copy={agentCopy}
+                copy={listCopy}
               />
             ))}
           </div>
@@ -97,15 +91,13 @@ export function AgentsPanelAgentGroups({
           {showNotDetected && (
             <div className="space-y-1.5">
               {notFound.map(agent => (
-                <AgentsPanelAgentRow
+                <AgentsPanelAgentListRow
                   key={agent.key}
                   agent={agent}
                   agentStatus="notFound"
-                  expanded={openAgentKey === agent.key}
-                  onToggleExpand={() => toggleAgentRow(agent.key)}
+                  onOpenDetail={() => onOpenDetail(agent.key)}
                   onInstallAgent={mcp.installAgent}
-                  mcpStatus={mcp.status}
-                  copy={agentCopy}
+                  copy={listCopy}
                 />
               ))}
             </div>
