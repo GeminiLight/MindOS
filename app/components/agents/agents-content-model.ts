@@ -3,6 +3,7 @@ import type { AgentInfo, SkillInfo } from '@/components/settings/types';
 export type AgentsDashboardTab = 'overview' | 'mcp' | 'skills';
 export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
+export type SkillSourceFilter = 'all' | 'builtin' | 'user';
 
 export interface RiskItem {
   id: string;
@@ -66,4 +67,14 @@ export function buildRiskQueue(args: {
   if (args.notFoundCount > 0) items.push({ id: 'not-found', severity: 'warn', title: `${args.notFoundCount} agent(s) not detected on this machine` });
   if (args.allSkillsDisabled) items.push({ id: 'skills-disabled', severity: 'warn', title: 'All skills are disabled' });
   return items;
+}
+
+export function filterSkills(skills: SkillInfo[], query: string, source: SkillSourceFilter): SkillInfo[] {
+  const q = query.trim().toLowerCase();
+  return skills.filter((skill) => {
+    if (source !== 'all' && skill.source !== source) return false;
+    if (!q) return true;
+    const haystack = `${skill.name} ${skill.description}`.toLowerCase();
+    return haystack.includes(q);
+  });
 }

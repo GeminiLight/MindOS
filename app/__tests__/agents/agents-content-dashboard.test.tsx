@@ -81,12 +81,14 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.navMcp);
     expect(html).toContain(a.navSkills);
     expect(html).toContain(a.overview.riskQueue);
+    expect(html).toContain('role="tablist"');
   });
 
   it('renders mcp table with test/reconnect/copy actions', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="mcp" />);
     const a = messages.en.agentsContent;
 
+    expect(html).toContain(a.mcp.connectionGraph);
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
     expect(html).toContain(a.mcp.actions.testConnection);
@@ -98,6 +100,8 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.skills.title);
+    expect(html).toContain(a.skills.searchPlaceholder);
+    expect(html).toContain(a.skills.matrixToggle);
     expect(html).toContain(a.skills.capabilityGroups);
     expect(html).toContain('custom-routing');
   });
