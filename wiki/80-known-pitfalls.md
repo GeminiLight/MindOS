@@ -4,6 +4,11 @@
 
 ## Desktop / 打包
 
+### 首次本地模式白屏（无/空 config + 未进 /setup）
+- **现象：** 选「本地模式」后主窗口全白；`~/.mindos/config.json` 不存在，或存在但为空/坏 JSON/缺 `desktopMode`
+- **原因：** 旧逻辑用 `isFirstRun && !existsSync` 决定是否打开 `/setup?force=1`；`saveDesktopMode` 只写了 `desktopMode` 未设 `setupPending`，与 Next 侧 `readSettings` 不一致；若 `config.json` 已存在但无效，会跳过模式选择并直接加载 `/`，易与空知识库/首启状态叠加为白屏
+- **解决：** `needsDesktopModeSelectAtLaunch()` 覆盖空/坏文件；首次选本地且尚无 `mindRoot` 时写入 `setupPending: true`；`resolveLocalMindOsBrowseUrl()` 在 `setupPending` 时统一打开 `/setup?force=1`（与切换本地模式、重启服务路径一致）
+
 ### Next 生产进程绑定机器 hostname，`127.0.0.1` 健康检查永远超时
 - **现象：** Desktop 或 `verify-standalone` 等不到 `/api/health`，但本机 `curl http://$(hostname):PORT/api/health` 有响应
 - **原因：** Next 默认把监听地址设成 **系统 hostname**，未监听 loopback

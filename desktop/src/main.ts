@@ -51,7 +51,6 @@ let currentMode: 'local' | 'remote' = 'local';
 let currentWebPort: number | undefined;
 let currentMcpPort: number | undefined;
 let currentRemoteAddress: string | undefined;
-let isFirstRun = false;
 let cachedConfig: MindOSConfig | null = null;
 
 // ── Config ──
@@ -69,26 +68,73 @@ interface MindOSConfig {
   mindosRuntimeStrictCompat?: boolean;
   minMindOsVersion?: string;
   maxTestedMindOsVersion?: string;
+  /** Shared with Next `readSettings` — true until setup wizard completes */
+  setupPending?: boolean;
   [key: string]: unknown;
 }
 
-function loadConfig(): MindOSConfig {
-  if (cachedConfig) return cachedConfig;
+/** Read config.json from disk without touching `cachedConfig` (for merge / URL resolution). */
+function readMindOsConfigFileUncached(): MindOSConfig {
   try {
-    cachedConfig = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-    return cachedConfig!;
+    if (!existsSync(CONFIG_PATH)) return {};
+    const raw = readFileSync(CONFIG_PATH, 'utf-8').trim();
+    if (!raw) return {};
+    return JSON.parse(raw) as MindOSConfig;
   } catch {
     return {};
   }
 }
 
+function loadConfig(): MindOSConfig {
+  if (cachedConfig) return cachedConfig;
+  cachedConfig = readMindOsConfigFileUncached();
+  return cachedConfig;
+}
+
 function invalidateConfig(): void { cachedConfig = null; }
 
-function saveDesktopMode(mode: 'local' | 'remote'): void {
+/** Show mode picker when file missing, empty, invalid JSON, or desktopMode unset. */
+function needsDesktopModeSelectAtLaunch(): boolean {
+  if (!existsSync(CONFIG_PATH)) return true;
+  try {
+    const raw = readFileSync(CONFIG_PATH, 'utf-8').trim();
+    if (!raw) return true;
+    const j = JSON.parse(raw) as MindOSConfig;
+    if (j.desktopMode !== 'local' && j.desktopMode !== 'remote') return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function shouldSeedWebSetupPending(mode: 'local' | 'remote', existing: MindOSConfig): boolean {
+  if (mode !== 'local') return false;
+  if (existing.setupPending === true) return true;
+  const mr = existing.mindRoot;
+  const hasMindRoot = typeof mr === 'string' && mr.trim() !== '';
+  return !hasMindRoot;
+}
+
+/** When local server is up, open setup wizard if onboarding not finished (same flag as Next app). */
+function resolveLocalMindOsBrowseUrl(baseUrl: string): string {
+  const u = baseUrl.replace(/\/$/, '');
+  const j = readMindOsConfigFileUncached();
+  if (j.setupPending === true) {
+    return `${u}/setup?force=1`;
+  }
+  return u;
+}
+
+function saveDesktopMode(mode: 'local' | 'remote', opts?: { allowSeedWebSetup?: boolean }): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
-  const existing = loadConfig();
-  writeFileSync(CONFIG_PATH, JSON.stringify({ ...existing, desktopMode: mode }, null, 2));
-  cachedConfig = { ...existing, desktopMode: mode };
+  invalidateConfig();
+  const existing = readMindOsConfigFileUncached();
+  const merged: MindOSConfig = { ...existing, desktopMode: mode };
+  if (opts?.allowSeedWebSetup && shouldSeedWebSetupPending(mode, existing)) {
+    merged.setupPending = true;
+  }
+  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
+  cachedConfig = merged;
 }
 
 // ── Splash Screen ──
@@ -560,7 +606,8 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   // 3. Apply
   if (url) {
     saveDesktopMode(targetMode);
-    mainWindow.loadURL(url);
+    const openUrl = targetMode === 'local' ? resolveLocalMindOsBrowseUrl(url) : url;
+    mainWindow.loadURL(openUrl);
     refreshTray('running');
     if (oldPM) oldPM.stop().catch(() => {});
     if (oldCM) oldCM.stop();
@@ -598,7 +645,7 @@ async function handleRestartServices(): Promise<void> {
       // Connected to external CLI — do a full re-launch
       const url = await startLocalMode();
       if (url && mainWindow) {
-        mainWindow.loadURL(url);
+        mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
         refreshTray('running');
       }
     }
@@ -721,7 +768,7 @@ async function handleSplashAction(actionId: string): Promise<void> {
       const mode = await showModeSelectWindow();
       if (mode) {
         currentMode = mode;
-        saveDesktopMode(mode);
+        saveDesktopMode(mode, { allowSeedWebSetup: true });
       }
       // Create new splash for boot
       splashWindow = createSplash();
@@ -768,10 +815,12 @@ async function bootApp(): Promise<void> {
 
   refreshTray('running');
 
-  // First run → go to onboard setup wizard; subsequent → normal page
-  const loadUrl = isFirstRun ? `${url}/setup?force=1` : url;
-  isFirstRun = false; // only once
+  const loadUrl = currentMode === 'local' ? resolveLocalMindOsBrowseUrl(url) : url;
   mainWindow.loadURL(loadUrl);
+
+  mainWindow.webContents.once('did-fail-load', (_event, code, desc, failedUrl) => {
+    console.error('[MindOS] main window did-fail-load', code, desc, failedUrl);
+  });
 
   // Wait for content to load, then show main + hide splash
   mainWindow.webContents.once('did-finish-load', () => {
@@ -791,24 +840,20 @@ async function bootApp(): Promise<void> {
 // ── App Lifecycle ──
 
 app.whenReady().then(async () => {
-  const config = loadConfig();
-
-  // First run: no config file yet — user picks local vs remote before we persist desktopMode or boot.
-  isFirstRun = !config.desktopMode && !existsSync(CONFIG_PATH);
-
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
 
-  if (isFirstRun) {
+  if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();
     if (!mode) {
       app.quit();
       return;
     }
     currentMode = mode;
-    saveDesktopMode(mode);
+    saveDesktopMode(mode, { allowSeedWebSetup: true });
     splashWindow = createSplash();
   } else {
-    currentMode = config.desktopMode || 'local';
+    const disk = readMindOsConfigFileUncached();
+    currentMode = disk.desktopMode === 'remote' ? 'remote' : 'local';
     splashWindow = createSplash();
   }
 
