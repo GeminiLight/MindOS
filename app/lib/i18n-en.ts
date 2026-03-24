@@ -156,6 +156,8 @@ export const en = {
       notFoundDetail: 'This agent app was not detected on this machine. Install it, then refresh the list.',
       skillsEmptyHint: 'Enable and edit skills in MCP & Skills settings.',
       backToList: 'Back',
+      closeAgentDetail: 'Close',
+      agentDetailPanelAria: 'Agent connection configuration',
       agentDetailTransport: 'Transport',
       agentDetailSnippet: 'Config snippet',
     },

@@ -17,6 +17,7 @@ export function AgentsPanelAgentGroups({
   detected,
   notFound,
   onOpenDetail,
+  selectedAgentKey,
   mcp,
   listCopy,
   showNotDetected,
@@ -26,21 +27,24 @@ export function AgentsPanelAgentGroups({
   connected: AgentInfo[];
   detected: AgentInfo[];
   notFound: AgentInfo[];
-  onOpenDetail: (key: string) => void;
+  onOpenDetail?: (key: string) => void;
+  selectedAgentKey?: string | null;
   mcp: Pick<McpContextValue, 'installAgent'>;
   listCopy: AgentsPanelAgentListRowCopy;
   showNotDetected: boolean;
   setShowNotDetected: (v: boolean | ((prev: boolean) => boolean)) => void;
   p: AgentsCopy;
 }) {
+  const open = onOpenDetail ?? (() => {});
+
   return (
     <div>
-      <div className="px-0 py-1 mb-1">
-        <span className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">{p.rosterLabel}</span>
+      <div className="px-0 py-1 mb-0.5">
+        <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">{p.rosterLabel}</span>
       </div>
       {connected.length > 0 && (
         <section className="mb-3">
-          <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          <h3 className="text-[11px] font-medium text-muted-foreground/90 uppercase tracking-wider mb-2 pl-0.5">
             {p.sectionConnected} ({connected.length})
           </h3>
           <div className="space-y-1.5">
@@ -49,7 +53,8 @@ export function AgentsPanelAgentGroups({
                 key={agent.key}
                 agent={agent}
                 agentStatus="connected"
-                onOpenDetail={() => onOpenDetail(agent.key)}
+                selected={selectedAgentKey === agent.key}
+                onOpenDetail={() => open(agent.key)}
                 onInstallAgent={mcp.installAgent}
                 copy={listCopy}
               />
@@ -60,7 +65,7 @@ export function AgentsPanelAgentGroups({
 
       {detected.length > 0 && (
         <section className="mb-3">
-          <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          <h3 className="text-[11px] font-medium text-muted-foreground/90 uppercase tracking-wider mb-2 pl-0.5">
             {p.sectionDetected} ({detected.length})
           </h3>
           <div className="space-y-1.5">
@@ -69,7 +74,8 @@ export function AgentsPanelAgentGroups({
                 key={agent.key}
                 agent={agent}
                 agentStatus="detected"
-                onOpenDetail={() => onOpenDetail(agent.key)}
+                selected={selectedAgentKey === agent.key}
+                onOpenDetail={() => open(agent.key)}
                 onInstallAgent={mcp.installAgent}
                 copy={listCopy}
               />
@@ -83,7 +89,7 @@ export function AgentsPanelAgentGroups({
           <button
             type="button"
             onClick={() => setShowNotDetected(!showNotDetected)}
-            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm pl-0.5"
           >
             {showNotDetected ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             {p.sectionNotDetected} ({notFound.length})
@@ -95,7 +101,8 @@ export function AgentsPanelAgentGroups({
                   key={agent.key}
                   agent={agent}
                   agentStatus="notFound"
-                  onOpenDetail={() => onOpenDetail(agent.key)}
+                  selected={selectedAgentKey === agent.key}
+                  onOpenDetail={() => open(agent.key)}
                   onInstallAgent={mcp.installAgent}
                   copy={listCopy}
                 />
