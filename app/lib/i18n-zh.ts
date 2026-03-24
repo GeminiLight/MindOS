@@ -201,16 +201,10 @@ export const zh = {
     echo: {
       title: '回响',
       aboutYouTitle: '与你有关',
-      aboutYouHint: '路径与链接里，绕回你名下的那几笔。',
       continuedTitle: '未完待续',
-      continuedHint: '草稿、写到一半的句子、没收口的待办。',
       dailyEchoTitle: '每日回响',
-      dailyEchoHint: '给今天留一行空白；轻到不必为此开一场对话。',
       pastYouTitle: '历史的你',
-      pastYouHint: '在另一个时间刻度上，你写下的选择与心情。',
       intentGrowthTitle: '心向生长',
-      intentGrowthHint: '你在推的方向，以及它怎样慢慢偏转。',
-      comingSoon: '随后到来',
     },
     discover: {
       title: '探索',
