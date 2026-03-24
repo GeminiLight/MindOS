@@ -17,5 +17,5 @@
     "lib": ["ES2022"]
   },
   "include": ["src/**/*.ts", "../shared/**/*.ts"],
-  "exclude": ["node_modules", "dist", "dist-electron", "src/*-renderer.ts"]
+  "exclude": ["node_modules", "dist", "dist-electron", "src/*-renderer.ts", "**/*.test.ts"]
 }

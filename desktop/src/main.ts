@@ -26,6 +26,7 @@ import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loa
 import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
+import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
 
 // ── Constants ──
 const APP_ROOT = app.getAppPath();
@@ -62,6 +63,12 @@ interface MindOSConfig {
   authToken?: string;
   webPassword?: string;
   desktopMode?: 'local' | 'remote';
+  /** @see wiki/specs/spec-desktop-bundled-mindos.md */
+  mindosRuntimePolicy?: 'prefer-newer' | 'bundled-only' | 'user-only';
+  mindosRuntimeRoot?: string;
+  mindosRuntimeStrictCompat?: boolean;
+  minMindOsVersion?: string;
+  maxTestedMindOsVersion?: string;
   [key: string]: unknown;
 }
 
@@ -215,28 +222,61 @@ async function startLocalMode(): Promise<string | null> {
     }
   }
 
-  // 2. MindOS install check — auto-install if missing
-  let projectRoot = await getMindosInstallPath(nodePath);
-  if (!projectRoot) {
-    splashStatus({ message: zh ? '正在安装 MindOS...' : 'Installing MindOS...' });
-    try {
-      projectRoot = await installMindosWithPrivateNode(nodePath, (status) => {
-        if (status === 'installing') {
-          splashStatus({ message: zh ? '正在安装 MindOS（首次约需 1-2 分钟）...' : 'Installing MindOS (first time, ~1-2 min)...' });
-        }
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      splashStatus({
-        error: zh ? `MindOS 安装失败: ${msg}` : `MindOS install failed: ${msg}`,
-        actions: [
-          { id: 'retry', label: 'retry', primary: true },
-          { id: 'switch-remote', label: 'switchRemote' },
-          { id: 'quit', label: 'quit' },
-        ],
-      });
-      return null;
+  // 2. MindOS root — bundled vs global vs override (spec-desktop-bundled-mindos)
+  const runtimeRes = await resolveLocalMindOsProjectRoot(loadConfig(), nodePath);
+  if (!runtimeRes.ok) {
+    splashStatus({
+      error: zh ? runtimeRes.messageZh : runtimeRes.messageEn,
+      actions: [
+        { id: 'retry', label: 'retry', primary: true },
+        { id: 'switch-remote', label: 'switchRemote' },
+        { id: 'quit', label: 'quit' },
+      ],
+    });
+    return null;
+  }
+
+  const { pick: runtimePick } = runtimeRes;
+  console.info(
+    `[MindOS] runtime pick source=${runtimePick.source} root=${runtimePick.projectRoot ?? '—'} version=${runtimePick.version ?? '—'}${runtimePick.reason ? ` reason=${runtimePick.reason}` : ''}`,
+  );
+
+  let projectRoot: string | null = runtimeRes.projectRoot;
+  if (!projectRoot && runtimeRes.needsInstallFallback) {
+    projectRoot = runtimeRes.userCandidatePath;
+    if (!projectRoot) {
+      splashStatus({ message: zh ? '正在安装 MindOS...' : 'Installing MindOS...' });
+      try {
+        projectRoot = await installMindosWithPrivateNode(nodePath, (status) => {
+          if (status === 'installing') {
+            splashStatus({ message: zh ? '正在安装 MindOS（首次约需 1-2 分钟）...' : 'Installing MindOS (first time, ~1-2 min)...' });
+          }
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        splashStatus({
+          error: zh ? `MindOS 安装失败: ${msg}` : `MindOS install failed: ${msg}`,
+          actions: [
+            { id: 'retry', label: 'retry', primary: true },
+            { id: 'switch-remote', label: 'switchRemote' },
+            { id: 'quit', label: 'quit' },
+          ],
+        });
+        return null;
+      }
     }
+  }
+
+  if (!projectRoot) {
+    splashStatus({
+      error: zh ? '未找到可运行的 MindOS 目录' : 'No runnable MindOS installation found',
+      actions: [
+        { id: 'retry', label: 'retry', primary: true },
+        { id: 'switch-remote', label: 'switchRemote' },
+        { id: 'quit', label: 'quit' },
+      ],
+    });
+    return null;
   }
 
   const npxPath = getNpxPath(nodePath);
