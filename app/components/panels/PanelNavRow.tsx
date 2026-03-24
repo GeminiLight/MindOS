@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /** Row matching Discover panel nav: icon tile, title, optional badge, chevron. */
 export function PanelNavRow({
@@ -11,12 +12,15 @@ export function PanelNavRow({
   badge,
   href,
   onClick,
+  active,
 }: {
   icon: ReactNode;
   title: string;
   badge?: React.ReactNode;
   href?: string;
   onClick?: () => void;
+  /** When true, row shows selected state (e.g. current Echo segment). */
+  active?: boolean;
 }) {
   const content = (
     <>
@@ -27,18 +31,22 @@ export function PanelNavRow({
     </>
   );
 
-  const className =
-    'flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm';
+  const className = cn(
+    'flex items-center gap-3 px-4 py-2.5 transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    active
+      ? 'bg-accent/50 text-foreground cursor-default'
+      : 'hover:bg-muted/50 cursor-pointer',
+  );
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} aria-current={active ? 'page' : undefined}>
         {content}
       </Link>
     );
   }
   return (
-    <button type="button" onClick={onClick} className={`${className} w-full`}>
+    <button type="button" onClick={onClick} className={cn(className, 'w-full')}>
       {content}
     </button>
   );
