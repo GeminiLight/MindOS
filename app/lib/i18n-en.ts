@@ -148,6 +148,15 @@ export const en = {
       newSkill: '+ New',
       // Footer
       advancedConfig: 'Advanced Config →',
+      // Hub nav (aligned with Discover panel rows)
+      navOverview: 'Overview',
+      navMcp: 'MCP & Skills',
+      navSkills: 'Skills',
+      navUsage: 'Usage & help',
+      navInsights: 'Agent insights',
+      rosterLabel: 'Your setup',
+      notFoundDetail: 'This agent app was not detected on this machine. Install it, then refresh the list.',
+      skillsEmptyHint: 'Enable and edit skills in MCP & Skills settings.',
     },
     plugins: {
       title: 'Plugins',
