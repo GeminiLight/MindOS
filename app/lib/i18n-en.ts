@@ -283,6 +283,7 @@ export const en = {
     mcp: {
       title: 'MCP health',
       refresh: 'Refresh',
+      connectionGraph: 'Connection graph',
       table: {
         agent: 'Agent',
         status: 'Status',
@@ -299,6 +300,9 @@ export const en = {
     skills: {
       title: 'Skills',
       capabilityGroups: 'Capability groups',
+      searchPlaceholder: 'Search skills...',
+      matrixToggle: 'Skill x Agent compatibility matrix',
+      sourceAll: 'All',
       sourceBuiltin: 'Built-in',
       sourceUser: 'Custom',
       emptyGroup: 'No skills in this group.',
