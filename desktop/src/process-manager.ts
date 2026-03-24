@@ -167,6 +167,8 @@ export class ProcessManager extends EventEmitter {
       MIND_ROOT: mindRoot,
       NODE_ENV: 'production',
     };
+    /** Next binds to OS hostname by default; health checks use 127.0.0.1 */
+    if (!env.HOSTNAME) env.HOSTNAME = '127.0.0.1';
 
     // Check for standalone server.js first (much faster startup)
     const standaloneServer = path.join(appDir, '.next', 'standalone', 'server.js');

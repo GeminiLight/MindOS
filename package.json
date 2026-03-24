@@ -64,6 +64,7 @@
     "start": "mindos start",
     "mcp": "mindos mcp",
     "test": "cd app && npx vitest run",
+    "verify:standalone": "node scripts/verify-standalone.mjs",
     "release": "bash scripts/release.sh"
   },
   "engines": {
