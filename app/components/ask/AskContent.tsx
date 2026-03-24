@@ -13,6 +13,33 @@ import SessionHistory from '@/components/ask/SessionHistory';
 import FileChip from '@/components/ask/FileChip';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { cn } from '@/lib/utils';
+import { useComposerVerticalResize } from '@/hooks/useComposerVerticalResize';
+
+const PANEL_COMPOSER_STORAGE = 'mindos-agent-panel-composer-height';
+const PANEL_COMPOSER_DEFAULT = 104;
+const PANEL_COMPOSER_MIN = 84;
+const PANEL_COMPOSER_MAX_ABS = 440;
+const PANEL_COMPOSER_MAX_VIEW = 0.48;
+const PANEL_COMPOSER_KEY_STEP = 24;
+
+function panelComposerMaxForViewport(): number {
+  if (typeof window === 'undefined') return PANEL_COMPOSER_MAX_ABS;
+  return Math.min(PANEL_COMPOSER_MAX_ABS, Math.floor(window.innerHeight * PANEL_COMPOSER_MAX_VIEW));
+}
+
+function readStoredPanelComposerHeight(): number {
+  if (typeof window === 'undefined') return PANEL_COMPOSER_DEFAULT;
+  try {
+    const s = localStorage.getItem(PANEL_COMPOSER_STORAGE);
+    if (s) {
+      const n = parseInt(s, 10);
+      if (Number.isFinite(n) && n >= PANEL_COMPOSER_MIN && n <= PANEL_COMPOSER_MAX_ABS) return n;
+    }
+  } catch {
+    /* ignore */
+  }
+  return PANEL_COMPOSER_DEFAULT;
+}
 
 interface AskContentProps {
   /** Controls visibility — 'open' for modal, 'active' for panel */
@@ -33,10 +60,78 @@ interface AskContentProps {
 }
 
 export default function AskContent({ visible, currentFile, initialMessage, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch }: AskContentProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const isPanel = variant === 'panel';
+
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
+
+  const [panelComposerHeight, setPanelComposerHeight] = useState(readStoredPanelComposerHeight);
+  const panelComposerHRef = useRef(panelComposerHeight);
+  panelComposerHRef.current = panelComposerHeight;
+
+  const getPanelComposerHeight = useCallback(() => panelComposerHRef.current, []);
+  const persistPanelComposerHeight = useCallback((h: number) => {
+    try {
+      localStorage.setItem(PANEL_COMPOSER_STORAGE, String(h));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onPanelComposerResizePointerDown = useComposerVerticalResize({
+    minHeight: PANEL_COMPOSER_MIN,
+    maxHeightAbs: PANEL_COMPOSER_MAX_ABS,
+    maxHeightViewportRatio: PANEL_COMPOSER_MAX_VIEW,
+    getHeight: getPanelComposerHeight,
+    setHeight: setPanelComposerHeight,
+    persist: persistPanelComposerHeight,
+  });
+
+  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(panelComposerMaxForViewport);
+
+  const applyPanelComposerClampAndPersist = useCallback(() => {
+    const maxH = panelComposerMaxForViewport();
+    setPanelComposerViewportMax(maxH);
+    const h = panelComposerHRef.current;
+    if (h > maxH) {
+      setPanelComposerHeight(maxH);
+      panelComposerHRef.current = maxH;
+      persistPanelComposerHeight(maxH);
+    }
+  }, [persistPanelComposerHeight]);
+
+  const handlePanelComposerSeparatorKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+      e.preventDefault();
+      const maxH = panelComposerMaxForViewport();
+      setPanelComposerViewportMax(maxH);
+      const h = panelComposerHRef.current;
+      let next = h;
+      if (e.key === 'ArrowUp') next = h + PANEL_COMPOSER_KEY_STEP;
+      else if (e.key === 'ArrowDown') next = h - PANEL_COMPOSER_KEY_STEP;
+      else if (e.key === 'Home') next = PANEL_COMPOSER_MIN;
+      else if (e.key === 'End') next = maxH;
+      const clamped = Math.round(Math.max(PANEL_COMPOSER_MIN, Math.min(maxH, next)));
+      setPanelComposerHeight(clamped);
+      panelComposerHRef.current = clamped;
+      persistPanelComposerHeight(clamped);
+    },
+    [persistPanelComposerHeight],
+  );
+
+  const resetPanelComposerHeight = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setPanelComposerHeight(PANEL_COMPOSER_DEFAULT);
+      panelComposerHRef.current = PANEL_COMPOSER_DEFAULT;
+      persistPanelComposerHeight(PANEL_COMPOSER_DEFAULT);
+    },
+    [persistPanelComposerHeight],
+  );
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -93,6 +188,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     return () => window.removeEventListener('keydown', handler);
   }, [variant, visible, onClose, mention]);
 
+  useEffect(() => {
+    if (!isPanel) return;
+    applyPanelComposerClampAndPersist();
+    window.addEventListener('resize', applyPanelComposerClampAndPersist);
+    return () => window.removeEventListener('resize', applyPanelComposerClampAndPersist);
+  }, [isPanel, applyPanelComposerClampAndPersist]);
+
   const handleInputChange = useCallback((val: string) => {
     setInput(val);
     mention.updateMentionFromInput(val);
@@ -108,21 +210,32 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [input, attachedFiles, mention]);
 
-  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (mention.mentionQuery === null) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      mention.navigateMention('down');
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      mention.navigateMention('up');
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      if (mention.mentionResults.length > 0) {
-        e.preventDefault();
-        selectMention(mention.mentionResults[mention.mentionIndex]);
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (mention.mentionQuery !== null) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          mention.navigateMention('down');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          mention.navigateMention('up');
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          if (e.key === 'Enter' && e.shiftKey) return;
+          if (mention.mentionResults.length > 0) {
+            e.preventDefault();
+            selectMention(mention.mentionResults[mention.mentionIndex]);
+          }
+        }
+        return;
       }
-    }
-  }, [mention, selectMention]);
+      // Panel: multiline input — Enter sends, Shift+Enter inserts newline (textarea default).
+      if (variant === 'panel' && e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
+        e.preventDefault();
+        (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
+      }
+    },
+    [mention, selectMention, variant, isLoading, input],
+  );
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
 
@@ -250,7 +363,6 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [session, currentFile, upload, mention]);
 
-  const isPanel = variant === 'panel';
   const iconSize = isPanel ? 13 : 14;
   const inputIconSize = isPanel ? 14 : 15;
 
@@ -319,47 +431,79 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         labels={{ connecting: t.ask.connecting, thinking: t.ask.thinking, generating: t.ask.generating }}
       />
 
-      {/* Input area */}
-      <div className="border-t border-border shrink-0">
-        {attachedFiles.length > 0 && (
-          <div className={isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1'}>
-            <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-              {isPanel ? 'Context' : 'Knowledge Base Context'}
-            </div>
-            <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
-              {attachedFiles.map(f => (
-                <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
-              ))}
-            </div>
+      {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
+      <div
+        className={cn('shrink-0 border-t border-border', isPanel && 'flex flex-col overflow-hidden bg-card')}
+        style={isPanel ? { height: panelComposerHeight } : undefined}
+      >
+        {isPanel ? (
+          <div
+            role="separator"
+            tabIndex={0}
+            aria-orientation="horizontal"
+            aria-label={`${t.ask.panelComposerResize}. ${t.ask.panelComposerResetHint}. ${t.ask.panelComposerKeyboard}`}
+            aria-valuemin={PANEL_COMPOSER_MIN}
+            aria-valuemax={panelComposerViewportMax}
+            aria-valuenow={panelComposerHeight}
+            title={`${t.ask.panelComposerResize} · ${t.ask.panelComposerResetHint} · ${t.ask.panelComposerKeyboard}`}
+            onPointerDown={onPanelComposerResizePointerDown}
+            onKeyDown={handlePanelComposerSeparatorKeyDown}
+            onDoubleClick={resetPanelComposerHeight}
+            className="group flex h-3 shrink-0 cursor-ns-resize items-center justify-center border-b border-border/50 bg-muted/[0.06] transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          >
+            <span
+              className="pointer-events-none h-1 w-10 rounded-full bg-border transition-colors group-hover:bg-[var(--amber)]/45 group-active:bg-[var(--amber)]/60"
+              aria-hidden
+            />
           </div>
-        )}
+        ) : null}
 
-        {upload.localAttachments.length > 0 && (
-          <div className={isPanel ? 'px-3 pb-1' : 'px-4 pb-1'}>
-            <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-              {isPanel ? 'Uploaded' : 'Uploaded Files'}
+        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
+          {attachedFiles.length > 0 && (
+            <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
+              <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
+                {isPanel ? 'Context' : 'Knowledge Base Context'}
+              </div>
+              <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
+                {attachedFiles.map(f => (
+                  <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
+                ))}
+              </div>
             </div>
-            <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
-              {upload.localAttachments.map((f, idx) => (
-                <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
-              ))}
+          )}
+
+          {upload.localAttachments.length > 0 && (
+            <div className={cn('shrink-0', isPanel ? 'px-3 pb-1' : 'px-4 pb-1')}>
+              <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
+                {isPanel ? 'Uploaded' : 'Uploaded Files'}
+              </div>
+              <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
+                {upload.localAttachments.map((f, idx) => (
+                  <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {upload.uploadError && (
-          <div className={`${isPanel ? 'px-3' : 'px-4'} pb-1 text-xs text-error`}>{upload.uploadError}</div>
-        )}
+          {upload.uploadError && (
+            <div className={cn('shrink-0 pb-1 text-xs text-error', isPanel ? 'px-3' : 'px-4')}>{upload.uploadError}</div>
+          )}
 
-        {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
-          <MentionPopover
-            results={mention.mentionResults}
-            selectedIndex={mention.mentionIndex}
-            onSelect={selectMention}
-          />
-        )}
+          {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
+            <MentionPopover
+              results={mention.mentionResults}
+              selectedIndex={mention.mentionIndex}
+              onSelect={selectMention}
+            />
+          )}
 
-        <form onSubmit={handleSubmit} className={`flex items-center ${isPanel ? 'gap-1.5 px-2 py-2.5' : 'gap-2 px-3 py-3'}`}>
+          <form
+            onSubmit={handleSubmit}
+            className={cn(
+              'flex',
+              isPanel ? 'min-h-0 flex-1 items-end gap-1.5 px-2 py-2' : 'items-center gap-2 px-3 py-3',
+            )}
+          >
           <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach local file">
             <Paperclip size={inputIconSize} />
           </button>
@@ -385,7 +529,10 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               const pos = el.selectionStart ?? input.length;
               const newVal = input.slice(0, pos) + '@' + input.slice(pos);
               handleInputChange(newVal);
-              setTimeout(() => { el.focus(); el.setSelectionRange(pos + 1, pos + 1); }, 0);
+              setTimeout(() => {
+                el.focus();
+                el.setSelectionRange(pos + 1, pos + 1);
+              }, 0);
             }}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
             title="@ mention file"
@@ -393,15 +540,32 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             <AtSign size={inputIconSize} />
           </button>
 
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => handleInputChange(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={t.ask.placeholder}
-            disabled={isLoading}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50 min-w-0"
-          />
+          {isPanel ? (
+            <textarea
+              ref={(el) => {
+                inputRef.current = el;
+              }}
+              value={input}
+              onChange={e => handleInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={t.ask.placeholder}
+              disabled={isLoading}
+              rows={1}
+              className="min-h-0 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none transition-[height] duration-75 disabled:opacity-50"
+            />
+          ) : (
+            <input
+              ref={(el) => {
+                inputRef.current = el;
+              }}
+              value={input}
+              onChange={e => handleInputChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={t.ask.placeholder}
+              disabled={isLoading}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50 min-w-0"
+            />
+          )}
 
           {isLoading ? (
             <button type="button" onClick={handleStop} className="p-1.5 rounded-md transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted" title={t.ask.stopTitle}>
@@ -412,7 +576,8 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               <Send size={isPanel ? 13 : 14} />
             </button>
           )}
-        </form>
+          </form>
+        </div>
       </div>
 
       {/* Footer hints — use full class strings so Tailwind JIT includes utilities */}
@@ -420,13 +585,36 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         className={cn(
           'flex shrink-0 items-center',
           isPanel
-            ? 'gap-2 px-3 pb-1.5 text-[10px] text-muted-foreground/40'
+            ? 'flex-wrap gap-x-2 gap-y-1 px-3 pb-1.5 text-[10px] text-muted-foreground/40'
             : 'hidden gap-3 px-4 pb-2 text-xs text-muted-foreground/50 md:flex',
         )}
       >
-        <span><kbd className="font-mono">↵</kbd> {t.ask.send}</span>
-        <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
-        {!isPanel && <span><kbd className="font-mono">ESC</kbd> {t.search.close}</span>}
+        <span suppressHydrationWarning>
+          <kbd className="font-mono">↵</kbd> {t.ask.send}
+        </span>
+        {isPanel ? (
+          <span suppressHydrationWarning>
+            <kbd className="font-mono">⇧</kbd>
+            <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
+          </span>
+        ) : null}
+        {isPanel ? (
+          <span
+            className="hidden sm:inline"
+            suppressHydrationWarning
+            title={`${t.ask.panelComposerResize} · ${t.ask.panelComposerResetHint} · ${t.ask.panelComposerKeyboard}`}
+          >
+            <kbd className="font-mono">↕</kbd> {t.ask.panelComposerFooter}
+          </span>
+        ) : null}
+        <span suppressHydrationWarning>
+          <kbd className="font-mono">@</kbd> {t.ask.attachFile}
+        </span>
+        {!isPanel && (
+          <span suppressHydrationWarning>
+            <kbd className="font-mono">ESC</kbd> {t.search.close}
+          </span>
+        )}
       </div>
     </>
   );

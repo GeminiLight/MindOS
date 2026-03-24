@@ -68,6 +68,11 @@ export const zh = {
   sshNoConfig: '💡 有 ~/.ssh/config 时将自动列出可选 Host',
   sshNoSsh: '未检测到 SSH',
   sshSelectHost: 'user@hostname 或 SSH Host 别名',
+  // Toolbar (theme / language)
+  themeTooltipLight: '主题：浅色',
+  themeTooltipDark: '主题：深色',
+  langTooltipZh: '语言：中文',
+  langTooltipEn: '语言：English',
 } as const;
 
 export type I18nKeys = keyof typeof zh;

@@ -1,9 +1,31 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MindOS</title>
+  <!-- Sync theme + document language before first paint (avoids light/dark or zh/en flash). -->
+  <script>
+(function () {
+  document.documentElement.classList.add('connect-hydrating');
+  function systemLangIsZh() {
+    try { return (navigator.language || '').toLowerCase().startsWith('zh'); } catch (_) { return false; }
+  }
+  try {
+    var th = localStorage.getItem('mindos-connect-theme');
+    if (th === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else if (th === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+
+    var lg = localStorage.getItem('mindos-lang');
+    var resolved;
+    if (lg === 'zh') resolved = 'zh';
+    else if (lg === 'en') resolved = 'en';
+    else resolved = systemLangIsZh() ? 'zh' : 'en';
+    document.documentElement.lang = resolved === 'zh' ? 'zh-CN' : 'en';
+  } catch (_) { /* file:// or sandbox */ }
+})();
+  </script>
   <style>
     /* ── Design tokens: Light Mode (default) ── */
     :root {
@@ -41,8 +63,41 @@
       }
     }
 
+    /* Forced theme (overrides system). Same tokens as :root / dark media above. */
+    html[data-theme="light"] {
+      --background: #faf9f7;
+      --foreground: #1c1a17;
+      --card: #ffffff;
+      --card-hover: #f5f3f0;
+      --border: rgba(28, 26, 23, 0.10);
+      --muted-foreground: #8a8275;
+      --amber: #c8873a;
+      --amber-dim: rgba(200, 135, 58, 0.12);
+      --amber-foreground: #ffffff;
+      --success: #2d8a3e;
+      --error: #c85050;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    html[data-theme="dark"] {
+      --background: #131210;
+      --foreground: #e8e4dc;
+      --card: #1c1a17;
+      --card-hover: #252320;
+      --border: rgba(232, 228, 220, 0.08);
+      --muted-foreground: #8a8275;
+      --amber: #d4954a;
+      --amber-dim: rgba(212, 149, 74, 0.20);
+      --amber-foreground: #131210;
+      --success: #7aad80;
+      --error: #c85050;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    html.connect-hydrating body {
+      opacity: 0;
+    }
     body {
       background: var(--background);
       color: var(--foreground);
@@ -53,6 +108,7 @@
       min-height: 100vh;
       padding: 24px;
       -webkit-font-smoothing: antialiased;
+      transition: opacity 0.12s ease-out;
     }
 
     .container {
@@ -257,23 +313,35 @@
       border-color: var(--muted-foreground);
     }
 
-    /* ── Language Switcher ── */
-    .lang-switcher {
-      position: absolute; top: 14px; right: 14px;
-      display: flex; gap: 2px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 2px;
+    /* ── Theme + language icon toolbar ── */
+    .connect-toolbar {
+      position: absolute; top: 12px; right: 12px;
+      display: flex; gap: 6px; align-items: center;
     }
-    .lang-btn {
-      padding: 3px 10px; font-size: 11px;
-      color: var(--muted-foreground); background: transparent;
-      border: none; border-radius: 6px; cursor: pointer;
-      transition: all 0.15s; font-weight: 500;
+    .icon-btn {
+      width: 36px; height: 36px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--card); color: var(--foreground);
+      cursor: pointer; padding: 0;
+      transition: border-color 0.15s, background 0.15s;
     }
-    .lang-btn:hover { color: var(--foreground); }
-    .lang-btn.active {
-      background: var(--amber);
-      color: var(--amber-foreground);
+    .icon-btn:hover {
+      border-color: var(--amber);
+      background: var(--card-hover);
+    }
+    .icon-btn:focus { outline: none; }
+    .icon-btn:focus-visible {
+      box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--amber);
+    }
+    .icon-btn svg {
+      width: 18px; height: 18px;
+      flex-shrink: 0;
+    }
+    .lang-glyph {
+      font-size: 14px; font-weight: 600;
+      line-height: 1;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     }
 
     /* ── Setup helper ── */
@@ -316,9 +384,13 @@
       background: rgba(200, 80, 80, 0.06);
     }
     @media (prefers-color-scheme: dark) {
-      .install-progress.success { background: rgba(122, 173, 128, 0.1); }
-      .install-progress.error { background: rgba(200, 80, 80, 0.1); }
+      :root:not([data-theme="light"]) .install-progress.success { background: rgba(122, 173, 128, 0.1); }
+      :root:not([data-theme="light"]) .install-progress.error { background: rgba(200, 80, 80, 0.1); }
     }
+    html[data-theme="dark"] .install-progress.success { background: rgba(122, 173, 128, 0.1); }
+    html[data-theme="dark"] .install-progress.error { background: rgba(200, 80, 80, 0.1); }
+    html[data-theme="light"] .install-progress.success { background: rgba(45, 138, 62, 0.06); }
+    html[data-theme="light"] .install-progress.error { background: rgba(200, 80, 80, 0.06); }
 
     .hidden { display: none !important; }
     .spinner {
@@ -351,10 +423,9 @@
   </style>
 </head>
 <body>
-  <!-- Language switcher — events bound by JS, no onclick -->
-  <div class="lang-switcher">
-    <button class="lang-btn" id="lang-zh">中文</button>
-    <button class="lang-btn" id="lang-en">EN</button>
+  <div class="connect-toolbar" role="toolbar" aria-label="Appearance">
+    <button type="button" class="icon-btn" id="btn-theme" aria-label="Theme"></button>
+    <button type="button" class="icon-btn" id="btn-lang" aria-label="Language"></button>
   </div>
 
   <div class="container">
@@ -461,6 +532,12 @@
     </div>
   </div>
 
+  <!-- If connect-renderer.js fails to load or throws before init, still show UI (avoid stuck opacity:0). -->
+  <script>
+    setTimeout(function () {
+      document.documentElement.classList.remove('connect-hydrating');
+    }, 3500);
+  </script>
   <script src="../dist-electron/renderer/connect-renderer.js"></script>
 </body>
 </html>
