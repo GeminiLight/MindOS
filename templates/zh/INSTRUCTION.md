@@ -14,7 +14,7 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 1. 读取根 `INSTRUCTION.md`（本文件）
 2. 读取根 `README.md`（目录索引与导航）
-3. 同时读取 `CONFIG.json` 与 `CONFIG.md`（配置值 + 配置语义说明）
+3. 读取 `CONFIG.json`（配置值 + 命名语义）
 4. 路由到目标目录
 5. 若目标目录含 `INSTRUCTION.md`，先读取局部规则
 6. 再读取目标目录 `README.md` 与目标文件
@@ -123,7 +123,7 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 - 内容文件：可用 `emoji + 名称`
 - 目录名：按 `languagePreference.folderNamingLanguage` 生成；中文模板默认中文，英文模板默认英文。
-- 系统文件：`README.md`、`INSTRUCTION.md`、`TODO.md`、`CHANGELOG.md`、`CONFIG.json`、`CONFIG.md`
+- 系统文件：`README.md`、`INSTRUCTION.md`、`TODO.md`、`CHANGELOG.md`、`CONFIG.json`
 
 ### 4.3 读写前置
 
@@ -172,6 +172,6 @@ Agent 进入知识库时，按以下顺序加载上下文：
 
 ## 9. 配置文件读取规则（CONFIG）
 
-- `CONFIG.json` 与 `CONFIG.md` 必须同时读取。
-- 两者是互补关系，不分优先级。
-- `CONFIG.json` 提供结构化配置值；`CONFIG.md` 提供语义说明与使用意图。
+- `CONFIG.json` 是配置的唯一权威源。
+- 字段语义内嵌于 `keySpecs`；目录命名规则内嵌于 `naming`。
+- 无需额外的 `CONFIG.md`。

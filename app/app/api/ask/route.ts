@@ -182,7 +182,10 @@ export async function POST(req: NextRequest) {
   // 2. user-skill-rules.md — user's personalized rules from KB root (if exists)
   const isZh = serverSettings.disabledSkills?.includes('mindos') ?? false;
   const skillDirName = isZh ? 'mindos-zh' : 'mindos';
-  const skillPath = path.resolve(process.cwd(), `data/skills/${skillDirName}/SKILL.md`);
+  const appDir = process.env.MINDOS_PROJECT_ROOT
+    ? path.join(process.env.MINDOS_PROJECT_ROOT, 'app')
+    : process.cwd();
+  const skillPath = path.join(appDir, `data/skills/${skillDirName}/SKILL.md`);
   const skill = readAbsoluteFile(skillPath);
 
   const mindRoot = getMindRoot();

@@ -52,7 +52,7 @@ Run this sequence before substantive edits:
 - If unavailable, read root `INSTRUCTION.md` and root `README.md` directly.
 
 2. Discover current structure dynamically.
-- Use `mindos_list_files` and targeted `mindos_search_notes`.
+- Use `mindos_list_spaces` (top-level zones + README blurbs), `mindos_list_files`, and targeted `mindos_search_notes` as needed.
 - Do not assume fixed top-level directory names.
 
 3. Load local guidance around target paths.
@@ -96,6 +96,7 @@ Before any non-trivial write, confirm all checks:
 
 - `mindos_bootstrap`: Load startup context.
 - `mindos_list_files`: Inspect file tree.
+- `mindos_list_spaces`: Top-level Mind Spaces with README blurbs (lighter than full tree).
 - `mindos_search_notes`: Locate relevant files by keyword/scope/type/date. **When searching, always issue multiple parallel searches with different keywords upfront** — synonyms, abbreviations, English/Chinese variants, and broader/narrower terms. A single keyword is fragile; casting a wider net on the first try avoids wasted rounds.
 - `mindos_get_recent`: Inspect latest activity.
 - `mindos_get_backlinks`: Assess impact before rename/move/delete.

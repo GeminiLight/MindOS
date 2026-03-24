@@ -63,10 +63,22 @@ function copyFiltered(fromAbs, toAbs, rel) {
   const entries = readdirSync(fromAbs, { withFileTypes: true });
   for (const ent of entries) {
     const name = ent.name;
-    if (name === 'node_modules') continue;
     if (rel === '.next' && (name === 'cache' || name === 'dev')) continue;
 
     const nextRel = rel ? path.join(rel, name) : name;
+
+    // Skip app-level node_modules but KEEP .next/standalone/node_modules (traced runtime deps).
+    // Copy the standalone node_modules in one shot (cpSync recursive) to preserve symlinks/structure.
+    if (name === 'node_modules') {
+      const standalonePrefix = path.join('.next', 'standalone');
+      if (rel === standalonePrefix) {
+        const fromChild = path.join(fromAbs, name);
+        const toChild = path.join(toAbs, name);
+        cpSync(fromChild, toChild, { recursive: true });
+      }
+      continue;
+    }
+
     const fromChild = path.join(fromAbs, name);
     const toChild = path.join(toAbs, name);
 

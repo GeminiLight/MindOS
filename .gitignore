@@ -54,5 +54,9 @@ desktop/node_modules/
 desktop/resources/mindos-runtime/*
 !desktop/resources/mindos-runtime/README.md
 
+# Docker / Docker Compose — local overrides & secrets (keep Dockerfile / docker-compose.yml tracked)
+docker-compose.override.yml
+/.env
+
 # Shared SDK build
 shared/dist/

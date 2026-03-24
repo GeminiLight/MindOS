@@ -14,7 +14,7 @@
 - 处理中英文模板对齐。
 - 新增示例数据与示例文件。
 - 修复模板规则冲突（`INSTRUCTION.md` vs `README.md`）。
-- 更新配置协议（`CONFIG.json` / `CONFIG.md`）。
+- 更新配置协议（`CONFIG.json`）。
 
 ## 3. 全局约束（必须）
 
@@ -41,7 +41,6 @@
 - `TODO.md`
 - `CHANGELOG.md`
 - `CONFIG.json`
-- `CONFIG.md`
 
 ## 5. 示例文件规则
 
@@ -54,9 +53,9 @@
 
 ## 6. CONFIG 协议
 
-- `CONFIG.json` 与 `CONFIG.md` 必须同时读取。
-- 两者互补，不分优先级。
-- 目录命名与层级命名等语义协议优先沉淀在 `CONFIG.md`；`CONFIG.json` 保持结构化键值表达。
+- `CONFIG.json` 是配置的唯一权威源。
+- 字段语义内嵌于 `keySpecs`；目录命名规则内嵌于 `naming`。
+- 无需额外的 `CONFIG.md`。
 
 ## 7. 配置设计约束
 

@@ -73,7 +73,7 @@
   - en: Switch tools or start a new chat and you're re-transporting context — knowledge can't be reused across Agents / Deep personal context scattered everywhere — Agents always lack the full picture
 - **Shift**
   - zh: 内置 MCP Server，所有 Agent 零配置直连核心知识库 / 项目记忆与 SOP 仅需一处记录，即可全量赋能所有 AI 工具
-  - en: Built-in MCP Server (20+ tools) — full-lineup Agents connect with zero config / Profile, SOPs & project memory: record once, empower all Agents
+  - en: Built-in MCP Server — full-lineup Agents connect with zero config / Profile, SOPs & project memory: record once, empower all Agents
 
 ### Pillar 02: Transparent & Controllable
 
@@ -482,7 +482,7 @@
 
 | Feature | zh Title | en Title | zh Desc | en Desc |
 |---------|----------|----------|---------|---------|
-| MCP | MCP Server & Skills | MCP Server & Skills | 20+ 工具，stdio + HTTP 双传输，全阵容 Agent 兼容（OpenClaw, Claude Code, Cursor 等），零配置接入读写、搜索及执行本地工作流。 | 20+ tools, stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access to read, write, search, and execute local workflows. |
+| MCP | MCP Server & Skills | MCP Server & Skills | 完整 MCP 工具集，stdio + HTTP 双传输，全阵容 Agent 兼容（OpenClaw, Claude Code, Cursor 等），零配置接入读写、搜索及执行本地工作流。 | Full MCP tool surface, stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access to read, write, search, and execute local workflows. |
 | 模板 | 结构化模板 | Structured Templates | 预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。 | Pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context. |
 | Agent-Ready | 笔记即指令 | Agent-Ready Docs | 日常笔记天然就是 Agent 可直接执行的高质量指令——无需额外格式转换，写下即可调度。 | Everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch. |
 

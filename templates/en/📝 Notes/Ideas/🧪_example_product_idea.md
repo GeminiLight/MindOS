@@ -1,16 +1,13 @@
-# 💡 Product Idea Example: Trust Layer for Personal AI
+# 💡 Idea Example: Weekend Reading Digest
 
 ## Concept
-- Add a "Trust Trace" panel that shows where each generated answer came from in the user's own knowledge base.
+- Every Sunday, review highlights from the week's reading and distill 3 actionable takeaways.
 
-## User Promise
-- "You don't just get answers. You see evidence."
+## Why It Matters
+- Prevents knowledge from evaporating after consumption.
+- Builds a compounding library of personal insights.
 
-## Why It Can Win
-- Converts skepticism into confidence.
-- Creates strong differentiation against black-box assistants.
-
-## Validation Plan
-1. Prototype trace UI in one workflow.
-2. Run 10 user sessions.
-3. Measure confidence score before/after.
+## Next Steps
+1. Pick one book or article from this week.
+2. Write 3 bullet takeaways in Notes/Inbox.
+3. Move the best one into a project or goal.

@@ -12,7 +12,7 @@
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
@@ -80,10 +80,31 @@ if (process.env.SKIP_MCP_NPM_CI === '1') {
   if (r.status !== 0) {
     fail('mcp npm ci --omit=dev failed (set SKIP_MCP_NPM_CI=1 to skip)');
   }
+  writeFileSync(
+    path.join(destMcp, '.mindos-npm-ci-platform'),
+    `${process.platform}-${process.arch}`,
+    'utf-8',
+  );
 }
 
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');
+}
+
+const templatesFrom = path.join(source, 'templates');
+if (existsSync(templatesFrom) && statSync(templatesFrom).isDirectory()) {
+  cpSync(templatesFrom, path.join(dest, 'templates'), { recursive: true });
+} else {
+  console.warn('[prepare-mindos-runtime] No templates/ in source — setup init will not find starter templates');
+}
+
+const binFrom = path.join(source, 'bin');
+if (existsSync(binFrom) && statSync(binFrom).isDirectory()) {
+  cpSync(binFrom, path.join(dest, 'bin'), { recursive: true });
+} else {
+  console.warn(
+    '[prepare-mindos-runtime] No bin/ in source — packaged app may log "Bundled MindOS CLI not found"',
+  );
 }
 
 console.log(`[prepare-mindos-runtime] OK → ${dest} (from ${source})`);

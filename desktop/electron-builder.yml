@@ -33,8 +33,12 @@ mac:
   gatekeeperAssess: false
 
 asar: true
-# No asarUnpack needed — loadFile() reads from asar directly,
-# and keeping HTML inside asar preserves relative script paths.
+# macOS Chromium often returns ERR_FAILED for file:// pages loaded from inside app.asar; mirror these out.
+asarUnpack:
+  - "**/src/connect.html"
+  - "**/src/splash.html"
+  - "**/dist-electron/preload/**"
+  - "**/dist-electron/renderer/connect-renderer.js"
 # Bundled MindOS: populate `resources/mindos-runtime` via `npm run prepare-mindos-runtime` before dist — see desktop/resources/mindos-runtime/README.md
 
 extraResources:

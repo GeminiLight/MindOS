@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 export async function POST() {
   try {
-    const cliPath = process.env.MINDOS_CLI_PATH || resolve(process.cwd(), '..', 'bin', 'cli.js');
+    const cliPath = process.env.MINDOS_CLI_PATH || resolve(process.env.MINDOS_PROJECT_ROOT || process.cwd(), '..', 'bin', 'cli.js');
     const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
     // Use 'restart' (stop all → wait for ports free → start) instead of bare
     // 'start' which would fail assertPortFree because the current process and

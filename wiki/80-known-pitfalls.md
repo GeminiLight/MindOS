@@ -19,6 +19,21 @@
 - **原因：** Turbopack/开发会话会在 `app/.next/dev` 留下缓存；整目录拷贝 `app/.next` 时会一并带上
 - **解决：** `copyAppForBundledRuntime` 排除 `.next/dev`（与 `.next/cache` 同理）；生产启动走 `standalone/server.js`，不依赖该目录
 
+### `mindos.pid` 误判「CLI 已在跑」→ `ERR_CONNECTION_REFUSED` 白屏
+- **现象：** 主窗口 `did-fail-load -102`；`http://127.0.0.1:3456/` 拒绝连接；删 `config.json` 仍白屏；可能伴随 `Bundled MindOS CLI not found (mindos-runtime/bin/cli.js)`
+- **原因：** (1) `checkCliConflict()` 仅 `kill(pid,0)` 即假定 MindOS Web 已在 `config.port ?? 3456` 上监听，**未探测 `/api/health`**，陈旧 PID 或无关进程占位会导致假阳性；(2) `prepare-mindos-runtime` 未拷贝仓库 `bin/`，打包内缺少 `mindos-runtime/bin/cli.js`
+- **解决：** 冲突分支在 `loadURL` 前 `verifyMindOsWebListening`（短重试）；`prepare-mindos-runtime` 在存在时拷贝 `bin/`；用户可手动删 `~/.mindos/mindos.pid` 后重开（仍建议用新版本逻辑自动回落到起本地服务）
+
+### macOS：`file://…/app.asar` 内嵌页面 `ERR_FAILED`（connect / splash）
+- **现象：** `did-fail-load` 指向 `…/app.asar/src/connect.html` 等；模式选择或远程连接窗口打不开
+- **原因：** 部分环境下 Chromium 对 asar 内 `file://` 主文档或子资源加载不稳定
+- **解决：** `electron-builder` `asarUnpack` 列出 `src/connect.html`、`src/splash.html`、`dist-electron/renderer/connect-renderer.js`、`dist-electron/preload/**`；运行时 `resolvePreferUnpacked()` 优先使用 `app.asar.unpacked` 下同路径；**connect / 模式选择页**用特权 scheme `mindos-connect://bundle/...` + `protocol.handle` + `net.fetch` 提供内容（避免 `file://` 仍 `ERR_FAILED`）；对应窗口 `webPreferences.sandbox: false`
+
+### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
+- **现象：** Desktop 本地模式或 `mindos` CLI 起 MCP 时：`@esbuild/linux-x64` present but this platform needs `@esbuild/darwin-arm64`（或 win/linux 交叉）
+- **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
+- **解决：** `prepare` 在 `mcp/` 写入 `.mindos-npm-ci-platform`（如 `linux-x64`）；`ProcessManager.start()` 调用 `ensureBundledMcpNodeModules()`：与 `process.platform-arch` 不一致（或启发式发现错误 `@esbuild/*`）时删掉 `mcp/node_modules` 并在本机再跑 `npm ci --omit=dev`（用 Desktop 自带的 Node）；根本方案也可改为在目标 OS 上执行 `prepare-mindos-runtime`
+
 ## CLI
 
 ### npm 全局安装缺 node_modules
@@ -30,6 +45,11 @@
 - **现象：** 一个 `ERR_MODULE_NOT_FOUND` 背后串联 4 个 bug
 - **Bug 链：** (1) node_modules 缺失 → (2) `process.argv[3]` 是 `-g` 不是 `install`，路由到 MCP server → (3) `-y` 跳过了 agent 选择（应强制弹出）→ (4) args 解析起始位置基于 sub 不同而不同
 - **教训：** 用户报一个症状，沿调用链至少查 3 层
+
+### JSDoc / 块注释里出现字面量 `/*` → `.js` 整文件解析失败
+- **现象：** 如 `mindos onboard` 报 `SyntaxError: Unexpected token ')'`，栈指向含「JSONC、注释」说明的注释行
+- **原因：** `/** … /* … */` 中内层 `/*` 会提前结束块注释，后续代码裸露
+- **解决：** 注释说明里避免未转义的 `/*` 序列（改用「块注释」「slash-star」等文字描述）
 
 ### cleanNextDir() 必须清理完整 .next
 - **现象：** 构建缓存导致 stale artifact 错误

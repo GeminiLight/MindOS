@@ -114,6 +114,36 @@ server.registerTool("mindos_list_files", {
   } catch (e) { logOp("mindos_list_files", { response_format }, "error", String(e)); return error(String(e)); }
 });
 
+// ── mindos_list_spaces ──────────────────────────────────────────────────────
+
+server.registerTool("mindos_list_spaces", {
+  title: "List Mind Spaces",
+  description:
+    "List top-level Mind Spaces (same as home Spaces grid): name, path, file count, and README blurb. Only spaces that appear in the file tree (at least one .md/.csv under the folder) are included.",
+  inputSchema: z.object({
+    response_format: z.enum(["markdown", "json"]).default("json"),
+  }),
+  annotations: { readOnlyHint: true },
+}, async ({ response_format }) => {
+  try {
+    const json = await get("/api/file", { op: "list_spaces" });
+    const spaces = json.spaces as Array<{ name: string; path: string; fileCount: number; description: string }>;
+    if (response_format === "json") {
+      logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
+      return ok(JSON.stringify({ spaces: spaces ?? [] }, null, 2));
+    }
+    const lines = (spaces ?? []).map(
+      (s) => `- **${s.name}** (\`${s.path}/\`) — ${s.fileCount} file(s)${s.description ? ` — ${s.description}` : ""}`,
+    );
+    const text = lines.length ? lines.join("\n") : "(no top-level spaces in tree)";
+    logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
+    return ok(text);
+  } catch (e) {
+    logOp("mindos_list_spaces", { response_format }, "error", String(e));
+    return error(String(e));
+  }
+});
+
 // ── mindos_read_file ────────────────────────────────────────────────────────
 
 server.registerTool("mindos_read_file", {
