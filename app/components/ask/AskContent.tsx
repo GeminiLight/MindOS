@@ -118,7 +118,11 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     persist: persistPanelComposerHeight,
   });
 
-  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(panelComposerMaxForViewport);
+  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(PANEL_COMPOSER_MAX_ABS);
+
+  useEffect(() => {
+    setPanelComposerViewportMax(panelComposerMaxForViewport());
+  }, []);
 
   const applyPanelComposerClampAndPersist = useCallback(() => {
     const maxH = panelComposerMaxForViewport();
