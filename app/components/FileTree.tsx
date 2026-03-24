@@ -48,18 +48,15 @@ function filterVisibleNodes(nodes: FileNode[], parentIsSpace: boolean): FileNode
   });
 }
 
-// ─── SpaceContextMenu ─────────────────────────────────────────────────────────
+// ─── Context Menu Shell ───────────────────────────────────────────────────────
 
-function SpaceContextMenu({ x, y, node, onClose, onRename }: {
+function ContextMenuShell({ x, y, onClose, menuHeight, children }: {
   x: number;
   y: number;
-  node: FileNode;
   onClose: () => void;
-  onRename: () => void;
+  menuHeight?: number;
+  children: React.ReactNode;
 }) {
-  const router = useRouter();
-  const { t } = useLocale();
-  const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,7 +72,7 @@ function SpaceContextMenu({ x, y, node, onClose, onRename }: {
     };
   }, [onClose]);
 
-  const adjustedY = Math.min(y, window.innerHeight - 160);
+  const adjustedY = Math.min(y, window.innerHeight - (menuHeight ?? 160));
   const adjustedX = Math.min(x, window.innerWidth - 200);
 
   return (
@@ -84,123 +81,84 @@ function SpaceContextMenu({ x, y, node, onClose, onRename }: {
       className="fixed z-50 min-w-[180px] bg-card border border-border rounded-lg shadow-lg py-1"
       style={{ top: adjustedY, left: adjustedX }}
     >
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
-        onClick={() => {
-          router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`);
+      {children}
+    </div>
+  );
+}
+
+const MENU_ITEM = "w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left";
+const MENU_DANGER = "w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left";
+const MENU_DIVIDER = "my-1 border-t border-border/50";
+
+// ─── SpaceContextMenu ─────────────────────────────────────────────────────────
+
+function SpaceContextMenu({ x, y, node, onClose, onRename }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
+}) {
+  const router = useRouter();
+  const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <ContextMenuShell x={x} y={y} onClose={onClose}>
+      <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
+        <ScrollText size={14} className="shrink-0" /> {t.fileTree.editRules}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
+        <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
+      </button>
+      <div className={MENU_DIVIDER} />
+      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
+        if (!confirm(t.fileTree.confirmDeleteSpace(node.name))) return;
+        startTransition(async () => {
+          const result = await deleteSpaceAction(node.path);
+          if (result.success) { router.push('/'); router.refresh(); }
           onClose();
-        }}
-      >
-        <ScrollText size={14} className="shrink-0" />
-        {t.fileTree.editRules}
-      </button>
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
-        onClick={() => { onRename(); onClose(); }}
-      >
-        <Pencil size={14} className="shrink-0" />
-        {t.fileTree.renameSpace}
-      </button>
-      <div className="my-1 border-t border-border/50" />
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left"
-        disabled={isPending}
-        onClick={() => {
-          if (!confirm(t.fileTree.confirmDeleteSpace(node.name))) return;
-          startTransition(async () => {
-            const result = await deleteSpaceAction(node.path);
-            if (result.success) {
-              router.push('/');
-              router.refresh();
-            }
-            onClose();
-          });
-        }}
-      >
+        });
+      }}>
         <Trash2 size={14} className="shrink-0" />
         {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteSpace}
       </button>
-    </div>
+    </ContextMenuShell>
   );
 }
 
 // ─── FolderContextMenu ────────────────────────────────────────────────────────
 
 function FolderContextMenu({ x, y, node, onClose, onRename }: {
-  x: number;
-  y: number;
-  node: FileNode;
-  onClose: () => void;
-  onRename: () => void;
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
-    };
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', keyHandler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', keyHandler);
-    };
-  }, [onClose]);
-
-  const adjustedY = Math.min(y, window.innerHeight - 140);
-  const adjustedX = Math.min(x, window.innerWidth - 200);
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 min-w-[180px] bg-card border border-border rounded-lg shadow-lg py-1"
-      style={{ top: adjustedY, left: adjustedX }}
-    >
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
-        disabled={isPending}
-        onClick={() => {
-          startTransition(async () => {
-            const result = await convertToSpaceAction(node.path);
-            if (result.success) router.refresh();
-            onClose();
-          });
-        }}
-      >
-        <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} />
-        {t.fileTree.convertToSpace}
+    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={140}>
+      <button className={MENU_ITEM} disabled={isPending} onClick={() => {
+        startTransition(async () => {
+          const result = await convertToSpaceAction(node.path);
+          if (result.success) router.refresh();
+          onClose();
+        });
+      }}>
+        <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} /> {t.fileTree.convertToSpace}
       </button>
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
-        onClick={() => { onRename(); onClose(); }}
-      >
-        <Pencil size={14} className="shrink-0" />
-        {t.fileTree.rename}
+      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
+        <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
       </button>
-      <div className="my-1 border-t border-border/50" />
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left"
-        disabled={isPending}
-        onClick={() => {
-          if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
-          startTransition(async () => {
-            const result = await deleteFolderAction(node.path);
-            if (result.success) {
-              router.push('/');
-              router.refresh();
-            }
-            onClose();
-          });
-        }}
-      >
+      <div className={MENU_DIVIDER} />
+      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
+        if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
+        startTransition(async () => {
+          const result = await deleteFolderAction(node.path);
+          if (result.success) { router.push('/'); router.refresh(); }
+          onClose();
+        });
+      }}>
         <Trash2 size={14} className="shrink-0" />
         {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteFolder}
       </button>
-    </div>
+    </ContextMenuShell>
   );
 }
 
