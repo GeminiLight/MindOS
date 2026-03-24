@@ -307,6 +307,7 @@ export const zh = {
     mcp: {
       title: 'MCP 健康',
       refresh: '刷新',
+      connectionGraph: '连接图谱',
       table: {
         agent: 'Agent',
         status: '状态',
@@ -323,6 +324,9 @@ export const zh = {
     skills: {
       title: 'Skills',
       capabilityGroups: '能力分组',
+      searchPlaceholder: '搜索技能...',
+      matrixToggle: 'Skill x Agent 兼容矩阵',
+      sourceAll: '全部',
       sourceBuiltin: '内置',
       sourceUser: '自定义',
       emptyGroup: '该分组暂无技能。',
