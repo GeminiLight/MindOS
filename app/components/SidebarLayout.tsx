@@ -25,6 +25,7 @@ import SearchModal from './SearchModal';
 import AskModal from './AskModal';
 import SettingsModal from './SettingsModal';
 import KeyboardShortcuts from './KeyboardShortcuts';
+import ChangesBanner from './changes/ChangesBanner';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
@@ -82,6 +83,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
     : undefined;
   const agentsContentActive = pathname?.startsWith('/agents');
+  const railActivePanel = lp.activePanel ?? (agentsContentActive ? 'agents' : null);
 
   // ── Event listeners ──
 
@@ -229,12 +231,11 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
       {/* ── Desktop: Activity Bar + Panel ── */}
       <ActivityBar
-        activePanel={agentsContentActive ? 'agents' : lp.activePanel}
+        activePanel={railActivePanel}
         onPanelChange={lp.setActivePanel}
         onAgentsClick={() => {
-          lp.setActivePanel(null);
+          lp.setActivePanel((current) => (current === 'agents' ? null : 'agents'));
           setAgentDetailKey(null);
-          router.push('/agents');
         }}
         syncStatus={syncStatus}
         expanded={lp.railExpanded}
@@ -370,7 +371,10 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       <AskModal open={mobileAskOpen} onClose={() => setMobileAskOpen(false)} currentFile={currentFile} />
 
       <main id="main-content" className="min-h-screen transition-all duration-200 pt-[52px] md:pt-0">
-        <div className="min-h-screen bg-background">{children}</div>
+        <div className="min-h-screen bg-background">
+          <ChangesBanner />
+          {children}
+        </div>
       </main>
 
       <style>{`
