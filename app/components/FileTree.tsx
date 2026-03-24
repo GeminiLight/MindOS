@@ -4,16 +4,21 @@ import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
-import { ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2, Trash2, Pencil } from 'lucide-react';
-import { createFileAction, deleteFileAction, renameFileAction } from '@/lib/actions';
+import {
+  ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
+  Trash2, Pencil, Layers, ScrollText,
+} from 'lucide-react';
+import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
+
+const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
 
 interface FileTreeProps {
   nodes: FileNode[];
   depth?: number;
   onNavigate?: () => void;
-  /** When set, directories with depth <= this value open, others close. null = no override (manual control). */
   maxOpenDepth?: number | null;
+  parentIsSpace?: boolean;
 }
 
 function getIcon(node: FileNode) {
@@ -29,12 +34,143 @@ function getCurrentFilePath(pathname: string): string {
   return encoded.split('/').map(decodeURIComponent).join('/');
 }
 
+function countContentFiles(node: FileNode): number {
+  if (node.type === 'file') return SYSTEM_FILES.has(node.name) ? 0 : 1;
+  return (node.children ?? []).reduce((sum, c) => sum + countContentFiles(c), 0);
+}
+
+function filterVisibleNodes(nodes: FileNode[], parentIsSpace: boolean): FileNode[] {
+  return nodes.filter(node => {
+    if (node.type !== 'file') return true;
+    if (parentIsSpace && SYSTEM_FILES.has(node.name)) return false;
+    if (!parentIsSpace && node.name === 'README.md') return false;
+    return true;
+  });
+}
+
+// ─── Context Menu Shell ───────────────────────────────────────────────────────
+
+function ContextMenuShell({ x, y, onClose, menuHeight, children }: {
+  x: number;
+  y: number;
+  onClose: () => void;
+  menuHeight?: number;
+  children: React.ReactNode;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+  }, [onClose]);
+
+  const adjustedY = Math.min(y, window.innerHeight - (menuHeight ?? 160));
+  const adjustedX = Math.min(x, window.innerWidth - 200);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[180px] bg-card border border-border rounded-lg shadow-lg py-1"
+      style={{ top: adjustedY, left: adjustedX }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const MENU_ITEM = "w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left";
+const MENU_DANGER = "w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left";
+const MENU_DIVIDER = "my-1 border-t border-border/50";
+
+// ─── SpaceContextMenu ─────────────────────────────────────────────────────────
+
+function SpaceContextMenu({ x, y, node, onClose, onRename }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
+}) {
+  const router = useRouter();
+  const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <ContextMenuShell x={x} y={y} onClose={onClose}>
+      <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
+        <ScrollText size={14} className="shrink-0" /> {t.fileTree.editRules}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
+        <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
+      </button>
+      <div className={MENU_DIVIDER} />
+      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
+        if (!confirm(t.fileTree.confirmDeleteSpace(node.name))) return;
+        startTransition(async () => {
+          const result = await deleteSpaceAction(node.path);
+          if (result.success) { router.push('/'); router.refresh(); }
+          onClose();
+        });
+      }}>
+        <Trash2 size={14} className="shrink-0" />
+        {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteSpace}
+      </button>
+    </ContextMenuShell>
+  );
+}
+
+// ─── FolderContextMenu ────────────────────────────────────────────────────────
+
+function FolderContextMenu({ x, y, node, onClose, onRename }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
+}) {
+  const router = useRouter();
+  const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={140}>
+      <button className={MENU_ITEM} disabled={isPending} onClick={() => {
+        startTransition(async () => {
+          const result = await convertToSpaceAction(node.path);
+          if (result.success) router.refresh();
+          onClose();
+        });
+      }}>
+        <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} /> {t.fileTree.convertToSpace}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
+        <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
+      </button>
+      <div className={MENU_DIVIDER} />
+      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
+        if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
+        startTransition(async () => {
+          const result = await deleteFolderAction(node.path);
+          if (result.success) { router.push('/'); router.refresh(); }
+          onClose();
+        });
+      }}>
+        <Trash2 size={14} className="shrink-0" />
+        {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteFolder}
+      </button>
+    </ContextMenuShell>
+  );
+}
+
+// ─── NewFileInline ────────────────────────────────────────────────────────────
+
 function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: number; onDone: () => void }) {
   const [value, setValue] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const router = useRouter();
   const { t } = useLocale();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = useCallback(() => {
     const name = value.trim();
@@ -51,8 +187,18 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
     });
   }, [value, dirPath, onDone, router, t]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onDone();
+      }
+    };
+    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); };
+  }, [onDone]);
+
   return (
-    <div className="px-2 pb-1" style={{ paddingLeft: `${depth * 12 + 20}px` }}>
+    <div ref={containerRef} className="px-2 pb-1" style={{ paddingLeft: `${depth * 12 + 20}px` }}>
       <div className="flex items-center gap-1">
         <input
           autoFocus
@@ -87,12 +233,15 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
   );
 }
 
+// ─── DirectoryNode ────────────────────────────────────────────────────────────
+
 function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
   maxOpenDepth?: number | null;
 }) {
   const router = useRouter();
   const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
+  const isSpace = !!node.isSpace;
   const [open, setOpen] = useState(depth === 0 ? true : isActive);
   const [showNewFile, setShowNewFile] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -100,18 +249,17 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   const [isPending, startTransition] = useTransition();
   const renameRef = useRef<HTMLInputElement>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const { t } = useLocale();
 
   const toggle = useCallback(() => setOpen(v => !v), []);
 
-  // React to maxOpenDepth changes from parent
   const prevMaxOpenDepth = useRef<number | null | undefined>(undefined);
   useEffect(() => {
     if (maxOpenDepth === null || maxOpenDepth === undefined) {
       prevMaxOpenDepth.current = maxOpenDepth;
       return;
     }
-    // Only react when value actually changes
     if (prevMaxOpenDepth.current !== maxOpenDepth) {
       setOpen(depth <= maxOpenDepth);
       prevMaxOpenDepth.current = maxOpenDepth;
@@ -140,7 +288,8 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
     const newName = renameValue.trim();
     if (!newName || newName === node.name) { setRenaming(false); return; }
     startTransition(async () => {
-      const result = await renameFileAction(node.path, newName);
+      const action = isSpace ? renameSpaceAction : renameFileAction;
+      const result = await action(node.path, newName);
       if (result.success && result.newPath) {
         setRenaming(false);
         router.push(`/view/${encodePath(result.newPath)}`);
@@ -149,7 +298,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
         setRenaming(false);
       }
     });
-  }, [renameValue, node.name, node.path, router]);
+  }, [renameValue, node.name, node.path, router, isSpace]);
 
   const handleSingleClick = useCallback(() => {
     if (renaming) return;
@@ -162,8 +311,17 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   }, [renaming, router, node.path, onNavigate]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (isSpace) return;
     startRename(e);
-  }, [startRename]);
+  }, [startRename, isSpace]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const contentCount = isSpace ? countContentFiles(node) : 0;
 
   if (renaming) {
     return (
@@ -185,9 +343,14 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
     );
   }
 
+  const showBorder = isSpace && depth === 0;
+
   return (
     <div>
-      <div className="relative group/dir flex items-center">
+      <div
+        className="relative group/dir flex items-center"
+        onContextMenu={handleContextMenu}
+      >
         <button
           onClick={toggle}
           className="shrink-0 p-1 rounded hover:bg-muted text-zinc-500 transition-colors"
@@ -209,11 +372,16 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
             ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
           `}
         >
-          {open
-            ? <FolderOpen size={14} className="text-yellow-400 shrink-0" />
-            : <Folder size={14} className="text-yellow-400 shrink-0" />
+          {isSpace
+            ? <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} />
+            : open
+              ? <FolderOpen size={14} className="text-yellow-400 shrink-0" />
+              : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
+          {isSpace && !open && (
+            <span className="ml-auto text-xs text-muted-foreground shrink-0 tabular-nums pr-1">{contentCount}</span>
+          )}
         </button>
         <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
           <button
@@ -229,35 +397,80 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           >
             <Plus size={13} />
           </button>
-          <button
-            type="button"
-            onClick={startRename}
-            className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title={t.fileTree.rename}
-          >
-            <Pencil size={12} />
-          </button>
+          {isSpace ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`);
+                onNavigate?.();
+              }}
+              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={t.fileTree.editRules}
+            >
+              <ScrollText size={12} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={startRename}
+              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={t.fileTree.rename}
+            >
+              <Pencil size={12} />
+            </button>
+          )}
         </div>
       </div>
 
       <div
-        className="overflow-hidden transition-all duration-200"
-        style={{ maxHeight: open ? '9999px' : '0px' }}
+        className={`overflow-hidden transition-all duration-200 ${showBorder ? 'border-l-2 ml-[18px]' : ''}`}
+        style={{
+          maxHeight: open ? '9999px' : '0px',
+          ...(showBorder ? { borderColor: 'color-mix(in srgb, var(--amber) 30%, transparent)' } : {}),
+        }}
       >
         {node.children && (
-          <FileTree nodes={node.children} depth={depth + 1} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
+          <FileTree
+            nodes={node.children}
+            depth={showBorder ? 1 : depth + 1}
+            onNavigate={onNavigate}
+            maxOpenDepth={maxOpenDepth}
+            parentIsSpace={isSpace}
+          />
         )}
         {showNewFile && (
           <NewFileInline
             dirPath={node.path}
-            depth={depth}
+            depth={showBorder ? 0 : depth}
             onDone={() => setShowNewFile(false)}
           />
         )}
       </div>
+
+      {contextMenu && (isSpace ? (
+        <SpaceContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          node={node}
+          onClose={() => setContextMenu(null)}
+          onRename={() => startRename()}
+        />
+      ) : (
+        <FolderContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          node={node}
+          onClose={() => setContextMenu(null)}
+          onRename={() => startRename()}
+        />
+      ))}
     </div>
   );
 }
+
+// ─── FileNodeItem ─────────────────────────────────────────────────────────────
 
 function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
@@ -359,9 +572,14 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   );
 }
 
-export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth }: FileTreeProps) {
+// ─── FileTree (root) ──────────────────────────────────────────────────────────
+
+export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, parentIsSpace }: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
+
+  const isInsideDir = depth > 0;
+  const visibleNodes = isInsideDir ? filterVisibleNodes(nodes, !!parentIsSpace) : nodes;
 
   useEffect(() => {
     if (!currentPath || depth !== 0) return;
@@ -374,7 +592,7 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth }:
 
   return (
     <div className="flex flex-col gap-0.5">
-      {nodes.map((node) =>
+      {visibleNodes.map((node) =>
         node.type === 'directory' ? (
           <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
         ) : (

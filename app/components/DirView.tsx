@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, useSyncExternalStore, useMemo } from 'react';
+import { useSyncExternalStore, useMemo } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode } from '@/lib/types';
+import type { SpacePreview } from '@/lib/core/types';
 import { useLocale } from '@/lib/LocaleContext';
+
+const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
 
 interface DirViewProps {
   dirPath: string;
   entries: FileNode[];
+  spacePreview?: SpacePreview | null;
 }
 
 function FileIcon({ node }: { node: FileNode }) {
@@ -54,15 +58,94 @@ function useDirViewPref() {
   return [view, setView] as const;
 }
 
-export default function DirView({ dirPath, entries }: DirViewProps) {
+// ─── Space Preview Cards ──────────────────────────────────────────────────────
+
+function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel }: {
+  icon: React.ReactNode;
+  title: string;
+  lines: string[];
+  viewAllHref: string;
+  viewAllLabel: string;
+}) {
+  if (lines.length === 0) return null;
+  return (
+    <div className="bg-muted/30 border border-border/40 rounded-lg px-4 py-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        {icon}
+        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+      </div>
+      <div className="space-y-1">
+        {lines.map((line, i) => (
+          <p key={i} className="text-sm text-muted-foreground/80 leading-relaxed">
+            · {line}
+          </p>
+        ))}
+      </div>
+      <div className="flex justify-end mt-2">
+        <Link
+          href={viewAllHref}
+          className="text-xs hover:underline transition-colors"
+          style={{ color: 'var(--amber)' }}
+        >
+          {viewAllLabel}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function SpacePreviewSection({ preview, dirPath }: {
+  preview: SpacePreview;
+  dirPath: string;
+}) {
+  const { t } = useLocale();
+  const hasRules = preview.instructionLines.length > 0;
+  const hasAbout = preview.readmeLines.length > 0;
+  if (!hasRules && !hasAbout) return null;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+      {hasRules && (
+        <SpacePreviewCard
+          icon={<ScrollText size={14} className="text-muted-foreground shrink-0" />}
+          title={t.fileTree.rules}
+          lines={preview.instructionLines}
+          viewAllHref={`/view/${encodePath(`${dirPath}/INSTRUCTION.md`)}`}
+          viewAllLabel={t.fileTree.viewAll}
+        />
+      )}
+      {hasAbout && (
+        <SpacePreviewCard
+          icon={<BookOpen size={14} className="text-muted-foreground shrink-0" />}
+          title={t.fileTree.about}
+          lines={preview.readmeLines}
+          viewAllHref={`/view/${encodePath(`${dirPath}/README.md`)}`}
+          viewAllLabel={t.fileTree.viewAll}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── DirView ──────────────────────────────────────────────────────────────────
+
+export default function DirView({ dirPath, entries, spacePreview }: DirViewProps) {
   const [view, setView] = useDirViewPref();
   const { t } = useLocale();
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
+
+  const visibleEntries = useMemo(() => {
+    if (spacePreview) {
+      return entries.filter(e => e.type !== 'file' || !SYSTEM_FILES.has(e.name));
+    }
+    return entries.filter(e => e.type !== 'file' || e.name !== 'README.md');
+  }, [entries, spacePreview]);
+
   const fileCounts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of entries) map.set(e.path, countFiles(e));
+    for (const e of visibleEntries) map.set(e.path, countFiles(e));
     return map;
-  }, [entries]);
+  }, [visibleEntries]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -72,7 +155,6 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={dirPath} />
           </div>
-          {/* New file + View toggle */}
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href={`/view/${encodePath(dirPath ? `${dirPath}/Untitled.md` : 'Untitled.md')}`}
@@ -104,11 +186,16 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
       {/* Content */}
       <div className="flex-1 px-4 md:px-6 py-6">
         <div className="max-w-[860px] mx-auto">
-          {entries.length === 0 ? (
+          {/* Space preview cards */}
+          {spacePreview && (
+            <SpacePreviewSection preview={spacePreview} dirPath={dirPath} />
+          )}
+
+          {visibleEntries.length === 0 ? (
             <p className="text-muted-foreground text-sm">{t.dirView.emptyFolder}</p>
           ) : view === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              {entries.map(entry => (
+              {visibleEntries.map(entry => (
                 <Link
                   key={entry.path}
                   href={`/view/${encodePath(entry.path)}`}
@@ -137,7 +224,7 @@ export default function DirView({ dirPath, entries }: DirViewProps) {
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
-              {entries.map(entry => (
+              {visibleEntries.map(entry => (
                 <Link
                   key={entry.path}
                   href={`/view/${encodePath(entry.path)}`}

@@ -1,3 +1,8 @@
+export interface SpacePreview {
+  instructionLines: string[];
+  readmeLines: string[];
+}
+
 export interface FileNode {
   name: string;
   path: string;
@@ -5,6 +10,8 @@ export interface FileNode {
   children?: FileNode[];
   extension?: string;
   mtime?: number;
+  isSpace?: boolean;
+  spacePreview?: SpacePreview;
 }
 
 export interface SearchResult {
