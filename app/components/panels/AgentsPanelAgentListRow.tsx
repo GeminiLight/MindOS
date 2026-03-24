@@ -14,12 +14,14 @@ export interface AgentsPanelAgentListRowCopy {
 export default function AgentsPanelAgentListRow({
   agent,
   agentStatus,
+  selected = false,
   onOpenDetail,
   onInstallAgent,
   copy,
 }: {
   agent: AgentInfo;
   agentStatus: AgentsPanelAgentListStatus;
+  selected?: boolean;
   onOpenDetail: () => void;
   onInstallAgent: (key: string) => Promise<boolean>;
   copy: AgentsPanelAgentListRowCopy;
@@ -28,22 +30,38 @@ export default function AgentsPanelAgentListRow({
     agentStatus === 'connected' ? 'bg-emerald-500' : agentStatus === 'detected' ? 'bg-amber-500' : 'bg-zinc-400';
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card/30 flex items-center gap-2 px-3 py-2">
+    <div
+      className={`
+        group flex items-center gap-0 rounded-xl border transition-all duration-150
+        ${selected
+          ? 'border-border ring-2 ring-ring/50 bg-[var(--amber-dim)]/45'
+          : 'border-border/70 bg-card/50 hover:border-border hover:bg-muted/25'}
+      `}
+    >
       <button
         type="button"
         onClick={onOpenDetail}
-        className="flex flex-1 min-w-0 items-center gap-2 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-3 pr-2 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-        <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
+        <span className={`w-2 h-2 rounded-full shrink-0 ring-2 ring-background ${dot}`} />
+        <span className="text-sm font-medium text-foreground truncate leading-tight">{agent.name}</span>
         {agentStatus === 'connected' && agent.transport && (
-          <span className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{agent.transport}</span>
+          <span className="text-2xs font-mono tabular-nums px-1.5 py-0.5 rounded-md bg-muted/90 text-muted-foreground shrink-0 border border-border/50">
+            {agent.transport}
+          </span>
         )}
+        <span className="flex-1 min-w-[4px]" />
+        <ChevronRight
+          size={15}
+          className={`shrink-0 transition-opacity duration-150 ${selected ? 'text-[var(--amber)] opacity-90' : 'text-muted-foreground/45 group-hover:text-muted-foreground/80'}`}
+          aria-hidden
+        />
       </button>
 
       {agentStatus === 'detected' && (
-        <AgentInstallButton agentKey={agent.key} agentName={agent.name} onInstallAgent={onInstallAgent} copy={copy} />
+        <div className="pr-2 py-2 shrink-0">
+          <AgentInstallButton agentKey={agent.key} agentName={agent.name} onInstallAgent={onInstallAgent} copy={copy} />
+        </div>
       )}
     </div>
   );
@@ -74,7 +92,7 @@ function AgentInstallButton({
       type="button"
       onClick={handleInstall}
       disabled={installing}
-      className="flex items-center gap-1 px-2 py-1 text-2xs rounded-md font-medium text-[var(--amber-foreground)] disabled:opacity-50 transition-colors shrink-0 bg-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center gap-1 px-2 py-1.5 text-2xs rounded-lg font-medium text-[var(--amber-foreground)] disabled:opacity-50 transition-colors shrink-0 bg-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {installing ? <Loader2 size={10} className="animate-spin" /> : null}
       {installing ? copy.installing : copy.install(agentName)}
