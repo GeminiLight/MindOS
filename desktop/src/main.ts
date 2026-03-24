@@ -27,6 +27,11 @@ import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
+import {
+  getEffectiveMindRootFromConfig,
+  localBrowseNeedsSetupWizard,
+  shouldSeedWebSetupPendingForLocal,
+} from './mindos-desktop-config';
 
 // ── Constants ──
 const APP_ROOT = app.getAppPath();
@@ -57,6 +62,8 @@ let cachedConfig: MindOSConfig | null = null;
 interface MindOSConfig {
   ai?: Record<string, unknown>;
   mindRoot?: string;
+  /** Legacy key; Next readSettings maps sopRoot → mindRoot — Desktop must match */
+  sopRoot?: string;
   port?: number;
   mcpPort?: number;
   authToken?: string;
@@ -107,25 +114,14 @@ function needsDesktopModeSelectAtLaunch(): boolean {
   }
 }
 
-function shouldSeedWebSetupPending(mode: 'local' | 'remote', existing: MindOSConfig): boolean {
-  if (mode !== 'local') return false;
-  if (existing.setupPending === true) return true;
-  const mr = existing.mindRoot;
-  const hasMindRoot = typeof mr === 'string' && mr.trim() !== '';
-  return !hasMindRoot;
-}
-
 /**
  * When local server is up, open setup wizard if web onboarding is not done.
- * Matches Next `readSettings`: `setupPending`, and legacy Desktop-only files that only
- * set `desktopMode` without `mindRoot` (would load `/` and white-screen).
+ * Uses same signals as Next `readSettings` (setupPending, mindRoot ?? sopRoot).
  */
 function resolveLocalMindOsBrowseUrl(baseUrl: string): string {
   const u = baseUrl.replace(/\/$/, '');
   const j = readMindOsConfigFileUncached();
-  const mr = j.mindRoot;
-  const hasMindRoot = typeof mr === 'string' && mr.trim() !== '';
-  if (j.setupPending === true || !hasMindRoot) {
+  if (localBrowseNeedsSetupWizard(j)) {
     return `${u}/setup?force=1`;
   }
   return u;
@@ -136,7 +132,7 @@ function saveDesktopMode(mode: 'local' | 'remote', opts?: { allowSeedWebSetup?: 
   invalidateConfig();
   const existing = readMindOsConfigFileUncached();
   const merged: MindOSConfig = { ...existing, desktopMode: mode };
-  if (opts?.allowSeedWebSetup && shouldSeedWebSetupPending(mode, existing)) {
+  if (opts?.allowSeedWebSetup && shouldSeedWebSetupPendingForLocal(mode, existing)) {
     merged.setupPending = true;
   }
   writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
@@ -394,7 +390,9 @@ async function startLocalMode(): Promise<string | null> {
 
   processManager = new ProcessManager({
     nodePath, npxPath, projectRoot, webPort, mcpPort,
-    mindRoot: config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'),
+    mindRoot:
+      getEffectiveMindRootFromConfig(config) ||
+      path.join(app.getPath('home'), 'MindOS', 'mind'),
     authToken: config.authToken,
     verbose: false,
     env: getEnrichedEnv(nodePath),
@@ -437,7 +435,9 @@ async function startLocalMode(): Promise<string | null> {
             const res = await fetch(`http://127.0.0.1:${webPort}/api/health`, { signal: AbortSignal.timeout(3000) });
             if (res.ok) {
               clearInterval(recoveryPoll);
-              mainWindow?.reload();
+              mainWindow?.loadURL(
+                resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${webPort}`),
+              );
               refreshTray('running');
             }
           } catch { /* still down */ }
@@ -646,7 +646,13 @@ async function handleRestartServices(): Promise<void> {
       // Desktop owns the processes — restart them
       await processManager.restart();
       refreshTray('running');
-      mainWindow?.reload();
+      if (mainWindow && currentWebPort !== undefined) {
+        mainWindow.loadURL(
+          resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${currentWebPort}`),
+        );
+      } else {
+        mainWindow?.reload();
+      }
     } else {
       // Connected to external CLI — do a full re-launch
       const url = await startLocalMode();
@@ -667,8 +673,8 @@ async function handleRestartServices(): Promise<void> {
 const trayCallbacks: TrayCallbacks = {
   onChangeMode: handleChangeMode,
   onOpenMindRoot: () => {
-    const config = loadConfig();
-    shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
+    const configured = getEffectiveMindRootFromConfig(loadConfig());
+    shell.openPath(configured || path.join(app.getPath('home'), 'MindOS', 'mind'));
   },
   onRestartServices: handleRestartServices,
   onSwitchServer: handleSwitchServer,
@@ -684,8 +690,8 @@ function setupIPC(): void {
   }));
 
   ipcMain.handle('open-mindroot', () => {
-    const config = loadConfig();
-    shell.openPath(config.mindRoot || path.join(app.getPath('home'), 'MindOS', 'mind'));
+    const configured = getEffectiveMindRootFromConfig(loadConfig());
+    shell.openPath(configured || path.join(app.getPath('home'), 'MindOS', 'mind'));
   });
 
   ipcMain.handle('switch-mode', () => handleChangeMode());
