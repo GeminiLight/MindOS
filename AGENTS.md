@@ -236,3 +236,9 @@ Warm Amber 传递人机共生的温度，但绝不花哨。工具本身退到背
 ### Layout Direction
 
 目标演进方向：Activity Bar（48px 纯图标 Rail）+ 可切换 Panel + Content，替代当前的多 Modal 方案。详见 `wiki/22-page-design.md` 优化路线图。
+
+### Echo（内向内容面）
+
+- **标题不重复**：面包屑只保留父级（如「回响 / Echo」），当前小节名仅出现在 `h1`，避免同一词读两遍。
+- **主区内切换**：在 `/echo/*` 内提供横向 segment 导航（pill），减少「关面板 → 再点另一行」的往返。
+- **克制动效**：卡片 hover 仅用边框/阴影微变化（≤150ms），不大面积铺琥珀色块。

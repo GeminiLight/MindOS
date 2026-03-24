@@ -201,6 +201,7 @@ export const en = {
     breadcrumbNav: 'Breadcrumb',
     parent: 'Echo',
     heroKicker: 'Echo',
+    segmentNavAria: 'Echo sections',
     snapshotBadge: 'Local · private',
     factsHeading: 'Snapshot',
     emptyFactsTitle: 'Nothing here yet',

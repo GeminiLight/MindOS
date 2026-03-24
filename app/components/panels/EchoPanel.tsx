@@ -6,21 +6,13 @@ import { UserRound, Bookmark, Sun, History, Brain } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/LocaleContext';
-import { ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
+import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
 
 interface EchoPanelProps {
   active: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
 }
-
-const SEGMENT_HREF: Record<EchoSegment, string> = {
-  'about-you': '/echo/about-you',
-  continued: '/echo/continued',
-  daily: '/echo/daily',
-  'past-you': '/echo/past-you',
-  growth: '/echo/growth',
-};
 
 export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelProps) {
   const { t } = useLocale();
@@ -42,7 +34,7 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
         <div className="flex flex-col py-1">
           {ECHO_SEGMENT_ORDER.map((segment) => {
             const row = rowBySegment[segment];
-            const href = SEGMENT_HREF[segment];
+            const href = ECHO_SEGMENT_HREF[segment];
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <div key={segment} className="border-b border-border/60 last:border-b-0">

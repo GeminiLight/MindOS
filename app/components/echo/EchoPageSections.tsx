@@ -19,7 +19,7 @@ export function EchoFactSnapshot({
 }) {
   return (
     <section
-      className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6"
       aria-labelledby={headingId}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -95,7 +95,7 @@ export function EchoCollapsibleInsight({
   const btnId = `${panelId}-btn`;
 
   return (
-    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/15 hover:shadow-md">
       <button
         id={btnId}
         type="button"
