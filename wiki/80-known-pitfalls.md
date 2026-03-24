@@ -2,6 +2,13 @@
 
 # 踩坑记录 (Known Pitfalls)
 
+## Desktop / 打包
+
+### `prepare-mindos-runtime` 把 `.next/dev` 打进安装包 → 体积暴涨
+- **现象：** Desktop 内置 `mindos-runtime/app` 数百 MB，其中 `.next/dev` 占大头
+- **原因：** Turbopack/开发会话会在 `app/.next/dev` 留下缓存；整目录拷贝 `app/.next` 时会一并带上
+- **解决：** `copyAppForBundledRuntime` 排除 `.next/dev`（与 `.next/cache` 同理）；生产启动走 `standalone/server.js`，不依赖该目录
+
 ## CLI
 
 ### npm 全局安装缺 node_modules
