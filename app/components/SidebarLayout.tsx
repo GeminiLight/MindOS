@@ -12,6 +12,7 @@ import SearchPanel from './panels/SearchPanel';
 import PluginsPanel from './panels/PluginsPanel';
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
+import EchoPanel from './panels/EchoPanel';
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
   RIGHT_AGENT_DETAIL_DEFAULT_WIDTH,
@@ -242,6 +243,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         maximized={lp.panelMaximized}
         onMaximize={lp.handlePanelMaximize}
       >
+        <div className={`flex flex-col h-full ${lp.activePanel === 'echo' ? '' : 'hidden'}`}>
+          <EchoPanel active={lp.activePanel === 'echo'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
+        </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'search' ? '' : 'hidden'}`}>
           <SearchPanel active={lp.activePanel === 'search'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>

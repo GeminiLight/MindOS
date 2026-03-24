@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Blocks, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'plugins' | 'agents' | 'discover';
+export type PanelId = 'files' | 'search' | 'echo' | 'plugins' | 'agents' | 'discover';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -157,6 +157,7 @@ export default function ActivityBar({
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
+          <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => toggle('echo')} />
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} walkthroughId="search-button" />
           <RailButton icon={<Blocks size={18} />} label={t.sidebar.plugins} active={activePanel === 'plugins'} expanded={expanded} onClick={() => toggle('plugins')} />
           <RailButton icon={<Bot size={18} />} label={t.sidebar.agents} active={activePanel === 'agents'} expanded={expanded} onClick={() => toggle('agents')} />
