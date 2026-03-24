@@ -394,7 +394,11 @@ const commands = {
       startSyncDaemon(mindRoot).catch(() => {});
     }
     await printStartupInfo(webPort, mcpPort);
-    run(`${NEXT_BIN} start -p ${webPort} ${extra}`, resolve(ROOT, 'app'));
+    run(
+      `${NEXT_BIN} start -p ${webPort} ${extra}`,
+      resolve(ROOT, 'app'),
+      process.env.HOSTNAME ? undefined : { HOSTNAME: '127.0.0.1' }
+    );
   },
 
   // ── build ──────────────────────────────────────────────────────────────────

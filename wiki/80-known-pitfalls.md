@@ -4,6 +4,11 @@
 
 ## Desktop / 打包
 
+### Next 生产进程绑定机器 hostname，`127.0.0.1` 健康检查永远超时
+- **现象：** Desktop 或 `verify-standalone` 等不到 `/api/health`，但本机 `curl http://$(hostname):PORT/api/health` 有响应
+- **原因：** Next 默认把监听地址设成 **系统 hostname**，未监听 loopback
+- **解决：** 未显式设置 `HOSTNAME` 时，Desktop `ProcessManager` 与 CLI `mindos start`（`next start`）注入 `HOSTNAME=127.0.0.1`；需要对外监听时用户自行 export `HOSTNAME=0.0.0.0`
+
 ### `prepare-mindos-runtime` 把 `.next/dev` 打进安装包 → 体积暴涨
 - **现象：** Desktop 内置 `mindos-runtime/app` 数百 MB，其中 `.next/dev` 占大头
 - **原因：** Turbopack/开发会话会在 `app/.next/dev` 留下缓存；整目录拷贝 `app/.next` 时会一并带上

@@ -3,9 +3,13 @@ import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { ROOT } from './constants.js';
 
-export function run(command, cwd = ROOT) {
+/**
+ * @param {Record<string, string | undefined>} [envPatch] merged into process.env (for child only)
+ */
+export function run(command, cwd = ROOT, envPatch) {
   try {
-    execSync(command, { cwd, stdio: 'inherit', env: process.env });
+    const env = envPatch ? { ...process.env, ...envPatch } : process.env;
+    execSync(command, { cwd, stdio: 'inherit', env });
   } catch (err) {
     process.exit(err.status || 1);
   }
