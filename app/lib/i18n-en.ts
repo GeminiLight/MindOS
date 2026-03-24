@@ -177,16 +177,10 @@ export const en = {
     echo: {
       title: 'Echo',
       aboutYouTitle: 'Tied to you',
-      aboutYouHint: 'Paths and links in your library that curve back to your name.',
       continuedTitle: 'Still open',
-      continuedHint: 'Drafts, half-written lines, todos you never closed.',
       dailyEchoTitle: 'Daily echo',
-      dailyEchoHint: 'One quiet line for today—no need to open a full chat.',
       pastYouTitle: 'Who you were',
-      pastYouHint: 'Choices and moods you set down at another point on the timeline.',
       intentGrowthTitle: 'Heart & growth',
-      intentGrowthHint: 'What you are steering toward, and how it slowly shifts.',
-      comingSoon: 'On its way',
     },
     discover: {
       title: 'Discover',

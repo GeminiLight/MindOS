@@ -27,15 +27,12 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Record<
-    EchoSegment,
-    { icon: ReactNode; title: string; hint: string }
-  > = {
-    'about-you': { icon: <UserRound size={14} />, title: e.aboutYouTitle, hint: e.aboutYouHint },
-    continued: { icon: <Bookmark size={14} />, title: e.continuedTitle, hint: e.continuedHint },
-    daily: { icon: <Sun size={14} />, title: e.dailyEchoTitle, hint: e.dailyEchoHint },
-    'past-you': { icon: <History size={14} />, title: e.pastYouTitle, hint: e.pastYouHint },
-    growth: { icon: <Brain size={14} />, title: e.intentGrowthTitle, hint: e.intentGrowthHint },
+  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string }> = {
+    'about-you': { icon: <UserRound size={14} />, title: e.aboutYouTitle },
+    continued: { icon: <Bookmark size={14} />, title: e.continuedTitle },
+    daily: { icon: <Sun size={14} />, title: e.dailyEchoTitle },
+    'past-you': { icon: <History size={14} />, title: e.pastYouTitle },
+    growth: { icon: <Brain size={14} />, title: e.intentGrowthTitle },
   };
 
   return (
@@ -50,9 +47,6 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
             return (
               <div key={segment} className="border-b border-border/60 last:border-b-0">
                 <PanelNavRow href={href} icon={row.icon} title={row.title} active={isActive} />
-                <p className="-mt-0.5 px-4 pb-3 pl-[3.25rem] font-sans text-2xs leading-relaxed text-muted-foreground">
-                  {row.hint}
-                </p>
               </div>
             );
           })}

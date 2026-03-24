@@ -115,16 +115,10 @@ describe('i18n echo panel', () => {
   const echoKeys = [
     'title',
     'aboutYouTitle',
-    'aboutYouHint',
     'continuedTitle',
-    'continuedHint',
     'dailyEchoTitle',
-    'dailyEchoHint',
     'pastYouTitle',
-    'pastYouHint',
     'intentGrowthTitle',
-    'intentGrowthHint',
-    'comingSoon',
   ] as const;
 
   it('en has all echo keys', () => {
