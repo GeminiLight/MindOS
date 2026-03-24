@@ -110,6 +110,8 @@ npm run release patch   # 或 minor / major
 #    - publish-npm.yml    → 发布到 npm（仅 v*.*.* tag）
 ```
 
+**Desktop 安装包**：MindOS 以 **npm / `vX.Y.Z` tag** 为产品版本主轴；发 Electron 包时内置 MindOS 应从 **同一 tag** 构建，关于页建议同时展示 MindOS 版本与 Desktop 壳版本。详见 [spec-desktop-bundled-mindos.md](../specs/spec-desktop-bundled-mindos.md) 中的「发布与版本（npm 与 Desktop 对齐）」一节（实现 CI 联动前可按该节做发版 checklist 人工核对）。
+
 ## Workflow 文件
 
 | 文件 | 触发 | 作用 |
