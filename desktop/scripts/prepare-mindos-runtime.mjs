@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
  * Copy a built MindOS repo tree into resources/mindos-runtime for electron-builder extraResources.
- * Prerequisite: repo root has app/.next (run `npm run build` from monorepo root) and mcp/ with node_modules if needed.
+ * Prerequisite: repo root has app/.next with standalone output (run `npm run build` from monorepo root).
  *
  *   MINDOS_BUNDLE_SOURCE=/path/to/mindos-repo node scripts/prepare-mindos-runtime.mjs
  *
  * @see wiki/specs/spec-desktop-bundled-mindos.md
+ * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.join(__dirname, '..');
@@ -24,13 +26,20 @@ function fail(msg) {
   process.exit(1);
 }
 
-const appNext = path.join(source, 'app', '.next');
+const appDir = path.join(source, 'app');
+const appNext = path.join(appDir, '.next');
 const mcpDir = path.join(source, 'mcp');
 const rootPkg = path.join(source, 'package.json');
 
 if (!existsSync(rootPkg)) fail(`Not a MindOS repo root (no package.json): ${source}`);
 if (!existsSync(appNext)) fail(`Missing app/.next — from repo root run: npm run build (or mindos build)`);
 if (!existsSync(mcpDir)) fail(`Missing mcp/ under ${source}`);
+
+try {
+  materializeStandaloneAssets(appDir);
+} catch (e) {
+  fail(e instanceof Error ? e.message : String(e));
+}
 
 const keepNames = new Set(['.gitkeep', 'README.md']);
 mkdirSync(dest, { recursive: true });
@@ -47,7 +56,7 @@ function copyTree(rel) {
 
 copyTree('package.json');
 copyTree('LICENSE');
-copyTree('app');
+copyAppForBundledRuntime(appDir, path.join(dest, 'app'));
 copyTree('mcp');
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');
