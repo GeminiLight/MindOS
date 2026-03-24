@@ -302,6 +302,13 @@ export const zh = {
     enterFileName: '请输入文件名',
     failed: '操作失败',
     confirmDelete: (name: string) => `确定删除「${name}」？此操作不可撤销。`,
+    rules: '规则',
+    about: '说明',
+    viewAll: '查看全部',
+    editRules: '编辑规则',
+    renameSpace: '重命名空间',
+    deleteSpace: '删除空间',
+    confirmDeleteSpace: (name: string) => `删除空间「${name}」及其所有文件？此操作不可撤销。`,
   },
   dirView: {
     gridView: '网格视图',

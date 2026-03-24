@@ -278,6 +278,13 @@ export const en = {
     enterFileName: 'Enter a file name',
     failed: 'Failed',
     confirmDelete: (name: string) => `Delete "${name}"? This cannot be undone.`,
+    rules: 'Rules',
+    about: 'About',
+    viewAll: 'View all',
+    editRules: 'Edit Rules',
+    renameSpace: 'Rename Space',
+    deleteSpace: 'Delete Space',
+    confirmDeleteSpace: (name: string) => `Delete space "${name}" and all its files? This cannot be undone.`,
   },
   dirView: {
     gridView: 'Grid view',

@@ -1,6 +1,6 @@
 'use server';
 
-import { createFile, deleteFile, renameFile, getMindRoot, invalidateCache } from '@/lib/fs';
+import { createFile, deleteFile, deleteDirectory, renameFile, renameSpace, getMindRoot, invalidateCache } from '@/lib/fs';
 import { createSpaceFilesystem } from '@/lib/core/create-space';
 import { revalidatePath } from 'next/cache';
 
@@ -37,6 +37,31 @@ export async function renameFileAction(oldPath: string, newName: string): Promis
     return { success: true, newPath };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Failed to rename file' };
+  }
+}
+
+export async function renameSpaceAction(
+  spacePath: string,
+  newName: string,
+): Promise<{ success: boolean; newPath?: string; error?: string }> {
+  try {
+    const newPath = renameSpace(spacePath, newName);
+    revalidatePath('/', 'layout');
+    return { success: true, newPath };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to rename space' };
+  }
+}
+
+export async function deleteSpaceAction(
+  spacePath: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    deleteDirectory(spacePath);
+    revalidatePath('/', 'layout');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to delete space' };
   }
 }
 
