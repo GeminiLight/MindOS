@@ -39,6 +39,7 @@
 - [x] **StepKB autocomplete 选中闪回**：`justSelectedRef` 修复
 - [x] **StepReview retry disabled dead code**：移除不可达的 disabled guard
 - [x] **Echo 内容页 P0**：`/echo` → `/echo/about-you`、`/echo/[segment]` 白名单 404、`EchoPanel` 链至五 segment + 路径选中态、`SidebarLayout` 访问 `/echo/*` 时自动切 Echo 面板、`echoPages` i18n、事实层空态 + 可折见解区 + Daily/Growth localStorage + Ask 预填。见 `wiki/specs/spec-echo-content-pages.md`
+- [x] **Echo 内容页视觉精修**：hero 卡片 + 琥珀竖线 / kicker、`EchoHero` + 事实卡图标与 `snapshotBadge`、`continued` dashed 空态、`PanelNavRow` 当前项左侧琥珀条与 `EchoCollapsibleInsight` 卡片化；`spec-echo-visual-polish.md` + i18n 键单测
 
 </details>
 

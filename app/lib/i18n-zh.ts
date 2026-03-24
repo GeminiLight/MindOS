@@ -230,6 +230,8 @@ export const zh = {
   echoPages: {
     breadcrumbNav: '面包屑导航',
     parent: '回响',
+    heroKicker: '回响',
+    snapshotBadge: '本地 · 私密',
     factsHeading: '所见',
     emptyFactsTitle: '尚无内容',
     emptyFactsBody: '开启索引后，笔记库中的结构化线索会出现在此。数据仅保存在本机。',

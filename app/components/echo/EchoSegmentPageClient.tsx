@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import Link from 'next/link';
 import type { EchoSegment } from '@/lib/echo-segments';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
+import { EchoHero } from './EchoHero';
 import {
   EchoCollapsibleInsight,
   EchoContinuedGroups,
@@ -44,6 +44,12 @@ function segmentLead(segment: EchoSegment, p: ReturnType<typeof useLocale>['t'][
   }
 }
 
+const fieldLabelClass =
+  'block font-sans text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
+const inputClass =
+  'mt-2 w-full min-h-[5rem] resize-y rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+const cardSectionClass = 'rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6';
+
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t } = useLocale();
   const p = t.echoPages;
@@ -51,6 +57,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const title = segmentTitle(segment, echo);
   const lead = segmentLead(segment, p);
   const factsHeadingId = useId();
+  const pageTitleId = 'echo-page-title';
 
   const [dailyLine, setDailyLine] = useState('');
   const [growthIntent, setGrowthIntent] = useState('');
@@ -87,36 +94,32 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     openAskModal(p.dailyAskPrefill(dailyLine), 'user');
   }, [dailyLine, p, persistDaily]);
 
+  const primaryBtnClass =
+    'inline-flex items-center rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  const secondaryBtnClass =
+    'inline-flex items-center rounded-lg border border-border bg-background px-4 py-2.5 font-sans text-sm font-medium text-foreground transition-colors duration-150 hover:border-[var(--amber)]/35 hover:bg-[var(--amber-dim)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
   return (
-    <article className="max-w-2xl mx-auto px-4 py-8 md:py-10" aria-labelledby="echo-page-title">
-      <nav aria-label={p.breadcrumbNav} className="text-sm text-muted-foreground mb-6 font-sans">
-        <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <li>
-            <Link
-              href="/echo/about-you"
-              className="hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm px-0.5"
-            >
-              {p.parent}
-            </Link>
-          </li>
-          <li aria-hidden className="text-border">
-            /
-          </li>
-          <li className="text-foreground font-medium" aria-current="page">
-            {title}
-          </li>
-        </ol>
-      </nav>
+    <article
+      className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-11"
+      aria-labelledby={pageTitleId}
+    >
+      <EchoHero
+        breadcrumbNav={p.breadcrumbNav}
+        parentHref="/echo/about-you"
+        parent={p.parent}
+        currentTitle={title}
+        heroKicker={p.heroKicker}
+        pageTitle={title}
+        lead={lead}
+        titleId={pageTitleId}
+      />
 
-      <h1 id="echo-page-title" className="font-display text-2xl md:text-3xl text-foreground tracking-tight">
-        {title}
-      </h1>
-      <p className="mt-2 text-sm text-muted-foreground leading-relaxed font-sans">{lead}</p>
-
-      <div className="mt-8 space-y-4">
+      <div className="mt-8 space-y-6">
         <EchoFactSnapshot
           headingId={factsHeadingId}
           heading={p.factsHeading}
+          snapshotBadge={p.snapshotBadge}
           emptyTitle={p.emptyFactsTitle}
           emptyBody={p.emptyFactsBody}
         />
@@ -130,8 +133,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       </div>
 
       {segment === 'daily' ? (
-        <div className="mt-6 rounded-lg border border-border/60 bg-card/30 p-4">
-          <label htmlFor="echo-daily-line" className="text-sm font-medium text-foreground font-sans">
+        <section className={`${cardSectionClass} mt-6`}>
+          <label htmlFor="echo-daily-line" className={fieldLabelClass}>
             {p.dailyLineLabel}
           </label>
           <textarea
@@ -141,21 +144,19 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             onBlur={persistDaily}
             rows={3}
             placeholder={p.dailyLinePlaceholder}
-            className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground font-sans placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y min-h-[5rem]"
+            className={inputClass}
           />
-          <button
-            type="button"
-            onClick={openDailyAsk}
-            className="mt-3 inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground font-sans hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {p.continueAgent}
-          </button>
-        </div>
+          <div className="mt-4">
+            <button type="button" onClick={openDailyAsk} className={primaryBtnClass}>
+              {p.continueAgent}
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {segment === 'growth' ? (
-        <div className="mt-6 rounded-lg border border-border/60 bg-card/30 p-4">
-          <label htmlFor="echo-growth-intent" className="text-sm font-medium text-foreground font-sans">
+        <section className={`${cardSectionClass} mt-6`}>
+          <label htmlFor="echo-growth-intent" className={fieldLabelClass}>
             {p.growthIntentLabel}
           </label>
           <textarea
@@ -165,32 +166,32 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             onBlur={persistGrowth}
             rows={4}
             placeholder={p.growthIntentPlaceholder}
-            className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground font-sans placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y min-h-[6rem]"
+            className={`${inputClass} min-h-[6.5rem]`}
           />
-          <p className="mt-2 text-2xs text-muted-foreground font-sans">{p.growthSavedNote}</p>
-        </div>
+          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.growthSavedNote}</p>
+        </section>
       ) : null}
 
       {segment === 'past-you' ? (
-        <div className="mt-6">
+        <section className={`${cardSectionClass} mt-6`}>
           <button
             type="button"
             disabled
             title={p.pastYouDisabledHint}
-            className="inline-flex items-center rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground font-sans opacity-80 cursor-not-allowed"
+            className="inline-flex cursor-not-allowed items-center rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 font-sans text-sm text-muted-foreground opacity-85"
           >
             {p.pastYouAnother}
           </button>
-          <p className="mt-2 text-2xs text-muted-foreground font-sans">{p.pastYouDisabledHint}</p>
-        </div>
+          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.pastYouDisabledHint}</p>
+        </section>
       ) : null}
 
       {segment !== 'daily' ? (
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => openAskModal(`${p.parent} / ${title}\n\n`, 'user')}
-            className="inline-flex items-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground font-sans hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={secondaryBtnClass}
           >
             {p.continueAgent}
           </button>
