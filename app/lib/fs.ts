@@ -7,6 +7,7 @@ import {
   writeFile as coreWriteFile,
   createFile as coreCreateFile,
   deleteFile as coreDeleteFile,
+  deleteDirectory as coreDeleteDirectory,
   renameFile as coreRenameFile,
   renameSpaceDirectory as coreRenameSpaceDirectory,
   moveFile as coreMoveFile,
@@ -22,7 +23,9 @@ import {
   gitLog as coreGitLog,
   gitShowFile as coreGitShowFile,
   invalidateSearchIndex,
+  summarizeTopLevelSpaces,
 } from './core';
+import type { MindSpaceSummary } from './core';
 import { FileNode } from './core/types';
 import { SearchMatch } from './types';
 import { effectiveSopRoot } from './settings';
@@ -78,8 +81,31 @@ function ensureCache(): FileTreeCache {
 
 // ─── Internal builders ────────────────────────────────────────────────────────
 
-function buildFileTree(dirPath: string): FileNode[] {
-  const root = getMindRoot();
+const SPACE_PREVIEW_MAX_LINES = 3;
+
+function extractBodyLines(filePath: string, maxLines: number): string[] {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const bodyLines: string[] = [];
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      bodyLines.push(trimmed);
+      if (bodyLines.length >= maxLines) break;
+    }
+    return bodyLines;
+  } catch { return []; }
+}
+
+function buildSpacePreview(dirAbsPath: string) {
+  return {
+    instructionLines: extractBodyLines(path.join(dirAbsPath, 'INSTRUCTION.md'), SPACE_PREVIEW_MAX_LINES),
+    readmeLines: extractBodyLines(path.join(dirAbsPath, 'README.md'), SPACE_PREVIEW_MAX_LINES),
+  };
+}
+
+function buildFileTree(dirPath: string, rootOverride?: string): FileNode[] {
+  const root = rootOverride ?? getMindRoot();
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -95,9 +121,15 @@ function buildFileTree(dirPath: string): FileNode[] {
 
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name)) continue;
-      const children = buildFileTree(fullPath);
+      const children = buildFileTree(fullPath, root);
       if (children.length > 0) {
-        nodes.push({ name: entry.name, path: relativePath, type: 'directory', children });
+        const hasInstruction = children.some(c => c.type === 'file' && c.name === 'INSTRUCTION.md');
+        const node: FileNode = { name: entry.name, path: relativePath, type: 'directory', children };
+        if (hasInstruction) {
+          node.isSpace = true;
+          node.spacePreview = buildSpacePreview(fullPath);
+        }
+        nodes.push(node);
       }
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
@@ -113,6 +145,11 @@ function buildFileTree(dirPath: string): FileNode[] {
   });
 
   return nodes;
+}
+
+/** Exposed for testing only — builds a file tree from an arbitrary root path. */
+export function buildFileTreeForTest(rootPath: string): FileNode[] {
+  return buildFileTree(rootPath, rootPath);
 }
 
 function buildAllFiles(dirPath: string): string[] {
@@ -145,6 +182,11 @@ function buildAllFiles(dirPath: string): string[] {
 /** Returns the cached file tree for the knowledge base. */
 export function getFileTree(): FileNode[] {
   return ensureCache().tree;
+}
+
+/** Top-level Mind Spaces (same cached tree as home Spaces grid). */
+export function listMindSpaces(): MindSpaceSummary[] {
+  return summarizeTopLevelSpaces(getMindRoot(), ensureCache().tree);
 }
 
 /** Returns cached list of all file paths (relative to MIND_ROOT). */
@@ -257,6 +299,12 @@ export function renameSpace(spacePath: string, newName: string): string {
   const result = coreRenameSpaceDirectory(getMindRoot(), spacePath, newName);
   invalidateCache();
   return result;
+}
+
+/** Recursively deletes a directory under MIND_ROOT. */
+export function deleteDirectory(dirPath: string): void {
+  coreDeleteDirectory(getMindRoot(), dirPath);
+  invalidateCache();
 }
 
 // ─── Public API: Line-level operations (delegated to @mindos/core) ───────────
@@ -479,6 +527,7 @@ export function gitShowFile(filePath: string, commit: string): string {
 
 import type { BacklinkEntry } from './core/types';
 export type { BacklinkEntry } from './core/types';
+export type { MindSpaceSummary } from './core';
 
 export function findBacklinks(targetPath: string): BacklinkEntry[] {
   return coreFindBacklinks(getMindRoot(), targetPath);

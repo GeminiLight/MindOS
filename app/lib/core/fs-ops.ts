@@ -56,6 +56,21 @@ export function deleteFile(mindRoot: string, filePath: string): void {
 }
 
 /**
+ * Recursively deletes a directory and all its contents.
+ * Throws if the path does not exist, is outside mindRoot, or is not a directory.
+ */
+export function deleteDirectory(mindRoot: string, dirPath: string): void {
+  const resolved = resolveSafe(mindRoot, dirPath);
+  if (!fs.existsSync(resolved)) {
+    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Directory not found: ${dirPath}`, { dirPath });
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    throw new MindOSError(ErrorCodes.INVALID_PATH, `Not a directory: ${dirPath}`, { dirPath });
+  }
+  fs.rmSync(resolved, { recursive: true, force: true });
+}
+
+/**
  * Renames a file within its current directory.
  * newName must be a plain filename (no path separators).
  * Returns the new relative path.
