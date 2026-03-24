@@ -285,6 +285,9 @@ export const en = {
     renameSpace: 'Rename Space',
     deleteSpace: 'Delete Space',
     confirmDeleteSpace: (name: string) => `Delete space "${name}" and all its files? This cannot be undone.`,
+    convertToSpace: 'Convert to Space',
+    deleteFolder: 'Delete Folder',
+    confirmDeleteFolder: (name: string) => `Delete folder "${name}" and all its contents? This cannot be undone.`,
   },
   dirView: {
     gridView: 'Grid view',

@@ -8,7 +8,7 @@ import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
   Trash2, Pencil, Layers, ScrollText,
 } from 'lucide-react';
-import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction } from '@/lib/actions';
+import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
 
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
@@ -124,6 +124,86 @@ function SpaceContextMenu({ x, y, node, onClose, onRename }: {
   );
 }
 
+// ─── FolderContextMenu ────────────────────────────────────────────────────────
+
+function FolderContextMenu({ x, y, node, onClose, onRename }: {
+  x: number;
+  y: number;
+  node: FileNode;
+  onClose: () => void;
+  onRename: () => void;
+}) {
+  const router = useRouter();
+  const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+  }, [onClose]);
+
+  const adjustedY = Math.min(y, window.innerHeight - 140);
+  const adjustedX = Math.min(x, window.innerWidth - 200);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[180px] bg-card border border-border rounded-lg shadow-lg py-1"
+      style={{ top: adjustedY, left: adjustedX }}
+    >
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
+        disabled={isPending}
+        onClick={() => {
+          startTransition(async () => {
+            const result = await convertToSpaceAction(node.path);
+            if (result.success) router.refresh();
+            onClose();
+          });
+        }}
+      >
+        <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} />
+        {t.fileTree.convertToSpace}
+      </button>
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left"
+        onClick={() => { onRename(); onClose(); }}
+      >
+        <Pencil size={14} className="shrink-0" />
+        {t.fileTree.rename}
+      </button>
+      <div className="my-1 border-t border-border/50" />
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left"
+        disabled={isPending}
+        onClick={() => {
+          if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
+          startTransition(async () => {
+            const result = await deleteFolderAction(node.path);
+            if (result.success) {
+              router.push('/');
+              router.refresh();
+            }
+            onClose();
+          });
+        }}
+      >
+        <Trash2 size={14} className="shrink-0" />
+        {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteFolder}
+      </button>
+    </div>
+  );
+}
+
 // ─── NewFileInline ────────────────────────────────────────────────────────────
 
 function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: number; onDone: () => void }) {
@@ -132,6 +212,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
   const [error, setError] = useState('');
   const router = useRouter();
   const { t } = useLocale();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = useCallback(() => {
     const name = value.trim();
@@ -148,8 +229,18 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
     });
   }, [value, dirPath, onDone, router, t]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onDone();
+      }
+    };
+    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); };
+  }, [onDone]);
+
   return (
-    <div className="px-2 pb-1" style={{ paddingLeft: `${depth * 12 + 20}px` }}>
+    <div ref={containerRef} className="px-2 pb-1" style={{ paddingLeft: `${depth * 12 + 20}px` }}>
       <div className="flex items-center gap-1">
         <input
           autoFocus
@@ -267,11 +358,10 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   }, [startRename, isSpace]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    if (!isSpace) return;
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY });
-  }, [isSpace]);
+  }, []);
 
   const contentCount = isSpace ? countContentFiles(node) : 0;
 
@@ -401,7 +491,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
         )}
       </div>
 
-      {contextMenu && (
+      {contextMenu && (isSpace ? (
         <SpaceContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
@@ -409,7 +499,15 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
         />
-      )}
+      ) : (
+        <FolderContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          node={node}
+          onClose={() => setContextMenu(null)}
+          onRename={() => startRename()}
+        />
+      ))}
     </div>
   );
 }

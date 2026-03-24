@@ -23,6 +23,7 @@ export {
   createFile,
   deleteFile,
   deleteDirectory,
+  convertToSpace,
   renameFile,
   renameSpaceDirectory,
   moveFile,
