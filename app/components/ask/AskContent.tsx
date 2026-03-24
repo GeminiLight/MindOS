@@ -24,7 +24,7 @@ const PANEL_COMPOSER_KEY_STEP = 24;
 /** 输入框随内容增高，超过此行数后在框内滚动（与常见 IM 一致） */
 const PANEL_TEXTAREA_MAX_VISIBLE_LINES = 8;
 
-function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number): void {
+function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number, availableHeight?: number): void {
   const style = getComputedStyle(el);
   const parsedLh = parseFloat(style.lineHeight);
   const parsedFs = parseFloat(style.fontSize);
@@ -33,7 +33,10 @@ function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: nu
   const pad =
     (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
     (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
-  const maxH = lineHeight * maxVisibleLines + pad;
+  let maxH = lineHeight * maxVisibleLines + pad;
+  if (availableHeight && Number.isFinite(availableHeight) && availableHeight > 0) {
+    maxH = Math.min(maxH, availableHeight);
+  }
   if (!Number.isFinite(maxH) || maxH <= 0) return;
   el.style.height = '0px';
   const next = Math.min(el.scrollHeight, maxH);
@@ -213,11 +216,15 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     return () => window.removeEventListener('resize', applyPanelComposerClampAndPersist);
   }, [isPanel, applyPanelComposerClampAndPersist]);
 
+  const formRef = useRef<HTMLFormElement>(null);
+
   useLayoutEffect(() => {
     if (!isPanel || !visible) return;
     const el = inputRef.current;
     if (!el || !(el instanceof HTMLTextAreaElement)) return;
-    syncPanelTextareaToContent(el, PANEL_TEXTAREA_MAX_VISIBLE_LINES);
+    const form = formRef.current;
+    const availableH = form ? form.clientHeight - 40 : undefined;
+    syncPanelTextareaToContent(el, PANEL_TEXTAREA_MAX_VISIBLE_LINES, availableH);
   }, [input, isPanel, isLoading, visible, panelComposerHeight]);
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -489,7 +496,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </div>
         ) : null}
 
-        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-y-auto')}>
+        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
           {attachedFiles.length > 0 && (
             <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
               <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
@@ -529,6 +536,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           )}
 
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className={cn(
               'flex',
