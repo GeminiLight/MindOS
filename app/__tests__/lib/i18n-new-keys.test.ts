@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { en } from '@/lib/i18n-en';
+import { zh } from '@/lib/i18n-zh';
 
 describe('i18n explore keys', () => {
   const e = en.explore;
@@ -77,5 +78,32 @@ describe('i18n onboarding keys', () => {
   it('has error-related keys', () => {
     expect(o.initError).toBeTruthy();
     expect(o.dismiss).toBeTruthy();
+  });
+});
+
+describe('i18n agents panel hub', () => {
+  const hubKeys = [
+    'navOverview',
+    'navMcp',
+    'navSkills',
+    'navUsage',
+    'navInsights',
+    'rosterLabel',
+    'notFoundDetail',
+    'skillsEmptyHint',
+  ] as const;
+
+  it('en has all hub keys', () => {
+    const a = en.panels.agents;
+    for (const k of hubKeys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+  });
+
+  it('zh mirrors all hub keys', () => {
+    const a = zh.panels.agents;
+    for (const k of hubKeys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
   });
 });
