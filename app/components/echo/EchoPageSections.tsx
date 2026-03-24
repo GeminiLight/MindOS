@@ -1,8 +1,7 @@
 'use client';
 
-import { useId, useState } from 'react';
-import { ChevronDown, Library, Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import type { ReactNode } from 'react';
+import { Library } from 'lucide-react';
 
 export function EchoFactSnapshot({
   headingId,
@@ -10,12 +9,15 @@ export function EchoFactSnapshot({
   snapshotBadge,
   emptyTitle,
   emptyBody,
+  actions,
 }: {
   headingId: string;
   heading: string;
   snapshotBadge: string;
   emptyTitle: string;
   emptyBody: string;
+  /** e.g. continue-in-Agent CTA — inside this card so it is not orphaned between sections */
+  actions?: ReactNode;
 }) {
   return (
     <section
@@ -47,6 +49,9 @@ export function EchoFactSnapshot({
       <p className="mt-4 border-t border-border/60 pt-4 font-sans text-sm leading-relaxed text-muted-foreground">
         {emptyBody}
       </p>
+      {actions ? (
+        <div className="mt-4 border-t border-border/60 pt-4">{actions}</div>
+      ) : null}
     </section>
   );
 }
@@ -55,10 +60,12 @@ export function EchoContinuedGroups({
   draftsLabel,
   todosLabel,
   subEmptyHint,
+  footer,
 }: {
   draftsLabel: string;
   todosLabel: string;
   subEmptyHint: string;
+  footer?: ReactNode;
 }) {
   const cell = (label: string) => (
     <div className="flex min-h-[5.75rem] flex-col justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 px-4 py-4">
@@ -68,77 +75,12 @@ export function EchoContinuedGroups({
   );
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {cell(draftsLabel)}
-      {cell(todosLabel)}
-    </div>
-  );
-}
-
-export function EchoCollapsibleInsight({
-  title,
-  showLabel,
-  hideLabel,
-  hint,
-  generateLabel,
-  disabledHint,
-}: {
-  title: string;
-  showLabel: string;
-  hideLabel: string;
-  hint: string;
-  generateLabel: string;
-  disabledHint: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const btnId = `${panelId}-btn`;
-
-  return (
-    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/15 hover:shadow-md">
-      <button
-        id={btnId}
-        type="button"
-        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-200 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-dim)] text-[var(--amber)]"
-          aria-hidden
-        >
-          <Sparkles size={17} strokeWidth={1.75} />
-        </span>
-        <span className="flex-1 font-sans text-sm font-medium text-foreground">{title}</span>
-        <ChevronDown
-          size={16}
-          className={cn(
-            'shrink-0 text-muted-foreground transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-          aria-hidden
-        />
-        <span className="sr-only">{open ? hideLabel : showLabel}</span>
-      </button>
-      {open ? (
-        <div
-          id={panelId}
-          role="region"
-          aria-labelledby={btnId}
-          className="border-t border-border/60 px-5 pb-5 pt-4"
-        >
-          <p className="font-sans text-sm leading-relaxed text-muted-foreground">{hint}</p>
-          <button
-            type="button"
-            disabled
-            className="mt-4 inline-flex cursor-not-allowed items-center rounded-lg border border-border bg-muted/30 px-3 py-2 font-sans text-sm text-muted-foreground opacity-75"
-          >
-            {generateLabel}
-          </button>
-          <p className="mt-2 font-sans text-2xs text-muted-foreground">{disabledHint}</p>
-        </div>
-      ) : null}
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {cell(draftsLabel)}
+        {cell(todosLabel)}
+      </div>
+      {footer ? <div className="border-t border-border/60 pt-4">{footer}</div> : null}
     </div>
   );
 }

@@ -752,23 +752,26 @@ async function bootApp(): Promise<void> {
 
 app.whenReady().then(async () => {
   const config = loadConfig();
-  currentMode = config.desktopMode || 'local';
 
-  // 1. Show splash immediately
-  splashWindow = createSplash();
+  // First run: no config file yet — user picks local vs remote before we persist desktopMode or boot.
+  isFirstRun = !config.desktopMode && !existsSync(CONFIG_PATH);
 
-  // Register splash action handler
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
 
-  // 2. First run detection
-  isFirstRun = !config.desktopMode && !existsSync(CONFIG_PATH);
   if (isFirstRun) {
-    // Default to local for first run — user will go through onboard wizard
-    currentMode = 'local';
-    saveDesktopMode('local');
+    const mode = await showModeSelectWindow();
+    if (!mode) {
+      app.quit();
+      return;
+    }
+    currentMode = mode;
+    saveDesktopMode(mode);
+    splashWindow = createSplash();
+  } else {
+    currentMode = config.desktopMode || 'local';
+    splashWindow = createSplash();
   }
 
-  // 3. Boot
   await bootApp();
 });
 
