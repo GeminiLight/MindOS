@@ -51,19 +51,19 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 
 ## 🧠 Human-AI Shared Mind
 
-> No more fragmented memory, no more black-box behavior, no more lost experience.
+> You shape AI through thinking, AI empowers you through execution. Human and AI, growing together in one shared brain.
 
 **1. Global Sync — Breaking Memory Silos**
 
-Each Agent keeps its own memory — switching tools means manually hauling context. **MindOS lets all Agents share one knowledge base via MCP and Skills — record once, reuse everywhere.**
+Switch tools or start a new chat and you're re-transporting context, scattering knowledge. **With a built-in MCP server (20+ tools), MindOS connects all Agents to your core knowledge base with zero config. Record profile and project memory once to empower all AI tools.**
 
-**2. Transparent & Controllable — No More Black Boxes**
+**2. Transparent & Controllable — No Black Boxes**
 
-What did your Agent remember? Is it even correct? You have no way to know. **MindOS saves every read/write as local plain text — humans can audit, correct, and delete in the GUI.**
+Agent memory locked in black boxes makes reasoning unauditable, erasing trust as hallucinations compound. **MindOS saves every retrieval, reflection & action as local plain text. You hold absolute mind-correction rights with a full GUI to recalibrate Agents anytime.**
 
-**3. Symbiotic Evolution — Experience Flows Back as Instructions**
+**3. Symbiotic Evolution — Experience Flows Back As Instructions**
 
-All that experience from your conversations — gone the moment you close the window. **MindOS auto-distills conversation experience into Skills/SOPs. Notes are instructions. The knowledge base gets better with use.**
+You express preferences but the next chat starts from zero, leaving your thinking useless for AI. **MindOS auto-distills every thought into your knowledge base. Clarify your standards through interaction and sharpen your cognition with each iteration—AI will never repeat the same mistake.**
 
 > **Foundation:** Local-first by default — all data stays in local plain text for privacy, ownership, and speed.
 

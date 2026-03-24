@@ -4,12 +4,9 @@ curl -L -o ~/Downloads/MindOS-0.1.0-arm64-mac.zip 'http://21.6.243.108:8080/desk
 
 cd ~/Downloads && unzip MindOS-0.1.0-arm64-mac.zip && open MindOS-0.1.0-arm64.dmg 
 
+1. Landing Page 
+2. 来帮我精心设计 智能体 的slidebar，我觉得他们应该类似 探索 页面 上面有若干个大的按钮，比如 Overview、MCP、Skill、Usage等等（这块需要参考探索的slide，维持风格类似），帮助用户全局管理各个Agent。然后下面再展示各个Agent，甚至每个agent也是能点开的查看信息。帮我理解我们的产品理解来精心设计下吧
 
-1，使用案例的完善
-2，帮我理解下如果用户没有安装 MindOS 的 User Flow，你要考虑很多用户可能没有 NodeJs
-3. 现在版本更新导致的小红点会出现，但正确更新后，好像不会消失
-4. 网页端的更新虽然有这个四步骤，但是重新构建新应用的时候，这个网页就直接关闭了，你有什么建议
-5. 更新 Contributor
 
 
 1. 现在模版下面有很多一级目录，其实是用户的一些Space，并且需要INTRUCTION.md来自动管理。新建一个新的一级目录也需要自动创建，帮我想想怎么提升用户体验。
@@ -79,7 +76,15 @@ Review change
 - 支持用户有多个mindos
 - wiki 使用指南，比如roadmap到stage
 
+
+
 ## ADDRESSED
+
+1，使用案例的完善
+2，帮我理解下如果用户没有安装 MindOS 的 User Flow，你要考虑很多用户可能没有 NodeJs
+3. 现在版本更新导致的小红点会出现，但正确更新后，好像不会消失
+4. 网页端的更新虽然有这个四步骤，但是重新构建新应用的时候，这个网页就直接关闭了，你有什么建议
+5. 更新 Contributor
 
 帮我理解下现在链接远程mindos的user flow
 

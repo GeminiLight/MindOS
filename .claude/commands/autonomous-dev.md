@@ -11,7 +11,8 @@
 
 ## 阶段 1：Spec + 架构评审
 
-3. 按 CLAUDE.md 的 **Spec 模板** 写 spec 到 `wiki/specs/`，每段不能为空
+3. 按需使用 `product-designer` 和 `ui-design-patterns` skill 确保用户体验
+ 按 CLAUDE.md 的 **Spec 模板** 写 spec 到 `wiki/specs/`，每段不能为空
 4. 用 `software-architecture` skill 的原则审查 spec 方案：
    - **Library-First**：方案中是否有可用现成库替代的自定义实现？优先用库，除非是核心业务逻辑
    - **Clean Architecture**：业务逻辑是否独立于框架和 UI？关注点是否分离？

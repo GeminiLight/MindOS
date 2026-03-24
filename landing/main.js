@@ -97,7 +97,6 @@ function highlightCard(cardId) {
     const card = document.getElementById(cardId);
     if (card) {
         card.classList.add('active');
-        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
     }
 }
 

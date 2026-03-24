@@ -69,10 +69,10 @@
   - zh: 换个工具、开个新对话，就要把背景重讲一遍？
   - en: Switch tools or start a new chat, and you have to re-explain everything?
 - **Pain**
-  - zh: 切换工具或开新对话，就要重新搬运上下文——知识无法跨 Agent 复用 / 个人深度背景散落多处，Agent 每次都缺乏完整 Context
+  - zh: 切换工具带来上下文割裂，知识无法跨 Agent 复用 / 个人深度背景散落各处，Agent 缺乏全局 Context
   - en: Switch tools or start a new chat and you're re-transporting context — knowledge can't be reused across Agents / Deep personal context scattered everywhere — Agents always lack the full picture
 - **Shift**
-  - zh: 内置 MCP Server (20+ 工具)，全阵容 Agent 零配置直连知识库 / Profile、SOP 与项目记忆一处记录，全量赋能所有 Agent
+  - zh: 内置 MCP Server，所有 Agent 零配置直连核心知识库 / 项目记忆与 SOP 仅需一处记录，即可全量赋能所有 AI 工具
   - en: Built-in MCP Server (20+ tools) — full-lineup Agents connect with zero config / Profile, SOPs & project memory: record once, empower all Agents
 
 ### Pillar 02: Transparent & Controllable
@@ -84,10 +84,10 @@
   - zh: Agent 在记忆你，但记了什么、记对没有？
   - en: Your Agent is memorizing you — but what exactly did it remember, and is it right?
 - **Pain**
-  - zh: Agent 的"记忆"锁在黑箱中，推理过程无法审查，错误难以追溯和纠正 / 幻觉不受控地累积，信任链随时间持续崩塌
+  - zh: Agent 记忆锁在黑箱中，推理无法审查，错误极难追溯纠正 / 交互幻觉不受控地累积，人机信任链随时间持续崩塌
   - en: Agent memory locked in black boxes — reasoning can't be audited, errors can't be traced or corrected / Hallucinations compound unchecked, eroding trust over time
 - **Shift**
-  - zh: 每次检索、反思与执行均沉淀为本地纯文本，GUI 提供完整的审查与干预界面 / 人类拥有绝对的心智纠偏权，随时校准 Agent 行为
+  - zh: 检索与执行均沉淀为本地纯文本，提供完整的审查干预界面 / 人类拥有绝对的心智纠偏权，可随时校准 Agent 行为
   - en: Every retrieval, reflection & action saved as local plain text, with a full GUI for audit and intervention / Humans hold absolute mind-correction rights — recalibrate Agents anytime
 
 ### Pillar 03: Symbiotic Evolution
@@ -99,10 +99,10 @@
   - zh: 你和 AI 对话了 100 次，这些思考去了哪里？
   - en: You've thought with AI 100 times — where did all that thinking go?
 - **Pain**
-  - zh: 你反复向 AI 表达偏好、标准和判断，但下次对话又从零开始——你的思考没有变成 AI 的能力 / AI 不成长，你也没变清晰——思考的过程没有沉淀为你自己的方法论
+  - zh: 反复表达偏好，新对话又从零开始，思考未成 AI 能力 / AI 不成长你也没变清晰，思考过程未沉淀为方法论
   - en: You keep expressing preferences, standards, and judgment to AI, but the next chat starts from zero — your thinking never becomes AI's capability / AI doesn't grow, and neither do you — the thinking process never crystallizes into your own methodology
 - **Shift**
-  - zh: 每次思考自动沉淀为知识库的一部分——AI 下次更懂你，不再犯同样的错 / 思考的过程迫使你想清楚标准和边界，你的认知也在每次沉淀中变得更锐利
+  - zh: 思考自动沉淀为知识库，下次应对更默契，拒绝重复犯错 / 在交互中厘清想法与标准，认知随每次沉淀变得锐利
   - en: Every thought auto-distills into your knowledge base — AI understands you better next time, never repeating the same mistake / The act of thinking forces you to clarify your own standards and boundaries, sharpening your cognition with each iteration
 
 ### Foundation Banner
