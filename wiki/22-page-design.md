@@ -43,7 +43,7 @@
 
 **Rail 中部按钮顺序（上 → 下）**：空间（文件树）→ **回响 Echo** → 搜索（⌘K）→ 插件 → 智能体 → 探索。底部为帮助、同步、设置等（不切换主 Panel）。
 
-**Panel 子视图**：`FileTree`、`EchoPanel`、`SearchPanel`、`PluginsPanel`、`AgentsPanel`、`DiscoverPanel`。回响无独立路由：内容为「与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长」等自我向模块（不导流首页、Guide、探索）。规格见 `wiki/specs/spec-echo-panel.md`、`wiki/specs/spec-activity-bar-layout.md`、`wiki/specs/spec-discover-panel.md`。
+**Panel 子视图**：`FileTree`、`EchoPanel`、`SearchPanel`、`PluginsPanel`、`AgentsPanel`、`DiscoverPanel`。回响主内容在 **`/echo/[segment]`**（侧栏五行链入）；不向首页、Guide、探索导流。规格见 `wiki/specs/spec-echo-panel.md`、`wiki/specs/spec-echo-content-pages.md`、`wiki/specs/spec-activity-bar-layout.md`、`wiki/specs/spec-discover-panel.md`。
 
 ### 移动端 (<768px)
 
@@ -95,6 +95,7 @@ Drawer (triggered by ☰):
 | `/setup` | 初始化向导 | `Setup` | 8 步 Wizard |
 | `/login` | 登录 | `LoginPage` | Web 密码认证 |
 | `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
+| `/echo/[segment]` | 回响内容页 | `app/app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `wiki/specs/spec-echo-content-pages.md` |
 
 ---
 
