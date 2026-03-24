@@ -51,14 +51,19 @@ export async function testConnection(address: string): Promise<HealthCheckResult
     const res = await fetch(`${url}/api/health`, {
       signal: ctrl.signal,
       cache: 'no-store',
-    });
+    } as RequestInit);
     clearTimeout(timer);
 
     if (!res.ok) {
       return { status: 'error', error: `HTTP ${res.status}` };
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as {
+      ok?: boolean;
+      service?: string;
+      version?: string;
+      authRequired?: boolean;
+    };
     if (data.ok !== true || data.service !== 'mindos') {
       return { status: 'not-mindos' };
     }
