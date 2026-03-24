@@ -115,6 +115,13 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     return () => cancelAnimationFrame(id);
   }, [pathname]);
 
+  // Deep-link Echo routes: keep left Echo panel aligned with URL
+  useEffect(() => {
+    if (pathname?.startsWith('/echo')) {
+      lp.setActivePanel('echo');
+    }
+  }, [pathname, lp.setActivePanel]);
+
   const handleAgentDetailWidthCommit = useCallback((w: number) => {
     setAgentDetailWidth(w);
     try {
