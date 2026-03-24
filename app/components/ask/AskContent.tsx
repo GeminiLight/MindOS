@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { Sparkles, Send, AtSign, Paperclip, StopCircle, RotateCcw, History, X, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { Message } from '@/lib/types';
@@ -21,6 +21,24 @@ const PANEL_COMPOSER_MIN = 84;
 const PANEL_COMPOSER_MAX_ABS = 440;
 const PANEL_COMPOSER_MAX_VIEW = 0.48;
 const PANEL_COMPOSER_KEY_STEP = 24;
+/** 输入框随内容增高，超过此行数后在框内滚动（与常见 IM 一致） */
+const PANEL_TEXTAREA_MAX_VISIBLE_LINES = 8;
+
+function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number): void {
+  const style = getComputedStyle(el);
+  const parsedLh = parseFloat(style.lineHeight);
+  const parsedFs = parseFloat(style.fontSize);
+  const fontSize = Number.isFinite(parsedFs) ? parsedFs : 14;
+  const lineHeight = Number.isFinite(parsedLh) ? parsedLh : fontSize * 1.375;
+  const pad =
+    (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
+    (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
+  const maxH = lineHeight * maxVisibleLines + pad;
+  if (!Number.isFinite(maxH) || maxH <= 0) return;
+  el.style.height = '0px';
+  const next = Math.min(el.scrollHeight, maxH);
+  el.style.height = `${Number.isFinite(next) ? next : maxH}px`;
+}
 
 function panelComposerMaxForViewport(): number {
   if (typeof window === 'undefined') return PANEL_COMPOSER_MAX_ABS;
@@ -195,10 +213,23 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     return () => window.removeEventListener('resize', applyPanelComposerClampAndPersist);
   }, [isPanel, applyPanelComposerClampAndPersist]);
 
+  useLayoutEffect(() => {
+    if (!isPanel || !visible) return;
+    const el = inputRef.current;
+    if (!el || !(el instanceof HTMLTextAreaElement)) return;
+    syncPanelTextareaToContent(el, PANEL_TEXTAREA_MAX_VISIBLE_LINES);
+  }, [input, isPanel, isLoading, visible, panelComposerHeight]);
+
+  const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInputChange = useCallback((val: string) => {
     setInput(val);
-    mention.updateMentionFromInput(val);
+    if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+    mentionTimerRef.current = setTimeout(() => mention.updateMentionFromInput(val), 80);
   }, [mention]);
+
+  useEffect(() => {
+    return () => { if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current); };
+  }, []);
 
   const selectMention = useCallback((filePath: string) => {
     const atIdx = input.lastIndexOf('@');
@@ -458,7 +489,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </div>
         ) : null}
 
-        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
+        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-y-auto')}>
           {attachedFiles.length > 0 && (
             <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
               <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
@@ -551,7 +582,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               placeholder={t.ask.placeholder}
               disabled={isLoading}
               rows={1}
-              className="min-h-0 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none transition-[height] duration-75 disabled:opacity-50"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
             />
           ) : (
             <input
@@ -596,15 +627,6 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           <span suppressHydrationWarning>
             <kbd className="font-mono">⇧</kbd>
             <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
-          </span>
-        ) : null}
-        {isPanel ? (
-          <span
-            className="hidden sm:inline"
-            suppressHydrationWarning
-            title={`${t.ask.panelComposerResize} · ${t.ask.panelComposerResetHint} · ${t.ask.panelComposerKeyboard}`}
-          >
-            <kbd className="font-mono">↕</kbd> {t.ask.panelComposerFooter}
           </span>
         ) : null}
         <span suppressHydrationWarning>
