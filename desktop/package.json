@@ -19,7 +19,9 @@
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare-mindos-runtime": "node scripts/prepare-mindos-runtime.mjs",
+    "dist:with-bundled": "npm run prepare-mindos-runtime && electron-builder"
   },
   "dependencies": {
     "electron-store": "^10.0.0",

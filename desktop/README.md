@@ -2,6 +2,16 @@
 
 Electron 桌面客户端
 
+## 内置 MindOS 运行时（可选）
+
+安装包可将已构建的 MindOS 打进 `Resources/mindos-runtime`，离线/无全局 `npm i -g` 时也能启动本地模式。详见 `wiki/specs/spec-desktop-bundled-mindos.md`。
+
+1. 在**仓库根目录**完成 `app/.next`（例如 `npm run build`），并保证 `app/`、`mcp/` 依赖已安装。
+2. `cd desktop && npm run prepare-mindos-runtime`
+3. 再执行 `npm run dist` 或 `./scripts/build-mac.sh` 等。
+
+一键：`npm run dist:with-bundled`（等同 prepare + `electron-builder`）。仅打测试包且未准备运行时，目录里可仅有 `resources/mindos-runtime/README.md`，行为与未内置时一致。
+
 ## 打包脚本
 
 项目提供了两个打包脚本，分别用于不同平台：

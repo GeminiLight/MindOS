@@ -50,6 +50,9 @@ desktop/dist/
 desktop/dist-electron/
 desktop/dist-renderer/
 desktop/node_modules/
+# Populated by prepare-mindos-runtime.mjs (keep README tracked)
+desktop/resources/mindos-runtime/*
+!desktop/resources/mindos-runtime/README.md
 
 # Shared SDK build
 shared/dist/
