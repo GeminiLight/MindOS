@@ -252,18 +252,26 @@
 2. **版本元数据存放**：`minMindOsVersion` / `maxTestedMindOsVersion` 写入 `desktop/package.json`、`app.config` 常量还是构建时 `define`；需单一真相源。
 3. **用户从 `bundled-only` 切回 `prefer-newer`**：仅改 config 即可，无需清缓存（与「不持久化择优结果」一致）；是否在 UI 提示「下次启动生效」。
 
+## 实现进度（代码）
+
+| 状态 | 项 |
+|------|-----|
+| 已完成 | `pickMindOsRuntime`（纯函数）、`analyzeMindOsLayout`、`getDefaultBundledMindOsDirectory`（打包路径 `resources/mindos-runtime`；开发用 `MINDOS_DEV_BUNDLED_ROOT`）、`resolveLocalMindOsProjectRoot`、`startLocalMode` 接入；`config`：`mindosRuntimePolicy`、`mindosRuntimeRoot`、`MINDOS_RUNTIME_ROOT`、`mindosRuntimeStrictCompat`、`minMindOsVersion`、`maxTestedMindOsVersion`；Main 日志 `[MindOS] runtime pick …` |
+| 已完成 | Desktop `npm test`：`mindos-runtime-pick` + `mindos-runtime-layout` 单测（`semver` 择优与布局探测） |
+| 未做 | `extraResources` 打入真实 `mindos-runtime` 产物、三平台安装包冒烟、关于页双版本、托盘重启重新 resolve |
+
 ## 验收标准
 
 - [ ] 在无全局 `@geminilight/mindos`、且**未**触发 `installMindosWithPrivateNode`（或等价：用户目录无可用全局包）的前提下，本地模式能仅依赖 **BundledRuntime** 完成 **`/api/health`** 与主窗口加载（**且**非 `mindos.pid` 撞车 CLI 场景，或该场景在验收环境中已关闭）。
 - [ ] 安装全局 `@geminilight/mindos` 且版本 **高于** 内置版本、且构建完整时，默认策略下启动使用的是 **UserRuntime**（日志或调试接口可证）。
-- [ ] 全局版本 **低于** `minMindOsVersion` 时，不采用该 UserRuntime，启动使用 Bundled 或明确错误提示（与实现约定一致）。
-- [ ] `mindosRuntimePolicy=bundled-only` 时，即使全局版本更高也 **不**使用 UserRuntime。
-- [ ] `mindosRuntimePolicy=user-only` 且无可用 UserRuntime（无全局包或路径无效）时，**失败并提示**，不静默使用 Bundled。
-- [ ] `mindosRuntimeRoot` 指向有效自定义目录时，**优先于** bundled/user 择优（与第一节优先级一致）。
-- [ ] 内置与用户路径切换**不需要**用户手动删 `config.json`；重启后策略自动重新评估。
+- [x] 全局版本 **低于** `minMindOsVersion` 时，不采用该 UserRuntime，启动使用 Bundled 或明确错误提示（与实现约定一致）。（逻辑在 `pickMindOsRuntime` + 单测；E2E 待内置与用户包组合环境）
+- [x] `mindosRuntimePolicy=bundled-only` 时，即使全局版本更高也 **不**使用 UserRuntime。
+- [x] `mindosRuntimePolicy=user-only` 且无可用 UserRuntime（无全局包或路径无效）时，**失败并提示**，不静默使用 Bundled。
+- [x] `mindosRuntimeRoot` / `MINDOS_RUNTIME_ROOT` 指向有效可运行根时**优先于** bundled/user（`resolveLocalMindOsProjectRoot`）；无效路径明确报错。
+- [x] 内置与用户路径切换**不需要**用户手动删 `config.json`；重启后策略自动重新评估。
 - [ ] electron-builder 产物在 **macOS / Windows / Linux** 至少各一平台冒烟：本地模式启动成功（平台矩阵可在 CI 中分阶段）。
-- [ ] `wiki/specs/spec-electron-desktop-app.md` 已增加对本 spec 的交叉引用。
-- [ ] 新增或更新自动化测试：**semver 择优逻辑**与「路径不可用回退」可在 Node 层单测覆盖（不强制启动 Electron）。
+- [x] `wiki/specs/spec-electron-desktop-app.md` 已增加对本 spec 的交叉引用。
+- [x] 新增或更新自动化测试：**semver 择优逻辑**与「路径不可用回退」可在 Node 层单测覆盖（不强制启动 Electron）。
 - [ ] （可选）托盘「重启服务」在用户升级全局包后：要么文档明确「需重启 Desktop / 切换模式」，要么实现**重新 resolve** `projectRoot` 并验收通过。
 
 ---

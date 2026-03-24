@@ -35,6 +35,7 @@ mac:
 asar: true
 # No asarUnpack needed — loadFile() reads from asar directly,
 # and keeping HTML inside asar preserves relative script paths.
+# Bundled MindOS (optional): ship `mindos-runtime/` via extraResources — see wiki/specs/spec-desktop-bundled-mindos.md
 
 win:
   icon: src/icons/icon.ico
