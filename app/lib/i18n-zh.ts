@@ -173,6 +173,14 @@ export const zh = {
       newSkill: '+ 新建',
       // Footer
       advancedConfig: '高级配置 →',
+      navOverview: '总览',
+      navMcp: 'MCP 与技能',
+      navSkills: '技能',
+      navUsage: '使用与帮助',
+      navInsights: '智能体洞察',
+      rosterLabel: '当前环境',
+      notFoundDetail: '本机未检测到该智能体客户端。请安装后刷新列表。',
+      skillsEmptyHint: '请在「MCP 与技能」设置中启用或编辑 Skills。',
     },
     plugins: {
       title: '插件',
