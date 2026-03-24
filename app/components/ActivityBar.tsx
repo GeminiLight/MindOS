@@ -16,6 +16,7 @@ export const RAIL_WIDTH_EXPANDED = 180;
 interface ActivityBarProps {
   activePanel: PanelId | null;
   onPanelChange: (id: PanelId | null) => void;
+  onAgentsClick?: () => void;
   syncStatus: SyncStatus | null;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -76,6 +77,7 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
 export default function ActivityBar({
   activePanel,
   onPanelChange,
+  onAgentsClick,
   syncStatus,
   expanded,
   onExpandedChange,
@@ -160,7 +162,13 @@ export default function ActivityBar({
           <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => toggle('echo')} />
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} walkthroughId="search-button" />
           <RailButton icon={<Blocks size={18} />} label={t.sidebar.plugins} active={activePanel === 'plugins'} expanded={expanded} onClick={() => toggle('plugins')} />
-          <RailButton icon={<Bot size={18} />} label={t.sidebar.agents} active={activePanel === 'agents'} expanded={expanded} onClick={() => toggle('agents')} />
+          <RailButton
+            icon={<Bot size={18} />}
+            label={t.sidebar.agents}
+            active={activePanel === 'agents'}
+            expanded={expanded}
+            onClick={() => onAgentsClick ? debounced(onAgentsClick) : toggle('agents')}
+          />
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => toggle('discover')} />
         </div>
 

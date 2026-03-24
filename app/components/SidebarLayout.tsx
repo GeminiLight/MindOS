@@ -81,6 +81,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   const currentFile = pathname.startsWith('/view/')
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
     : undefined;
+  const agentsContentActive = pathname?.startsWith('/agents');
 
   // ── Event listeners ──
 
@@ -228,8 +229,13 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
       {/* ── Desktop: Activity Bar + Panel ── */}
       <ActivityBar
-        activePanel={lp.activePanel}
+        activePanel={agentsContentActive ? 'agents' : lp.activePanel}
         onPanelChange={lp.setActivePanel}
+        onAgentsClick={() => {
+          lp.setActivePanel(null);
+          setAgentDetailKey(null);
+          router.push('/agents');
+        }}
         syncStatus={syncStatus}
         expanded={lp.railExpanded}
         onExpandedChange={handleExpandedChange}
