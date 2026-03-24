@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
@@ -9,34 +9,29 @@ import type { SkillInfo } from '../settings/types';
 import PanelHeader from './PanelHeader';
 import { AgentsPanelHubNav } from './AgentsPanelHubNav';
 import { AgentsPanelAgentGroups } from './AgentsPanelAgentGroups';
-import AgentsPanelAgentDetail, { type AgentsPanelAgentDetailStatus } from './AgentsPanelAgentDetail';
 
 interface AgentsPanelProps {
   active: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
+  /** Highlights the row for the agent whose detail is open in the right dock. */
+  selectedAgentKey?: string | null;
+  onOpenAgentDetail?: (key: string) => void;
 }
 
-function resolveAgentDetailStatus(
-  key: string,
-  connected: { key: string }[],
-  detected: { key: string }[],
-  notFound: { key: string }[],
-): AgentsPanelAgentDetailStatus | null {
-  if (connected.some(a => a.key === key)) return 'connected';
-  if (detected.some(a => a.key === key)) return 'detected';
-  if (notFound.some(a => a.key === key)) return 'notFound';
-  return null;
-}
-
-export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPanelProps) {
+export default function AgentsPanel({
+  active,
+  maximized,
+  onMaximize,
+  selectedAgentKey = null,
+  onOpenAgentDetail,
+}: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
   const mcp = useMcpData();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showBuiltinSkills, setShowBuiltinSkills] = useState(false);
-  const [detailAgentKey, setDetailAgentKey] = useState<string | null>(null);
 
   const overviewRef = useRef<HTMLDivElement>(null);
   const skillsRef = useRef<HTMLDivElement>(null);
@@ -68,30 +63,6 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
     install: p.install,
   };
 
-  const detailCopy = {
-    connected: p.connected,
-    installing: p.installing,
-    install: p.install,
-    copyConfig: p.copyConfig,
-    copied: p.copied,
-    transportLocal: p.transportLocal,
-    transportRemote: p.transportRemote,
-    configPath: p.configPath,
-    notFoundDetail: p.notFoundDetail,
-    backToList: p.backToList,
-    agentDetailTransport: p.agentDetailTransport,
-    agentDetailSnippet: p.agentDetailSnippet,
-  };
-
-  const resolvedDetail = useMemo(() => {
-    if (!detailAgentKey) return null;
-    const agent = mcp.agents.find(a => a.key === detailAgentKey);
-    if (!agent) return null;
-    const status = resolveAgentDetailStatus(detailAgentKey, connected, detected, notFound);
-    if (!status) return null;
-    return { agent, status };
-  }, [detailAgentKey, mcp.agents, connected, detected, notFound]);
-
   const hubCopy = {
     navOverview: p.navOverview,
     navMcp: p.navMcp,
@@ -109,13 +80,11 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
     />
   );
 
-  const showAgentDetail = resolvedDetail !== null;
-
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={p.title} maximized={maximized} onMaximize={onMaximize}>
         <div className="flex items-center gap-1.5">
-          {!mcp.loading && !showAgentDetail && (
+          {!mcp.loading && (
             <span className="text-2xs text-muted-foreground">
               {connected.length} {p.connected}
             </span>
@@ -138,15 +107,6 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
           <div className="flex justify-center py-8">
             <Loader2 size={16} className="animate-spin text-muted-foreground" />
           </div>
-        ) : resolvedDetail ? (
-          <AgentsPanelAgentDetail
-            agent={resolvedDetail.agent}
-            agentStatus={resolvedDetail.status}
-            mcpStatus={mcp.status}
-            onBack={() => setDetailAgentKey(null)}
-            onInstallAgent={mcp.installAgent}
-            copy={detailCopy}
-          />
         ) : mcp.agents.length === 0 && mcp.skills.length === 0 ? (
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
@@ -205,7 +165,8 @@ export default function AgentsPanel({ active, maximized, onMaximize }: AgentsPan
                 connected={connected}
                 detected={detected}
                 notFound={notFound}
-                onOpenDetail={key => setDetailAgentKey(key)}
+                onOpenDetail={onOpenAgentDetail}
+                selectedAgentKey={selectedAgentKey}
                 mcp={mcp}
                 listCopy={listCopy}
                 showNotDetected={showNotDetected}
