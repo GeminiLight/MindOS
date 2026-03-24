@@ -64,3 +64,17 @@ export { isGitRepo, gitLog, gitShowFile } from './git';
 export { createSpaceFilesystem } from './create-space';
 export { summarizeTopLevelSpaces } from './list-spaces';
 export type { MindSpaceSummary } from './list-spaces';
+
+// Content changes
+export {
+  appendContentChange,
+  listContentChanges,
+  markContentChangesSeen,
+  getContentChangeSummary,
+} from './content-changes';
+export type {
+  ContentChangeEvent,
+  ContentChangeInput,
+  ContentChangeSummary,
+  ContentChangeSource,
+} from './content-changes';

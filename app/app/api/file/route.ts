@@ -19,11 +19,28 @@ import {
   getMindRoot,
   invalidateCache,
   listMindSpaces,
+  appendContentChange,
 } from '@/lib/fs';
 import { createSpaceFilesystem } from '@/lib/core/create-space';
 
 function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
+}
+
+function safeRead(filePath: string): string {
+  try {
+    return getFileContent(filePath);
+  } catch {
+    return '';
+  }
+}
+
+function sourceFromRequest(req: NextRequest, body: Record<string, unknown>) {
+  const bodySource = body.source;
+  if (bodySource === 'agent' || bodySource === 'user' || bodySource === 'system') return bodySource;
+  const headerSource = req.headers.get('x-mindos-source');
+  if (headerSource === 'agent' || headerSource === 'user' || headerSource === 'system') return headerSource;
+  return 'user' as const;
 }
 
 // GET /api/file?path=foo.md&op=read_file|read_lines | GET ?op=list_spaces (no path)
@@ -73,13 +90,32 @@ export async function POST(req: NextRequest) {
 
   try {
     let resp: NextResponse;
+    let changeEvent:
+      | {
+        op: string;
+        path: string;
+        summary: string;
+        before?: string;
+        after?: string;
+        beforePath?: string;
+        afterPath?: string;
+      }
+      | null = null;
 
     switch (op) {
 
       case 'save_file': {
         const { content } = params as { content: string };
         if (typeof content !== 'string') return err('missing content');
+        const before = safeRead(filePath);
         saveFileContent(filePath, content);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: 'Updated file content',
+          before,
+          after: content,
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -87,7 +123,15 @@ export async function POST(req: NextRequest) {
       case 'append_to_file': {
         const { content } = params as { content: string };
         if (typeof content !== 'string') return err('missing content');
+        const before = safeRead(filePath);
         appendToFile(filePath, content);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: 'Appended content to file',
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -96,7 +140,15 @@ export async function POST(req: NextRequest) {
         const { after_index, lines } = params as { after_index: number; lines: string[] };
         if (typeof after_index !== 'number') return err('missing after_index');
         if (!Array.isArray(lines)) return err('lines must be array');
+        const before = safeRead(filePath);
         insertLines(filePath, after_index, lines);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: `Inserted ${lines.length} line(s)`,
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -107,7 +159,15 @@ export async function POST(req: NextRequest) {
         if (!Array.isArray(lines)) return err('lines must be array');
         if (start < 0 || end < 0) return err('start/end must be >= 0');
         if (start > end) return err('start must be <= end');
+        const before = safeRead(filePath);
         updateLines(filePath, start, end, lines);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: `Updated lines ${start}-${end}`,
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -116,7 +176,15 @@ export async function POST(req: NextRequest) {
         const { heading, content } = params as { heading: string; content: string };
         if (typeof heading !== 'string') return err('missing heading');
         if (typeof content !== 'string') return err('missing content');
+        const before = safeRead(filePath);
         insertAfterHeading(filePath, heading, content);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: `Inserted content after heading "${heading}"`,
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -125,13 +193,29 @@ export async function POST(req: NextRequest) {
         const { heading, content } = params as { heading: string; content: string };
         if (typeof heading !== 'string') return err('missing heading');
         if (typeof content !== 'string') return err('missing content');
+        const before = safeRead(filePath);
         updateSection(filePath, heading, content);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: `Updated section "${heading}"`,
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
 
       case 'delete_file': {
+        const before = safeRead(filePath);
         deleteFile(filePath);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: 'Deleted file',
+          before,
+          after: '',
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -139,14 +223,32 @@ export async function POST(req: NextRequest) {
       case 'rename_file': {
         const { new_name } = params as { new_name: string };
         if (typeof new_name !== 'string' || !new_name) return err('missing new_name');
+        const before = safeRead(filePath);
         const newPath = renameFile(filePath, new_name);
+        changeEvent = {
+          op,
+          path: newPath,
+          summary: `Renamed file to ${new_name}`,
+          before,
+          after: safeRead(newPath),
+          beforePath: filePath,
+          afterPath: newPath,
+        };
         resp = NextResponse.json({ ok: true, newPath });
         break;
       }
 
       case 'create_file': {
         const { content } = params as { content?: string };
-        createFile(filePath, typeof content === 'string' ? content : '');
+        const after = typeof content === 'string' ? content : '';
+        createFile(filePath, after);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: 'Created file',
+          before: '',
+          after,
+        };
         resp = NextResponse.json({ ok: true });
         break;
       }
@@ -154,7 +256,17 @@ export async function POST(req: NextRequest) {
       case 'move_file': {
         const { to_path } = params as { to_path: string };
         if (typeof to_path !== 'string' || !to_path) return err('missing to_path');
+        const before = safeRead(filePath);
         const result = moveFile(filePath, to_path);
+        changeEvent = {
+          op,
+          path: result.newPath,
+          summary: `Moved file to ${result.newPath}`,
+          before,
+          after: safeRead(result.newPath),
+          beforePath: filePath,
+          afterPath: result.newPath,
+        };
         resp = NextResponse.json({ ok: true, ...result });
         break;
       }
@@ -169,6 +281,13 @@ export async function POST(req: NextRequest) {
         try {
           const { path: spacePath } = createSpaceFilesystem(getMindRoot(), name, description, parent_path);
           invalidateCache();
+          changeEvent = {
+            op,
+            path: spacePath,
+            summary: 'Created space',
+            before: '',
+            after: description,
+          };
           resp = NextResponse.json({ ok: true, path: spacePath });
         } catch (e) {
           const msg = (e as Error).message;
@@ -186,6 +305,13 @@ export async function POST(req: NextRequest) {
         const { new_name } = params as { new_name: string };
         if (typeof new_name !== 'string' || !new_name.trim()) return err('missing new_name');
         const newPath = renameSpace(filePath, new_name.trim());
+        changeEvent = {
+          op,
+          path: newPath,
+          summary: `Renamed space to ${new_name.trim()}`,
+          beforePath: filePath,
+          afterPath: newPath,
+        };
         resp = NextResponse.json({ ok: true, newPath });
         break;
       }
@@ -193,7 +319,15 @@ export async function POST(req: NextRequest) {
       case 'append_csv': {
         const { row } = params as { row: string[] };
         if (!Array.isArray(row) || row.length === 0) return err('row must be non-empty array');
+        const before = safeRead(filePath);
         const result = appendCsvRow(filePath, row);
+        changeEvent = {
+          op,
+          path: filePath,
+          summary: `Appended CSV row (${row.length} cell${row.length === 1 ? '' : 's'})`,
+          before,
+          after: safeRead(filePath),
+        };
         resp = NextResponse.json({ ok: true, ...result });
         break;
       }
@@ -205,6 +339,17 @@ export async function POST(req: NextRequest) {
     // Invalidate Next.js router cache so sidebar file tree updates
     if (TREE_CHANGING_OPS.has(op)) {
       try { revalidatePath('/', 'layout'); } catch { /* noop in test env */ }
+    }
+
+    if (changeEvent) {
+      try {
+        appendContentChange({
+          ...changeEvent,
+          source: sourceFromRequest(req, body),
+        });
+      } catch (logError) {
+        console.warn('[file.route] failed to append content change log:', (logError as Error).message);
+      }
     }
 
     return resp;
