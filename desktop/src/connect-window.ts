@@ -3,7 +3,8 @@
  * Loads connect.html and bridges IPC to shared/connection SDK.
  */
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
-import path from 'path';
+import { resolvePreferUnpacked } from './resolve-packaged-asset';
+import { mindosConnectPageUrl } from './mindos-connect-protocol';
 import Store from 'electron-store';
 import { testConnection, normalizeAddress } from '../../shared/connection';
 import type { SavedConnection } from '../../shared/connection';
@@ -19,15 +20,9 @@ export function clearActiveTunnel(): void {
   if (activeTunnel) { activeTunnel.stop().catch(() => {}); activeTunnel = null; }
 }
 
-/**
- * Resolve paths relative to the app root.
- * - Dev: app.getAppPath() → desktop/ (where package.json lives)
- * - Production: app.getAppPath() → <resources>/app.asar
- * Both have src/connect.html and dist-electron/ at root level.
- */
-const APP_ROOT = app.getAppPath();
-const HTML_PATH = path.join(APP_ROOT, 'src', 'connect.html');
-const PRELOAD_PATH = path.join(APP_ROOT, 'dist-electron', 'preload', 'connect-preload.js');
+function connectPreloadPath(): string {
+  return resolvePreferUnpacked('dist-electron', 'preload', 'connect-preload.js');
+}
 
 const MAX_CONNECTIONS = 5;
 
@@ -251,16 +246,18 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       title: 'MindOS',
       titleBarStyle: 'default',
       webPreferences: {
-        preload: PRELOAD_PATH,
+        preload: connectPreloadPath(),
         nodeIntegration: false,
         contextIsolation: true,
+        /** Default sandbox breaks file/custom-scheme loading from the app bundle on macOS. */
+        sandbox: false,
       },
       show: false,
     });
 
     modeWin.once('ready-to-show', () => modeWin.show());
 
-    modeWin.loadFile(HTML_PATH, { query: { modeSelect: 'true' } }).catch(err => {
+    modeWin.loadURL(mindosConnectPageUrl({ modeSelect: 'true' })).catch(err => {
       console.error('[MindOS] Failed to load connect.html for mode selection:', err);
     });
 
@@ -466,16 +463,17 @@ export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string 
       title: 'MindOS',
       titleBarStyle: 'default',
       webPreferences: {
-        preload: PRELOAD_PATH,
+        preload: connectPreloadPath(),
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: false,
       },
       show: false,
     });
 
     connectWin.once('ready-to-show', () => connectWin.show());
 
-    connectWin.loadFile(HTML_PATH).catch(err => {
+    connectWin.loadURL(mindosConnectPageUrl()).catch(err => {
       console.error('[MindOS] Failed to load connect.html for remote connection:', err);
     });
 

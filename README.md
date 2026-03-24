@@ -55,7 +55,7 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 
 **1. Global Sync — Breaking Memory Silos**
 
-Switch tools or start a new chat and you're re-transporting context, scattering knowledge. **With a built-in MCP server (20+ tools), MindOS connects all Agents to your core knowledge base with zero config. Record profile and project memory once to empower all AI tools.**
+Switch tools or start a new chat and you're re-transporting context, scattering knowledge. **With a built-in MCP server, MindOS connects all Agents to your core knowledge base with zero config. Record profile and project memory once to empower all AI tools.**
 
 **2. Transparent & Controllable — No Black Boxes**
 

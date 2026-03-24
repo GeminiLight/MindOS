@@ -88,6 +88,12 @@ export default async function RootLayout({
             __html: `(function(){if(typeof Node!=='undefined'){var o=Node.prototype.removeChild;Node.prototype.removeChild=function(c){if(c.parentNode!==this){try{return o.call(c.parentNode,c)}catch(e){return c}}return o.call(this,c)};var i=Node.prototype.insertBefore;Node.prototype.insertBefore=function(n,r){if(r&&r.parentNode!==this){try{return i.call(r.parentNode,n,r)}catch(e){return i.call(this,n,null)}}return i.call(this,n,r)}}})();`,
           }}
         />
+        {/* Electron macOS: set data-electron-mac before first paint so sidebar clears traffic lights */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(/electron/i.test(navigator.userAgent)&&/macintosh/i.test(navigator.userAgent)){document.documentElement.setAttribute('data-electron-mac','')}}catch(e){}})();`,
+          }}
+        />
         {/* Apply user appearance settings before first paint, preventing flash */}
         <script
           dangerouslySetInnerHTML={{

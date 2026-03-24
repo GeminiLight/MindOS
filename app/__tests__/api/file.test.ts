@@ -20,6 +20,22 @@ describe('GET /api/file', () => {
     expect(body.error).toBe('missing path');
   });
 
+  it('list_spaces returns top-level spaces without path param', async () => {
+    seedFile('LSpace/note.md', 'x');
+    seedFile('LSpace/README.md', '# L\n\nhello space');
+    invalidateCache();
+    const req = new NextRequest('http://localhost/api/file?op=list_spaces');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.spaces)).toBe(true);
+    const ls = body.spaces as Array<{ path: string; description: string; fileCount: number }>;
+    const found = ls.find((s) => s.path === 'LSpace' || s.path.endsWith('LSpace'));
+    expect(found).toBeTruthy();
+    expect(found?.fileCount).toBeGreaterThanOrEqual(1);
+    expect(found?.description).toContain('hello space');
+  });
+
   it('reads file content (default op=read_file)', async () => {
     seedFile('hello.md', '# Hello World');
     invalidateCache();

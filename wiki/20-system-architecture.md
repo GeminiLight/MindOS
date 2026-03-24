@@ -13,7 +13,7 @@
 ┌─────────────────────┐  ┌────────────────────────┐
 │   app/ (Next.js 16) │  │  mcp/ (MCP Server)     │
 │   ─────────────────  │  │  ────────────────────  │
-│   • 前端 UI 组件     │  │  • 20+ MCP 工具        │
+│   • 前端 UI 组件     │  │  • MCP ↔ App API       │
 │   • API Routes       │  │  • stdio + HTTP 传输   │
 │   • 内置 Agent       │  │  • Bearer Token 认证   │
 │   • 插件渲染器       │  │  • 安全沙箱 & 写保护   │
@@ -42,7 +42,7 @@ mindos/
 │   │   ├── settings.ts         # 配置管理
 │   │   └── renderers/          # 插件注册表
 │   └── data/skills/            # 内置 Skill 上下文
-├── mcp/                        # MCP Server（20+ 工具）
+├── mcp/                        # MCP Server（工具见 mcp/README 表格）
 ├── bin/                        # CLI 入口
 │   ├── cli.js                  # 命令路由 + 入口 (~742 行)
 │   └── lib/                    # 13 个模块
@@ -137,7 +137,7 @@ mindos/
 
 **传输：** stdio (本地 Agent) / Streamable HTTP (远程设备，Bearer Token)
 
-**20+ 工具：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move)
+**工具覆盖：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move) — 完整列表以 `mcp/src/index.ts` 注册为准。
 
 **安全边界：** 路径沙箱 (`MIND_ROOT` 内) + `INSTRUCTION.md` 写保护 + 25,000 字符上限
 

@@ -42,13 +42,26 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Install desktop dependencies only (app/mcp are not bundled)
-      - name: Install desktop dependencies
-        run: cd desktop && npm install
+      # Install all dependencies (app + mcp + desktop)
+      - name: Install dependencies
+        run: |
+          cd app && npm install && cd ..
+          cd mcp && npm install && cd ..
+          cd desktop && npm install
+
+      # Build Next.js standalone (required by prepare-mindos-runtime)
+      - name: Build MindOS (Next.js standalone)
+        run: |
+          node scripts/gen-renderer-index.js
+          cd app && npx next build
 
       # Build Electron (compile TS → JS)
       - name: Build Electron
         run: cd desktop && npm run build
+
+      # Bundle MindOS runtime into desktop resources
+      - name: Prepare bundled runtime
+        run: cd desktop && npm run prepare-mindos-runtime
 
       # Package for the target platform
       - name: Package (${{ matrix.platform }})
@@ -63,6 +76,7 @@ jobs:
           name: mindos-desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             desktop/dist/*.dmg
+            desktop/dist/*.zip
             desktop/dist/*.exe
             desktop/dist/*.AppImage
             desktop/dist/*.deb
@@ -85,6 +99,7 @@ jobs:
           name: ${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
           files: |
             desktop/dist/*.dmg
+            desktop/dist/*.zip
             desktop/dist/*.exe
             desktop/dist/*.AppImage
             desktop/dist/*.deb

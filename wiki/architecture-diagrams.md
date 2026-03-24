@@ -84,7 +84,7 @@ sequenceDiagram
     KB-->>MS: 返回数据
     MS-->>AG: MCP 响应
     
-    Note over MS,KB: 支持 20+ 工具：读取、搜索、写入、管理
+    Note over MS,KB: 工具覆盖：读取、搜索、写入、管理
 ```
 
 ## 组件关系图
@@ -132,7 +132,7 @@ graph TB
     
     subgraph "协议层"
         P1[MCP 协议解析<br/>@modelcontextprotocol/sdk]
-        P2[工具路由<br/>20+ 工具]
+        P2[工具路由<br/>与 App API 对齐]
     end
     
     subgraph "安全层"

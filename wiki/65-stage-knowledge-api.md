@@ -20,7 +20,7 @@
 MindOS 目前有两种对外接口，但都不是为"外部应用集成"设计的：
 
 ```
-1. MCP Server (20+ 工具)
+1. MCP Server（工具与 App API 对齐）
    → 设计目标：Agent 使用（Claude Code, Cursor 等）
    → 传输协议：stdio / Streamable HTTP
    → 认证：Bearer Token（单一 token，全权限）

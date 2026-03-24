@@ -33,12 +33,14 @@
       "defaultHeadingLevel": 2
     }
   },
-  "protocol": {
-    "readMode": "config_and_doc",
-    "priorityBetweenConfigAndDoc": "none",
+  "naming": {
+    "firstLevelDirEmoji": true,
+    "deeperLevelDirEmoji": false,
     "notes": [
-      "CONFIG.json 与 CONFIG.md 需同时读取",
-      "两者是互补关系，不分优先级"
+      "一级目录（根目录子目录）使用 emoji + 名称，如 👤 画像/",
+      "二级及以下目录使用纯文字名称，如 家人/",
+      "目录命名语言由 languagePreference.folderNamingLanguage 决定",
+      "内容文件 emoji 前缀由 filename.emojiPrefixDefault 控制"
     ]
   },
   "uiSchema": {

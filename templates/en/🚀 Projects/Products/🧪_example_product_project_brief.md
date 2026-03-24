@@ -1,20 +1,18 @@
-# 📌 Product Project Brief Example: MindOS Public Launch
+# 📌 Project Brief Example: Personal Blog Relaunch
 
 ## Vision
-- Build the most trusted personal operating system for AI-assisted execution.
+- Build a clean, low-maintenance blog to share learning notes and side project stories.
 
-## Core Promise
-- "From scattered notes to consistent outcomes, every week."
-
-## Target Users
-- Builders, creators, and operators who feel fragmented across tools.
+## Goals
+- Publish at least 2 posts per month.
+- Keep total setup under 4 hours.
 
 ## Key Deliverables
-- Positioning-led landing page
-- 60-second product demo
-- Case-based onboarding template
+- Choose a static site generator (Hugo / Astro / Next.js)
+- Write 3 seed posts from existing notes
+- Set up a simple deploy pipeline
 
-## Success Metrics
-- Activation rate
-- Week-2 retention
-- Demo-to-signup conversion
+## Success Criteria
+- Blog is live and publicly accessible.
+- Writing workflow takes < 30 min per post.
+- At least 1 reader feedback received in the first month.

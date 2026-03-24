@@ -57,7 +57,7 @@ export async function POST() {
     await new Promise(r => setTimeout(r, 1000));
 
     // Step 3: Spawn new MCP server
-    const root = resolve(process.cwd(), '..');
+    const root = process.env.MINDOS_PROJECT_ROOT || resolve(process.cwd(), '..');
     const mcpDir = resolve(root, 'mcp');
 
     if (!existsSync(resolve(mcpDir, 'node_modules'))) {

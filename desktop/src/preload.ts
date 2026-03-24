@@ -13,6 +13,16 @@ function onChannel(channel: string, cb: (...args: unknown[]) => void): CleanupFn
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
+// Mark <html> for macOS-specific CSS (traffic-light safe zone, drag region).
+// The inline script in layout.tsx handles this for most loads; this is a belt-and-suspenders fallback.
+try {
+  if (process.platform === 'darwin') {
+    window.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.setAttribute('data-electron-mac', '');
+    });
+  }
+} catch { /* sandbox may restrict process access */ }
+
 contextBridge.exposeInMainWorld('mindos', {
   // App info
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
