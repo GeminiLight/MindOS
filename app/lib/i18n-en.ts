@@ -702,7 +702,7 @@ export const en = {
     c1: {
       title: 'Inject Your Identity',
       desc: 'Tell all AI agents who you are — preferences, tech stack, communication style — in one shot.',
-      prompt: 'Read my MindOS knowledge base and help me write a self-introduction into Profile.',
+prompt: "Here's my resume, read it and organize my info into MindOS.",
     },
     c2: {
       title: 'Save Information',
@@ -805,7 +805,7 @@ export const en = {
       title: 'Using MindOS with AI Agents',
       intro: 'Once you connect an agent (Claude Code, Cursor, Windsurf, etc.) via MCP, just talk to it naturally. The agent can read and write your knowledge base directly — no special commands needed. Here are the most common scenarios:',
       scenarios: [
-        { emoji: '🪪', title: 'Inject Your Identity', desc: 'Tell all AI agents who you are — preferences, tech stack, communication style — in one shot.', prompt: '"Here is my resume, read it and organize my identity, skills, and preferences into MindOS Profile."' },
+        { emoji: '🪪', title: 'Inject Your Identity', desc: 'Tell all AI agents who you are — preferences, tech stack, communication style — in one shot.', prompt: "\"Here's my resume, read it and organize my info into MindOS.\"" },
         { emoji: '🔄', title: 'Cross-Agent Handoff', desc: 'Brainstorm ideas in GPT, then execute in Claude Code — zero context loss.', prompt: '"Save this conversation to MindOS."\n"Read the plan in MindOS and help me start coding."' },
         { emoji: '📋', title: 'Experience → SOP', desc: 'Turn hard-won debugging sessions into reusable workflows that prevent future mistakes.', prompt: '"Help me distill this conversation into a reusable workflow in MindOS."' },
         { emoji: '🚀', title: 'Project Cold Start', desc: 'Spin up a new project in minutes — your profile and SOPs guide the scaffolding automatically.', prompt: '"Help me start a new project following the Startup SOP in MindOS."' },
