@@ -8,6 +8,7 @@ import {
   createFile as coreCreateFile,
   deleteFile as coreDeleteFile,
   renameFile as coreRenameFile,
+  renameSpaceDirectory as coreRenameSpaceDirectory,
   moveFile as coreMoveFile,
   readLines as coreReadLines,
   insertLines as coreInsertLines,
@@ -247,6 +248,13 @@ export function deleteFile(filePath: string): void {
 /** Renames a file. newName must be a plain filename (no path separators). */
 export function renameFile(oldPath: string, newName: string): string {
   const result = coreRenameFile(getMindRoot(), oldPath, newName);
+  invalidateCache();
+  return result;
+}
+
+/** Renames a Space directory under MIND_ROOT. newName must be a single path segment. */
+export function renameSpace(spacePath: string, newName: string): string {
+  const result = coreRenameSpaceDirectory(getMindRoot(), spacePath, newName);
   invalidateCache();
   return result;
 }

@@ -13,9 +13,13 @@ import {
   updateSection,
   deleteFile,
   renameFile,
+  renameSpace,
   moveFile,
   appendCsvRow,
+  getMindRoot,
+  invalidateCache,
 } from '@/lib/fs';
+import { createSpaceFilesystem } from '@/lib/core/create-space';
 
 function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
@@ -39,7 +43,14 @@ export async function GET(req: NextRequest) {
 }
 
 // Ops that change file tree structure (sidebar needs refresh)
-const TREE_CHANGING_OPS = new Set(['create_file', 'delete_file', 'rename_file', 'move_file']);
+const TREE_CHANGING_OPS = new Set([
+  'create_file',
+  'delete_file',
+  'rename_file',
+  'move_file',
+  'create_space',
+  'rename_space',
+]);
 
 // POST /api/file  body: { op, path, ...params }
 export async function POST(req: NextRequest) {
@@ -135,6 +146,37 @@ export async function POST(req: NextRequest) {
         if (typeof to_path !== 'string' || !to_path) return err('missing to_path');
         const result = moveFile(filePath, to_path);
         resp = NextResponse.json({ ok: true, ...result });
+        break;
+      }
+
+      case 'create_space': {
+        const name = params.name;
+        const description = typeof params.description === 'string' ? params.description : '';
+        const parent_path = typeof params.parent_path === 'string' ? params.parent_path : '';
+        if (typeof name !== 'string' || !name.trim()) {
+          return err('missing or empty name');
+        }
+        try {
+          const { path: spacePath } = createSpaceFilesystem(getMindRoot(), name, description, parent_path);
+          invalidateCache();
+          resp = NextResponse.json({ ok: true, path: spacePath });
+        } catch (e) {
+          const msg = (e as Error).message;
+          const code400 =
+            msg.includes('required') ||
+            msg.includes('must not contain') ||
+            msg.includes('Invalid parent') ||
+            msg.includes('already exists');
+          return err(msg, code400 ? 400 : 500);
+        }
+        break;
+      }
+
+      case 'rename_space': {
+        const { new_name } = params as { new_name: string };
+        if (typeof new_name !== 'string' || !new_name.trim()) return err('missing new_name');
+        const newPath = renameSpace(filePath, new_name.trim());
+        resp = NextResponse.json({ ok: true, newPath });
         break;
       }
 

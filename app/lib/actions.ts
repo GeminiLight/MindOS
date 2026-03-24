@@ -1,6 +1,7 @@
 'use server';
 
-import { createFile, deleteFile, renameFile } from '@/lib/fs';
+import { createFile, deleteFile, renameFile, getMindRoot, invalidateCache } from '@/lib/fs';
+import { createSpaceFilesystem } from '@/lib/core/create-space';
 import { revalidatePath } from 'next/cache';
 
 export async function createFileAction(dirPath: string, fileName: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
@@ -50,34 +51,12 @@ export async function createSpaceAction(
   parentPath: string = ''
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
-    const trimmed = name.trim();
-    if (!trimmed) return { success: false, error: 'Space name is required' };
-    if (trimmed.includes('/') || trimmed.includes('\\')) {
-      return { success: false, error: 'Space name must not contain path separators' };
-    }
-
-    // Sanitize parentPath — reject traversal attempts
-    const cleanParent = parentPath.replace(/\/+$/, '').trim();
-    if (cleanParent.includes('..') || cleanParent.startsWith('/') || cleanParent.includes('\\')) {
-      return { success: false, error: 'Invalid parent path' };
-    }
-
-    // Build full path: parentPath + name
-    const prefix = cleanParent ? cleanParent + '/' : '';
-    const fullPath = `${prefix}${trimmed}`;
-
-    // Strip emoji for clean title in README content
-    const cleanName = trimmed.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || trimmed;
-    const desc = description.trim() || '(Describe the purpose and usage of this space.)';
-    const readmeContent = `# ${cleanName}\n\n${desc}\n\n## 📁 Structure\n\n\`\`\`bash\n${fullPath}/\n├── INSTRUCTION.md\n├── README.md\n└── (your files here)\n\`\`\`\n\n## 💡 Usage\n\n(Add usage guidelines for this space.)\n`;
-
-    // createFile triggers scaffoldIfNewSpace → auto-generates INSTRUCTION.md
-    createFile(`${fullPath}/README.md`, readmeContent);
+    const { path: fullPath } = createSpaceFilesystem(getMindRoot(), name, description, parentPath);
+    invalidateCache();
     revalidatePath('/', 'layout');
     return { success: true, path: fullPath };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to create space';
-    // Make "already exists" error more user-friendly
     if (msg.includes('already exists')) {
       return { success: false, error: 'A space with this name already exists' };
     }
