@@ -309,6 +309,9 @@ export const zh = {
     renameSpace: '重命名空间',
     deleteSpace: '删除空间',
     confirmDeleteSpace: (name: string) => `删除空间「${name}」及其所有文件？此操作不可撤销。`,
+    convertToSpace: '转为空间',
+    deleteFolder: '删除文件夹',
+    confirmDeleteFolder: (name: string) => `删除文件夹「${name}」及其所有内容？此操作不可撤销。`,
   },
   dirView: {
     gridView: '网格视图',
