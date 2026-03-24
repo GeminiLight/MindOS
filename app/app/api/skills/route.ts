@@ -5,7 +5,7 @@ import path from 'path';
 import os from 'os';
 import { readSettings, writeSettings } from '@/lib/settings';
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
+const PROJECT_ROOT = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 
 function getMindRoot(): string {
   const s = readSettings();

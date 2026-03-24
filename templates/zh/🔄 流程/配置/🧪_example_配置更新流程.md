@@ -17,7 +17,7 @@
 1. 新建或更新 Agent 协议文档。
 2. 新建或更新 MCP 清单文档（仅记录流程，不写明文密钥）。
 3. 新建或更新 Skill 清单文档。
-4. 同步 `CONFIG.json` 与 `CONFIG.md`。
+4. 更新 `CONFIG.json`（含 `keySpecs` 和 `naming`）。
 5. 运行 `rg` 清理旧路径与失效引用。
 
 ## 验收标准

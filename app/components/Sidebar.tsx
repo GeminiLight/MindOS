@@ -90,6 +90,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
+      <div className="shrink-0 electron-mac-titlebar-pad" />
       <div className="flex items-center justify-between px-4 py-4 border-b border-border shrink-0">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo id="desktop" />

@@ -11,8 +11,10 @@ function readVersion(): string {
   // 1. Env var set by CLI (most reliable)
   if (process.env.npm_package_version) return process.env.npm_package_version;
 
-  // 2. Try known relative paths from Next.js app directory
+  // 2. Try known relative paths — MINDOS_PROJECT_ROOT is reliable in standalone mode
+  const projRoot = process.env.MINDOS_PROJECT_ROOT;
   const candidates = [
+    ...(projRoot ? [join(projRoot, 'package.json')] : []),
     join(process.cwd(), '..', 'package.json'),    // dev: app/ → root
     join(process.cwd(), 'package.json'),           // if cwd is root
     join(dirname(process.cwd()), 'package.json'),  // standalone edge case

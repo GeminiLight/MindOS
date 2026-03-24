@@ -14,7 +14,7 @@ When entering a knowledge base, load context in this order:
 
 1. Read root `INSTRUCTION.md` (this file)
 2. Read root `README.md` (index and navigation)
-3. Read `CONFIG.json` and `CONFIG.md` together (config values + semantic explanation)
+3. Read `CONFIG.json` (config values + naming semantics)
 4. Route to the target directory
 5. If target directory has `INSTRUCTION.md`, read it first
 6. Then read target `README.md` and target files
@@ -123,7 +123,7 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 - Content files: optional `emoji + name`
 - Directories: follow `languagePreference.folderNamingLanguage`; zh templates default to Chinese naming, en templates default to English naming.
-- System files: `README.md`, `INSTRUCTION.md`, `TODO.md`, `CHANGELOG.md`, `CONFIG.json`, `CONFIG.md`
+- System files: `README.md`, `INSTRUCTION.md`, `TODO.md`, `CHANGELOG.md`, `CONFIG.json`
 
 ### 4.3 Read-Before-Write
 
@@ -172,6 +172,6 @@ Create it only when local rules are reusable and meaningful. Avoid creating them
 
 ## 9. CONFIG Read Protocol
 
-- `CONFIG.json` and `CONFIG.md` must be read together.
-- They are complementary and have no priority relationship.
-- `CONFIG.json` provides structured config values; `CONFIG.md` provides semantic explanation and intent.
+- `CONFIG.json` is the single source of truth for all configuration.
+- Field semantics are embedded in `keySpecs`; directory naming rules in `naming`.
+- No separate `CONFIG.md` is needed.

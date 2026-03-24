@@ -376,7 +376,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           #main-content {
             padding-left: ${lp.panelOpen && lp.panelMaximized ? '100vw' : `${lp.panelOpen ? lp.railWidth + lp.effectivePanelWidth : lp.railWidth}px`} !important;
             padding-right: calc(var(--right-panel-width) + var(--right-agent-detail-width)) !important;
-            padding-top: 0 !important;
+            padding-top: 0;
           }
         }
       `}</style>

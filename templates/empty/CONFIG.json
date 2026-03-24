@@ -33,12 +33,14 @@
       "defaultHeadingLevel": 2
     }
   },
-  "protocol": {
-    "readMode": "config_and_doc",
-    "priorityBetweenConfigAndDoc": "none",
+  "naming": {
+    "firstLevelDirEmoji": true,
+    "deeperLevelDirEmoji": false,
     "notes": [
-      "CONFIG.json and CONFIG.md must be read together",
-      "They are complementary and have no priority relationship"
+      "First-level directories (root children) use emoji + name",
+      "Second-level and deeper directories use plain names",
+      "Directory naming language follows languagePreference.folderNamingLanguage",
+      "Content file emoji prefix follows filename.emojiPrefixDefault"
     ]
   },
   "uiSchema": {

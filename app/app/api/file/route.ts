@@ -18,6 +18,7 @@ import {
   appendCsvRow,
   getMindRoot,
   invalidateCache,
+  listMindSpaces,
 } from '@/lib/fs';
 import { createSpaceFilesystem } from '@/lib/core/create-space';
 
@@ -25,10 +26,19 @@ function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
 }
 
-// GET /api/file?path=foo.md&op=read_file|read_lines
+// GET /api/file?path=foo.md&op=read_file|read_lines | GET ?op=list_spaces (no path)
 export async function GET(req: NextRequest) {
   const filePath = req.nextUrl.searchParams.get('path');
   const op = req.nextUrl.searchParams.get('op') ?? 'read_file';
+
+  if (op === 'list_spaces') {
+    try {
+      return NextResponse.json({ spaces: listMindSpaces() });
+    } catch (e) {
+      return err((e as Error).message, 500);
+    }
+  }
+
   if (!filePath) return err('missing path');
 
   try {

@@ -118,9 +118,20 @@ function LoginForm() {
   );
 }
 
+function LoginFallback() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--amber)]" aria-hidden />
+        <p className="text-sm">Loading…</p>
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<LoginFallback />}>
       <LoginForm />
     </Suspense>
   );

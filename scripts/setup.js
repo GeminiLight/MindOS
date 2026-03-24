@@ -598,7 +598,7 @@ function expandHomePath(p) {
   return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
 }
 
-/** Parse JSONC (JSON with // and /* */ comments) — for VS Code-based editor configs */
+/** Parse JSONC: JSON plus line // comments and slash-star block comments (e.g. VS Code configs). */
 function parseJsonc(text) {
   let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
   stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getProjectRoot } from './project-root';
 
 /**
  * Recursively copy `src` to `dest`, skipping files that already exist in dest.
@@ -29,12 +30,18 @@ export function applyTemplate(template: string, destDir: string): void {
     throw new Error(`Invalid template: ${template}`);
   }
 
-  // templates/ is at the repo root (sibling of app/)
-  const repoRoot = path.resolve(process.cwd(), '..');
-  const templateDir = path.join(repoRoot, 'templates', template);
-
-  if (!fs.existsSync(templateDir)) {
-    throw new Error(`Template "${template}" not found at ${templateDir}`);
+  // templates/ lives at the repo/project root (sibling of app/).
+  // In standalone mode process.cwd() is .next/standalone/ — unreliable for relative paths.
+  // MINDOS_PROJECT_ROOT is set by Desktop ProcessManager and CLI startup.
+  const projectRoot = getProjectRoot();
+  const candidates = [
+    path.join(projectRoot, 'templates', template),
+    path.resolve(process.cwd(), '..', 'templates', template),
+    path.resolve(process.cwd(), 'templates', template),
+  ];
+  const templateDir = candidates.find((d) => fs.existsSync(d));
+  if (!templateDir) {
+    throw new Error(`Template "${template}" not found at ${candidates.join(', ')}`);
   }
 
   if (!fs.existsSync(destDir)) {

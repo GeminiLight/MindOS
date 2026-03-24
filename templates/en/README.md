@@ -9,7 +9,6 @@ my-mind/
 ├── INSTRUCTION.md
 ├── README.md
 ├── CONFIG.json
-├── CONFIG.md
 ├── TODO.md
 ├── CHANGELOG.md
 ├── 👤 Profile/
@@ -22,6 +21,6 @@ my-mind/
 
 ## 💡 Usage
 
-- Bootstrap read order: `INSTRUCTION.md` -> `README.md` -> `CONFIG.json` + `CONFIG.md`
+- Bootstrap read order: `INSTRUCTION.md` -> `README.md` -> `CONFIG.json`
 - Capture first in `📝 Notes/`, then move stable content to domain folders
 - Directories that need regular updates: `👤 Profile/`, `🔗 Connections/`, `🚀 Projects/`

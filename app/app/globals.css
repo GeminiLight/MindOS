@@ -422,3 +422,7 @@ a:focus-visible,
 .wysiwyg-wrapper:focus-within {
   outline: none;
 }
+
+/* macOS Electron: traffic-light safe zone. Actual CSS is injected by Electron
+   main process via webContents.insertCSS(); this is a no-op fallback. */
+.electron-mac-titlebar-pad { display: none; }

@@ -36,9 +36,11 @@ const AGENT_NAME_MAP: Record<string, string> = {
 
 /** Fallback: find local skills directory for offline installs */
 function findLocalSkillsDir(): string | null {
+  const projRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
   const candidates = [
-    path.resolve(process.cwd(), 'data/skills'),   // app/data/skills/
-    path.resolve(process.cwd(), '..', 'skills'),   // project-root/skills/
+    path.resolve(process.cwd(), 'data/skills'),       // app/data/skills/
+    path.join(projRoot, 'skills'),                     // project-root/skills/
+    path.join(projRoot, 'app', 'data', 'skills'),      // standalone fallback
   ];
   for (const dir of candidates) {
     if (fs.existsSync(dir)) return dir;
