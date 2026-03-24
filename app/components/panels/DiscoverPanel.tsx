@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-import { Lightbulb, Blocks, Zap, LayoutTemplate, ChevronRight, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
+import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
 import PanelHeader from './PanelHeader';
+import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/LocaleContext';
 import { useCases } from '@/components/explore/use-cases';
 import { openAskModal } from '@/hooks/useAskModal';
@@ -11,46 +11,6 @@ interface DiscoverPanelProps {
   active: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
-}
-
-/** Navigation entry — clickable row linking to a page or showing coming soon */
-function NavEntry({
-  icon,
-  title,
-  badge,
-  href,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  badge?: React.ReactNode;
-  href?: string;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <span className="flex items-center justify-center w-7 h-7 rounded-md bg-muted shrink-0">{icon}</span>
-      <span className="text-sm font-medium text-foreground flex-1">{title}</span>
-      {badge}
-      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-    </>
-  );
-
-  const className = "flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer";
-
-  if (href) {
-    return <Link href={href} className={className}>{content}</Link>;
-  }
-  return <button onClick={onClick} className={`${className} w-full`}>{content}</button>;
-}
-
-/** Coming soon badge */
-function ComingSoonBadge({ label }: { label: string }) {
-  return (
-    <span className="text-2xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
-      {label}
-    </span>
-  );
 }
 
 /** Compact use case row */
@@ -112,23 +72,23 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Navigation entries */}
         <div className="py-2">
-          <NavEntry
+          <PanelNavRow
             icon={<Lightbulb size={14} className="text-[var(--amber)]" />}
             title={d.useCases}
             badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
             href="/explore"
           />
-          <NavEntry
+          <PanelNavRow
             icon={<Blocks size={14} className="text-muted-foreground" />}
             title={d.pluginMarket}
             badge={<ComingSoonBadge label={d.comingSoon} />}
           />
-          <NavEntry
+          <PanelNavRow
             icon={<Zap size={14} className="text-muted-foreground" />}
             title={d.skillMarket}
             badge={<ComingSoonBadge label={d.comingSoon} />}
           />
-          <NavEntry
+          <PanelNavRow
             icon={<LayoutTemplate size={14} className="text-muted-foreground" />}
             title={d.spaceTemplates}
             badge={<ComingSoonBadge label={d.comingSoon} />}
