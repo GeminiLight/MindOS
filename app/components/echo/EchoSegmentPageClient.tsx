@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { EchoSegment } from '@/lib/echo-segments';
 import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
-import type { Locale } from '@/lib/i18n';
+import type { Locale, Messages } from '@/lib/i18n';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
@@ -51,6 +51,21 @@ const inputClass =
 const cardSectionClass =
   'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6';
 
+function echoSnapshotCopy(segment: EchoSegment, p: Messages['echoPages']): { title: string; body: string } {
+  switch (segment) {
+    case 'about-you':
+      return { title: p.snapshotAboutYouTitle, body: p.snapshotAboutYouBody };
+    case 'continued':
+      return { title: p.snapshotContinuedTitle, body: p.snapshotContinuedBody };
+    case 'daily':
+      return { title: p.snapshotDailyTitle, body: p.snapshotDailyBody };
+    case 'past-you':
+      return { title: p.snapshotPastYouTitle, body: p.snapshotPastYouBody };
+    case 'growth':
+      return { title: p.snapshotGrowthTitle, body: p.snapshotGrowthBody };
+  }
+}
+
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t, locale } = useLocale();
   const p = t.echoPages;
@@ -62,6 +77,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
   const [dailyLine, setDailyLine] = useState('');
   const [growthIntent, setGrowthIntent] = useState('');
+
+  const snapshot = useMemo(() => echoSnapshotCopy(segment, p), [segment, p]);
 
   useEffect(() => {
     try {
@@ -106,8 +123,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         segment,
         segmentTitle: title,
         factsHeading: p.factsHeading,
-        emptyTitle: p.emptyFactsTitle,
-        emptyBody: p.emptyFactsBody,
+        emptyTitle: snapshot.title,
+        emptyBody: snapshot.body,
         continuedDrafts: p.continuedDrafts,
         continuedTodos: p.continuedTodos,
         subEmptyHint: p.subEmptyHint,
@@ -121,8 +138,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       segment,
       title,
       p.factsHeading,
-      p.emptyFactsTitle,
-      p.emptyFactsBody,
+      snapshot,
       p.continuedDrafts,
       p.continuedTodos,
       p.subEmptyHint,
@@ -133,8 +149,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     ],
   );
 
-  const primaryBtnClass =
-    'inline-flex items-center rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const secondaryBtnClass =
     'inline-flex items-center rounded-lg border border-border bg-background px-4 py-2.5 font-sans text-sm font-medium text-foreground transition-colors duration-150 hover:border-[var(--amber)]/35 hover:bg-[var(--amber-dim)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -160,8 +174,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           headingId={factsHeadingId}
           heading={p.factsHeading}
           snapshotBadge={p.snapshotBadge}
-          emptyTitle={p.emptyFactsTitle}
-          emptyBody={p.emptyFactsBody}
+          emptyTitle={snapshot.title}
+          emptyBody={snapshot.body}
           actions={
             segment === 'about-you' ? (
               <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
@@ -198,8 +212,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             placeholder={p.dailyLinePlaceholder}
             className={inputClass}
           />
+          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.dailySavedNote}</p>
           <div className="mt-4">
-            <button type="button" onClick={openDailyAsk} className={primaryBtnClass}>
+            <button type="button" onClick={openDailyAsk} className={secondaryBtnClass}>
               {p.continueAgent}
             </button>
           </div>
@@ -231,11 +246,12 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
       {segment === 'past-you' ? (
         <section className={`${cardSectionClass} mt-6`}>
+          <label className={fieldLabelClass}>{p.pastYouDrawLabel}</label>
           <button
             type="button"
             disabled
             title={p.pastYouDisabledHint}
-            className="inline-flex cursor-not-allowed items-center rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 font-sans text-sm text-muted-foreground opacity-85"
+            className="mt-2 inline-flex cursor-not-allowed items-center rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 font-sans text-sm text-muted-foreground opacity-85"
           >
             {p.pastYouAnother}
           </button>

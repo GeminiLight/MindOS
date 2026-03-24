@@ -170,6 +170,13 @@ cd / && rm -rf /tmp/mindos-smoke-$$
 - 只有打 `v*.*.*` tag 才会触发 `publish-npm` workflow（发布到 npm）
 - `npm run release` 会自动：检查工作区干净 → 跑测试 → bump 版本 → 打 tag → push → 等待 CI
 
+**npm 与 MindOS Desktop 对齐（精简）**
+
+- **MindOS 产品版本** = `@geminilight/mindos` 的 `version` = git **`vX.Y.Z`**（npm 发布主轴）。
+- **Desktop 安装包**另有**壳版本**（Electron）；**内置 MindOS** 须从**同一 `vX.Y.Z`** 构建，勿手拷未 tag 目录。可只发 npm、不必每次发 Desktop；**一旦发 Desktop**，内置应对齐本次要推的 MindOS 版本。
+- **关于 / 诊断**：建议同时展示 **MindOS 版本** 与 **Desktop 壳版本**，避免用户只对不上号。
+- 全文与 checklist：`wiki/specs/spec-desktop-bundled-mindos.md`（「发布与版本」）、发版步骤 `wiki/refs/git-sync-workflow.md`。
+
 ## 文档维护
 
 ### 文档一致性规则
