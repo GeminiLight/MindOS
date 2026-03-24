@@ -140,6 +140,12 @@
 - **注意：** `export const dynamic = 'force-dynamic'` 只对 page/route 有效，对 layout.tsx 无效
 - **规则：** 凡是新增文件写操作的 API route，必须调用 `revalidatePath('/', 'layout')` 来通知 layout 刷新 file tree
 
+### Sidebar 按钮既当“面板开关”又当“内容路由”会导致状态漂移
+- **现象：** 点击 Activity Bar 的 `Agents` 后，左侧面板状态与内容路由不同步，出现按钮高亮但打开了旧 panel，或进入内容页却仍保留右侧详情 dock
+- **原因：** 同一个入口同时承担两种语义（toggle panel + navigate route），并且共享 `activePanel` 状态
+- **解决：** `Agents` 入口统一语义为“内容路由”到 `/agents`，面板逻辑降级为兼容层；高亮与路由联动（`pathname.startsWith('/agents')`）
+- **规则：** 一个导航入口只做一种语义。若迁移过程中保留旧实现，必须显式定义兼容期和退场时间线
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败
