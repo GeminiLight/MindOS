@@ -23,6 +23,7 @@ export {
   createFile,
   deleteFile,
   renameFile,
+  renameSpaceDirectory,
   moveFile,
   getRecentlyModified,
 } from './fs-ops';
@@ -56,3 +57,6 @@ export { findBacklinks } from './backlinks';
 
 // Git
 export { isGitRepo, gitLog, gitShowFile } from './git';
+
+// Mind Space
+export { createSpaceFilesystem } from './create-space';

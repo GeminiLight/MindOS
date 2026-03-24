@@ -1,6 +1,6 @@
 # MindOS MCP Server
 
-Pure HTTP client wrapper that maps 20 MCP tools to the App REST API via `fetch`. Zero business logic — all operations are delegated to the App.
+Pure HTTP client wrapper that maps 22 MCP tools to the App REST API via `fetch`. Zero business logic — all operations are delegated to the App.
 
 ## Architecture
 
@@ -41,7 +41,7 @@ MCP_TRANSPORT=stdio mindos mcp   # stdio mode
 | `MCP_PORT` | `8781` | HTTP listen port (configurable via `mindos onboard`) |
 | `MCP_ENDPOINT` | `/mcp` | HTTP endpoint path |
 
-## MCP Tools (20)
+## MCP Tools (22)
 
 | Tool | App API | Description |
 |------|---------|-------------|
@@ -49,6 +49,8 @@ MCP_TRANSPORT=stdio mindos mcp   # stdio mode
 | `mindos_read_file` | `GET /api/file?path=...` | Read file content (with offset/limit pagination) |
 | `mindos_write_file` | `POST /api/file` op=save_file | Overwrite file content |
 | `mindos_create_file` | `POST /api/file` op=create_file | Create a new .md or .csv file |
+| `mindos_create_space` | `POST /api/file` op=create_space | Create a Mind Space (README + INSTRUCTION scaffold) |
+| `mindos_rename_space` | `POST /api/file` op=rename_space | Rename a Space directory (folder only) |
 | `mindos_delete_file` | `POST /api/file` op=delete_file | Delete a file |
 | `mindos_rename_file` | `POST /api/file` op=rename_file | Rename a file (same directory) |
 | `mindos_move_file` | `POST /api/file` op=move_file | Move a file to a new path |

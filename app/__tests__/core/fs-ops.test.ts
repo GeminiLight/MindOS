@@ -6,6 +6,7 @@ import {
   createFile,
   deleteFile,
   renameFile,
+  renameSpaceDirectory,
 } from '@/lib/core/fs-ops';
 import fs from 'fs';
 import path from 'path';
@@ -114,6 +115,48 @@ describe('fs-ops', () => {
       seedFile(mindRoot, 'a.md', 'a');
       seedFile(mindRoot, 'b.md', 'b');
       expect(() => renameFile(mindRoot, 'a.md', 'b.md')).toThrow('already exists');
+    });
+  });
+
+  describe('renameSpaceDirectory', () => {
+    it('renames a top-level space directory', () => {
+      fs.mkdirSync(path.join(mindRoot, 'SpaceA'), { recursive: true });
+      seedFile(mindRoot, 'SpaceA/README.md', '# A');
+      const newPath = renameSpaceDirectory(mindRoot, 'SpaceA', 'SpaceB');
+      expect(path.normalize(newPath)).toBe(path.normalize('SpaceB'));
+      expect(fs.existsSync(path.join(mindRoot, 'SpaceB', 'README.md'))).toBe(true);
+      expect(fs.existsSync(path.join(mindRoot, 'SpaceA'))).toBe(false);
+    });
+
+    it('renames nested space under parent', () => {
+      fs.mkdirSync(path.join(mindRoot, 'Parent', 'Child'), { recursive: true });
+      seedFile(mindRoot, 'Parent/Child/README.md', '# c');
+      const newPath = renameSpaceDirectory(mindRoot, 'Parent/Child', 'Kid');
+      expect(path.normalize(newPath)).toBe(path.normalize(path.join('Parent', 'Kid')));
+      expect(fs.existsSync(path.join(mindRoot, 'Parent', 'Kid', 'README.md'))).toBe(true);
+    });
+
+    it('throws if path is not a directory', () => {
+      seedFile(mindRoot, 'only-file.md', 'x');
+      expect(() => renameSpaceDirectory(mindRoot, 'only-file.md', 'Dir')).toThrow('Not a directory');
+    });
+
+    it('throws if new_name contains path separators', () => {
+      fs.mkdirSync(path.join(mindRoot, 'S'), { recursive: true });
+      seedFile(mindRoot, 'S/README.md', 'x');
+      expect(() => renameSpaceDirectory(mindRoot, 'S', 'a/b')).toThrow('path separators');
+    });
+
+    it('throws if target directory already exists', () => {
+      fs.mkdirSync(path.join(mindRoot, 'A'), { recursive: true });
+      fs.mkdirSync(path.join(mindRoot, 'B'), { recursive: true });
+      seedFile(mindRoot, 'A/README.md', 'x');
+      seedFile(mindRoot, 'B/README.md', 'y');
+      expect(() => renameSpaceDirectory(mindRoot, 'A', 'B')).toThrow('already exists');
+    });
+
+    it('throws for empty space path', () => {
+      expect(() => renameSpaceDirectory(mindRoot, '', 'X')).toThrow('Space path');
     });
   });
 });
