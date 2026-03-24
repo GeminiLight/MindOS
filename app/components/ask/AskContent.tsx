@@ -12,6 +12,7 @@ import MentionPopover from '@/components/ask/MentionPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
 import FileChip from '@/components/ask/FileChip';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
+import { cn } from '@/lib/utils';
 
 interface AskContentProps {
   /** Controls visibility — 'open' for modal, 'active' for panel */
@@ -414,8 +415,15 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         </form>
       </div>
 
-      {/* Footer hints */}
-      <div className={`${isPanel ? 'px-3 pb-1.5' : 'hidden md:flex px-4 pb-2'} flex items-center gap-${isPanel ? '2' : '3'} text-${isPanel ? '[10px]' : 'xs'} text-muted-foreground/${isPanel ? '40' : '50'} shrink-0`}>
+      {/* Footer hints — use full class strings so Tailwind JIT includes utilities */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center',
+          isPanel
+            ? 'gap-2 px-3 pb-1.5 text-[10px] text-muted-foreground/40'
+            : 'hidden gap-3 px-4 pb-2 text-xs text-muted-foreground/50 md:flex',
+        )}
+      >
         <span><kbd className="font-mono">↵</kbd> {t.ask.send}</span>
         <span><kbd className="font-mono">@</kbd> {t.ask.attachFile}</span>
         {!isPanel && <span><kbd className="font-mono">ESC</kbd> {t.search.close}</span>}

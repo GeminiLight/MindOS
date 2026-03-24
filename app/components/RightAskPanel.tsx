@@ -40,7 +40,7 @@ export default function RightAskPanel({
   return (
     <aside
       className={`
-        hidden md:flex fixed top-0 right-0 h-screen z-30
+        hidden md:flex fixed top-0 right-0 h-screen z-40
         flex-col bg-card border-l border-border
         transition-transform duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
@@ -61,16 +61,19 @@ export default function RightAskPanel({
           </button>
         </div>
       }>
-        <AskContent
-          visible={open}
-          variant="panel"
-          currentFile={open ? currentFile : undefined}
-          initialMessage={initialMessage}
-          onFirstMessage={onFirstMessage}
-          onClose={onClose}
-          askMode={askMode}
-          onModeSwitch={onModeSwitch}
-        />
+        {/* Flex column + min-h-0 so MessageList flex-1 gets a bounded height (fragment children are direct flex items) */}
+        <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+          <AskContent
+            visible={open}
+            variant="panel"
+            currentFile={open ? currentFile : undefined}
+            initialMessage={initialMessage}
+            onFirstMessage={onFirstMessage}
+            onClose={onClose}
+            askMode={askMode}
+            onModeSwitch={onModeSwitch}
+          />
+        </div>
       </ErrorBoundary>
 
       {/* Drag resize handle — LEFT edge */}
