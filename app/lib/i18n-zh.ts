@@ -180,6 +180,8 @@ export const zh = {
       notFoundDetail: '本机未检测到该智能体客户端。请安装后刷新列表。',
       skillsEmptyHint: '请在「MCP 与技能」设置中启用或编辑 Skills。',
       backToList: '返回',
+      closeAgentDetail: '关闭',
+      agentDetailPanelAria: '智能体连接配置',
       agentDetailTransport: '传输方式',
       agentDetailSnippet: '配置片段',
     },
