@@ -8,6 +8,7 @@ import {
   createFile as coreCreateFile,
   deleteFile as coreDeleteFile,
   deleteDirectory as coreDeleteDirectory,
+  convertToSpace as coreConvertToSpace,
   renameFile as coreRenameFile,
   renameSpaceDirectory as coreRenameSpaceDirectory,
   moveFile as coreMoveFile,
@@ -313,6 +314,12 @@ export function renameSpace(spacePath: string, newName: string): string {
 /** Recursively deletes a directory under MIND_ROOT. */
 export function deleteDirectory(dirPath: string): void {
   coreDeleteDirectory(getMindRoot(), dirPath);
+  invalidateCache();
+}
+
+/** Converts a regular folder into a Space by adding INSTRUCTION.md + README.md. */
+export function convertToSpace(dirPath: string): void {
+  coreConvertToSpace(getMindRoot(), dirPath);
   invalidateCache();
 }
 
