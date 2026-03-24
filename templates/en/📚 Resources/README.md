@@ -8,10 +8,10 @@ External resource collections and structured indexes.
 📚 Resources/
 ├── README.md
 ├── INSTRUCTION.md
-├── 🧾 AI Products.csv
-├── 🧾 AI Influencers.csv
-├── 🧾 AI Tools.csv
-└── 🧾 AI Scholars.csv
+├── 🧾 Books.csv
+├── 🧾 People to Follow.csv
+├── 🧾 Tools.csv
+└── 🧾 Learning Resources.csv
 ```
 
 ## Usage

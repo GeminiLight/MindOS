@@ -9,7 +9,6 @@ my-mind/
 ├── INSTRUCTION.md
 ├── README.md
 ├── CONFIG.json
-├── CONFIG.md
 ├── TODO.md
 ├── CHANGELOG.md
 ├── 👤 画像/
@@ -22,6 +21,6 @@ my-mind/
 
 ## 💡 使用说明
 
-- 启动时优先读取：`INSTRUCTION.md` -> `README.md` -> `CONFIG.json` + `CONFIG.md`
+- 启动时优先读取：`INSTRUCTION.md` -> `README.md` -> `CONFIG.json`
 - 新内容先记在 `📝 笔记/`，稳定后归档到对应目录
 - 需要持续更新的目录：`👤 画像/`、`🔗 关系/`、`🚀 项目/`

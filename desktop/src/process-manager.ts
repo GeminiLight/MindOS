@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
 import { readFileSync, existsSync } from 'fs';
+import { ensureBundledMcpNodeModules } from './ensure-mcp-native-deps';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -16,6 +17,8 @@ export interface ProcessManagerOptions {
   mcpPort: number;
   mindRoot: string;
   authToken?: string;
+  /** Same as ~/.mindos/config.json webPassword — Web UI login + Next middleware */
+  webPassword?: string;
   verbose?: boolean;
   /** Enriched env with correct PATH for spawned processes */
   env?: Record<string, string>;
@@ -38,6 +41,8 @@ export class ProcessManager extends EventEmitter {
   async start(): Promise<void> {
     this.stopped = false;
     this.emit('status-change', 'starting');
+
+    ensureBundledMcpNodeModules(this.opts.projectRoot, this.opts.nodePath, this.opts.env || {});
 
     // 1. Spawn MCP server
     this.mcpProcess = this.spawnMcp();
@@ -152,7 +157,7 @@ export class ProcessManager extends EventEmitter {
   }
 
   private spawnWeb(): ChildProcess {
-    const { projectRoot, webPort, mindRoot } = this.opts;
+    const { projectRoot, webPort, mindRoot, authToken, webPassword } = this.opts;
     const appDir = path.join(projectRoot, 'app');
 
     if (!existsSync(appDir)) {
@@ -166,7 +171,10 @@ export class ProcessManager extends EventEmitter {
       MINDOS_WEB_PORT: String(webPort),
       MIND_ROOT: mindRoot,
       NODE_ENV: 'production',
+      MINDOS_PROJECT_ROOT: projectRoot,
     };
+    if (authToken) env.AUTH_TOKEN = authToken;
+    if (webPassword) env.WEB_PASSWORD = webPassword;
     /** Next binds to OS hostname by default; health checks use 127.0.0.1 */
     if (!env.HOSTNAME) env.HOSTNAME = '127.0.0.1';
 
@@ -232,8 +240,25 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
+  /** Forward child stdout/stderr so `MINDOS_OPEN_DEVTOOLS=1` terminal actually shows crash output. */
+  private pipeChildOutput(proc: ChildProcess, label: string): void {
+    const tag = `[MindOS:${label}]`;
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        console.log(tag, line);
+      }
+    });
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        console.error(tag, line);
+      }
+    });
+  }
+
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
+    this.pipeChildOutput(proc, which);
     const handler = (code: number | null, signal: string | null) => {
+      console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
       if (this.stopped) return;
 
       this.crashCount[which]++;

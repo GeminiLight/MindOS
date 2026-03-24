@@ -32,19 +32,24 @@ import {
   localBrowseNeedsSetupWizard,
   shouldSeedWebSetupPendingForLocal,
 } from './mindos-desktop-config';
+import { ensureMindosCliShim, refreshMindosCliAndNotify } from './install-cli-shim';
+import { verifyMindOsWebListening } from './mindos-web-health';
+import { resolvePreferUnpacked } from './resolve-packaged-asset';
+import { registerMindosConnectSchemePrivileged, registerMindosConnectProtocol } from './mindos-connect-protocol';
+
+registerMindosConnectSchemePrivileged();
 
 // ── Constants ──
-const APP_ROOT = app.getAppPath();
 const CONFIG_DIR = path.join(app.getPath('home'), '.mindos');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const PID_PATH = path.join(CONFIG_DIR, 'mindos.pid');
 const DEFAULT_WEB_PORT = 3456;
 const DEFAULT_MCP_PORT = 8781;
 
-// ── Paths ──
-const SPLASH_HTML = path.join(APP_ROOT, 'src', 'splash.html');
-const SPLASH_PRELOAD = path.join(APP_ROOT, 'dist-electron', 'preload', 'splash-preload.js');
-const MAIN_PRELOAD = path.join(APP_ROOT, 'dist-electron', 'preload', 'preload.js');
+// ── Paths (prefer app.asar.unpacked on macOS — see electron-builder asarUnpack) ──
+const SPLASH_HTML = resolvePreferUnpacked('src', 'splash.html');
+const SPLASH_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'splash-preload.js');
+const MAIN_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'preload.js');
 
 // ── State ──
 let splashWindow: BrowserWindow | null = null;
@@ -156,6 +161,7 @@ function createSplash(): BrowserWindow {
       preload: SPLASH_PRELOAD,
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
     },
     show: false,
   });
@@ -197,6 +203,8 @@ function createMainWindow(): BrowserWindow {
     title: 'MindOS',
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
+    /** Match app light `globals.css` --background (#f8f6f1); reduces white flash before first paint. */
+    backgroundColor: '#f8f6f1',
     webPreferences: {
       preload: MAIN_PRELOAD,
       nodeIntegration: false,
@@ -329,12 +337,19 @@ async function startLocalMode(): Promise<string | null> {
 
   const npxPath = getNpxPath(nodePath);
 
-  // 3. CLI conflict check
+  // 3. CLI conflict check — mindos.pid can be stale; must not loadURL before /api/health works
   const conflict = checkCliConflict();
-  if (conflict.running) {
-    // Just connect to existing — best UX
-    splashStatus({ status: 'connecting' });
-    return `http://127.0.0.1:${conflict.webPort}`;
+  if (conflict.running && conflict.webPort != null) {
+    const healthy = await verifyMindOsWebListening(conflict.webPort);
+    if (healthy) {
+      splashStatus({ status: 'connecting' });
+      currentWebPort = conflict.webPort;
+      currentMcpPort = conflict.mcpPort;
+      return `http://127.0.0.1:${conflict.webPort}`;
+    }
+    console.warn(
+      '[MindOS] mindos.pid suggests a running CLI but /api/health did not succeed — starting a local server from the bundled runtime.',
+    );
   }
 
   // 4. Ensure app is built (first run or after update — npm package has no .next)
@@ -394,6 +409,7 @@ async function startLocalMode(): Promise<string | null> {
       getEffectiveMindRootFromConfig(config) ||
       path.join(app.getPath('home'), 'MindOS', 'mind'),
     authToken: config.authToken,
+    webPassword: typeof config.webPassword === 'string' ? config.webPassword : undefined,
     verbose: false,
     env: getEnrichedEnv(nodePath),
   });
@@ -678,6 +694,7 @@ const trayCallbacks: TrayCallbacks = {
   },
   onRestartServices: handleRestartServices,
   onSwitchServer: handleSwitchServer,
+  onRefreshCliShim: () => { refreshMindosCliAndNotify(mainWindow); },
 };
 
 // ── IPC Handlers ──
@@ -832,12 +849,43 @@ async function bootApp(): Promise<void> {
 
   mainWindow.webContents.once('did-fail-load', (_event, code, desc, failedUrl) => {
     console.error('[MindOS] main window did-fail-load', code, desc, failedUrl);
+    closeSplash();
+    const zh = navigator_lang() === 'zh';
+    void dialog.showMessageBox(mainWindow!, {
+      type: 'error',
+      title: zh ? '页面加载失败' : 'Page failed to load',
+      message: zh ? `无法加载：${failedUrl}` : `Could not load: ${failedUrl}`,
+      detail: `${desc} (code ${code})\n\n${zh ? '若使用本地模式，请在终端执行 MINDOS_OPEN_DEVTOOLS=1 启动应用以打开开发者工具，或在浏览器访问同一地址对比。' : 'Tip: launch with MINDOS_OPEN_DEVTOOLS=1 to open DevTools, or open the same URL in a browser.'}`,
+    });
+    mainWindow?.show();
   });
 
   // Wait for content to load, then show main + hide splash
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow?.show();
     closeSplash();
+    if (process.env.MINDOS_OPEN_DEVTOOLS === '1') {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    }
+    // macOS: inject CSS to avoid traffic-light overlap — guaranteed to work regardless of
+    // framework hydration, preload sandbox, or content-security-policy.
+    if (process.platform === 'darwin') {
+      mainWindow?.webContents.insertCSS(`
+        html { --electron-mac-titlebar-h: 28px; }
+        /* Activity Bar (rail) + Side Panel: shift down together so separators align */
+        [role="toolbar"][aria-label="Navigation"],
+        [role="toolbar"][aria-label="Navigation"] ~ aside[role="region"] {
+          top: var(--electron-mac-titlebar-h) !important;
+          height: calc(100vh - var(--electron-mac-titlebar-h)) !important;
+        }
+        /* Old sidebar layout fallback */
+        .electron-mac-titlebar-pad {
+          display: block !important;
+          height: var(--electron-mac-titlebar-h);
+          -webkit-app-region: drag;
+        }
+      `);
+    }
   });
 
   // Fallback: if did-finish-load doesn't fire in 10s, show anyway
@@ -852,7 +900,11 @@ async function bootApp(): Promise<void> {
 // ── App Lifecycle ──
 
 app.whenReady().then(async () => {
+  registerMindosConnectProtocol();
+
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
+
+  ensureMindosCliShim();
 
   if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();

@@ -21,7 +21,10 @@ export function getEffectiveMindRootFromConfig(j: MindosDesktopConfigShape): str
 
 /** True → Desktop should load `/setup?force=1` for local server base URL. */
 export function localBrowseNeedsSetupWizard(j: MindosDesktopConfigShape): boolean {
-  return j.setupPending === true;
+  if (j.setupPending === true) return true;
+  // Fresh install: no mindRoot/sopRoot configured → show setup wizard so user picks a path
+  if (!getEffectiveMindRootFromConfig(j)) return true;
+  return false;
 }
 
 /** When saving desktopMode=local, whether to set `setupPending: true` on first merge. */
@@ -30,6 +33,8 @@ export function shouldSeedWebSetupPendingForLocal(
   existing: MindosDesktopConfigShape,
 ): boolean {
   if (mode !== 'local') return false;
-  // Do not infer from empty mindRoot — that forced /setup even after user cleared setupPending.
-  return existing.setupPending === true;
+  if (existing.setupPending === true) return true;
+  // Fresh install: no mindRoot/sopRoot configured yet → needs setup wizard
+  if (!getEffectiveMindRootFromConfig(existing)) return true;
+  return false;
 }

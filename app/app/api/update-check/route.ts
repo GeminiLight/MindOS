@@ -7,9 +7,17 @@ import { resolve } from 'path';
 // Read version from package.json (not process.env.npm_package_version — unavailable in daemon mode)
 let current = '0.0.0';
 try {
-  const pkgPath = resolve(process.cwd(), '..', 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-  current = pkg.version;
+  const projRoot = process.env.MINDOS_PROJECT_ROOT;
+  const candidates = [
+    ...(projRoot ? [resolve(projRoot, 'package.json')] : []),
+    resolve(process.cwd(), '..', 'package.json'),
+  ];
+  for (const p of candidates) {
+    try {
+      const pkg = JSON.parse(readFileSync(p, 'utf-8'));
+      if (pkg.version) { current = pkg.version; break; }
+    } catch { /* try next */ }
+  }
 } catch {}
 
 // npm registry sources: prefer China mirror, fallback to official

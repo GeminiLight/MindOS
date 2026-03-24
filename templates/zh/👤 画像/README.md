@@ -8,13 +8,13 @@
 👤 画像/
 ├── README.md
 ├── INSTRUCTION.md
-├── 👤 Identity.md
-├── ⚙️ Preferences.md
-└── 🎯 Focus.md
+├── 👤 身份.md
+├── ⚙️ 偏好.md
+└── 🎯 聚焦.md
 ```
 
 ## 💡 使用说明
 
-- 建议先填写：`👤 Identity.md`、`⚙️ Preferences.md`、`🎯 Focus.md`。
+- 建议先填写：`👤 身份.md`、`⚙️ 偏好.md`、`🎯 聚焦.md`。
 - 本目录只放长期稳定信息，不放临时草稿。
 - 执行与同步规则以 `INSTRUCTION.md` 为准。

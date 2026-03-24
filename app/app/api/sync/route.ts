@@ -37,9 +37,9 @@ function isGitRepo(dir: string) {
   return existsSync(join(dir, '.git'));
 }
 
-/** Resolve path to bin/cli.js — prefer env var set by CLI launcher, fall back to cwd. */
+/** Resolve path to bin/cli.js — prefer env var set by CLI launcher, fall back to project root. */
 function getCliPath() {
-  return process.env.MINDOS_CLI_PATH || resolve(process.cwd(), '..', 'bin', 'cli' + '.js');
+  return process.env.MINDOS_CLI_PATH || resolve(process.env.MINDOS_PROJECT_ROOT || process.cwd(), '..', 'bin', 'cli' + '.js');
 }
 
 /** Run CLI command via execFile — avoids shell injection by passing args as array */

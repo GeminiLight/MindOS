@@ -17,6 +17,8 @@ export interface TrayCallbacks {
   onOpenMindRoot: () => void;
   onRestartServices: () => Promise<void>;
   onSwitchServer: () => Promise<void>;
+  /** Re-install ~/.mindos/bin/mindos and show PATH hints */
+  onRefreshCliShim?: () => void;
 }
 
 let callbacks: TrayCallbacks | null = null;
@@ -115,6 +117,12 @@ export function updateTrayMenu(
       label: zh ? '打开知识库目录' : 'Open Knowledge Base',
       click: () => callbacks?.onOpenMindRoot(),
     },
+    ...(callbacks?.onRefreshCliShim
+      ? [{
+          label: zh ? '安装/刷新终端命令 mindos…' : 'Install / refresh mindos CLI…',
+          click: () => callbacks?.onRefreshCliShim?.(),
+        } as const]
+      : []),
     { type: 'separator' },
   ];
 

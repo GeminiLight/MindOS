@@ -50,7 +50,7 @@ description: >
 - 若不可用，直接读取根 `INSTRUCTION.md` 与根 `README.md`。
 
 2. 动态发现当前结构。
-- 使用 `mindos_list_files` 与按需 `mindos_search_notes`。
+- 使用 `mindos_list_spaces`（顶层分区与 README 摘要）、`mindos_list_files` 与按需 `mindos_search_notes`。
 - 不假设固定一级目录名。
 
 3. 加载目标路径附近的局部规则。
@@ -94,6 +94,7 @@ description: >
 
 - `mindos_bootstrap`：加载启动上下文。
 - `mindos_list_files`：查看文件树。
+- `mindos_list_spaces`：列出顶层心智空间及 README 摘要（比整棵树更轻）。
 - `mindos_search_notes`：按关键词/范围/类型/日期定位文件。**搜索时，第一次就应并行发起多个关键词搜索**——同义词、缩写、中英文变体、更宽/更窄的表述。单一关键词很脆弱，一开始就撒网能避免多轮空搜。
 - `mindos_get_recent`：查看近期活动。
 - `mindos_get_backlinks`：重命名/移动/删除前评估影响。
