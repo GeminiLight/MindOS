@@ -5,6 +5,7 @@ import type { EchoSegment } from '@/lib/echo-segments';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
+import EchoSegmentNav from './EchoSegmentNav';
 import {
   EchoCollapsibleInsight,
   EchoContinuedGroups,
@@ -48,7 +49,8 @@ const fieldLabelClass =
   'block font-sans text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
 const inputClass =
   'mt-2 w-full min-h-[5rem] resize-y rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const cardSectionClass = 'rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6';
+const cardSectionClass =
+  'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6';
 
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t } = useLocale();
@@ -108,14 +110,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         breadcrumbNav={p.breadcrumbNav}
         parentHref="/echo/about-you"
         parent={p.parent}
-        currentTitle={title}
         heroKicker={p.heroKicker}
         pageTitle={title}
         lead={lead}
         titleId={pageTitleId}
       />
 
-      <div className="mt-8 space-y-6">
+      <EchoSegmentNav activeSegment={segment} />
+
+      <div className="mt-6 space-y-6 sm:mt-8">
         <EchoFactSnapshot
           headingId={factsHeadingId}
           heading={p.factsHeading}
