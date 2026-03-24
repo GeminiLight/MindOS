@@ -13,6 +13,11 @@ import PluginsPanel from './panels/PluginsPanel';
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import RightAskPanel from './RightAskPanel';
+import RightAgentDetailPanel, {
+  RIGHT_AGENT_DETAIL_DEFAULT_WIDTH,
+  RIGHT_AGENT_DETAIL_MIN_WIDTH,
+  RIGHT_AGENT_DETAIL_MAX_WIDTH,
+} from './RightAgentDetailPanel';
 import AskFab from './AskFab';
 import SyncPopover from './panels/SyncPopover';
 import SearchModal from './SearchModal';
@@ -47,6 +52,20 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   // ── Sync popover ──
   const [syncPopoverOpen, setSyncPopoverOpen] = useState(false);
   const [syncAnchorRect, setSyncAnchorRect] = useState<DOMRect | null>(null);
+
+  // ── Agent MCP detail (right dock, does not replace left Agents list) ──
+  const [agentDetailKey, setAgentDetailKey] = useState<string | null>(null);
+  const [agentDetailWidth, setAgentDetailWidth] = useState(() => {
+    if (typeof window === 'undefined') return RIGHT_AGENT_DETAIL_DEFAULT_WIDTH;
+    try {
+      const stored = localStorage.getItem('right-agent-detail-panel-width');
+      if (stored) {
+        const w = parseInt(stored, 10);
+        if (w >= RIGHT_AGENT_DETAIL_MIN_WIDTH && w <= RIGHT_AGENT_DETAIL_MAX_WIDTH) return w;
+      }
+    } catch { /* ignore */ }
+    return RIGHT_AGENT_DETAIL_DEFAULT_WIDTH;
+  });
 
   // ── Mobile state ──
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -90,7 +109,21 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   }, [ap.askOpenSource]);
 
   // Close mobile drawer on route change
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMobileOpen(false));
+    return () => cancelAnimationFrame(id);
+  }, [pathname]);
+
+  const handleAgentDetailWidthCommit = useCallback((w: number) => {
+    setAgentDetailWidth(w);
+    try {
+      localStorage.setItem('right-agent-detail-panel-width', String(w));
+    } catch { /* ignore */ }
+  }, []);
+
+  const closeAgentDetailPanel = useCallback(() => setAgentDetailKey(null), []);
+
+  const agentDockOpen = agentDetailKey !== null && lp.activePanel === 'agents';
 
   // Refresh file tree periodically
   useEffect(() => {
@@ -112,6 +145,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (lp.panelMaximized) { lp.handlePanelMaximize(); return; }
+        if (agentDockOpen) { setAgentDetailKey(null); return; }
         if (ap.askPanelOpen) { ap.closeAskPanel(); return; }
         if (ap.desktopAskPopupOpen) { ap.closeDesktopAskPopup(); return; }
       }
@@ -138,7 +172,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [lp.panelMaximized, ap.askPanelOpen, ap.desktopAskPopupOpen, ap.toggleAskPanel, lp]);
+  }, [agentDockOpen, lp, ap]);
 
   // ── Settings helpers ──
   const openSyncSettings = useCallback(() => {
@@ -215,7 +249,13 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           <PluginsPanel active={lp.activePanel === 'plugins'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'agents' ? '' : 'hidden'}`}>
-          <AgentsPanel active={lp.activePanel === 'agents'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
+          <AgentsPanel
+            active={lp.activePanel === 'agents'}
+            maximized={lp.panelMaximized}
+            onMaximize={lp.handlePanelMaximize}
+            selectedAgentKey={agentDockOpen ? agentDetailKey : null}
+            onOpenAgentDetail={setAgentDetailKey}
+          />
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
           <DiscoverPanel active={lp.activePanel === 'discover'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
@@ -234,6 +274,16 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onWidthCommit={ap.handleAskWidthCommit}
         askMode={ap.askMode}
         onModeSwitch={ap.handleAskModeSwitch}
+      />
+
+      <RightAgentDetailPanel
+        open={agentDockOpen}
+        agentKey={agentDetailKey}
+        onClose={closeAgentDetailPanel}
+        rightOffset={ap.askPanelOpen ? ap.askPanelWidth : 0}
+        width={agentDetailWidth}
+        onWidthChange={setAgentDetailWidth}
+        onWidthCommit={handleAgentDetailWidthCommit}
       />
 
       <AskModal
@@ -308,10 +358,13 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
       <style>{`
         @media (min-width: 768px) {
-          :root { --right-panel-width: ${ap.askPanelOpen ? ap.askPanelWidth : 0}px; }
+          :root {
+            --right-panel-width: ${ap.askPanelOpen ? ap.askPanelWidth : 0}px;
+            --right-agent-detail-width: ${agentDockOpen ? agentDetailWidth : 0}px;
+          }
           #main-content {
             padding-left: ${lp.panelOpen && lp.panelMaximized ? '100vw' : `${lp.panelOpen ? lp.railWidth + lp.effectivePanelWidth : lp.railWidth}px`} !important;
-            padding-right: var(--right-panel-width) !important;
+            padding-right: calc(var(--right-panel-width) + var(--right-agent-detail-width)) !important;
             padding-top: 0 !important;
           }
         }

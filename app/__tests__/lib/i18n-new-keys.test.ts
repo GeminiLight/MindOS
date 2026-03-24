@@ -90,6 +90,8 @@ describe('i18n agents panel hub', () => {
     'notFoundDetail',
     'skillsEmptyHint',
     'backToList',
+    'closeAgentDetail',
+    'agentDetailPanelAria',
     'agentDetailTransport',
     'agentDetailSnippet',
   ] as const;

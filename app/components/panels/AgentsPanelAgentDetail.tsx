@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronLeft, Loader2, CheckCircle2, AlertCircle, Copy, Check, Monitor, Globe } from 'lucide-react';
+import { ChevronLeft, X, Loader2, CheckCircle2, AlertCircle, Copy, Check, Monitor, Globe } from 'lucide-react';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { AgentInfo, McpStatus } from '../settings/types';
+import type { AgentsPanelAgentDetailStatus } from './agents-panel-resolve-status';
 
-export type AgentsPanelAgentDetailStatus = 'connected' | 'detected' | 'notFound';
+export type { AgentsPanelAgentDetailStatus };
 
 export interface AgentsPanelAgentDetailCopy {
   connected: string;
@@ -19,6 +20,8 @@ export interface AgentsPanelAgentDetailCopy {
   configPath: string;
   notFoundDetail: string;
   backToList: string;
+  /** Close button (dock header) — aria-label */
+  closeDetail?: string;
   agentDetailTransport: string;
   agentDetailSnippet: string;
 }
@@ -30,6 +33,7 @@ export default function AgentsPanelAgentDetail({
   onBack,
   onInstallAgent,
   copy,
+  headerVariant = 'inline',
 }: {
   agent: AgentInfo;
   agentStatus: AgentsPanelAgentDetailStatus;
@@ -37,6 +41,8 @@ export default function AgentsPanelAgentDetail({
   onBack: () => void;
   onInstallAgent: (key: string) => Promise<boolean>;
   copy: AgentsPanelAgentDetailCopy;
+  /** `dock`: right-side sheet title + X. `inline`: back chevron (legacy sidebar drill). */
+  headerVariant?: 'inline' | 'dock';
 }) {
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -73,21 +79,38 @@ export default function AgentsPanelAgentDetail({
     agentStatus === 'connected' ? 'bg-emerald-500' : agentStatus === 'detected' ? 'bg-amber-500' : 'bg-zinc-400';
 
   return (
-    <div className="flex flex-col min-h-0">
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground rounded-md px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-        >
-          <ChevronLeft size={16} />
-          {copy.backToList}
-        </button>
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-        <span className="text-sm font-medium text-foreground truncate">{agent.name}</span>
-      </div>
+    <div className="flex flex-col h-full min-h-0">
+      {headerVariant === 'dock' ? (
+        <header className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3 bg-card">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+            <h2 className="text-sm font-semibold text-foreground truncate font-display">{agent.name}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+            aria-label={copy.closeDetail ?? 'Close'}
+          >
+            <X size={16} />
+          </button>
+        </header>
+      ) : (
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-sm shrink-0">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground rounded-md px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+          >
+            <ChevronLeft size={16} />
+            {copy.backToList}
+          </button>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+          <span className="text-sm font-medium text-foreground truncate">{agent.name}</span>
+        </div>
+      )}
 
-      <div className="px-3 py-4 space-y-4 flex-1">
+      <div className="px-4 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
         {agentStatus === 'detected' && (
           <div className="flex flex-wrap items-center gap-2">
             <button
