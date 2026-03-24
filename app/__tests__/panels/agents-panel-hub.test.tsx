@@ -40,21 +40,15 @@ vi.mock('@/lib/LocaleContext', () => ({
   useLocale: () => ({ locale: 'en' as const, setLocale: () => {}, t: messages.en }),
 }));
 
-vi.mock('next/link', () => ({
-  default: function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
-    return <a href={href}>{children}</a>;
-  },
-}));
-
 describe('AgentsPanel hub layout', () => {
-  it('renders Discover-style nav rows, roster label, and agent name', () => {
+  it('renders three hub nav rows (Overview, MCP, Skills), roster label, and agent name', () => {
     const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
     const a = messages.en.panels.agents;
     expect(html).toContain(a.navOverview);
-    expect(html).toContain(a.navMcp.replace(/&/g, '&amp;'));
-    expect(html).toContain(a.navUsage.replace(/&/g, '&amp;'));
-    expect(html).toContain(a.navInsights);
+    expect(html).toContain(a.navMcp);
+    expect(html).toContain(a.navSkills);
     expect(html).toContain(a.rosterLabel);
     expect(html).toContain('Test Agent');
+    expect(html).not.toContain('/help');
   });
 });
