@@ -128,7 +128,7 @@ export default function McpProvider({ children }: { children: ReactNode }) {
     if (!agent) return false;
 
     try {
-      const res = await apiFetch<{ results: Array<{ key: string; ok: boolean; error?: string }> }>('/api/mcp/install', {
+      const res = await apiFetch<{ results: Array<{ agent?: string; status?: string; ok?: boolean; error?: string }> }>('/api/mcp/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,7 +141,8 @@ export default function McpProvider({ children }: { children: ReactNode }) {
         }),
       });
 
-      const ok = res.results?.[0]?.ok ?? false;
+      const first = res.results?.[0];
+      const ok = first?.ok === true || first?.status === 'ok';
       if (ok) {
         // Refresh to pick up newly installed agent
         await fetchAll();

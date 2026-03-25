@@ -178,3 +178,5 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `qwen-code` | `qwen-code` | ❌ | ✅ |
 | `trae-cn` | `trae-cn` | ❌ | ✅ |
 | `roo` | `roo` | ❌ | ✅ |
+
+> 全局维护规则见：`wiki/refs/agent-config-registry.md`

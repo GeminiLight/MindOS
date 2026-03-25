@@ -133,6 +133,15 @@ describe('POST /api/mcp/install-skill — agent filtering', () => {
     expect(cmd).toContain('-a universal');
   });
 
+  it('treats vscode as universal in skill install', async () => {
+    const { POST } = await importRoute();
+    await POST(makeReq({ skill: 'mindos', agents: ['vscode'] }));
+
+    const cmd = execSyncMock.mock.calls[0][0] as string;
+    expect(cmd).toContain('-a universal');
+    expect(cmd).not.toContain('-a vscode');
+  });
+
   it('falls back to -a universal for empty agents array', async () => {
     const { POST } = await importRoute();
     await POST(makeReq({ skill: 'mindos', agents: [] }));
@@ -251,23 +260,24 @@ describe('POST /api/mcp/install-skill — command format', () => {
 /* ── AGENT_NAME_MAP completeness ─────────────────────────────────── */
 
 describe('AGENT_NAME_MAP completeness', () => {
-  it('every non-universal MCP agent key has a mapping or is in UNIVERSAL_AGENTS', async () => {
-    // Import MCP_AGENTS from the source of truth
+  it('every MCP agent key follows SKILL_AGENT_REGISTRY mode', async () => {
+    // Import source-of-truth registries
     const { MCP_AGENTS } = await import('../../lib/mcp-agents');
+    const { SKILL_AGENT_REGISTRY } = await import('../../lib/mcp-agents');
     const { POST } = await importRoute();
 
-    // We can't directly access AGENT_NAME_MAP, but we can verify behavior:
-    // Every non-universal agent should produce -a flags (not be silently dropped)
-    const nonUniversalKeys = Object.keys(MCP_AGENTS).filter(
-      k => !['amp', 'cline', 'codex', 'cursor', 'gemini-cli', 'github-copilot', 'kimi-cli', 'opencode', 'warp'].includes(k)
-    );
-
-    for (const key of nonUniversalKeys) {
+    for (const key of Object.keys(MCP_AGENTS)) {
       execSyncMock.mockClear();
       await POST(makeReq({ skill: 'mindos', agents: [key] }));
       const cmd = execSyncMock.mock.calls[0]?.[0] as string;
-      // Should have -a <something>, not fall through to -a universal
-      expect(cmd, `Agent '${key}' should produce an -a flag`).toContain(`-a ${key}`);
+      const reg = SKILL_AGENT_REGISTRY[key];
+      if (!reg || reg.mode === 'additional') {
+        expect(cmd, `Agent '${key}' should produce an explicit -a flag`).toContain(`-a ${key}`);
+      } else if (reg.mode === 'universal') {
+        expect(cmd, `Agent '${key}' should use universal fallback`).toContain('-a universal');
+      } else {
+        expect(cmd, `Unsupported agent '${key}' should not produce explicit -a flag`).toContain('-a universal');
+      }
     }
   });
 });
