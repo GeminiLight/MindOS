@@ -4,6 +4,7 @@ import {
   buildMcpRiskQueue,
   createBulkSkillTogglePlan,
   filterAgentsForMcpWorkspace,
+  filterSkillsForAgentDetail,
   filterSkillsForWorkspace,
   resolveMatrixAgents,
   summarizeMcpBulkReconnectResults,
@@ -62,6 +63,23 @@ describe('filterSkillsForWorkspace', () => {
       capability: 'all',
     });
     expect(filtered).toHaveLength(3);
+  });
+});
+
+describe('filterSkillsForAgentDetail', () => {
+  it('filters by query and source on normal path', () => {
+    const filtered = filterSkillsForAgentDetail(skills, { query: 'deploy', source: 'builtin' });
+    expect(filtered.map((s) => s.name)).toEqual(['deploy-ci']);
+  });
+
+  it('returns all skills on empty query and all source (boundary path)', () => {
+    const filtered = filterSkillsForAgentDetail(skills, { query: '', source: 'all' });
+    expect(filtered).toHaveLength(skills.length);
+  });
+
+  it('returns empty list for unmatched query (error path)', () => {
+    const filtered = filterSkillsForAgentDetail(skills, { query: 'not-exist', source: 'all' });
+    expect(filtered).toEqual([]);
   });
 });
 

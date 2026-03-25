@@ -8,6 +8,7 @@ export type AgentStatusFilter = 'all' | 'connected' | 'detected' | 'notFound';
 export type AgentTransportFilter = 'all' | 'stdio' | 'http' | 'other';
 export type SkillWorkspaceStatusFilter = 'all' | 'enabled' | 'disabled' | 'attention';
 export type SkillCapabilityFilter = SkillCapability | 'all';
+export type AgentDetailSkillSourceFilter = 'all' | 'builtin' | 'user';
 
 export interface RiskItem {
   id: string;
@@ -205,4 +206,17 @@ export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult
     succeeded: results.length - failed,
     failed,
   };
+}
+
+export function filterSkillsForAgentDetail(
+  skills: SkillInfo[],
+  filters: { query: string; source: AgentDetailSkillSourceFilter },
+): SkillInfo[] {
+  const q = filters.query.trim().toLowerCase();
+  return skills.filter((skill) => {
+    if (filters.source !== 'all' && skill.source !== filters.source) return false;
+    if (!q) return true;
+    const haystack = `${skill.name} ${skill.description} ${skill.path}`.toLowerCase();
+    return haystack.includes(q);
+  });
 }
