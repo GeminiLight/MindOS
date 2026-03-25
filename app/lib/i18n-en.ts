@@ -122,6 +122,7 @@ export const en = {
     clearAll: 'Clear all',
     confirmClear: 'Confirm clear?',
     noSessions: 'No saved sessions.',
+    draftingHint: 'AI is still running — you can draft the next step now.',
   },
   panels: {
     agents: {
@@ -138,6 +139,7 @@ export const en = {
       noAgents: 'No agents detected.',
       autoRefresh: 'Auto-refresh every 30s',
       connect: 'Connect',
+      openDashboard: 'Dashboard',
       installing: 'Installing...',
       install: (name: string) => `Install ${name}`,
       // Snippet section

@@ -78,6 +78,7 @@
 - [x] **I16：Agents 面板 Hub 导航** — 顶部 Discover 同款大行导航（Overview / MCP & Skills / Skills / Usage & help / Agent insights 即将推出）+ 分隔线下列表；智能体行可展开查看路径、stdio|http、复制配置。[spec](./specs/spec-agents-panel-hub-nav.md)
 - [x] **I18：Agents Content-First Dashboard（P1）** — Sidebar 点击 Agents 进入 `/agents` 内容页；新增 Overview/MCP/Skills 三段视图与 `/agents/[agentKey]` 详情页；ActivityBar 的 Agents 按钮改为内容导航并保留旧右侧 detail 兼容期；新增 agents content i18n 与测试。[spec](./specs/spec-agents-content-first-dashboard.md)
 - [x] **I19：Agents Dashboard UX/UI Polish（P1.5）** — `/agents` 导航补齐 tab 语义（tablist/tab/tabpanel）；MCP 增加 Connection Graph（light）+ 健康表联动；Skills 增加搜索、来源过滤、按需兼容矩阵；保持 Content-first 路由与可访问性一致。[spec](./specs/spec-agents-content-dashboard-ux-polish.md)
+- [x] **Ask 输入不中断（执行中可草拟）** — 修复 Agent 执行期间输入框被禁用：允许边执行边输入，提交仍串行；新增“可先输入下一步”提示与 jsdom 回归测试。测试：`app/__tests__/ask/ask-content-input-during-run.test.tsx`
 
 ### 🟡 中优先
 
