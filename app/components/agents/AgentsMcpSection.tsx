@@ -38,10 +38,32 @@ export default function AgentsMcpSection({
 }) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>('all');
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const filteredAgents = useMemo(
     () => filterAgentsForMcpTable(mcp.agents, query, statusFilter),
     [mcp.agents, query, statusFilter],
   );
+
+  async function handleTestConnection(agentKey: string) {
+    setBusyAction(`test:${agentKey}`);
+    try {
+      await mcp.refresh();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleReconnect(agent: typeof mcp.agents[number]) {
+    setBusyAction(`reconnect:${agent.key}`);
+    try {
+      const scope = agent.scope === 'project' ? 'project' : 'global';
+      const transport = agent.transport === 'http' ? 'http' : 'stdio';
+      await mcp.installAgent(agent.key, { scope, transport });
+      await mcp.refresh();
+    } finally {
+      setBusyAction(null);
+    }
+  }
 
   return (
     <section role="tabpanel" id="agents-panel-mcp" aria-labelledby="agents-tab-mcp" className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -83,7 +105,7 @@ export default function AgentsMcpSection({
             className="w-full h-9 rounded-md border border-border bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </label>
-        <div className="flex items-center gap-1 rounded-md border border-border p-1 bg-background">
+        <div role="group" aria-label={copy.table.status} className="flex items-center gap-1 rounded-md border border-border p-1 bg-background">
           <StatusFilterButton active={statusFilter === 'all'} label={copy.filters.all} onClick={() => setStatusFilter('all')} />
           <StatusFilterButton active={statusFilter === 'connected'} label={copy.filters.connected} onClick={() => setStatusFilter('connected')} />
           <StatusFilterButton active={statusFilter === 'detected'} label={copy.filters.detected} onClick={() => setStatusFilter('detected')} />
@@ -118,10 +140,20 @@ export default function AgentsMcpSection({
                     >
                       {copyState === agent.key ? copy.actions.copied : copy.actions.copySnippet}
                     </button>
-                    <button type="button" className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <button
+                      type="button"
+                      onClick={() => void handleTestConnection(agent.key)}
+                      disabled={!agent.installed || busyAction !== null}
+                      className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       {copy.actions.testConnection}
                     </button>
-                    <button type="button" className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <button
+                      type="button"
+                      onClick={() => void handleReconnect(agent)}
+                      disabled={busyAction !== null}
+                      className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       {copy.actions.reconnect}
                     </button>
                   </div>
@@ -155,6 +187,7 @@ function StatusFilterButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`px-2.5 h-7 rounded text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active ? 'bg-[var(--amber-dim)] text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
       }`}
