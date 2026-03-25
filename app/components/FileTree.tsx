@@ -541,11 +541,18 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
     );
   }
 
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData('text/mindos-path', node.path);
+    e.dataTransfer.effectAllowed = 'copy';
+  }, [node.path]);
+
   return (
     <div className="relative group/file">
       <button
         onClick={handleClick}
         onDoubleClick={startRename}
+        draggable
+        onDragStart={handleDragStart}
         data-filepath={node.path}
         className={`
           w-full flex items-center gap-1.5 px-2 py-1 rounded text-left
