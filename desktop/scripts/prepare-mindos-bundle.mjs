@@ -2,7 +2,7 @@
  * Shared logic for packaging MindOS `app/` into Desktop `mindos-runtime`.
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import path from 'path';
 
 /**
@@ -44,6 +44,46 @@ export function copyAppForBundledRuntime(sourceAppDir, destAppDir) {
   rmSync(destAppDir, { recursive: true, force: true });
   mkdirSync(destAppDir, { recursive: true });
   copyFiltered(sourceAppDir, destAppDir, '');
+  fixTurbopackHashedExternals(destAppDir);
+}
+
+/**
+ * Turbopack appends a content hash to serverExternalPackages names
+ * (e.g. `@mariozechner/pi-agent-core-805d1afb58d9a138`).
+ * standalone/node_modules only has the original name. Create symlinks so
+ * the hashed require resolves to the real package.
+ */
+function fixTurbopackHashedExternals(destAppDir) {
+  const chunksDir = path.join(destAppDir, '.next', 'standalone', '.next', 'server', 'chunks');
+  const nmDir = path.join(destAppDir, '.next', 'standalone', 'node_modules');
+  if (!existsSync(chunksDir) || !existsSync(nmDir)) return;
+
+  const hashPattern = /"(@[^"\/]+\/[^"\/]+-[a-f0-9]{16,})"/g;
+  for (const name of readdirSync(chunksDir)) {
+    if (!name.endsWith('.js')) continue;
+    const content = readFileSync(path.join(chunksDir, name), 'utf-8');
+    let m;
+    while ((m = hashPattern.exec(content)) !== null) {
+      const hashed = m[1]; // e.g. @mariozechner/pi-agent-core-805d1afb58d9a138
+      const lastDash = hashed.lastIndexOf('-');
+      const original = hashed.slice(0, lastDash); // @mariozechner/pi-agent-core
+      const scope = original.split('/')[0]; // @mariozechner
+      const hashedPkgName = hashed.split('/')[1]; // pi-agent-core-805d1afb58d9a138
+      const originalPkgName = original.split('/')[1]; // pi-agent-core
+
+      const originalDir = path.join(nmDir, scope, originalPkgName);
+      const hashedDir = path.join(nmDir, scope, hashedPkgName);
+
+      if (existsSync(originalDir) && !existsSync(hashedDir)) {
+        try {
+          symlinkSync(originalPkgName, hashedDir);
+          console.log(`[prepare-mindos-bundle] Symlink: ${hashed} → ${original}`);
+        } catch (e) {
+          console.warn(`[prepare-mindos-bundle] Failed to symlink ${hashed}:`, e.message);
+        }
+      }
+    }
+  }
 }
 
 /**

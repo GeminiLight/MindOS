@@ -88,6 +88,13 @@ if (process.env.SKIP_MCP_NPM_CI === '1') {
     console.log('[prepare-mindos-runtime] mcp/node_modules already present — skipping npm ci');
   }
 }
+// Remove .bin/ symlinks that become dangling across platforms (macOS xattr warnings).
+// Desktop calls tsx/esbuild by full path, not via .bin/ shortcuts.
+const destMcpBin = path.join(destMcp, 'node_modules', '.bin');
+if (existsSync(destMcpBin)) {
+  rmSync(destMcpBin, { recursive: true, force: true });
+}
+
 // Stamp the platform so Desktop can detect cross-platform mismatch at runtime
 writeFileSync(
   path.join(destMcp, '.mindos-npm-ci-platform'),
