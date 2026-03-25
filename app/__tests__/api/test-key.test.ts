@@ -78,6 +78,9 @@ describe('POST /api/settings/test-key', () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response('{}', { status: 200 }),
     );
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('{}', { status: 200 }),
+    );
 
     const res = await POST(makeReq({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-5.4' }));
     const body = await res.json();
@@ -88,9 +91,13 @@ describe('POST /api/settings/test-key', () => {
     const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('https://api.openai.com/v1/chat/completions');
     expect(opts.headers['Authorization']).toBe('Bearer sk-test');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('uses custom baseUrl for openai', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('{}', { status: 200 }),
+    );
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response('{}', { status: 200 }),
     );
@@ -104,6 +111,21 @@ describe('POST /api/settings/test-key', () => {
 
     const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('https://custom.api.com/v1/chat/completions');
+  });
+
+  it('returns incompatibility error when tool-call check fails for openai', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('{}', { status: 200 }),
+    );
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'tools is not supported' } }), { status: 400 }),
+    );
+
+    const res = await POST(makeReq({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-5.4' }));
+    const body = await res.json();
+
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('incompatible with agent tool calls');
   });
 
   // ─── Error classification ────────────────────────────────────
