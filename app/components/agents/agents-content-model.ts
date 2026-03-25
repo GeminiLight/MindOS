@@ -5,6 +5,8 @@ export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
 export type SkillSourceFilter = 'all' | 'builtin' | 'user';
 export type AgentStatusFilter = 'all' | 'connected' | 'detected' | 'notFound';
+export type SkillWorkspaceStatusFilter = 'all' | 'enabled' | 'disabled' | 'attention';
+export type SkillCapabilityFilter = SkillCapability | 'all';
 
 export interface RiskItem {
   id: string;
@@ -78,6 +80,65 @@ export function filterSkills(skills: SkillInfo[], query: string, source: SkillSo
     const haystack = `${skill.name} ${skill.description}`.toLowerCase();
     return haystack.includes(q);
   });
+}
+
+export function buildSkillAttentionSet(skills: SkillInfo[]): Set<string> {
+  return new Set(
+    skills
+      .filter((skill) => (!skill.enabled && skill.source === 'user') || skill.description.trim().length === 0)
+      .map((skill) => skill.name),
+  );
+}
+
+export function filterSkillsForWorkspace(
+  skills: SkillInfo[],
+  filters: {
+    query: string;
+    source: SkillSourceFilter;
+    status: SkillWorkspaceStatusFilter;
+    capability: SkillCapabilityFilter;
+  },
+): SkillInfo[] {
+  const attention = buildSkillAttentionSet(skills);
+  const byQueryAndSource = filterSkills(skills, filters.query, filters.source);
+  return byQueryAndSource.filter((skill) => {
+    if (filters.status === 'enabled' && !skill.enabled) return false;
+    if (filters.status === 'disabled' && skill.enabled) return false;
+    if (filters.status === 'attention' && !attention.has(skill.name)) return false;
+    if (filters.capability !== 'all' && capabilityForSkill(skill) !== filters.capability) return false;
+    return true;
+  });
+}
+
+export function resolveMatrixAgents(agents: AgentInfo[], focusKey: string): AgentInfo[] {
+  if (focusKey === 'all') return agents;
+  const focused = agents.find((agent) => agent.key === focusKey);
+  return focused ? [focused] : [];
+}
+
+export function createBulkSkillTogglePlan(skills: SkillInfo[], targetEnabled: boolean): string[] {
+  return skills.filter((skill) => skill.enabled !== targetEnabled).map((skill) => skill.name);
+}
+
+export interface BulkSkillToggleResult {
+  skillName: string;
+  ok: boolean;
+  reason?: string;
+}
+
+export function summarizeBulkSkillToggleResults(results: BulkSkillToggleResult[]): {
+  total: number;
+  succeeded: number;
+  failed: number;
+  failedSkills: string[];
+} {
+  const failedSkills = results.filter((item) => !item.ok).map((item) => item.skillName);
+  return {
+    total: results.length,
+    succeeded: results.length - failedSkills.length,
+    failed: failedSkills.length,
+    failedSkills,
+  };
 }
 
 export function filterAgentsByStatus(agents: AgentInfo[], status: AgentStatusFilter): AgentInfo[] {
