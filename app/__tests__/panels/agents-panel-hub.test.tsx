@@ -37,7 +37,7 @@ vi.mock('@/hooks/useMcpData', () => ({
     skills: [],
     loading: false,
     refresh: async () => {},
-    toggleSkill: async () => {},
+    toggleSkill: async () => true,
     installAgent: async () => true,
   }),
 }));
@@ -57,6 +57,7 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain('href="/agents"');
     expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=skills"');
+    expect(html).toContain('href="/agents/test-agent"');
     expect(html).toContain('Test Agent');
     expect(html).not.toContain('/help');
   });

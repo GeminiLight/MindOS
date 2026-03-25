@@ -273,7 +273,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
             maximized={lp.panelMaximized}
             onMaximize={lp.handlePanelMaximize}
             selectedAgentKey={agentDockOpen ? agentDetailKey : null}
-            onOpenAgentDetail={setAgentDetailKey}
           />
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
