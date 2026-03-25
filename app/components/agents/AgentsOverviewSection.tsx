@@ -22,6 +22,10 @@ export default function AgentsOverviewSection({
     successRate7d: string;
     topSkills: string;
     failedAgents: string;
+    nextAction: string;
+    nextActionHint: string;
+    riskLevelError: string;
+    riskLevelWarn: string;
     na: string;
   };
   buckets: AgentBuckets;
@@ -48,7 +52,18 @@ export default function AgentsOverviewSection({
             {riskQueue.map((risk) => (
               <li key={risk.id} className="flex items-start gap-2 text-sm">
                 <AlertTriangle size={14} className={risk.severity === 'error' ? 'text-destructive mt-0.5' : 'text-[var(--amber)] mt-0.5'} />
-                <span className="text-foreground">{risk.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground">{risk.title}</span>
+                  <span
+                    className={`text-2xs px-1.5 py-0.5 rounded ${
+                      risk.severity === 'error'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                    }`}
+                  >
+                    {risk.severity === 'error' ? copy.riskLevelError : copy.riskLevelWarn}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
@@ -62,6 +77,9 @@ export default function AgentsOverviewSection({
           <InfoLine label={topSkillsLabel || copy.topSkills} value={topSkillsValue} />
           <InfoLine label={failedAgentsLabel || copy.failedAgents} value={failedAgentsValue} />
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          <span className="text-foreground">{copy.nextAction}:</span> {copy.nextActionHint}
+        </p>
       </section>
     </div>
   );

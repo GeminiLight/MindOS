@@ -69,6 +69,13 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const snippet = generateSnippet(agent, mcp.status, currentTransport);
   const nativeInstalledSkills = agent.installedSkillNames ?? [];
   const configuredMcpServers = agent.configuredMcpServers ?? [];
+  const healthStrip = [
+    { label: a.detail.healthConnected, value: agent.present && agent.installed ? a.detail.yes : a.detail.no, tone: agent.present && agent.installed ? 'ok' : 'warn' as const },
+    { label: a.detail.healthInstalled, value: agent.installed ? a.detail.yes : a.detail.no, tone: agent.installed ? 'ok' : 'warn' as const },
+    { label: a.detail.healthRuntimeSignals, value: agent.runtimeConversationSignal || agent.runtimeUsageSignal ? a.detail.yes : a.detail.no, tone: agent.runtimeConversationSignal || agent.runtimeUsageSignal ? 'ok' : 'warn' as const },
+    { label: a.detail.healthConfiguredServers, value: String(configuredMcpServers.length), tone: configuredMcpServers.length > 0 ? 'ok' : 'warn' as const },
+    { label: a.detail.healthInstalledSkills, value: String(nativeInstalledSkills.length), tone: nativeInstalledSkills.length > 0 ? 'ok' : 'warn' as const },
+  ];
 
   useEffect(() => {
     setTargetScope(currentScope);
@@ -154,6 +161,17 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{agent.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{a.detailSubtitle}</p>
       </div>
+      <section className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <h2 className="text-sm font-medium text-foreground">{a.detail.healthStripTitle}</h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          {healthStrip.map((item) => (
+            <div key={item.label} className="rounded-md border border-border bg-background px-3 py-2">
+              <p className="text-2xs text-muted-foreground mb-1">{item.label}</p>
+              <p className={`text-sm font-medium ${item.tone === 'ok' ? 'text-success' : 'text-[var(--amber)]'}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-medium text-foreground mb-2">{a.detail.identity}</h2>

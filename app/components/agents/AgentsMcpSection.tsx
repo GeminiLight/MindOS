@@ -30,6 +30,10 @@ export default function AgentsMcpSection({
     searchPlaceholder: string;
     emptyState: string;
     resultCount: (n: number) => string;
+    filteredSummaryTitle: string;
+    filteredConnected: (n: number) => string;
+    filteredDetected: (n: number) => string;
+    filteredNotFound: (n: number) => string;
     configVisibilityTitle: string;
     hiddenRootDetected: (n: number, total: number) => string;
     runtimeSignalDetected: (n: number, total: number) => string;
@@ -84,6 +88,14 @@ export default function AgentsMcpSection({
         notFoundCount: buckets.notFound.length,
       }),
     [mcp.status?.running, buckets.detected.length, buckets.notFound.length],
+  );
+  const filteredSummary = useMemo(
+    () => ({
+      connected: filteredAgents.filter((agent) => agent.present && agent.installed).length,
+      detected: filteredAgents.filter((agent) => agent.present && !agent.installed).length,
+      notFound: filteredAgents.filter((agent) => !agent.present).length,
+    }),
+    [filteredAgents],
   );
   const hiddenRootDetectedCount = useMemo(
     () => mcp.agents.filter((agent) => !!agent.hiddenRootPresent).length,
@@ -195,6 +207,14 @@ export default function AgentsMcpSection({
             <StatusFilterButton active={transportFilter === 'stdio'} label={copy.transportFilters.stdio} onClick={() => setTransportFilter('stdio')} />
             <StatusFilterButton active={transportFilter === 'http'} label={copy.transportFilters.http} onClick={() => setTransportFilter('http')} />
             <StatusFilterButton active={transportFilter === 'other'} label={copy.transportFilters.other} onClick={() => setTransportFilter('other')} />
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <p className="text-xs font-medium text-muted-foreground mb-2">{copy.filteredSummaryTitle}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-muted-foreground mb-2">
+              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredConnected(filteredSummary.connected)}</span>
+              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredDetected(filteredSummary.detected)}</span>
+              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredNotFound(filteredSummary.notFound)}</span>
+            </div>
           </div>
           <div className="rounded-md border border-border bg-background p-3">
             <p className="text-xs font-medium text-muted-foreground mb-2">{copy.configVisibilityTitle}</p>
