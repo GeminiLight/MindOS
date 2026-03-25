@@ -78,3 +78,14 @@ export type {
   ContentChangeSummary,
   ContentChangeSource,
 } from './content-changes';
+
+// Agent audit log
+export {
+  appendAgentAuditEvent,
+  listAgentAuditEvents,
+  parseAgentAuditJsonLines,
+} from './agent-audit-log';
+export type {
+  AgentAuditEvent,
+  AgentAuditInput,
+} from './agent-audit-log';

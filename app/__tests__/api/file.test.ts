@@ -257,6 +257,34 @@ describe('POST /api/file', () => {
     expect(content).toContain('appended');
   });
 
+  it('append_to_file transparently migrates legacy .agent-log.json writes into .mindos/agent-audit-log.json', async () => {
+    invalidateCache();
+    const line = JSON.stringify({
+      ts: '2026-03-25T12:00:00.000Z',
+      tool: 'mindos_search_notes',
+      params: { query: 'agent' },
+      result: 'ok',
+      message: '1 result',
+    }) + '\n';
+
+    const res = await POST(post({
+      op: 'append_to_file',
+      path: '.agent-log.json',
+      content: line,
+    }));
+    expect(res.status).toBe(200);
+
+    const newLogPath = path.join(root(), '.mindos', 'agent-audit-log.json');
+    expect(fs.existsSync(newLogPath)).toBe(true);
+    const json = JSON.parse(fs.readFileSync(newLogPath, 'utf-8')) as {
+      events: Array<{ tool: string; op: string }>;
+    };
+    expect(json.events.length).toBeGreaterThan(0);
+    expect(json.events[0].tool).toBe('mindos_search_notes');
+    expect(json.events[0].op).toBe('append');
+    expect(fs.existsSync(path.join(root(), '.agent-log.json'))).toBe(false);
+  });
+
   it('create_file creates a new file', async () => {
     invalidateCache();
     const res = await POST(post({

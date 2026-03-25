@@ -29,7 +29,7 @@ MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户
 | 能力 | 触发文件 | 功能 |
 |------|---------|------|
 | CSV Views | 任意 `.csv`（排除 TODO） | Table/Gallery/Board 视图；作为 MindOS 内建能力，不在插件面板管理 |
-| Agent Inspector | `*.agent-log.json` | Agent 工具调用日志可视化；作为 MindOS 内建能力，不在插件面板管理 |
+| Agent Inspector | `.mindos/agent-audit-log.json`（兼容旧 `.agent-log.json`） | Agent 工具调用日志可视化；作为 MindOS 内建能力，不在插件面板管理 |
 | Config Panel | `CONFIG.json` | 配置编辑面板；作为 MindOS 内建能力，不在插件面板管理 |
 
 ## 注册机制

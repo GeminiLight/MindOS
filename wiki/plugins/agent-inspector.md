@@ -8,19 +8,40 @@
 |------|---|
 | ID | `agent-inspector` |
 | 图标 | 🔍 |
-| Core | No |
-| 入口文件 | `.agent-log.json` |
-| 匹配规则 | 文件名以 `.agent-log.json` 结尾 |
+| Core | Yes |
+| 入口文件 | `.mindos/agent-audit-log.json` |
+| 匹配规则 | 主匹配 `.mindos/agent-audit-log.json`，兼容旧 `.agent-log.json` |
 
 ## 文件格式
 
-**JSON Lines**（每行一个完整 JSON 对象），非标准 JSON 数组：
+**当前格式：标准 JSON 文件**
 
-```jsonl
-{"ts":"2025-01-15T10:30:00Z","tool":"mindos_write_file","params":{"path":"Profile/Identity.md","content":"..."},"result":"ok","message":"Written 245 bytes"}
-{"ts":"2025-01-15T10:31:00Z","tool":"mindos_read_file","params":{"path":"TODO.md"},"result":"ok","message":"Read 1024 bytes"}
-{"ts":"2025-01-15T10:32:00Z","tool":"mindos_search","params":{"query":"meeting notes"},"result":"ok","message":"Found 3 results"}
+```json
+{
+  "version": 1,
+  "events": [
+    {
+      "id": "abc123",
+      "ts": "2025-01-15T10:30:00Z",
+      "tool": "mindos_write_file",
+      "params": { "path": "Profile/Identity.md", "content": "..." },
+      "result": "ok",
+      "message": "Written 245 bytes",
+      "op": "append"
+    }
+  ],
+  "legacy": {
+    "mdImportedCount": 0,
+    "jsonlImportedCount": 0,
+    "lastImportedAt": null
+  }
+}
 ```
+
+**兼容迁移：**
+- 旧 `Agent-Audit.md`（```agent-op fenced blocks）会自动导入并删除旧文件
+- 旧 `.agent-log.json`（JSON Lines）会自动导入并删除旧文件
+- 可手动执行：`node scripts/migrate-agent-audit-log.js --mind-root <path>`
 
 ### 字段说明
 
