@@ -39,6 +39,11 @@
 - **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒
 - **解决：** 升级为主程序能力：统一写入 `.mindos/change-log.json`，提供 `/api/changes`（summary/list/mark_seen）、全局提醒条与 `/changes` 下钻视图；Diff 插件仅作兼容，不再是主入口
 
+### Ask 对话执行中输入被禁用，无法提前草拟下一步
+- **现象：** Agent 正在执行时，输入框不可编辑；用户只能等待执行结束后再输入下一步
+- **原因：** `AskContent` 在 `isLoading` 时给 input/textarea 加了 `disabled`，把“发送中”与“不可输入”错误耦合
+- **解决：** 执行中仍允许输入；仅阻止并发 submit，不阻断草拟。并在 footer 提示“可先输入下一步”，降低等待焦虑并提升连续操作体验
+
 ## CLI
 
 ### npm 全局安装缺 node_modules

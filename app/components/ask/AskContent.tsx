@@ -600,9 +600,8 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               onChange={e => handleInputChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={t.ask.placeholder}
-              disabled={isLoading}
               rows={1}
-              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none"
             />
           ) : (
             <input
@@ -613,8 +612,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               onChange={e => handleInputChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={t.ask.placeholder}
-              disabled={isLoading}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50 min-w-0"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
             />
           )}
 
@@ -655,6 +653,11 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         {!isPanel && (
           <span suppressHydrationWarning>
             <kbd className="font-mono">ESC</kbd> {t.search.close}
+          </span>
+        )}
+        {isLoading && input.trim() && (
+          <span className={isPanel ? 'text-[10px] text-[var(--amber)]/80' : 'text-xs text-[var(--amber)]/80'}>
+            {t.ask.draftingHint}
           </span>
         )}
       </div>
