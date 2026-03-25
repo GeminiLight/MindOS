@@ -26,16 +26,6 @@ export const MCP_AGENTS = {
     presenceCli: 'claude',
     presenceDirs: ['~/.claude/'],
   },
-  'claude-desktop': {
-    name: 'Claude Desktop',
-    project: null,
-    global: process.platform === 'darwin'
-      ? '~/Library/Application Support/Claude/claude_desktop_config.json'
-      : '~/.config/Claude/claude_desktop_config.json',
-    key: 'mcpServers',
-    preferredTransport: 'http',
-    presenceDirs: ['~/Library/Application Support/Claude/', '~/.config/Claude/'],
-  },
   'cursor': {
     name: 'Cursor',
     project: '.cursor/mcp.json',
@@ -190,6 +180,32 @@ export const MCP_AGENTS = {
       '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
     ],
   },
+};
+
+/**
+ * Skill-install registry keyed by MCP agent key.
+ * Keep in sync with app/lib/mcp-agents.ts.
+ */
+export const SKILL_AGENT_REGISTRY = {
+  'claude-code': { mode: 'additional', skillAgentName: 'claude-code' },
+  'cursor': { mode: 'universal' },
+  'windsurf': { mode: 'additional', skillAgentName: 'windsurf' },
+  'cline': { mode: 'universal' },
+  'trae': { mode: 'additional', skillAgentName: 'trae' },
+  'gemini-cli': { mode: 'universal' },
+  'openclaw': { mode: 'additional', skillAgentName: 'openclaw' },
+  'codebuddy': { mode: 'additional', skillAgentName: 'codebuddy' },
+  'iflow-cli': { mode: 'additional', skillAgentName: 'iflow-cli' },
+  'kimi-cli': { mode: 'universal' },
+  'opencode': { mode: 'universal' },
+  'pi': { mode: 'additional', skillAgentName: 'pi' },
+  'augment': { mode: 'additional', skillAgentName: 'augment' },
+  'qwen-code': { mode: 'additional', skillAgentName: 'qwen-code' },
+  'qoder': { mode: 'additional', skillAgentName: 'qoder' },
+  'trae-cn': { mode: 'additional', skillAgentName: 'trae-cn' },
+  'roo': { mode: 'additional', skillAgentName: 'roo' },
+  'vscode': { mode: 'universal' },
+  'codex': { mode: 'universal' },
 };
 
 export function detectAgentPresence(agentKey) {

@@ -15,27 +15,39 @@ const UNIVERSAL_AGENTS = new Set([
 
 const SKILL_UNSUPPORTED = new Set<string>([]);
 
-const AGENT_NAME_MAP: Record<string, string> = {
-  'claude-code': 'claude-code',
-  'windsurf': 'windsurf',
-  'trae': 'trae',
-  'openclaw': 'openclaw',
-  'codebuddy': 'codebuddy',
-  'iflow-cli': 'iflow-cli',
-  'pi': 'pi',
-  'augment': 'augment',
-  'qwen-code': 'qwen-code',
-  'qoder': 'qoder',
-  'trae-cn': 'trae-cn',
-  'roo': 'roo',
+const SKILL_AGENT_REGISTRY: Record<string, { mode: 'universal' | 'additional' | 'unsupported'; skillAgentName?: string }> = {
+  'claude-code': { mode: 'additional', skillAgentName: 'claude-code' },
+  'cursor': { mode: 'universal' },
+  'windsurf': { mode: 'additional', skillAgentName: 'windsurf' },
+  'cline': { mode: 'universal' },
+  'trae': { mode: 'additional', skillAgentName: 'trae' },
+  'gemini-cli': { mode: 'universal' },
+  'openclaw': { mode: 'additional', skillAgentName: 'openclaw' },
+  'codebuddy': { mode: 'additional', skillAgentName: 'codebuddy' },
+  'iflow-cli': { mode: 'additional', skillAgentName: 'iflow-cli' },
+  'kimi-cli': { mode: 'universal' },
+  'opencode': { mode: 'universal' },
+  'pi': { mode: 'additional', skillAgentName: 'pi' },
+  'augment': { mode: 'additional', skillAgentName: 'augment' },
+  'qwen-code': { mode: 'additional', skillAgentName: 'qwen-code' },
+  'qoder': { mode: 'additional', skillAgentName: 'qoder' },
+  'trae-cn': { mode: 'additional', skillAgentName: 'trae-cn' },
+  'roo': { mode: 'additional', skillAgentName: 'roo' },
+  'vscode': { mode: 'universal' },
+  'codex': { mode: 'universal' },
 };
 
 /* ── Replicated logic from scripts/setup.js ──────────────────────── */
 
 function filterAgents(selectedAgents: string[]): string[] {
-  return selectedAgents
-    .filter(key => !UNIVERSAL_AGENTS.has(key) && !SKILL_UNSUPPORTED.has(key))
-    .map(key => AGENT_NAME_MAP[key] || key);
+  return selectedAgents.flatMap((key) => {
+    if (SKILL_UNSUPPORTED.has(key)) return [];
+    if (UNIVERSAL_AGENTS.has(key)) return [];
+    const reg = SKILL_AGENT_REGISTRY[key];
+    if (!reg) return [key];
+    if (reg.mode === 'unsupported' || reg.mode === 'universal') return [];
+    return [reg.skillAgentName || key];
+  });
 }
 
 function buildAgentFlags(additionalAgents: string[]): string {
@@ -203,6 +215,11 @@ describe('CLI skill install — end-to-end scenarios', () => {
   it('S9b: includes qoder in additional-agent flags', () => {
     const cmd = simulate('en', ['qoder', 'cursor']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a qoder -g -y');
+  });
+
+  it('S9c: vscode should use universal fallback (no explicit -a vscode)', () => {
+    const cmd = simulate('en', ['vscode']);
+    expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a universal -g -y');
   });
 
   it('S10: kimi-cli + opencode are universal, should be filtered', () => {
