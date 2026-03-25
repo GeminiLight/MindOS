@@ -276,6 +276,10 @@ Join our WeChat group for early access, feedback, and AI workflow discussions:
 <a href="https://github.com/USTChandsomeboy"><img src="https://github.com/USTChandsomeboy.png" width="60" style="border-radius:50%" alt="USTChandsomeboy" /></a>
 <a href="https://github.com/ppsmk388"><img src="https://github.com/ppsmk388.png" width="60" style="border-radius:50%" alt="ppsmk388" /></a>
 
+### 🙏 Acknowledgements
+
+This project has been published on the [LINUX DO community](https://linux.do), and we deeply appreciate the community's support and feedback.
+
 ---
 
 ## 📄 License
