@@ -70,6 +70,7 @@ export default function RightAgentDetailPanel({
     connected: p.connected,
     installing: p.installing,
     install: p.install,
+    installFailed: p.installFailed,
     copyConfig: p.copyConfig,
     copied: p.copied,
     transportLocal: p.transportLocal,

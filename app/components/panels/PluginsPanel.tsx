@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getAllRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
+import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/LocaleContext';
@@ -32,7 +32,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
   useEffect(() => {
     if (!mounted || fetchedRef.current) return;
     fetchedRef.current = true;
-    const entryPaths = getAllRenderers()
+    const entryPaths = getPluginRenderers()
       .map(r => r.entryPath)
       .filter((p): p is string => !!p);
     if (entryPaths.length === 0) return;
@@ -47,7 +47,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
       .catch(() => {});
   }, [mounted]);
 
-  const renderers = mounted ? getAllRenderers() : [];
+  const renderers = mounted ? getPluginRenderers() : [];
   const enabledCount = mounted ? renderers.filter(r => isRendererEnabled(r.id)).length : 0;
 
   const handleToggle = useCallback((id: string, enabled: boolean) => {

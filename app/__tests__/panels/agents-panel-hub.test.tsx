@@ -54,7 +54,6 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain(a.navMcp);
     expect(html).toContain(a.navSkills);
     expect(html).toContain(a.rosterLabel);
-    expect(html).toContain(a.openDashboard);
     expect(html).toContain('href="/agents"');
     expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=skills"');

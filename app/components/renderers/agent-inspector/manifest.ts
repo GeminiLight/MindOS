@@ -8,6 +8,8 @@ export const manifest: RendererDefinition = {
   icon: '🔍',
   tags: ['agent', 'inspector', 'log', 'mcp', 'tools'],
   builtin: true,
+  core: true,
+  appBuiltinFeature: true,
   entryPath: '.agent-log.json',
   match: ({ filePath }) => /\.agent-log\.json$/i.test(filePath),
   load: () => import('./AgentInspectorRenderer').then(m => ({ default: m.AgentInspectorRenderer })),

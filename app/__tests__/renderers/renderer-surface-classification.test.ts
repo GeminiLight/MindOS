@@ -1,0 +1,31 @@
+import { describe, expect, it } from 'vitest';
+import { manifest as agentInspectorManifest } from '@/components/renderers/agent-inspector/manifest';
+import { manifest as configPanelManifest } from '@/components/renderers/config/manifest';
+import { manifest as csvManifest } from '@/components/renderers/csv/manifest';
+import { manifest as todoManifest } from '@/components/renderers/todo/manifest';
+
+describe('renderer surface classification', () => {
+  it('marks CSV as app-builtin feature (not plugin surface)', () => {
+    expect(csvManifest.id).toBe('csv');
+    expect(csvManifest.appBuiltinFeature).toBe(true);
+    expect(csvManifest.core).toBe(true);
+  });
+
+  it('keeps TODO as plugin-surface renderer', () => {
+    expect(todoManifest.id).toBe('todo');
+    expect(todoManifest.appBuiltinFeature ?? false).toBe(false);
+  });
+
+  it('marks Agent Inspector as app-builtin feature (not plugin surface)', () => {
+    expect(agentInspectorManifest.id).toBe('agent-inspector');
+    expect(agentInspectorManifest.appBuiltinFeature).toBe(true);
+    expect(agentInspectorManifest.core).toBe(true);
+  });
+
+  it('marks Config Panel as app-builtin feature (not plugin surface)', () => {
+    expect(configPanelManifest.id).toBe('config-panel');
+    expect(configPanelManifest.appBuiltinFeature).toBe(true);
+    expect(configPanelManifest.core).toBe(true);
+  });
+});
+

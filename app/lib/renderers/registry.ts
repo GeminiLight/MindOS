@@ -16,6 +16,11 @@ export interface RendererDefinition {
   tags: string[];
   builtin: boolean;      // true = ships with MindOS; false = user-installed (future)
   core?: boolean;        // true = default renderer for a file type, cannot be disabled by user
+  /**
+   * App-builtin feature (not a user-facing plugin).
+   * When true, keep renderer functional but hide from Plugins surfaces.
+   */
+  appBuiltinFeature?: boolean;
   entryPath?: string;    // canonical entry file shown on home page (e.g. 'TODO.md')
   match: (ctx: Pick<RendererContext, 'filePath' | 'extension'>) => boolean;
   // Provide either `component` (eager) or `load` (lazy). Prefer `load` for code-splitting.
@@ -77,4 +82,9 @@ export function resolveRenderer(
 
 export function getAllRenderers(): RendererDefinition[] {
   return registry;
+}
+
+/** User-facing plugins only (exclude app-builtin features like CSV). */
+export function getPluginRenderers(): RendererDefinition[] {
+  return registry.filter((r) => !r.appBuiltinFeature);
 }

@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { readSettings } from '@/lib/settings';
 import { getRecentlyModified, getFileContent, getFileTree } from '@/lib/fs';
 import { getAllRenderers } from '@/lib/renderers/registry';
-import '@/lib/renderers/index'; // registers all renderers
 import HomeContent from '@/components/HomeContent';
 import type { FileNode } from '@/lib/core/types';
 
@@ -83,7 +82,7 @@ export default function HomePage() {
     console.error('[HomePage] Failed to load recent files:', err);
   }
 
-  // Derive plugin entry paths from registry — no hardcoded list needed
+  // Derive renderer entry paths from registry — used by plugin and app-builtin sections on home.
   const entryPaths = getAllRenderers()
     .map(r => r.entryPath)
     .filter((p): p is string => !!p);

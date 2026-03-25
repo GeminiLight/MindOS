@@ -5,8 +5,7 @@ import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, Chevron
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
-import { getAllRenderers } from '@/lib/renderers/registry';
-import '@/lib/renderers/index'; // registers all renderers
+import { getAllRenderers, getPluginRenderers } from '@/lib/renderers/registry';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
 import CreateSpaceModal from './CreateSpaceModal';
@@ -124,8 +123,10 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
 
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
-  // Only show renderers that are available (have entryPath + file exists) as quick-access chips
-  const availablePlugins = getAllRenderers().filter(r => r.entryPath && existingSet.has(r.entryPath));
+  // User-manageable plugins: only show available entry files
+  const availablePlugins = getPluginRenderers().filter(r => r.entryPath && existingSet.has(r.entryPath));
+  // App-builtin features: always visible, with active/inactive state
+  const builtinFeatures = getAllRenderers().filter((r) => r.appBuiltinFeature && r.id !== 'csv');
 
   const lastFile = recent[0];
 
@@ -275,7 +276,41 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
         <CreateSpaceModal t={t} dirPaths={dirPaths ?? []} />
       </section>
 
-      {/* ── Section 2: Extensions ── */}
+      {/* ── Section 2: Built-in capabilities ── */}
+      {builtinFeatures.length > 0 && (
+        <section className="mb-8">
+          <SectionTitle icon={<Puzzle size={13} />} count={builtinFeatures.length}>
+            {t.home.builtinFeatures}
+          </SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {builtinFeatures.map((r) => {
+              const active = !!r.entryPath && existingSet.has(r.entryPath);
+              if (active && r.entryPath) {
+                return (
+                  <Link key={r.id} href={`/view/${encodePath(r.entryPath)}`}>
+                    <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-amber-500/30 hover:bg-muted/60">
+                      <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
+                      <span className="font-medium text-foreground">{r.name}</span>
+                    </span>
+                  </Link>
+                );
+              }
+              return (
+                <span
+                  key={r.id}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground opacity-70"
+                  title={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
+                >
+                  <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
+                  <span className="font-medium">{r.name}</span>
+                </span>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 3: Extensions ── */}
       {availablePlugins.length > 0 && (
         <section className="mb-8">
           <SectionTitle
@@ -310,7 +345,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
         </section>
       )}
 
-      {/* ── Section 3: Recently Edited ── */}
+      {/* ── Section 4: Recently Edited ── */}
       {recent.length > 0 && (
         <section className="mb-12">
           <SectionTitle icon={<Clock size={13} />} count={recent.length}>{t.home.recentlyEdited}</SectionTitle>

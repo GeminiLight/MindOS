@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useLocale } from '@/lib/LocaleContext';
 import { useMcpData } from '@/hooks/useMcpData';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -20,6 +19,24 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const a = t.agentsContent;
   const mcp = useMcpData();
   const [copyState, setCopyState] = useState<string | null>(null);
+  const pageHeader = useMemo(() => {
+    if (tab === 'skills') {
+      return {
+        title: a.navSkills,
+        subtitle: a.skills.capabilityGroups,
+      };
+    }
+    if (tab === 'mcp') {
+      return {
+        title: a.navMcp,
+        subtitle: a.mcp.connectionGraph,
+      };
+    }
+    return {
+      title: a.title,
+      subtitle: a.subtitle,
+    };
+  }, [a, tab]);
 
   const buckets = useMemo(() => bucketAgents(mcp.agents), [mcp.agents]);
   const riskQueue = useMemo(
@@ -32,13 +49,6 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       }),
     [mcp.skills, mcp.status?.running, buckets.detected.length, buckets.notFound.length],
   );
-
-  const navClass = (target: AgentsDashboardTab) =>
-    `px-3 py-1.5 text-xs rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-      tab === target
-        ? 'border-border bg-[var(--amber-dim)] text-[var(--amber)]'
-        : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-    }`;
 
   const copySnippet = async (agentKey: string) => {
     const agent = mcp.agents.find((item) => item.key === agentKey);
@@ -53,15 +63,9 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-10">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{a.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{a.subtitle}</p>
+        <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{pageHeader.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
       </header>
-
-      <div className="mb-6 flex items-center gap-2 border-b border-border pb-3" role="tablist" aria-label={a.title}>
-        <Link href="/agents" role="tab" id="agents-tab-overview" aria-controls="agents-panel-overview" aria-selected={tab === 'overview'} className={navClass('overview')}>{a.navOverview}</Link>
-        <Link href="/agents?tab=mcp" role="tab" id="agents-tab-mcp" aria-controls="agents-panel-mcp" aria-selected={tab === 'mcp'} className={navClass('mcp')}>{a.navMcp}</Link>
-        <Link href="/agents?tab=skills" role="tab" id="agents-tab-skills" aria-controls="agents-panel-skills" aria-selected={tab === 'skills'} className={navClass('skills')}>{a.navSkills}</Link>
-      </div>
 
       {tab === 'overview' && (
         <AgentsOverviewSection

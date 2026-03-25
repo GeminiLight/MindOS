@@ -199,7 +199,13 @@ export function appendContentChange(input: ContentChangeInput): ContentChangeEve
   return coreAppendContentChange(getMindRoot(), input);
 }
 
-export function listContentChanges(options: { path?: string; limit?: number } = {}): ContentChangeEvent[] {
+export function listContentChanges(options: {
+  path?: string;
+  limit?: number;
+  source?: 'user' | 'agent' | 'system';
+  op?: string;
+  q?: string;
+} = {}): ContentChangeEvent[] {
   return coreListContentChanges(getMindRoot(), options);
 }
 
