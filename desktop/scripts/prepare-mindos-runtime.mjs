@@ -12,7 +12,7 @@
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
@@ -88,16 +88,32 @@ if (process.env.SKIP_MCP_NPM_CI === '1') {
     console.log('[prepare-mindos-runtime] mcp/node_modules already present — skipping npm ci');
   }
 }
-// Clean only dangling symlinks in .bin/ — keep valid ones (tsx, esbuild needed at runtime).
+// Fix .bin/ symlinks: cpSync preserves absolute symlinks pointing to the build machine.
+// Convert to relative so they work on the target machine.
 const destMcpBin = path.join(destMcp, 'node_modules', '.bin');
+const destMcpNmAbs = path.join(destMcp, 'node_modules');
 if (existsSync(destMcpBin)) {
   for (const name of readdirSync(destMcpBin)) {
     const full = path.join(destMcpBin, name);
     try {
-      // lstatSync doesn't follow symlinks; statSync does — if stat throws, target is missing
       const lst = lstatSync(full);
-      if (lst.isSymbolicLink()) {
-        try { statSync(full); } catch { rmSync(full, { force: true }); }
+      if (!lst.isSymbolicLink()) continue;
+      const target = readlinkSync(full);
+      if (!path.isAbsolute(target)) continue;
+      // Resolve where the absolute target would be inside our copied node_modules
+      const basename = path.basename(target);
+      // Walk up from .bin/ → node_modules/, then into the package
+      // e.g. /build/mcp/node_modules/tsx/dist/cli.mjs → find tsx/dist/cli.mjs inside destMcpNm
+      const nmIdx = target.lastIndexOf('/node_modules/');
+      if (nmIdx < 0) { rmSync(full, { force: true }); continue; }
+      const relInNm = target.slice(nmIdx + '/node_modules/'.length);
+      const localTarget = path.join(destMcpNmAbs, relInNm);
+      if (existsSync(localTarget)) {
+        rmSync(full, { force: true });
+        const rel = path.relative(destMcpBin, localTarget);
+        symlinkSync(rel, full);
+      } else {
+        rmSync(full, { force: true });
       }
     } catch { /* ignore */ }
   }
