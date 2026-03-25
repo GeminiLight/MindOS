@@ -326,8 +326,14 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       if (!res.ok) {
         let errorMsg = `Request failed (${res.status})`;
         try {
-          const errBody = await res.json();
-          if (errBody.error) errorMsg = errBody.error;
+          const errBody = await res.json() as { error?: { message?: string } | string; message?: string };
+          if (typeof errBody?.error === 'string' && errBody.error.trim()) {
+            errorMsg = errBody.error;
+          } else if (typeof errBody?.error === 'object' && typeof errBody.error?.message === 'string' && errBody.error.message.trim()) {
+            errorMsg = errBody.error.message;
+          } else if (typeof errBody?.message === 'string' && errBody.message.trim()) {
+            errorMsg = errBody.message;
+          }
         } catch {}
         throw new Error(errorMsg);
       }

@@ -62,7 +62,49 @@ async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promi
       signal: ctrl.signal,
     });
     const latency = Date.now() - start;
-    if (res.ok) return { ok: true, latency };
+    if (res.ok) {
+      // `/api/ask` always sends tool definitions, so key test should verify this
+      // compatibility as well (not just plain chat completion).
+      const toolRes = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: 'hi' },
+          ],
+          tools: [{
+            type: 'function',
+            function: {
+              name: 'noop',
+              description: 'No-op function used for compatibility checks.',
+              parameters: {
+                type: 'object',
+                properties: {},
+                additionalProperties: false,
+              },
+            },
+          }],
+          tool_choice: 'none',
+        }),
+        signal: ctrl.signal,
+      });
+
+      if (toolRes.ok) return { ok: true, latency };
+
+      const toolBody = await toolRes.text();
+      const toolErr = classifyError(toolRes.status, toolBody);
+      return {
+        ok: false,
+        code: toolErr.code,
+        error: `Model endpoint passes basic test but is incompatible with agent tool calls: ${toolErr.error}`,
+      };
+    }
     const body = await res.text();
     return { ok: false, ...classifyError(res.status, body) };
   } catch (e: unknown) {
