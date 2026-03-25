@@ -158,8 +158,13 @@ describe('GET /api/mcp/agents', () => {
     // Pre-seed a claude-code config
     const configPath = path.join(tempHome, '.claude.json');
     fs.writeFileSync(configPath, JSON.stringify({
-      mcpServers: { mindos: { type: 'stdio', command: 'mindos', args: ['mcp'] } },
+      mcpServers: {
+        mindos: { type: 'stdio', command: 'mindos', args: ['mcp'] },
+        github: { url: 'https://api.githubcopilot.com/mcp' },
+      },
     }), 'utf-8');
+    fs.mkdirSync(path.join(tempHome, '.claude', 'skills', 'mindos'), { recursive: true });
+    fs.mkdirSync(path.join(tempHome, '.claude', 'skills', 'project-wiki'), { recursive: true });
 
     const { GET } = await importAgentsRoute();
     const res = await GET();
@@ -172,6 +177,14 @@ describe('GET /api/mcp/agents', () => {
     expect(typeof claude.hiddenRootPresent).toBe('boolean');
     expect(typeof claude.runtimeConversationSignal).toBe('boolean');
     expect(typeof claude.runtimeUsageSignal).toBe('boolean');
+    expect(Array.isArray(claude.configuredMcpServers)).toBe(true);
+    expect(claude.configuredMcpServers).toContain('mindos');
+    expect(claude.configuredMcpServers).toContain('github');
+    expect(claude.configuredMcpServerCount).toBe(2);
+    expect(Array.isArray(claude.installedSkillNames)).toBe(true);
+    expect(claude.installedSkillNames).toContain('mindos');
+    expect(claude.installedSkillNames).toContain('project-wiki');
+    expect(claude.installedSkillCount).toBe(2);
   });
 
   it('reports not installed when no config exists', async () => {

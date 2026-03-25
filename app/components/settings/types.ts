@@ -87,6 +87,12 @@ export interface AgentInfo {
   runtimeConversationSignal?: boolean;
   runtimeUsageSignal?: boolean;
   runtimeLastActivityAt?: string;
+  configuredMcpServers?: string[];
+  configuredMcpServerCount?: number;
+  configuredMcpSources?: string[];
+  installedSkillNames?: string[];
+  installedSkillCount?: number;
+  installedSkillSourcePath?: string;
 }
 
 export interface SkillInfo {

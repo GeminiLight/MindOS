@@ -203,6 +203,12 @@
 - **解决：** 详情页改为全量 skills 视图（搜索 + source 过滤 + 启停 + user skill 编辑），并补充 MCP 管理区（scope/transport 应用、snippet 复制、刷新）
 - **规则：** 管理页默认应展示“全量配置 + 状态标签”，而不是先裁剪后展示；状态属于筛选器，不属于数据源定义
 
+### Agent 详情使用全局 catalog 冒充“该 Agent 已安装项”
+- **现象：** 页面显示了 skill 管理控件，但用户仍看不出某个 Agent 在其隐藏目录里到底安装了哪些 skills、配置了哪些 MCP servers
+- **原因：** 数据源来自全局 `/api/skills` 与 `mindos` 单条安装检测，缺少对 agent 原生目录与配置文件的全量扫描结果
+- **解决：** `/api/mcp/agents` 增加 `configuredMcpServers` 与 `installedSkillNames`（含来源路径），详情页单独展示“agent native installed”区块并提供空态/数量反馈
+- **规则：** “已安装/已配置”必须来自 agent 原生配置扫描；“可用 catalog”仅作管理参考，不能替代真实安装态
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败

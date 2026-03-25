@@ -5,6 +5,8 @@ import {
   detectInstalled,
   detectAgentPresence,
   detectAgentRuntimeSignals,
+  detectAgentConfiguredMcpServers,
+  detectAgentInstalledSkills,
   resolveSkillWorkspaceProfile,
 } from '@/lib/mcp-agents';
 
@@ -15,6 +17,8 @@ export async function GET() {
       const present = detectAgentPresence(key);
       const skillProfile = resolveSkillWorkspaceProfile(key);
       const runtime = detectAgentRuntimeSignals(key);
+      const configuredMcp = detectAgentConfiguredMcpServers(key);
+      const installedSkills = detectAgentInstalledSkills(key);
       return {
         key,
         name: agent.name,
@@ -40,6 +44,12 @@ export async function GET() {
         runtimeConversationSignal: runtime.conversationSignal,
         runtimeUsageSignal: runtime.usageSignal,
         runtimeLastActivityAt: runtime.lastActivityAt,
+        configuredMcpServers: configuredMcp.servers,
+        configuredMcpServerCount: configuredMcp.servers.length,
+        configuredMcpSources: configuredMcp.sources,
+        installedSkillNames: installedSkills.skills,
+        installedSkillCount: installedSkills.skills.length,
+        installedSkillSourcePath: installedSkills.sourcePath,
       };
     });
 

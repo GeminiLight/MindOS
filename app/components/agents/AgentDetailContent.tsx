@@ -67,6 +67,8 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const currentScope = agent.scope === 'project' ? 'project' : 'global';
   const currentTransport: 'stdio' | 'http' = agent.transport === 'http' ? 'http' : 'stdio';
   const snippet = generateSnippet(agent, mcp.status, currentTransport);
+  const nativeInstalledSkills = agent.installedSkillNames ?? [];
+  const configuredMcpServers = agent.configuredMcpServers ?? [];
 
   useEffect(() => {
     setTargetScope(currentScope);
@@ -189,6 +191,26 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-medium text-foreground mb-2">{a.detail.skillAssignments}</h2>
         <div className="space-y-3">
+          <div className="rounded-md border border-border bg-background p-3 space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">{a.detail.nativeInstalledSkills}</p>
+            <p className="text-2xs text-muted-foreground">
+              {a.detail.nativeInstalledSkillsCount(nativeInstalledSkills.length)}
+            </p>
+            {nativeInstalledSkills.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{a.detail.nativeInstalledSkillsEmpty}</p>
+            ) : (
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {nativeInstalledSkills.slice(0, 8).map((name) => (
+                  <li key={name}>- {name}</li>
+                ))}
+                {nativeInstalledSkills.length > 8 ? (
+                  <li>{a.detail.nativeInstalledSkillsMore(nativeInstalledSkills.length - 8)}</li>
+                ) : null}
+              </ul>
+            )}
+            <p className="text-2xs text-muted-foreground">{agent.installedSkillSourcePath ?? a.na}</p>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
             <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsAll}: {skillSummary.total}</div>
             <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsEnabled}: {skillSummary.enabled}</div>
@@ -307,6 +329,24 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           <DetailLine label={a.detail.mcpInstalled} value={agent.installed ? a.detail.yes : a.detail.no} />
           <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
           <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
+        </div>
+        <div className="rounded-md border border-border bg-background p-3 space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">{a.detail.configuredMcpServers}</p>
+          <p className="text-2xs text-muted-foreground">
+            {a.detail.configuredMcpServersCount(configuredMcpServers.length)}
+          </p>
+          {configuredMcpServers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{a.detail.configuredMcpServersEmpty}</p>
+          ) : (
+            <ul className="text-xs text-muted-foreground space-y-1">
+              {configuredMcpServers.slice(0, 8).map((name) => (
+                <li key={name}>- {name}</li>
+              ))}
+              {configuredMcpServers.length > 8 ? (
+                <li>{a.detail.configuredMcpServersMore(configuredMcpServers.length - 8)}</li>
+              ) : null}
+            </ul>
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label className="text-xs text-muted-foreground">
