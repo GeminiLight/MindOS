@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
@@ -14,9 +15,8 @@ interface AgentsPanelProps {
   active: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
-  /** Highlights the row for the agent whose detail is open in the right dock. */
+  /** Legacy fallback selected row source (e.g. compatibility mode). */
   selectedAgentKey?: string | null;
-  onOpenAgentDetail?: (key: string) => void;
 }
 
 export default function AgentsPanel({
@@ -24,11 +24,11 @@ export default function AgentsPanel({
   maximized,
   onMaximize,
   selectedAgentKey = null,
-  onOpenAgentDetail,
 }: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
   const mcp = useMcpData();
+  const pathname = usePathname();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showBuiltinSkills, setShowBuiltinSkills] = useState(false);
@@ -55,6 +55,11 @@ export default function AgentsPanel({
     if (ok) await mcp.refresh();
     return ok;
   };
+
+  const routeSelectedAgentKey = pathname?.startsWith('/agents/')
+    ? decodeURIComponent(pathname.slice('/agents/'.length))
+    : null;
+  const effectiveSelectedAgentKey = routeSelectedAgentKey ?? selectedAgentKey;
 
   const listCopy = {
     installing: p.installing,
@@ -162,8 +167,7 @@ export default function AgentsPanel({
                 connected={connected}
                 detected={detected}
                 notFound={notFound}
-                onOpenDetail={onOpenAgentDetail}
-                selectedAgentKey={selectedAgentKey}
+                selectedAgentKey={effectiveSelectedAgentKey}
                 listCopy={listCopy}
                 onInstallAgent={installAgentWithRefresh}
                 showNotDetected={showNotDetected}

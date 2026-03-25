@@ -6,13 +6,13 @@ import { Terminal, FileEdit, FilePlus, Trash2, Search, Clock, ChevronDown, Alert
 import type { RendererContext } from '@/lib/renderers/registry';
 
 // ─── Log entry format ─────────────────────────────────────────────────────────
-// Each entry is a fenced JSON block in the markdown:
+// Primary format:
+// {
+//   "version": 1,
+//   "events": [{ "ts": "...", "tool": "mindos_write_file", "params": {}, "result": "ok" }]
+// }
 //
-// ```agent-op
-// { "ts": "2025-01-15T10:30:00Z", "tool": "mindos_write_file",
-//   "params": { "path": "...", "content": "..." },
-//   "result": "ok" | "error", "message": "..." }
-// ```
+// Legacy format (still supported for compatibility): JSON Lines.
 
 interface AgentOp {
   ts: string;
@@ -22,9 +22,14 @@ interface AgentOp {
   message?: string;
 }
 
+interface AgentAuditState {
+  version?: number;
+  events?: AgentOp[];
+}
+
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
-function parseOps(content: string): AgentOp[] {
+function parseJsonLines(content: string): AgentOp[] {
   const ops: AgentOp[] = [];
 
   // JSON Lines format: each line is a JSON object
@@ -36,6 +41,23 @@ function parseOps(content: string): AgentOp[] {
       if (op.tool && op.ts) ops.push(op);
     } catch { /* skip non-JSON lines */ }
   }
+  return ops;
+}
+
+function parseOps(content: string): AgentOp[] {
+  // New format: JSON object with events array.
+  try {
+    const parsed = JSON.parse(content) as AgentAuditState;
+    if (Array.isArray(parsed.events)) {
+      return parsed.events
+        .filter((op) => Boolean(op?.tool) && Boolean(op?.ts))
+        .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    }
+  } catch {
+    // Fallback to legacy JSONL.
+  }
+
+  const ops = parseJsonLines(content);
 
   // newest first
   return ops.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
@@ -236,7 +258,7 @@ export function AgentInspectorRenderer({ content }: RendererContext) {
         <Terminal size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
         <p>No agent operations logged yet.</p>
         <p style={{ marginTop: 6, opacity: 0.6, fontSize: 11 }}>
-          Agent writes appear here as <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>```agent-op</code> blocks.
+          Agent writes appear here from <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>.mindos/agent-audit-log.json</code>.
         </p>
       </div>
     );

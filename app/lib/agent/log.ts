@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { getMindRoot } from '@/lib/fs';
+import { appendAgentAuditEvent } from '@/lib/core/agent-audit-log';
 
-const LOG_FILE = '.agent-log.json';
-const MAX_SIZE = 500 * 1024; // 500KB
+const LEGACY_LOG_FILE = '.agent-log.json';
 
 interface AgentOpEntry {
   ts: string;
@@ -22,23 +22,20 @@ interface AgentOpEntry {
 export function logAgentOp(entry: AgentOpEntry): void {
   try {
     const root = getMindRoot();
-    const logPath = path.join(root, LOG_FILE);
-
-    const line = JSON.stringify(entry) + '\n';
-
-    // Check size and truncate if needed
-    if (fs.existsSync(logPath)) {
-      const stat = fs.statSync(logPath);
-      if (stat.size > MAX_SIZE) {
-        const content = fs.readFileSync(logPath, 'utf-8');
-        const lines = content.trimEnd().split('\n');
-        // Keep the newer half
-        const kept = lines.slice(Math.floor(lines.length / 2));
-        fs.writeFileSync(logPath, kept.join('\n') + '\n');
-      }
+    appendAgentAuditEvent(root, {
+      ts: entry.ts,
+      tool: entry.tool,
+      params: entry.params,
+      result: entry.result,
+      message: entry.message,
+      durationMs: entry.durationMs,
+    });
+    // Best-effort cleanup of legacy JSONL path.
+    try {
+      fs.rmSync(path.join(root, LEGACY_LOG_FILE), { force: true });
+    } catch {
+      // ignore
     }
-
-    fs.appendFileSync(logPath, line);
   } catch {
     // Logging should never break tool execution
   }
