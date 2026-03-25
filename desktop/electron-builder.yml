@@ -24,6 +24,10 @@ mac:
       arch:
         - arm64
         - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
   # Ad-Hoc signing: allows the app to run on Apple Silicon Macs
   # without a paid developer account. Users will still see Gatekeeper
   # warnings, but the app won't crash with "Killed: 9"
