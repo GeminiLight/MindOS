@@ -208,6 +208,44 @@ export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult
   };
 }
 
+export interface CrossAgentMcpServer {
+  serverName: string;
+  agents: string[];
+}
+
+export function aggregateCrossAgentMcpServers(agents: AgentInfo[]): CrossAgentMcpServer[] {
+  const map = new Map<string, string[]>();
+  for (const agent of agents) {
+    for (const server of agent.configuredMcpServers ?? []) {
+      const existing = map.get(server);
+      if (existing) existing.push(agent.name);
+      else map.set(server, [agent.name]);
+    }
+  }
+  return [...map.entries()]
+    .map(([serverName, agentNames]) => ({ serverName, agents: agentNames }))
+    .sort((a, b) => b.agents.length - a.agents.length || a.serverName.localeCompare(b.serverName));
+}
+
+export interface CrossAgentSkill {
+  skillName: string;
+  agents: string[];
+}
+
+export function aggregateCrossAgentSkills(agents: AgentInfo[]): CrossAgentSkill[] {
+  const map = new Map<string, string[]>();
+  for (const agent of agents) {
+    for (const skill of agent.installedSkillNames ?? []) {
+      const existing = map.get(skill);
+      if (existing) existing.push(agent.name);
+      else map.set(skill, [agent.name]);
+    }
+  }
+  return [...map.entries()]
+    .map(([skillName, agentNames]) => ({ skillName, agents: agentNames }))
+    .sort((a, b) => b.agents.length - a.agents.length || a.skillName.localeCompare(b.skillName));
+}
+
 export function filterSkillsForAgentDetail(
   skills: SkillInfo[],
   filters: { query: string; source: AgentDetailSkillSourceFilter },

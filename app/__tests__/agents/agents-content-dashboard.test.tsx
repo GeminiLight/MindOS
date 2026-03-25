@@ -128,6 +128,9 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.mcp.riskQueueTitle);
     expect(html).toContain(a.mcp.configVisibilityTitle);
     expect(html).toContain(a.mcp.filteredSummaryTitle);
+    expect(html).toContain(a.mcp.crossAgentServersTitle);
+    expect(html).toContain('github');
+    expect(html).toContain('mindos');
     expect(html).toContain(a.mcp.resultCount(baseMcpState.agents.length));
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
@@ -146,6 +149,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.skills.searchPlaceholder);
     expect(html).toContain(a.skills.statusAttention);
     expect(html).toContain(a.skills.summaryTitle);
+    expect(html).toContain(a.skills.crossAgentSkillsTitle);
     expect(html).toContain(a.skills.bulkEnableFiltered);
     expect(html).toContain(a.skills.capabilityGroups);
     expect(html).toContain(a.skills.registrySummaryTitle);
