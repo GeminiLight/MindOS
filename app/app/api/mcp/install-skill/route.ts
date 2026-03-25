@@ -3,35 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { SKILL_AGENT_REGISTRY } from '@/lib/mcp-agents';
 
 /* ── Constants ────────────────────────────────────────────────── */
 
 const GITHUB_SOURCE = 'GeminiLight/MindOS';
 
-// Universal agents read directly from ~/.agents/skills/ — no symlink needed.
-const UNIVERSAL_AGENTS = new Set([
-  'amp', 'cline', 'codex', 'cursor', 'gemini-cli',
-  'github-copilot', 'kimi-cli', 'opencode', 'warp',
-]);
-
 // Agents that do NOT support Skills at all
 const SKILL_UNSUPPORTED = new Set<string>([]);
-
-// MCP agent key → npx skills agent name (for non-universal agents)
-const AGENT_NAME_MAP: Record<string, string> = {
-  'claude-code': 'claude-code',
-  'windsurf': 'windsurf',
-  'trae': 'trae',
-  'openclaw': 'openclaw',
-  'codebuddy': 'codebuddy',
-  'iflow-cli': 'iflow-cli',
-  'pi': 'pi',
-  'augment': 'augment',
-  'qwen-code': 'qwen-code',
-  'qoder': 'qoder',
-  'trae-cn': 'trae-cn',
-  'roo': 'roo',
-};
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
@@ -79,9 +58,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid skill name' }, { status: 400 });
     }
 
-    const additionalAgents = (agents || [])
-      .filter(key => !UNIVERSAL_AGENTS.has(key) && !SKILL_UNSUPPORTED.has(key))
-      .map(key => AGENT_NAME_MAP[key] || key);
+    const additionalAgents = (agents || []).flatMap((key) => {
+      if (SKILL_UNSUPPORTED.has(key)) return [];
+      const reg = SKILL_AGENT_REGISTRY[key];
+      if (!reg) return [key]; // Forward-compatible fallback for unknown keys.
+      if (reg.mode === 'unsupported') return [];
+      if (reg.mode === 'universal') return [];
+      return [reg.skillAgentName || key];
+    });
 
     // Try GitHub source first, fall back to local path
     const sources = [GITHUB_SOURCE];

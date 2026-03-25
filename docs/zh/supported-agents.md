@@ -85,3 +85,5 @@ mindos mcp install --transport http --url http://<服务器IP>:8781/mcp --token 
 ```
 
 > 各 Agent 的配置文件路径不同，详见上方表格中的 **MCP 配置文件路径** 列。
+>
+> 维护规则与校对清单：`wiki/refs/agent-config-registry.md`
