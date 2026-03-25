@@ -32,11 +32,11 @@ on:
       - '.env.local.example'
       - 'package.json'
       - 'package-lock.json'
-    # Internal wiki trees — do not sync to public mindos repo (see rsync excludes below).
-    # Commits that only touch these paths skip this workflow.
-    paths-ignore:
-      - 'wiki/specs/**'
-      - 'wiki/discussions/**'
+      # Internal wiki trees — do not sync to public mindos repo.
+      # Use negative patterns here because GitHub Actions does not allow
+      # combining `paths` and `paths-ignore` in the same push trigger.
+      - '!wiki/specs/**'
+      - '!wiki/discussions/**'
 
 permissions:
   contents: write
