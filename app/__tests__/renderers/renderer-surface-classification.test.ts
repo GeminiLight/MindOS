@@ -11,9 +11,10 @@ describe('renderer surface classification', () => {
     expect(csvManifest.core).toBe(true);
   });
 
-  it('keeps TODO as plugin-surface renderer', () => {
+  it('marks TODO as app-builtin feature (not plugin surface)', () => {
     expect(todoManifest.id).toBe('todo');
-    expect(todoManifest.appBuiltinFeature ?? false).toBe(false);
+    expect(todoManifest.appBuiltinFeature).toBe(true);
+    expect(todoManifest.core).toBe(true);
   });
 
   it('marks Agent Inspector as app-builtin feature (not plugin surface)', () => {
