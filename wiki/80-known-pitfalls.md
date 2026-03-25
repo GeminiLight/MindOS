@@ -197,6 +197,12 @@
 - **解决：** 明确拆两层信号：进程级指标继续走 `/api/monitoring`；Agent 级运行迹象通过隐藏目录扫描信号（conversation/usage/last activity）展示
 - **规则：** 任何 Agent 级可视化必须标注数据来源层级（MindOS runtime vs Agent hidden folder），避免混用口径
 
+### Agent Detail 只展示 enabled skills，导致“信息量几乎为零”
+- **现象：** 详情页只列出启用技能，禁用技能/来源/编辑入口全部不可见；用户误判为“没有配置”
+- **原因：** UI 直接使用 `skills.filter(enabled)`，把“状态维度”当成“数据集维度”，丢失全量配置上下文
+- **解决：** 详情页改为全量 skills 视图（搜索 + source 过滤 + 启停 + user skill 编辑），并补充 MCP 管理区（scope/transport 应用、snippet 复制、刷新）
+- **规则：** 管理页默认应展示“全量配置 + 状态标签”，而不是先裁剪后展示；状态属于筛选器，不属于数据源定义
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败
