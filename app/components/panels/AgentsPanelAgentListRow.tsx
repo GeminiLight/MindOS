@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { Check, ChevronRight, Loader2, RotateCw } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
 
 export type AgentsPanelAgentListStatus = 'connected' | 'detected' | 'notFound';
 
 export interface AgentsPanelAgentListRowCopy {
   installing: string;
-  install: (name: string) => string;
+  install: string;
+  installSuccess: string;
+  installFailed: string;
+  retryInstall: string;
 }
 
 export default function AgentsPanelAgentListRow({
@@ -79,23 +82,45 @@ function AgentInstallButton({
   copy: AgentsPanelAgentListRowCopy;
 }) {
   const [installing, setInstalling] = useState(false);
+  const [installState, setInstallState] = useState<'idle' | 'success' | 'error'>('idle');
 
   const handleInstall = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (installing) return;
     setInstalling(true);
-    await onInstallAgent(agentKey);
+    setInstallState('idle');
+    const ok = await onInstallAgent(agentKey);
     setInstalling(false);
+    setInstallState(ok ? 'success' : 'error');
   };
+
+  const isError = installState === 'error';
+  const isSuccess = installState === 'success';
+  const label = installing
+    ? copy.installing
+    : isSuccess
+      ? copy.installSuccess
+      : isError
+        ? copy.retryInstall
+        : copy.install;
 
   return (
     <button
       type="button"
       onClick={handleInstall}
       disabled={installing}
-      className="flex items-center gap-1 px-2 py-1.5 text-2xs rounded-lg font-medium text-[var(--amber-foreground)] disabled:opacity-50 transition-colors shrink-0 bg-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`flex items-center gap-1 px-2 py-1.5 text-2xs rounded-lg font-medium text-white disabled:opacity-50 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        isError ? 'bg-error hover:bg-error/90' : isSuccess ? 'bg-success hover:bg-success/90' : 'bg-[var(--amber)] hover:bg-[var(--amber)]/90'
+      }`}
+      aria-label={`${agentName} ${label}`}
     >
       {installing ? <Loader2 size={10} className="animate-spin" /> : null}
-      {installing ? copy.installing : copy.install(agentName)}
+      {!installing && isSuccess ? <Check size={10} /> : null}
+      {!installing && isError ? <RotateCw size={10} /> : null}
+      {label}
+      <span className="sr-only" aria-live="polite">
+        {isError ? copy.installFailed : ''}
+      </span>
     </button>
   );
 }

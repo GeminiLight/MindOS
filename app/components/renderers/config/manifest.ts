@@ -9,6 +9,7 @@ export const manifest: RendererDefinition = {
   tags: ['config', 'json', 'settings', 'schema'],
   builtin: true,
   core: true,
+  appBuiltinFeature: true,
   entryPath: 'CONFIG.json',
   match: ({ filePath, extension }) => extension === 'json' && /(^|\/)CONFIG\.json$/i.test(filePath),
   load: () => import('./ConfigRenderer').then(m => ({ default: m.ConfigRenderer })),

@@ -32,7 +32,7 @@ export default function AgentsOverviewSection({
   failedAgentsValue: string;
 }) {
   return (
-    <div className="space-y-4" role="tabpanel" id="agents-panel-overview" aria-labelledby="agents-tab-overview">
+    <div className="space-y-4">
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <StatCard title={copy.connected} value={String(buckets.connected.length)} tone="ok" />
         <StatCard title={copy.detected} value={String(buckets.detected.length)} tone="warn" />

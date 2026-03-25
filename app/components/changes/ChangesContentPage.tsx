@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, History, RefreshCw } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useLocale } from '@/lib/LocaleContext';
 import { collapseDiffContext, buildLineDiff } from './line-diff';
 
 interface ChangeEvent {
@@ -28,18 +29,22 @@ interface ListPayload {
   events: ChangeEvent[];
 }
 
-function relativeTime(ts: string): string {
+function relativeTime(ts: string, t: ReturnType<typeof useLocale>['t']): string {
   const delta = Date.now() - new Date(ts).getTime();
   const mins = Math.floor(delta / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t.changes.relativeTime.justNow;
+  if (mins < 60) return t.changes.relativeTime.minutesAgo(mins);
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return t.changes.relativeTime.hoursAgo(hours);
+  return t.changes.relativeTime.daysAgo(Math.floor(hours / 24));
 }
 
 export default function ChangesContentPage({ initialPath = '' }: { initialPath?: string }) {
+  const { t } = useLocale();
   const [pathFilter, setPathFilter] = useState(initialPath);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'agent' | 'user' | 'system'>('all');
+  const [opFilter, setOpFilter] = useState<string>('all');
+  const [queryFilter, setQueryFilter] = useState('');
   const [events, setEvents] = useState<ChangeEvent[]>([]);
   const [summary, setSummary] = useState<SummaryPayload>({ unreadCount: 0, totalCount: 0 });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -50,9 +55,12 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     setLoading(true);
     setError(null);
     try {
-      const listUrl = pathFilter
-        ? `/api/changes?op=list&limit=80&path=${encodeURIComponent(pathFilter)}`
-        : '/api/changes?op=list&limit=80';
+      const params = new URLSearchParams({ op: 'list', limit: '120' });
+      if (pathFilter.trim()) params.set('path', pathFilter.trim());
+      if (sourceFilter !== 'all') params.set('source', sourceFilter);
+      if (opFilter !== 'all') params.set('event_op', opFilter);
+      if (queryFilter.trim()) params.set('q', queryFilter.trim());
+      const listUrl = `/api/changes?${params.toString()}`;
       const [list, summaryData] = await Promise.all([
         apiFetch<ListPayload>(listUrl),
         apiFetch<SummaryPayload>('/api/changes?op=summary'),
@@ -64,7 +72,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     } finally {
       setLoading(false);
     }
-  }, [pathFilter]);
+  }, [pathFilter, sourceFilter, opFilter, queryFilter]);
 
   useEffect(() => {
     void fetchData();
@@ -79,55 +87,116 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     await fetchData();
   }, [fetchData]);
 
-  const eventCountLabel = useMemo(() => `${events.length} event${events.length === 1 ? '' : 's'}`, [events.length]);
+  const eventCountLabel = useMemo(() => t.changes.eventsCount(events.length), [events.length, t]);
+  const opOptions = useMemo(() => {
+    const ops = Array.from(new Set(events.map((e) => e.op))).sort((a, b) => a.localeCompare(b));
+    if (opFilter !== 'all' && !ops.includes(opFilter)) ops.unshift(opFilter);
+    return ['all', ...ops];
+  }, [events, opFilter]);
+
+  const sourceLabel = useCallback((source: ChangeEvent['source']) => {
+    if (source === 'agent') return t.changes.filters.agent;
+    if (source === 'user') return t.changes.filters.user;
+    return t.changes.filters.system;
+  }, [t]);
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 py-2.5 bg-background">
-        <div className="content-width xl:mr-[220px] flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground font-display">
-              <History size={15} />
-              Content changes
+      <div className="px-4 md:px-6 pt-6 md:pt-8">
+        <div className="content-width xl:mr-[220px] rounded-xl border border-border bg-card px-4 py-3 md:px-5 md:py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground font-display">
+                <History size={15} />
+                {t.changes.title}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t.changes.subtitle}
+              </p>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{eventCountLabel}</span>
+                <span className="rounded-full bg-[var(--amber-dim)] px-2 py-0.5 text-[var(--amber)]">
+                  {t.changes.unreadCount(summary.unreadCount)}
+                </span>
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">{eventCountLabel} · {summary.unreadCount} unread</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void fetchData()}
-              className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="inline-flex items-center gap-1"><RefreshCw size={12} /> Refresh</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void markSeen()}
-              className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-[var(--amber)] text-[var(--amber-foreground)] focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Mark seen
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void fetchData()}
+                className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="inline-flex items-center gap-1"><RefreshCw size={12} /> {t.changes.refresh}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void markSeen()}
+                className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t.changes.markAllRead}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="px-4 md:px-6 py-6 md:py-8">
+      <div className="px-4 md:px-6 py-4 md:py-6">
         <div className="content-width xl:mr-[220px] space-y-3">
           <div className="rounded-lg border border-border bg-card p-3">
-            <label className="text-xs text-muted-foreground">Filter by file path</label>
-            <input
-              value={pathFilter}
-              onChange={(e) => setPathFilter(e.target.value)}
-              placeholder="e.g. Projects/plan.md"
-              className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
+              <label className="block">
+                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.filePath}</span>
+                <input
+                  value={pathFilter}
+                  onChange={(e) => setPathFilter(e.target.value)}
+                  placeholder={t.changes.filters.filePathPlaceholder}
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.source}</span>
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value as 'all' | 'agent' | 'user' | 'system')}
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all">{t.changes.filters.all}</option>
+                  <option value="agent">{t.changes.filters.agent}</option>
+                  <option value="user">{t.changes.filters.user}</option>
+                  <option value="system">{t.changes.filters.system}</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.operation}</span>
+                <select
+                  value={opFilter}
+                  onChange={(e) => setOpFilter(e.target.value)}
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {opOptions.map((op) => (
+                    <option key={op} value={op}>
+                      {op === 'all' ? t.changes.filters.operationAll : op}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.keyword}</span>
+                <input
+                  value={queryFilter}
+                  onChange={(e) => setQueryFilter(e.target.value)}
+                  placeholder={t.changes.filters.keywordPlaceholder}
+                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+            </div>
           </div>
 
-          {loading && <p className="text-sm text-muted-foreground">Loading changes...</p>}
+          {loading && <p className="text-sm text-muted-foreground">{t.changes.loading}</p>}
           {error && <p className="text-sm text-error">{error}</p>}
           {!loading && !error && events.length === 0 && (
             <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              No content changes yet.
+              {t.changes.empty}
             </div>
           )}
 
@@ -135,35 +204,49 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
             const open = !!expanded[event.id];
             const rows = collapseDiffContext(buildLineDiff(event.before ?? '', event.after ?? ''));
             return (
-              <div key={event.id} className="rounded-lg border border-border bg-card overflow-hidden">
+              <div key={event.id} className="rounded-xl border border-border bg-card overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpanded((prev) => ({ ...prev, [event.id]: !prev[event.id] }))}
-                  className="w-full px-3 py-2.5 text-left hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full px-3 py-3 text-left hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-start gap-2">
                     <span className="pt-0.5 text-muted-foreground">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-foreground font-display">{event.summary}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {event.path} · {event.op} · {event.source} · {relativeTime(event.ts)}
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span
+                          className="rounded-md px-2 py-0.5 font-medium"
+                          style={{
+                            background: 'color-mix(in srgb, var(--amber) 16%, var(--muted))',
+                            color: 'var(--foreground)',
+                            border: '1px solid color-mix(in srgb, var(--amber) 36%, var(--border))',
+                          }}
+                        >
+                          {event.path}
+                        </span>
+                        <span>{event.op}</span>
+                        <span>·</span>
+                        <span>{sourceLabel(event.source)}</span>
+                        <span>·</span>
+                        <span>{relativeTime(event.ts, t)}</span>
                       </div>
                     </div>
                     <Link
                       href={`/view/${event.path.split('/').map(encodeURIComponent).join('/')}`}
-                      className="text-xs text-[var(--amber)] hover:underline"
+                      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      Open
+                      {t.changes.open}
                     </Link>
                   </div>
                 </button>
 
                 {open && (
-                  <div className="border-t border-border bg-background">
+                  <div className="border-t border-border bg-background/70">
                     {rows.map((row, idx) => {
                       if (row.type === 'gap') {
-                        return <div key={`${event.id}-gap-${idx}`} className="px-3 py-1 text-2xs text-muted-foreground">... {row.count} unchanged lines ...</div>;
+                        return <div key={`${event.id}-gap-${idx}`} className="px-3 py-1 text-2xs text-muted-foreground">{t.changes.unchangedLines(row.count)}</div>;
                       }
                       const prefix = row.type === 'insert' ? '+' : row.type === 'delete' ? '-' : ' ';
                       const color = row.type === 'insert'

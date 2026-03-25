@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
@@ -28,7 +27,6 @@ export default function AgentsPanel({
   onOpenAgentDetail,
 }: AgentsPanelProps) {
   const { t } = useLocale();
-  const router = useRouter();
   const p = t.panels.agents;
   const mcp = useMcpData();
   const [refreshing, setRefreshing] = useState(false);
@@ -52,10 +50,18 @@ export default function AgentsPanel({
   const customSkills = mcp.skills.filter(s => s.source === 'user');
   const builtinSkills = mcp.skills.filter(s => s.source === 'builtin');
   const activeSkillCount = mcp.skills.filter(s => s.enabled).length;
+  const installAgentWithRefresh = async (key: string) => {
+    const ok = await mcp.installAgent(key);
+    if (ok) await mcp.refresh();
+    return ok;
+  };
 
   const listCopy = {
     installing: p.installing,
     install: p.install,
+    installSuccess: p.installSuccess,
+    installFailed: p.installFailed,
+    retryInstall: p.retryInstall,
   };
 
   const hubCopy = {
@@ -80,15 +86,6 @@ export default function AgentsPanel({
               {connected.length} {p.connected}
             </span>
           )}
-          <button
-            onClick={() => router.push('/agents')}
-            className="px-2 py-1 rounded border border-border text-2xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={p.openDashboard}
-            title={p.openDashboard}
-            type="button"
-          >
-            {p.openDashboard}
-          </button>
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -169,6 +166,7 @@ export default function AgentsPanel({
                 selectedAgentKey={selectedAgentKey}
                 mcp={mcp}
                 listCopy={listCopy}
+                onInstallAgent={installAgentWithRefresh}
                 showNotDetected={showNotDetected}
                 setShowNotDetected={setShowNotDetected}
                 p={{

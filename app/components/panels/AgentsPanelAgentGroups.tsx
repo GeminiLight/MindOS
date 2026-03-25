@@ -2,7 +2,6 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
-import type { McpContextValue } from '@/hooks/useMcpData';
 import AgentsPanelAgentListRow, { type AgentsPanelAgentListRowCopy } from './AgentsPanelAgentListRow';
 
 type AgentsCopy = {
@@ -18,7 +17,7 @@ export function AgentsPanelAgentGroups({
   notFound,
   onOpenDetail,
   selectedAgentKey,
-  mcp,
+  onInstallAgent,
   listCopy,
   showNotDetected,
   setShowNotDetected,
@@ -29,7 +28,7 @@ export function AgentsPanelAgentGroups({
   notFound: AgentInfo[];
   onOpenDetail?: (key: string) => void;
   selectedAgentKey?: string | null;
-  mcp: Pick<McpContextValue, 'installAgent'>;
+  onInstallAgent: (key: string) => Promise<boolean>;
   listCopy: AgentsPanelAgentListRowCopy;
   showNotDetected: boolean;
   setShowNotDetected: (v: boolean | ((prev: boolean) => boolean)) => void;
@@ -55,7 +54,7 @@ export function AgentsPanelAgentGroups({
                 agentStatus="connected"
                 selected={selectedAgentKey === agent.key}
                 onOpenDetail={() => open(agent.key)}
-                onInstallAgent={mcp.installAgent}
+                onInstallAgent={onInstallAgent}
                 copy={listCopy}
               />
             ))}
@@ -76,7 +75,7 @@ export function AgentsPanelAgentGroups({
                 agentStatus="detected"
                 selected={selectedAgentKey === agent.key}
                 onOpenDetail={() => open(agent.key)}
-                onInstallAgent={mcp.installAgent}
+                onInstallAgent={onInstallAgent}
                 copy={listCopy}
               />
             ))}
@@ -103,7 +102,7 @@ export function AgentsPanelAgentGroups({
                   agentStatus="notFound"
                   selected={selectedAgentKey === agent.key}
                   onOpenDetail={() => open(agent.key)}
-                  onInstallAgent={mcp.installAgent}
+                  onInstallAgent={onInstallAgent}
                   copy={listCopy}
                 />
               ))}
