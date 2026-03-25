@@ -9,6 +9,7 @@ export const manifest: RendererDefinition = {
   tags: ['productivity', 'tasks', 'markdown'],
   builtin: true,
   core: true,
+  appBuiltinFeature: true,
   entryPath: 'TODO.md',
   match: ({ filePath }) => /\bTODO\b.*\.(md|csv)$/i.test(filePath),
   load: () => import('./TodoRenderer').then(m => ({ default: m.TodoRenderer })),

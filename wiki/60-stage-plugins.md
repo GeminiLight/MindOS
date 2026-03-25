@@ -12,7 +12,6 @@ MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户
 
 | 插件 | 触发文件 | 功能 |
 |------|---------|------|
-| TODO Board | `TODO.md/csv` | checkbox → 交互看板，按 `##` 分列，变更即时写回 |
 | Wiki Graph | 任意 `.md` | WikiLink + Markdown Link → force-directed 图谱，Local/Global 范围 |
 | Timeline | `CHANGELOG.md`, `TIMELINE.md` | 日期标题 → 竖向时间轴卡片，`#tag` 提取 |
 | Backlinks | `BACKLINKS.md`, `index.md`, `MOC.md` | 全库扫描引用来源 + 上下文 snippet |
@@ -28,6 +27,7 @@ MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户
 
 | 能力 | 触发文件 | 功能 |
 |------|---------|------|
+| TODO Board | `TODO.md/csv` | checkbox → 交互看板，按 `##` 分列，变更即时写回；作为 MindOS 内建能力，不在插件面板管理 |
 | CSV Views | 任意 `.csv`（排除 TODO） | Table/Gallery/Board 视图；作为 MindOS 内建能力，不在插件面板管理 |
 | Agent Inspector | `.mindos/agent-audit-log.json`（兼容旧 `.agent-log.json`） | Agent 工具调用日志可视化；作为 MindOS 内建能力，不在插件面板管理 |
 | Config Panel | `CONFIG.json` | 配置编辑面板；作为 MindOS 内建能力，不在插件面板管理 |
