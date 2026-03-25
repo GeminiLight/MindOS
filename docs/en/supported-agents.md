@@ -86,3 +86,5 @@ mindos mcp install --transport http --url http://<server-ip>:8781/mcp --token yo
 ```
 
 > Each Agent stores config in a different file — see the **MCP Config Path** column in the table above for exact paths.
+>
+> Maintenance rules and checklist: `wiki/refs/agent-config-registry.md`

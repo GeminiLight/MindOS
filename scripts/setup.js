@@ -30,7 +30,7 @@ import { execSync, spawn } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import { createConnection } from 'node:net';
 import http from 'node:http';
-import { MCP_AGENTS, detectAgentPresence } from '../bin/lib/mcp-agents.js';
+import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from '../bin/lib/mcp-agents.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -750,21 +750,7 @@ const UNIVERSAL_AGENTS = new Set([
   'cline', 'codex', 'cursor', 'gemini-cli',
   'github-copilot', 'kimi-cli', 'opencode', 'warp',
 ]);
-const SKILL_UNSUPPORTED = new Set(['claude-desktop']);
-const AGENT_NAME_MAP = {
-  'claude-code': 'claude-code',
-  'windsurf': 'windsurf',
-  'trae': 'trae',
-  'openclaw': 'openclaw',
-  'codebuddy': 'codebuddy',
-  'iflow-cli': 'iflow-cli',
-  'pi': 'pi',
-  'augment': 'augment',
-  'qwen-code': 'qwen-code',
-  'qoder': 'qoder',
-  'trae-cn': 'trae-cn',
-  'roo': 'roo',
-};
+const SKILL_UNSUPPORTED = new Set([]);
 
 /**
  * Install the appropriate MindOS Skill to selected agents via `npx skills add`.
@@ -783,8 +769,16 @@ function runSkillInstallStep(template, selectedAgents) {
 
   // Filter to non-universal, skill-capable agents
   const additionalAgents = selectedAgents
-    .filter(key => !UNIVERSAL_AGENTS.has(key) && !SKILL_UNSUPPORTED.has(key))
-    .map(key => AGENT_NAME_MAP[key] || key);
+    .flatMap((key) => {
+      if (SKILL_UNSUPPORTED.has(key)) return [];
+      // Keep backward-compatibility for non-MCP universal keys.
+      if (UNIVERSAL_AGENTS.has(key)) return [];
+      const reg = SKILL_AGENT_REGISTRY[key];
+      if (!reg) return [key];
+      if (reg.mode === 'unsupported') return [];
+      if (reg.mode === 'universal') return [];
+      return [reg.skillAgentName || key];
+    });
 
   // Each agent needs its own -a flag (skills CLI does NOT accept comma-separated)
   const agentFlags = additionalAgents.length > 0
