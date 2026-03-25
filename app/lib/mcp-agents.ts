@@ -257,6 +257,128 @@ export const SKILL_AGENT_REGISTRY: Record<string, SkillAgentRegistration> = {
   'codex': { mode: 'universal' },
 };
 
+export interface SkillWorkspaceProfile {
+  mode: SkillInstallMode;
+  skillAgentName?: string;
+  workspacePath: string;
+}
+
+export interface AgentRuntimeSignals {
+  hiddenRootPath: string;
+  hiddenRootPresent: boolean;
+  conversationSignal: boolean;
+  usageSignal: boolean;
+  lastActivityAt?: string;
+}
+
+function resolveHiddenRootPath(agent: AgentDef): string {
+  const dirs = agent.presenceDirs ?? [];
+  for (const entry of dirs) {
+    const abs = expandHome(entry);
+    if (!fs.existsSync(abs)) continue;
+    try {
+      const stat = fs.statSync(abs);
+      if (stat.isDirectory()) return abs;
+      if (stat.isFile()) return path.dirname(abs);
+    } catch {
+      continue;
+    }
+  }
+  return path.dirname(expandHome(agent.global));
+}
+
+function readDirectoryEntries(dir: string): fs.Dirent[] {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function detectSignalsFromName(name: string): { conversation: boolean; usage: boolean } {
+  const lowered = name.toLowerCase();
+  return {
+    conversation: /(session|history|conversation|chat|transcript)/.test(lowered),
+    usage: /(usage|token|cost|billing|metric|analytics)/.test(lowered),
+  };
+}
+
+export function resolveSkillWorkspaceProfile(agentKey: string): SkillWorkspaceProfile {
+  const registration = SKILL_AGENT_REGISTRY[agentKey] ?? { mode: 'unsupported' as const };
+  if (registration.mode === 'universal') {
+    return { mode: registration.mode, workspacePath: expandHome('~/.agents/skills') };
+  }
+  const agent = MCP_AGENTS[agentKey];
+  const root = agent ? resolveHiddenRootPath(agent) : expandHome('~/.agents');
+  const workspacePath = path.join(root, 'skills');
+  return {
+    mode: registration.mode,
+    skillAgentName: registration.skillAgentName,
+    workspacePath,
+  };
+}
+
+export function detectAgentRuntimeSignals(agentKey: string): AgentRuntimeSignals {
+  const agent = MCP_AGENTS[agentKey];
+  if (!agent) {
+    return {
+      hiddenRootPath: '',
+      hiddenRootPresent: false,
+      conversationSignal: false,
+      usageSignal: false,
+    };
+  }
+  const hiddenRootPath = resolveHiddenRootPath(agent);
+  if (!fs.existsSync(hiddenRootPath)) {
+    return {
+      hiddenRootPath,
+      hiddenRootPresent: false,
+      conversationSignal: false,
+      usageSignal: false,
+    };
+  }
+
+  const maxDepth = 3;
+  const maxEntries = 300;
+  let scanned = 0;
+  let conversationSignal = false;
+  let usageSignal = false;
+  let latestMtime = 0;
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: hiddenRootPath, depth: 0 }];
+
+  while (queue.length > 0 && scanned < maxEntries) {
+    const current = queue.shift();
+    if (!current) break;
+    const entries = readDirectoryEntries(current.dir);
+    for (const entry of entries) {
+      if (scanned >= maxEntries) break;
+      scanned += 1;
+      if (entry.name === 'node_modules' || entry.name === '.git') continue;
+      const fullPath = path.join(current.dir, entry.name);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs;
+        const signals = detectSignalsFromName(entry.name);
+        if (signals.conversation) conversationSignal = true;
+        if (signals.usage) usageSignal = true;
+        if (entry.isDirectory() && current.depth < maxDepth) {
+          queue.push({ dir: fullPath, depth: current.depth + 1 });
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return {
+    hiddenRootPath,
+    hiddenRootPresent: true,
+    conversationSignal,
+    usageSignal,
+    lastActivityAt: latestMtime > 0 ? new Date(latestMtime).toISOString() : undefined,
+  };
+}
+
 /* ── MindOS MCP Install Detection ──────────────────────────────────────── */
 
 export function detectInstalled(agentKey: string): { installed: boolean; scope?: string; transport?: string; configPath?: string } {
