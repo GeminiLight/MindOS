@@ -34,6 +34,11 @@
 - **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
 - **解决：** `prepare` 在 `mcp/` 写入 `.mindos-npm-ci-platform`（如 `linux-x64`）；`ProcessManager.start()` 调用 `ensureBundledMcpNodeModules()`：与 `process.platform-arch` 不一致（或启发式发现错误 `@esbuild/*`）时删掉 `mcp/node_modules` 并在本机再跑 `npm ci --omit=dev`（用 Desktop 自带的 Node）；根本方案也可改为在目标 OS 上执行 `prepare-mindos-runtime`
 
+### Desktop 模式下 Settings → Update 执行 npm update 无效
+- **现象：** 用户在 Desktop 点「Update」，npm 更新了全局包，但 App 内置的 `mindos-runtime` 不变，重启后版本未升
+- **原因：** Desktop 走 bundled standalone runtime（只读 `.app` 内），npm install 写到另一个路径；且 `process.cwd()` 在 standalone 下指向 `.next/standalone/`，CLI 路径也不对
+- **解决：** `UpdateTab` 检测 `window.mindos`（Electron preload bridge），存在时走 `electron-updater`（IPC `check-update` / `install-update`），不走 npm API；浏览器/CLI 模式保持原有 npm 更新。CI 的 `build-desktop.yml` 用 `--publish always` 让 electron-builder 自动生成 `latest-mac.yml` 等描述文件并上传 GitHub Release，electron-updater 才能正常工作
+
 ### Diff 仅做插件入口，用户看不到全局变化
 - **现象：** 只有打开 `Agent-Diff.md` 才能看到差异；普通编辑流里不知道哪里变了、何时变了
 - **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒

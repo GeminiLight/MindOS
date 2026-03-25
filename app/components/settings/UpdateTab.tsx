@@ -1,9 +1,23 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink, Circle } from 'lucide-react';
+import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink, Circle, Monitor } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
+
+interface MindosDesktopBridge {
+  checkUpdate: () => Promise<{ available: boolean; version?: string }>;
+  installUpdate: () => Promise<void>;
+  onUpdateProgress?: (cb: (progress: { percent: number }) => void) => () => void;
+  onUpdateReady?: (cb: () => void) => () => void;
+  getAppInfo?: () => Promise<{ version?: string }>;
+}
+
+function getDesktopBridge(): MindosDesktopBridge | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { mindos?: MindosDesktopBridge };
+  return w.mindos?.checkUpdate ? (w.mindos as MindosDesktopBridge) : null;
+}
 
 interface UpdateInfo {
   current: string;
@@ -51,7 +65,182 @@ function StageIcon({ status }: { status: string }) {
   }
 }
 
+/** Desktop (Electron) update: uses electron-updater via preload IPC bridge */
+function DesktopUpdateTab() {
+  const { t } = useLocale();
+  const u = t.settings.update;
+  const bridge = getDesktopBridge()!;
+  const [state, setState] = useState<'idle' | 'checking' | 'downloading' | 'ready' | 'error'>('idle');
+  const [available, setAvailable] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    bridge.getAppInfo?.().then((info) => {
+      if (info?.version) setAppVersion(info.version);
+    }).catch(() => {});
+    handleCheck();
+    const cleanups: Array<() => void> = [];
+    if (bridge.onUpdateProgress) {
+      cleanups.push(bridge.onUpdateProgress((p) => setProgress(Math.round(p.percent))));
+    }
+    if (bridge.onUpdateReady) {
+      cleanups.push(bridge.onUpdateReady(() => setState('ready')));
+    }
+    return () => cleanups.forEach((fn) => fn());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCheck = async () => {
+    setState('checking');
+    setErrorMsg('');
+    try {
+      const r = await bridge.checkUpdate();
+      setAvailable(r.available);
+      if (r.version) setVersion(r.version);
+      setState('idle');
+    } catch {
+      setState('error');
+      setErrorMsg(u?.error ?? 'Failed to check for updates.');
+    }
+  };
+
+  const handleInstall = async () => {
+    setState('downloading');
+    setProgress(0);
+    try {
+      await bridge.installUpdate();
+    } catch {
+      setState('error');
+      setErrorMsg('Update failed. Please try again.');
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Monitor size={14} className="text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">MindOS Desktop</span>
+          </div>
+          {appVersion && <span className="text-xs font-mono text-muted-foreground">v{appVersion}</span>}
+        </div>
+
+        {state === 'checking' && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 size={13} className="animate-spin" />
+            {u?.checking ?? 'Checking for updates...'}
+          </div>
+        )}
+
+        {state === 'idle' && !available && (
+          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 size={13} />
+            {u?.upToDate ?? "You're up to date"}
+          </div>
+        )}
+
+        {state === 'idle' && available && (
+          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
+            <Download size={13} />
+            {version ? `Update available: v${version}` : 'Update available'}
+          </div>
+        )}
+
+        {state === 'downloading' && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-foreground">
+              <Loader2 size={13} className="animate-spin" style={{ color: 'var(--amber)' }} />
+              {u?.desktopDownloading ?? 'Downloading update...'}
+            </div>
+            <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.max(progress, 3)}%`, background: 'var(--amber)' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {state === 'ready' && (
+          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 size={13} />
+            {u?.desktopReady ?? 'Update downloaded. Restart to apply.'}
+          </div>
+        )}
+
+        {state === 'error' && (
+          <div className="flex items-center gap-2 text-xs text-destructive">
+            <AlertCircle size={13} />
+            {errorMsg}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleCheck}
+          disabled={state === 'checking' || state === 'downloading'}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <RefreshCw size={12} className={state === 'checking' ? 'animate-spin' : ''} />
+          {u?.checkButton ?? 'Check for Updates'}
+        </button>
+
+        {state === 'idle' && available && (
+          <button
+            onClick={handleInstall}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-white transition-colors"
+            style={{ background: 'var(--amber)' }}
+          >
+            <Download size={12} />
+            {version ? `Update to v${version}` : 'Update'}
+          </button>
+        )}
+
+        {state === 'ready' && (
+          <button
+            onClick={() => bridge.installUpdate()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-white transition-colors"
+            style={{ background: 'var(--amber)' }}
+          >
+            <RefreshCw size={12} />
+            {u?.desktopRestart ?? 'Restart Now'}
+          </button>
+        )}
+      </div>
+
+      <div className="border-t border-border pt-4 space-y-2">
+        <a
+          href={CHANGELOG_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ExternalLink size={12} />
+          {u?.releaseNotes ?? 'View release notes'}
+        </a>
+        <p className="text-2xs text-muted-foreground/60">
+          {u?.desktopHint ?? 'Updates are delivered through the Desktop app auto-updater.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Router: Desktop uses electron-updater IPC; browser/CLI uses npm API */
 export function UpdateTab() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => { setIsDesktop(!!getDesktopBridge()); }, []);
+  if (isDesktop) return <DesktopUpdateTab />;
+  return <BrowserUpdateTab />;
+}
+
+/** Browser / CLI update: uses npm registry check + POST /api/update */
+function BrowserUpdateTab() {
   const { t, locale } = useLocale();
   const u = t.settings.update;
   const [info, setInfo] = useState<UpdateInfo | null>(null);

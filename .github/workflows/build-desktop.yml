@@ -63,11 +63,30 @@ jobs:
       - name: Prepare bundled runtime
         run: cd desktop && npm run prepare-mindos-runtime
 
-      # Package for the target platform
+      # Get version (needed for tag name)
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(cd desktop && node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      # Package for the target platform.
+      # --publish always: electron-builder generates latest-mac.yml / latest-linux.yml / latest.yml
+      # and uploads to the GitHub Release (required for electron-updater auto-update).
+      # --publish never: local build only (artifact upload, no release).
       - name: Package (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: cd desktop && npm run dist:${{ matrix.platform }}
+          EP_GH_IGNORE_TIME: true
+        run: |
+          TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
+          if [ "${{ inputs.publish }}" = "true" ]; then
+            cd desktop && npx electron-builder --${{ matrix.platform }} --publish always
+          else
+            cd desktop && npm run dist:${{ matrix.platform }}
+          fi
+        shell: bash
 
       # Upload artifacts (always, even if not publishing)
       - name: Upload artifacts
@@ -80,29 +99,6 @@ jobs:
             desktop/dist/*.exe
             desktop/dist/*.AppImage
             desktop/dist/*.deb
+            desktop/dist/*.yml
+            desktop/dist/*.yaml
           if-no-files-found: warn
-
-      # Collect version info
-      - name: Get version
-        id: version
-        run: |
-          VERSION=$(cd desktop && node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-        shell: bash
-
-      # Publish to GitHub Releases
-      - name: Publish to GitHub Releases
-        if: inputs.publish == true
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
-          name: ${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
-          files: |
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/*.exe
-            desktop/dist/*.AppImage
-            desktop/dist/*.deb
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
