@@ -5,6 +5,7 @@ export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
 export type SkillSourceFilter = 'all' | 'builtin' | 'user';
 export type AgentStatusFilter = 'all' | 'connected' | 'detected' | 'notFound';
+export type AgentTransportFilter = 'all' | 'stdio' | 'http' | 'other';
 export type SkillWorkspaceStatusFilter = 'all' | 'enabled' | 'disabled' | 'attention';
 export type SkillCapabilityFilter = SkillCapability | 'all';
 
@@ -154,4 +155,54 @@ export function filterAgentsForMcpTable(agents: AgentInfo[], query: string, stat
     const haystack = `${agent.name} ${agent.key} ${agent.configPath ?? ''}`.toLowerCase();
     return haystack.includes(q);
   });
+}
+
+export function resolveAgentTransport(agent: AgentInfo): AgentTransportFilter {
+  const transport = (agent.transport ?? agent.preferredTransport ?? '').toLowerCase();
+  if (transport === 'stdio' || transport === 'http') return transport;
+  return 'other';
+}
+
+export function filterAgentsForMcpWorkspace(
+  agents: AgentInfo[],
+  filters: { query: string; status: AgentStatusFilter; transport: AgentTransportFilter },
+): AgentInfo[] {
+  const q = filters.query.trim().toLowerCase();
+  return agents.filter((agent) => {
+    if (filters.status !== 'all' && resolveAgentStatus(agent) !== filters.status) return false;
+    if (filters.transport !== 'all' && resolveAgentTransport(agent) !== filters.transport) return false;
+    if (!q) return true;
+    const haystack = `${agent.name} ${agent.key} ${agent.configPath ?? ''}`.toLowerCase();
+    return haystack.includes(q);
+  });
+}
+
+export function buildMcpRiskQueue(args: {
+  mcpRunning: boolean;
+  detectedCount: number;
+  notFoundCount: number;
+}): RiskItem[] {
+  const items: RiskItem[] = [];
+  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: 'MCP server is not running' });
+  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: `${args.detectedCount} detected agent(s) need configuration` });
+  if (args.notFoundCount > 0) items.push({ id: 'not-found', severity: 'warn', title: `${args.notFoundCount} agent(s) not detected on this machine` });
+  return items;
+}
+
+export interface McpBulkReconnectResult {
+  agentKey: string;
+  ok: boolean;
+}
+
+export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult[]): {
+  total: number;
+  succeeded: number;
+  failed: number;
+} {
+  const failed = results.filter((item) => !item.ok).length;
+  return {
+    total: results.length,
+    succeeded: results.length - failed,
+    failed,
+  };
 }
