@@ -147,6 +147,7 @@ export const zh = {
     clearAll: '清除全部',
     confirmClear: '确认清除？',
     noSessions: '暂无历史对话。',
+    draftingHint: 'AI 仍在执行，你可以先输入下一步。',
   },
   panels: {
     agents: {
@@ -163,6 +164,7 @@ export const zh = {
       noAgents: '未检测到智能体。',
       autoRefresh: '每 30 秒自动刷新',
       connect: '连接',
+      openDashboard: '仪表盘',
       installing: '安装中...',
       install: (name: string) => `安装 ${name}`,
       // Snippet section
