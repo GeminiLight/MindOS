@@ -22,6 +22,7 @@ import {
   appendContentChange,
 } from '@/lib/fs';
 import { createSpaceFilesystem } from '@/lib/core/create-space';
+import { appendAgentAuditEvent, parseAgentAuditJsonLines } from '@/lib/core/agent-audit-log';
 
 function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
@@ -123,6 +124,14 @@ export async function POST(req: NextRequest) {
       case 'append_to_file': {
         const { content } = params as { content: string };
         if (typeof content !== 'string') return err('missing content');
+        if (filePath === '.agent-log.json') {
+          const entries = parseAgentAuditJsonLines(content);
+          for (const entry of entries) {
+            appendAgentAuditEvent(getMindRoot(), entry);
+          }
+          resp = NextResponse.json({ ok: true, migratedEntries: entries.length });
+          break;
+        }
         const before = safeRead(filePath);
         appendToFile(filePath, content);
         changeEvent = {
