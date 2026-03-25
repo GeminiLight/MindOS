@@ -662,3 +662,25 @@
 - **现象：** TCP connect 方式检测端口，防火墙 drop 包导致 ETIMEDOUT 误判为"端口被占用"
 - **解决：** 改用 `net.createServer().listen(port)` 尝试绑定，EADDRINUSE = 被占，成功绑定后 close = 空闲
 - **规则：** 判断端口是否可用只用 bind 模式
+
+## Ask AI / @ Mention
+
+### @ mention 零结果时 submit 被锁死
+- **现象：** 输入 `@nonexistent` 后无匹配，但发送按钮变灰不可用；用户只能手动删除 `@` 才能继续
+- **原因：** `useMention.updateMentionFromInput` 设置了 `mentionQuery`（非 null）但 `mentionResults` 为空 → submit guard `mention.mentionQuery !== null` 锁死
+- **解决：** 当过滤结果为空时立即 `resetMention()`，不锁 submit
+- **规则：** 下拉式 mention/autocomplete 在零匹配时必须回归普通输入模式
+
+### @ mention 文件列表不刷新（新增/删除文件搜不到）
+- **现象：** 创建新文件后 `@` 搜索找不到新文件
+- **原因：** `useMention` 仅 mount 时 `fetch('/api/files')` 一次，后续文件变更不触发 refetch
+- **解决：** 监听 `window.dispatchEvent(new Event('mindos:files-changed'))`，自动 refetch
+- **规则：** 涉及"列表跟踪实体变更"的 hook，必须有重刷机制（事件/轮询/invalidation）
+
+### navigateMention 空结果产生负索引
+- **现象：** 零匹配状态按 ↓ 键后 `mentionIndex` 变为 -1（`length - 1 = -1`）
+- **解决：** `navigateMention` 在 `mentionResults.length === 0` 时直接 return
+
+### /api/files 异常响应导致 mention crash
+- **现象：** API 返回非数组（如 `{ error: ... }`）时 `allFiles.filter` 抛 TypeError
+- **解决：** `safeFetchFiles` 检查 `r.ok`、`Array.isArray(data)` 双重防御

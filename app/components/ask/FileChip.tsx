@@ -21,6 +21,7 @@ export default function FileChip({ path, onRemove, variant = 'kb' }: FileChipPro
       <button
         type="button"
         onClick={onRemove}
+        aria-label={`Remove ${name}`}
         className="text-muted-foreground hover:text-foreground ml-0.5 shrink-0"
       >
         <X size={10} />
