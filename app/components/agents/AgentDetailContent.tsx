@@ -91,6 +91,21 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
           <Activity size={14} className="text-muted-foreground" />
+          {a.detail.runtimeSignals}
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <DetailLine label={a.detail.skillMode} value={agent.skillMode ?? a.na} />
+          <DetailLine label={a.detail.hiddenRoot} value={agent.hiddenRootPath ?? a.na} />
+          <DetailLine label={a.detail.hiddenRootPresent} value={agent.hiddenRootPresent ? a.detail.yes : a.detail.no} />
+          <DetailLine label={a.detail.conversationSignal} value={agent.runtimeConversationSignal ? a.detail.yes : a.detail.no} />
+          <DetailLine label={a.detail.usageSignal} value={agent.runtimeUsageSignal ? a.detail.yes : a.detail.no} />
+          <DetailLine label={a.detail.lastActivityAt} value={agent.runtimeLastActivityAt ?? a.na} />
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
+          <Activity size={14} className="text-muted-foreground" />
           {a.detail.recentActivity}
         </h2>
         <p className="text-sm text-muted-foreground">{a.detail.noActivity}</p>

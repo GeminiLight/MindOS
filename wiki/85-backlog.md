@@ -82,6 +82,7 @@
 - [x] **I21：Agents Skills Workspace（P1.7）** — Skills 页升级为多维管理工作台：状态过滤（Enabled/Disabled/Needs Attention）、能力过滤、批量启停筛选结果、Agent 聚焦矩阵；MCP 管理视图补充筛选结果计数。并新增模型层测试覆盖正常/边界/错误路径。[spec](./specs/spec-agents-skills-workspace-multi-agent.md)
 - [x] **I22：Agents MCP Control Plane（P1.8）** — MCP 页升级为统一管理工作台：新增传输筛选（All/stdio/http/other）、风险队列（MCP 停止/Detected 待配置/Not found）、筛选结果批量重连与执行反馈；补充模型层 + 页面渲染测试覆盖正常/边界/错误路径。[spec](./specs/spec-agents-mcp-control-plane-upgrade.md)
 - [x] **I23：Agents Sidebar Agent Click 路由统一（P1.9）** — Sidebar 中点击任意 Agent 行统一跳转 `/agents/[agentKey]`，详情在 Content 展示（skill/mcp/usage/space reach），不再走右侧详情抽屉；面板行高亮改为路由驱动。[spec](./specs/spec-agents-sidebar-agent-open-content-detail.md)
+- [x] **I24：Agents 统一配置与运行信号可视化（P2.0）** — `/api/mcp/agents` 增补 skill 模式与隐藏目录 runtime 信号（conversation/usage/last activity）；MCP/Skills 页新增多 Agent 配置可见性摘要，Agent 详情页新增 Runtime & Config Signals 区块。[spec](./specs/spec-agents-unified-multi-agent-config-visualization.md)
 - [x] **Ask 输入不中断（执行中可草拟）** — 修复 Agent 执行期间输入框被禁用：允许边执行边输入，提交仍串行；新增“可先输入下一步”提示与 jsdom 回归测试。测试：`app/__tests__/ask/ask-content-input-during-run.test.tsx`
 
 ### 🟡 中优先

@@ -79,6 +79,14 @@ export interface AgentInfo {
   globalNestedKey?: string;
   globalPath: string;
   projectPath?: string | null;
+  skillMode?: 'universal' | 'additional' | 'unsupported';
+  skillAgentName?: string;
+  skillWorkspacePath?: string;
+  hiddenRootPath?: string;
+  hiddenRootPresent?: boolean;
+  runtimeConversationSignal?: boolean;
+  runtimeUsageSignal?: boolean;
+  runtimeLastActivityAt?: string;
 }
 
 export interface SkillInfo {

@@ -191,6 +191,12 @@
 - **解决：** 在 P1.9 将 Agent 行点击统一为 `/agents/[agentKey]` 路由；右侧抽屉保留兼容代码但不再作为主入口
 - **规则：** 同一层级导航项只能有一个主语义。若信息是“完整详情”，必须放在可回退、可分享、可刷新的内容路由中
 
+### 把进程级统计误当成 Agent 原生运行统计
+- **现象：** 在 Agents 页面把 `/api/monitoring` 的 token/request 累计直接当作单个 Agent 的 usage，导致“某个 Agent 高活跃”结论失真
+- **原因：** `metrics.ts` 是 MindOS 进程级聚合，不等于 `~/.claude`、`~/.codex` 等 Agent 隐藏目录里的原生会话/usage 证据
+- **解决：** 明确拆两层信号：进程级指标继续走 `/api/monitoring`；Agent 级运行迹象通过隐藏目录扫描信号（conversation/usage/last activity）展示
+- **规则：** 任何 Agent 级可视化必须标注数据来源层级（MindOS runtime vs Agent hidden folder），避免混用口径
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败
