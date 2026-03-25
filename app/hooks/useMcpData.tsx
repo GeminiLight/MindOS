@@ -12,7 +12,7 @@ export interface McpContextValue {
   skills: SkillInfo[];
   loading: boolean;
   refresh: () => Promise<void>;
-  toggleSkill: (name: string, enabled: boolean) => Promise<void>;
+  toggleSkill: (name: string, enabled: boolean) => Promise<boolean>;
   installAgent: (key: string, opts?: { scope?: string; transport?: string }) => Promise<boolean>;
 }
 
@@ -108,7 +108,7 @@ export default function McpProvider({ children }: { children: ReactNode }) {
     await fetchAll();
   }, [fetchAll]);
 
-  const toggleSkill = useCallback(async (name: string, enabled: boolean) => {
+  const toggleSkill = useCallback(async (name: string, enabled: boolean): Promise<boolean> => {
     // Optimistic update
     setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled } : s));
     try {
@@ -117,9 +117,11 @@ export default function McpProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggle', name, enabled }),
       });
+      return true;
     } catch {
       // Revert on failure
       setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled: !enabled } : s));
+      return false;
     }
   }, []);
 
