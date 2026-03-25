@@ -11,6 +11,7 @@ import type {
   SkillWorkspaceStatusFilter,
 } from './agents-content-model';
 import {
+  aggregateCrossAgentSkills,
   buildSkillAttentionSet,
   createBulkSkillTogglePlan,
   filterSkillsForWorkspace,
@@ -30,6 +31,9 @@ export default function AgentsSkillsSection({
     summaryEnabled: (n: number) => string;
     summaryDisabled: (n: number) => string;
     summaryAttention: (n: number) => string;
+    crossAgentSkillsTitle: string;
+    crossAgentSkillsEmpty: string;
+    crossAgentSkillAgents: (names: string) => string;
     capabilityGroups: string;
     registrySummaryTitle: string;
     registryUniversal: (n: number) => string;
@@ -108,6 +112,10 @@ export default function AgentsSkillsSection({
     return { universal, additional, unsupported, hiddenRoots, total: knownAgents.length };
   }, [knownAgents]);
   const attentionCount = useMemo(() => buildSkillAttentionSet(mcp.skills).size, [mcp.skills]);
+  const crossAgentSkills = useMemo(
+    () => aggregateCrossAgentSkills(mcp.agents),
+    [mcp.agents],
+  );
 
   const runBulkToggle = async (targetEnabled: boolean) => {
     if (bulkRunning) return;
@@ -150,14 +158,48 @@ export default function AgentsSkillsSection({
           <span className="rounded-md border border-border px-2 py-1.5">{copy.summaryAttention(attentionCount)}</span>
         </div>
       </div>
-      <div className="rounded-md border border-border bg-background p-3">
-        <p className="text-xs font-medium text-muted-foreground mb-2">{copy.registrySummaryTitle}</p>
-        <ul className="space-y-1 text-xs text-muted-foreground">
-          <li>{copy.registryUniversal(registrySummary.universal)}</li>
-          <li>{copy.registryAdditional(registrySummary.additional)}</li>
-          <li>{copy.registryUnsupported(registrySummary.unsupported)}</li>
-          <li>{copy.registryHiddenRoots(registrySummary.hiddenRoots, registrySummary.total)}</li>
-        </ul>
+      <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+        <p className="text-xs font-semibold text-foreground">{copy.crossAgentSkillsTitle}</p>
+        {crossAgentSkills.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{copy.crossAgentSkillsEmpty}</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {crossAgentSkills.slice(0, 20).map((sk) => (
+              <span
+                key={sk.skillName}
+                title={copy.crossAgentSkillAgents(sk.agents.join(', '))}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--amber-dim)] px-2.5 py-1 text-xs text-foreground"
+              >
+                <span className="font-medium">{sk.skillName}</span>
+                <span className="tabular-nums text-muted-foreground">{sk.agents.length}</span>
+              </span>
+            ))}
+            {crossAgentSkills.length > 20 ? (
+              <span className="text-xs text-muted-foreground self-center">+{crossAgentSkills.length - 20}</span>
+            ) : null}
+          </div>
+        )}
+      </div>
+      <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+        <p className="text-xs font-semibold text-foreground">{copy.registrySummaryTitle}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="inline-block w-2 h-2 rounded-full bg-success" />
+            {copy.registryUniversal(registrySummary.universal)}
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="inline-block w-2 h-2 rounded-full bg-[var(--amber)]" />
+            {copy.registryAdditional(registrySummary.additional)}
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30" />
+            {copy.registryUnsupported(registrySummary.unsupported)}
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="inline-block w-2 h-2 rounded-full bg-success" />
+            {copy.registryHiddenRoots(registrySummary.hiddenRoots, registrySummary.total)}
+          </div>
+        </div>
       </div>
 
       {view === 'manage' ? (
