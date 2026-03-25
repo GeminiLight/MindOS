@@ -89,5 +89,8 @@ export function filterAgentsForMcpTable(agents: AgentInfo[], query: string, stat
   const q = query.trim().toLowerCase();
   const byStatus = filterAgentsByStatus(agents, status);
   if (!q) return byStatus;
-  return byStatus.filter((agent) => agent.name.toLowerCase().includes(q));
+  return byStatus.filter((agent) => {
+    const haystack = `${agent.name} ${agent.key} ${agent.configPath ?? ''}`.toLowerCase();
+    return haystack.includes(q);
+  });
 }
