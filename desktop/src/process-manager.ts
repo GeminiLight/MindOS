@@ -169,6 +169,7 @@ export class ProcessManager extends EventEmitter {
     const env: Record<string, string> = {
       ...(this.opts.env || process.env as Record<string, string>),
       MINDOS_WEB_PORT: String(webPort),
+      MINDOS_MCP_PORT: String(this.opts.mcpPort),
       MIND_ROOT: mindRoot,
       NODE_ENV: 'production',
       MINDOS_PROJECT_ROOT: projectRoot,

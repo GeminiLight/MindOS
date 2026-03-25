@@ -17,7 +17,7 @@ function parseHostname(host: string): string {
 export async function GET(req: NextRequest) {
   try {
     const settings = readSettings();
-    const port = settings.mcpPort ?? 8781;
+    const port = Number(process.env.MINDOS_MCP_PORT) || settings.mcpPort || 8781;
     const token = settings.authToken ?? '';
     const authConfigured = !!token;
 
