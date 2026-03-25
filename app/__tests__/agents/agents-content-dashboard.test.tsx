@@ -59,7 +59,7 @@ const baseMcpState = {
   ],
   loading: false,
   refresh: async () => {},
-  toggleSkill: async () => {},
+  toggleSkill: async () => true,
   installAgent: async () => true,
 };
 
@@ -91,6 +91,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.mcp.connectionGraph);
     expect(html).toContain(a.mcp.searchPlaceholder);
     expect(html).toContain(a.mcp.filters.all);
+    expect(html).toContain(a.mcp.resultCount(baseMcpState.agents.length));
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
     expect(html).toContain(a.mcp.actions.testConnection);
@@ -106,6 +107,8 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.skills.tabs.manage);
     expect(html).toContain(a.skills.tabs.matrix);
     expect(html).toContain(a.skills.searchPlaceholder);
+    expect(html).toContain(a.skills.statusAttention);
+    expect(html).toContain(a.skills.bulkEnableFiltered);
     expect(html).toContain(a.skills.capabilityGroups);
     expect(html).toContain('custom-routing');
   });
