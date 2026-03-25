@@ -164,7 +164,6 @@ export default function AgentsPanel({
                 notFound={notFound}
                 onOpenDetail={onOpenAgentDetail}
                 selectedAgentKey={selectedAgentKey}
-                mcp={mcp}
                 listCopy={listCopy}
                 onInstallAgent={installAgentWithRefresh}
                 showNotDetected={showNotDetected}
