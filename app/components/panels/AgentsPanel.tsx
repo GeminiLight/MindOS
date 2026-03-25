@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
@@ -27,6 +28,7 @@ export default function AgentsPanel({
   onOpenAgentDetail,
 }: AgentsPanelProps) {
   const { t } = useLocale();
+  const router = useRouter();
   const p = t.panels.agents;
   const mcp = useMcpData();
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +91,15 @@ export default function AgentsPanel({
               {connected.length} {p.connected}
             </span>
           )}
+          <button
+            onClick={() => router.push('/agents')}
+            className="px-2 py-1 rounded border border-border text-2xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={p.openDashboard}
+            title={p.openDashboard}
+            type="button"
+          >
+            {p.openDashboard}
+          </button>
           <button
             onClick={handleRefresh}
             disabled={refreshing}

@@ -664,6 +664,10 @@ export const zh = {
       releaseNotes: '查看更新日志',
       hint: '更新通过 npm 安装，等同于在终端运行',
       inTerminal: '。',
+      desktopDownloading: '正在下载更新...',
+      desktopReady: '更新已下载，重启后生效。',
+      desktopRestart: '立即重启',
+      desktopHint: '更新通过桌面端自动更新推送。',
     },
   },
   onboarding: {

@@ -640,6 +640,10 @@ export const en = {
       releaseNotes: 'View release notes',
       hint: 'Updates are installed via npm. Equivalent to running',
       inTerminal: 'in your terminal.',
+      desktopDownloading: 'Downloading update...',
+      desktopReady: 'Update downloaded. Restart to apply.',
+      desktopRestart: 'Restart Now',
+      desktopHint: 'Updates are delivered through the Desktop app auto-updater.',
     },
   },
   onboarding: {

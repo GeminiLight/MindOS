@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import AgentsPanel from '@/components/panels/AgentsPanel';
 import { messages } from '@/lib/i18n';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: () => {} }),
+}));
+
 vi.mock('@/hooks/useMcpData', () => ({
   useMcpData: () => ({
     status: {
@@ -48,6 +52,7 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain(a.navMcp);
     expect(html).toContain(a.navSkills);
     expect(html).toContain(a.rosterLabel);
+    expect(html).toContain(a.openDashboard);
     expect(html).toContain('Test Agent');
     expect(html).not.toContain('/help');
   });
