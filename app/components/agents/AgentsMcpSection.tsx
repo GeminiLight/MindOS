@@ -25,6 +25,7 @@ export default function AgentsMcpSection({
     };
     searchPlaceholder: string;
     emptyState: string;
+    resultCount: (n: number) => string;
     filters: {
       all: string;
       connected: string;
@@ -125,6 +126,7 @@ export default function AgentsMcpSection({
               <StatusFilterButton active={statusFilter === 'notFound'} label={copy.filters.notFound} onClick={() => setStatusFilter('notFound')} />
             </div>
           </div>
+          <p className="text-2xs text-muted-foreground">{copy.resultCount(filteredAgents.length)}</p>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
