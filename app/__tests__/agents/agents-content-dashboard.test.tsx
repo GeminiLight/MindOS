@@ -72,22 +72,22 @@ vi.mock('@/lib/LocaleContext', () => ({
 }));
 
 describe('Agents content dashboard', () => {
-  it('renders overview with segment nav and action queue', () => {
+  it('renders overview without top segment nav', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.title);
-    expect(html).toContain(a.navOverview);
-    expect(html).toContain(a.navMcp);
-    expect(html).toContain(a.navSkills);
     expect(html).toContain(a.overview.riskQueue);
-    expect(html).toContain('role="tablist"');
+    expect(html).not.toContain('role="tablist"');
   });
 
-  it('renders mcp table with test/reconnect/copy actions', () => {
+  it('renders mcp manage/topology sections with table actions', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="mcp" />);
     const a = messages.en.agentsContent;
 
+    expect(html).not.toContain('role="tablist"');
+    expect(html).toContain(a.mcp.tabs.manage);
+    expect(html).toContain(a.mcp.tabs.topology);
     expect(html).toContain(a.mcp.connectionGraph);
     expect(html).toContain(a.mcp.searchPlaceholder);
     expect(html).toContain(a.mcp.filters.all);
@@ -97,13 +97,15 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.mcp.actions.reconnect);
   });
 
-  it('renders skills capability groups', () => {
+  it('renders skills focused header and section tabs', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="skills" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.skills.title);
+    expect(html).not.toContain('role="tablist"');
+    expect(html).toContain(a.skills.tabs.manage);
+    expect(html).toContain(a.skills.tabs.matrix);
     expect(html).toContain(a.skills.searchPlaceholder);
-    expect(html).toContain(a.skills.matrixToggle);
     expect(html).toContain(a.skills.capabilityGroups);
     expect(html).toContain('custom-routing');
   });

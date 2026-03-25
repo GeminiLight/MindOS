@@ -17,7 +17,6 @@ import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
 import DirPicker from '@/components/DirPicker';
-import '@/lib/renderers/index'; // registers all renderers
 
 interface ViewPageClientProps {
   filePath: string;

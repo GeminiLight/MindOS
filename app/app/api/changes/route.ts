@@ -22,10 +22,16 @@ export async function GET(req: NextRequest) {
 
     if (op === 'list') {
       const path = req.nextUrl.searchParams.get('path') ?? undefined;
+      const sourceParam = req.nextUrl.searchParams.get('source');
+      const source = sourceParam === 'user' || sourceParam === 'agent' || sourceParam === 'system'
+        ? sourceParam
+        : undefined;
+      const opFilter = req.nextUrl.searchParams.get('event_op') ?? undefined;
+      const q = req.nextUrl.searchParams.get('q') ?? undefined;
       const limitParam = req.nextUrl.searchParams.get('limit');
       const limit = limitParam ? Number(limitParam) : 50;
       if (!Number.isFinite(limit) || limit <= 0) return err('invalid limit');
-      return NextResponse.json({ events: listContentChanges({ path, limit }) });
+      return NextResponse.json({ events: listContentChanges({ path, source, op: opFilter, q, limit }) });
     }
 
     return err(`unknown op: ${op}`);

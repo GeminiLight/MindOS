@@ -31,6 +31,7 @@ import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
 import { WalkthroughProvider } from './walkthrough';
 import McpProvider from '@/hooks/useMcpData';
+import '@/lib/renderers/index'; // client-side renderer registration source of truth
 import { useLeftPanel } from '@/hooks/useLeftPanel';
 import { useAskPanel } from '@/hooks/useAskPanel';
 import type { Tab } from './settings/types';

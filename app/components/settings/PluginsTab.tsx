@@ -1,20 +1,21 @@
 'use client';
 
 import { Puzzle } from 'lucide-react';
-import { getAllRenderers, setRendererEnabled } from '@/lib/renderers/registry';
+import { getPluginRenderers, setRendererEnabled } from '@/lib/renderers/registry';
 import { Toggle } from './Primitives';
 import type { PluginsTabProps } from './types';
 
 export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps) {
+  const renderers = getPluginRenderers();
   return (
     <div className="space-y-5">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.settings.plugins.title}</p>
 
-      {getAllRenderers().length === 0 ? (
+      {renderers.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t.settings.plugins.noPlugins}</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {getAllRenderers().map(renderer => {
+          {renderers.map(renderer => {
             const isCore = !!renderer.core;
             const enabled = isCore ? true : (pluginStates[renderer.id] ?? true);
             return (

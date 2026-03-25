@@ -11,6 +11,7 @@ import UpdateBanner from '@/components/UpdateBanner';
 import UpdateOverlay from '@/components/UpdateOverlay';
 import { cookies } from 'next/headers';
 import type { Locale } from '@/lib/i18n';
+import '@/lib/renderers/index'; // globally register built-in renderers once
 
 const geistSans = Inter({
   variable: '--font-geist-sans',

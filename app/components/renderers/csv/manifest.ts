@@ -9,6 +9,7 @@ export const manifest: RendererDefinition = {
   tags: ['csv', 'table', 'gallery', 'board', 'data'],
   builtin: true,
   core: true,
+  appBuiltinFeature: true,
   entryPath: 'Resources/Products.csv',
   match: ({ extension, filePath }) => extension === 'csv' && !/\bTODO\b/i.test(filePath),
   load: () => import('./CsvRenderer').then(m => ({ default: m.CsvRenderer })),
