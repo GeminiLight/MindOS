@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentInfo, SkillInfo } from '@/components/settings/types';
 import {
+  buildMcpRiskQueue,
   createBulkSkillTogglePlan,
+  filterAgentsForMcpWorkspace,
   filterSkillsForWorkspace,
   resolveMatrixAgents,
+  summarizeMcpBulkReconnectResults,
   summarizeBulkSkillToggleResults,
 } from '@/components/agents/agents-content-model';
 
@@ -86,5 +89,44 @@ describe('bulk skill toggle helpers', () => {
     expect(summary.succeeded).toBe(0);
     expect(summary.failed).toBe(1);
     expect(summary.total).toBe(1);
+  });
+});
+
+describe('MCP workspace model helpers', () => {
+  it('filters agents by query + status + transport (normal path)', () => {
+    const filtered = filterAgentsForMcpWorkspace(
+      [
+        { ...agents[0], transport: 'stdio' },
+        { ...agents[1], transport: 'http' },
+      ],
+      { query: 'cur', status: 'connected', transport: 'stdio' },
+    );
+    expect(filtered.map((a) => a.key)).toEqual(['cursor']);
+  });
+
+  it('keeps all agents on boundary all-filters', () => {
+    const filtered = filterAgentsForMcpWorkspace(
+      [
+        { ...agents[0], transport: 'stdio' },
+        { ...agents[1], transport: undefined },
+      ],
+      { query: '', status: 'all', transport: 'all' },
+    );
+    expect(filtered).toHaveLength(2);
+  });
+
+  it('returns stable summary for empty reconnect results (error path)', () => {
+    const summary = summarizeMcpBulkReconnectResults([]);
+    expect(summary.total).toBe(0);
+    expect(summary.failed).toBe(0);
+  });
+
+  it('builds risk queue from mcp running state and buckets', () => {
+    const queue = buildMcpRiskQueue({
+      mcpRunning: false,
+      detectedCount: 2,
+      notFoundCount: 1,
+    });
+    expect(queue.length).toBe(3);
   });
 });

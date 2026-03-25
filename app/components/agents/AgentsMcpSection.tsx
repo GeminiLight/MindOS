@@ -5,8 +5,12 @@ import Link from 'next/link';
 import { RefreshCw, Search, Server } from 'lucide-react';
 import type { McpContextValue } from '@/hooks/useMcpData';
 import type { AgentBuckets } from './agents-content-model';
-import type { AgentStatusFilter } from './agents-content-model';
-import { filterAgentsForMcpTable } from './agents-content-model';
+import type { AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
+import {
+  buildMcpRiskQueue,
+  filterAgentsForMcpWorkspace,
+  summarizeMcpBulkReconnectResults,
+} from './agents-content-model';
 
 export default function AgentsMcpSection({
   copy,
@@ -26,6 +30,19 @@ export default function AgentsMcpSection({
     searchPlaceholder: string;
     emptyState: string;
     resultCount: (n: number) => string;
+    riskQueueTitle: string;
+    riskMcpStopped: string;
+    riskDetected: (n: number) => string;
+    riskNotFound: (n: number) => string;
+    bulkReconnectFiltered: string;
+    bulkRunning: string;
+    bulkSummary: (ok: number, failed: number) => string;
+    transportFilters: {
+      all: string;
+      stdio: string;
+      http: string;
+      other: string;
+    };
     filters: {
       all: string;
       connected: string;
@@ -43,11 +60,27 @@ export default function AgentsMcpSection({
 }) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>('all');
+  const [transportFilter, setTransportFilter] = useState<AgentTransportFilter>('all');
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [view, setView] = useState<'manage' | 'topology'>('manage');
   const filteredAgents = useMemo(
-    () => filterAgentsForMcpTable(mcp.agents, query, statusFilter),
-    [mcp.agents, query, statusFilter],
+    () =>
+      filterAgentsForMcpWorkspace(mcp.agents, {
+        query,
+        status: statusFilter,
+        transport: transportFilter,
+      }),
+    [mcp.agents, query, statusFilter, transportFilter],
+  );
+  const riskQueue = useMemo(
+    () =>
+      buildMcpRiskQueue({
+        mcpRunning: !!mcp.status?.running,
+        detectedCount: buckets.detected.length,
+        notFoundCount: buckets.notFound.length,
+      }),
+    [mcp.status?.running, buckets.detected.length, buckets.notFound.length],
   );
 
   async function handleTestConnection(agentKey: string) {
@@ -69,6 +102,23 @@ export default function AgentsMcpSection({
     } finally {
       setBusyAction(null);
     }
+  }
+
+  async function handleBulkReconnect() {
+    if (busyAction !== null || filteredAgents.length === 0) return;
+    setBusyAction('bulk');
+    setBulkMessage(copy.bulkRunning);
+    const results: Array<{ agentKey: string; ok: boolean }> = [];
+    for (const agent of filteredAgents) {
+      const scope = agent.scope === 'project' ? 'project' : 'global';
+      const transport = agent.transport === 'http' ? 'http' : 'stdio';
+      const ok = await mcp.installAgent(agent.key, { scope, transport });
+      results.push({ agentKey: agent.key, ok });
+    }
+    await mcp.refresh();
+    const summary = summarizeMcpBulkReconnectResults(results);
+    setBulkMessage(copy.bulkSummary(summary.succeeded, summary.failed));
+    setBusyAction(null);
   }
 
   return (
@@ -125,6 +175,32 @@ export default function AgentsMcpSection({
               <StatusFilterButton active={statusFilter === 'detected'} label={copy.filters.detected} onClick={() => setStatusFilter('detected')} />
               <StatusFilterButton active={statusFilter === 'notFound'} label={copy.filters.notFound} onClick={() => setStatusFilter('notFound')} />
             </div>
+          </div>
+          <div role="group" aria-label={copy.table.transport} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-1 bg-background">
+            <StatusFilterButton active={transportFilter === 'all'} label={copy.transportFilters.all} onClick={() => setTransportFilter('all')} />
+            <StatusFilterButton active={transportFilter === 'stdio'} label={copy.transportFilters.stdio} onClick={() => setTransportFilter('stdio')} />
+            <StatusFilterButton active={transportFilter === 'http'} label={copy.transportFilters.http} onClick={() => setTransportFilter('http')} />
+            <StatusFilterButton active={transportFilter === 'other'} label={copy.transportFilters.other} onClick={() => setTransportFilter('other')} />
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <p className="text-xs font-medium text-muted-foreground mb-2">{copy.riskQueueTitle}</p>
+            <ul className="space-y-1.5 text-xs text-muted-foreground">
+              {!mcp.status?.running ? <li>{copy.riskMcpStopped}</li> : null}
+              {buckets.detected.length > 0 ? <li>{copy.riskDetected(buckets.detected.length)}</li> : null}
+              {buckets.notFound.length > 0 ? <li>{copy.riskNotFound(buckets.notFound.length)}</li> : null}
+              {riskQueue.length === 0 ? <li>{copy.emptyState}</li> : null}
+            </ul>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleBulkReconnect()}
+              disabled={busyAction !== null || filteredAgents.length === 0}
+              className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {copy.bulkReconnectFiltered}
+            </button>
+            {bulkMessage ? <span className="text-2xs text-muted-foreground">{bulkMessage}</span> : null}
           </div>
           <p className="text-2xs text-muted-foreground">{copy.resultCount(filteredAgents.length)}</p>
 
