@@ -2,21 +2,30 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
+function safeFetchFiles(): Promise<string[]> {
+  return fetch('/api/files')
+    .then((r) => (r.ok ? r.json() : []))
+    .then((data) => (Array.isArray(data) ? data : []))
+    .catch(() => [] as string[]);
+}
+
 export function useMention() {
   const [allFiles, setAllFiles] = useState<string[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<string[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
 
-  // Load file list once
-  useEffect(() => {
-    fetch('/api/files')
-      .then((r) => r.json())
-      .then(setAllFiles)
-      .catch(() => {});
+  const loadFiles = useCallback(() => {
+    safeFetchFiles().then(setAllFiles);
   }, []);
 
-  /** Parse @-mention from input text; returns updated input if a mention was selected. */
+  useEffect(() => {
+    loadFiles();
+    const handler = () => loadFiles();
+    window.addEventListener('mindos:files-changed', handler);
+    return () => window.removeEventListener('mindos:files-changed', handler);
+  }, [loadFiles]);
+
   const updateMentionFromInput = useCallback(
     (val: string) => {
       const atIdx = val.lastIndexOf('@');
@@ -30,8 +39,15 @@ export function useMention() {
         return;
       }
       const query = val.slice(atIdx + 1).toLowerCase();
+      const filtered = allFiles.filter((f) => f.toLowerCase().includes(query)).slice(0, 8);
+      if (filtered.length === 0) {
+        setMentionQuery(null);
+        setMentionResults([]);
+        setMentionIndex(0);
+        return;
+      }
       setMentionQuery(query);
-      setMentionResults(allFiles.filter((f) => f.toLowerCase().includes(query)).slice(0, 8));
+      setMentionResults(filtered);
       setMentionIndex(0);
     },
     [allFiles],
@@ -39,6 +55,7 @@ export function useMention() {
 
   const navigateMention = useCallback(
     (direction: 'up' | 'down') => {
+      if (mentionResults.length === 0) return;
       if (direction === 'down') {
         setMentionIndex((i) => Math.min(i + 1, mentionResults.length - 1));
       } else {

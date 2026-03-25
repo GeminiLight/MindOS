@@ -171,6 +171,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming'>('connecting');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const session = useAskSession(currentFile);
   const upload = useFileUpload();
@@ -409,6 +410,25 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [isLoading, currentFile, session, upload, mention]);
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('text/mindos-path')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback(() => setIsDragOver(false), []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const filePath = e.dataTransfer.getData('text/mindos-path');
+    if (filePath && !attachedFiles.includes(filePath)) {
+      setAttachedFiles(prev => [...prev, filePath]);
+    }
+  }, [attachedFiles]);
+
   const handleLoadSession = useCallback((id: string) => {
     session.loadSession(id);
     setShowHistory(false);
@@ -489,8 +509,15 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
       {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
       <div
-        className={cn('shrink-0 border-t border-border', isPanel && 'flex flex-col overflow-hidden bg-card')}
+        className={cn(
+          'shrink-0 border-t border-border',
+          isPanel && 'flex flex-col overflow-hidden bg-card',
+          isDragOver && 'ring-2 ring-[var(--amber)] ring-inset bg-[var(--amber-dim)]',
+        )}
         style={isPanel ? { height: panelComposerHeight } : undefined}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {isPanel ? (
           <div
