@@ -26,6 +26,11 @@ export default function AgentsSkillsSection({
   copy: {
     title: string;
     capabilityGroups: string;
+    registrySummaryTitle: string;
+    registryUniversal: (n: number) => string;
+    registryAdditional: (n: number) => string;
+    registryUnsupported: (n: number) => string;
+    registryHiddenRoots: (n: number, total: number) => string;
     tabs: {
       manage: string;
       matrix: string;
@@ -90,6 +95,13 @@ export default function AgentsSkillsSection({
       })),
     [copy.groupLabels],
   );
+  const registrySummary = useMemo(() => {
+    const universal = knownAgents.filter((agent) => agent.skillMode === 'universal').length;
+    const additional = knownAgents.filter((agent) => agent.skillMode === 'additional').length;
+    const unsupported = knownAgents.filter((agent) => agent.skillMode === 'unsupported').length;
+    const hiddenRoots = knownAgents.filter((agent) => !!agent.hiddenRootPresent).length;
+    return { universal, additional, unsupported, hiddenRoots, total: knownAgents.length };
+  }, [knownAgents]);
 
   const runBulkToggle = async (targetEnabled: boolean) => {
     if (bulkRunning) return;
@@ -124,6 +136,15 @@ export default function AgentsSkillsSection({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">{copy.capabilityGroups}</p>
+      <div className="rounded-md border border-border bg-background p-3">
+        <p className="text-xs font-medium text-muted-foreground mb-2">{copy.registrySummaryTitle}</p>
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          <li>{copy.registryUniversal(registrySummary.universal)}</li>
+          <li>{copy.registryAdditional(registrySummary.additional)}</li>
+          <li>{copy.registryUnsupported(registrySummary.unsupported)}</li>
+          <li>{copy.registryHiddenRoots(registrySummary.hiddenRoots, registrySummary.total)}</li>
+        </ul>
+      </div>
 
       {view === 'manage' ? (
         <>

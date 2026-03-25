@@ -1,12 +1,20 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { MCP_AGENTS, detectInstalled, detectAgentPresence } from '@/lib/mcp-agents';
+import {
+  MCP_AGENTS,
+  detectInstalled,
+  detectAgentPresence,
+  detectAgentRuntimeSignals,
+  resolveSkillWorkspaceProfile,
+} from '@/lib/mcp-agents';
 
 export async function GET() {
   try {
     const agents = Object.entries(MCP_AGENTS).map(([key, agent]) => {
       const status = detectInstalled(key);
       const present = detectAgentPresence(key);
+      const skillProfile = resolveSkillWorkspaceProfile(key);
+      const runtime = detectAgentRuntimeSignals(key);
       return {
         key,
         name: agent.name,
@@ -24,6 +32,14 @@ export async function GET() {
         globalNestedKey: agent.globalNestedKey,
         globalPath: agent.global,
         projectPath: agent.project,
+        skillMode: skillProfile.mode,
+        skillAgentName: skillProfile.skillAgentName,
+        skillWorkspacePath: skillProfile.workspacePath,
+        hiddenRootPath: runtime.hiddenRootPath,
+        hiddenRootPresent: runtime.hiddenRootPresent,
+        runtimeConversationSignal: runtime.conversationSignal,
+        runtimeUsageSignal: runtime.usageSignal,
+        runtimeLastActivityAt: runtime.lastActivityAt,
       };
     });
 

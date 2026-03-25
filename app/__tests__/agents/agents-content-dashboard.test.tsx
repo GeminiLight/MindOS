@@ -27,6 +27,12 @@ const baseMcpState = {
       configKey: 'mcpServers',
       globalPath: '/tmp/cursor.json',
       transport: 'stdio',
+      skillMode: 'universal' as const,
+      hiddenRootPath: '/home/test/.cursor',
+      hiddenRootPresent: true,
+      runtimeConversationSignal: true,
+      runtimeUsageSignal: true,
+      runtimeLastActivityAt: '2026-03-24T00:00:00.000Z',
     },
     {
       key: 'codex',
@@ -39,6 +45,11 @@ const baseMcpState = {
       format: 'json' as const,
       configKey: 'mcpServers',
       globalPath: '/tmp/codex.json',
+      skillMode: 'universal' as const,
+      hiddenRootPath: '/home/test/.codex',
+      hiddenRootPresent: true,
+      runtimeConversationSignal: false,
+      runtimeUsageSignal: false,
     },
     {
       key: 'ghost',
@@ -51,6 +62,11 @@ const baseMcpState = {
       format: 'json' as const,
       configKey: 'mcpServers',
       globalPath: '/tmp/ghost.json',
+      skillMode: 'additional' as const,
+      hiddenRootPath: '/home/test/.ghost',
+      hiddenRootPresent: false,
+      runtimeConversationSignal: false,
+      runtimeUsageSignal: false,
     },
   ],
   skills: [
@@ -94,6 +110,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.mcp.transportFilters.all);
     expect(html).toContain(a.mcp.bulkReconnectFiltered);
     expect(html).toContain(a.mcp.riskQueueTitle);
+    expect(html).toContain(a.mcp.configVisibilityTitle);
     expect(html).toContain(a.mcp.resultCount(baseMcpState.agents.length));
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
@@ -113,6 +130,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.skills.statusAttention);
     expect(html).toContain(a.skills.bulkEnableFiltered);
     expect(html).toContain(a.skills.capabilityGroups);
+    expect(html).toContain(a.skills.registrySummaryTitle);
     expect(html).toContain('custom-routing');
   });
 });
@@ -126,6 +144,7 @@ describe('Agent detail content', () => {
     expect(html).toContain(a.connection);
     expect(html).toContain(a.capabilities);
     expect(html).toContain(a.skillAssignments);
+    expect(html).toContain(a.runtimeSignals);
     expect(html).toContain(a.recentActivity);
     expect(html).toContain(a.spaceReach);
   });

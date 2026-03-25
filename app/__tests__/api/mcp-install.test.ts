@@ -168,6 +168,10 @@ describe('GET /api/mcp/agents', () => {
     expect(claude.installed).toBe(true);
     expect(claude.scope).toBe('global');
     expect(claude.transport).toBe('stdio');
+    expect(claude.skillMode).toBeDefined();
+    expect(typeof claude.hiddenRootPresent).toBe('boolean');
+    expect(typeof claude.runtimeConversationSignal).toBe('boolean');
+    expect(typeof claude.runtimeUsageSignal).toBe('boolean');
   });
 
   it('reports not installed when no config exists', async () => {
