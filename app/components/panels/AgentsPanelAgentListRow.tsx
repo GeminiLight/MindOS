@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Check, ChevronRight, Loader2, RotateCw } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
 
@@ -18,14 +19,14 @@ export default function AgentsPanelAgentListRow({
   agent,
   agentStatus,
   selected = false,
-  onOpenDetail,
+  detailHref,
   onInstallAgent,
   copy,
 }: {
   agent: AgentInfo;
   agentStatus: AgentsPanelAgentListStatus;
   selected?: boolean;
-  onOpenDetail: () => void;
+  detailHref: string;
   onInstallAgent: (key: string) => Promise<boolean>;
   copy: AgentsPanelAgentListRowCopy;
 }) {
@@ -41,9 +42,8 @@ export default function AgentsPanelAgentListRow({
           : 'border-border/70 bg-card/50 hover:border-border hover:bg-muted/25'}
       `}
     >
-      <button
-        type="button"
-        onClick={onOpenDetail}
+      <Link
+        href={detailHref}
         className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-3 pr-2 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className={`w-2 h-2 rounded-full shrink-0 ring-2 ring-background ${dot}`} />
@@ -59,7 +59,7 @@ export default function AgentsPanelAgentListRow({
           className={`shrink-0 transition-opacity duration-150 ${selected ? 'text-[var(--amber)] opacity-90' : 'text-muted-foreground/45 group-hover:text-muted-foreground/80'}`}
           aria-hidden
         />
-      </button>
+      </Link>
 
       {agentStatus === 'detected' && (
         <div className="pr-2 py-2 shrink-0">

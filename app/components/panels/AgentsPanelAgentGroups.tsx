@@ -15,7 +15,6 @@ export function AgentsPanelAgentGroups({
   connected,
   detected,
   notFound,
-  onOpenDetail,
   selectedAgentKey,
   onInstallAgent,
   listCopy,
@@ -26,7 +25,6 @@ export function AgentsPanelAgentGroups({
   connected: AgentInfo[];
   detected: AgentInfo[];
   notFound: AgentInfo[];
-  onOpenDetail?: (key: string) => void;
   selectedAgentKey?: string | null;
   onInstallAgent: (key: string) => Promise<boolean>;
   listCopy: AgentsPanelAgentListRowCopy;
@@ -34,8 +32,6 @@ export function AgentsPanelAgentGroups({
   setShowNotDetected: (v: boolean | ((prev: boolean) => boolean)) => void;
   p: AgentsCopy;
 }) {
-  const open = onOpenDetail ?? (() => {});
-
   return (
     <div>
       <div className="px-0 py-1 mb-0.5">
@@ -53,7 +49,7 @@ export function AgentsPanelAgentGroups({
                 agent={agent}
                 agentStatus="connected"
                 selected={selectedAgentKey === agent.key}
-                onOpenDetail={() => open(agent.key)}
+                detailHref={`/agents/${encodeURIComponent(agent.key)}`}
                 onInstallAgent={onInstallAgent}
                 copy={listCopy}
               />
@@ -74,7 +70,7 @@ export function AgentsPanelAgentGroups({
                 agent={agent}
                 agentStatus="detected"
                 selected={selectedAgentKey === agent.key}
-                onOpenDetail={() => open(agent.key)}
+                detailHref={`/agents/${encodeURIComponent(agent.key)}`}
                 onInstallAgent={onInstallAgent}
                 copy={listCopy}
               />
@@ -101,7 +97,7 @@ export function AgentsPanelAgentGroups({
                   agent={agent}
                   agentStatus="notFound"
                   selected={selectedAgentKey === agent.key}
-                  onOpenDetail={() => open(agent.key)}
+                  detailHref={`/agents/${encodeURIComponent(agent.key)}`}
                   onInstallAgent={onInstallAgent}
                   copy={listCopy}
                 />
