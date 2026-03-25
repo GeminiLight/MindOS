@@ -271,6 +271,16 @@ export interface AgentRuntimeSignals {
   lastActivityAt?: string;
 }
 
+export interface AgentConfiguredMcpServers {
+  servers: string[];
+  sources: string[];
+}
+
+export interface AgentInstalledSkills {
+  skills: string[];
+  sourcePath: string;
+}
+
 function resolveHiddenRootPath(agent: AgentDef): string {
   const dirs = agent.presenceDirs ?? [];
   for (const entry of dirs) {
@@ -303,6 +313,56 @@ function detectSignalsFromName(name: string): { conversation: boolean; usage: bo
   };
 }
 
+function readNestedRecord(obj: Record<string, unknown>, nestedPath: string): Record<string, unknown> | null {
+  const parts = nestedPath.split('.').filter(Boolean);
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (!current || typeof current !== 'object') return null;
+    current = (current as Record<string, unknown>)[part];
+  }
+  if (!current || typeof current !== 'object') return null;
+  return current as Record<string, unknown>;
+}
+
+function parseJsonServerNames(content: string, configKey: string, globalNestedKey?: string): string[] {
+  try {
+    const config = parseJsonc(content) as Record<string, unknown>;
+    const section = globalNestedKey
+      ? readNestedRecord(config, globalNestedKey)
+      : (config[configKey] as unknown);
+    if (!section || typeof section !== 'object') return [];
+    return Object.keys(section as Record<string, unknown>);
+  } catch {
+    return [];
+  }
+}
+
+function parseTomlServerNames(content: string, sectionKey: string): string[] {
+  const names = new Set<string>();
+  const lines = content.split('\n');
+  let inRootSection = false;
+  const sectionPrefix = `${sectionKey}.`;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const section = trimmed.slice(1, -1).trim();
+      inRootSection = section === sectionKey;
+      if (section.startsWith(sectionPrefix)) {
+        const name = section.slice(sectionPrefix.length).split('.')[0]?.trim();
+        if (name) names.add(name);
+      }
+      continue;
+    }
+    if (!inRootSection) continue;
+    const kv = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*/);
+    if (!kv) continue;
+    const name = kv[1]?.trim();
+    if (name) names.add(name);
+  }
+  return [...names];
+}
+
 export function resolveSkillWorkspaceProfile(agentKey: string): SkillWorkspaceProfile {
   const registration = SKILL_AGENT_REGISTRY[agentKey] ?? { mode: 'unsupported' as const };
   if (registration.mode === 'universal') {
@@ -316,6 +376,51 @@ export function resolveSkillWorkspaceProfile(agentKey: string): SkillWorkspacePr
     skillAgentName: registration.skillAgentName,
     workspacePath,
   };
+}
+
+export function detectAgentConfiguredMcpServers(agentKey: string): AgentConfiguredMcpServers {
+  const agent = MCP_AGENTS[agentKey];
+  if (!agent) return { servers: [], sources: [] };
+  const serverSet = new Set<string>();
+  const sources: string[] = [];
+  for (const [scopeType, cfgPath] of [['global', agent.global], ['project', agent.project]] as Array<[string, string | null]>) {
+    if (!cfgPath) continue;
+    const absPath = expandHome(cfgPath);
+    if (!fs.existsSync(absPath)) continue;
+    try {
+      const content = fs.readFileSync(absPath, 'utf-8');
+      const nestedPath = scopeType === 'global' ? agent.globalNestedKey : undefined;
+      const names =
+        agent.format === 'toml'
+          ? parseTomlServerNames(content, agent.key)
+          : parseJsonServerNames(content, agent.key, nestedPath);
+      for (const name of names) serverSet.add(name);
+      sources.push(`${scopeType}:${cfgPath}`);
+    } catch {
+      continue;
+    }
+  }
+  return {
+    servers: [...serverSet].sort((a, b) => a.localeCompare(b)),
+    sources,
+  };
+}
+
+export function detectAgentInstalledSkills(agentKey: string): AgentInstalledSkills {
+  const profile = resolveSkillWorkspaceProfile(agentKey);
+  const sourcePath = profile.workspacePath;
+  if (!fs.existsSync(sourcePath)) return { skills: [], sourcePath };
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = fs.readdirSync(sourcePath, { withFileTypes: true });
+  } catch {
+    return { skills: [], sourcePath };
+  }
+  const skills = entries
+    .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.'))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+  return { skills, sourcePath };
 }
 
 export function detectAgentRuntimeSignals(agentKey: string): AgentRuntimeSignals {
@@ -402,7 +507,9 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
       } else {
         // JSON format (default)
         const config = parseJsonc(content);
-        const servers = config[agent.key];
+        const servers = scopeType === 'global' && agent.globalNestedKey
+          ? readNestedRecord(config as Record<string, unknown>, agent.globalNestedKey)
+          : (config[agent.key] as Record<string, unknown> | undefined);
         if (servers?.mindos) {
           const entry = servers.mindos;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
