@@ -32,6 +32,11 @@ on:
       - '.env.local.example'
       - 'package.json'
       - 'package-lock.json'
+    # Internal wiki trees — do not sync to public mindos repo (see rsync excludes below).
+    # Commits that only touch these paths skip this workflow.
+    paths-ignore:
+      - 'wiki/specs/**'
+      - 'wiki/discussions/**'
 
 permissions:
   contents: write
@@ -97,7 +102,10 @@ jobs:
             esac
             cp "$wf" /tmp/mindos/.github/workflows/
           done
+          # wiki/specs、wiki/discussions — dev-only; not copied to GeminiLight/mindos
           [ -d wiki/ ] && rsync -av --delete \
+            --exclude='specs/' \
+            --exclude='discussions/' \
             --exclude='00-product-proposal.md' \
             --exclude='01-project-roadmap.md' \
             --exclude='02-business-model.md' \
@@ -107,8 +115,6 @@ jobs:
             --exclude='implementation-roadmap.md' \
             --exclude='architecture-review-summary.md' \
             --exclude='ui-audit-*.md' \
-            --exclude='discussions/' \
-            --exclude='specs/' \
             wiki/ /tmp/mindos/wiki/
 
           [ -f .gitignore.prod ] && cp .gitignore.prod /tmp/mindos/.gitignore

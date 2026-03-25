@@ -70,22 +70,30 @@ if (process.env.SKIP_MCP_NPM_CI === '1') {
 } else if (!existsSync(mcpLock)) {
   console.warn('[prepare-mindos-runtime] mcp/package-lock.json missing — skip npm ci (keep copied node_modules)');
 } else {
-  rmSync(path.join(destMcp, 'node_modules'), { recursive: true, force: true });
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const r = spawnSync(npmCmd, ['ci', '--omit=dev'], {
-    cwd: destMcp,
-    stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production' },
-  });
-  if (r.status !== 0) {
-    fail('mcp npm ci --omit=dev failed (set SKIP_MCP_NPM_CI=1 to skip)');
+  // In CI, source mcp/node_modules is already installed for the current platform.
+  // Only re-install if the copied node_modules is missing (e.g. excluded by .gitignore).
+  const destMcpNm = path.join(destMcp, 'node_modules');
+  if (!existsSync(destMcpNm) || readdirSync(destMcpNm).length === 0) {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const r = spawnSync(npmCmd, ['ci', '--omit=dev'], {
+      cwd: destMcp,
+      stdio: 'inherit',
+      env: { ...process.env, NODE_ENV: 'production' },
+      shell: process.platform === 'win32',
+    });
+    if (r.status !== 0) {
+      fail('mcp npm ci --omit=dev failed (set SKIP_MCP_NPM_CI=1 to skip)');
+    }
+  } else {
+    console.log('[prepare-mindos-runtime] mcp/node_modules already present — skipping npm ci');
   }
-  writeFileSync(
-    path.join(destMcp, '.mindos-npm-ci-platform'),
-    `${process.platform}-${process.arch}`,
-    'utf-8',
-  );
 }
+// Stamp the platform so Desktop can detect cross-platform mismatch at runtime
+writeFileSync(
+  path.join(destMcp, '.mindos-npm-ci-platform'),
+  `${process.platform}-${process.arch}`,
+  'utf-8',
+);
 
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');
