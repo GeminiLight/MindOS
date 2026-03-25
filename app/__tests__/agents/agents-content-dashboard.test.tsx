@@ -147,6 +147,14 @@ describe('Agent detail content', () => {
     expect(html).toContain(a.runtimeSignals);
     expect(html).toContain(a.recentActivity);
     expect(html).toContain(a.spaceReach);
+    expect(html).toContain(a.skillsSearchPlaceholder);
+    expect(html).toContain(a.skillsAll);
+    expect(html).toContain(a.skillsSourceBuiltin);
+    expect(html).toContain(a.skillsSourceUser);
+    expect(html).toContain(a.mcpManagement);
+    expect(html).toContain(a.mcpCopySnippet);
+    expect(html).toContain(a.mcpReconnect);
+    expect(html).toContain('custom-routing');
   });
 
   it('renders not-found state for missing agent key', () => {
