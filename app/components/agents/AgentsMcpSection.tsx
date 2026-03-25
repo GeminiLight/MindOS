@@ -7,6 +7,7 @@ import type { McpContextValue } from '@/hooks/useMcpData';
 import type { AgentBuckets } from './agents-content-model';
 import type { AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
 import {
+  aggregateCrossAgentMcpServers,
   buildMcpRiskQueue,
   filterAgentsForMcpWorkspace,
   summarizeMcpBulkReconnectResults,
@@ -34,6 +35,9 @@ export default function AgentsMcpSection({
     filteredConnected: (n: number) => string;
     filteredDetected: (n: number) => string;
     filteredNotFound: (n: number) => string;
+    crossAgentServersTitle: string;
+    crossAgentServersEmpty: string;
+    crossAgentServerAgents: (names: string) => string;
     configVisibilityTitle: string;
     hiddenRootDetected: (n: number, total: number) => string;
     runtimeSignalDetected: (n: number, total: number) => string;
@@ -96,6 +100,10 @@ export default function AgentsMcpSection({
       notFound: filteredAgents.filter((agent) => !agent.present).length,
     }),
     [filteredAgents],
+  );
+  const crossAgentServers = useMemo(
+    () => aggregateCrossAgentMcpServers(mcp.agents),
+    [mcp.agents],
   );
   const hiddenRootDetectedCount = useMemo(
     () => mcp.agents.filter((agent) => !!agent.hiddenRootPresent).length,
@@ -216,21 +224,67 @@ export default function AgentsMcpSection({
               <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredNotFound(filteredSummary.notFound)}</span>
             </div>
           </div>
-          <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">{copy.configVisibilityTitle}</p>
-            <ul className="space-y-1.5 text-xs text-muted-foreground mb-3">
-              <li>{copy.hiddenRootDetected(hiddenRootDetectedCount, mcp.agents.length)}</li>
-              <li>{copy.runtimeSignalDetected(runtimeSignalDetectedCount, mcp.agents.length)}</li>
-            </ul>
+          <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+            <p className="text-xs font-semibold text-foreground">{copy.crossAgentServersTitle}</p>
+            {crossAgentServers.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{copy.crossAgentServersEmpty}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {crossAgentServers.map((srv) => (
+                  <span
+                    key={srv.serverName}
+                    title={copy.crossAgentServerAgents(srv.agents.join(', '))}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[var(--amber-dim)] px-2.5 py-1 text-xs text-foreground"
+                  >
+                    <Server size={12} className="text-[var(--amber)]" />
+                    <span className="font-medium">{srv.serverName}</span>
+                    <span className="tabular-nums text-muted-foreground">{srv.agents.length}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">{copy.riskQueueTitle}</p>
-            <ul className="space-y-1.5 text-xs text-muted-foreground">
-              {!mcp.status?.running ? <li>{copy.riskMcpStopped}</li> : null}
-              {buckets.detected.length > 0 ? <li>{copy.riskDetected(buckets.detected.length)}</li> : null}
-              {buckets.notFound.length > 0 ? <li>{copy.riskNotFound(buckets.notFound.length)}</li> : null}
-              {riskQueue.length === 0 ? <li>{copy.emptyState}</li> : null}
-            </ul>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+              <p className="text-xs font-semibold text-foreground">{copy.configVisibilityTitle}</p>
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2 h-2 rounded-full ${hiddenRootDetectedCount > 0 ? 'bg-success' : 'bg-muted-foreground/30'}`} />
+                  {copy.hiddenRootDetected(hiddenRootDetectedCount, mcp.agents.length)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2 h-2 rounded-full ${runtimeSignalDetectedCount > 0 ? 'bg-success' : 'bg-muted-foreground/30'}`} />
+                  {copy.runtimeSignalDetected(runtimeSignalDetectedCount, mcp.agents.length)}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+              <p className="text-xs font-semibold text-foreground">{copy.riskQueueTitle}</p>
+              {riskQueue.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{copy.emptyState}</p>
+              ) : (
+                <div className="space-y-1.5 text-xs">
+                  {!mcp.status?.running ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-destructive" />
+                      <span className="text-destructive">{copy.riskMcpStopped}</span>
+                    </div>
+                  ) : null}
+                  {buckets.detected.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-[var(--amber)]" />
+                      <span className="text-muted-foreground">{copy.riskDetected(buckets.detected.length)}</span>
+                    </div>
+                  ) : null}
+                  {buckets.notFound.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-[var(--amber)]" />
+                      <span className="text-muted-foreground">{copy.riskNotFound(buckets.notFound.length)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentInfo, SkillInfo } from '@/components/settings/types';
 import {
+  aggregateCrossAgentMcpServers,
+  aggregateCrossAgentSkills,
   buildMcpRiskQueue,
   createBulkSkillTogglePlan,
   filterAgentsForMcpWorkspace,
@@ -146,5 +148,49 @@ describe('MCP workspace model helpers', () => {
       notFoundCount: 1,
     });
     expect(queue.length).toBe(3);
+  });
+});
+
+describe('aggregateCrossAgentMcpServers', () => {
+  it('aggregates servers across agents (normal path)', () => {
+    const result = aggregateCrossAgentMcpServers([
+      { ...agents[0], configuredMcpServers: ['mindos', 'github'] } as AgentInfo,
+      { ...agents[1], configuredMcpServers: ['mindos', 'slack'] } as AgentInfo,
+    ]);
+    expect(result.find((s) => s.serverName === 'mindos')?.agents).toHaveLength(2);
+    expect(result.find((s) => s.serverName === 'github')?.agents).toHaveLength(1);
+    expect(result.find((s) => s.serverName === 'slack')?.agents).toHaveLength(1);
+  });
+
+  it('returns empty for agents with no servers (boundary)', () => {
+    const result = aggregateCrossAgentMcpServers([
+      { ...agents[0], configuredMcpServers: [] } as AgentInfo,
+    ]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('handles undefined configuredMcpServers (error path)', () => {
+    const result = aggregateCrossAgentMcpServers([
+      { ...agents[0], configuredMcpServers: undefined } as unknown as AgentInfo,
+    ]);
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('aggregateCrossAgentSkills', () => {
+  it('aggregates skills across agents (normal path)', () => {
+    const result = aggregateCrossAgentSkills([
+      { ...agents[0], installedSkillNames: ['mindos', 'custom-a'] } as AgentInfo,
+      { ...agents[1], installedSkillNames: ['mindos'] } as AgentInfo,
+    ]);
+    expect(result.find((s) => s.skillName === 'mindos')?.agents).toHaveLength(2);
+    expect(result.find((s) => s.skillName === 'custom-a')?.agents).toHaveLength(1);
+  });
+
+  it('returns empty for agents with no skills (boundary)', () => {
+    const result = aggregateCrossAgentSkills([
+      { ...agents[0], installedSkillNames: [] } as AgentInfo,
+    ]);
+    expect(result).toHaveLength(0);
   });
 });
