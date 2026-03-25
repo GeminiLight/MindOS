@@ -107,6 +107,8 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.title);
+    expect(html).toContain(a.workspacePulse.title);
+    expect(html).toContain(a.workspacePulse.connected);
     expect(html).toContain(a.overview.riskQueue);
     expect(html).not.toContain('role="tablist"');
   });
@@ -125,6 +127,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.mcp.bulkReconnectFiltered);
     expect(html).toContain(a.mcp.riskQueueTitle);
     expect(html).toContain(a.mcp.configVisibilityTitle);
+    expect(html).toContain(a.mcp.filteredSummaryTitle);
     expect(html).toContain(a.mcp.resultCount(baseMcpState.agents.length));
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
@@ -142,6 +145,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.skills.tabs.matrix);
     expect(html).toContain(a.skills.searchPlaceholder);
     expect(html).toContain(a.skills.statusAttention);
+    expect(html).toContain(a.skills.summaryTitle);
     expect(html).toContain(a.skills.bulkEnableFiltered);
     expect(html).toContain(a.skills.capabilityGroups);
     expect(html).toContain(a.skills.registrySummaryTitle);
@@ -168,6 +172,7 @@ describe('Agent detail content', () => {
     expect(html).toContain(a.mcpManagement);
     expect(html).toContain(a.mcpCopySnippet);
     expect(html).toContain(a.mcpReconnect);
+    expect(html).toContain(a.healthStripTitle);
     expect(html).toContain(a.nativeInstalledSkills);
     expect(html).toContain(a.configuredMcpServers);
     expect(html).toContain('github');

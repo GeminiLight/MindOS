@@ -11,6 +11,7 @@ import type {
   SkillWorkspaceStatusFilter,
 } from './agents-content-model';
 import {
+  buildSkillAttentionSet,
   createBulkSkillTogglePlan,
   filterSkillsForWorkspace,
   groupSkillsByCapability,
@@ -25,6 +26,10 @@ export default function AgentsSkillsSection({
 }: {
   copy: {
     title: string;
+    summaryTitle: string;
+    summaryEnabled: (n: number) => string;
+    summaryDisabled: (n: number) => string;
+    summaryAttention: (n: number) => string;
     capabilityGroups: string;
     registrySummaryTitle: string;
     registryUniversal: (n: number) => string;
@@ -102,6 +107,7 @@ export default function AgentsSkillsSection({
     const hiddenRoots = knownAgents.filter((agent) => !!agent.hiddenRootPresent).length;
     return { universal, additional, unsupported, hiddenRoots, total: knownAgents.length };
   }, [knownAgents]);
+  const attentionCount = useMemo(() => buildSkillAttentionSet(mcp.skills).size, [mcp.skills]);
 
   const runBulkToggle = async (targetEnabled: boolean) => {
     if (bulkRunning) return;
@@ -136,6 +142,14 @@ export default function AgentsSkillsSection({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">{copy.capabilityGroups}</p>
+      <div className="rounded-md border border-border bg-background p-3">
+        <p className="text-xs font-medium text-muted-foreground mb-2">{copy.summaryTitle}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-muted-foreground">
+          <span className="rounded-md border border-border px-2 py-1.5">{copy.summaryEnabled(mcp.skills.filter((skill) => skill.enabled).length)}</span>
+          <span className="rounded-md border border-border px-2 py-1.5">{copy.summaryDisabled(mcp.skills.filter((skill) => !skill.enabled).length)}</span>
+          <span className="rounded-md border border-border px-2 py-1.5">{copy.summaryAttention(attentionCount)}</span>
+        </div>
+      </div>
       <div className="rounded-md border border-border bg-background p-3">
         <p className="text-xs font-medium text-muted-foreground mb-2">{copy.registrySummaryTitle}</p>
         <ul className="space-y-1 text-xs text-muted-foreground">

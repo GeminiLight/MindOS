@@ -209,6 +209,12 @@
 - **解决：** `/api/mcp/agents` 增加 `configuredMcpServers` 与 `installedSkillNames`（含来源路径），详情页单独展示“agent native installed”区块并提供空态/数量反馈
 - **规则：** “已安装/已配置”必须来自 agent 原生配置扫描；“可用 catalog”仅作管理参考，不能替代真实安装态
 
+### Agents 页面只有局部指标，切 tab 后丢失全局状态
+- **现象：** 用户在 MCP/Skills/Detail 间切换时，需要反复重新判断“现在整体健康度如何”，容易漏掉风险项
+- **原因：** 指标只散落在各区块，没有稳定的全局摘要层，信息架构停留在“平面卡片堆叠”
+- **解决：** 在 `/agents` 顶部增加统一 Workspace Pulse（connected/detected/notFound/risk/enabled skills），各子页再补筛选摘要和健康条，形成“摘要→操作→明细”三层结构
+- **规则：** 多 Agent 控制台必须始终保留全局状态入口；tab 内区块只承载局部操作，不应承担全局态心智负担
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败
