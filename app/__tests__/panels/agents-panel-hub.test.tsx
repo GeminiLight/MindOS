@@ -5,6 +5,8 @@ import { messages } from '@/lib/i18n';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => {} }),
+  usePathname: () => '/agents',
+  useSearchParams: () => new URLSearchParams('tab=mcp'),
 }));
 
 vi.mock('@/hooks/useMcpData', () => ({
@@ -53,6 +55,9 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain(a.navSkills);
     expect(html).toContain(a.rosterLabel);
     expect(html).toContain(a.openDashboard);
+    expect(html).toContain('href="/agents"');
+    expect(html).toContain('href="/agents?tab=mcp"');
+    expect(html).toContain('href="/agents?tab=skills"');
     expect(html).toContain('Test Agent');
     expect(html).not.toContain('/help');
   });

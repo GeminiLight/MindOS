@@ -4,6 +4,7 @@ export type AgentsDashboardTab = 'overview' | 'mcp' | 'skills';
 export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
 export type SkillSourceFilter = 'all' | 'builtin' | 'user';
+export type AgentStatusFilter = 'all' | 'connected' | 'detected' | 'notFound';
 
 export interface RiskItem {
   id: string;
@@ -77,4 +78,16 @@ export function filterSkills(skills: SkillInfo[], query: string, source: SkillSo
     const haystack = `${skill.name} ${skill.description}`.toLowerCase();
     return haystack.includes(q);
   });
+}
+
+export function filterAgentsByStatus(agents: AgentInfo[], status: AgentStatusFilter): AgentInfo[] {
+  if (status === 'all') return agents;
+  return agents.filter((agent) => resolveAgentStatus(agent) === status);
+}
+
+export function filterAgentsForMcpTable(agents: AgentInfo[], query: string, status: AgentStatusFilter): AgentInfo[] {
+  const q = query.trim().toLowerCase();
+  const byStatus = filterAgentsByStatus(agents, status);
+  if (!q) return byStatus;
+  return byStatus.filter((agent) => agent.name.toLowerCase().includes(q));
 }

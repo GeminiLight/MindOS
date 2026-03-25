@@ -13,6 +13,7 @@
 | Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json`（全局）或 `.gemini/settings.json`（项目级） | `.agents/skills/`（通用路径） |
 | GitHub Copilot | ✅ | ✅ | `.vscode/mcp.json`（项目级）或 VS Code 用户 `settings.json`（全局） | `.agents/skills/`（通用路径） |
 | Kimi Code | ✅ | ✅ | `~/.kimi/mcp.json`（全局）或 `.kimi/mcp.json`（项目级） | `.agents/skills/`（通用路径） |
+| Qoder | ✅ | ✅ | `~/.qoder.json`（全局） | `.qoder/skills/`（项目级）或 `~/.qoder/skills/`（全局） |
 | Pi | ✅ | ✅ | `~/.pi/agent/mcp.json`（全局）或 `.pi/settings.json`（项目级） | `.pi/skills/`（项目级）或 `~/.pi/skills/`（全局） |
 | Augment | ✅ | ✅ | `~/.augment/settings.json`（全局）或 `.augment/settings.json`（项目级） | `.augment/skills/`（项目级）或 `~/.augment/skills/`（全局） |
 | Qwen Code | ✅ | ✅ | `~/.qwen/settings.json`（全局）或 `.qwen/settings.json`（项目级） | `.qwen/skills/`（项目级）或 `~/.qwen/skills/`（全局） |

@@ -310,6 +310,14 @@ export const zh = {
       title: 'MCP 健康',
       refresh: '刷新',
       connectionGraph: '连接图谱',
+      searchPlaceholder: '搜索 Agent...',
+      emptyState: '当前筛选条件下没有匹配的 Agent。',
+      filters: {
+        all: '全部',
+        connected: '已连接',
+        detected: '已检测',
+        notFound: '未找到',
+      },
       table: {
         agent: 'Agent',
         status: '状态',

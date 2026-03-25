@@ -161,6 +161,15 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
     presenceCli: 'qwen',
     presenceDirs: ['~/.qwen/'],
   },
+  'qoder': {
+    name: 'Qoder',
+    project: null,
+    global: '~/.qoder.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'qoder',
+    presenceDirs: ['~/.qoder/', '~/.qoder.json'],
+  },
   'trae-cn': {
     name: 'Trae CN',
     project: '.trae/mcp.json',

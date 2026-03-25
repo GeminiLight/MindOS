@@ -103,6 +103,12 @@ describe('detectAgentPresence', () => {
     expect(detectAgentPresence('qwen-code')).toBe(true);
   });
 
+  it('detects qoder via CLI', () => {
+    mockExecSync.mockReturnValue(Buffer.from('/usr/bin/qoder'));
+    existsSyncSpy.mockReturnValue(false);
+    expect(detectAgentPresence('qoder')).toBe(true);
+  });
+
   it('detects trae-cn via dir', () => {
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
     existsSyncSpy.mockImplementation((p: fs.PathLike) => {

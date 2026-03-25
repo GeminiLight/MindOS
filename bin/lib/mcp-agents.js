@@ -94,11 +94,11 @@ export const MCP_AGENTS = {
   'codebuddy': {
     name: 'CodeBuddy',
     project: null,
-    global: '~/.claude-internal/.claude.json',
+    global: '~/.codebuddy/mcp.json',
     key: 'mcpServers',
     preferredTransport: 'stdio',
-    presenceCli: 'claude-internal',
-    presenceDirs: ['~/.claude-internal/'],
+    presenceCli: 'codebuddy',
+    presenceDirs: ['~/.codebuddy/'],
   },
   'iflow-cli': {
     name: 'iFlow CLI',
@@ -153,6 +153,15 @@ export const MCP_AGENTS = {
     preferredTransport: 'stdio',
     presenceCli: 'qwen',
     presenceDirs: ['~/.qwen/'],
+  },
+  'qoder': {
+    name: 'Qoder',
+    project: null,
+    global: '~/.qoder.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'qoder',
+    presenceDirs: ['~/.qoder/', '~/.qoder.json'],
   },
   'trae-cn': {
     name: 'Trae CN',

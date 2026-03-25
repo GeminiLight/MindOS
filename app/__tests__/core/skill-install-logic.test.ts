@@ -25,6 +25,7 @@ const AGENT_NAME_MAP: Record<string, string> = {
   'pi': 'pi',
   'augment': 'augment',
   'qwen-code': 'qwen-code',
+  'qoder': 'qoder',
   'trae-cn': 'trae-cn',
   'roo': 'roo',
 };
@@ -197,6 +198,11 @@ describe('CLI skill install — end-to-end scenarios', () => {
   it('S9: mix of old + new non-universal agents, zh', () => {
     const cmd = simulate('zh', ['claude-code', 'augment', 'trae-cn', 'qwen-code']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos-zh -a claude-code -a augment -a trae-cn -a qwen-code -g -y');
+  });
+
+  it('S9b: includes qoder in additional-agent flags', () => {
+    const cmd = simulate('en', ['qoder', 'cursor']);
+    expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a qoder -g -y');
   });
 
   it('S10: kimi-cli + opencode are universal, should be filtered', () => {
