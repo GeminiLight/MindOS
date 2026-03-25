@@ -209,24 +209,24 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-medium text-foreground mb-2">{a.detail.skillAssignments}</h2>
         <div className="space-y-3">
-          <div className="rounded-md border border-border bg-background p-3 space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">{a.detail.nativeInstalledSkills}</p>
-            <p className="text-2xs text-muted-foreground">
-              {a.detail.nativeInstalledSkillsCount(nativeInstalledSkills.length)}
-            </p>
+          <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-foreground">{a.detail.nativeInstalledSkills}</p>
+              <span className="text-2xs text-muted-foreground tabular-nums">{a.detail.nativeInstalledSkillsCount(nativeInstalledSkills.length)}</span>
+            </div>
             {nativeInstalledSkills.length === 0 ? (
               <p className="text-xs text-muted-foreground">{a.detail.nativeInstalledSkillsEmpty}</p>
             ) : (
-              <ul className="text-xs text-muted-foreground space-y-1">
-                {nativeInstalledSkills.slice(0, 8).map((name) => (
-                  <li key={name}>- {name}</li>
+              <div className="flex flex-wrap gap-1.5">
+                {nativeInstalledSkills.slice(0, 12).map((name) => (
+                  <span key={name} className="inline-flex items-center rounded-md bg-[var(--amber-dim)] px-2 py-0.5 text-xs text-foreground font-medium">{name}</span>
                 ))}
-                {nativeInstalledSkills.length > 8 ? (
-                  <li>{a.detail.nativeInstalledSkillsMore(nativeInstalledSkills.length - 8)}</li>
+                {nativeInstalledSkills.length > 12 ? (
+                  <span className="text-xs text-muted-foreground self-center">{a.detail.nativeInstalledSkillsMore(nativeInstalledSkills.length - 12)}</span>
                 ) : null}
-              </ul>
+              </div>
             )}
-            <p className="text-2xs text-muted-foreground">{agent.installedSkillSourcePath ?? a.na}</p>
+            <p className="text-2xs text-muted-foreground truncate">{agent.installedSkillSourcePath ?? a.na}</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
@@ -348,22 +348,25 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
           <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
         </div>
-        <div className="rounded-md border border-border bg-background p-3 space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">{a.detail.configuredMcpServers}</p>
-          <p className="text-2xs text-muted-foreground">
-            {a.detail.configuredMcpServersCount(configuredMcpServers.length)}
-          </p>
+        <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-foreground">{a.detail.configuredMcpServers}</p>
+            <span className="text-2xs text-muted-foreground tabular-nums">{a.detail.configuredMcpServersCount(configuredMcpServers.length)}</span>
+          </div>
           {configuredMcpServers.length === 0 ? (
             <p className="text-xs text-muted-foreground">{a.detail.configuredMcpServersEmpty}</p>
           ) : (
-            <ul className="text-xs text-muted-foreground space-y-1">
-              {configuredMcpServers.slice(0, 8).map((name) => (
-                <li key={name}>- {name}</li>
+            <div className="flex flex-wrap gap-1.5">
+              {configuredMcpServers.slice(0, 12).map((name) => (
+                <span key={name} className="inline-flex items-center gap-1 rounded-md bg-[var(--amber-dim)] px-2 py-0.5 text-xs text-foreground font-medium">
+                  <Server size={10} className="text-[var(--amber)]" />
+                  {name}
+                </span>
               ))}
-              {configuredMcpServers.length > 8 ? (
-                <li>{a.detail.configuredMcpServersMore(configuredMcpServers.length - 8)}</li>
+              {configuredMcpServers.length > 12 ? (
+                <span className="text-xs text-muted-foreground self-center">{a.detail.configuredMcpServersMore(configuredMcpServers.length - 12)}</span>
               ) : null}
-            </ul>
+            </div>
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
