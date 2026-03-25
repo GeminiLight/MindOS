@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
@@ -35,18 +35,11 @@ export default function AgentsPanel({
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showBuiltinSkills, setShowBuiltinSkills] = useState(false);
 
-  const overviewRef = useRef<HTMLDivElement>(null);
-  const skillsRef = useRef<HTMLDivElement>(null);
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await mcp.refresh();
     setRefreshing(false);
   };
-
-  const scrollTo = useCallback((el: HTMLElement | null) => {
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
 
   const openAdvancedConfig = () => {
     window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'mcp' } }));
@@ -75,10 +68,6 @@ export default function AgentsPanel({
     <AgentsPanelHubNav
       copy={hubCopy}
       connectedCount={connected.length}
-      overviewRef={overviewRef}
-      skillsRef={skillsRef}
-      scrollTo={scrollTo}
-      openAdvancedConfig={openAdvancedConfig}
     />
   );
 
@@ -122,7 +111,7 @@ export default function AgentsPanel({
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
             <div className="mx-4 border-t border-border" />
-            <div ref={overviewRef} className="mx-3 rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between scroll-mt-2">
+            <div className="mx-3 rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between">
               <span className="text-xs font-medium text-foreground">{p.mcpServer}</span>
               {mcp.status?.running ? (
                 <span className="flex items-center gap-1.5 text-[11px]">
@@ -137,7 +126,7 @@ export default function AgentsPanel({
                 </span>
               )}
             </div>
-            <div ref={skillsRef} className="mx-3 scroll-mt-2 rounded-lg border border-dashed border-border px-3 py-3 text-center">
+            <div className="mx-3 rounded-lg border border-dashed border-border px-3 py-3 text-center">
               <p className="text-xs text-muted-foreground mb-2">{p.noAgents}</p>
               <p className="text-2xs text-muted-foreground mb-3">{p.skillsEmptyHint}</p>
               <button
@@ -156,7 +145,7 @@ export default function AgentsPanel({
             <div className="mx-4 border-t border-border" />
 
             <div className="px-3 py-3 space-y-4">
-              <div ref={overviewRef} className="rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between scroll-mt-2">
+              <div className="rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between">
                 <span className="text-xs font-medium text-foreground">{p.mcpServer}</span>
                 {mcp.status?.running ? (
                   <span className="flex items-center gap-1.5 text-[11px]">
@@ -190,7 +179,7 @@ export default function AgentsPanel({
                 }}
               />
 
-              <section ref={skillsRef} className="scroll-mt-2">
+              <section>
                 {mcp.skills.length > 0 ? (
                   <>
                     <div className="flex items-center justify-between mb-2">

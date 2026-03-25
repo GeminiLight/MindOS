@@ -167,6 +167,12 @@
 - **解决：** 引入 `search + source filter + matrix accordion` 组合：先筛选再展开矩阵；矩阵默认折叠，仅在需要时展开
 - **规则：** Dashboard 中高密度数据默认“渐进披露”而非“首屏全量渲染”；优先提供过滤入口，再提供明细视图
 
+### Agents Sidebar Hub 行为与 Content 信息架构不一致
+- **现象：** Sidebar 里的 `MCP/Skills` 看起来像一级导航，但点击后分别跳到 Settings 或面板内滚动，用户难以形成稳定心智模型
+- **原因：** Hub 行为同时承担“导航”和“局部动作”，入口语义不统一
+- **解决：** Hub 三行统一改为内容页深链：`/agents`、`/agents?tab=mcp`、`/agents?tab=skills`；局部动作保留在具体页面内部
+- **规则：** 当某行 UI 呈现为导航样式（icon + title + chevron）时，必须跳转到与标题同名的信息架构层级，不应偷偷执行异质动作
+
 ## MCP
 
 ### JSONC 配置文件导致 Agent 安装失败

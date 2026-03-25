@@ -1,6 +1,6 @@
 'use client';
 
-import { type RefObject } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { LayoutDashboard, Server, Zap } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
@@ -13,35 +13,35 @@ type HubCopy = {
 export function AgentsPanelHubNav({
   copy,
   connectedCount,
-  overviewRef,
-  skillsRef,
-  scrollTo,
-  openAdvancedConfig,
 }: {
   copy: HubCopy;
   connectedCount: number;
-  overviewRef: RefObject<HTMLDivElement | null>;
-  skillsRef: RefObject<HTMLDivElement | null>;
-  scrollTo: (el: HTMLElement | null) => void;
-  openAdvancedConfig: () => void;
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab = searchParams.get('tab');
+  const inAgentsRoute = pathname === '/agents';
+
   return (
     <div className="py-2">
       <PanelNavRow
         icon={<LayoutDashboard size={14} className="text-[var(--amber)]" />}
         title={copy.navOverview}
         badge={<span className="text-2xs tabular-nums text-muted-foreground">{connectedCount}</span>}
-        onClick={() => scrollTo(overviewRef.current)}
+        href="/agents"
+        active={inAgentsRoute && (tab === null || tab === 'overview')}
       />
       <PanelNavRow
         icon={<Server size={14} className="text-muted-foreground" />}
         title={copy.navMcp}
-        onClick={openAdvancedConfig}
+        href="/agents?tab=mcp"
+        active={inAgentsRoute && tab === 'mcp'}
       />
       <PanelNavRow
         icon={<Zap size={14} className="text-muted-foreground" />}
         title={copy.navSkills}
-        onClick={() => scrollTo(skillsRef.current)}
+        href="/agents?tab=skills"
+        active={inAgentsRoute && tab === 'skills'}
       />
     </div>
   );

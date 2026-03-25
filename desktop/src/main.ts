@@ -49,7 +49,7 @@ const DEFAULT_MCP_PORT = 8781;
 // ── Paths (prefer app.asar.unpacked on macOS — see electron-builder asarUnpack) ──
 const SPLASH_HTML = resolvePreferUnpacked('src', 'splash.html');
 const SPLASH_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'splash-preload.js');
-const MAIN_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'preload.js');
+const MAIN_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'index.js');
 
 // ── State ──
 let splashWindow: BrowserWindow | null = null;

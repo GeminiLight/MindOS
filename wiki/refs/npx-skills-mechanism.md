@@ -151,6 +151,7 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `kimi-cli` | ✅ Universal | ❌ |
 | `opencode` | ✅ Universal | ❌ |
 | `pi` | ❌ Additional | ✅ `-a pi` |
+| `qoder` | ❌ Additional | ✅ `-a qoder` |
 | `augment` | ❌ Additional | ✅ `-a augment` |
 | `qwen-code` | ❌ Additional | ✅ `-a qwen-code` |
 | `trae-cn` | ❌ Additional | ✅ `-a trae-cn` |
@@ -172,6 +173,7 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `kimi-cli` | `kimi-cli` | ✅ | ✅ |
 | `opencode` | `opencode` | ✅ | ✅ |
 | `pi` | `pi` | ❌ | ✅ |
+| `qoder` | `qoder` | ❌ | ✅ |
 | `augment` | `augment` | ❌ | ✅ |
 | `qwen-code` | `qwen-code` | ❌ | ✅ |
 | `trae-cn` | `trae-cn` | ❌ | ✅ |

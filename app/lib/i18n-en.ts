@@ -286,6 +286,14 @@ export const en = {
       title: 'MCP health',
       refresh: 'Refresh',
       connectionGraph: 'Connection graph',
+      searchPlaceholder: 'Search agents...',
+      emptyState: 'No agents match current filters.',
+      filters: {
+        all: 'All',
+        connected: 'Connected',
+        detected: 'Detected',
+        notFound: 'Not found',
+      },
       table: {
         agent: 'Agent',
         status: 'Status',

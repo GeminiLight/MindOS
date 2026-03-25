@@ -225,14 +225,15 @@ describe('POST /api/mcp/install-skill — command format', () => {
     expect(body.agents).toEqual(['claude-code']);
   });
 
-  it('passes new agents (augment, roo, trae-cn) as -a flags', async () => {
+  it('passes new agents (augment, roo, trae-cn, qoder) as -a flags', async () => {
     const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['augment', 'roo', 'trae-cn'] }));
+    await POST(makeReq({ skill: 'mindos', agents: ['augment', 'roo', 'trae-cn', 'qoder'] }));
 
     const cmd = execSyncMock.mock.calls[0][0] as string;
     expect(cmd).toContain('-a augment');
     expect(cmd).toContain('-a roo');
     expect(cmd).toContain('-a trae-cn');
+    expect(cmd).toContain('-a qoder');
     expect(cmd).not.toContain('-a universal');
   });
 

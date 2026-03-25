@@ -761,6 +761,7 @@ const AGENT_NAME_MAP = {
   'pi': 'pi',
   'augment': 'augment',
   'qwen-code': 'qwen-code',
+  'qoder': 'qoder',
   'trae-cn': 'trae-cn',
   'roo': 'roo',
 };

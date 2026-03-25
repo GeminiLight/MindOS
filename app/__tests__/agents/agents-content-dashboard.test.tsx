@@ -89,6 +89,8 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.mcp.connectionGraph);
+    expect(html).toContain(a.mcp.searchPlaceholder);
+    expect(html).toContain(a.mcp.filters.all);
     expect(html).toContain(a.mcp.table.agent);
     expect(html).toContain(a.mcp.actions.copySnippet);
     expect(html).toContain(a.mcp.actions.testConnection);
