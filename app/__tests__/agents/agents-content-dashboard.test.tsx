@@ -33,6 +33,11 @@ const baseMcpState = {
       runtimeConversationSignal: true,
       runtimeUsageSignal: true,
       runtimeLastActivityAt: '2026-03-24T00:00:00.000Z',
+      configuredMcpServers: ['mindos', 'github'],
+      configuredMcpServerCount: 2,
+      installedSkillNames: ['mindos', 'custom-routing'],
+      installedSkillCount: 2,
+      installedSkillSourcePath: '/home/test/.cursor/skills',
     },
     {
       key: 'codex',
@@ -50,6 +55,11 @@ const baseMcpState = {
       hiddenRootPresent: true,
       runtimeConversationSignal: false,
       runtimeUsageSignal: false,
+      configuredMcpServers: ['mindos'],
+      configuredMcpServerCount: 1,
+      installedSkillNames: ['mindos'],
+      installedSkillCount: 1,
+      installedSkillSourcePath: '/home/test/.codex/skills',
     },
     {
       key: 'ghost',
@@ -67,6 +77,10 @@ const baseMcpState = {
       hiddenRootPresent: false,
       runtimeConversationSignal: false,
       runtimeUsageSignal: false,
+      configuredMcpServers: [],
+      configuredMcpServerCount: 0,
+      installedSkillNames: [],
+      installedSkillCount: 0,
     },
   ],
   skills: [
@@ -154,6 +168,9 @@ describe('Agent detail content', () => {
     expect(html).toContain(a.mcpManagement);
     expect(html).toContain(a.mcpCopySnippet);
     expect(html).toContain(a.mcpReconnect);
+    expect(html).toContain(a.nativeInstalledSkills);
+    expect(html).toContain(a.configuredMcpServers);
+    expect(html).toContain('github');
     expect(html).toContain('custom-routing');
   });
 
