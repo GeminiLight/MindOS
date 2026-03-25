@@ -12,7 +12,7 @@
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
@@ -88,11 +88,19 @@ if (process.env.SKIP_MCP_NPM_CI === '1') {
     console.log('[prepare-mindos-runtime] mcp/node_modules already present — skipping npm ci');
   }
 }
-// Remove .bin/ symlinks that become dangling across platforms (macOS xattr warnings).
-// Desktop calls tsx/esbuild by full path, not via .bin/ shortcuts.
+// Clean only dangling symlinks in .bin/ — keep valid ones (tsx, esbuild needed at runtime).
 const destMcpBin = path.join(destMcp, 'node_modules', '.bin');
 if (existsSync(destMcpBin)) {
-  rmSync(destMcpBin, { recursive: true, force: true });
+  for (const name of readdirSync(destMcpBin)) {
+    const full = path.join(destMcpBin, name);
+    try {
+      // lstatSync doesn't follow symlinks; statSync does — if stat throws, target is missing
+      const lst = lstatSync(full);
+      if (lst.isSymbolicLink()) {
+        try { statSync(full); } catch { rmSync(full, { force: true }); }
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 // Stamp the platform so Desktop can detect cross-platform mismatch at runtime
