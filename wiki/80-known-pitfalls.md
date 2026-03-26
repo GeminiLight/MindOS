@@ -684,3 +684,9 @@
 ### /api/files 异常响应导致 mention crash
 - **现象：** API 返回非数组（如 `{ error: ... }`）时 `allFiles.filter` 抛 TypeError
 - **解决：** `safeFetchFiles` 检查 `r.ok`、`Array.isArray(data)` 双重防御
+
+### `mindos mcp` stdio 模式因端口冲突 EADDRINUSE 崩溃
+- **现象：** `mindos start` 运行中（占用 3456 + 8781），MCP 客户端（Claude Code 等）调用 `mindos mcp` 报 EADDRINUSE
+- **原因：** `bin/cli.js` 的 `mcp` 命令处理器未设置 `MCP_TRANSPORT`，`mcp/src/index.ts` 默认 `"http"` → 尝试绑定已被占用的 8781 端口
+- **解决：** `mindos mcp` 默认 `MCP_TRANSPORT=stdio`（HTTP 模式由 `mindos start` → `spawnMcp()` 处理）；同时所有 HTTP 场景显式设置 `MCP_TRANSPORT=http` 消除隐式依赖
+- **规则：** 进程间 transport 类型必须显式声明，不能依赖接收端默认值——尤其当同一入口可能被不同上下文调用时
