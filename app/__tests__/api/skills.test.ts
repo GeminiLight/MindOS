@@ -62,7 +62,7 @@ describe('GET /api/skills', () => {
     expect(userSkill.description).toBe('A test skill');
   });
 
-  it('detects pi project and global skills', async () => {
+  it('does not scan pi project or global skill directories', async () => {
     const projectPiDir = path.join(projectRoot, '.pi', 'skills', 'pi-project-skill');
     const globalPiDir = path.join(tempRoot, '.pi', 'agent', 'skills', 'pi-global-skill');
 
@@ -76,10 +76,8 @@ describe('GET /api/skills', () => {
     const body = await res.json();
     const projectSkill = body.skills.find((s: { name: string }) => s.name === 'pi-project-skill');
     const globalSkill = body.skills.find((s: { name: string }) => s.name === 'pi-global-skill');
-    expect(projectSkill).toBeDefined();
-    expect(projectSkill.editable).toBe(false);
-    expect(globalSkill).toBeDefined();
-    expect(globalSkill.editable).toBe(false);
+    expect(projectSkill).toBeUndefined();
+    expect(globalSkill).toBeUndefined();
   });
 });
 

@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { getAllRenderers, getPluginRenderers } from '@/lib/renderers/registry';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
 import CreateSpaceModal from './CreateSpaceModal';
+import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 import type { SpaceInfo } from '@/app/page';
 
 interface RecentFile {
@@ -131,11 +132,8 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-12">
-      <GuideCard
-        onNavigate={(path) => { window.location.href = `/view/${encodeURIComponent(path)}`; }}
-        spaces={spaceList}
-        recentFiles={recent.slice(0, 5)}
-      />
+      <GuideCard />
+      <ExampleCleanupBanner />
 
       {/* ── Hero ── */}
       <div className="mb-10">
@@ -199,6 +197,13 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
           </Link>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground"
+          >
+            <FolderInput size={14} />
+            <span>{t.fileTree.importFile}</span>
+          </button>
           <Link
             href="/explore"
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 text-[var(--amber)]"
@@ -229,10 +234,10 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                   <Link
                     key={s.name}
                     href={`/view/${encodePath(s.path)}`}
-                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
+                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
                       isEmpty
                         ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border hover:border-[var(--amber)]/30 hover:bg-muted/40'
+                        : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
                     }`}
                   >
                     {emoji ? (
@@ -514,6 +519,68 @@ function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
       <Plus size={12} />
       <span>{t.home.newSpace}</span>
     </button>
+  );
+}
+
+/* ── Example files cleanup banner ── */
+function ExampleCleanupBanner() {
+  const { t } = useLocale();
+  const [count, setCount] = useState<number | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [done, setDone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    scanExampleFilesAction().then(r => {
+      if (r.files.length > 0) setCount(r.files.length);
+    }).catch(() => {});
+  }, []);
+
+  const handleCleanup = useCallback(async () => {
+    if (count === null) return;
+    setCleaning(true);
+    try {
+      const r = await cleanupExamplesAction();
+      if (r.success) {
+        setDone(true);
+        setTimeout(() => setDismissed(true), 2500);
+      }
+    } catch { /* silent — banner stays, user can retry */ }
+    setCleaning(false);
+  }, [count]);
+
+  if (dismissed || count === null || count === 0) return null;
+
+  if (done) {
+    return (
+      <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl border border-success/30 bg-success/5 animate-in fade-in duration-300">
+        <Check size={14} className="text-success shrink-0" />
+        <span className="text-xs text-success">{t.home.cleanupExamplesDone}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-muted/30 animate-in fade-in duration-300">
+      <span className="text-sm leading-none shrink-0">🧪</span>
+      <span className="text-xs text-muted-foreground flex-1">
+        {t.home.cleanupExamples(count)}
+      </span>
+      <button
+        onClick={handleCleanup}
+        disabled={cleaning}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 bg-[var(--amber-dim)] text-[var(--amber)] hover:opacity-80"
+      >
+        {cleaning ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+        {t.home.cleanupExamplesButton}
+      </button>
+      <button
+        onClick={() => setDismissed(true)}
+        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground shrink-0"
+      >
+        <X size={12} />
+      </button>
+    </div>
   );
 }
 

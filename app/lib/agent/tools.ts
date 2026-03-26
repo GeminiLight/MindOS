@@ -295,7 +295,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'list_skills',
     label: 'List Skills',
-    description: 'List available MindOS and pi-compatible skills discovered from app/data/skills, skills, {mindRoot}/.skills, .pi/skills, and ~/.pi/agent/skills. Use this before load_skill when you need a skill by name.',
+    description: 'List available MindOS skills discovered from app/data/skills, skills, {mindRoot}/.skills, and ~/.mindos/skills. Use this before load_skill when you need a skill by name.',
     parameters: ListSkillsParams,
     execute: safeExecute(async () => {
       const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
@@ -308,7 +308,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'load_skill',
     label: 'Load Skill',
-    description: 'Load the full content of a specific skill by name from the pi-compatible skill directories. Use list_skills first if you do not know the exact skill name.',
+    description: 'Load the full content of a specific skill by name. Use list_skills first if you do not know the exact skill name.',
     parameters: LoadSkillParams,
     execute: safeExecute(async (_id, params: Static<typeof LoadSkillParams>) => {
       const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
@@ -321,12 +321,12 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'list_mcp_tools',
     label: 'List MCP Tools',
-    description: 'Inspect mcporter-managed MCP servers. Without `server`, lists discovered servers and their health. With `server`, lists that server\'s tools and JSON schemas.',
+    description: 'List MCP servers configured in ~/.mindos/mcp.json. Without `server`, lists discovered servers and their health. With `server`, lists that server\'s tools and JSON schemas.',
     parameters: ListMcpToolsParams,
     execute: safeExecute(async (_id, params: Static<typeof ListMcpToolsParams>) => {
       if (!params.server) {
         const result = await listMcporterServers();
-        if (!result.servers || result.servers.length === 0) return textResult('No MCP servers discovered by mcporter.');
+        if (!result.servers || result.servers.length === 0) return textResult('No external MCP servers configured. The MindOS built-in MCP server is always available.');
         return textResult(result.servers.map((server) => `- **${server.name}** — status: ${server.status}${server.transport ? ` | transport: ${server.transport}` : ''}${server.error ? ` | error: ${server.error}` : ''}`).join('\n'));
       }
 
@@ -341,7 +341,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'call_mcp_tool',
     label: 'Call MCP Tool',
-    description: 'Call a specific mcporter-managed MCP tool by server and tool name. Pass `arguments_json` as a JSON object string. Use list_mcp_tools first to discover names and schemas.',
+    description: 'Call a specific MCP tool by server and tool name. Pass `arguments_json` as a JSON object string. Use list_mcp_tools first to discover names and schemas.',
     parameters: CallMcpToolParams,
     execute: safeExecute(async (_id, params: Static<typeof CallMcpToolParams>) => {
       let parsedArgs: Record<string, unknown> = {};

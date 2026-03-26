@@ -61,7 +61,7 @@ export { findBacklinks } from './backlinks';
 export { isGitRepo, gitLog, gitShowFile } from './git';
 
 // Mind Space
-export { createSpaceFilesystem } from './create-space';
+export { createSpaceFilesystem, generateReadmeTemplate } from './create-space';
 export { summarizeTopLevelSpaces } from './list-spaces';
 export type { MindSpaceSummary } from './list-spaces';
 

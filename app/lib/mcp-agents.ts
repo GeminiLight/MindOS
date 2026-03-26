@@ -41,6 +41,14 @@ export interface SkillAgentRegistration {
 }
 
 export const MCP_AGENTS: Record<string, AgentDef> = {
+  'mindos': {
+    name: 'MindOS',
+    project: null,
+    global: '~/.mindos/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceDirs: ['~/.mindos/'],
+  },
   'claude-code': {
     name: 'Claude Code',
     project: '.mcp.json',

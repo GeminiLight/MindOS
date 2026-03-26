@@ -1,6 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
 
 export interface PiSkillInfo {
   name: string;
@@ -9,7 +9,7 @@ export interface PiSkillInfo {
   source: 'builtin' | 'user';
   enabled: boolean;
   editable: boolean;
-  origin: 'app-builtin' | 'project-builtin' | 'mindos-user' | 'pi-project' | 'pi-global';
+  origin: 'app-builtin' | 'project-builtin' | 'mindos-user' | 'mindos-global';
 }
 
 export interface ScanSkillOptions {
@@ -59,18 +59,11 @@ export function getPiSkillSearchDirs(projectRoot: string, mindRoot: string) {
       editable: true,
     },
     {
-      origin: 'pi-project' as const,
-      dir: path.join(projectRoot, '.pi', 'skills'),
-      pathLabel: '.pi/skills',
+      origin: 'mindos-global' as const,
+      dir: path.join(os.homedir(), '.mindos', 'skills'),
+      pathLabel: '~/.mindos/skills',
       source: 'user' as const,
-      editable: false,
-    },
-    {
-      origin: 'pi-global' as const,
-      dir: path.join(os.homedir(), '.pi', 'agent', 'skills'),
-      pathLabel: '~/.pi/agent/skills',
-      source: 'user' as const,
-      editable: false,
+      editable: true,
     },
   ];
 }

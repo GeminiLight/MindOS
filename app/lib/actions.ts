@@ -1,7 +1,10 @@
 'use server';
 
-import { createFile, deleteFile, deleteDirectory, convertToSpace, renameFile, renameSpace, getMindRoot, invalidateCache } from '@/lib/fs';
-import { createSpaceFilesystem } from '@/lib/core/create-space';
+import fs from 'fs';
+import path from 'path';
+import { createFile, deleteFile, deleteDirectory, convertToSpace, renameFile, renameSpace, getMindRoot, invalidateCache, collectAllFiles } from '@/lib/fs';
+import { createSpaceFilesystem, generateReadmeTemplate } from '@/lib/core/create-space';
+import { INSTRUCTION_TEMPLATE, cleanDirName } from '@/lib/core/space-scaffold';
 import { revalidatePath } from 'next/cache';
 
 export async function createFileAction(dirPath: string, fileName: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
@@ -110,5 +113,79 @@ export async function createSpaceAction(
       return { success: false, error: 'A space with this name already exists' };
     }
     return { success: false, error: msg };
+  }
+}
+
+/**
+ * Revert AI-generated space content back to scaffold templates.
+ * Called when user discards AI initialization from SpaceInitToast.
+ */
+export async function revertSpaceInitAction(
+  spacePath: string,
+  name: string,
+  description: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const mindRoot = getMindRoot();
+    const absDir = path.resolve(mindRoot, spacePath);
+    if (!absDir.startsWith(mindRoot)) {
+      return { success: false, error: 'Invalid path' };
+    }
+
+    const readmePath = path.join(absDir, 'README.md');
+    const instructionPath = path.join(absDir, 'INSTRUCTION.md');
+
+    const readmeContent = generateReadmeTemplate(spacePath, name, description);
+    fs.writeFileSync(readmePath, readmeContent, 'utf-8');
+
+    const dirName = cleanDirName(name);
+    fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(dirName), 'utf-8');
+
+    invalidateCache();
+    revalidatePath('/', 'layout');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to revert' };
+  }
+}
+
+const EXAMPLE_PREFIX = '🧪_example_';
+
+export async function scanExampleFilesAction(): Promise<{ files: string[] }> {
+  const all = collectAllFiles();
+  const examples = all.filter(f => path.basename(f).startsWith(EXAMPLE_PREFIX));
+  return { files: examples };
+}
+
+export async function cleanupExamplesAction(): Promise<{ success: boolean; deleted: number; error?: string }> {
+  try {
+    const { files } = await scanExampleFilesAction();
+    if (files.length === 0) return { success: true, deleted: 0 };
+
+    const root = getMindRoot();
+    for (const relPath of files) {
+      const absPath = path.resolve(root, relPath);
+      if (absPath.startsWith(root) && fs.existsSync(absPath)) {
+        fs.unlinkSync(absPath);
+      }
+    }
+
+    // Clean up empty directories left behind
+    const dirs = new Set(files.map(f => path.dirname(path.resolve(root, f))));
+    const sortedDirs = [...dirs].sort((a, b) => b.length - a.length);
+    for (const dir of sortedDirs) {
+      try {
+        if (dir.startsWith(root) && dir !== root) {
+          const entries = fs.readdirSync(dir);
+          if (entries.length === 0) fs.rmdirSync(dir);
+        }
+      } catch { /* directory not empty or already removed */ }
+    }
+
+    invalidateCache();
+    revalidatePath('/', 'layout');
+    return { success: true, deleted: files.length };
+  } catch (err) {
+    return { success: false, deleted: 0, error: err instanceof Error ? err.message : 'Failed to cleanup' };
   }
 }
