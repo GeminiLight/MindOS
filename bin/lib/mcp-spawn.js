@@ -62,6 +62,7 @@ export function spawnMcp(verbose = false) {
 
   const env = {
     ...process.env,
+    MCP_TRANSPORT: 'http',
     MCP_PORT: mcpPort,
     MCP_HOST: process.env.MCP_HOST || '0.0.0.0',
     MINDOS_URL: process.env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
