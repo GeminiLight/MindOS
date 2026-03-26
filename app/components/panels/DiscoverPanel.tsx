@@ -1,11 +1,15 @@
 'use client';
 
-import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, ChevronDown } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/LocaleContext';
 import { useCases } from '@/components/explore/use-cases';
 import { openAskModal } from '@/hooks/useAskModal';
+import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
+import { Toggle } from '../settings/Primitives';
 
 interface DiscoverPanelProps {
   active: boolean;
@@ -56,8 +60,44 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
   const { t } = useLocale();
   const d = t.panels.discover;
   const e = t.explore;
+  const p = t.panels.plugins;
+  const router = useRouter();
 
-  /** Type-safe lookup for use case i18n */
+  const [pluginsMounted, setPluginsMounted] = useState(false);
+  const [showPlugins, setShowPlugins] = useState(false);
+  const [, forceUpdate] = useState(0);
+  const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set());
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    loadDisabledState();
+    setPluginsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!pluginsMounted || fetchedRef.current) return;
+    fetchedRef.current = true;
+    const entryPaths = getPluginRenderers().map(r => r.entryPath).filter((ep): ep is string => !!ep);
+    if (entryPaths.length === 0) return;
+    fetch('/api/files')
+      .then(r => r.ok ? r.json() : [])
+      .then((allPaths: string[]) => {
+        const pathSet = new Set(allPaths);
+        setExistingFiles(new Set(entryPaths.filter(ep => pathSet.has(ep))));
+      })
+      .catch(() => {});
+  }, [pluginsMounted]);
+
+  const handleToggle = useCallback((id: string, enabled: boolean) => {
+    setRendererEnabled(id, enabled);
+    forceUpdate(n => n + 1);
+    window.dispatchEvent(new Event('renderer-state-changed'));
+  }, []);
+
+  const handleOpenPlugin = useCallback((entryPath: string) => {
+    router.push(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
+  }, [router]);
+
   const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
     const map: Record<string, { title: string; desc: string; prompt: string }> = {
       c1: e.c1, c2: e.c2, c3: e.c3, c4: e.c4, c5: e.c5,
@@ -65,6 +105,9 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
     };
     return map[id];
   };
+
+  const renderers = pluginsMounted ? getPluginRenderers() : [];
+  const enabledCount = pluginsMounted ? renderers.filter(r => isRendererEnabled(r.id)).length : 0;
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
@@ -93,6 +136,49 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
             title={d.spaceTemplates}
             badge={<ComingSoonBadge label={d.comingSoon} />}
           />
+        </div>
+
+        <div className="mx-4 border-t border-border" />
+
+        {/* Installed extensions (merged from Plugins panel) */}
+        <div className="py-2">
+          <button
+            type="button"
+            onClick={() => setShowPlugins(v => !v)}
+            className="w-full flex items-center gap-1.5 px-4 py-1.5 text-left"
+          >
+            <ChevronDown size={11} className={`text-muted-foreground transition-transform duration-150 ${showPlugins ? '' : '-rotate-90'}`} />
+            <Blocks size={13} className="text-muted-foreground shrink-0" />
+            <span className="text-2xs font-medium text-muted-foreground uppercase tracking-wider flex-1">
+              {p.title}
+            </span>
+            <span className="text-2xs text-muted-foreground tabular-nums">{enabledCount}/{renderers.length}</span>
+          </button>
+          {showPlugins && renderers.map(r => {
+            const enabled = isRendererEnabled(r.id);
+            const fileExists = r.entryPath ? existingFiles.has(r.entryPath) : false;
+            const canOpen = enabled && r.entryPath && fileExists;
+            return (
+              <div
+                key={r.id}
+                className={`flex items-center gap-2 px-4 py-1.5 mx-1 rounded-sm transition-colors ${canOpen ? 'cursor-pointer hover:bg-muted/50' : ''} ${!enabled ? 'opacity-50' : ''}`}
+                onClick={canOpen ? () => handleOpenPlugin(r.entryPath!) : undefined}
+                role={canOpen ? 'link' : undefined}
+                tabIndex={canOpen ? 0 : undefined}
+                onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenPlugin(r.entryPath!); } } : undefined}
+              >
+                <span className="text-sm shrink-0" suppressHydrationWarning>{r.icon}</span>
+                <span className="text-xs text-foreground truncate flex-1">{r.name}</span>
+                {r.core ? (
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
+                ) : (
+                  <div onClick={e => e.stopPropagation()}>
+                    <Toggle checked={enabled} onChange={v => handleToggle(r.id, v)} size="sm" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="mx-4 border-t border-border" />

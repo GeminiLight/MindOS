@@ -9,7 +9,7 @@ import Panel from './Panel';
 import FileTree from './FileTree';
 import Logo from './Logo';
 import SearchPanel from './panels/SearchPanel';
-import PluginsPanel from './panels/PluginsPanel';
+
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
@@ -289,9 +289,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'search' ? '' : 'hidden'}`}>
           <SearchPanel active={lp.activePanel === 'search'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
-        </div>
-        <div className={`flex flex-col h-full ${lp.activePanel === 'plugins' ? '' : 'hidden'}`}>
-          <PluginsPanel active={lp.activePanel === 'plugins'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'agents' ? '' : 'hidden'}`}>
           <AgentsPanel
