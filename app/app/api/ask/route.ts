@@ -24,6 +24,7 @@ import { readSettings } from '@/lib/settings';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
+import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import type { Message as FrontendMessage } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -417,6 +418,7 @@ export async function POST(req: NextRequest) {
         path.join(projectRoot, 'skills'),
         path.join(getMindRoot(), '.skills'),
       ],
+      additionalExtensionPaths: scanExtensionPaths(),
     });
     await resourceLoader.reload();
 

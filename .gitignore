@@ -19,6 +19,7 @@ app/data
 .claude-internal
 .cursor
 .codebuddy
+.pi
 
 # User config is stored in ~/.mindos/config.json (never committed)
 app/.env.local
