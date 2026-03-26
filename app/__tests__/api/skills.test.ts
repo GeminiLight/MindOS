@@ -6,20 +6,33 @@ import path from 'path';
 
 // We need a real temp dir for skill file operations
 let tempRoot: string;
+let projectRoot: string;
+let originalHome: string | undefined;
+let originalProjectRoot: string | undefined;
 
 beforeEach(() => {
   tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-skill-test-'));
+  projectRoot = path.join(tempRoot, 'project');
+  fs.mkdirSync(projectRoot, { recursive: true });
   process.env.MIND_ROOT = tempRoot;
+  originalHome = process.env.HOME;
+  originalProjectRoot = process.env.MINDOS_PROJECT_ROOT;
+  process.env.HOME = tempRoot;
+  process.env.MINDOS_PROJECT_ROOT = projectRoot;
 });
 
 afterEach(() => {
   fs.rmSync(tempRoot, { recursive: true, force: true });
   delete process.env.MIND_ROOT;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalProjectRoot === undefined) delete process.env.MINDOS_PROJECT_ROOT;
+  else process.env.MINDOS_PROJECT_ROOT = originalProjectRoot;
 });
 
 // Must import after env setup — dynamic import to avoid caching
 async function importRoute() {
-  // Clear module cache to pick up fresh MIND_ROOT
+  vi.resetModules();
   const mod = await import('../../app/api/skills/route');
   return mod;
 }
@@ -35,7 +48,6 @@ describe('GET /api/skills', () => {
   });
 
   it('detects user skills from {mindRoot}/.skills/', async () => {
-    // Seed a user skill
     const skillDir = path.join(tempRoot, '.skills', 'my-test-skill');
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: my-test-skill\ndescription: A test skill\n---\n\nHello', 'utf-8');
@@ -48,6 +60,26 @@ describe('GET /api/skills', () => {
     expect(userSkill.source).toBe('user');
     expect(userSkill.editable).toBe(true);
     expect(userSkill.description).toBe('A test skill');
+  });
+
+  it('detects pi project and global skills', async () => {
+    const projectPiDir = path.join(projectRoot, '.pi', 'skills', 'pi-project-skill');
+    const globalPiDir = path.join(tempRoot, '.pi', 'agent', 'skills', 'pi-global-skill');
+
+    fs.mkdirSync(projectPiDir, { recursive: true });
+    fs.writeFileSync(path.join(projectPiDir, 'SKILL.md'), '---\nname: pi-project-skill\ndescription: Project pi skill\n---\n', 'utf-8');
+    fs.mkdirSync(globalPiDir, { recursive: true });
+    fs.writeFileSync(path.join(globalPiDir, 'SKILL.md'), '---\nname: pi-global-skill\ndescription: Global pi skill\n---\n', 'utf-8');
+
+    const { GET } = await importRoute();
+    const res = await GET();
+    const body = await res.json();
+    const projectSkill = body.skills.find((s: { name: string }) => s.name === 'pi-project-skill');
+    const globalSkill = body.skills.find((s: { name: string }) => s.name === 'pi-global-skill');
+    expect(projectSkill).toBeDefined();
+    expect(projectSkill.editable).toBe(false);
+    expect(globalSkill).toBeDefined();
+    expect(globalSkill.editable).toBe(false);
   });
 });
 

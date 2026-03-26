@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { readSettings, writeSettings } from '@/lib/settings';
+import { parseSkillMd, readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
 
 const PROJECT_ROOT = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 
@@ -12,113 +13,15 @@ function getMindRoot(): string {
   return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS', 'mind');
 }
 
-interface SkillInfo {
-  name: string;
-  description: string;
-  path: string;
-  source: 'builtin' | 'user';
-  enabled: boolean;
-  editable: boolean;
-}
-
-function parseSkillMd(content: string): { name: string; description: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return { name: '', description: '' };
-  const yaml = match[1];
-  const nameMatch = yaml.match(/^name:\s*(.+)/m);
-  const descMatch = yaml.match(/^description:\s*>?\s*\n?([\s\S]*?)(?=\n\w|\n---)/m);
-  const name = nameMatch ? nameMatch[1].trim() : '';
-  let description = '';
-  if (descMatch) {
-    description = descMatch[1].trim().split('\n').map(l => l.trim()).join(' ').slice(0, 200);
-  } else {
-    const simpleDesc = yaml.match(/^description:\s*(.+)/m);
-    if (simpleDesc) description = simpleDesc[1].trim().slice(0, 200);
-  }
-  return { name, description };
-}
-
-function scanSkillDirs(disabledSkills: string[]): SkillInfo[] {
-  const skills: SkillInfo[] = [];
-  const seen = new Set<string>();
-
-  // 1. app/data/skills/ — builtin
-  const builtinDir = path.join(PROJECT_ROOT, 'app', 'data', 'skills');
-  if (fs.existsSync(builtinDir)) {
-    for (const entry of fs.readdirSync(builtinDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const skillFile = path.join(builtinDir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillFile)) continue;
-      const content = fs.readFileSync(skillFile, 'utf-8');
-      const { name, description } = parseSkillMd(content);
-      const skillName = name || entry.name;
-      seen.add(skillName);
-      skills.push({
-        name: skillName,
-        description,
-        path: `app/data/skills/${entry.name}/SKILL.md`,
-        source: 'builtin',
-        enabled: !disabledSkills.includes(skillName),
-        editable: false,
-      });
-    }
-  }
-
-  // 2. skills/ — project root builtin
-  const skillsDir = path.join(PROJECT_ROOT, 'skills');
-  if (fs.existsSync(skillsDir)) {
-    for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const skillFile = path.join(skillsDir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillFile)) continue;
-      const content = fs.readFileSync(skillFile, 'utf-8');
-      const { name, description } = parseSkillMd(content);
-      const skillName = name || entry.name;
-      if (seen.has(skillName)) continue; // already listed from app/data/skills/
-      seen.add(skillName);
-      skills.push({
-        name: skillName,
-        description,
-        path: `skills/${entry.name}/SKILL.md`,
-        source: 'builtin',
-        enabled: !disabledSkills.includes(skillName),
-        editable: false,
-      });
-    }
-  }
-
-  // 3. {mindRoot}/.skills/ — user custom
-  const mindRoot = getMindRoot();
-  const userSkillsDir = path.join(mindRoot, '.skills');
-  if (fs.existsSync(userSkillsDir)) {
-    for (const entry of fs.readdirSync(userSkillsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const skillFile = path.join(userSkillsDir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillFile)) continue;
-      const content = fs.readFileSync(skillFile, 'utf-8');
-      const { name, description } = parseSkillMd(content);
-      const skillName = name || entry.name;
-      if (seen.has(skillName)) continue;
-      seen.add(skillName);
-      skills.push({
-        name: skillName,
-        description,
-        path: `{mindRoot}/.skills/${entry.name}/SKILL.md`,
-        source: 'user',
-        enabled: !disabledSkills.includes(skillName),
-        editable: true,
-      });
-    }
-  }
-
-  return skills;
-}
-
 export async function GET() {
   try {
     const settings = readSettings();
     const disabledSkills = settings.disabledSkills ?? [];
-    const skills = scanSkillDirs(disabledSkills);
+    const skills = scanSkillDirs({
+      projectRoot: PROJECT_ROOT,
+      mindRoot: getMindRoot(),
+      disabledSkills,
+    });
     return NextResponse.json({ skills });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -205,18 +108,11 @@ export async function POST(req: NextRequest) {
 
       case 'read': {
         if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 });
-        const dirs = [
-          path.join(PROJECT_ROOT, 'app', 'data', 'skills', name),
-          path.join(PROJECT_ROOT, 'skills', name),
-          path.join(userSkillsDir, name),
-        ];
-        for (const dir of dirs) {
-          const file = path.join(dir, 'SKILL.md');
-          if (fs.existsSync(file)) {
-            return NextResponse.json({ content: fs.readFileSync(file, 'utf-8') });
-          }
+        const content = readSkillContentByName(name, { projectRoot: PROJECT_ROOT, mindRoot });
+        if (!content) {
+          return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
         }
-        return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
+        return NextResponse.json({ content });
       }
 
       case 'read-native': {
