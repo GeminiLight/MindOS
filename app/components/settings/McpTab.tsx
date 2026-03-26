@@ -68,7 +68,7 @@ export function McpTab({ t }: McpTabProps) {
       {/* MCP Config Viewer */}
       {mcp.agents.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-foreground mb-3">MCP</h3>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">MCP</p>
           <AgentConfigViewer
             connectedAgents={connectedAgents}
             detectedAgents={detectedAgents}
@@ -91,13 +91,13 @@ export function McpTab({ t }: McpTabProps) {
 
       {/* Skills */}
       <div>
-        <h3 className="text-sm font-medium text-foreground mb-3">{m?.skillsTitle ?? 'Skills'}</h3>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{m?.skillsTitle ?? 'Skills'}</p>
         <SkillsSection t={t} />
       </div>
 
       {/* Batch Agent Install */}
       <div>
-        <h3 className="text-sm font-medium text-foreground mb-3">{m?.agentsTitle ?? 'Agent Configuration'}</h3>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{m?.agentsTitle ?? 'Agent Configuration'}</p>
         <AgentInstall agents={mcp.agents} t={t} onRefresh={mcp.refresh} />
       </div>
     </div>
@@ -119,8 +119,8 @@ function McpStatusCard({ status, restarting, onRestart, onRefresh, m }: {
       <div className="flex items-center gap-2.5 text-xs">
         {restarting ? (
           <>
-            <Loader2 size={12} className="animate-spin" style={{ color: 'var(--amber)' }} />
-            <span style={{ color: 'var(--amber)' }}>{m?.restarting ?? 'Restarting...'}</span>
+            <Loader2 size={12} className="animate-spin text-[var(--amber)]" />
+            <span className="text-[var(--amber)]">{m?.restarting ?? 'Restarting...'}</span>
           </>
         ) : (
           <>
@@ -142,8 +142,7 @@ function McpStatusCard({ status, restarting, onRestart, onRefresh, m }: {
       <div className="flex items-center gap-2">
         {!status.running && !restarting && (
           <button onClick={onRestart}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-white transition-colors"
-            style={{ background: 'var(--amber)' }}>
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors">
             <RotateCcw size={12} /> {m?.restart ?? 'Restart'}
           </button>
         )}
@@ -222,18 +221,18 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
           {/* Agent status badge */}
           <div className="flex items-center gap-2">
             {currentAgent.present && currentAgent.installed ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-success/10 text-success">
+                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
                 {m?.tagConnected ?? 'Connected'}
               </span>
             ) : currentAgent.present && !currentAgent.installed ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium" style={{ background: 'var(--amber-subtle, rgba(200,135,58,0.1))', color: 'var(--amber)' }}>
-                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--amber)' }} />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-[var(--amber-subtle)] text-[var(--amber)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)] inline-block" />
                 {m?.tagDetected ?? 'Detected — not configured'}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-muted text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground inline-block" />
                 {m?.tagNotInstalled ?? 'Not installed'}
               </span>
             )}
@@ -267,7 +266,7 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
 
           {/* Auth warning */}
           {transport === 'http' && mcpStatus && !mcpStatus.authConfigured && (
-            <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--amber)' }}>
+            <p className="flex items-center gap-1.5 text-xs text-[var(--amber)]">
               <AlertCircle size={12} />
               {m?.noAuthWarning ?? 'Auth not configured. Run `mindos token` to set up.'}
             </p>

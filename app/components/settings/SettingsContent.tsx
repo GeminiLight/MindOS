@@ -245,7 +245,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
               onClick={() => setTab(tabItem.id)}
               className={`flex items-center gap-1 px-2 py-2 text-[11px] font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
-                  ? 'border-amber-500 text-foreground'
+                  ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -296,7 +296,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
               onClick={() => setTab(tabItem.id)}
               className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
-                  ? 'border-amber-500 text-foreground'
+                  ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -330,7 +330,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
                 }`}
               >
                 {tab === tabItem.id && (
-                  <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-amber-500" />
+                  <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-[var(--amber)]" />
                 )}
                 {tabItem.icon}
                 {tabItem.label}

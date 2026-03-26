@@ -115,24 +115,19 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
   }, [suggestions.length]);
 
   const existingSet = new Set(existingFiles ?? []);
+  const spaceList = spaces ?? [];
+  const { groups, rootFiles } = useMemo(() => groupBySpace(recent, spaceList), [recent, spaceList]);
 
-  // Empty knowledge base → show onboarding
   if (recent.length === 0) {
     return <OnboardingView />;
   }
 
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
 
-  // User-manageable plugins: only show available entry files
   const availablePlugins = getPluginRenderers().filter(r => r.entryPath && existingSet.has(r.entryPath));
-  // App-builtin features: always visible, with active/inactive state
   const builtinFeatures = getAllRenderers().filter((r) => r.appBuiltinFeature && r.id !== 'csv');
 
   const lastFile = recent[0];
-
-  // Group recent files by Space
-  const spaceList = spaces ?? [];
-  const { groups, rootFiles } = useMemo(() => groupBySpace(recent, spaceList), [recent, spaceList]);
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-12">
@@ -160,7 +155,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             onClick={triggerAsk}
             title="⌘/"
             data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-amber-500/50 hover:bg-amber-500/8"
+            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber)]/8"
           >
             <Sparkles size={15} className="shrink-0 text-[var(--amber)]" />
             <span className="text-sm flex-1 text-left text-foreground">
@@ -237,7 +232,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                     className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 hover:translate-x-0.5 ${
                       isEmpty
                         ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border hover:border-amber-500/30 hover:bg-muted/40'
+                        : 'border-border hover:border-[var(--amber)]/30 hover:bg-muted/40'
                     }`}
                   >
                     {emoji ? (
@@ -288,7 +283,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
               if (active && r.entryPath) {
                 return (
                   <Link key={r.id} href={`/view/${encodePath(r.entryPath)}`}>
-                    <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-amber-500/30 hover:bg-muted/60">
+                    <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/60">
                       <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
                       <span className="font-medium text-foreground">{r.name}</span>
                     </span>
@@ -335,7 +330,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
               <Link
                 key={r.id}
                 href={`/view/${encodePath(r.entryPath!)}`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-amber-500/30 hover:bg-muted/60"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/60"
               >
                 <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
                 <span className="font-medium text-foreground">{r.name}</span>

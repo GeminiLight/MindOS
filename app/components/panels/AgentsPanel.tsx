@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Loader2, RefreshCw, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useLocale } from '@/lib/LocaleContext';
-import { Toggle } from '../settings/Primitives';
-import type { SkillInfo } from '../settings/types';
 import PanelHeader from './PanelHeader';
 import { AgentsPanelHubNav } from './AgentsPanelHubNav';
 import { AgentsPanelAgentGroups } from './AgentsPanelAgentGroups';
@@ -15,7 +13,6 @@ interface AgentsPanelProps {
   active: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
-  /** Legacy fallback selected row source (e.g. compatibility mode). */
   selectedAgentKey?: string | null;
 }
 
@@ -31,7 +28,6 @@ export default function AgentsPanel({
   const pathname = usePathname();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
-  const [showBuiltinSkills, setShowBuiltinSkills] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -47,9 +43,6 @@ export default function AgentsPanel({
   const detected = mcp.agents.filter(a => a.present && !a.installed);
   const notFound = mcp.agents.filter(a => !a.present);
 
-  const customSkills = mcp.skills.filter(s => s.source === 'user');
-  const builtinSkills = mcp.skills.filter(s => s.source === 'builtin');
-  const activeSkillCount = mcp.skills.filter(s => s.enabled).length;
   const installAgentWithRefresh = async (key: string) => {
     const ok = await mcp.installAgent(key);
     if (ok) await mcp.refresh();
@@ -113,28 +106,13 @@ export default function AgentsPanel({
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
             <div className="mx-4 border-t border-border" />
-            <div className="mx-3 rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">{p.mcpServer}</span>
-              {mcp.status?.running ? (
-                <span className="flex items-center gap-1.5 text-[11px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                  <span className="text-emerald-600 dark:text-emerald-400">:{mcp.status.port}</span>
-                  <span className="text-muted-foreground">· {mcp.status.toolCount} tools</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 text-[11px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
-                  <span className="text-muted-foreground">{p.stopped}</span>
-                </span>
-              )}
-            </div>
-            <div className="mx-3 rounded-lg border border-dashed border-border px-3 py-3 text-center">
-              <p className="text-xs text-muted-foreground mb-2">{p.noAgents}</p>
+            <div className="mx-3 rounded-lg border border-dashed border-border px-3 py-4 text-center">
+              <p className="text-xs text-muted-foreground mb-1.5">{p.noAgents}</p>
               <p className="text-2xs text-muted-foreground mb-3">{p.skillsEmptyHint}</p>
               <button
                 onClick={handleRefresh}
                 type="button"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <RefreshCw size={11} /> {p.retry}
               </button>
@@ -147,22 +125,6 @@ export default function AgentsPanel({
             <div className="mx-4 border-t border-border" />
 
             <div className="px-3 py-3 space-y-4">
-              <div className="rounded-lg border border-border bg-card/50 px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">{p.mcpServer}</span>
-                {mcp.status?.running ? (
-                  <span className="flex items-center gap-1.5 text-[11px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    <span className="text-emerald-600 dark:text-emerald-400">:{mcp.status.port}</span>
-                    <span className="text-muted-foreground">· {mcp.status.toolCount} tools</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 text-[11px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
-                    <span className="text-muted-foreground">{p.stopped}</span>
-                  </span>
-                )}
-              </div>
-
               <AgentsPanelAgentGroups
                 connected={connected}
                 detected={detected}
@@ -179,55 +141,6 @@ export default function AgentsPanel({
                   sectionNotDetected: p.sectionNotDetected,
                 }}
               />
-
-              <section>
-                {mcp.skills.length > 0 ? (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                        {p.skillsTitle} <span className="normal-case font-normal">{activeSkillCount} {p.skillsActive}</span>
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={openAdvancedConfig}
-                        className="text-2xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                      >
-                        {p.newSkill}
-                      </button>
-                    </div>
-
-                    {customSkills.length > 0 && (
-                      <div className="space-y-0.5 mb-2">
-                        {customSkills.map(skill => (
-                          <SkillRow key={skill.name} skill={skill} onToggle={mcp.toggleSkill} />
-                        ))}
-                      </div>
-                    )}
-
-                    {builtinSkills.length > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setShowBuiltinSkills(!showBuiltinSkills)}
-                          className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors mb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                        >
-                          {showBuiltinSkills ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                          {p.builtinSkills} ({builtinSkills.length})
-                        </button>
-                        {showBuiltinSkills && (
-                          <div className="space-y-0.5">
-                            {builtinSkills.map(skill => (
-                              <SkillRow key={skill.name} skill={skill} onToggle={mcp.toggleSkill} />
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-2xs text-muted-foreground py-1">{p.skillsEmptyHint}</p>
-                )}
-              </section>
             </div>
           </div>
         )}
@@ -243,15 +156,6 @@ export default function AgentsPanel({
           {p.advancedConfig}
         </button>
       </div>
-    </div>
-  );
-}
-
-function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (name: string, enabled: boolean) => void }) {
-  return (
-    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-muted/30 transition-colors">
-      <span className="text-xs text-foreground truncate">{skill.name}</span>
-      <Toggle size="sm" checked={skill.enabled} onChange={v => onToggle(skill.name, v)} />
     </div>
   );
 }

@@ -129,7 +129,7 @@ export default function SkillCreateForm({ onSave, onCancel, saving, error, m }: 
               onClick={() => handleTemplateChange(tmpl)}
               className={`px-2.5 py-1 text-xs transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                 selectedTemplate === tmpl
-                  ? 'bg-amber-500/15 text-amber-600 font-medium'
+                  ? 'bg-[var(--amber-subtle)] text-[var(--amber)] font-medium'
                   : 'text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -160,8 +160,7 @@ export default function SkillCreateForm({ onSave, onCancel, saving, error, m }: 
         <button
           onClick={() => onSave(newName.trim(), newContent || getTemplate(newName.trim() || 'my-skill'))}
           disabled={!newName.trim() || saving}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-[var(--amber)] text-[var(--amber-foreground)]"
         >
           {saving && <Loader2 size={10} className="animate-spin" />}
           {m?.saveSkill ?? 'Save'}

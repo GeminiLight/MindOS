@@ -202,6 +202,123 @@ describe('POST /api/skills — CRUD', () => {
     expect(res.status).toBe(200);
   });
 
+  it('reads a skill via POST read action', async () => {
+    const { POST } = await importRoute();
+
+    // Create first
+    await POST(new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', name: 'read-test', content: '---\nname: read-test\ndescription: hello\n---\n\nbody' }),
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    // Read via POST
+    const readReq = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'read', name: 'read-test' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(readReq);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.content).toContain('read-test');
+    expect(body.content).toContain('body');
+  });
+
+  it('returns 404 for reading non-existent skill', async () => {
+    const { POST } = await importRoute();
+    const req = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'read', name: 'ghost-skill' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(404);
+  });
+
+  it('updates a user skill content', async () => {
+    const { POST } = await importRoute();
+
+    // Create first
+    await POST(new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', name: 'update-test', description: 'original' }),
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    // Update content
+    const newContent = '---\nname: update-test\ndescription: updated\n---\n\nnew body';
+    const updateReq = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'update', name: 'update-test', content: newContent }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(updateReq);
+    expect(res.status).toBe(200);
+
+    // Verify by reading back
+    const readReq = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'read', name: 'update-test' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const readRes = await POST(readReq);
+    const body = await readRes.json();
+    expect(body.content).toContain('updated');
+    expect(body.content).toContain('new body');
+  });
+
+  it('returns 404 for updating non-existent skill', async () => {
+    const { POST } = await importRoute();
+    const req = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'update', name: 'no-such-skill', content: 'x' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(404);
+  });
+
+  it('toggle requires name parameter', async () => {
+    const { POST } = await importRoute();
+    const req = new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'toggle' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it('toggle re-enables a previously disabled skill', async () => {
+    const { POST } = await importRoute();
+
+    // Disable
+    const disRes = await POST(new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'toggle', name: 'toggle-roundtrip', enabled: false }),
+      headers: { 'content-type': 'application/json' },
+    }));
+    expect(disRes.status).toBe(200);
+
+    // Re-enable
+    const enRes = await POST(new NextRequest('http://localhost/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'toggle', name: 'toggle-roundtrip', enabled: true }),
+      headers: { 'content-type': 'application/json' },
+    }));
+    expect(enRes.status).toBe(200);
+
+    // Verify settings: the skill should NOT be in the disabled list after re-enable.
+    // readSettings reads from os.homedir()/.mindos/config.json (module-level const),
+    // so we verify the roundtrip at the API level rather than through GET which
+    // depends on MIND_ROOT for scanning skill dirs.
+    const { readSettings } = await import('../../lib/settings');
+    const settings = readSettings();
+    const disabled = settings.disabledSkills ?? [];
+    expect(disabled).not.toContain('toggle-roundtrip');
+  });
+
   it('returns 400 for unknown action', async () => {
     const { POST } = await importRoute();
     const req = new NextRequest('http://localhost/api/skills', {
