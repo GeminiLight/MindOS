@@ -511,7 +511,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
           ? readNestedRecord(config as Record<string, unknown>, agent.globalNestedKey)
           : (config[agent.key] as Record<string, unknown> | undefined);
         if (servers?.mindos) {
-          const entry = servers.mindos;
+          const entry = servers.mindos as Record<string, unknown>;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
           return { installed: true, scope: scopeType, transport, configPath: cfgPath };
         }
