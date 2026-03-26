@@ -357,21 +357,29 @@ export async function POST(req: NextRequest) {
         contextStrategy,
       ),
 
-      // Write-protection: block writes to protected files
+      // Write-protection: block writes to protected files gracefully
       beforeToolCall: async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
         const { toolCall, args } = context;
         // toolCall is an object with type "toolCall" and contains the tool name and ID
         const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
         if (toolName && WRITE_TOOLS.has(toolName)) {
-          const filePath = (args as any).path ?? (args as any).from_path;
-          if (filePath) {
+          // Special handling for batch creations where we need to check multiple files
+          const pathsToCheck: string[] = [];
+          if (toolName === 'batch_create_files' && Array.isArray((args as any).files)) {
+            (args as any).files.forEach((f: any) => { if (f.path) pathsToCheck.push(f.path); });
+          } else {
+            const singlePath = (args as any).path ?? (args as any).from_path;
+            if (singlePath) pathsToCheck.push(singlePath);
+          }
+
+          for (const filePath of pathsToCheck) {
             try {
               assertNotProtected(filePath, 'modified by AI agent');
             } catch (e) {
               const errorMsg = e instanceof Error ? e.message : String(e);
               return {
                 block: true,
-                reason: `Write-protection error: ${errorMsg}`,
+                reason: `Write-protection error: ${errorMsg}. You CANNOT modify ${filePath} because it is system-protected. Please tell the user you don't have permission to do this.`,
               };
             }
           }

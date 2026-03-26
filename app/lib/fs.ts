@@ -525,8 +525,8 @@ function generateSnippet(
     }
   }
 
-  const snippetStart = Math.max(0, bestStart - 60);
-  const snippetEnd = Math.min(content.length, bestEnd + 61);
+  const snippetStart = Math.max(0, bestStart - 120);
+  const snippetEnd = Math.min(content.length, bestEnd + 120);
 
   let start = snippetStart;
   if (start > 0) {
@@ -539,7 +539,9 @@ function generateSnippet(
     if (spaceIdx > bestEnd) end = spaceIdx;
   }
 
-  let snippet = content.slice(start, end).replace(/\n/g, ' ').trim();
+  let snippet = content.slice(start, end).trim();
+  // Collapse multiple newlines into spaces but keep single newlines
+  snippet = snippet.replace(/\n{2,}/g, ' ↵ ');
   if (start > 0) snippet = '...' + snippet;
   if (end < content.length) snippet = snippet + '...';
   return snippet;

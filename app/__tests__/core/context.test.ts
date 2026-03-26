@@ -244,7 +244,7 @@ describe('context: hardPrune', () => {
     const result = hardPrune(msgs, '', 'gpt-3.5');
     expect((result[0] as any).role).toBe('user');
     const content = (result[0] as any).content;
-    expect(typeof content === 'string' && content.includes('pruned')).toBe(true);
+    expect(typeof content === 'string' && content.includes('truncated')).toBe(true);
   });
 
   it('preserves messages when exactly at threshold', () => {
