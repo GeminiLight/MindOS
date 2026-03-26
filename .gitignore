@@ -1,6 +1,7 @@
 **/node_modules/
 **/dist/
 app/.next
+app/.vscode
 app/data
 !app/data/skills
 *.tsbuildinfo
