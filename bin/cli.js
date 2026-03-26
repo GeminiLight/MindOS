@@ -421,11 +421,18 @@ const commands = {
       console.log(yellow('Installing MCP dependencies (first run)...\n'));
       npmInstall(resolve(ROOT, 'mcp'), '--no-workspaces');
     }
-    // Map config env vars to what the MCP server expects
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+    // `mindos mcp` is the entry point for MCP clients (Claude Code, Cursor, etc.)
+    // which communicate over stdin/stdout. Default to stdio; HTTP is handled by
+    // `mindos start` via spawnMcp(). Callers can still override via env.
+    if (!process.env.MCP_TRANSPORT) {
+      process.env.MCP_TRANSPORT = 'stdio';
+    }
     const webPort = process.env.MINDOS_WEB_PORT || '3456';
-    process.env.MCP_PORT   = mcpPort;
-    process.env.MINDOS_URL = `http://localhost:${webPort}`;
+    process.env.MINDOS_URL = process.env.MINDOS_URL || `http://localhost:${webPort}`;
+    // Only set MCP_PORT for HTTP mode (stdio doesn't bind any port)
+    if (process.env.MCP_TRANSPORT === 'http') {
+      process.env.MCP_PORT = process.env.MINDOS_MCP_PORT || '8781';
+    }
     run(`npx tsx src/index.ts`, resolve(ROOT, 'mcp'));
   },
 

@@ -137,6 +137,7 @@ export class ProcessManager extends EventEmitter {
 
     const env: Record<string, string> = {
       ...(this.opts.env || process.env as Record<string, string>),
+      MCP_TRANSPORT: 'http',
       MCP_PORT: String(mcpPort),
       MCP_HOST: '0.0.0.0',
       MINDOS_URL: `http://127.0.0.1:${webPort}`,
