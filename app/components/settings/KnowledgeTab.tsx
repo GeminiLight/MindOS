@@ -116,7 +116,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <SectionLabel>Knowledge Base</SectionLabel>
 
       <Field
@@ -208,7 +208,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             )}
           </div>
           {revealedToken && (
-            <p className="text-xs text-amber-500">
+            <p className="text-xs text-[var(--amber)]">
               New token generated. Copy it now — it won&apos;t be shown in full again.
             </p>
           )}
@@ -221,7 +221,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           <SectionLabel>{t.guide?.title ?? 'Getting Started'}</SectionLabel>
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2">
-              <Sparkles size={14} style={{ color: 'var(--amber)' }} />
+              <Sparkles size={14} className="text-[var(--amber)]" />
               <div>
                 <div className="text-sm text-foreground">{t.guide?.showGuide ?? 'Show getting started guide'}</div>
               </div>

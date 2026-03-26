@@ -37,6 +37,8 @@ export type MessagePart = TextPart | ToolCallPart | ReasoningPart;
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  /** Unix timestamp in milliseconds when this message was created */
+  timestamp?: number;
   /** Structured parts for assistant messages (tool calls + text segments) */
   parts?: MessagePart[];
 }

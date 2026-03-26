@@ -57,6 +57,14 @@ interface FileTreeCache {
 let _cache: FileTreeCache | null = null;
 const CACHE_TTL_MS = 5_000; // 5 seconds
 
+let _treeVersion = 0;
+
+/** Monotonically increasing counter — bumped on every file mutation so the
+ *  client can cheaply detect changes without rebuilding the full tree. */
+export function getTreeVersion(): number {
+  return _treeVersion;
+}
+
 function isCacheValid(): boolean {
   return _cache !== null && (Date.now() - _cache.timestamp) < CACHE_TTL_MS;
 }
@@ -65,6 +73,7 @@ function isCacheValid(): boolean {
 export function invalidateCache(): void {
   _cache = null;
   _searchIndex = null;
+  _treeVersion++;
   invalidateSearchIndex();
 }
 

@@ -77,7 +77,7 @@ export default function AgentsPanelAgentDetail({
   };
 
   const dot =
-    agentStatus === 'connected' ? 'bg-emerald-500' : agentStatus === 'detected' ? 'bg-amber-500' : 'bg-zinc-400';
+    agentStatus === 'connected' ? 'bg-[var(--success)]' : agentStatus === 'detected' ? 'bg-[var(--amber)]' : 'bg-muted-foreground';
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -125,7 +125,7 @@ export default function AgentsPanelAgentDetail({
             </button>
             {result && (
               <span
-                className={`flex items-center gap-1 text-2xs ${result.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}
+                className={`flex items-center gap-1 text-2xs ${result.type === 'success' ? 'text-success' : 'text-destructive'}`}
               >
                 {result.type === 'success' ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
                 {result.text}

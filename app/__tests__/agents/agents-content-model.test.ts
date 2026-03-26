@@ -141,13 +141,13 @@ describe('MCP workspace model helpers', () => {
     expect(summary.failed).toBe(0);
   });
 
-  it('builds risk queue from mcp running state and buckets', () => {
+  it('builds risk queue from mcp running state and buckets (notFound excluded)', () => {
     const queue = buildMcpRiskQueue({
       mcpRunning: false,
       detectedCount: 2,
       notFoundCount: 1,
     });
-    expect(queue.length).toBe(3);
+    expect(queue.length).toBe(2);
   });
 });
 

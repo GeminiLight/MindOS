@@ -296,9 +296,11 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     const text = input.trim();
     if (!text || isLoading) return;
 
-    const userMsg: Message = { role: 'user', content: text };
+    // Attach current timestamp so backend knows EXACTLY when the user typed this message
+    const userMsg: Message = { role: 'user', content: text, timestamp: Date.now() };
     const requestMessages = [...session.messages, userMsg];
-    session.setMessages([...requestMessages, { role: 'assistant', content: '' }]);
+    // And for the incoming assistant response, give it an initial timestamp
+    session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
     if (onFirstMessage && !firstMessageFired.current) {
       firstMessageFired.current = true;
@@ -450,7 +452,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/20 md:hidden" />
         )}
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Sparkles size={isPanel ? 14 : 15} style={{ color: 'var(--amber)' }} />
+          <Sparkles size={isPanel ? 14 : 15} className="text-[var(--amber)]" />
           <span className={isPanel ? 'font-display text-xs uppercase tracking-wider text-muted-foreground' : 'font-display'}>
             {isPanel ? 'MindOS Agent' : t.ask.title}
           </span>
@@ -541,7 +543,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </div>
         ) : null}
 
-        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
+        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-y-auto')}>
           {attachedFiles.length > 0 && (
             <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
               <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>

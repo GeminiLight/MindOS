@@ -11,6 +11,10 @@ import {
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
 
+function notifyFilesChanged() {
+  window.dispatchEvent(new Event('mindos:files-changed'));
+}
+
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
 
 interface FileTreeProps {
@@ -112,7 +116,7 @@ function SpaceContextMenu({ x, y, node, onClose, onRename }: {
         if (!confirm(t.fileTree.confirmDeleteSpace(node.name))) return;
         startTransition(async () => {
           const result = await deleteSpaceAction(node.path);
-          if (result.success) { router.push('/'); router.refresh(); }
+          if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
           onClose();
         });
       }}>
@@ -137,11 +141,11 @@ function FolderContextMenu({ x, y, node, onClose, onRename }: {
       <button className={MENU_ITEM} disabled={isPending} onClick={() => {
         startTransition(async () => {
           const result = await convertToSpaceAction(node.path);
-          if (result.success) router.refresh();
+          if (result.success) { router.refresh(); notifyFilesChanged(); }
           onClose();
         });
       }}>
-        <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} /> {t.fileTree.convertToSpace}
+        <Layers size={14} className="shrink-0 text-[var(--amber)]" /> {t.fileTree.convertToSpace}
       </button>
       <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
         <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
@@ -151,7 +155,7 @@ function FolderContextMenu({ x, y, node, onClose, onRename }: {
         if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
         startTransition(async () => {
           const result = await deleteFolderAction(node.path);
-          if (result.success) { router.push('/'); router.refresh(); }
+          if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
           onClose();
         });
       }}>
@@ -181,6 +185,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
         onDone();
         router.push(`/view/${encodePath(result.filePath)}`);
         router.refresh();
+        notifyFilesChanged();
       } else {
         setError(result.error || t.fileTree.failed);
       }
@@ -217,11 +222,11 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
           "
         />
         {isPending
-          ? <Loader2 size={13} className="text-zinc-500 animate-spin shrink-0" />
+          ? <Loader2 size={13} className="text-muted-foreground animate-spin shrink-0" />
           : (
             <button
               onClick={handleSubmit}
-              className="text-xs text-blue-400 hover:text-blue-300 shrink-0 px-1"
+              className="text-xs text-[var(--amber)] hover:text-foreground shrink-0 px-1"
             >
               {t.fileTree.create}
             </button>
@@ -294,6 +299,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
         setRenaming(false);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
+        notifyFilesChanged();
       } else {
         setRenaming(false);
       }
@@ -338,7 +344,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           onBlur={commitRename}
           className="w-full bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />}
+        {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
       </div>
     );
   }
@@ -353,7 +359,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
       >
         <button
           onClick={toggle}
-          className="shrink-0 p-1 rounded hover:bg-muted text-zinc-500 transition-colors"
+          className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
           style={{ marginLeft: `${depth * 12 + 4}px` }}
           aria-label={open ? 'Collapse' : 'Expand'}
         >
@@ -373,7 +379,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           `}
         >
           {isSpace
-            ? <Layers size={14} className="shrink-0" style={{ color: 'var(--amber)' }} />
+            ? <Layers size={14} className="shrink-0 text-[var(--amber)]" />
             : open
               ? <FolderOpen size={14} className="text-yellow-400 shrink-0" />
               : <Folder size={14} className="text-yellow-400 shrink-0" />
@@ -505,6 +511,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
         setRenaming(false);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
+        notifyFilesChanged();
       } else {
         setRenaming(false);
       }
@@ -518,8 +525,14 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       await deleteFileAction(node.path);
       if (currentPath === node.path) router.push('/');
       router.refresh();
+      notifyFilesChanged();
     });
   }, [node.name, node.path, currentPath, router, t]);
+
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData('text/mindos-path', node.path);
+    e.dataTransfer.effectAllowed = 'copy';
+  }, [node.path]);
 
   if (renaming) {
     return (
@@ -536,15 +549,10 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
           onBlur={commitRename}
           className="w-full bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />}
+        {isPending && <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
       </div>
     );
   }
-
-  const handleDragStart = useCallback((e: React.DragEvent) => {
-    e.dataTransfer.setData('text/mindos-path', node.path);
-    e.dataTransfer.effectAllowed = 'copy';
-  }, [node.path]);
 
   return (
     <div className="relative group/file">

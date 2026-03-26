@@ -121,7 +121,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
           type="button"
           disabled={disabled}
           onClick={() => handleTestKey(providerName)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {result.state === 'testing' ? (
             <>
@@ -143,7 +143,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} /></>}>
         <Select
           value={provider}
@@ -214,7 +214,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       )}
 
       {Object.values(env).some(Boolean) && (
-        <div className="flex items-start gap-2 text-xs text-amber-500/80 bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2.5">
+        <div className="flex items-start gap-2 text-xs text-[var(--amber)] bg-[var(--amber-subtle)] border border-[var(--amber)]/20 rounded-lg px-3 py-2.5">
           <AlertCircle size={13} className="shrink-0 mt-0.5" />
           <span>{t.settings.ai.envHint}</span>
         </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { FileText, Table } from 'lucide-react';
 
 interface MentionPopoverProps {
@@ -9,10 +10,20 @@ interface MentionPopoverProps {
 }
 
 export default function MentionPopover({ results, selectedIndex, onSelect }: MentionPopoverProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = listRef.current;
+    if (!container) return;
+    const selected = container.children[selectedIndex] as HTMLElement | undefined;
+    selected?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   if (results.length === 0) return null;
 
   return (
     <div className="mx-4 mb-1 border border-border rounded-lg bg-card shadow-lg overflow-hidden">
+      <div ref={listRef} className="max-h-[240px] overflow-y-auto">
       {results.map((f, idx) => {
         const name = f.split('/').pop() ?? f;
         const isCsv = name.endsWith('.csv');
@@ -42,7 +53,8 @@ export default function MentionPopover({ results, selectedIndex, onSelect }: Men
           </button>
         );
       })}
-      <div className="px-3 py-1.5 border-t border-border flex gap-3 text-2xs text-muted-foreground/50">
+      </div>
+      <div className="px-3 py-1.5 border-t border-border flex gap-3 text-2xs text-muted-foreground/50 shrink-0">
         <span>↑↓ navigate</span>
         <span>↵ select</span>
         <span>ESC dismiss</span>

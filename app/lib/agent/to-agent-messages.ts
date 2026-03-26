@@ -24,11 +24,13 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
   const result: AgentMessage[] = [];
 
   for (const msg of messages) {
+    const timestamp = msg.timestamp ?? Date.now();
+
     if (msg.role === 'user') {
       result.push({
         role: 'user',
         content: msg.content,
-        timestamp: Date.now(),
+        timestamp,
       } satisfies UserMessage as AgentMessage);
       continue;
     }
@@ -49,7 +51,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
           model: '',
           usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
           stopReason: 'stop',
-          timestamp: Date.now(),
+          timestamp,
         } satisfies AssistantMessage as AgentMessage);
       }
       continue;
@@ -85,7 +87,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
         model: '',
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
         stopReason: toolCalls.length > 0 ? 'toolUse' : 'stop',
-        timestamp: Date.now(),
+        timestamp,
       } satisfies AssistantMessage as AgentMessage);
     }
 
@@ -97,7 +99,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
         toolName: tc.toolName,
         content: [{ type: 'text', text: tc.output ?? '' }],
         isError: tc.state === 'error',
-        timestamp: Date.now(),
+        timestamp,
       } satisfies ToolResultMessage as AgentMessage);
     }
   }

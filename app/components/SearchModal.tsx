@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
@@ -32,6 +32,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
@@ -99,6 +100,13 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose, results, selectedIndex, navigate]);
 
+  useLayoutEffect(() => {
+    const container = resultsRef.current;
+    if (!container) return;
+    const selected = container.children[selectedIndex] as HTMLElement | undefined;
+    selected?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   if (!open) return null;
 
   return (
@@ -134,7 +142,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         </div>
 
         {/* Results */}
-        <div className="max-h-[50vh] md:max-h-80 overflow-y-auto flex-1">
+        <div ref={resultsRef} className="max-h-[50vh] md:max-h-80 overflow-y-auto flex-1">
           {results.length === 0 && query && !loading && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t.search.noResults}</div>
           )}

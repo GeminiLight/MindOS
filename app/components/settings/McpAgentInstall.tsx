@@ -94,8 +94,7 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
               style={{ accentColor: 'var(--amber)' }}
             />
             <span className="w-28 shrink-0 text-xs">{agent.name}</span>
-            <span className="text-2xs px-1.5 py-0.5 rounded font-mono"
-              style={{ background: 'rgba(100,100,120,0.08)' }}>
+            <span className="text-2xs px-1.5 py-0.5 rounded font-mono bg-muted">
               {getEffectiveTransport(agent)}
             </span>
             {agent.installed ? (
@@ -131,8 +130,7 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
           onClick={() => setSelected(new Set(
             agents.filter(a => !a.installed && a.present).map(a => a.key)
           ))}
-          className="px-2.5 py-1 rounded-md border transition-colors hover:bg-muted/50"
-          style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>
+          className="px-2.5 py-1 rounded-md border border-[var(--amber)] text-[var(--amber)] transition-colors hover:bg-muted/50">
           {m?.selectDetected ?? 'Select Detected'}
         </button>
         <button type="button"
@@ -205,8 +203,7 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
       <button
         onClick={handleInstall}
         disabled={selected.size === 0 || installing}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--amber)] text-[var(--amber-foreground)]"
       >
         {installing && <Loader2 size={12} className="animate-spin" />}
         {installing ? (m?.installing ?? 'Installing...') : (m?.installSelected ?? 'Install Selected')}

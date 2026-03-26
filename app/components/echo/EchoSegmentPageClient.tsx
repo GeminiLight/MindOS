@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, Bookmark, Brain, Check, History, Sun, UserRound } from 'lucide-react';
 import type { EchoSegment } from '@/lib/echo-segments';
 import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
 import type { Locale, Messages } from '@/lib/i18n';
@@ -44,12 +46,20 @@ function segmentLead(segment: EchoSegment, p: ReturnType<typeof useLocale>['t'][
   }
 }
 
+const SEGMENT_ICON: Record<EchoSegment, ReactNode> = {
+  'about-you': <UserRound size={18} strokeWidth={1.75} />,
+  continued: <Bookmark size={18} strokeWidth={1.75} />,
+  daily: <Sun size={18} strokeWidth={1.75} />,
+  'past-you': <History size={18} strokeWidth={1.75} />,
+  growth: <Brain size={18} strokeWidth={1.75} />,
+};
+
 const fieldLabelClass =
   'block font-sans text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
 const inputClass =
-  'mt-2 w-full min-h-[5rem] resize-y rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'mt-2 w-full min-h-[5rem] resize-y rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-[var(--amber)]/40';
 const cardSectionClass =
-  'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6';
+  'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow sm:p-6';
 
 function echoSnapshotCopy(segment: EchoSegment, p: Messages['echoPages']): { title: string; body: string } {
   switch (segment) {
@@ -77,6 +87,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
   const [dailyLine, setDailyLine] = useState('');
   const [growthIntent, setGrowthIntent] = useState('');
+  const [dailySaved, setDailySaved] = useState(false);
+  const [growthSaved, setGrowthSaved] = useState(false);
+  const dailySavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const growthSavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => {
+    clearTimeout(dailySavedTimer.current);
+    clearTimeout(growthSavedTimer.current);
+  }, []);
 
   const snapshot = useMemo(() => echoSnapshotCopy(segment, p), [segment, p]);
 
@@ -97,6 +116,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     } catch {
       /* ignore */
     }
+    clearTimeout(dailySavedTimer.current);
+    setDailySaved(true);
+    dailySavedTimer.current = setTimeout(() => setDailySaved(false), 1800);
   }, [dailyLine]);
 
   const persistGrowth = useCallback(() => {
@@ -105,6 +127,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     } catch {
       /* ignore */
     }
+    clearTimeout(growthSavedTimer.current);
+    setGrowthSaved(true);
+    growthSavedTimer.current = setTimeout(() => setGrowthSaved(false), 1800);
   }, [growthIntent]);
 
   const openDailyAsk = useCallback(() => {
@@ -150,7 +175,14 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   );
 
   const secondaryBtnClass =
-    'inline-flex items-center rounded-lg border border-border bg-background px-4 py-2.5 font-sans text-sm font-medium text-foreground transition-colors duration-150 hover:border-[var(--amber)]/35 hover:bg-[var(--amber-dim)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2.5 font-sans text-sm font-medium text-foreground transition-colors duration-150 hover:border-[var(--amber)]/35 hover:bg-[var(--amber-dim)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  const agentBtn = (onClick: () => void) => (
+    <button type="button" onClick={onClick} className={secondaryBtnClass}>
+      {p.continueAgent}
+      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  );
 
   return (
     <article
@@ -158,16 +190,13 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       aria-labelledby={pageTitleId}
     >
       <EchoHero
-        breadcrumbNav={p.breadcrumbNav}
-        parentHref="/echo/about-you"
-        parent={p.parent}
         heroKicker={p.heroKicker}
         pageTitle={title}
         lead={lead}
         titleId={pageTitleId}
-      />
-
-      <EchoSegmentNav activeSegment={segment} />
+      >
+        <EchoSegmentNav activeSegment={segment} />
+      </EchoHero>
 
       <div className="mt-6 space-y-6 sm:mt-8">
         <EchoFactSnapshot
@@ -176,24 +205,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           snapshotBadge={p.snapshotBadge}
           emptyTitle={snapshot.title}
           emptyBody={snapshot.body}
-          actions={
-            segment === 'about-you' ? (
-              <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
-                {p.continueAgent}
-              </button>
-            ) : undefined
-          }
+          icon={SEGMENT_ICON[segment]}
+          actions={segment === 'about-you' ? agentBtn(openSegmentAsk) : undefined}
         />
         {segment === 'continued' ? (
           <EchoContinuedGroups
             draftsLabel={p.continuedDrafts}
             todosLabel={p.continuedTodos}
             subEmptyHint={p.subEmptyHint}
-            footer={
-              <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
-                {p.continueAgent}
-              </button>
-            }
+            footer={agentBtn(openSegmentAsk)}
           />
         ) : null}
       </div>
@@ -212,11 +232,14 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             placeholder={p.dailyLinePlaceholder}
             className={inputClass}
           />
-          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.dailySavedNote}</p>
+          <p className="mt-3 flex items-center gap-2 font-sans text-2xs text-muted-foreground">
+            <span>{p.dailySavedNote}</span>
+            <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
+              {dailySaved ? <><Check size={12} aria-hidden /> {p.savedFlash}</> : null}
+            </span>
+          </p>
           <div className="mt-4">
-            <button type="button" onClick={openDailyAsk} className={secondaryBtnClass}>
-              {p.continueAgent}
-            </button>
+            {agentBtn(openDailyAsk)}
           </div>
         </section>
       ) : null}
@@ -235,31 +258,29 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             placeholder={p.growthIntentPlaceholder}
             className={`${inputClass} min-h-[6.5rem]`}
           />
-          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.growthSavedNote}</p>
+          <p className="mt-3 flex items-center gap-2 font-sans text-2xs text-muted-foreground">
+            <span>{p.growthSavedNote}</span>
+            <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
+              {growthSaved ? <><Check size={12} aria-hidden /> {p.savedFlash}</> : null}
+            </span>
+          </p>
           <div className="mt-4 border-t border-border/60 pt-4">
-            <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
-              {p.continueAgent}
-            </button>
+            {agentBtn(openSegmentAsk)}
           </div>
         </section>
       ) : null}
 
       {segment === 'past-you' ? (
         <section className={`${cardSectionClass} mt-6`}>
-          <label className={fieldLabelClass}>{p.pastYouDrawLabel}</label>
-          <button
-            type="button"
-            disabled
-            title={p.pastYouDisabledHint}
-            className="mt-2 inline-flex cursor-not-allowed items-center rounded-lg border border-dashed border-border bg-muted/20 px-4 py-2.5 font-sans text-sm text-muted-foreground opacity-85"
-          >
-            {p.pastYouAnother}
-          </button>
-          <p className="mt-3 font-sans text-2xs text-muted-foreground">{p.pastYouDisabledHint}</p>
+          <div className="flex items-center gap-3">
+            <span className={fieldLabelClass}>{p.pastYouDrawLabel}</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-sans text-2xs font-medium text-muted-foreground">
+              {p.pastYouComingSoon}
+            </span>
+          </div>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-muted-foreground">{p.pastYouDisabledHint}</p>
           <div className="mt-4 border-t border-border/60 pt-4">
-            <button type="button" onClick={openSegmentAsk} className={secondaryBtnClass}>
-              {p.continueAgent}
-            </button>
+            {agentBtn(openSegmentAsk)}
           </div>
         </section>
       ) : null}
