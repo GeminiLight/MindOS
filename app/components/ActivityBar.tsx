@@ -58,7 +58,7 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
       `}
     >
       {active && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[18px] rounded-r-full" style={{ background: 'var(--amber)' }} />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[18px] rounded-r-full bg-[var(--amber)]" />
       )}
       <span className="shrink-0 flex items-center justify-center w-[18px]">{icon}</span>
       {badge}
@@ -147,7 +147,7 @@ export default function ActivityBar({
         {/* ── Top: Logo ── */}
         <Link
           href="/"
-          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full py-3 hover:opacity-80 transition-opacity`}
+          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full py-[13px] hover:opacity-80 transition-opacity`}
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />

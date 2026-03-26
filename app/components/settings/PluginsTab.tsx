@@ -8,7 +8,7 @@ import type { PluginsTabProps } from './types';
 export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps) {
   const renderers = getPluginRenderers();
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.settings.plugins.title}</p>
 
       {renderers.length === 0 ? (
@@ -30,7 +30,7 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground">{renderer.name}</span>
                         {isCore && (
-                          <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-600 font-mono">
+                          <span className="text-2xs px-1.5 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber)] font-mono">
                             core
                           </span>
                         )}

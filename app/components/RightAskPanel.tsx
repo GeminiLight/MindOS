@@ -81,7 +81,7 @@ export default function RightAskPanel({
         className="absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden md:block"
         onMouseDown={handleMouseDown}
       >
-        <div className="absolute left-[2px] top-0 w-[2px] h-full opacity-0 group-hover:opacity-100 bg-amber-500/60 transition-opacity" />
+        <div className="absolute left-[2px] top-0 w-[2px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/60 transition-opacity" />
       </div>
     </aside>
   );

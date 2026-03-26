@@ -67,7 +67,7 @@ export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, da
               onClick={() => setFont(f.value)}
               className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
                 font === f.value
-                  ? 'border-amber-500 bg-amber-500/10 text-foreground font-medium shadow-sm'
+                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
                   : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
               style={{ fontFamily: f.style.fontFamily }}
@@ -94,7 +94,7 @@ export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, da
               onClick={() => setContentWidth(w.value)}
               className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
                 contentWidth === w.value
-                  ? 'border-amber-500 bg-amber-500/10 text-foreground font-medium shadow-sm'
+                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
                   : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >

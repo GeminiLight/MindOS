@@ -51,7 +51,7 @@ export default function SkillRow({
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="text-xs font-medium flex-1">{skill.name}</span>
         <span className={`text-2xs px-1.5 py-0.5 rounded ${
-          skill.source === 'builtin' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'
+          skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-subtle)] text-[var(--amber)]'
         }`}>
           {skill.source === 'builtin' ? (m?.skillBuiltin ?? 'Built-in') : (m?.skillUser ?? 'Custom')}
         </span>
@@ -106,8 +106,7 @@ export default function SkillRow({
                     <button
                       onClick={() => onEditSave(skill.name)}
                       disabled={saving}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-[var(--amber)] text-[var(--amber-foreground)]"
                     >
                       {saving && <Loader2 size={10} className="animate-spin" />}
                       {m?.saveSkill ?? 'Save'}

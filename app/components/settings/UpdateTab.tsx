@@ -57,7 +57,7 @@ function StageIcon({ status }: { status: string }) {
     case 'done':
       return <CheckCircle2 size={14} className="text-success shrink-0" />;
     case 'running':
-      return <Loader2 size={14} className="animate-spin shrink-0" style={{ color: 'var(--amber)' }} />;
+      return <Loader2 size={14} className="animate-spin shrink-0 text-[var(--amber)]" />;
     case 'failed':
       return <AlertCircle size={14} className="text-destructive shrink-0" />;
     default:
@@ -119,7 +119,7 @@ function DesktopUpdateTab() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -137,14 +137,14 @@ function DesktopUpdateTab() {
         )}
 
         {state === 'idle' && !available && (
-          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 text-xs text-success">
             <CheckCircle2 size={13} />
             {u?.upToDate ?? "You're up to date"}
           </div>
         )}
 
         {state === 'idle' && available && (
-          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
+          <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
             <Download size={13} />
             {version ? `Update available: v${version}` : 'Update available'}
           </div>
@@ -153,20 +153,20 @@ function DesktopUpdateTab() {
         {state === 'downloading' && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs text-foreground">
-              <Loader2 size={13} className="animate-spin" style={{ color: 'var(--amber)' }} />
+              <Loader2 size={13} className="animate-spin text-[var(--amber)]" />
               {u?.desktopDownloading ?? 'Downloading update...'}
             </div>
             <div className="h-1 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${Math.max(progress, 3)}%`, background: 'var(--amber)' }}
+                className="h-full rounded-full bg-[var(--amber)] transition-all duration-300"
+                style={{ width: `${Math.max(progress, 3)}%` }}
               />
             </div>
           </div>
         )}
 
         {state === 'ready' && (
-          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 text-xs text-success">
             <CheckCircle2 size={13} />
             {u?.desktopReady ?? 'Update downloaded. Restart to apply.'}
           </div>
@@ -193,8 +193,7 @@ function DesktopUpdateTab() {
         {state === 'idle' && available && (
           <button
             onClick={handleInstall}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-white transition-colors"
-            style={{ background: 'var(--amber)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
             <Download size={12} />
             {version ? `Update to v${version}` : 'Update'}
@@ -204,8 +203,7 @@ function DesktopUpdateTab() {
         {state === 'ready' && (
           <button
             onClick={() => bridge.installUpdate()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-white transition-colors"
-            style={{ background: 'var(--amber)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
             <RefreshCw size={12} />
             {u?.desktopRestart ?? 'Restart Now'}
@@ -401,7 +399,7 @@ function BrowserUpdateTab() {
   const progress = stages.length > 0 ? Math.round((doneCount / stages.length) * 100) : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Version Card */}
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -419,14 +417,14 @@ function BrowserUpdateTab() {
         )}
 
         {state === 'idle' && info && !info.hasUpdate && (
-          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 text-xs text-success">
             <CheckCircle2 size={13} />
             {u?.upToDate ?? "You're up to date"}
           </div>
         )}
 
         {state === 'idle' && info?.hasUpdate && (
-          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--amber)' }}>
+          <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
             <Download size={13} />
             {u?.available ? u.available(info.current, info.latest) : `Update available: v${info.current} → v${info.latest}`}
           </div>
@@ -449,8 +447,8 @@ function BrowserUpdateTab() {
             {/* Progress bar */}
             <div className="h-1 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(progress, 5)}%`, background: 'var(--amber)' }}
+                className="h-full rounded-full bg-[var(--amber)] transition-all duration-500 ease-out"
+                style={{ width: `${Math.max(progress, 5)}%` }}
               />
             </div>
 
@@ -463,7 +461,7 @@ function BrowserUpdateTab() {
         )}
 
         {state === 'updated' && (
-          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 text-xs text-success">
             <CheckCircle2 size={13} />
             {u?.updated ?? 'Updated successfully! Reloading...'}
           </div>
@@ -471,7 +469,7 @@ function BrowserUpdateTab() {
 
         {state === 'timeout' && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+            <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
               <AlertCircle size={13} />
               {u?.timeout ?? 'Update may still be in progress.'}
             </div>
@@ -521,8 +519,7 @@ function BrowserUpdateTab() {
         {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
           <button
             onClick={handleUpdate}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-white transition-colors"
-            style={{ background: 'var(--amber)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
             <Download size={12} />
             {u?.updateButton ? u.updateButton(info.latest) : `Update to v${info.latest}`}

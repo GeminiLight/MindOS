@@ -712,7 +712,6 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('switch-mode', () => handleChangeMode());
-  ipcMain.handle('change-mode', () => handleChangeMode());
   ipcMain.handle('restart-services', () => handleRestartServices());
   ipcMain.handle('switch-server', () => handleSwitchServer());
 }
@@ -847,7 +846,7 @@ async function bootApp(): Promise<void> {
   const loadUrl = currentMode === 'local' ? resolveLocalMindOsBrowseUrl(url) : url;
   mainWindow.loadURL(loadUrl);
 
-  mainWindow.webContents.once('did-fail-load', (_event, code, desc, failedUrl) => {
+  mainWindow.webContents.on('did-fail-load', (_event, code, desc, failedUrl) => {
     console.error('[MindOS] main window did-fail-load', code, desc, failedUrl);
     closeSplash();
     const zh = navigator_lang() === 'zh';
@@ -860,18 +859,36 @@ async function bootApp(): Promise<void> {
     mainWindow?.show();
   });
 
-  // Wait for content to load, then show main + hide splash
-  mainWindow.webContents.once('did-finish-load', () => {
-    mainWindow?.show();
-    closeSplash();
-    if (process.env.MINDOS_OPEN_DEVTOOLS === '1') {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+  // Show main + hide splash on each navigation (not just the first)
+  let firstLoad = true;
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (firstLoad) {
+      mainWindow?.show();
+      closeSplash();
+      if (process.env.MINDOS_OPEN_DEVTOOLS === '1') {
+        mainWindow?.webContents.openDevTools({ mode: 'detach' });
+      }
+      firstLoad = false;
     }
-    // macOS: inject CSS to avoid traffic-light overlap — guaranteed to work regardless of
-    // framework hydration, preload sandbox, or content-security-policy.
+    // macOS: inject CSS on every load (navigation resets injected stylesheets)
     if (process.platform === 'darwin') {
       mainWindow?.webContents.insertCSS(`
         html { --electron-mac-titlebar-h: 28px; }
+        /* Full-width drag zone at the very top of the window */
+        body::before {
+          content: '';
+          display: block;
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          height: var(--electron-mac-titlebar-h);
+          -webkit-app-region: drag;
+          z-index: 9999;
+          pointer-events: auto;
+        }
+        /* Buttons/links inside the drag zone must be clickable */
+        button, a, input, select, textarea, [role="button"] {
+          -webkit-app-region: no-drag;
+        }
         /* Activity Bar (rail) + Side Panel: shift down together so separators align */
         [role="toolbar"][aria-label="Navigation"],
         [role="toolbar"][aria-label="Navigation"] ~ aside[role="region"] {

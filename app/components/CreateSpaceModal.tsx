@@ -108,6 +108,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
 
       close();
       router.refresh();
+      window.dispatchEvent(new Event('mindos:files-changed'));
       router.push(`/view/${encodePath(createdPath + '/')}`);
     } else {
       const msg = result.error ?? '';
@@ -200,7 +201,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               disabled={!aiAvailable}
               onClick={() => setUseAi(v => !v)}
               className={`relative mt-0.5 inline-flex shrink-0 h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
-                useAi ? 'bg-amber-500' : 'bg-muted'
+                useAi ? 'bg-[var(--amber)]' : 'bg-muted'
               }`}
             >
               <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${useAi ? 'translate-x-3' : 'translate-x-0'}`} />
@@ -212,7 +213,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               </div>
               {aiAvailable === false && (
                 <p className="text-2xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                  <AlertTriangle size={10} className="text-[var(--amber)] shrink-0" />
                   {h.aiInitNoKey ?? 'Configure an API key in Settings → AI to enable'}
                 </p>
               )}

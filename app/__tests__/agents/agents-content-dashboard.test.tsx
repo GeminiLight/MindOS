@@ -102,85 +102,73 @@ vi.mock('@/lib/LocaleContext', () => ({
 }));
 
 describe('Agents content dashboard', () => {
-  it('renders overview without top segment nav', () => {
+  it('renders overview with pulse stats, agent cards, and quick nav', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.title);
-    expect(html).toContain(a.workspacePulse.title);
     expect(html).toContain(a.workspacePulse.connected);
-    expect(html).toContain(a.overview.riskQueue);
-    expect(html).not.toContain('role="tablist"');
+    expect(html).toContain(a.workspacePulse.enabledSkills);
+    expect(html).toContain(a.overview.usagePulse);
+    expect(html).toContain(a.overview.pulseMcp);
+    expect(html).toContain('Cursor');
+    expect(html).toContain('Codex');
+    expect(html).toContain('Ghost Agent');
+    expect(html).toContain('MCP');
+    expect(html).toContain('Skills');
   });
 
-  it('renders mcp manage/topology sections with table actions', () => {
+  it('renders mcp section with By Server (default) / By Agent views and management', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="mcp" />);
     const a = messages.en.agentsContent;
 
-    expect(html).not.toContain('role="tablist"');
-    expect(html).toContain(a.mcp.tabs.manage);
-    expect(html).toContain(a.mcp.tabs.topology);
-    expect(html).toContain(a.mcp.connectionGraph);
-    expect(html).toContain(a.mcp.searchPlaceholder);
-    expect(html).toContain(a.mcp.filters.all);
-    expect(html).toContain(a.mcp.transportFilters.all);
-    expect(html).toContain(a.mcp.bulkReconnectFiltered);
-    expect(html).toContain(a.mcp.riskQueueTitle);
-    expect(html).toContain(a.mcp.configVisibilityTitle);
-    expect(html).toContain(a.mcp.filteredSummaryTitle);
-    expect(html).toContain(a.mcp.crossAgentServersTitle);
-    expect(html).toContain('github');
+    expect(html).toContain(a.mcp.tabs.byAgent);
+    expect(html).toContain(a.mcp.tabs.byServer);
+    expect(html).toContain(a.mcp.searchServersPlaceholder);
     expect(html).toContain('mindos');
-    expect(html).toContain(a.mcp.resultCount(baseMcpState.agents.length));
-    expect(html).toContain(a.mcp.table.agent);
-    expect(html).toContain(a.mcp.actions.copySnippet);
-    expect(html).toContain(a.mcp.actions.testConnection);
-    expect(html).toContain(a.mcp.actions.reconnect);
+    expect(html).toContain('github');
+    expect(html).toContain('Cursor');
+    expect(html).toContain('Codex');
   });
 
-  it('renders skills focused header and section tabs', () => {
+  it('renders skills section with By Skill / By Agent views and management', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="skills" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.skills.title);
-    expect(html).not.toContain('role="tablist"');
-    expect(html).toContain(a.skills.tabs.manage);
-    expect(html).toContain(a.skills.tabs.matrix);
+    expect(html).toContain(a.skills.tabs.bySkill);
+    expect(html).toContain(a.skills.tabs.byAgent);
     expect(html).toContain(a.skills.searchPlaceholder);
     expect(html).toContain(a.skills.statusAttention);
-    expect(html).toContain(a.skills.summaryTitle);
-    expect(html).toContain(a.skills.crossAgentSkillsTitle);
+    expect(html).toContain(a.skills.summaryEnabled(1));
+    expect(html).toContain(a.skills.summaryDisabled(1));
     expect(html).toContain(a.skills.bulkEnableFiltered);
-    expect(html).toContain(a.skills.capabilityGroups);
-    expect(html).toContain(a.skills.registrySummaryTitle);
+    expect(html).toContain(a.skills.bulkDisableFiltered);
     expect(html).toContain('custom-routing');
+    expect(html).toContain('mindos');
   });
 });
 
 describe('Agent detail content', () => {
-  it('renders detail modules for existing agent', () => {
+  it('renders consolidated detail with cross-agent context', () => {
     const html = renderToStaticMarkup(<AgentDetailContent agentKey="cursor" />);
     const a = messages.en.agentsContent.detail;
 
-    expect(html).toContain(a.identity);
-    expect(html).toContain(a.connection);
-    expect(html).toContain(a.capabilities);
+    expect(html).toContain(a.format);
+    expect(html).toContain(a.lastActivityAt);
     expect(html).toContain(a.skillAssignments);
-    expect(html).toContain(a.runtimeSignals);
-    expect(html).toContain(a.recentActivity);
-    expect(html).toContain(a.spaceReach);
     expect(html).toContain(a.skillsSearchPlaceholder);
-    expect(html).toContain(a.skillsAll);
     expect(html).toContain(a.skillsSourceBuiltin);
-    expect(html).toContain(a.skillsSourceUser);
     expect(html).toContain(a.mcpManagement);
     expect(html).toContain(a.mcpCopySnippet);
     expect(html).toContain(a.mcpReconnect);
-    expect(html).toContain(a.healthStripTitle);
     expect(html).toContain(a.nativeInstalledSkills);
     expect(html).toContain(a.configuredMcpServers);
     expect(html).toContain('github');
     expect(html).toContain('custom-routing');
+    expect(html).toContain('Codex');
+    expect(html).not.toContain(a.recentActivity);
+    expect(html).not.toContain(a.spaceReach);
   });
 
   it('renders not-found state for missing agent key', () => {

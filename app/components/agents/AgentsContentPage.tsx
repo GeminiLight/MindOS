@@ -49,16 +49,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       }),
     [mcp.skills, mcp.status?.running, buckets.detected.length, buckets.notFound.length],
   );
-  const workspacePulse = useMemo(() => {
-    const enabledSkills = mcp.skills.filter((skill) => skill.enabled).length;
-    return {
-      connected: buckets.connected.length,
-      detected: buckets.detected.length,
-      notFound: buckets.notFound.length,
-      risk: riskQueue.length,
-      enabledSkills,
-    };
-  }, [buckets.connected.length, buckets.detected.length, buckets.notFound.length, mcp.skills, riskQueue.length]);
+  const enabledSkillCount = useMemo(
+    () => mcp.skills.filter((skill) => skill.enabled).length,
+    [mcp.skills],
+  );
 
   const copySnippet = async (agentKey: string) => {
     const agent = mcp.agents.find((item) => item.key === agentKey);
@@ -76,31 +70,21 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{pageHeader.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
       </header>
-      <section className="mb-6 rounded-lg border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-foreground">{a.workspacePulse.title}</h2>
-          <span className="text-2xs text-muted-foreground">
-            {workspacePulse.risk === 0 ? a.workspacePulse.healthy : a.workspacePulse.needsAttention(workspacePulse.risk)}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          <PulseMetric label={a.workspacePulse.connected} value={workspacePulse.connected} tone="ok" />
-          <PulseMetric label={a.workspacePulse.detected} value={workspacePulse.detected} tone="warn" />
-          <PulseMetric label={a.workspacePulse.notFound} value={workspacePulse.notFound} tone="warn" />
-          <PulseMetric label={a.workspacePulse.risk} value={workspacePulse.risk} tone={workspacePulse.risk > 0 ? 'warn' : 'ok'} />
-          <PulseMetric label={a.workspacePulse.enabledSkills} value={workspacePulse.enabledSkills} tone="ok" />
-        </div>
-      </section>
 
-      {tab === 'overview' && (
+      {/* Loading skeleton — shown while initial data loads */}
+      {mcp.loading && tab === 'overview' && <OverviewSkeleton />}
+
+      {!mcp.loading && tab === 'overview' && (
         <AgentsOverviewSection
           copy={a.overview}
           buckets={buckets}
           riskQueue={riskQueue}
-          topSkillsLabel={a.overview.topSkills}
-          failedAgentsLabel={a.overview.failedAgents}
-          topSkillsValue={mcp.skills.filter((s) => s.enabled).slice(0, 3).map((s) => s.name).join(', ') || a.overview.na}
-          failedAgentsValue={buckets.notFound.map((x) => x.name).slice(0, 3).join(', ') || a.overview.na}
+          mcpRunning={!!mcp.status?.running}
+          mcpPort={mcp.status?.port ?? null}
+          mcpToolCount={mcp.status?.toolCount ?? 0}
+          enabledSkillCount={enabledSkillCount}
+          allAgents={mcp.agents}
+          pulseCopy={a.workspacePulse}
         />
       )}
 
@@ -115,19 +99,58 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   );
 }
 
-function PulseMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'ok' | 'warn';
-}) {
+/* ────────── Loading skeleton for Overview ────────── */
+
+function OverviewSkeleton() {
   return (
-    <div className="rounded-md border border-border bg-background px-3 py-2">
-      <p className="text-2xs text-muted-foreground mb-1">{label}</p>
-      <p className={`text-sm font-medium tabular-nums ${tone === 'ok' ? 'text-success' : 'text-[var(--amber)]'}`}>{value}</p>
+    <div className="space-y-5 animate-pulse" aria-busy="true" aria-label="Loading">
+      {/* Stats bar skeleton */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border bg-muted/10">
+          <div className="h-4 w-32 bg-muted rounded" />
+        </div>
+        <div className="grid grid-cols-3 md:grid-cols-6 divide-x divide-border">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="px-3 py-3.5 flex flex-col items-center gap-2">
+              <div className="h-3 w-16 bg-muted rounded" />
+              <div className="h-5 w-8 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick nav skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4 flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-20 bg-muted rounded" />
+              <div className="h-3 w-full bg-muted rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Agent cards skeleton */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="h-4 w-24 bg-muted rounded" />
+          <div className="h-3 w-16 bg-muted rounded" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-3.5">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-7 h-7 rounded-full bg-muted" />
+                <div className="flex-1 h-4 bg-muted rounded" />
+                <div className="h-4 w-16 bg-muted rounded" />
+              </div>
+              <div className="h-3 w-2/3 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

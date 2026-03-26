@@ -137,18 +137,43 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
   const agentDockOpen = agentDetailKey !== null && lp.activePanel === 'agents';
 
-  // Refresh file tree periodically
+  // Refresh file tree when server-side tree version changes.
+  // Polls a lightweight version counter every 3s — only calls router.refresh()
+  // (which rebuilds the full tree) when the version actually changes.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') router.refresh();
+    let lastVersion = -1;
+    let stopped = false;
+
+    const checkVersion = async () => {
+      if (stopped || document.visibilityState === 'hidden') return;
+      try {
+        const res = await fetch('/api/tree-version');
+        if (!res.ok) return;
+        const { v } = (await res.json()) as { v: number };
+        if (lastVersion === -1) {
+          lastVersion = v;
+          return;
+        }
+        if (v !== lastVersion) {
+          lastVersion = v;
+          router.refresh();
+          window.dispatchEvent(new Event('mindos:files-changed'));
+        }
+      } catch (err) { console.debug('[tree-version] poll failed', err); }
     };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkVersion();
+    };
+
+    void checkVersion();
+    const interval = setInterval(() => void checkVersion(), 3_000);
     document.addEventListener('visibilitychange', onVisible);
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') router.refresh();
-    }, 30_000);
+
     return () => {
-      document.removeEventListener('visibilitychange', onVisible);
+      stopped = true;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [router]);
 
@@ -224,8 +249,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       {/* Skip link */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-medium focus:font-display"
-        style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-medium focus:font-display bg-[var(--amber)] text-[var(--amber-foreground)]"
       >
         Skip to main content
       </a>
@@ -235,7 +259,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         activePanel={railActivePanel}
         onPanelChange={lp.setActivePanel}
         onAgentsClick={() => {
-          lp.setActivePanel((current) => (current === 'agents' ? null : 'agents'));
+          const wasActive = lp.activePanel === 'agents';
+          lp.setActivePanel(wasActive ? null : 'agents');
+          if (!wasActive) router.push('/agents');
           setAgentDetailKey(null);
         }}
         syncStatus={syncStatus}

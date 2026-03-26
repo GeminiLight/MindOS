@@ -38,7 +38,7 @@ describe('useMention logic', () => {
     it('should auto-reset mention when filter yields zero results', () => {
       const allFiles = ['README.md', 'TODO.md'];
       const query = 'nonexistentfile';
-      const filtered = allFiles.filter(f => f.toLowerCase().includes(query)).slice(0, 8);
+      const filtered = allFiles.filter(f => f.toLowerCase().includes(query)).slice(0, 30);
 
       expect(filtered.length).toBe(0);
     });

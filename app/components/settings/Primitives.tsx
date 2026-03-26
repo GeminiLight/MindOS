@@ -35,7 +35,7 @@ export function Select({ className = '', ...props }: React.SelectHTMLAttributes<
 export function EnvBadge({ overridden }: { overridden: boolean }) {
   if (!overridden) return null;
   return (
-    <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono ml-1.5">env</span>
+    <span className="text-2xs px-1.5 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber)] font-mono ml-1.5">env</span>
   );
 }
 
@@ -72,7 +72,7 @@ export function Toggle({ checked, onChange, size = 'md', disabled, title, onClic
       onClick={onClick ?? (() => onChange?.(!checked))}
       className={`relative inline-flex shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
         sm ? 'h-4 w-7' : 'h-5 w-9'
-      } ${checked ? 'bg-amber-500' : 'bg-muted'}`}
+      } ${checked ? 'bg-[var(--amber)]' : 'bg-muted'}`}
     >
       <span
         className={`pointer-events-none inline-block rounded-full bg-white shadow-sm transition-transform ${
@@ -119,8 +119,7 @@ export function PrimaryButton({ children, disabled, onClick, type = 'button', cl
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
-      style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+      className={`px-4 py-2 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
       {...props}
     >
       {children}

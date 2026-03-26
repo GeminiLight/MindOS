@@ -1,17 +1,32 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Search, Server } from 'lucide-react';
 import type { McpContextValue } from '@/hooks/useMcpData';
-import type { AgentBuckets } from './agents-content-model';
-import type { AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
+import type { AgentBuckets, AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
+import {
+  ActionButton,
+  AddAvatarButton,
+  AgentAvatar,
+  AgentPickerPopover,
+  BulkMessage,
+  ConfirmDialog,
+  EmptyState,
+  PillButton,
+  SearchInput,
+  StatusDot,
+} from './AgentsPrimitives';
 import {
   aggregateCrossAgentMcpServers,
-  buildMcpRiskQueue,
+
   filterAgentsForMcpWorkspace,
+  resolveAgentStatus,
+  sortAgentsByStatus,
   summarizeMcpBulkReconnectResults,
 } from './agents-content-model';
+
+type McpView = 'byAgent' | 'byServer';
 
 export default function AgentsMcpSection({
   copy,
@@ -23,45 +38,34 @@ export default function AgentsMcpSection({
   copy: {
     title: string;
     refresh: string;
-    connectionGraph: string;
-    tabs: {
-      manage: string;
-      topology: string;
-    };
+    tabs: { byAgent: string; byServer: string; [k: string]: string };
     searchPlaceholder: string;
     emptyState: string;
     resultCount: (n: number) => string;
-    filteredSummaryTitle: string;
-    filteredConnected: (n: number) => string;
-    filteredDetected: (n: number) => string;
-    filteredNotFound: (n: number) => string;
-    crossAgentServersTitle: string;
     crossAgentServersEmpty: string;
-    crossAgentServerAgents: (names: string) => string;
-    configVisibilityTitle: string;
-    hiddenRootDetected: (n: number, total: number) => string;
-    runtimeSignalDetected: (n: number, total: number) => string;
-    riskQueueTitle: string;
     riskMcpStopped: string;
-    riskDetected: (n: number) => string;
-    riskNotFound: (n: number) => string;
     bulkReconnectFiltered: string;
     bulkRunning: string;
     bulkSummary: (ok: number, failed: number) => string;
-    transportFilters: {
-      all: string;
-      stdio: string;
-      http: string;
-      other: string;
-    };
-    filters: {
-      all: string;
-      connected: string;
-      detected: string;
-      notFound: string;
-    };
-    table: { agent: string; status: string; transport: string; actions: string };
-    actions: { copySnippet: string; copied: string; testConnection: string; reconnect: string };
+    installMindos: string;
+    mcpServerLabel: string;
+    searchServersPlaceholder: string;
+    serverAgentCount: (n: number) => string;
+    addAgent: string;
+    removeFromServer: string;
+    confirmRemoveTitle: string;
+    confirmRemoveMessage: (agent: string, server: string) => string;
+    cancel: string;
+    noAvailableAgents: string;
+    manualRemoveHint: string;
+    reconnectAllInServer: string;
+    reconnectAllRunning: string;
+    reconnectAllDone: (ok: number, failed: number) => string;
+    serverTransport: (t: string) => string;
+    transportFilters: { all: string; stdio: string; http: string; other: string };
+    filters: { all: string; connected: string; detected: string; notFound: string };
+    table: { status: string; transport: string; [k: string]: string };
+    actions: { copySnippet: string; copied: string; reconnect: string; [k: string]: string };
     status: { connected: string; detected: string; notFound: string };
   };
   mcp: McpContextValue;
@@ -69,70 +73,46 @@ export default function AgentsMcpSection({
   copyState: string | null;
   onCopySnippet: (agentKey: string) => Promise<void>;
 }) {
+  const [view, setView] = useState<McpView>('byServer');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>('all');
   const [transportFilter, setTransportFilter] = useState<AgentTransportFilter>('all');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
-  const [view, setView] = useState<'manage' | 'topology'>('manage');
+
+  const sortedAgents = useMemo(() => sortAgentsByStatus(mcp.agents), [mcp.agents]);
   const filteredAgents = useMemo(
-    () =>
-      filterAgentsForMcpWorkspace(mcp.agents, {
-        query,
-        status: statusFilter,
-        transport: transportFilter,
-      }),
+    () => sortAgentsByStatus(filterAgentsForMcpWorkspace(mcp.agents, { query, status: statusFilter, transport: transportFilter })),
     [mcp.agents, query, statusFilter, transportFilter],
   );
-  const riskQueue = useMemo(
-    () =>
-      buildMcpRiskQueue({
-        mcpRunning: !!mcp.status?.running,
-        detectedCount: buckets.detected.length,
-        notFoundCount: buckets.notFound.length,
-      }),
-    [mcp.status?.running, buckets.detected.length, buckets.notFound.length],
-  );
-  const filteredSummary = useMemo(
-    () => ({
-      connected: filteredAgents.filter((agent) => agent.present && agent.installed).length,
-      detected: filteredAgents.filter((agent) => agent.present && !agent.installed).length,
-      notFound: filteredAgents.filter((agent) => !agent.present).length,
-    }),
-    [filteredAgents],
-  );
-  const crossAgentServers = useMemo(
-    () => aggregateCrossAgentMcpServers(mcp.agents),
-    [mcp.agents],
-  );
-  const hiddenRootDetectedCount = useMemo(
-    () => mcp.agents.filter((agent) => !!agent.hiddenRootPresent).length,
-    [mcp.agents],
-  );
-  const runtimeSignalDetectedCount = useMemo(
-    () =>
-      mcp.agents.filter(
-        (agent) => !!agent.runtimeConversationSignal || !!agent.runtimeUsageSignal,
-      ).length,
-    [mcp.agents],
-  );
+  const crossAgentServers = useMemo(() => aggregateCrossAgentMcpServers(mcp.agents), [mcp.agents]);
+  const filteredServers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return crossAgentServers;
+    return crossAgentServers.filter((srv) => srv.serverName.toLowerCase().includes(q));
+  }, [crossAgentServers, query]);
 
-  async function handleTestConnection(agentKey: string) {
-    setBusyAction(`test:${agentKey}`);
-    try {
-      await mcp.refresh();
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function handleReconnect(agent: typeof mcp.agents[number]) {
+  async function handleReconnect(agent: (typeof mcp.agents)[number]) {
     setBusyAction(`reconnect:${agent.key}`);
     try {
       const scope = agent.scope === 'project' ? 'project' : 'global';
       const transport = agent.transport === 'http' ? 'http' : 'stdio';
       await mcp.installAgent(agent.key, { scope, transport });
       await mcp.refresh();
+    } catch (err) {
+      console.error('[mcp] reconnect failed', err);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleInstallMindos(agentKey: string) {
+    setBusyAction(`install:${agentKey}`);
+    try {
+      await mcp.installAgent(agentKey, { scope: 'global', transport: 'stdio' });
+      await mcp.refresh();
+    } catch (err) {
+      console.error('[mcp] install mindos failed', err);
     } finally {
       setBusyAction(null);
     }
@@ -155,255 +135,417 @@ export default function AgentsMcpSection({
     setBusyAction(null);
   }
 
+  const isRefreshing = busyAction === 'refresh';
+
   return (
-    <section className="rounded-lg border border-border bg-card p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <section className="space-y-4 overflow-hidden" aria-label={copy.title}>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
           <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
-            <Server size={15} className="text-muted-foreground" />
+            <Server size={15} className="text-muted-foreground" aria-hidden="true" />
             {copy.title}
           </h2>
           <button
             type="button"
-            onClick={() => void mcp.refresh()}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            onClick={() => { setBusyAction('refresh'); void mcp.refresh().finally(() => setBusyAction(null)); }}
+            disabled={isRefreshing}
+            aria-label={copy.refresh}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md px-1.5 py-1 hover:bg-muted disabled:opacity-50 transition-colors duration-150"
           >
-            <RefreshCw size={13} />
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             {copy.refresh}
           </button>
         </div>
-        <div className="flex items-center gap-1 rounded-md border border-border p-1 bg-background">
-          <StatusFilterButton active={view === 'manage'} label={copy.tabs.manage} onClick={() => setView('manage')} />
-          <StatusFilterButton active={view === 'topology'} label={copy.tabs.topology} onClick={() => setView('topology')} />
+        <div className="flex items-center gap-1 rounded-md border border-border p-0.5 bg-background" role="tablist" aria-label={copy.title}>
+          <PillButton active={view === 'byServer'} label={copy.tabs.byServer} onClick={() => setView('byServer')} />
+          <PillButton active={view === 'byAgent'} label={copy.tabs.byAgent} onClick={() => setView('byAgent')} />
         </div>
       </div>
 
-      {view === 'topology' ? (
-        <div className="rounded-md border border-border bg-background p-3">
-          <p className="text-xs font-medium text-muted-foreground mb-2">{copy.connectionGraph}</p>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <NodePill label={copy.status.connected} count={buckets.connected.length} tone="ok" />
-            <span className="text-muted-foreground">→</span>
-            <NodePill label={copy.status.detected} count={buckets.detected.length} tone="warn" />
-            <span className="text-muted-foreground">→</span>
-            <NodePill label={copy.status.notFound} count={buckets.notFound.length} tone="neutral" />
-            <span className="mx-2 text-muted-foreground">|</span>
-            <NodePill label={copy.title} count={mcp.status?.running ? 1 : 0} tone={mcp.status?.running ? 'ok' : 'neutral'} />
-          </div>
+      {/* Compact status strip + risk alerts */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <StatusDot tone="ok" label={copy.filters.connected} count={buckets.connected.length} />
+          <StatusDot tone="warn" label={copy.filters.detected} count={buckets.detected.length} />
+          {buckets.notFound.length > 0 && (
+            <StatusDot tone="neutral" label={copy.filters.notFound} count={buckets.notFound.length} />
+          )}
+          <span className="text-muted-foreground/40" aria-hidden="true">|</span>
+          <StatusDot tone={mcp.status?.running ? 'ok' : 'neutral'} label={copy.mcpServerLabel} count={mcp.status?.running ? 1 : 0} />
         </div>
-      ) : (
-        <>
-          <div className="flex flex-col md:flex-row gap-2">
-            <label className="relative flex-1">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={copy.searchPlaceholder}
-                className="w-full h-9 rounded-md border border-border bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <div role="group" aria-label={copy.table.status} className="flex items-center gap-1 rounded-md border border-border p-1 bg-background">
-              <StatusFilterButton active={statusFilter === 'all'} label={copy.filters.all} onClick={() => setStatusFilter('all')} />
-              <StatusFilterButton active={statusFilter === 'connected'} label={copy.filters.connected} onClick={() => setStatusFilter('connected')} />
-              <StatusFilterButton active={statusFilter === 'detected'} label={copy.filters.detected} onClick={() => setStatusFilter('detected')} />
-              <StatusFilterButton active={statusFilter === 'notFound'} label={copy.filters.notFound} onClick={() => setStatusFilter('notFound')} />
-            </div>
+        {!mcp.status?.running && (
+          <div className="mt-2 pt-2 border-t border-border/60" role="alert">
+            <p className="text-xs text-destructive flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" aria-hidden="true" />
+              {copy.riskMcpStopped}
+            </p>
           </div>
-          <div role="group" aria-label={copy.table.transport} className="flex flex-wrap items-center gap-1 rounded-md border border-border p-1 bg-background">
-            <StatusFilterButton active={transportFilter === 'all'} label={copy.transportFilters.all} onClick={() => setTransportFilter('all')} />
-            <StatusFilterButton active={transportFilter === 'stdio'} label={copy.transportFilters.stdio} onClick={() => setTransportFilter('stdio')} />
-            <StatusFilterButton active={transportFilter === 'http'} label={copy.transportFilters.http} onClick={() => setTransportFilter('http')} />
-            <StatusFilterButton active={transportFilter === 'other'} label={copy.transportFilters.other} onClick={() => setTransportFilter('other')} />
-          </div>
-          <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">{copy.filteredSummaryTitle}</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-muted-foreground mb-2">
-              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredConnected(filteredSummary.connected)}</span>
-              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredDetected(filteredSummary.detected)}</span>
-              <span className="rounded-md border border-border px-2 py-1.5">{copy.filteredNotFound(filteredSummary.notFound)}</span>
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-            <p className="text-xs font-semibold text-foreground">{copy.crossAgentServersTitle}</p>
-            {crossAgentServers.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{copy.crossAgentServersEmpty}</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {crossAgentServers.map((srv) => (
-                  <span
-                    key={srv.serverName}
-                    title={copy.crossAgentServerAgents(srv.agents.join(', '))}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-[var(--amber-dim)] px-2.5 py-1 text-xs text-foreground"
-                  >
-                    <Server size={12} className="text-[var(--amber)]" />
-                    <span className="font-medium">{srv.serverName}</span>
-                    <span className="tabular-nums text-muted-foreground">{srv.agents.length}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-lg border border-border bg-background p-4 space-y-2">
-              <p className="text-xs font-semibold text-foreground">{copy.configVisibilityTitle}</p>
-              <div className="space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block w-2 h-2 rounded-full ${hiddenRootDetectedCount > 0 ? 'bg-success' : 'bg-muted-foreground/30'}`} />
-                  {copy.hiddenRootDetected(hiddenRootDetectedCount, mcp.agents.length)}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block w-2 h-2 rounded-full ${runtimeSignalDetectedCount > 0 ? 'bg-success' : 'bg-muted-foreground/30'}`} />
-                  {copy.runtimeSignalDetected(runtimeSignalDetectedCount, mcp.agents.length)}
-                </div>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-background p-4 space-y-2">
-              <p className="text-xs font-semibold text-foreground">{copy.riskQueueTitle}</p>
-              {riskQueue.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{copy.emptyState}</p>
-              ) : (
-                <div className="space-y-1.5 text-xs">
-                  {!mcp.status?.running ? (
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full bg-destructive" />
-                      <span className="text-destructive">{copy.riskMcpStopped}</span>
-                    </div>
-                  ) : null}
-                  {buckets.detected.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full bg-[var(--amber)]" />
-                      <span className="text-muted-foreground">{copy.riskDetected(buckets.detected.length)}</span>
-                    </div>
-                  ) : null}
-                  {buckets.notFound.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full bg-[var(--amber)]" />
-                      <span className="text-muted-foreground">{copy.riskNotFound(buckets.notFound.length)}</span>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleBulkReconnect()}
-              disabled={busyAction !== null || filteredAgents.length === 0}
-              className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {copy.bulkReconnectFiltered}
-            </button>
-            {bulkMessage ? <span className="text-2xs text-muted-foreground">{bulkMessage}</span> : null}
-          </div>
-          <p className="text-2xs text-muted-foreground">{copy.resultCount(filteredAgents.length)}</p>
+        )}
+      </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b border-border">
-                  <th className="py-2 font-medium text-muted-foreground">{copy.table.agent}</th>
-                  <th className="py-2 font-medium text-muted-foreground">{copy.table.status}</th>
-                  <th className="py-2 font-medium text-muted-foreground">{copy.table.transport}</th>
-                  <th className="py-2 font-medium text-muted-foreground">{copy.table.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAgents.map((agent) => (
-                  <tr key={agent.key} className="border-b border-border/60">
-                    <td className="py-2 text-foreground">
-                      <Link href={`/agents/${encodeURIComponent(agent.key)}`} className="hover:underline">{agent.name}</Link>
-                    </td>
-                    <td className="py-2 text-muted-foreground">{agent.present ? (agent.installed ? copy.status.connected : copy.status.detected) : copy.status.notFound}</td>
-                    <td className="py-2 text-muted-foreground">{agent.transport ?? agent.preferredTransport}</td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void onCopySnippet(agent.key)}
-                          className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {copyState === agent.key ? copy.actions.copied : copy.actions.copySnippet}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleTestConnection(agent.key)}
-                          disabled={!agent.installed || busyAction !== null}
-                          className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {copy.actions.testConnection}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleReconnect(agent)}
-                          disabled={busyAction !== null}
-                          className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {copy.actions.reconnect}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredAgents.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-sm text-muted-foreground text-center">
-                      {copy.emptyState}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {/* Search */}
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder={view === 'byAgent' ? copy.searchPlaceholder : copy.searchServersPlaceholder}
+        ariaLabel={copy.searchPlaceholder}
+        icon={Search}
+      />
+
+      {view === 'byAgent' ? (
+        <ByAgentView
+          copy={copy}
+          agents={filteredAgents}
+          busyAction={busyAction}
+          copyState={copyState}
+          bulkMessage={bulkMessage}
+          statusFilter={statusFilter}
+          transportFilter={transportFilter}
+          onStatusFilter={setStatusFilter}
+          onTransportFilter={setTransportFilter}
+          onCopySnippet={onCopySnippet}
+          onReconnect={handleReconnect}
+          onInstallMindos={handleInstallMindos}
+          onBulkReconnect={handleBulkReconnect}
+        />
+      ) : (
+        <ByServerView
+          copy={copy}
+          servers={filteredServers}
+          allAgents={sortedAgents}
+          busyAction={busyAction}
+          onInstallMindos={handleInstallMindos}
+          onReconnect={handleReconnect}
+        />
       )}
     </section>
   );
 }
 
-function StatusFilterButton({
-  active,
-  label,
-  onClick,
+/* ────────── By Agent View ────────── */
+
+function ByAgentView({
+  copy,
+  agents,
+  busyAction,
+  copyState,
+  bulkMessage,
+  statusFilter,
+  transportFilter,
+  onStatusFilter,
+  onTransportFilter,
+  onCopySnippet,
+  onReconnect,
+  onInstallMindos,
+  onBulkReconnect,
 }: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
+  copy: Parameters<typeof AgentsMcpSection>[0]['copy'];
+  agents: ReturnType<typeof sortAgentsByStatus>;
+  busyAction: string | null;
+  copyState: string | null;
+  bulkMessage: string | null;
+  statusFilter: AgentStatusFilter;
+  transportFilter: AgentTransportFilter;
+  onStatusFilter: (f: AgentStatusFilter) => void;
+  onTransportFilter: (f: AgentTransportFilter) => void;
+  onCopySnippet: (agentKey: string) => Promise<void>;
+  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
+  onInstallMindos: (agentKey: string) => Promise<void>;
+  onBulkReconnect: () => Promise<void>;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`px-2.5 h-7 rounded text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        active ? 'bg-[var(--amber-dim)] text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-      }`}
-    >
-      {label}
-    </button>
+    <>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div role="group" aria-label={copy.table.status} className="flex items-center gap-0.5 rounded-md border border-border p-0.5 bg-background">
+          <PillButton active={statusFilter === 'all'} label={copy.filters.all} onClick={() => onStatusFilter('all')} />
+          <PillButton active={statusFilter === 'connected'} label={copy.filters.connected} onClick={() => onStatusFilter('connected')} />
+          <PillButton active={statusFilter === 'detected'} label={copy.filters.detected} onClick={() => onStatusFilter('detected')} />
+          <PillButton active={statusFilter === 'notFound'} label={copy.filters.notFound} onClick={() => onStatusFilter('notFound')} />
+        </div>
+        <div role="group" aria-label={copy.table.transport} className="flex items-center gap-0.5 rounded-md border border-border p-0.5 bg-background">
+          <PillButton active={transportFilter === 'all'} label={copy.transportFilters.all} onClick={() => onTransportFilter('all')} />
+          <PillButton active={transportFilter === 'stdio'} label={copy.transportFilters.stdio} onClick={() => onTransportFilter('stdio')} />
+          <PillButton active={transportFilter === 'http'} label={copy.transportFilters.http} onClick={() => onTransportFilter('http')} />
+          <PillButton active={transportFilter === 'other'} label={copy.transportFilters.other} onClick={() => onTransportFilter('other')} />
+        </div>
+      </div>
+
+      {/* Bulk actions + result count */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ActionButton
+          onClick={() => void onBulkReconnect()}
+          disabled={busyAction !== null || agents.length === 0}
+          busy={busyAction === 'bulk'}
+          label={copy.bulkReconnectFiltered}
+        />
+        <span className="text-2xs text-muted-foreground tabular-nums">{copy.resultCount(agents.length)}</span>
+        <BulkMessage message={bulkMessage} />
+      </div>
+
+      {/* Agent cards */}
+      {agents.length === 0 ? (
+        <EmptyState message={copy.emptyState} />
+      ) : (
+        <div className="space-y-2">
+          {agents.map((agent) => {
+            const status = resolveAgentStatus(agent);
+            const mcpServers = agent.configuredMcpServers ?? [];
+            const nativeSkillCount = (agent.installedSkillNames ?? []).length;
+            return (
+              <div key={agent.key} className="rounded-lg border border-border bg-card group hover:border-border/60 hover:shadow-sm transition-all duration-150">
+                {/* Card header with avatar */}
+                <div className="flex items-center gap-3 p-3">
+                  <AgentAvatar name={agent.name} status={status} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/agents/${encodeURIComponent(agent.key)}`} className="text-sm font-medium text-foreground hover:underline cursor-pointer truncate">
+                        {agent.name}
+                      </Link>
+                      <span className="text-2xs text-muted-foreground font-mono shrink-0">{agent.transport ?? agent.preferredTransport}</span>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${status === 'connected' ? 'bg-success/10 text-success' : status === 'detected' ? 'bg-[var(--amber-dim)] text-[var(--amber)]' : 'bg-muted text-muted-foreground'}`}>
+                        {copy.status[status]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-2xs text-muted-foreground">
+                      <span className="tabular-nums">{mcpServers.length} MCP</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{nativeSkillCount} skills</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-150">
+                    <ActionButton
+                      onClick={() => void onCopySnippet(agent.key)}
+                      disabled={false}
+                      busy={false}
+                      label={copyState === agent.key ? copy.actions.copied : copy.actions.copySnippet}
+                    />
+                    {agent.installed ? (
+                      <ActionButton
+                        onClick={() => void onReconnect(agent)}
+                        disabled={busyAction !== null}
+                        busy={busyAction === `reconnect:${agent.key}`}
+                        label={copy.actions.reconnect}
+                      />
+                    ) : (
+                      <ActionButton
+                        onClick={() => void onInstallMindos(agent.key)}
+                        disabled={busyAction !== null}
+                        busy={busyAction === `install:${agent.key}`}
+                        label={copy.installMindos}
+                        variant="primary"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* MCP server chips */}
+                {mcpServers.length > 0 && (
+                  <div className="flex flex-wrap gap-1 px-3 pb-3 ml-12">
+                    {mcpServers.map((name) => (
+                      <span key={name} className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-2xs text-muted-foreground">
+                        <Server size={9} className="text-[var(--amber)] shrink-0" aria-hidden="true" />
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
-function NodePill({
-  label,
-  count,
-  tone,
+/* ────────── By Server View (Avatar Grid) ────────── */
+
+function ByServerView({
+  copy,
+  servers,
+  allAgents,
+  busyAction,
+  onInstallMindos,
+  onReconnect,
 }: {
-  label: string;
-  count: number;
-  tone: 'ok' | 'warn' | 'neutral';
+  copy: Parameters<typeof AgentsMcpSection>[0]['copy'];
+  servers: ReturnType<typeof aggregateCrossAgentMcpServers>;
+  allAgents: ReturnType<typeof sortAgentsByStatus>;
+  busyAction: string | null;
+  onInstallMindos: (agentKey: string) => Promise<void>;
+  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
 }) {
-  const cls =
-    tone === 'ok'
-      ? 'bg-success/10 text-success'
-      : tone === 'warn'
-        ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
-        : 'bg-muted text-muted-foreground';
+  const [pickerServer, setPickerServer] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{ agentName: string; serverName: string } | null>(null);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const [reconnectingServer, setReconnectingServer] = useState<string | null>(null);
+  const [reconnectMsg, setReconnectMsg] = useState<Record<string, string>>({});
+
+  const isMindosServer = (name: string) => name.toLowerCase().includes('mindos');
+
+  const handleAddAgent = useCallback(
+    async (agentKey: string, serverName: string) => {
+      setPickerServer(null);
+      if (isMindosServer(serverName)) {
+        await onInstallMindos(agentKey);
+      }
+    },
+    [onInstallMindos],
+  );
+
+  const handleConfirmRemove = useCallback(() => {
+    setConfirmState(null);
+    setHintMessage(copy.manualRemoveHint);
+    setTimeout(() => setHintMessage(null), 4000);
+  }, [copy.manualRemoveHint]);
+
+  const handleReconnectAllInServer = useCallback(
+    async (serverName: string, agents: typeof allAgents) => {
+      setReconnectingServer(serverName);
+      setReconnectMsg((prev) => ({ ...prev, [serverName]: copy.reconnectAllRunning }));
+      let ok = 0;
+      let failed = 0;
+      for (const agent of agents) {
+        try {
+          await onReconnect(agent);
+          ok++;
+        } catch {
+          failed++;
+        }
+      }
+      setReconnectMsg((prev) => ({ ...prev, [serverName]: copy.reconnectAllDone(ok, failed) }));
+      setReconnectingServer(null);
+      setTimeout(() => setReconnectMsg((prev) => { const next = { ...prev }; delete next[serverName]; return next; }), 4000);
+    },
+    [copy, onReconnect],
+  );
+
+  if (servers.length === 0) {
+    return <EmptyState message={copy.crossAgentServersEmpty} />;
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${cls}`}>
-      <span>{label}</span>
-      <span className="tabular-nums">{count}</span>
-    </span>
+    <>
+      <div className="space-y-3">
+        <p className="text-2xs text-muted-foreground tabular-nums">{copy.resultCount(servers.length)}</p>
+        {hintMessage && (
+          <div role="status" aria-live="polite" className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground animate-in fade-in duration-200">
+            {hintMessage}
+          </div>
+        )}
+        {servers.map((srv) => {
+          const agentDetails = srv.agents
+            .map((name) => allAgents.find((a) => a.name === name))
+            .filter(Boolean) as typeof allAgents;
+          const orphanNames = srv.agents.filter((name) => !agentDetails.some((a) => a.name === name));
+          const canManage = isMindosServer(srv.serverName);
+          const availableToAdd = canManage
+            ? allAgents.filter((a) => !srv.agents.includes(a.name))
+            : [];
+
+          const connectedCount = agentDetails.filter((a) => resolveAgentStatus(a) === 'connected').length;
+          const detectedCount = agentDetails.filter((a) => resolveAgentStatus(a) === 'detected').length;
+          const notFoundCount = agentDetails.length - connectedCount - detectedCount + orphanNames.length;
+
+          return (
+            <div key={srv.serverName} className="rounded-lg border border-border bg-card p-4 hover:border-border/60 hover:shadow-sm transition-all duration-150">
+              {/* Server header */}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Server size={14} className="text-[var(--amber)] shrink-0" aria-hidden="true" />
+                  <span className="text-sm font-medium text-foreground truncate">{srv.serverName}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canManage && agentDetails.length > 0 && (
+                    <ActionButton
+                      onClick={() => void handleReconnectAllInServer(srv.serverName, agentDetails)}
+                      disabled={reconnectingServer !== null || busyAction !== null}
+                      busy={reconnectingServer === srv.serverName}
+                      label={copy.reconnectAllInServer}
+                      busyLabel={copy.reconnectAllRunning}
+                    />
+                  )}
+                  {canManage && (
+                    <div className="relative">
+                      <AddAvatarButton
+                        onClick={() => setPickerServer(pickerServer === srv.serverName ? null : srv.serverName)}
+                        label={copy.addAgent}
+                        size="sm"
+                      />
+                      <AgentPickerPopover
+                        open={pickerServer === srv.serverName}
+                        agents={availableToAdd.map((a) => ({ key: a.key, name: a.name }))}
+                        emptyLabel={copy.noAvailableAgents}
+                        onSelect={(key) => void handleAddAgent(key, srv.serverName)}
+                        onClose={() => setPickerServer(null)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Agent status breakdown */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground mb-3">
+                <span className="tabular-nums">{copy.serverAgentCount(srv.agents.length)}</span>
+                {connectedCount > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" aria-hidden="true" />
+                    {connectedCount}
+                  </span>
+                )}
+                {detectedCount > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]" aria-hidden="true" />
+                    {detectedCount}
+                  </span>
+                )}
+                {notFoundCount > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" aria-hidden="true" />
+                    {notFoundCount}
+                  </span>
+                )}
+              </div>
+
+              {reconnectMsg[srv.serverName] && (
+                <p role="status" className="text-2xs text-muted-foreground mb-2 animate-in fade-in duration-200">{reconnectMsg[srv.serverName]}</p>
+              )}
+
+              {/* Agent avatar grid */}
+              <div className="flex flex-wrap items-center gap-2">
+                {agentDetails.map((agent) => {
+                  const agentStatus = resolveAgentStatus(agent);
+                  return (
+                    <Link key={agent.key} href={`/agents/${encodeURIComponent(agent.key)}`} className="cursor-pointer">
+                      <AgentAvatar
+                        name={agent.name}
+                        status={agentStatus}
+                        onRemove={canManage ? () => setConfirmState({ agentName: agent.name, serverName: srv.serverName }) : undefined}
+                      />
+                    </Link>
+                  );
+                })}
+                {orphanNames.map((name) => (
+                  <AgentAvatar key={name} name={name} status="notFound" />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={copy.confirmRemoveTitle}
+        message={confirmState ? copy.confirmRemoveMessage(confirmState.agentName, confirmState.serverName) : ''}
+        confirmLabel={copy.removeFromServer}
+        cancelLabel={copy.cancel}
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setConfirmState(null)}
+        variant="destructive"
+      />
+    </>
   );
 }

@@ -4,6 +4,7 @@ export type AgentsDashboardTab = 'overview' | 'mcp' | 'skills';
 export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
 export type SkillSourceFilter = 'all' | 'builtin' | 'user';
+export type UnifiedSourceFilter = 'all' | 'builtin' | 'user' | 'native';
 export type AgentStatusFilter = 'all' | 'connected' | 'detected' | 'notFound';
 export type AgentTransportFilter = 'all' | 'stdio' | 'http' | 'other';
 export type SkillWorkspaceStatusFilter = 'all' | 'enabled' | 'disabled' | 'attention';
@@ -42,12 +43,7 @@ export function resolveAgentStatus(agent: AgentInfo): AgentResolvedStatus {
 }
 
 export function capabilityForSkill(skill: SkillInfo): SkillCapability {
-  const text = `${skill.name} ${skill.description}`.toLowerCase();
-  if (text.includes('search') || text.includes('research')) return 'research';
-  if (text.includes('doc') || text.includes('write')) return 'docs';
-  if (text.includes('deploy') || text.includes('ops') || text.includes('ci')) return 'ops';
-  if (text.includes('memory') || text.includes('mind')) return 'memory';
-  return 'coding';
+  return capabilityFromText(`${skill.name} ${skill.description}`);
 }
 
 export function groupSkillsByCapability(skills: SkillInfo[]): Record<SkillCapability, SkillInfo[]> {
@@ -60,16 +56,20 @@ export function groupSkillsByCapability(skills: SkillInfo[]): Record<SkillCapabi
   };
 }
 
+function buildBaseRiskItems(args: { mcpRunning: boolean; detectedCount: number; notFoundCount: number }): RiskItem[] {
+  const items: RiskItem[] = [];
+  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: 'MCP server is not running' });
+  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: `${args.detectedCount} detected agent(s) need configuration` });
+  return items;
+}
+
 export function buildRiskQueue(args: {
   mcpRunning: boolean;
   detectedCount: number;
   notFoundCount: number;
   allSkillsDisabled: boolean;
 }): RiskItem[] {
-  const items: RiskItem[] = [];
-  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: 'MCP server is not running' });
-  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: `${args.detectedCount} detected agent(s) need configuration` });
-  if (args.notFoundCount > 0) items.push({ id: 'not-found', severity: 'warn', title: `${args.notFoundCount} agent(s) not detected on this machine` });
+  const items = buildBaseRiskItems(args);
   if (args.allSkillsDisabled) items.push({ id: 'skills-disabled', severity: 'warn', title: 'All skills are disabled' });
   return items;
 }
@@ -183,11 +183,7 @@ export function buildMcpRiskQueue(args: {
   detectedCount: number;
   notFoundCount: number;
 }): RiskItem[] {
-  const items: RiskItem[] = [];
-  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: 'MCP server is not running' });
-  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: `${args.detectedCount} detected agent(s) need configuration` });
-  if (args.notFoundCount > 0) items.push({ id: 'not-found', severity: 'warn', title: `${args.notFoundCount} agent(s) not detected on this machine` });
-  return items;
+  return buildBaseRiskItems(args);
 }
 
 export interface McpBulkReconnectResult {
@@ -246,6 +242,17 @@ export function aggregateCrossAgentSkills(agents: AgentInfo[]): CrossAgentSkill[
     .sort((a, b) => b.agents.length - a.agents.length || a.skillName.localeCompare(b.skillName));
 }
 
+const STATUS_ORDER: Record<AgentResolvedStatus, number> = { connected: 0, detected: 1, notFound: 2 };
+
+export function sortAgentsByStatus(agents: AgentInfo[]): AgentInfo[] {
+  return [...agents].sort((a, b) => {
+    const sa = STATUS_ORDER[resolveAgentStatus(a)];
+    const sb = STATUS_ORDER[resolveAgentStatus(b)];
+    if (sa !== sb) return sa - sb;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function filterSkillsForAgentDetail(
   skills: SkillInfo[],
   filters: { query: string; source: AgentDetailSkillSourceFilter },
@@ -257,4 +264,115 @@ export function filterSkillsForAgentDetail(
     const haystack = `${skill.name} ${skill.description} ${skill.path}`.toLowerCase();
     return haystack.includes(q);
   });
+}
+
+/* ────────── Unified Skill List (MindOS + Native) ────────── */
+
+export interface UnifiedSkillItem {
+  name: string;
+  kind: 'mindos' | 'native';
+  mindosSkill?: SkillInfo;
+  agents: string[];
+  capability: SkillCapability;
+  enabled: boolean;
+  source: 'builtin' | 'user' | 'native';
+  description: string;
+}
+
+export function capabilityFromText(text: string): SkillCapability {
+  const lower = text.toLowerCase();
+  if (lower.includes('search') || lower.includes('research') || lower.includes('arxiv') || lower.includes('paper')) return 'research';
+  if (lower.includes('doc') || lower.includes('write') || lower.includes('readme') || lower.includes('copy') || lower.includes('slide') || lower.includes('ppt')) return 'docs';
+  if (lower.includes('deploy') || lower.includes('ops') || lower.includes('ci') || lower.includes('ship') || lower.includes('qa') || lower.includes('review') || lower.includes('test')) return 'ops';
+  if (lower.includes('memory') || lower.includes('mind') || lower.includes('handoff') || lower.includes('session')) return 'memory';
+  return 'coding';
+}
+
+export function buildUnifiedSkillList(
+  mindosSkills: SkillInfo[],
+  crossAgentSkills: CrossAgentSkill[],
+): UnifiedSkillItem[] {
+  const mindosNames = new Set(mindosSkills.map((s) => s.name));
+  const crossMap = new Map<string, string[]>();
+  for (const cs of crossAgentSkills) crossMap.set(cs.skillName, cs.agents);
+
+  const result: UnifiedSkillItem[] = [];
+
+  for (const skill of mindosSkills) {
+    result.push({
+      name: skill.name,
+      kind: 'mindos',
+      mindosSkill: skill,
+      agents: crossMap.get(skill.name) ?? [],
+      capability: capabilityForSkill(skill),
+      enabled: skill.enabled,
+      source: skill.source,
+      description: skill.description,
+    });
+  }
+
+  for (const cs of crossAgentSkills) {
+    if (mindosNames.has(cs.skillName)) continue;
+    result.push({
+      name: cs.skillName,
+      kind: 'native',
+      agents: cs.agents,
+      capability: capabilityFromText(cs.skillName),
+      enabled: true,
+      source: 'native',
+      description: '',
+    });
+  }
+
+  return result;
+}
+
+export function groupUnifiedSkills(skills: UnifiedSkillItem[]): Record<SkillCapability, UnifiedSkillItem[]> {
+  return {
+    research: skills.filter((s) => s.capability === 'research'),
+    coding: skills.filter((s) => s.capability === 'coding'),
+    docs: skills.filter((s) => s.capability === 'docs'),
+    ops: skills.filter((s) => s.capability === 'ops'),
+    memory: skills.filter((s) => s.capability === 'memory'),
+  };
+}
+
+export function filterUnifiedSkills(
+  skills: UnifiedSkillItem[],
+  filters: {
+    query: string;
+    source: UnifiedSourceFilter;
+    status: SkillWorkspaceStatusFilter;
+    capability: SkillCapabilityFilter;
+  },
+): UnifiedSkillItem[] {
+  const q = filters.query.trim().toLowerCase();
+  const attentionSet = new Set(
+    skills
+      .filter((s) => s.kind === 'mindos' && ((!s.enabled && s.source === 'user') || s.description.trim().length === 0))
+      .map((s) => s.name),
+  );
+
+  return skills.filter((skill) => {
+    if (filters.source !== 'all') {
+      if (filters.source === 'native' && skill.kind !== 'native') return false;
+      if (filters.source === 'builtin' && skill.source !== 'builtin') return false;
+      if (filters.source === 'user' && skill.source !== 'user') return false;
+    }
+    if (filters.status === 'enabled' && !skill.enabled) return false;
+    if (filters.status === 'disabled' && skill.enabled) return false;
+    if (filters.status === 'attention' && !attentionSet.has(skill.name)) return false;
+    if (filters.capability !== 'all' && skill.capability !== filters.capability) return false;
+    if (q) {
+      const haystack = `${skill.name} ${skill.description}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+export function createBulkUnifiedTogglePlan(skills: UnifiedSkillItem[], targetEnabled: boolean): string[] {
+  return skills
+    .filter((s) => s.kind === 'mindos' && s.enabled !== targetEnabled)
+    .map((s) => s.name);
 }

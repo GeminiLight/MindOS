@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff } from 'lucide-react';
-import { SectionLabel, PrimaryButton } from './Primitives';
+import { SectionLabel, PrimaryButton, Input } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
 import type { Messages } from '@/lib/i18n';
@@ -64,7 +64,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -85,19 +85,15 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
         <label className="text-xs font-medium text-foreground block">
           {syncT?.remoteUrl ?? 'Git Remote URL'}
         </label>
-        <input
+        <Input
           type="text"
           value={remoteUrl}
           onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
           placeholder="https://github.com/user/my-mind.git"
-          className="w-full px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          style={{
-            borderColor: remoteUrl.trim() && !isValid ? 'var(--destructive, red)' : 'var(--border)',
-            color: 'var(--foreground)',
-          }}
+          className={`font-mono ${remoteUrl.trim() && !isValid ? 'border-destructive' : ''}`}
         />
         {remoteUrl.trim() && !isValid && (
-          <p className="text-xs" style={{ color: 'var(--destructive, red)' }}>
+          <p className="text-xs text-destructive">
             {syncT?.invalidUrl ?? 'Invalid Git URL — use HTTPS (https://...) or SSH (git@...)'}
           </p>
         )}
@@ -117,13 +113,12 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
             <span className="text-muted-foreground font-normal">{syncT?.optional ?? '(optional, for private repos)'}</span>
           </label>
           <div className="relative">
-            <input
+            <Input
               type={showToken ? 'text' : 'password'}
               value={token}
               onChange={e => setToken(e.target.value)}
               placeholder="ghp_xxxxxxxxxxxx"
-              className="w-full px-3 py-2 pr-9 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              className="pr-9 font-mono"
             />
             <button
               type="button"
@@ -144,13 +139,12 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
         <label className="text-xs font-medium text-foreground block">
           {syncT?.branchLabel ?? 'Branch'}
         </label>
-        <input
+        <Input
           type="text"
           value={branch}
           onChange={e => setBranch(e.target.value)}
           placeholder="main"
-          className="w-full max-w-[200px] px-3 py-2 text-sm rounded-lg border bg-transparent font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+          className="max-w-[200px] font-mono"
         />
       </div>
 
@@ -168,7 +162,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-2 text-xs p-3 rounded-lg" role="alert" aria-live="polite" style={{ background: 'rgba(200,80,80,0.1)', color: 'var(--error)' }}>
+        <div className="flex items-start gap-2 text-xs p-3 rounded-lg bg-destructive/10 text-destructive" role="alert" aria-live="polite">
           <AlertCircle size={13} className="shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -269,7 +263,7 @@ export function SyncTab({ t }: SyncTabProps) {
   const conflicts = status.conflicts || [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <SectionLabel>Sync</SectionLabel>
 
       {/* Status overview */}

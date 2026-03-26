@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Library } from 'lucide-react';
+import { Library, FileText, CircleCheck } from 'lucide-react';
 
 export function EchoFactSnapshot({
   headingId,
@@ -9,6 +9,7 @@ export function EchoFactSnapshot({
   snapshotBadge,
   emptyTitle,
   emptyBody,
+  icon,
   actions,
 }: {
   headingId: string;
@@ -16,12 +17,12 @@ export function EchoFactSnapshot({
   snapshotBadge: string;
   emptyTitle: string;
   emptyBody: string;
-  /** e.g. continue-in-Agent CTA — inside this card so it is not orphaned between sections */
+  icon?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <section
-      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow-md sm:p-6"
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/20 hover:shadow sm:p-6"
       aria-labelledby={headingId}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -30,7 +31,7 @@ export function EchoFactSnapshot({
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-dim)] text-[var(--amber)]"
             aria-hidden
           >
-            <Library size={18} strokeWidth={1.75} />
+            {icon ?? <Library size={18} strokeWidth={1.75} />}
           </span>
           <div>
             <h2
@@ -67,9 +68,12 @@ export function EchoContinuedGroups({
   subEmptyHint: string;
   footer?: ReactNode;
 }) {
-  const cell = (label: string) => (
-    <div className="flex min-h-[5.75rem] flex-col justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 px-4 py-4">
-      <h3 className="font-sans text-sm font-medium text-foreground">{label}</h3>
+  const cell = (label: string, icon: ReactNode) => (
+    <div className="flex min-h-[5.75rem] flex-col justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 px-4 py-4 transition-colors duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/15">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-muted-foreground" aria-hidden>{icon}</span>
+        <h3 className="font-sans text-sm font-medium text-foreground">{label}</h3>
+      </div>
       <p className="mt-2 font-sans text-2xs leading-relaxed text-muted-foreground">{subEmptyHint}</p>
     </div>
   );
@@ -77,8 +81,8 @@ export function EchoContinuedGroups({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        {cell(draftsLabel)}
-        {cell(todosLabel)}
+        {cell(draftsLabel, <FileText size={15} strokeWidth={1.75} />)}
+        {cell(todosLabel, <CircleCheck size={15} strokeWidth={1.75} />)}
       </div>
       {footer ? <div className="border-t border-border/60 pt-4">{footer}</div> : null}
     </div>
