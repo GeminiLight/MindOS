@@ -56,11 +56,10 @@ export function groupSkillsByCapability(skills: SkillInfo[]): Record<SkillCapabi
   };
 }
 
-function buildBaseRiskItems(args: { mcpRunning: boolean; detectedCount: number; notFoundCount: number }): RiskItem[] {
-  const items: RiskItem[] = [];
-  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: 'MCP server is not running' });
-  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: `${args.detectedCount} detected agent(s) need configuration` });
-  return items;
+export interface RiskCopy {
+  riskMcpStopped: string;
+  riskDetected: (n: number) => string;
+  riskSkillsDisabled: string;
 }
 
 export function buildRiskQueue(args: {
@@ -68,9 +67,12 @@ export function buildRiskQueue(args: {
   detectedCount: number;
   notFoundCount: number;
   allSkillsDisabled: boolean;
+  copy: RiskCopy;
 }): RiskItem[] {
-  const items = buildBaseRiskItems(args);
-  if (args.allSkillsDisabled) items.push({ id: 'skills-disabled', severity: 'warn', title: 'All skills are disabled' });
+  const items: RiskItem[] = [];
+  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: args.copy.riskMcpStopped });
+  if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: args.copy.riskDetected(args.detectedCount) });
+  if (args.allSkillsDisabled) items.push({ id: 'skills-disabled', severity: 'warn', title: args.copy.riskSkillsDisabled });
   return items;
 }
 
@@ -178,12 +180,18 @@ export function filterAgentsForMcpWorkspace(
   });
 }
 
+const defaultRiskCopy: RiskCopy = {
+  riskMcpStopped: 'MCP server is not running.',
+  riskDetected: (n: number) => `${n} detected agent(s) need configuration.`,
+  riskSkillsDisabled: 'All skills are disabled.',
+};
+
 export function buildMcpRiskQueue(args: {
   mcpRunning: boolean;
   detectedCount: number;
   notFoundCount: number;
 }): RiskItem[] {
-  return buildBaseRiskItems(args);
+  return buildRiskQueue({ ...args, allSkillsDisabled: false, copy: defaultRiskCopy });
 }
 
 export interface McpBulkReconnectResult {

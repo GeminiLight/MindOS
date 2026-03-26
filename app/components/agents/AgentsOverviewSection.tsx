@@ -378,18 +378,10 @@ function AgentCard({
         ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
         : 'bg-zinc-500/10 text-zinc-500';
 
-  const accentBorder =
-    status === 'connected'
-      ? 'border-l-[var(--success)]'
-      : status === 'detected'
-        ? 'border-l-[var(--amber)]'
-        : '';
-
   return (
     <Link
       href={`/agents/${encodeURIComponent(agent.key)}`}
-      className={`group rounded-xl border bg-card p-3.5
-        ${accentBorder ? `border-l-2 ${accentBorder} border-border` : 'border-border'}
+      className={`group rounded-xl border border-border bg-card p-3.5
         hover:border-[var(--amber)]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]
         active:scale-[0.98]
         transition-all duration-150 animate-in
@@ -416,11 +408,6 @@ function AgentCard({
       <div className="flex items-center gap-1 pt-2.5 border-t border-border/40">
         <MetricChip icon={<Server size={11} aria-hidden="true" />} value={mcpCount} label={copy.colMcp as string} />
         <MetricChip icon={<Zap size={11} aria-hidden="true" />} value={skillCount} label={copy.colSkills as string} />
-        {agent.skillMode && (
-          <span className="text-2xs px-1.5 py-0.5 rounded-md bg-muted/50 text-muted-foreground/70 truncate select-none">
-            {agent.skillMode}
-          </span>
-        )}
         <span className="flex-1 min-w-[4px]" />
         {hasRuntime && (
           <span
