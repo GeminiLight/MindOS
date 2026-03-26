@@ -111,7 +111,7 @@ export default function ActivityBar({
     // Browser/CLI: check npm registry
     const dismissed = localStorage.getItem('mindos_update_dismissed');
     const latest = localStorage.getItem('mindos_update_latest');
-    if (latest && latest !== dismissed) { setHasUpdate(true); return; }
+    if (latest && latest !== dismissed) { setHasUpdate(true); }
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/update-check');
@@ -120,6 +120,7 @@ export default function ActivityBar({
         if (!data.hasUpdate) {
           localStorage.removeItem('mindos_update_latest');
           localStorage.removeItem('mindos_update_dismissed');
+          setHasUpdate(false);
           return;
         }
         const d = localStorage.getItem('mindos_update_dismissed');

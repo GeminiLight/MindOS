@@ -258,6 +258,11 @@ function BrowserUpdateTab() {
       const data = await apiFetch<UpdateInfo>('/api/update-check');
       setInfo(data);
       if (!originalVersion.current) originalVersion.current = data.current;
+      if (!data.hasUpdate) {
+        localStorage.removeItem('mindos_update_latest');
+        localStorage.removeItem('mindos_update_dismissed');
+        window.dispatchEvent(new Event('mindos:update-dismissed'));
+      }
       setState('idle');
     } catch {
       setState('error');
