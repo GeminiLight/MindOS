@@ -30,7 +30,7 @@ export default function Backlinks({ filePath }: { filePath: string }) {
   return (
     <div className="mt-12 pt-8 border-t border-border">
       <div className="flex items-center gap-2 mb-6 text-muted-foreground">
-        <LinkIcon size={16} className="text-amber-500/70" />
+        <LinkIcon size={16} className="text-[var(--amber)]/70" />
         <h3 className="text-sm font-semibold tracking-wider uppercase font-display">
           {t.common?.relatedFiles || 'Related Files'}
         </h3>
@@ -51,14 +51,14 @@ export default function Backlinks({ filePath }: { filePath: string }) {
             <Link
               key={link.filePath}
               href={`/view/${link.filePath.split('/').map(encodeURIComponent).join('/')}`}
-              className="group block p-4 rounded-xl border border-border/50 bg-card/30 hover:bg-muted/30 hover:border-amber-500/30 transition-all duration-200"
+              className="group block p-4 rounded-xl border border-border/50 bg-card/30 hover:bg-muted/30 hover:border-[var(--amber)]/30 transition-all duration-200"
             >
               <div className="flex items-start gap-3">
-                <div className="mt-1 p-1.5 rounded-md bg-muted group-hover:bg-amber-500/10 transition-colors">
-                  <FileText size={14} className="text-muted-foreground group-hover:text-amber-500" />
+                <div className="mt-1 p-1.5 rounded-md bg-muted group-hover:bg-[var(--amber)]/10 transition-colors">
+                  <FileText size={14} className="text-muted-foreground group-hover:text-[var(--amber)]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm text-foreground group-hover:text-amber-500 transition-colors truncate mb-1">
+                  <div className="font-medium text-sm text-foreground group-hover:text-[var(--amber)] transition-colors truncate mb-1">
                     {link.filePath}
                   </div>
                   <div className="text-xs text-muted-foreground line-clamp-2 leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity">

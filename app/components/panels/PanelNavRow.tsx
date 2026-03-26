@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Row matching Discover panel nav: icon tile, title, optional badge, chevron. */
+/** Row matching Discover panel nav: icon tile, title, optional subtitle, optional badge, chevron. */
 export function PanelNavRow({
   icon,
   title,
+  subtitle,
   badge,
   href,
   onClick,
@@ -16,6 +17,7 @@ export function PanelNavRow({
 }: {
   icon: ReactNode;
   title: string;
+  subtitle?: string;
   badge?: React.ReactNode;
   href?: string;
   onClick?: () => void;
@@ -25,7 +27,12 @@ export function PanelNavRow({
   const content = (
     <>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">{icon}</span>
-      <span className="flex-1 text-left text-sm font-medium text-foreground">{title}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-left text-sm font-medium text-foreground truncate">{title}</span>
+        {subtitle ? (
+          <span className="block text-left text-2xs text-muted-foreground truncate">{subtitle}</span>
+        ) : null}
+      </span>
       {badge}
       <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
     </>

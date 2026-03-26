@@ -52,7 +52,7 @@ function ProgressBar({ value, max, className }: { value: number; max: number; cl
   return (
     <div className={`h-2 w-full rounded-full bg-muted ${className ?? ''}`}>
       <div
-        className={`h-full rounded-full transition-all duration-300 ${pct > 85 ? 'bg-destructive' : 'bg-amber-500'}`}
+        className={`h-full rounded-full transition-all duration-300 ${pct > 85 ? 'bg-destructive' : 'bg-[var(--amber)]'}`}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -125,10 +125,10 @@ export function MonitoringTab({ t }: MonitoringTabProps) {
     <div className="space-y-6">
       {/* System */}
       <section>
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-3">
-          <Cpu size={13} className="text-muted-foreground" />
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <Cpu size={13} />
           {mon.system || 'System'}
-        </h3>
+        </p>
         <div className="space-y-3">
           <div>
             <div className="flex justify-between text-xs mb-1">
@@ -147,10 +147,10 @@ export function MonitoringTab({ t }: MonitoringTabProps) {
 
       {/* Application */}
       <section>
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-3">
-          <Zap size={13} className="text-muted-foreground" />
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <Zap size={13} />
           {mon.application || 'Application'}
-        </h3>
+        </p>
         <div className="grid grid-cols-3 gap-4">
           <StatCard label={mon.requests || 'Requests'} value={application.agentRequests} />
           <StatCard label={mon.toolCalls || 'Tool Calls'} value={application.toolExecutions} />
@@ -166,10 +166,10 @@ export function MonitoringTab({ t }: MonitoringTabProps) {
 
       {/* Knowledge Base */}
       <section>
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-3">
-          <Database size={13} className="text-muted-foreground" />
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <Database size={13} />
           {mon.knowledgeBase || 'Knowledge Base'}
-        </h3>
+        </p>
         <div className="grid grid-cols-3 gap-4">
           <StatCard label={mon.files || 'Files'} value={knowledgeBase.fileCount} />
           <StatCard label={mon.totalSize || 'Total Size'} value={formatBytes(knowledgeBase.totalSizeBytes)} />
@@ -179,10 +179,10 @@ export function MonitoringTab({ t }: MonitoringTabProps) {
 
       {/* MCP */}
       <section>
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-3">
-          <HardDrive size={13} className="text-muted-foreground" />
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <HardDrive size={13} />
           MCP
-        </h3>
+        </p>
         <div className="grid grid-cols-3 gap-4">
           <StatCard
             label={mon.mcpStatus || 'Status'}

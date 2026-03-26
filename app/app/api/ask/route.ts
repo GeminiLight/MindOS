@@ -278,7 +278,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Generate current time for the agent's context
+  const now = new Date();
+  const timeContext = `## Current Time Context
+- Current UTC Time: ${now.toISOString()}
+- System Local Time: ${new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'long' }).format(now)}
+- Unix Timestamp: ${Math.floor(now.getTime() / 1000)}
+
+*Note: The times listed above represent "NOW". The user may have sent messages hours or days ago in this same conversation thread. Each user message in the history contains its own specific timestamp which you should refer to when understanding historical context.*`;
+
   const promptParts: string[] = [AGENT_SYSTEM_PROMPT];
+  
+  promptParts.push(`---\n\n${timeContext}`);
+  
   promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${initStatus}`);
 
   if (initContextBlocks.length > 0) {

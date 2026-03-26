@@ -61,7 +61,7 @@ export default function StepKB({ state, update, t, homeDir }: StepKBProps) {
           const full: string[] = (d.dirs as string[]).map((dir: string) => parentNorm + dir);
           const endsWithAnySep = typed.endsWith('/') || typed.endsWith('\\');
           const filtered = endsWithAnySep ? full : full.filter(f => f.startsWith(typed));
-          setSuggestions(filtered.slice(0, 8));
+          setSuggestions(filtered.slice(0, 20));
           setShowSuggestions(filtered.length > 0);
           setActiveSuggestion(-1);
         })

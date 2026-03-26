@@ -173,6 +173,7 @@ export class ProcessManager extends EventEmitter {
       MIND_ROOT: mindRoot,
       NODE_ENV: 'production',
       MINDOS_PROJECT_ROOT: projectRoot,
+      MINDOS_CLI_PATH: path.join(projectRoot, 'bin', 'cli.js'),
     };
     if (authToken) env.AUTH_TOKEN = authToken;
     if (webPassword) env.WEB_PASSWORD = webPassword;

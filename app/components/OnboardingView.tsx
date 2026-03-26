@@ -100,7 +100,7 @@ export default function OnboardingView() {
               key={tpl.id}
               disabled={isDisabled}
               onClick={() => handleSelect(tpl.id)}
-              className="group relative flex flex-col items-start gap-3 p-5 rounded-xl border border-border bg-card text-left transition-all duration-150 hover:border-amber-500/50 hover:bg-amber-500/5 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="group relative flex flex-col items-start gap-3 p-5 rounded-xl border border-border bg-card text-left transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber)]/5 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {/* Icon + title */}
               <div className="flex items-center gap-2.5 w-full">

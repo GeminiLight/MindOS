@@ -104,9 +104,10 @@ if (existsSync(destMcpBin)) {
       const basename = path.basename(target);
       // Walk up from .bin/ → node_modules/, then into the package
       // e.g. /build/mcp/node_modules/tsx/dist/cli.mjs → find tsx/dist/cli.mjs inside destMcpNm
-      const nmIdx = target.lastIndexOf('/node_modules/');
+      const normalized = target.replace(/\\/g, '/');
+      const nmIdx = normalized.lastIndexOf('/node_modules/');
       if (nmIdx < 0) { rmSync(full, { force: true }); continue; }
-      const relInNm = target.slice(nmIdx + '/node_modules/'.length);
+      const relInNm = normalized.slice(nmIdx + '/node_modules/'.length);
       const localTarget = path.join(destMcpNmAbs, relInNm);
       if (existsSync(localTarget)) {
         rmSync(full, { force: true });

@@ -57,7 +57,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground hover:border-amber-500/40 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground hover:border-[var(--amber)]/40 transition-colors text-left"
       >
         <Folder size={14} className="shrink-0 text-[var(--amber)]" />
         <span className="flex-1 truncate">{displayLabel}</span>

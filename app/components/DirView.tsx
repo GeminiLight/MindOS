@@ -84,8 +84,7 @@ function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel }: {
       <div className="flex justify-end mt-2">
         <Link
           href={viewAllHref}
-          className="text-xs hover:underline transition-colors"
-          style={{ color: 'var(--amber)' }}
+          className="text-xs hover:underline transition-colors text-[var(--amber)]"
         >
           {viewAllLabel}
         </Link>
@@ -150,7 +149,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
   return (
     <div className="flex flex-col min-h-screen">
       {/* Topbar */}
-      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 py-2.5" style={{ background: 'var(--background)' }}>
+      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 py-2.5 bg-background">
         <div className="max-w-[860px] mx-auto flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={dirPath} />

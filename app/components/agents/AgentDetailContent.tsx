@@ -1,14 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Server, ShieldCheck, Activity, Compass, Search, Copy, Check, RefreshCw, Loader2, Save } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { ArrowLeft, Server, Search, Trash2, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { useMcpData } from '@/hooks/useMcpData';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
-import { filterSkillsForAgentDetail, resolveAgentStatus, type AgentDetailSkillSourceFilter } from './agents-content-model';
+import {
+  aggregateCrossAgentMcpServers,
+  aggregateCrossAgentSkills,
+  filterSkillsForAgentDetail,
+  resolveAgentStatus,
+  type AgentDetailSkillSourceFilter,
+} from './agents-content-model';
+import { AgentAvatar, ActionButton, ConfirmDialog, PillButton } from './AgentsPrimitives';
+import SkillDetailPopover from './SkillDetailPopover';
 
 export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const { t } = useLocale();
@@ -26,9 +34,11 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
-
-  const [targetScope, setTargetScope] = useState<'project' | 'global'>('global');
-  const [targetTransport, setTargetTransport] = useState<'stdio' | 'http'>('stdio');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
+  const [mcpHint, setMcpHint] = useState<string | null>(null);
+  const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
 
   const filteredSkills = useMemo(
     () =>
@@ -49,40 +59,32 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     [mcp.skills],
   );
 
-  if (!agent) {
-    return (
-      <div className="content-width px-4 md:px-6 py-8 md:py-10">
-        <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
-          <ArrowLeft size={14} />
-          {a.backToOverview}
-        </Link>
-        <div className="rounded-lg border border-border bg-card p-6">
-          <p className="text-sm text-foreground">{a.detailNotFound}</p>
-        </div>
-      </div>
-    );
-  }
+  const crossAgentMcpMap = useMemo(() => {
+    const all = aggregateCrossAgentMcpServers(mcp.agents);
+    const map = new Map<string, string[]>();
+    for (const srv of all) map.set(srv.serverName, srv.agents);
+    return map;
+  }, [mcp.agents]);
 
-  const status = resolveAgentStatus(agent);
-  const currentScope = agent.scope === 'project' ? 'project' : 'global';
-  const currentTransport: 'stdio' | 'http' = agent.transport === 'http' ? 'http' : 'stdio';
-  const snippet = generateSnippet(agent, mcp.status, currentTransport);
-  const nativeInstalledSkills = agent.installedSkillNames ?? [];
-  const configuredMcpServers = agent.configuredMcpServers ?? [];
-  const healthStrip = [
-    { label: a.detail.healthConnected, value: agent.present && agent.installed ? a.detail.yes : a.detail.no, tone: agent.present && agent.installed ? 'ok' : 'warn' as const },
-    { label: a.detail.healthInstalled, value: agent.installed ? a.detail.yes : a.detail.no, tone: agent.installed ? 'ok' : 'warn' as const },
-    { label: a.detail.healthRuntimeSignals, value: agent.runtimeConversationSignal || agent.runtimeUsageSignal ? a.detail.yes : a.detail.no, tone: agent.runtimeConversationSignal || agent.runtimeUsageSignal ? 'ok' : 'warn' as const },
-    { label: a.detail.healthConfiguredServers, value: String(configuredMcpServers.length), tone: configuredMcpServers.length > 0 ? 'ok' : 'warn' as const },
-    { label: a.detail.healthInstalledSkills, value: String(nativeInstalledSkills.length), tone: nativeInstalledSkills.length > 0 ? 'ok' : 'warn' as const },
-  ];
+  const crossAgentSkillMap = useMemo(() => {
+    const all = aggregateCrossAgentSkills(mcp.agents);
+    const map = new Map<string, string[]>();
+    for (const sk of all) map.set(sk.skillName, sk.agents);
+    return map;
+  }, [mcp.agents]);
 
-  useEffect(() => {
-    setTargetScope(currentScope);
-    setTargetTransport(currentTransport);
-  }, [currentScope, currentTransport, agent.key]);
+  const status = agent ? resolveAgentStatus(agent) : 'notFound';
+  const currentScope = agent?.scope === 'project' ? 'project' : 'global';
+  const currentTransport: 'stdio' | 'http' = agent?.transport === 'http' ? 'http' : 'stdio';
+  const snippet = useMemo(
+    () => agent ? generateSnippet(agent, mcp.status, currentTransport) : { snippet: '', path: '' },
+    [agent, mcp.status, currentTransport],
+  );
+  const nativeInstalledSkills = agent?.installedSkillNames ?? [];
+  const configuredMcpServers = agent?.configuredMcpServers ?? [];
 
-  async function handleSkillToggle(name: string, enabled: boolean) {
+
+  const handleSkillToggle = useCallback(async (name: string, enabled: boolean) => {
     setSkillBusy(name);
     setEditError(null);
     try {
@@ -91,9 +93,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     } finally {
       setSkillBusy(null);
     }
-  }
+  }, [mcp]);
 
-  async function handleStartEditSkill(name: string) {
+  const handleStartEditSkill = useCallback(async (name: string) => {
     setEditError(null);
     setSkillBusy(name);
     try {
@@ -109,9 +111,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     } finally {
       setSkillBusy(null);
     }
-  }
+  }, [a.detail.skillReadFailed]);
 
-  async function handleSaveSkill() {
+  const handleSaveSkill = useCallback(async () => {
     if (!editingSkill) return;
     setSaveBusy(true);
     setEditError(null);
@@ -130,16 +132,37 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     } finally {
       setSaveBusy(false);
     }
-  }
+  }, [editingSkill, editContent, a.detail.skillSaveFailed, mcp]);
 
-  async function handleCopySnippet() {
+  const handleDeleteSkill = useCallback(async (name: string) => {
+    setConfirmDelete(null);
+    setSkillBusy(name);
+    try {
+      await apiFetch('/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', name }),
+      });
+      setDeleteMsg(a.detail.skillDeleteSuccess);
+      window.dispatchEvent(new Event('mindos:skills-changed'));
+      await mcp.refresh();
+    } catch {
+      setDeleteMsg(a.detail.skillDeleteFailed);
+    } finally {
+      setSkillBusy(null);
+      setTimeout(() => setDeleteMsg(null), 3000);
+    }
+  }, [a.detail.skillDeleteSuccess, a.detail.skillDeleteFailed, mcp]);
+
+  const handleCopySnippet = useCallback(async () => {
     const ok = await copyToClipboard(snippet.snippet);
     if (!ok) return;
     setSnippetCopied(true);
     setTimeout(() => setSnippetCopied(false), 1200);
-  }
+  }, [snippet.snippet]);
 
-  async function handleApplyMcpConfig(scope: 'project' | 'global', transport: 'stdio' | 'http') {
+  const handleApplyMcpConfig = useCallback(async (scope: 'project' | 'global', transport: 'stdio' | 'http') => {
+    if (!agent) return;
     setMcpBusy(true);
     setMcpMessage(a.detail.mcpApplying);
     try {
@@ -149,295 +172,332 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     } finally {
       setMcpBusy(false);
     }
-  }
+  }, [a.detail.mcpApplying, a.detail.mcpApplySuccess, a.detail.mcpApplyFailed, mcp, agent]);
 
-  return (
-    <div className="content-width px-4 md:px-6 py-8 md:py-10 space-y-4">
-      <div>
-        <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-3">
+  const handleDeleteSkillFromPopover = useCallback(async (name: string) => {
+    await apiFetch('/api/skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', name }),
+    });
+    window.dispatchEvent(new Event('mindos:skills-changed'));
+    await mcp.refresh();
+  }, [mcp]);
+
+  const handleMcpRemoveConfirm = useCallback(() => {
+    setConfirmMcpRemove(null);
+    setMcpHint(a.detail.mcpServerHint);
+    setTimeout(() => setMcpHint(null), 4000);
+  }, [a.detail.mcpServerHint]);
+
+  if (!agent) {
+    return (
+      <div className="content-width px-4 md:px-6 py-8 md:py-10">
+        <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft size={14} />
           {a.backToOverview}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{agent.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{a.detailSubtitle}</p>
+        <div className="rounded-lg border border-border bg-card p-6">
+          <p className="text-sm text-foreground">{a.detailNotFound}</p>
+        </div>
       </div>
-      <section className="rounded-lg border border-border bg-card p-4 space-y-2">
-        <h2 className="text-sm font-medium text-foreground">{a.detail.healthStripTitle}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          {healthStrip.map((item) => (
-            <div key={item.label} className="rounded-md border border-border bg-background px-3 py-2">
-              <p className="text-2xs text-muted-foreground mb-1">{item.label}</p>
-              <p className={`text-sm font-medium ${item.tone === 'ok' ? 'text-success' : 'text-[var(--amber)]'}`}>{item.value}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+    );
+  }
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2">{a.detail.identity}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <DetailLine label={a.detail.agentKey} value={agent.key} />
-          <DetailLine label={a.detail.status} value={status} />
-          <DetailLine label={a.detail.transport} value={agent.transport ?? agent.preferredTransport} />
-        </div>
-      </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
-          <Server size={14} className="text-muted-foreground" />
-          {a.detail.connection}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <DetailLine label={a.detail.endpoint} value={mcp.status?.endpoint ?? a.na} />
-          <DetailLine label={a.detail.port} value={String(mcp.status?.port ?? a.na)} />
-          <DetailLine label={a.detail.auth} value={mcp.status?.authConfigured ? a.detail.authConfigured : a.detail.authMissing} />
-        </div>
-      </section>
+  return (
+    <div className="content-width px-4 md:px-6 py-8 md:py-10 space-y-4">
+      {/* Back link */}
+      <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft size={14} />
+        {a.backToOverview}
+      </Link>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
-          <ShieldCheck size={14} className="text-muted-foreground" />
-          {a.detail.capabilities}
-        </h2>
-        <ul className="text-sm text-muted-foreground space-y-1">
-          <li>{a.detail.projectScope}: {agent.hasProjectScope ? a.detail.yes : a.detail.no}</li>
-          <li>{a.detail.globalScope}: {agent.hasGlobalScope ? a.detail.yes : a.detail.no}</li>
-          <li>{a.detail.format}: {agent.format}</li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2">{a.detail.skillAssignments}</h2>
-        <div className="space-y-3">
-          <div className="rounded-lg border border-border bg-background p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-foreground">{a.detail.nativeInstalledSkills}</p>
-              <span className="text-2xs text-muted-foreground tabular-nums">{a.detail.nativeInstalledSkillsCount(nativeInstalledSkills.length)}</span>
-            </div>
-            {nativeInstalledSkills.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{a.detail.nativeInstalledSkillsEmpty}</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {nativeInstalledSkills.slice(0, 12).map((name) => (
-                  <span key={name} className="inline-flex items-center rounded-md bg-[var(--amber-dim)] px-2 py-0.5 text-xs text-foreground font-medium">{name}</span>
-                ))}
-                {nativeInstalledSkills.length > 12 ? (
-                  <span className="text-xs text-muted-foreground self-center">{a.detail.nativeInstalledSkillsMore(nativeInstalledSkills.length - 12)}</span>
-                ) : null}
-              </div>
-            )}
-            <p className="text-2xs text-muted-foreground truncate">{agent.installedSkillSourcePath ?? a.na}</p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
-            <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsAll}: {skillSummary.total}</div>
-            <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsEnabled}: {skillSummary.enabled}</div>
-            <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsSourceBuiltin}: {skillSummary.builtin}</div>
-            <div className="rounded-md border border-border px-2 py-1.5">{a.detail.skillsSourceUser}: {skillSummary.user}</div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-2">
-            <label className="relative flex-1">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={skillQuery}
-                onChange={(e) => setSkillQuery(e.target.value)}
-                placeholder={a.detail.skillsSearchPlaceholder}
-                className="w-full h-9 rounded-md border border-border bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <div className="flex items-center gap-1 rounded-md border border-border p-1 bg-background">
-              <FilterChip active={skillSource === 'all'} label={a.detail.skillsFilterAll} onClick={() => setSkillSource('all')} />
-              <FilterChip active={skillSource === 'builtin'} label={a.detail.skillsFilterBuiltin} onClick={() => setSkillSource('builtin')} />
-              <FilterChip active={skillSource === 'user'} label={a.detail.skillsFilterUser} onClick={() => setSkillSource('user')} />
-            </div>
-          </div>
-
-          {filteredSkills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{a.detail.noSkills}</p>
-          ) : (
-            <ul className="space-y-2">
-              {filteredSkills.map((skill) => {
-                const isEditing = editingSkill === skill.name;
-                return (
-                  <li key={skill.name} className="rounded-md border border-border p-3">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm text-foreground">{skill.name}</p>
-                        <p className="text-2xs text-muted-foreground">{skill.source === 'builtin' ? a.detail.skillsSourceBuiltin : a.detail.skillsSourceUser}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleSkillToggle(skill.name, !skill.enabled)}
-                          disabled={skillBusy === skill.name}
-                          className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {skillBusy === skill.name ? a.detail.skillActionLoading : skill.enabled ? a.detail.skillDisable : a.detail.skillEnable}
-                        </button>
-                        {skill.editable ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleStartEditSkill(skill.name)}
-                            disabled={skillBusy === skill.name || saveBusy}
-                            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {skillBusy === skill.name ? a.detail.skillActionLoading : a.detail.skillEdit}
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    {isEditing ? (
-                      <div className="mt-2 space-y-2">
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="w-full h-40 rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        />
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleSaveSkill()}
-                            disabled={saveBusy}
-                            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {saveBusy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                            {a.detail.skillSave}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingSkill(null)}
-                            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            {a.detail.skillCancel}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {editError ? <p className="text-xs text-error">{editError}</p> : null}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
-          <Activity size={14} className="text-muted-foreground" />
-          {a.detail.runtimeSignals}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <DetailLine label={a.detail.skillMode} value={agent.skillMode ?? a.na} />
-          <DetailLine label={a.detail.hiddenRoot} value={agent.hiddenRootPath ?? a.na} />
-          <DetailLine label={a.detail.hiddenRootPresent} value={agent.hiddenRootPresent ? a.detail.yes : a.detail.no} />
-          <DetailLine label={a.detail.conversationSignal} value={agent.runtimeConversationSignal ? a.detail.yes : a.detail.no} />
-          <DetailLine label={a.detail.usageSignal} value={agent.runtimeUsageSignal ? a.detail.yes : a.detail.no} />
-          <DetailLine label={a.detail.lastActivityAt} value={agent.runtimeLastActivityAt ?? a.na} />
-        </div>
-      </section>
-
+      {/* ═══════════ AGENT PROFILE (consolidated header) ═══════════ */}
       <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-        <h2 className="text-sm font-medium text-foreground mb-1 flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
+          <AgentAvatar name={agent.name} status={status} size="md" />
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight font-display text-foreground">{agent.name}</h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ${
+                status === 'connected' ? 'bg-success/10 text-success'
+                  : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber)]'
+                    : 'bg-muted text-muted-foreground'
+              }`}>{status}</span>
+              <span className="text-2xs text-muted-foreground font-mono">{agent.transport ?? agent.preferredTransport}</span>
+              <span className="text-2xs text-muted-foreground">·</span>
+              <span className="text-2xs text-muted-foreground">{agent.skillMode ?? a.na}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t border-border">
+          <span>{a.detail.format}: <span className="text-foreground">{agent.format}</span></span>
+          <span>{a.detail.lastActivityAt}: <span className="text-foreground tabular-nums">{agent.runtimeLastActivityAt ?? a.na}</span></span>
+          <span>{configuredMcpServers.length} MCP · {nativeInstalledSkills.length} skills</span>
+        </div>
+      </section>
+
+      {/* ═══════════ MCP MANAGEMENT ═══════════ */}
+      <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <h2 className="text-sm font-medium text-foreground flex items-center gap-1.5">
           <Server size={14} className="text-muted-foreground" />
           {a.detail.mcpManagement}
         </h2>
+
+        {/* MCP status row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
           <DetailLine label={a.detail.mcpInstalled} value={agent.installed ? a.detail.yes : a.detail.no} />
           <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
           <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
         </div>
+
+        {/* Configured MCP servers with management */}
         <div className="rounded-lg border border-border bg-background p-4 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-foreground">{a.detail.configuredMcpServers}</p>
             <span className="text-2xs text-muted-foreground tabular-nums">{a.detail.configuredMcpServersCount(configuredMcpServers.length)}</span>
           </div>
+
+          {mcpHint && (
+            <div role="status" aria-live="polite" className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground animate-in fade-in duration-200">
+              {mcpHint}
+            </div>
+          )}
+
           {configuredMcpServers.length === 0 ? (
             <p className="text-xs text-muted-foreground">{a.detail.configuredMcpServersEmpty}</p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {configuredMcpServers.slice(0, 12).map((name) => (
-                <span key={name} className="inline-flex items-center gap-1 rounded-md bg-[var(--amber-dim)] px-2 py-0.5 text-xs text-foreground font-medium">
-                  <Server size={10} className="text-[var(--amber)]" />
-                  {name}
-                </span>
-              ))}
-              {configuredMcpServers.length > 12 ? (
-                <span className="text-xs text-muted-foreground self-center">{a.detail.configuredMcpServersMore(configuredMcpServers.length - 12)}</span>
-              ) : null}
+            <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+              {configuredMcpServers.map((name) => {
+                const sharedWith = (crossAgentMcpMap.get(name) ?? []).filter((n) => n !== agent.name);
+                return (
+                  <div key={name} className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-2 group/mcp hover:border-border hover:bg-muted/20 transition-all duration-100">
+                    <Server size={11} className="text-[var(--amber)] shrink-0" />
+                    <span className="text-xs font-medium text-foreground flex-1 min-w-0 truncate">{name}</span>
+                    {sharedWith.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {sharedWith.slice(0, 3).map((n) => (
+                          <AgentAvatar key={n} name={n} size="sm" />
+                        ))}
+                        {sharedWith.length > 3 && <span className="text-2xs text-muted-foreground">+{sharedWith.length - 3}</span>}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMcpRemove(name)}
+                      className="text-2xs text-muted-foreground hover:text-destructive cursor-pointer opacity-0 group-hover/mcp:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1 py-0.5 transition-all duration-150"
+                      aria-label={`${a.detail.mcpServerRemove} ${name}`}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <label className="text-xs text-muted-foreground">
-            {a.detail.mcpTargetScope}
-            <select
-              value={targetScope}
-              onChange={(e) => setTargetScope(e.target.value as 'project' | 'global')}
-              className="mt-1 w-full h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="project" disabled={!agent.hasProjectScope}>{a.detail.mcpScopeProject}</option>
-              <option value="global" disabled={!agent.hasGlobalScope}>{a.detail.mcpScopeGlobal}</option>
-            </select>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            {a.detail.mcpTargetTransport}
-            <select
-              value={targetTransport}
-              onChange={(e) => setTargetTransport(e.target.value as 'stdio' | 'http')}
-              className="mt-1 w-full h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="stdio">stdio</option>
-              <option value="http">http</option>
-            </select>
-          </label>
-        </div>
+
+        {/* MCP actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
+          <ActionButton
             onClick={() => void handleCopySnippet()}
-            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {snippetCopied ? <Check size={12} /> : <Copy size={12} />}
-            {snippetCopied ? a.detail.mcpCopied : a.detail.mcpCopySnippet}
-          </button>
-          <button
-            type="button"
+            disabled={false}
+            busy={false}
+            label={snippetCopied ? a.detail.mcpCopied : a.detail.mcpCopySnippet}
+          />
+          <ActionButton
             onClick={() => void mcp.refresh()}
-            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <RefreshCw size={12} />
-            {a.detail.mcpRefresh}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleApplyMcpConfig(targetScope, targetTransport)}
+            disabled={false}
+            busy={false}
+            label={a.detail.mcpRefresh}
+          />
+          <ActionButton
+            onClick={() => void handleApplyMcpConfig(currentScope, currentTransport)}
             disabled={mcpBusy}
-            className="text-xs px-2 py-1 rounded border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {a.detail.mcpReconnect}
-          </button>
+            busy={mcpBusy}
+            label={a.detail.mcpReconnect}
+            variant="primary"
+          />
         </div>
-        <p className="text-2xs text-muted-foreground">{snippet.path}</p>
-        {mcpMessage ? <p className="text-xs text-muted-foreground">{mcpMessage}</p> : null}
+        <p className="text-2xs text-muted-foreground truncate">{snippet.path}</p>
+        {mcpMessage && <p className="text-xs text-muted-foreground animate-in fade-in duration-200">{mcpMessage}</p>}
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
-          <Activity size={14} className="text-muted-foreground" />
-          {a.detail.recentActivity}
-        </h2>
-        <p className="text-sm text-muted-foreground">{a.detail.noActivity}</p>
+      {/* ═══════════ SKILL ASSIGNMENTS ═══════════ */}
+      <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-foreground">{a.detail.skillAssignments}</h2>
+          <div className="flex items-center gap-3 text-2xs text-muted-foreground tabular-nums">
+            <span>MindOS {skillSummary.total}</span>
+            <span>{a.detail.skillsEnabled.split(' ')[0]} {skillSummary.enabled}</span>
+            <span>{a.detail.nativeInstalledSkills} {nativeInstalledSkills.length}</span>
+          </div>
+        </div>
+
+        {/* Search + filters */}
+        <div className="flex flex-col md:flex-row gap-2">
+          <label className="relative flex-1">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              value={skillQuery}
+              onChange={(e) => setSkillQuery(e.target.value)}
+              placeholder={a.detail.skillsSearchPlaceholder}
+              className="w-full h-9 rounded-md border border-border bg-background pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors duration-150"
+            />
+          </label>
+          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5 bg-background">
+            <PillButton active={skillSource === 'all'} label={a.detail.skillsFilterAll} onClick={() => setSkillSource('all')} />
+            <PillButton active={skillSource === 'builtin'} label={a.detail.skillsFilterBuiltin} onClick={() => setSkillSource('builtin')} />
+            <PillButton active={skillSource === 'user'} label={a.detail.skillsFilterUser} onClick={() => setSkillSource('user')} />
+          </div>
+        </div>
+
+        {deleteMsg && (
+          <div role="status" aria-live="polite" className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground animate-in fade-in duration-200">
+            {deleteMsg}
+          </div>
+        )}
+
+        {/* MindOS Skills */}
+        {filteredSkills.length > 0 && (
+          <div>
+            <p className="text-2xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+              MindOS Skills <span className="tabular-nums">({filteredSkills.filter((s) => s.enabled).length}/{filteredSkills.length})</span>
+            </p>
+            <ul className="space-y-0.5">
+              {filteredSkills.map((skill) => {
+                const isEditing = editingSkill === skill.name;
+                return (
+                  <li key={skill.name} className="rounded-md hover:bg-muted/30 transition-colors duration-100">
+                    <div className="flex items-center gap-2 py-1.5 px-1.5 group/skill">
+                      <Zap size={13} className={`shrink-0 ${skill.enabled ? 'text-[var(--amber)]' : 'text-muted-foreground/50'}`} aria-hidden="true" />
+                      <button
+                        type="button"
+                        onClick={() => setDetailSkillName(skill.name)}
+                        className="text-xs text-foreground flex-1 min-w-0 truncate hover:text-[var(--amber)] cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded text-left"
+                      >
+                        {skill.name}
+                      </button>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-dim)] text-[var(--amber)]'}`}>
+                        {skill.source === 'builtin' ? a.detail.skillsSourceBuiltin : a.detail.skillsSourceUser}
+                      </span>
+
+                      <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/skill:opacity-100 md:focus-within:opacity-100 transition-opacity duration-150">
+                        <ActionButton
+                          onClick={() => void handleSkillToggle(skill.name, !skill.enabled)}
+                          disabled={skillBusy === skill.name}
+                          busy={skillBusy === skill.name}
+                          label={skill.enabled ? a.detail.skillDisable : a.detail.skillEnable}
+                        />
+                        {skill.editable && (
+                          <>
+                            <ActionButton
+                              onClick={() => void handleStartEditSkill(skill.name)}
+                              disabled={skillBusy === skill.name || saveBusy}
+                              busy={false}
+                              label={a.detail.skillEdit}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDelete(skill.name)}
+                              disabled={skillBusy === skill.name}
+                              className="inline-flex items-center justify-center min-h-[28px] px-1.5 rounded-md text-muted-foreground hover:text-destructive cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
+                              aria-label={`${a.detail.skillDelete} ${skill.name}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {isEditing && (
+                      <div className="px-3 pb-3 pt-0 space-y-2">
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="mt-2 w-full h-40 rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                        />
+                        <div className="flex items-center gap-2">
+                          <ActionButton onClick={() => void handleSaveSkill()} disabled={saveBusy} busy={saveBusy} label={a.detail.skillSave} variant="primary" />
+                          <ActionButton onClick={() => setEditingSkill(null)} disabled={false} busy={false} label={a.detail.skillCancel} />
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {filteredSkills.length === 0 && nativeInstalledSkills.length === 0 && (
+          <p className="text-sm text-muted-foreground">{a.detail.noSkills}</p>
+        )}
+
+        {/* Native installed skills — same row style */}
+        {nativeInstalledSkills.length > 0 && (
+          <div>
+            <p className="text-2xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+              {a.detail.nativeInstalledSkills} <span className="tabular-nums">({nativeInstalledSkills.length})</span>
+            </p>
+            <div className="space-y-0.5 max-h-[280px] overflow-y-auto">
+              {nativeInstalledSkills.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setDetailSkillName(name)}
+                  className="w-full flex items-center gap-2 py-1.5 px-1.5 rounded-md hover:bg-muted/30 transition-colors duration-100 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Zap size={13} className="shrink-0 text-muted-foreground/50" aria-hidden="true" />
+                  <span className="text-xs text-foreground flex-1 min-w-0 truncate hover:text-[var(--amber)] transition-colors duration-150">{name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {editError && <p className="text-xs text-error">{editError}</p>}
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
-          <Compass size={14} className="text-muted-foreground" />
-          {a.detail.spaceReach}
-        </h2>
-        <p className="text-sm text-muted-foreground">{a.detail.noSpaceReach}</p>
-      </section>
+      {/* ═══════════ Confirm Dialogs ═══════════ */}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={a.detail.skillDelete}
+        message={confirmDelete ? a.detail.skillDeleteConfirm(confirmDelete) : ''}
+        confirmLabel={a.detail.skillDelete}
+        cancelLabel={a.detail.skillCancel}
+        onConfirm={() => confirmDelete && void handleDeleteSkill(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+        variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={confirmMcpRemove !== null}
+        title={a.detail.mcpServerRemove}
+        message={confirmMcpRemove ? a.detail.mcpServerRemoveConfirm(confirmMcpRemove) : ''}
+        confirmLabel={a.detail.mcpServerRemove}
+        cancelLabel={a.detail.skillCancel}
+        onConfirm={handleMcpRemoveConfirm}
+        onCancel={() => setConfirmMcpRemove(null)}
+        variant="destructive"
+      />
+
+      {/* Skill detail popover */}
+      <SkillDetailPopover
+        open={detailSkillName !== null}
+        skillName={detailSkillName}
+        skill={detailSkillName ? mcp.skills.find((s) => s.name === detailSkillName) ?? null : null}
+        agentNames={detailSkillName ? (crossAgentSkillMap.get(detailSkillName) ?? []) : []}
+        isNative={detailSkillName ? !mcp.skills.some((s) => s.name === detailSkillName) : false}
+        nativeSourcePath={agent?.installedSkillSourcePath}
+        copy={a.skills.skillPopover}
+        onClose={() => setDetailSkillName(null)}
+        onToggle={mcp.toggleSkill}
+        onDelete={handleDeleteSkillFromPopover}
+        onRefresh={mcp.refresh}
+      />
     </div>
   );
 }
@@ -448,27 +508,5 @@ function DetailLine({ label, value }: { label: string; value: string }) {
       <p className="text-2xs text-muted-foreground mb-1">{label}</p>
       <p className="text-sm text-foreground truncate">{value}</p>
     </div>
-  );
-}
-
-function FilterChip({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2.5 h-7 rounded text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        active ? 'bg-[var(--amber-dim)] text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-      }`}
-    >
-      {label}
-    </button>
   );
 }

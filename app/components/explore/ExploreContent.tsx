@@ -31,17 +31,13 @@ export default function ExploreContent() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-5 rounded-full" style={{ background: 'var(--amber)' }} />
-          <h1
-            className="text-2xl font-semibold tracking-tight font-display"
-            style={{ color: 'var(--foreground)' }}
-          >
+          <div className="w-1 h-5 rounded-full bg-[var(--amber)]" />
+          <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
             {e.title}
           </h1>
         </div>
         <p
-          className="text-sm leading-relaxed"
-          style={{ color: 'var(--muted-foreground)', paddingLeft: '1rem' }}
+          className="text-sm leading-relaxed text-muted-foreground pl-4"
         >
           {e.subtitle}
         </p>

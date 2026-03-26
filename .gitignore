@@ -14,6 +14,9 @@ app/data
 .DS_Store
 *.zip
 
+.claude
+.claude-internal
+.cursor
 .codebuddy
 
 # User config is stored in ~/.mindos/config.json (never committed)
