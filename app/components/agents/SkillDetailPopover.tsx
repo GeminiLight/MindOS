@@ -136,6 +136,8 @@ export default function SkillDetailPopover({
       setLoadError(false);
       setCopied(false);
       setDeleteMsg(null);
+      setDeleting(false);
+      setToggleBusy(false);
       fetchContent();
     }
   }, [open, skillName, fetchContent]);

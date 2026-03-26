@@ -227,7 +227,7 @@ export async function compactMessages(
 
     console.log(`[ask] Compacted ${earlyMessages.length} early messages into summary (${summaryText.length} chars)`);
 
-    const summaryContent = `[Summary of earlier conversation]\n\n${summaryText}`;
+    const summaryContent = `[System Note: Older conversation history has been truncated due to context length limits, but here is an AI-generated summary of what was discussed so far.]\n\n${summaryText}`;
 
     // If first recent message is also 'user', merge summary into it to avoid
     // consecutive user messages (Anthropic rejects user→user sequences).
@@ -316,10 +316,15 @@ export function hardPrune(
     console.log(`[ask] Hard pruned ${cutIdx} messages, injecting synthetic user message (${messages.length} → ${pruned.length + 1})`);
     const syntheticUser: UserMessage = {
       role: 'user',
-      content: '[Conversation context was pruned due to length. Continuing from here.]',
+      content: '[System Note: Older conversation history has been truncated due to context length limits. The user may refer to things you can no longer see. If so, kindly ask them to repeat the context.]',
       timestamp: Date.now(),
     };
     return [syntheticUser as AgentMessage, ...pruned];
+  } else if (cutIdx > 0 && pruned.length > 0 && (pruned[0] as any).role === 'user') {
+    // If we pruned and the first message IS a user message, prepend the warning to it
+    const firstMsg = { ...pruned[0] } as UserMessage;
+    firstMsg.content = `[System Note: Older conversation history has been truncated due to context length limits. The user may refer to things you can no longer see. If so, kindly ask them to repeat the context.]\n\n` + firstMsg.content;
+    pruned[0] = firstMsg as AgentMessage;
   }
 
   if (cutIdx > 0) {

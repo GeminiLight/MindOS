@@ -91,9 +91,23 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
     const index = lowerContent.indexOf(lowerQuery);
     if (index === -1) continue;
 
-    const snippetStart = Math.max(0, index - 60);
-    const snippetEnd = Math.min(content.length, index + query.length + 60);
-    let snippet = content.slice(snippetStart, snippetEnd).replace(/\n/g, ' ').trim();
+    // Try to find natural boundaries (paragraphs) around the match
+    let snippetStart = content.lastIndexOf('\n\n', index);
+    if (snippetStart === -1) snippetStart = Math.max(0, index - 200);
+    else snippetStart += 2; // skip the newlines
+
+    let snippetEnd = content.indexOf('\n\n', index);
+    if (snippetEnd === -1) snippetEnd = Math.min(content.length, index + query.length + 200);
+
+    // Prevent massive blocks (cap at ~400 chars total)
+    if (index - snippetStart > 200) snippetStart = index - 200;
+    if (snippetEnd - index > 200) snippetEnd = index + query.length + 200;
+
+    let snippet = content.slice(snippetStart, snippetEnd).trim();
+    
+    // Collapse internal whitespace for cleaner search result presentation, but preserve some structure
+    snippet = snippet.replace(/\n{3,}/g, '\n\n');
+    
     if (snippetStart > 0) snippet = '...' + snippet;
     if (snippetEnd < content.length) snippet += '...';
 

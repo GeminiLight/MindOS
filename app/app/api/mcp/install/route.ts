@@ -11,6 +11,82 @@ function parseJsonc(text: string): Record<string, unknown> {
   return JSON.parse(stripped);
 }
 
+/** Ensure nested object path exists and return the leaf container */
+function ensureNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> {
+  const parts = dotPath.split('.').filter(Boolean);
+  let current = obj;
+  for (const part of parts) {
+    if (!current[part] || typeof current[part] !== 'object') {
+      current[part] = {};
+    }
+    current = current[part] as Record<string, unknown>;
+  }
+  return current;
+}
+
+/** Generate a TOML section string for an MCP entry */
+function buildTomlEntry(sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
+  const lines: string[] = [];
+  lines.push(`[${sectionKey}.${serverName}]`);
+  if (entry.type) lines.push(`type = "${entry.type}"`);
+  if (entry.command) lines.push(`command = "${entry.command}"`);
+  if (entry.url) lines.push(`url = "${entry.url}"`);
+  if (Array.isArray(entry.args)) {
+    lines.push(`args = [${entry.args.map(a => `"${a}"`).join(', ')}]`);
+  }
+  if (entry.env && typeof entry.env === 'object') {
+    lines.push('');
+    lines.push(`[${sectionKey}.${serverName}.env]`);
+    for (const [k, v] of Object.entries(entry.env)) {
+      lines.push(`${k} = "${v}"`);
+    }
+  }
+  if (entry.headers && typeof entry.headers === 'object') {
+    lines.push('');
+    lines.push(`[${sectionKey}.${serverName}.headers]`);
+    for (const [k, v] of Object.entries(entry.headers)) {
+      lines.push(`${k} = "${v}"`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/** Replace or append a [section.server] block in a TOML file */
+function mergeTomlEntry(existing: string, sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
+  const sectionHeader = `[${sectionKey}.${serverName}]`;
+  const envHeader = `[${sectionKey}.${serverName}.env]`;
+  const headersHeader = `[${sectionKey}.${serverName}.headers]`;
+  const newBlock = buildTomlEntry(sectionKey, serverName, entry);
+
+  const lines = existing.split('\n');
+  const result: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === sectionHeader || trimmed === envHeader || trimmed === headersHeader) {
+      skipping = true;
+      continue;
+    }
+    if (skipping && trimmed.startsWith('[')) {
+      skipping = false;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
+  }
+
+  // Remove trailing blank lines before appending
+  while (result.length > 0 && result[result.length - 1].trim() === '') {
+    result.pop();
+  }
+  result.push('');
+  result.push(newBlock);
+  result.push('');
+
+  return result.join('\n');
+}
+
 interface AgentInstallItem {
   key: string;
   scope: 'project' | 'global';
@@ -96,20 +172,31 @@ export async function POST(req: NextRequest) {
       const absPath = expandHome(configPath);
 
       try {
-        // Read existing config
-        let config: Record<string, unknown> = {};
-        if (fs.existsSync(absPath)) {
-          config = parseJsonc(fs.readFileSync(absPath, 'utf-8'));
-        }
-
-        // Merge — only touch mcpServers.mindos
-        if (!config[agent.key]) config[agent.key] = {};
-        (config[agent.key] as Record<string, unknown>).mindos = entry;
-
-        // Write
         const dir = path.dirname(absPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+
+        if (agent.format === 'toml') {
+          // TOML format (e.g. Codex): merge into existing TOML or generate new
+          const existing = fs.existsSync(absPath) ? fs.readFileSync(absPath, 'utf-8') : '';
+          const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry as Record<string, unknown>);
+          fs.writeFileSync(absPath, merged, 'utf-8');
+        } else {
+          // JSON format (default)
+          let config: Record<string, unknown> = {};
+          if (fs.existsSync(absPath)) {
+            config = parseJsonc(fs.readFileSync(absPath, 'utf-8'));
+          }
+
+          // For global scope with nested key (e.g. VS Code: mcp.servers),
+          // write to the nested path instead of the flat key
+          const useNestedKey = isGlobal && agent.globalNestedKey;
+          const container = useNestedKey
+            ? ensureNestedPath(config, agent.globalNestedKey!)
+            : (() => { if (!config[agent.key]) config[agent.key] = {}; return config[agent.key] as Record<string, unknown>; })();
+          container.mindos = entry;
+
+          fs.writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+        }
 
         const result: typeof results[number] = { agent: key, status: 'ok', path: configPath, transport: effectiveTransport };
 

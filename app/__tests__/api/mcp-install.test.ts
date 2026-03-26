@@ -129,6 +129,106 @@ describe('POST /api/mcp/install', () => {
     expect(body.results[0].status).toBe('error');
     expect(body.results[0].message).toMatch(/does not support/);
   });
+
+  it('installs codex agent in TOML format', async () => {
+    const { POST } = await importInstallRoute();
+    const req = new NextRequest('http://localhost/api/mcp/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        agents: [{ key: 'codex', scope: 'global' }],
+        transport: 'stdio',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(body.results[0].status).toBe('ok');
+
+    const configPath = path.join(tempHome, '.codex', 'config.toml');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content).toContain('[mcp_servers.mindos]');
+    expect(content).toContain('type = "stdio"');
+    expect(content).toContain('command = "mindos"');
+    expect(content).toContain('MCP_TRANSPORT = "stdio"');
+  });
+
+  it('preserves existing TOML content when installing codex', async () => {
+    const configDir = path.join(tempHome, '.codex');
+    fs.mkdirSync(configDir, { recursive: true });
+    const configPath = path.join(configDir, 'config.toml');
+    fs.writeFileSync(configPath, '[other_section]\nkey = "value"\n', 'utf-8');
+
+    const { POST } = await importInstallRoute();
+    const req = new NextRequest('http://localhost/api/mcp/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        agents: [{ key: 'codex', scope: 'global' }],
+        transport: 'stdio',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    await POST(req);
+
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content).toContain('[other_section]');
+    expect(content).toContain('key = "value"');
+    expect(content).toContain('[mcp_servers.mindos]');
+  });
+
+  it('installs vscode agent with correct nested key for global scope', async () => {
+    const { POST } = await importInstallRoute();
+    const req = new NextRequest('http://localhost/api/mcp/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        agents: [{ key: 'vscode', scope: 'global' }],
+        transport: 'stdio',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(body.results[0].status).toBe('ok');
+
+    const configPath = body.results[0].path;
+    const absPath = configPath.replace('~', tempHome);
+    expect(fs.existsSync(absPath)).toBe(true);
+    const config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
+    // VS Code global config must nest under mcp.servers, not just servers
+    expect(config.mcp).toBeDefined();
+    expect(config.mcp.servers).toBeDefined();
+    expect(config.mcp.servers.mindos).toBeDefined();
+    expect(config.mcp.servers.mindos.type).toBe('stdio');
+  });
+
+  it('installs vscode project scope with flat key', async () => {
+    // Create the .vscode directory first
+    fs.mkdirSync(path.join(process.cwd(), '.vscode'), { recursive: true });
+
+    const { POST } = await importInstallRoute();
+    const req = new NextRequest('http://localhost/api/mcp/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        agents: [{ key: 'vscode', scope: 'project' }],
+        transport: 'stdio',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(body.results[0].status).toBe('ok');
+
+    const absPath = path.join(process.cwd(), '.vscode', 'mcp.json');
+    if (fs.existsSync(absPath)) {
+      const config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
+      // Project scope uses flat key 'servers', not nested mcp.servers
+      expect(config.servers).toBeDefined();
+      expect(config.servers.mindos).toBeDefined();
+      expect(config.servers.mindos.type).toBe('stdio');
+      // Clean up
+      fs.rmSync(absPath);
+    }
+  });
 });
 
 describe('GET /api/mcp/agents', () => {
