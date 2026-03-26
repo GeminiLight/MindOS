@@ -102,3 +102,24 @@ jobs:
             desktop/dist/*.yml
             desktop/dist/*.yaml
           if-no-files-found: warn
+
+  # After all platforms finish, un-draft the release so it becomes visible
+  finalize:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(cd desktop && node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish release (un-draft)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
+          gh release edit "$TAG" --draft=false
