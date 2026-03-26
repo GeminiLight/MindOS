@@ -2,6 +2,14 @@
 
 # 产品建议书 (Product Proposal): MindOS
 
+## 核心品牌主张
+
+**MindOS：让认知沉淀，让心手并进。**
+
+在 AI 时代，心负责判断，手交给 Agent。
+
+---
+
 ## 一句话介绍 (Elevator Pitch)
 
 **MindOS 是 Agent 时代的 Personal Context OS——每次思考，都在生长：既照见人的成长，也驱动 Agent 的演化。**

@@ -35,11 +35,11 @@
   - zh: 你思考的地方，AI 行动的起点
   - en: Where You Think, Agents Act
 - **Headline**
-  - zh: 人类在此思考，Agent 依此行动。
-  - en: Human Thinks Here, Agents Act There.
+  - zh: 让认知沉淀，让心手并进。
+  - en: Let cognition compound. Let mind and action move together.
 - **Subhead**
-  - zh: 和所有 AI 共享你的大脑——每次思考，都在生长。
-  - en: Share your brain with every AI — every thought grows.
+  - zh: 在 AI 时代，心负责判断，手交给 Agent。MindOS 把你的判断、偏好和方法论沉淀成所有 Agent 都能复用的本地认知资产。
+  - en: In the AI era, your mind makes the calls. Agents do the work. MindOS turns your judgment, preferences, and workflows into local cognitive assets every Agent can reuse.
 - **CTA Primary**
   - zh: 开始构建
   - en: Get Started
@@ -57,8 +57,8 @@
   - zh: 人机共享心智
   - en: Human-AI Shared Mind
 - **Subhead**
-  - zh: 你在思考中塑造 AI，AI 在执行中反哺你。人和 AI，在同一个大脑里共同成长。
-  - en: You shape AI through thinking, AI empowers you through execution. Human and AI, growing together in one shared brain.
+  - zh: 你在思考中沉淀认知，Agent 在执行中放大行动。人和 AI 不再一次次从零开始，而是在同一套可治理的上下文中共同成长。
+  - en: You compound cognition through thinking, and Agents amplify action through execution. Human and AI grow together in one governed context instead of starting from zero every time.
 
 ### Pillar 01: Global Sync
 

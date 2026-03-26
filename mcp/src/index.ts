@@ -203,6 +203,35 @@ server.registerTool("mindos_create_file", {
   } catch (e) { logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
+// ── mindos_batch_create_files ────────────────────────────────────────────────
+
+server.registerTool("mindos_batch_create_files", {
+  title: "Batch Create Files",
+  description:
+    "Create multiple new files in a single operation. Only .md and .csv files allowed. Returns a summary of created files and any errors.",
+  inputSchema: z.object({
+    files: z.array(z.object({
+      path: z.string().min(1).regex(/\.(md|csv)$/).describe("Relative file path (must end in .md or .csv)"),
+      content: z.string().default("").describe("Initial file content"),
+    })).min(1).max(50).describe("List of files to create (max 50 per call)"),
+  }),
+}, async ({ files }) => {
+  const created: string[] = [];
+  const errors: string[] = [];
+  for (const file of files) {
+    try {
+      await post("/api/file", { op: "create_file", path: file.path, content: file.content });
+      created.push(file.path);
+    } catch (e) {
+      errors.push(`${file.path}: ${String(e)}`);
+    }
+  }
+  let msg = `Batch creation complete.\nCreated ${created.length} file(s): ${created.join(", ")}`;
+  if (errors.length > 0) msg += `\n\nFailed to create ${errors.length} file(s):\n${errors.join("\n")}`;
+  logOp("mindos_batch_create_files", { count: files.length }, created.length === files.length ? "ok" : "error", msg.slice(0, 200));
+  return created.length === files.length ? ok(msg) : error(msg);
+});
+
 // ── mindos_create_space ─────────────────────────────────────────────────────
 
 server.registerTool("mindos_create_space", {

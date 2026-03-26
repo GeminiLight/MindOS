@@ -1,5 +1,13 @@
 # MindOS 叙事与定位简版
 
+## 核心品牌主张
+
+**MindOS：让认知沉淀，让心手并进。**
+
+在 AI 时代，心负责判断，手交给 Agent。
+
+---
+
 ## 一句话
 
 **MindOS 是面向多 Agent 用户的 Personal Context OS。**

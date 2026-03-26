@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       transport: 'http',
       endpoint,
       port,
-      toolCount: running ? 23 : 0,
+      toolCount: running ? 24 : 0,
       authConfigured,
       // Masked for display; full token only used server-side in snippet generation
       maskedToken: authConfigured ? maskToken(token) : undefined,
