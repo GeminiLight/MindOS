@@ -53,8 +53,18 @@ export async function GET() {
       };
     });
 
-    // Sort: installed first, then detected, then not found
+    // MindOS is always installed (built-in MCP)
+    const mindosAgent = agents.find((a) => a.key === 'mindos');
+    if (mindosAgent) {
+      mindosAgent.installed = true;
+      mindosAgent.scope = 'builtin';
+      mindosAgent.transport = 'stdio';
+    }
+
+    // Sort: mindos first, then installed, then detected, then not found
     agents.sort((a, b) => {
+      if (a.key === 'mindos') return -1;
+      if (b.key === 'mindos') return 1;
       const rank = (x: typeof a) => x.installed ? 0 : x.present ? 1 : 2;
       return rank(a) - rank(b);
     });

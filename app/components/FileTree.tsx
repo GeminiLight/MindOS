@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
+import { useState, useCallback, useRef, useTransition, useEffect, useSyncExternalStore } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
@@ -16,6 +16,33 @@ function notifyFilesChanged() {
 }
 
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
+
+const HIDDEN_FILES_KEY = 'show-hidden-files';
+
+function subscribeHiddenFiles(cb: () => void) {
+  const handler = (e: StorageEvent) => { if (e.key === HIDDEN_FILES_KEY) cb(); };
+  const custom = () => cb();
+  window.addEventListener('storage', handler);
+  window.addEventListener('mindos:hidden-files-changed', custom);
+  return () => {
+    window.removeEventListener('storage', handler);
+    window.removeEventListener('mindos:hidden-files-changed', custom);
+  };
+}
+
+function getShowHiddenFiles() {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(HIDDEN_FILES_KEY) === 'true';
+}
+
+export function setShowHiddenFiles(value: boolean) {
+  localStorage.setItem(HIDDEN_FILES_KEY, String(value));
+  window.dispatchEvent(new Event('mindos:hidden-files-changed'));
+}
+
+function useShowHiddenFiles() {
+  return useSyncExternalStore(subscribeHiddenFiles, getShowHiddenFiles, () => false);
+}
 
 interface FileTreeProps {
   nodes: FileNode[];
@@ -618,9 +645,13 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
 export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, parentIsSpace, onImport }: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
+  const showHidden = useShowHiddenFiles();
 
   const isInsideDir = depth > 0;
-  const visibleNodes = isInsideDir ? filterVisibleNodes(nodes, !!parentIsSpace) : nodes;
+  let visibleNodes = isInsideDir ? filterVisibleNodes(nodes, !!parentIsSpace) : nodes;
+  if (!isInsideDir && !showHidden) {
+    visibleNodes = visibleNodes.filter(n => !n.name.startsWith('.'));
+  }
 
   useEffect(() => {
     if (!currentPath || depth !== 0) return;

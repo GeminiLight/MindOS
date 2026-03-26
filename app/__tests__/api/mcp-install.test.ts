@@ -236,8 +236,9 @@ describe('GET /api/mcp/agents', () => {
     const { GET } = await importAgentsRoute();
     const res = await GET();
     const body = await res.json();
-    expect(body.agents).toHaveLength(19);
+    expect(body.agents).toHaveLength(20);
     const keys = body.agents.map((a: { key: string }) => a.key);
+    expect(keys).toContain('mindos');
     expect(keys).toContain('claude-code');
     expect(keys).toContain('cursor');
     expect(keys).toContain('codebuddy');
@@ -307,13 +308,16 @@ describe('GET /api/mcp/agents', () => {
     const body = await res.json();
     const agents = body.agents as { key: string; installed: boolean; present: boolean }[];
 
-    // claude-code should be first (installed)
-    expect(agents[0].key).toBe('claude-code');
+    // mindos is always first (builtin)
+    expect(agents[0].key).toBe('mindos');
     expect(agents[0].installed).toBe(true);
 
-    // Verify ordering invariant: no non-installed agent appears before an installed one,
-    // and no not-found agent appears before a detected one
-    for (let i = 1; i < agents.length; i++) {
+    // claude-code should be second (installed via config)
+    expect(agents[1].key).toBe('claude-code');
+    expect(agents[1].installed).toBe(true);
+
+    // Verify ordering invariant: after mindos, no non-installed agent appears before an installed one
+    for (let i = 2; i < agents.length; i++) {
       const prev = agents[i - 1];
       const curr = agents[i];
       const rankOf = (a: typeof prev) => a.installed ? 0 : a.present ? 1 : 2;

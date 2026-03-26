@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { FileText, Table, FolderOpen } from 'lucide-react';
+import { Zap } from 'lucide-react';
+import type { SlashItem } from '@/hooks/useSlashCommand';
 
-interface MentionPopoverProps {
-  results: string[];
+interface SlashCommandPopoverProps {
+  results: SlashItem[];
   selectedIndex: number;
-  onSelect: (filePath: string) => void;
+  onSelect: (item: SlashItem) => void;
 }
 
-export default function MentionPopover({ results, selectedIndex, onSelect }: MentionPopoverProps) {
+export default function SlashCommandPopover({ results, selectedIndex, onSelect }: SlashCommandPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,47 +25,36 @@ export default function MentionPopover({ results, selectedIndex, onSelect }: Men
   return (
     <div className="border border-border rounded-lg bg-card shadow-lg overflow-hidden">
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5">
-        <FolderOpen size={11} className="text-muted-foreground/50" />
-        <span className="text-2xs font-medium text-muted-foreground/70 uppercase tracking-wider">Files</span>
+        <Zap size={11} className="text-[var(--amber)]/50" />
+        <span className="text-2xs font-medium text-muted-foreground/70 uppercase tracking-wider">Skills</span>
         <span className="text-2xs text-muted-foreground/40 ml-auto">{results.length}</span>
       </div>
       <div ref={listRef} className="max-h-[360px] overflow-y-auto">
-      {results.map((f, idx) => {
-        const name = f.split('/').pop() ?? f;
-        const dir = f.split('/').slice(0, -1).join('/');
-        const isCsv = name.endsWith('.csv');
-        return (
+        {results.map((item, idx) => (
           <button
-            key={f}
+            key={item.name}
             type="button"
             onMouseDown={(e) => {
               e.preventDefault();
-              onSelect(f);
+              onSelect(item);
             }}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
+            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
               idx === selectedIndex
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-muted'
             }`}
           >
-            {isCsv ? (
-              <Table size={13} className="text-success shrink-0" />
-            ) : (
-              <FileText size={13} className="text-muted-foreground shrink-0" />
-            )}
-            <span className="truncate font-medium flex-1">{name}</span>
-            {dir && (
-              <span className="text-2xs text-muted-foreground/40 truncate max-w-[140px] shrink-0">
-                {dir}
-              </span>
+            <Zap size={13} className="text-[var(--amber)] shrink-0" />
+            <span className="text-sm font-medium shrink-0">/{item.name}</span>
+            {item.description && (
+              <span className="text-2xs text-muted-foreground/50 truncate min-w-0 flex-1">{item.description}</span>
             )}
           </button>
-        );
-      })}
+        ))}
       </div>
       <div className="px-3 py-1.5 border-t border-border flex gap-3 text-2xs text-muted-foreground/40 shrink-0">
         <span>↑↓ navigate</span>
-        <span>↵ select</span>
+        <span>↵ / Tab select</span>
         <span>ESC dismiss</span>
       </div>
     </div>

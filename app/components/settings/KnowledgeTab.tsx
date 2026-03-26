@@ -7,10 +7,26 @@ import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatBytes, formatUptime } from '@/lib/format';
+import { setShowHiddenFiles } from '@/components/FileTree';
+import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
   const k = t.settings.knowledge;
+
+  // Hidden files toggle
+  const [showHidden, setShowHidden] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('show-hidden-files') === 'true'
+  );
+
+  // Example files cleanup
+  const [exampleCount, setExampleCount] = useState<number | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<number | null>(null);
+
+  useEffect(() => {
+    scanExampleFilesAction().then(r => setExampleCount(r.files.length)).catch(() => {});
+  }, []);
 
   // Guide state toggle
   const [guideActive, setGuideActive] = useState<boolean | null>(null);
@@ -129,6 +145,51 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           placeholder="/path/to/your/notes"
         />
       </Field>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm text-foreground">{k.showHiddenFiles}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{k.showHiddenFilesHint}</div>
+        </div>
+        <Toggle checked={showHidden} onChange={() => {
+          const next = !showHidden;
+          setShowHidden(next);
+          setShowHiddenFiles(next);
+        }} />
+      </div>
+
+      {exampleCount !== null && exampleCount > 0 && cleanupResult === null && (
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-foreground">{k.cleanupExamples}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{k.cleanupExamplesHint}</div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!confirm(k.cleanupExamplesConfirm(exampleCount))) return;
+              setCleaningUp(true);
+              const r = await cleanupExamplesAction();
+              setCleaningUp(false);
+              if (r.success) {
+                setCleanupResult(r.deleted);
+                setExampleCount(0);
+              }
+            }}
+            disabled={cleaningUp}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
+          >
+            {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            {k.cleanupExamplesButton}
+            <span className="ml-1 tabular-nums text-2xs opacity-70">{exampleCount}</span>
+          </button>
+        </div>
+      )}
+      {cleanupResult !== null && (
+        <div className="flex items-center gap-2 text-xs text-success">
+          <Check size={14} />
+          {k.cleanupExamplesDone(cleanupResult)}
+        </div>
+      )}
 
       <div className="border-t border-border pt-5">
         <SectionLabel>Security</SectionLabel>

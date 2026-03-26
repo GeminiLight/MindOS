@@ -27,19 +27,27 @@ export function useMention() {
   }, [loadFiles]);
 
   const updateMentionFromInput = useCallback(
-    (val: string) => {
-      const atIdx = val.lastIndexOf('@');
+    (val: string, cursorPos?: number) => {
+      const pos = cursorPos ?? val.length;
+      const before = val.slice(0, pos);
+      const atIdx = before.lastIndexOf('@');
       if (atIdx === -1) {
         setMentionQuery(null);
         return;
       }
-      const before = val[atIdx - 1];
-      if (atIdx > 0 && before !== ' ') {
+      if (atIdx > 0 && before[atIdx - 1] !== ' ' && before[atIdx - 1] !== '\n') {
         setMentionQuery(null);
         return;
       }
-      const query = val.slice(atIdx + 1).toLowerCase();
-      const filtered = allFiles.filter((f) => f.toLowerCase().includes(query)).slice(0, 30);
+      const query = before.slice(atIdx + 1);
+      if (query.includes(' ') || query.includes('\n')) {
+        setMentionQuery(null);
+        setMentionResults([]);
+        setMentionIndex(0);
+        return;
+      }
+      const q = query.toLowerCase();
+      const filtered = allFiles.filter((f) => f.toLowerCase().includes(q)).slice(0, 30);
       if (filtered.length === 0) {
         setMentionQuery(null);
         setMentionResults([]);
