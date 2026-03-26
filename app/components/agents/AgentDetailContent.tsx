@@ -214,34 +214,36 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       </Link>
 
       {/* ═══════════ AGENT PROFILE (consolidated header) ═══════════ */}
-      <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center gap-3">
+      <section className="rounded-xl border border-border bg-gradient-to-b from-card to-card/80 overflow-hidden">
+        <div className="flex items-center gap-4 p-5">
           <AgentAvatar name={agent.name} status={status} size="md" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold tracking-tight font-display text-foreground">{agent.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ${
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ${
                 status === 'connected' ? 'bg-success/10 text-success'
                   : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber)]'
                     : 'bg-muted text-muted-foreground'
               }`}>{status}</span>
-              <span className="text-2xs text-muted-foreground font-mono">{agent.transport ?? agent.preferredTransport}</span>
-              <span className="text-2xs text-muted-foreground">·</span>
-              <span className="text-2xs text-muted-foreground">{agent.skillMode ?? a.na}</span>
+              <span className="text-2xs text-muted-foreground/60 font-mono">{agent.transport ?? agent.preferredTransport}</span>
+              <span className="text-2xs text-muted-foreground/30" aria-hidden="true">·</span>
+              <span className="text-2xs text-muted-foreground/60">{agent.skillMode ?? a.na}</span>
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t border-border">
-          <span>{a.detail.format}: <span className="text-foreground">{agent.format}</span></span>
-          <span>{a.detail.lastActivityAt}: <span className="text-foreground tabular-nums">{agent.runtimeLastActivityAt ?? a.na}</span></span>
-          <span>{configuredMcpServers.length} MCP · {nativeInstalledSkills.length} skills</span>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground/70 px-5 py-3 border-t border-border/50 bg-muted/[0.03]">
+          <span>{a.detail.format}: <span className="text-foreground/80 font-medium">{agent.format}</span></span>
+          <span>{a.detail.lastActivityAt}: <span className="text-foreground/80 tabular-nums font-medium">{agent.runtimeLastActivityAt ?? a.na}</span></span>
+          <span className="font-medium text-foreground/80 tabular-nums">{configuredMcpServers.length} MCP · {nativeInstalledSkills.length} skills</span>
         </div>
       </section>
 
       {/* ═══════════ MCP MANAGEMENT ═══════════ */}
-      <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-        <h2 className="text-sm font-medium text-foreground flex items-center gap-1.5">
-          <Server size={14} className="text-muted-foreground" />
+      <section className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+            <Server size={13} className="text-muted-foreground/70" />
+          </div>
           {a.detail.mcpManagement}
         </h2>
 
@@ -253,10 +255,10 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         </div>
 
         {/* Configured MCP servers with management */}
-        <div className="rounded-lg border border-border bg-background p-4 space-y-2">
+        <div className="rounded-xl border border-border/60 bg-background/50 p-4 space-y-2.5">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-foreground">{a.detail.configuredMcpServers}</p>
-            <span className="text-2xs text-muted-foreground tabular-nums">{a.detail.configuredMcpServersCount(configuredMcpServers.length)}</span>
+            <span className="text-2xs text-muted-foreground/60 tabular-nums">{a.detail.configuredMcpServersCount(configuredMcpServers.length)}</span>
           </div>
 
           {mcpHint && (
@@ -272,8 +274,10 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
               {configuredMcpServers.map((name) => {
                 const sharedWith = (crossAgentMcpMap.get(name) ?? []).filter((n) => n !== agent.name);
                 return (
-                  <div key={name} className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-2 group/mcp hover:border-border hover:bg-muted/20 transition-all duration-100">
-                    <Server size={11} className="text-[var(--amber)] shrink-0" />
+                  <div key={name} className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-muted/[0.02] px-3 py-2.5 group/mcp hover:border-border/60 hover:bg-muted/[0.06] hover:shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-all duration-150">
+                    <div className="w-5 h-5 rounded-md bg-[var(--amber)]/[0.08] flex items-center justify-center shrink-0">
+                      <Server size={10} className="text-[var(--amber)]" />
+                    </div>
                     <span className="text-xs font-medium text-foreground flex-1 min-w-0 truncate">{name}</span>
                     {sharedWith.length > 0 && (
                       <div className="flex items-center gap-1">
@@ -325,13 +329,18 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       </section>
 
       {/* ═══════════ SKILL ASSIGNMENTS ═══════════ */}
-      <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <section className="rounded-xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-foreground">{a.detail.skillAssignments}</h2>
-          <div className="flex items-center gap-3 text-2xs text-muted-foreground tabular-nums">
-            <span>MindOS {skillSummary.total}</span>
-            <span>{a.detail.skillsEnabled.split(' ')[0]} {skillSummary.enabled}</span>
-            <span>{a.detail.nativeInstalledSkills} {nativeInstalledSkills.length}</span>
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+              <Zap size={13} className="text-muted-foreground/70" />
+            </div>
+            {a.detail.skillAssignments}
+          </h2>
+          <div className="flex items-center gap-2 text-2xs text-muted-foreground/60 tabular-nums">
+            <span className="px-1.5 py-0.5 rounded bg-muted/40">MindOS {skillSummary.total}</span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/[0.06] text-emerald-600 dark:text-emerald-400">{a.detail.skillsEnabled.split(' ')[0]} {skillSummary.enabled}</span>
+            <span className="px-1.5 py-0.5 rounded bg-muted/40">{a.detail.nativeInstalledSkills} {nativeInstalledSkills.length}</span>
           </div>
         </div>
 
@@ -504,9 +513,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <p className="text-2xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm text-foreground truncate">{value}</p>
+    <div className="rounded-lg border border-border/60 bg-muted/[0.02] px-3.5 py-2.5 hover:bg-muted/[0.06] transition-colors duration-100">
+      <p className="text-2xs text-muted-foreground/60 mb-1 uppercase tracking-wider">{label}</p>
+      <p className="text-sm text-foreground font-medium truncate">{value}</p>
     </div>
   );
 }

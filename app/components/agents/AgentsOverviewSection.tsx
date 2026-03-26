@@ -91,10 +91,10 @@ export default function AgentsOverviewSection({
     <div className="space-y-5">
       {/* ═══════════ HERO STATS BAR ═══════════ */}
       <section
-        className="rounded-xl border border-border bg-card overflow-hidden"
+        className="rounded-xl border border-border bg-gradient-to-b from-card to-card/80 overflow-hidden"
         aria-label={pulseCopy.connected}
       >
-        <div className="flex divide-x divide-border [&>*]:flex-1">
+        <div className="flex divide-x divide-border/50 [&>*]:flex-1">
           <StatCell
             icon={<Zap size={14} aria-hidden="true" />}
             label={pulseCopy.connected}
@@ -231,13 +231,13 @@ export default function AgentsOverviewSection({
         </section>
       ) : (
         <section
-          className="rounded-xl border border-dashed border-border bg-card/50 p-10 text-center"
+          className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-12 text-center"
           aria-label={copy.usagePulse}
         >
-          <div className="w-12 h-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto mb-3">
-            <Cable size={20} className="text-muted-foreground" aria-hidden="true" />
+          <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
+            <Cable size={22} className="text-muted-foreground/50" aria-hidden="true" />
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+          <p className="text-sm text-muted-foreground/70 leading-relaxed max-w-xs mx-auto">
             {copy.nextActionHint as string}
           </p>
         </section>
@@ -269,27 +269,33 @@ function StatCell({
         : 'text-muted-foreground';
   const iconColor =
     tone === 'ok'
-      ? 'text-muted-foreground'
+      ? 'text-emerald-500/70'
       : tone === 'warn'
         ? 'text-amber-500/70'
-        : 'text-muted-foreground/50';
+        : 'text-muted-foreground/40';
+  const hoverBg =
+    tone === 'ok'
+      ? 'hover:bg-emerald-500/[0.04]'
+      : tone === 'warn'
+        ? 'hover:bg-amber-500/[0.04]'
+        : 'hover:bg-muted/20';
 
   return (
     <div
-      className="px-3 py-3.5 text-center hover:bg-muted/20 transition-colors duration-100 group/stat"
+      className={`px-3 py-4 text-center ${hoverBg} transition-colors duration-150 group/stat`}
       role="group"
       aria-label={`${label}: ${value}${total !== undefined ? `/${total}` : ''}`}
     >
-      <div className={`flex items-center justify-center gap-1.5 mb-1.5 ${iconColor} group-hover/stat:text-foreground transition-colors duration-100`}>
+      <div className={`flex items-center justify-center gap-1.5 mb-2 ${iconColor} group-hover/stat:opacity-100 transition-all duration-150`}>
         {icon}
-        <span className="text-2xs text-muted-foreground truncate">{label}</span>
       </div>
-      <p className={`text-lg font-semibold tabular-nums leading-none ${textColor}`}>
+      <p className={`text-xl font-semibold tabular-nums leading-none mb-1.5 ${textColor}`}>
         {value}
         {total !== undefined && (
           <span className="text-xs font-normal text-muted-foreground ml-0.5">/{total}</span>
         )}
       </p>
+      <span className="text-2xs text-muted-foreground/70 truncate block">{label}</span>
     </div>
   );
 }
@@ -315,19 +321,19 @@ function QuickNavCard({
     <Link
       href={href}
       className="group rounded-xl border border-border bg-card p-4 flex items-start gap-3.5
-        hover:border-[var(--amber)]/30 hover:bg-muted/20 hover:shadow-sm
+        hover:border-[var(--amber)]/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]
         active:scale-[0.99]
-        transition-all duration-150
+        transition-all duration-200
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="shrink-0 w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground group-hover:text-[var(--amber)] group-hover:bg-[var(--amber-dim)] transition-colors duration-150">
+      <div className="shrink-0 w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-[var(--amber)] group-hover:bg-[var(--amber)]/[0.08] transition-all duration-200">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-sm font-semibold text-foreground">{title}</span>
           <span
-            className={`text-2xs px-1.5 py-0.5 rounded font-medium select-none ${
+            className={`text-2xs px-2 py-0.5 rounded-full font-medium select-none ${
               statTone === 'ok'
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
@@ -336,11 +342,11 @@ function QuickNavCard({
             {stat}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{description}</p>
+        <p className="text-xs text-muted-foreground/70 leading-relaxed line-clamp-2">{description}</p>
       </div>
       <ArrowRight
         size={14}
-        className="shrink-0 mt-1.5 text-muted-foreground/30 group-hover:text-[var(--amber)] group-hover:translate-x-0.5 transition-all duration-150"
+        className="shrink-0 mt-1.5 text-muted-foreground/20 group-hover:text-[var(--amber)] group-hover:translate-x-0.5 transition-all duration-200"
         aria-hidden="true"
       />
     </Link>
@@ -372,14 +378,22 @@ function AgentCard({
         ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
         : 'bg-zinc-500/10 text-zinc-500';
 
+  const accentBorder =
+    status === 'connected'
+      ? 'border-l-[var(--success)]'
+      : status === 'detected'
+        ? 'border-l-[var(--amber)]'
+        : '';
+
   return (
     <Link
       href={`/agents/${encodeURIComponent(agent.key)}`}
-      className="group rounded-xl border border-border bg-card p-3.5
-        hover:border-[var(--amber)]/30 hover:shadow-sm
+      className={`group rounded-xl border bg-card p-3.5
+        ${accentBorder ? `border-l-2 ${accentBorder} border-border` : 'border-border'}
+        hover:border-[var(--amber)]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]
         active:scale-[0.98]
         transition-all duration-150 animate-in
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
     >
       {/* Top row: avatar + name + status */}
@@ -390,26 +404,22 @@ function AgentCard({
             {agent.name}
           </span>
           {agent.transport && status === 'connected' && (
-            <span className="text-2xs text-muted-foreground font-mono">{agent.transport}</span>
+            <span className="text-2xs text-muted-foreground/60 font-mono">{agent.transport}</span>
           )}
         </div>
-        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 select-none ${statusColor}`}>
+        <span className={`text-2xs px-2 py-0.5 rounded-full font-medium shrink-0 select-none ${statusColor}`}>
           {statusLabel}
         </span>
       </div>
 
       {/* Metrics row */}
-      <div className="flex items-center gap-0 pt-2.5 border-t border-border/50">
+      <div className="flex items-center gap-1 pt-2.5 border-t border-border/40">
         <MetricChip icon={<Server size={11} aria-hidden="true" />} value={mcpCount} label={copy.colMcp as string} />
-        <span className="text-border mx-2 select-none" aria-hidden="true">·</span>
         <MetricChip icon={<Zap size={11} aria-hidden="true" />} value={skillCount} label={copy.colSkills as string} />
         {agent.skillMode && (
-          <>
-            <span className="text-border mx-2 select-none" aria-hidden="true">·</span>
-            <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate select-none">
-              {agent.skillMode}
-            </span>
-          </>
+          <span className="text-2xs px-1.5 py-0.5 rounded-md bg-muted/50 text-muted-foreground/70 truncate select-none">
+            {agent.skillMode}
+          </span>
         )}
         <span className="flex-1 min-w-[4px]" />
         {hasRuntime && (
@@ -438,9 +448,13 @@ function MetricChip({
   label: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-1" title={label} aria-label={`${label}: ${value}`}>
-      <span className="text-muted-foreground/60">{icon}</span>
-      <span className={`tabular-nums text-xs ${value > 0 ? 'text-foreground font-medium' : 'text-muted-foreground/50'}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${value > 0 ? 'bg-muted/40' : ''}`}
+      title={label}
+      aria-label={`${label}: ${value}`}
+    >
+      <span className={value > 0 ? 'text-muted-foreground' : 'text-muted-foreground/30'}>{icon}</span>
+      <span className={`tabular-nums text-xs ${value > 0 ? 'text-foreground font-medium' : 'text-muted-foreground/40'}`}>
         {value}
       </span>
     </span>

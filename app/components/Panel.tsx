@@ -51,6 +51,8 @@ interface PanelProps {
   maximized?: boolean;
   /** Callback to toggle maximize */
   onMaximize?: () => void;
+  /** Callback to open import modal for a space */
+  onImport?: (space: string) => void;
   /** Lazy-loaded panel content for search/ask/plugins */
   children?: React.ReactNode;
 }
@@ -66,6 +68,7 @@ export default function Panel({
   onWidthCommit,
   maximized = false,
   onMaximize,
+  onImport,
   children,
 }: PanelProps) {
   const open = activePanel !== null;
@@ -134,7 +137,7 @@ export default function Panel({
           </div>
         </PanelHeader>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <FileTree nodes={fileTree} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
+          <FileTree nodes={fileTree} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         </div>
         <SyncStatusBar collapsed={false} onOpenSyncSettings={onOpenSyncSettings} />
       </div>

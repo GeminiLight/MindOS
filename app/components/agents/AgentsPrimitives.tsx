@@ -11,8 +11,10 @@ export function PillButton({ active, label, onClick }: { active: boolean; label:
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`px-2.5 min-h-[28px] rounded text-xs cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        active ? 'bg-[var(--amber-dim)] text-[var(--amber)] font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+      className={`relative px-2.5 min-h-[28px] rounded text-xs cursor-pointer transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        active
+          ? 'bg-[var(--amber-dim)] text-[var(--amber)] font-medium shadow-[0_1px_2px_rgba(200,135,58,0.08)]'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
       }`}
     >
       {label}
@@ -21,11 +23,13 @@ export function PillButton({ active, label, onClick }: { active: boolean; label:
 }
 
 export function StatusDot({ tone, label, count }: { tone: 'ok' | 'warn' | 'neutral'; label: string; count: number }) {
-  const dotCls = tone === 'ok' ? 'bg-[var(--success)]' : tone === 'warn' ? 'bg-[var(--amber)]' : 'bg-muted-foreground';
+  const dotCls = tone === 'ok' ? 'bg-[var(--success)]' : tone === 'warn' ? 'bg-[var(--amber)]' : 'bg-muted-foreground/60';
+  const countCls = tone === 'ok' ? 'text-foreground' : tone === 'warn' ? 'text-[var(--amber)]' : 'text-muted-foreground';
   return (
     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-      <span className={`w-1.5 h-1.5 rounded-full ${dotCls}`} aria-hidden="true" />
-      {label} <span className="tabular-nums text-foreground">{count}</span>
+      <span className={`w-2 h-2 rounded-full ${dotCls} ${tone === 'ok' ? 'ring-2 ring-[var(--success)]/20' : ''}`} aria-hidden="true" />
+      <span className="text-xs">{label}</span>
+      <span className={`tabular-nums font-medium ${countCls}`}>{count}</span>
     </span>
   );
 }
@@ -44,23 +48,23 @@ export function SearchInput({
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }) {
   return (
-    <label className="relative block">
-      <Icon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+    <label className="relative block group/search">
+      <Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 group-focus-within/search:text-[var(--amber)] pointer-events-none transition-colors duration-150" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="w-full h-9 rounded-md border border-border bg-background pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors duration-150"
+        className="w-full h-9 rounded-lg border border-border bg-background pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--amber)]/30 focus-visible:border-[var(--amber)]/40 transition-all duration-150"
       />
       {value.length > 0 && (
         <button
           type="button"
           onClick={() => onChange('')}
           aria-label="Clear search"
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors duration-150"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors duration-150"
         >
-          <X size={14} />
+          <X size={13} />
         </button>
       )}
     </label>
@@ -112,20 +116,35 @@ export function BulkMessage({ message }: { message: string | null }) {
   );
 }
 
-export function EmptyState({ message, className }: { message: string; className?: string }) {
+export function EmptyState({ message, icon, className }: { message: string; icon?: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-dashed border-border bg-card/50 p-8 text-center ${className ?? ''}`}>
-      <p className="text-sm text-muted-foreground">{message}</p>
+    <div className={`rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-10 text-center ${className ?? ''}`}>
+      {icon && (
+        <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3 text-muted-foreground/40">
+          {icon}
+        </div>
+      )}
+      <p className="text-sm text-muted-foreground/70 leading-relaxed max-w-xs mx-auto">{message}</p>
     </div>
   );
 }
 
 /* ────────── Agent Avatar ────────── */
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500',
-  'bg-amber-600', 'bg-cyan-600', 'bg-indigo-500', 'bg-pink-500',
-  'bg-teal-500', 'bg-orange-500', 'bg-sky-500', 'bg-fuchsia-500',
+/** Soft pastel palette: [bg, border, text] — watercolor aesthetic */
+const AVATAR_PALETTES: [string, string, string][] = [
+  ['bg-rose-100/70',     'border-rose-300/50',    'text-rose-600/80'],
+  ['bg-violet-100/70',   'border-violet-300/50',  'text-violet-600/80'],
+  ['bg-emerald-100/70',  'border-emerald-300/50', 'text-emerald-600/80'],
+  ['bg-sky-100/70',      'border-sky-300/50',     'text-sky-600/80'],
+  ['bg-amber-100/70',    'border-amber-300/50',   'text-amber-700/80'],
+  ['bg-teal-100/70',     'border-teal-300/50',    'text-teal-600/80'],
+  ['bg-pink-100/70',     'border-pink-300/50',    'text-pink-600/80'],
+  ['bg-indigo-100/70',   'border-indigo-300/50',  'text-indigo-600/80'],
+  ['bg-lime-100/70',     'border-lime-300/50',    'text-lime-700/80'],
+  ['bg-fuchsia-100/70',  'border-fuchsia-300/50', 'text-fuchsia-600/80'],
+  ['bg-cyan-100/70',     'border-cyan-300/50',    'text-cyan-600/80'],
+  ['bg-orange-100/70',   'border-orange-300/50',  'text-orange-600/80'],
 ];
 
 function hashName(str: string): number {
@@ -153,13 +172,13 @@ export function AgentAvatar({
   onRemove?: () => void;
   href?: string;
 }) {
-  const color = AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
+  const [bg, border, text] = AVATAR_PALETTES[hashName(name) % AVATAR_PALETTES.length];
   const sizeClasses = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs';
   const dotColor = status === 'connected' ? 'bg-[var(--success)]' : status === 'detected' ? 'bg-[var(--amber)]' : 'bg-muted-foreground';
 
   return (
     <div className="relative group/avatar" title={name}>
-      <div className={`${sizeClasses} ${color} rounded-full flex items-center justify-center text-white font-medium select-none shadow-sm`}>
+      <div className={`${sizeClasses} ${bg} ${border} ${text} border rounded-full flex items-center justify-center font-semibold select-none`}>
         {initials(name)}
       </div>
       {status && (
@@ -322,9 +341,11 @@ export function AgentPickerPopover({
               onClick={() => onSelect(agent.key)}
               className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted cursor-pointer flex items-center gap-2 transition-colors duration-100"
             >
-              <div className={`w-6 h-6 rounded-full ${AVATAR_COLORS[hashName(agent.name) % AVATAR_COLORS.length]} flex items-center justify-center text-white text-[9px] font-medium shrink-0`}>
+              {(() => { const [bg, bdr, txt] = AVATAR_PALETTES[hashName(agent.name) % AVATAR_PALETTES.length]; return (
+              <div className={`w-6 h-6 rounded-full border ${bg} ${bdr} ${txt} flex items-center justify-center text-[9px] font-semibold shrink-0`}>
                 {initials(agent.name)}
               </div>
+              ); })()}
               {agent.name}
             </button>
           ))}

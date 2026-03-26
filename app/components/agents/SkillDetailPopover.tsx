@@ -217,14 +217,14 @@ export default function SkillDetailPopover({
         className="fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-border bg-card shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
       >
         {/* ─── Header ─── */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/60 bg-gradient-to-r from-card to-card/80 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[var(--amber)]/[0.08] flex items-center justify-center text-[var(--amber)] shrink-0">
             <CapIcon size={18} />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-foreground truncate">{skillName}</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={`text-2xs px-1.5 py-0.5 rounded font-medium select-none ${
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-2xs px-2 py-0.5 rounded-full font-medium select-none ${
                 isNative
                   ? 'bg-muted text-muted-foreground'
                   : skill?.source === 'builtin'
@@ -233,7 +233,7 @@ export default function SkillDetailPopover({
               }`}>
                 {sourceLabel}
               </span>
-              <span className="text-2xs text-muted-foreground capitalize">{capability}</span>
+              <span className="text-2xs text-muted-foreground/60 capitalize">{capability}</span>
             </div>
           </div>
           <button
@@ -267,9 +267,9 @@ export default function SkillDetailPopover({
 
           {/* Path */}
           {skillPath && (
-            <div className="rounded-lg border border-border bg-background p-3">
-              <span className="text-2xs text-muted-foreground block mb-1">{copy.path}</span>
-              <code className="text-xs text-foreground font-mono break-all leading-relaxed">{skillPath}</code>
+            <div className="rounded-xl border border-border/50 bg-muted/[0.03] p-3.5">
+              <span className="text-2xs text-muted-foreground/60 block mb-1.5 uppercase tracking-wider">{copy.path}</span>
+              <code className="text-xs text-foreground/80 font-mono break-all leading-relaxed">{skillPath}</code>
             </div>
           )}
 
@@ -410,9 +410,9 @@ function MetaCard({
       : tone === 'muted' ? 'text-muted-foreground'
         : 'text-foreground';
   return (
-    <div className="rounded-lg border border-border bg-background px-3 py-2.5">
-      <span className="text-2xs text-muted-foreground block mb-0.5">{label}</span>
-      <span className={`text-sm font-medium capitalize ${valueColor}`}>{value}</span>
+    <div className="rounded-xl border border-border/50 bg-muted/[0.03] px-3.5 py-3 hover:bg-muted/[0.06] transition-colors duration-100">
+      <span className="text-2xs text-muted-foreground/60 block mb-1 uppercase tracking-wider">{label}</span>
+      <span className={`text-sm font-semibold capitalize ${valueColor}`}>{value}</span>
     </div>
   );
 }
