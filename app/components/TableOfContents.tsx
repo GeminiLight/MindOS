@@ -128,6 +128,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
               href={`#${heading.id}`}
               onClick={(e) => handleClick(e, heading.id)}
               className="block text-xs py-1 rounded transition-colors duration-100 leading-snug"
+              suppressHydrationWarning
               style={{
                 paddingLeft: `${8 + indent}px`,
                 paddingRight: '8px',

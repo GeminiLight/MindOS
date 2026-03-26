@@ -133,6 +133,15 @@ export default function OnboardingView() {
       <p className="text-center text-xs leading-relaxed max-w-sm mx-auto font-display text-muted-foreground opacity-60">
         {ob.importHint}
       </p>
+      <p className="text-center mt-2">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
+          className="text-xs text-[var(--amber)] hover:underline transition-colors"
+        >
+          {t.fileImport.onboardingHint}
+        </button>
+      </p>
 
       {/* Sync hint card */}
       <div className="max-w-md mx-auto mt-6 flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card text-left">

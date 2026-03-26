@@ -34,13 +34,14 @@ export function AgentsPanelAgentGroups({
 }) {
   return (
     <div>
-      <div className="px-0 py-1 mb-0.5">
-        <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">{p.rosterLabel}</span>
+      <div className="px-0 py-1.5 mb-1">
+        <span className="text-2xs font-semibold text-muted-foreground/70 uppercase tracking-wider">{p.rosterLabel}</span>
       </div>
       {connected.length > 0 && (
         <section className="mb-3">
-          <h3 className="text-[11px] font-medium text-muted-foreground/90 uppercase tracking-wider mb-2 pl-0.5">
-            {p.sectionConnected} ({connected.length})
+          <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/80 uppercase tracking-wider mb-2 pl-0.5">
+            <span className="w-1 h-3 rounded-full bg-[var(--success)]/50" aria-hidden="true" />
+            {p.sectionConnected} <span className="text-muted-foreground/50 tabular-nums">({connected.length})</span>
           </h3>
           <div className="space-y-1.5">
             {connected.map(agent => (
@@ -60,8 +61,9 @@ export function AgentsPanelAgentGroups({
 
       {detected.length > 0 && (
         <section className="mb-3">
-          <h3 className="text-[11px] font-medium text-muted-foreground/90 uppercase tracking-wider mb-2 pl-0.5">
-            {p.sectionDetected} ({detected.length})
+          <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/80 uppercase tracking-wider mb-2 pl-0.5">
+            <span className="w-1 h-3 rounded-full bg-[var(--amber)]/50" aria-hidden="true" />
+            {p.sectionDetected} <span className="text-muted-foreground/50 tabular-nums">({detected.length})</span>
           </h3>
           <div className="space-y-1.5">
             {detected.map(agent => (

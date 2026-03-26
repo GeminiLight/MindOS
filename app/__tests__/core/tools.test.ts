@@ -260,3 +260,78 @@ describe('tools: get_recent', () => {
     expect(lines).toHaveLength(1);
   });
 });
+
+describe('web_fetch tool', () => {
+  it('returns formatted text from a URL', async () => {
+    // Mock the global fetch
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'content-type': 'text/html' }),
+      text: async () => '<html><head><title>Test Page</title></head><body><h1>Hello</h1><p>This is a <b>test</b>.</p></body></html>',
+    } as any);
+
+    try {
+      const result = await callTool('web_fetch', { url: 'https://example.com' });
+      expect(result).toContain('# Test Page');
+      expect(result).toContain('Source: https://example.com');
+      expect(result).toContain('# Hello');
+      expect(result).toContain('This is a test');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('handles raw text files properly', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      text: async () => 'Just plain text.\nWith newlines.',
+    } as any);
+
+    try {
+      const result = await callTool('web_fetch', { url: 'https://example.com/raw.txt' });
+      expect(result).toBe('Just plain text.\nWith newlines.');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe('web_search tool', () => {
+  it('returns formatted search results', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => '<html><body><div class="result__body"><h2 class="result__title"><a href="https://example.com/1">Title 1</a></h2><a class="result__snippet">Snippet 1</a></div><div class="result__body"><h2 class="result__title"><a href="https://example.com/2">Title 2</a></h2><div class="result__snippet">Snippet 2</div></div></body></html>',
+    } as any);
+
+    try {
+      const result = await callTool('web_search', { query: 'test query' });
+      expect(result).toContain('Title 1');
+      expect(result).toContain('https://example.com/1');
+      expect(result).toContain('Snippet 1');
+      expect(result).toContain('Title 2');
+      expect(result).toContain('Snippet 2');
+      expect(result).toContain('Web Search Results for: "test query"');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('handles empty results', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => '<html><body><div>No results body structure</div></body></html>',
+    } as any);
+
+    try {
+      const result = await callTool('web_search', { query: 'test query' });
+      expect(result).toContain('No web search results found for');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});

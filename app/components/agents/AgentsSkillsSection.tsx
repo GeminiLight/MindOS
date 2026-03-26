@@ -207,7 +207,12 @@ export default function AgentsSkillsSection({
     <section className="space-y-4 overflow-hidden" aria-label={copy.title}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-foreground">{copy.title}</h2>
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+            <Zap size={13} className="text-muted-foreground/70" aria-hidden="true" />
+          </div>
+          {copy.title}
+        </h2>
         <div className="flex items-center gap-1 rounded-md border border-border p-0.5 bg-background" role="tablist" aria-label={copy.title}>
           <PillButton active={view === 'bySkill'} label={copy.tabs.bySkill} onClick={() => setView('bySkill')} />
           <PillButton active={view === 'byAgent'} label={copy.tabs.byAgent} onClick={() => setView('byAgent')} />
@@ -215,8 +220,8 @@ export default function AgentsSkillsSection({
       </div>
 
       {/* Compact status strip */}
-      <div className="rounded-lg border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+      <div className="rounded-xl border border-border/60 bg-gradient-to-r from-card to-card/80 p-3.5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" aria-hidden="true" />
             {copy.summaryEnabled(enabledCount)}
@@ -446,8 +451,12 @@ function BySkillView({
         <div className="space-y-3">
           {sortedGrouped.map(([groupKey, sortedSkills]) => (
             <div key={groupKey}>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                {copy.groupLabels[groupKey as keyof typeof copy.groupLabels]} <span className="tabular-nums">({sortedSkills.length})</span>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="w-1 h-4 rounded-full bg-[var(--amber)]/40" aria-hidden="true" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {copy.groupLabels[groupKey as keyof typeof copy.groupLabels]}
+                </span>
+                <span className="text-2xs tabular-nums text-muted-foreground/50 font-medium">({sortedSkills.length})</span>
               </div>
               <div className="space-y-3">
                 {sortedSkills.map((skill) => {
@@ -457,7 +466,7 @@ function BySkillView({
                   const isUserSkill = skill.kind === 'mindos' && skill.source === 'user';
 
                   return (
-                    <div key={skill.name} className="rounded-lg border border-border bg-card p-4 hover:border-border/60 hover:shadow-sm transition-all duration-150">
+                    <div key={skill.name} className="rounded-xl border border-border bg-card p-4 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200">
                       {/* Skill header */}
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -676,7 +685,7 @@ function AgentCard({
   const visibleNative = nativeExpanded ? nativeSkills : nativeSkills.slice(0, NATIVE_COLLAPSE_THRESHOLD);
 
   return (
-    <div className="rounded-lg border border-border bg-card hover:border-border/60 hover:shadow-sm transition-all duration-150 overflow-hidden">
+    <div className="rounded-xl border border-border bg-card hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200 overflow-hidden">
       {/* Card header with avatar */}
       <div className="flex items-center gap-3 p-4 pb-0">
         <AgentAvatar name={name} status={status} />

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Settings, Menu, X } from 'lucide-react';
+import { Search, Settings, Menu, X, FolderInput } from 'lucide-react';
 import ActivityBar, { type PanelId } from './ActivityBar';
 import Panel from './Panel';
 import FileTree from './FileTree';
@@ -29,6 +29,9 @@ import ChangesBanner from './changes/ChangesBanner';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
+import dynamic from 'next/dynamic';
+
+const ImportModal = dynamic(() => import('./ImportModal'), { ssr: false });
 import { WalkthroughProvider } from './walkthrough';
 import McpProvider from '@/hooks/useMcpData';
 import '@/lib/renderers/index'; // client-side renderer registration source of truth
@@ -70,6 +73,25 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     return RIGHT_AGENT_DETAIL_DEFAULT_WIDTH;
   });
 
+  // ── Import modal state ──
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importDefaultSpace, setImportDefaultSpace] = useState<string | undefined>(undefined);
+  const [importInitialFiles, setImportInitialFiles] = useState<File[] | undefined>(undefined);
+  const [dragOverlay, setDragOverlay] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleOpenImport = useCallback((space?: string) => {
+    setImportDefaultSpace(space);
+    setImportInitialFiles(undefined);
+    setImportModalOpen(true);
+  }, []);
+
+  const handleCloseImport = useCallback(() => {
+    setImportModalOpen(false);
+    setImportDefaultSpace(undefined);
+    setImportInitialFiles(undefined);
+  }, []);
+
   // ── Mobile state ──
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -98,6 +120,12 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     window.addEventListener('mindos:open-settings', handler);
     return () => window.removeEventListener('mindos:open-settings', handler);
   }, []);
+
+  useEffect(() => {
+    const handler = () => handleOpenImport();
+    window.addEventListener('mindos:open-import', handler);
+    return () => window.removeEventListener('mindos:open-import', handler);
+  }, [handleOpenImport]);
 
   // GuideCard first message handler
   const handleFirstMessage = useCallback(() => {
@@ -206,6 +234,10 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         e.preventDefault();
         setSettingsOpen(v => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+        e.preventDefault();
+        setImportModalOpen(v => !v);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -283,6 +315,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onWidthCommit={lp.handlePanelWidthCommit}
         maximized={lp.panelMaximized}
         onMaximize={lp.handlePanelMaximize}
+        onImport={handleOpenImport}
       >
         <div className={`flex flex-col h-full ${lp.activePanel === 'echo' ? '' : 'hidden'}`}>
           <EchoPanel active={lp.activePanel === 'echo'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
@@ -386,19 +419,64 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           </button>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} />
+          <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} onImport={handleOpenImport} />
         </div>
       </aside>
 
       <SearchModal open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)} />
       <AskModal open={mobileAskOpen} onClose={() => setMobileAskOpen(false)} currentFile={currentFile} />
 
-      <main id="main-content" className="min-h-screen transition-all duration-200 pt-[52px] md:pt-0">
+      <main
+        id="main-content"
+        className="min-h-screen transition-all duration-200 pt-[52px] md:pt-0"
+        onDragEnter={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          dragCounterRef.current++;
+          if (dragCounterRef.current === 1) setDragOverlay(true);
+        }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+        }}
+        onDragLeave={() => {
+          dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+          if (dragCounterRef.current === 0) setDragOverlay(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          dragCounterRef.current = 0;
+          setDragOverlay(false);
+          if (e.dataTransfer.files.length > 0) {
+            setImportInitialFiles(Array.from(e.dataTransfer.files));
+            setImportDefaultSpace(undefined);
+            setImportModalOpen(true);
+          }
+        }}
+      >
         <div className="min-h-screen bg-background">
           <ChangesBanner />
           {children}
         </div>
+
+        {/* Global drag overlay */}
+        {dragOverlay && !importModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm transition-opacity duration-200">
+            <div className="border-2 border-dashed border-[var(--amber)]/50 rounded-xl p-12 flex flex-col items-center gap-3">
+              <FolderInput size={48} className="text-[var(--amber)]/60" />
+              <p className="text-sm text-foreground font-medium">{t.fileImport.dropOverlay}</p>
+              <p className="text-xs text-muted-foreground">{t.fileImport.dropOverlayFormats}</p>
+            </div>
+          </div>
+        )}
       </main>
+
+      <ImportModal
+        open={importModalOpen}
+        onClose={handleCloseImport}
+        defaultSpace={importDefaultSpace}
+        initialFiles={importInitialFiles}
+      />
 
       <style>{`
         @media (min-width: 768px) {

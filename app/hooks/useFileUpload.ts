@@ -115,6 +115,16 @@ export function useFileUpload() {
     setUploadError('');
   }, []);
 
+  const injectFiles = useCallback((files: LocalAttachment[]) => {
+    setLocalAttachments(prev => {
+      const merged = [...prev];
+      for (const item of files) {
+        if (!merged.some(m => m.name === item.name)) merged.push(item);
+      }
+      return merged;
+    });
+  }, []);
+
   return {
     localAttachments,
     uploadError,
@@ -122,5 +132,6 @@ export function useFileUpload() {
     pickFiles,
     removeAttachment,
     clearAttachments,
+    injectFiles,
   };
 }
