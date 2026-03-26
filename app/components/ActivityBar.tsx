@@ -97,10 +97,10 @@ export default function ActivityBar({
       : undefined;
 
     if (bridge?.checkUpdate) {
-      // Desktop: check via electron-updater IPC
+      const doCheck = bridge.checkUpdate.bind(bridge);
       const timer = setTimeout(async () => {
         try {
-          const r = await bridge.checkUpdate();
+          const r = await doCheck();
           if (r.available) setHasUpdate(true);
         } catch { /* silent */ }
       }, 10_000);
