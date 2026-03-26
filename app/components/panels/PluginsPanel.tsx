@@ -142,12 +142,12 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
                   </span>
                 ))}
                 {r.entryPath && enabled && !fileExists && (
-                  <span className="text-2xs" style={{ color: 'var(--amber)' }}>
+                  <span className="text-2xs text-[var(--amber)]">
                     {(p.createFile ?? 'Create {file}').replace('{file}', r.entryPath)}
                   </span>
                 )}
                 {canOpen && (
-                  <span className="text-2xs" style={{ color: 'var(--amber)' }}>
+                  <span className="text-2xs text-[var(--amber)]">
                     → {r.entryPath}
                   </span>
                 )}

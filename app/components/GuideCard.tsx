@@ -238,7 +238,7 @@ export default function GuideCard({ onNavigate, spaces = [], recentFiles = [] }:
                     const fileName = file.path.split('/').pop() || file.path;
                     return (
                       <button key={file.path} onClick={() => handleFileOpen(file.path)}
-                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50 truncate">
+                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-[var(--amber)]/30 hover:bg-muted/50 truncate">
                         📄 {fileName}
                       </button>
                     );
@@ -255,7 +255,7 @@ export default function GuideCard({ onNavigate, spaces = [], recentFiles = [] }:
                     const label = stripEmoji(s.name);
                     return (
                       <button key={s.name} onClick={() => handleFileOpen(s.path)}
-                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-amber-500/30 hover:bg-muted/50">
+                        className="text-left text-xs px-3 py-2 rounded-lg border border-border text-foreground transition-colors hover:border-[var(--amber)]/30 hover:bg-muted/50">
                         <span className="mr-1.5">{emoji || '📁'}</span>
                         <span>{label}</span>
                         <span className="block text-2xs mt-0.5 text-muted-foreground">
@@ -305,8 +305,8 @@ function TaskCard({ icon, title, cta, done, active, optional, onClick }: {
       className={`
         flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg border text-center
         transition-all duration-150
-        ${done ? 'opacity-60' : 'hover:border-amber-500/30 hover:bg-muted/50 cursor-pointer'}
-        ${active ? 'border-amber-500/40 bg-muted/50' : ''}
+        ${done ? 'opacity-60' : 'hover:border-[var(--amber)]/30 hover:bg-muted/50 cursor-pointer'}
+        ${active ? 'border-[var(--amber)]/40 bg-muted/50' : ''}
         ${done || active ? 'border-[var(--amber)]' : 'border-border'}
       `}
     >

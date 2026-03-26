@@ -1,8 +1,15 @@
 ## PENDING
 
+Agent 对比视图
 
-1. 合并插件到主程序
-2. Diff
+对话框 一堆bug。
+
+文件树刷新不及时，当有文件增删的时候，未及时显示。
+
+
+skill 面板，点开查看详情。
+
+webpage wording skill写个技能
 
 ACP for call
 Agent as Workflow
@@ -15,13 +22,91 @@ Editer for skill & agent & file
 
 Agents 面板开发
 
-- Agents SideBar，点击每个 Agent，应该直接弹出Content页，而不是右侧边栏
+- Agents SideBar，点击每个 Agent，应该直接弹出Content页，而不是右侧边栏，包括你检查出来这个agent有哪些skill、mcp、usage等等信息
 - 允许自定义 Agent 
 
 
 1. Desktop APP 首次打开直接默认了本地模式，而不是让用户选择本地还是remote。你看看有没有这个问题，有的话fix
 2. Desktop APP 能否内置一个build固定版本的mindos，如果用户没安装也能直接打开了；另外如果用户更新了npm mindos 发现版本更高，则回到更高版本build的页面，你觉得合理吗？
 
+
+
+● 还没发布到 0.5.1，CI 还在跑。你可以稍后手动执行：
+
+  npm install -g @geminilight/mindos@latest
+
+  或者直接用本地版本（已经是最新代码）：
+
+  cd /data/home/geminitwang/code/mindos && npm link
+
+避免硬编码，比如json里面的变量
+
+你觉得用户还会有哪些觉得很模糊 或者 不友好的地方
+
+- 历史对话的问题。
+
+1. 优化模版
+
+1. 优化Skill
+
+n. 优化REAMDE.md
+- 优化VISION文本，独立出一个product-vision.md放在wiki
+- 提示用户端口应该开放才可以外部访问GUI和MCP
+
+n. 文件改动版本历史
+通过git管理？如何记录agent操作历史？
+
+创造者故事
+
+- 前端密码验证
+
+首页下
+- search files应当和Ask AI调换位置和大小来显示AI-nature的特性
+- Plugins应该放在Recently Modified的上面
+-  New note按钮应该更名为New Notes，而且点击后进入的是404
+
+LANDING page 节日祝福的例子
+
+别人share模版，或者md
+
+
+[Auth] Token for MCP
+
+<!--  -->
+
+有一些零散的想法agent 就可以自主执行，然后人机literally 共享第二大脑了是吗
+
+如果再反问agent，它会有意识的帮人复盘，哪些可以SOP；然后通过mcp存到MindOS，所有agent都可以用了
+
+
+
+[] 支持ACP（Agent Coding Protocol）：调用其他Agent如 Claude Code 以辅助编程接
+
+
+  2.3 评论/批注机制
+
+  Notion 有 create-a-comment /
+  retrieve-a-comment，这对 Human-AI
+  协作很关键——Agent
+  可以在文件上留批注，而不是直接修改内容。
+
+  我们的 Audit Log（Agent-Audit.md）是单向日
+  志，用户很难对具体操作回复。可以考虑：
+
+  mindos_add_comment(path, line, content)  →
+  在文件旁添加 Agent 批注
+  mindos_get_comments(path)                →
+  读取批注
+
+  实现上可以用 {filename}.comments.md
+  或统一的 Agent-Comments.md 存储。
+
+1. 更新文件夹目录为MindOS
+
+
+  │ P3  │ Comment 机制  │ Human-AI       │
+  │     │               │ 异步协作       │
+  └─────┴───────────────┴────────────────┘
 
 ### 高优先级 - 用户体验改进
 
@@ -52,6 +137,12 @@ Agents 面板开发
 - cd ~/Downloads && unzip MindOS-0.1.0-arm64-mac.zip && open MindOS-0.1.0-arm64.dmg
 
 ## ADDRESSED
+
+
+
+1. 合并插件到主程序
+2. Diff
+
 
 ### 已解决的界面和交互问题
 

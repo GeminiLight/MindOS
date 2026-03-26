@@ -63,7 +63,7 @@ function AssistantMessageWithParts({ message, isStreaming }: { message: Message;
       })}
       {showTrailingSpinner && (
         <div className="flex items-center gap-2 py-1 mt-1">
-          <Loader2 size={12} className="animate-spin" style={{ color: 'var(--amber)' }} />
+          <Loader2 size={12} className="animate-spin text-[var(--amber)]" />
           <span className="text-xs text-muted-foreground animate-pulse">Executing tool…</span>
         </div>
       )}
@@ -137,16 +137,14 @@ export default function MessageList({
         <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           {m.role === 'assistant' && (
             <div
-              className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-              style={{ background: 'var(--amber-dim)' }}
+              className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-[var(--amber-dim)]"
             >
-              <Sparkles size={12} style={{ color: 'var(--amber)' }} />
+              <Sparkles size={12} className="text-[var(--amber)]" />
             </div>
           )}
           {m.role === 'user' ? (
             <div
-              className="max-w-[85%] px-3 py-2 rounded-xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap"
-              style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+              className="max-w-[85%] px-3 py-2 rounded-xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)]"
             >
               {m.content}
             </div>
@@ -168,7 +166,7 @@ export default function MessageList({
                 </>
               ) : isLoading && i === messages.length - 1 ? (
                 <div className="flex items-center gap-2 py-1">
-                  <Loader2 size={14} className="animate-spin" style={{ color: 'var(--amber)' }} />
+                  <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
                   <span className="text-xs text-muted-foreground animate-pulse">
                     {loadingPhase === 'connecting'
                       ? labels.connecting

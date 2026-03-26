@@ -31,6 +31,8 @@ export async function consumeUIMessageStream(
   let currentTextId: string | null = null;
   let currentReasoningPart: ReasoningPart | null = null;
 
+  const startedAt = Date.now();
+
   /** Build an immutable Message snapshot from current parts */
   function buildMessage(): Message {
     const clonedParts: MessagePart[] = parts.map(p => {
@@ -47,6 +49,7 @@ export async function consumeUIMessageStream(
       role: 'assistant',
       content: textContent,
       parts: clonedParts,
+      timestamp: startedAt,
     };
   }
 

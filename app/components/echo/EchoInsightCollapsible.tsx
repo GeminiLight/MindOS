@@ -103,7 +103,7 @@ export function EchoInsightCollapsible({
   const generateDisabled = aiLoading || !aiReady || streaming;
 
   return (
-    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/15 hover:shadow-md">
+    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/15 hover:shadow">
       <button
         id={btnId}
         type="button"
@@ -129,56 +129,65 @@ export function EchoInsightCollapsible({
         />
         <span className="sr-only">{open ? hideLabel : showLabel}</span>
       </button>
-      {open ? (
-        <div
-          id={panelId}
-          role="region"
-          aria-labelledby={btnId}
-          className="border-t border-border/60 px-5 pb-5 pt-4"
-        >
-          <p className="font-sans text-sm leading-relaxed text-muted-foreground">{hint}</p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={generateDisabled}
-              onClick={runGenerate}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--amber)] px-3 py-2 font-sans text-sm font-medium text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {streaming ? <Loader2 size={16} className="animate-spin shrink-0" aria-hidden /> : null}
-              {streaming ? generatingLabel : generateLabel}
-            </button>
-            {err ? (
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={btnId}
+        className={cn(
+          'grid transition-[grid-template-rows] duration-250 ease-out',
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-border/60 px-5 pb-5 pt-4">
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground">{hint}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                disabled={generateDisabled}
                 onClick={runGenerate}
-                disabled={streaming || !aiReady}
-                className="font-sans text-sm text-[var(--amber)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--amber)] px-3 py-2 font-sans text-sm font-medium text-[var(--amber-foreground)] transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {retryLabel}
+                {streaming ? (
+                  <Loader2 size={16} className="animate-spin shrink-0" aria-hidden />
+                ) : (
+                  <Sparkles size={15} className="shrink-0" aria-hidden />
+                )}
+                {streaming ? generatingLabel : generateLabel}
               </button>
-            ) : null}
-          </div>
-          {!aiLoading && !aiReady ? (
-            <p className="mt-2 font-sans text-2xs text-muted-foreground">{noAiHint}</p>
-          ) : null}
-          {err ? (
-            <p className="mt-3 font-sans text-sm text-error" role="alert">
-              {errorPrefix} {err}
-            </p>
-          ) : null}
-          {insightMd ? (
-            <div className={cn(proseInsight, 'mt-4 border-t border-border/60 pt-4')}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{insightMd}</ReactMarkdown>
-              {streaming ? (
-                <span
-                  className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-[var(--amber)] align-middle"
-                  aria-hidden
-                />
+              {err ? (
+                <button
+                  type="button"
+                  onClick={runGenerate}
+                  disabled={streaming || !aiReady}
+                  className="font-sans text-sm text-[var(--amber)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                >
+                  {retryLabel}
+                </button>
               ) : null}
             </div>
-          ) : null}
+            {!aiLoading && !aiReady ? (
+              <p className="mt-2 font-sans text-2xs text-muted-foreground">{noAiHint}</p>
+            ) : null}
+            {err ? (
+              <p className="mt-3 font-sans text-sm text-error" role="alert">
+                {errorPrefix} {err}
+              </p>
+            ) : null}
+            {insightMd ? (
+              <div className={cn(proseInsight, 'mt-4 border-t border-border/60 pt-4')}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{insightMd}</ReactMarkdown>
+                {streaming ? (
+                  <span
+                    className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-[var(--amber)] align-middle"
+                    aria-hidden
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

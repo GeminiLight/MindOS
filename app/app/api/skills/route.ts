@@ -128,12 +128,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, name, description, content, enabled } = body as {
-      action: 'create' | 'update' | 'delete' | 'toggle' | 'read';
+    const { action, name, description, content, enabled, sourcePath } = body as {
+      action: 'create' | 'update' | 'delete' | 'toggle' | 'read' | 'read-native';
       name?: string;
       description?: string;
       content?: string;
       enabled?: boolean;
+      sourcePath?: string;
     };
 
     const settings = readSettings();
@@ -216,6 +217,21 @@ export async function POST(req: NextRequest) {
           }
         }
         return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
+      }
+
+      case 'read-native': {
+        if (!name || !sourcePath) return NextResponse.json({ error: 'name and sourcePath required' }, { status: 400 });
+        const nativeBase = path.resolve(sourcePath);
+        const nativeSkillFile = path.join(nativeBase, name, 'SKILL.md');
+        if (!nativeSkillFile.startsWith(nativeBase)) {
+          return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+        }
+        if (!fs.existsSync(nativeSkillFile)) {
+          return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
+        }
+        const nativeContent = fs.readFileSync(nativeSkillFile, 'utf-8');
+        const { description: nativeDesc } = parseSkillMd(nativeContent);
+        return NextResponse.json({ content: nativeContent, description: nativeDesc });
       }
 
       default:

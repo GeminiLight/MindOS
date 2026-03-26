@@ -31,8 +31,8 @@ function CopyButton({ code }: { code: string }) {
       className="
         absolute top-2.5 right-2.5
         p-1.5 rounded-md
-        bg-zinc-700 hover:bg-zinc-600
-        text-zinc-400 hover:text-zinc-200
+        bg-muted hover:bg-accent
+        text-muted-foreground hover:text-foreground
         transition-colors duration-100
         opacity-0 group-hover:opacity-100
       "

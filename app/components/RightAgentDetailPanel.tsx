@@ -96,7 +96,7 @@ export default function RightAgentDetailPanel({
       aria-hidden={!open || !resolved}
     >
       {resolved && (
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
           <AgentsPanelAgentDetail
             agent={resolved.agent}
             agentStatus={resolved.status}

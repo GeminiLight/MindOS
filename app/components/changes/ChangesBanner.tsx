@@ -88,8 +88,7 @@ export default function ChangesBanner() {
       >
         <div className="flex items-start gap-2.5">
           <span
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--amber)]"
-            style={{ background: 'color-mix(in srgb, var(--amber) 18%, transparent)' }}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--amber)] bg-[var(--amber-subtle)]"
           >
             <History size={14} />
           </span>

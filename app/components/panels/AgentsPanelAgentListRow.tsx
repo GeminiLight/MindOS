@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronRight, Loader2, RotateCw } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
+import { AgentAvatar } from '../agents/AgentsPrimitives';
 
 export type AgentsPanelAgentListStatus = 'connected' | 'detected' | 'notFound';
 
@@ -30,9 +31,6 @@ export default function AgentsPanelAgentListRow({
   onInstallAgent: (key: string) => Promise<boolean>;
   copy: AgentsPanelAgentListRowCopy;
 }) {
-  const dot =
-    agentStatus === 'connected' ? 'bg-emerald-500' : agentStatus === 'detected' ? 'bg-amber-500' : 'bg-zinc-400';
-
   return (
     <div
       className={`
@@ -44,9 +42,9 @@ export default function AgentsPanelAgentListRow({
     >
       <Link
         href={detailHref}
-        className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-3 pr-2 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-2.5 pr-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className={`w-2 h-2 rounded-full shrink-0 ring-2 ring-background ${dot}`} />
+        <AgentAvatar name={agent.name} status={agentStatus} size="sm" />
         <span className="text-sm font-medium text-foreground truncate leading-tight">{agent.name}</span>
         {agentStatus === 'connected' && agent.transport && (
           <span className="text-2xs font-mono tabular-nums px-1.5 py-0.5 rounded-md bg-muted/90 text-muted-foreground shrink-0 border border-border/50">

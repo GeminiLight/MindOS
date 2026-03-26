@@ -39,7 +39,7 @@ export function useMention() {
         return;
       }
       const query = val.slice(atIdx + 1).toLowerCase();
-      const filtered = allFiles.filter((f) => f.toLowerCase().includes(query)).slice(0, 8);
+      const filtered = allFiles.filter((f) => f.toLowerCase().includes(query)).slice(0, 30);
       if (filtered.length === 0) {
         setMentionQuery(null);
         setMentionResults([]);
