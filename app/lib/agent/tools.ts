@@ -12,7 +12,14 @@ const MAX_FILE_CHARS = 20_000;
 
 export function truncate(content: string): string {
   if (content.length <= MAX_FILE_CHARS) return content;
-  return content.slice(0, MAX_FILE_CHARS) + `\n\n[...truncated — file is ${content.length} chars, showing first ${MAX_FILE_CHARS}]`;
+  
+  // Smart truncation: try to truncate at a natural boundary (newline)
+  let cutoff = content.lastIndexOf('\n', MAX_FILE_CHARS);
+  if (cutoff === -1) cutoff = MAX_FILE_CHARS;
+  
+  const totalLines = content.split('\n').length;
+  
+  return content.slice(0, cutoff) + `\n\n[...truncated — file is ${content.length} chars (${totalLines} lines), showing first ~${cutoff} chars]\n[Use the read_file_chunk tool to read the rest of the file by specifying start_line and end_line]`;
 }
 
 // ─── Helper: format tool error consistently ────────────────────────────────
@@ -51,6 +58,12 @@ const PathParam = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
 });
 
+const ReadFileChunkParams = Type.Object({
+  path: Type.String({ description: 'Relative file path' }),
+  start_line: Type.Number({ description: 'Line number to start reading from (1-indexed)' }),
+  end_line: Type.Number({ description: 'Line number to stop reading at (1-indexed)' }),
+});
+
 const QueryParam = Type.Object({
   query: Type.String({ description: 'Search query (case-insensitive)' }),
 });
@@ -69,6 +82,13 @@ const CreateFileParams = Type.Object({
   content: Type.Optional(Type.String({ description: 'Initial file content' })),
 });
 
+const BatchCreateFileParams = Type.Object({
+  files: Type.Array(Type.Object({
+    path: Type.String({ description: 'Relative file path (must end in .md or .csv)' }),
+    content: Type.String({ description: 'Initial file content' }),
+  }), { description: 'List of files to create' }),
+});
+
 const AppendParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   content: Type.String({ description: 'Content to append' }),
@@ -84,6 +104,13 @@ const UpdateSectionParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   heading: Type.String({ description: 'Heading text to find (e.g. "## Status")' }),
   content: Type.String({ description: 'New content for the section' }),
+});
+
+const EditLinesParams = Type.Object({
+  path: Type.String({ description: 'Relative file path' }),
+  start_line: Type.Number({ description: '1-indexed line number to start replacing' }),
+  end_line: Type.Number({ description: '1-indexed line number to stop replacing (inclusive)' }),
+  content: Type.String({ description: 'New content to insert in place of those lines' }),
 });
 
 const RenameParams = Type.Object({
@@ -115,8 +142,8 @@ const CsvAppendParams = Type.Object({
 
 // Write-operation tool names — used by beforeToolCall for write-protection
 export const WRITE_TOOLS = new Set([
-  'write_file', 'create_file', 'append_to_file', 'insert_after_heading',
-  'update_section', 'delete_file', 'rename_file', 'move_file', 'append_csv',
+  'write_file', 'create_file', 'batch_create_files', 'append_to_file', 'insert_after_heading',
+  'update_section', 'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
 ]);
 
 export const knowledgeBaseTools: AgentTool<any>[] = [
@@ -171,10 +198,36 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'read_file',
     label: 'Read File',
-    description: 'Read the content of a file by its relative path. Always read a file before modifying it.',
+    description: 'Read the content of a file by its relative path. Always read a file before modifying it. If the file is too large, it will be truncated. Use read_file_chunk to read specific parts of large files.',
     parameters: PathParam,
     execute: safeExecute(async (_id, params: Static<typeof PathParam>) => {
       return textResult(truncate(getFileContent(params.path)));
+    }),
+  },
+
+  {
+    name: 'read_file_chunk',
+    label: 'Read File Chunk',
+    description: 'Read a specific range of lines from a file. Highly recommended for reading large files that were truncated by read_file.',
+    parameters: ReadFileChunkParams,
+    execute: safeExecute(async (_id, params: Static<typeof ReadFileChunkParams>) => {
+      const content = getFileContent(params.path);
+      const lines = content.split('\n');
+      const start = Math.max(1, params.start_line);
+      const end = Math.min(lines.length, params.end_line);
+      
+      if (start > end) {
+        return textResult(`Error: start_line (${start}) is greater than end_line (${end}) or file has fewer lines.`);
+      }
+      
+      // Prefix each line with its line number (1-indexed)
+      const pad = String(lines.length).length;
+      const chunk = lines
+        .slice(start - 1, end)
+        .map((l, i) => `${String(start + i).padStart(pad, ' ')} | ${l}`)
+        .join('\n');
+        
+      return textResult(`Showing lines ${start} to ${end} of ${lines.length}:\n\n${chunk}`);
     }),
   },
 
@@ -224,6 +277,28 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   },
 
   {
+    name: 'batch_create_files',
+    label: 'Batch Create Files',
+    description: 'Create multiple new files in a single operation. Highly recommended when scaffolding new features or projects.',
+    parameters: BatchCreateFileParams,
+    execute: safeExecute(async (_id, params: Static<typeof BatchCreateFileParams>) => {
+      const created: string[] = [];
+      const errors: string[] = [];
+      for (const file of params.files) {
+        try {
+          createFile(file.path, file.content);
+          created.push(file.path);
+        } catch (e) {
+          errors.push(`${file.path}: ${formatToolError(e)}`);
+        }
+      }
+      let msg = `Batch creation complete.\nCreated ${created.length} files: ${created.join(', ')}`;
+      if (errors.length > 0) msg += `\n\nFailed to create ${errors.length} files:\n${errors.join('\n')}`;
+      return textResult(msg);
+    }),
+  },
+
+  {
     name: 'append_to_file',
     label: 'Append to File',
     description: 'Append text to the end of an existing file. A blank line separator is added automatically.',
@@ -237,7 +312,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'insert_after_heading',
     label: 'Insert After Heading',
-    description: 'Insert content right after a Markdown heading. Useful for adding items under a specific section.',
+    description: 'Insert content right after a Markdown heading. Useful for adding items under a specific section. If heading matches fail, use edit_lines instead.',
     parameters: InsertHeadingParams,
     execute: safeExecute(async (_id, params: Static<typeof InsertHeadingParams>) => {
       insertAfterHeading(params.path, params.heading, params.content);
@@ -248,11 +323,29 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'update_section',
     label: 'Update Section',
-    description: 'Replace the content of a Markdown section identified by its heading. The section spans from the heading to the next heading of equal or higher level.',
+    description: 'Replace the content of a Markdown section identified by its heading. The section spans from the heading to the next heading of equal or higher level. If heading matches fail, use edit_lines instead.',
     parameters: UpdateSectionParams,
     execute: safeExecute(async (_id, params: Static<typeof UpdateSectionParams>) => {
       updateSection(params.path, params.heading, params.content);
       return textResult(`Section "${params.heading}" updated in ${params.path}`);
+    }),
+  },
+
+  {
+    name: 'edit_lines',
+    label: 'Edit Lines',
+    description: 'Replace a specific range of lines with new content. Extremely reliable for precise edits. You must know the exact line numbers (use read_file_chunk to get them).',
+    parameters: EditLinesParams,
+    execute: safeExecute(async (_id, params: Static<typeof EditLinesParams>) => {
+      const { path: fp, start_line, end_line, content } = params;
+      const start = Math.max(0, start_line - 1);
+      const end = Math.max(0, end_line - 1);
+      
+      const mindRoot = getMindRoot();
+      // Import the core function dynamically or it should be added to lib/fs.ts
+      const { updateLines } = await import('@/lib/core');
+      updateLines(mindRoot, fp, start, end, content.split('\n'));
+      return textResult(`Lines ${start_line}-${end_line} replaced in ${fp}`);
     }),
   },
 

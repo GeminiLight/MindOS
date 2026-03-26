@@ -28,11 +28,19 @@ export function findBacklinks(mindRoot: string, targetPath: string): BacklinkEnt
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (patterns.some(p => p.test(lines[i]))) {
-        const start = Math.max(0, i - 1);
-        const end = Math.min(lines.length - 1, i + 1);
-        const ctx = lines.slice(start, end + 1).join('\n').trim();
+        // Expand to a slightly larger context block for agent comprehension
+        // Attempt to find paragraph boundaries (empty lines) or cap at a reasonable size
+        let start = i;
+        while (start > 0 && start > i - 3 && lines[start].trim() !== '') start--;
+        let end = i;
+        while (end < lines.length - 1 && end < i + 3 && lines[end].trim() !== '') end++;
+        
+        let ctx = lines.slice(start, end + 1).join('\n').trim();
+        // Collapse multiple newlines in the context to save tokens, but keep simple structure
+        ctx = ctx.replace(/\n{2,}/g, ' ↵ ');
+        
         results.push({ source: filePath, line: i + 1, context: ctx });
-        break;
+        break; // currently only records the first match per file
       }
     }
   }
