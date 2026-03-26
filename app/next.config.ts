@@ -3,7 +3,7 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['github-slugger'],
-  serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core'],
+  serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'mcporter'],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
   turbopack: {

@@ -1,17 +1,24 @@
 export const dynamic = 'force-dynamic';
-import { Agent, type AgentEvent, type BeforeToolCallContext, type BeforeToolCallResult, type AfterToolCallContext, type AfterToolCallResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import {
+  type AgentSessionEvent as AgentEvent,
+  AuthStorage,
+  convertToLlm,
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRegistry,
+  type ToolDefinition,
+  SessionManager,
+  SettingsManager,
+} from '@mariozechner/pi-coding-agent';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { getModelConfig } from '@/lib/agent/model';
-import { knowledgeBaseTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
+import { getRequestScopedTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
 import { AGENT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
-import {
-  estimateTokens, estimateStringTokens, getContextLimit,
-  createTransformContext,
-} from '@/lib/agent/context';
 import { logAgentOp } from '@/lib/agent/log';
 import { readSettings } from '@/lib/settings';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
@@ -145,6 +152,64 @@ function dirnameOf(filePath?: string): string | null {
   const idx = normalized.lastIndexOf('/');
   if (idx <= 0) return null;
   return normalized.slice(0, idx);
+}
+
+function textToolResult(text: string): AgentToolResult<Record<string, never>> {
+  return { content: [{ type: 'text', text }], details: {} };
+}
+
+function getProtectedPaths(toolName: string, args: Record<string, unknown>): string[] {
+  const pathsToCheck: string[] = [];
+  if (toolName === 'batch_create_files' && Array.isArray((args as any).files)) {
+    (args as any).files.forEach((f: any) => { if (f.path) pathsToCheck.push(f.path); });
+  } else {
+    const singlePath = (args as any).path ?? (args as any).from_path;
+    if (typeof singlePath === 'string') pathsToCheck.push(singlePath);
+  }
+  return pathsToCheck;
+}
+
+function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    label: tool.label,
+    description: tool.description,
+    parameters: tool.parameters as any,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      const args = (params ?? {}) as Record<string, unknown>;
+
+      if (WRITE_TOOLS.has(tool.name)) {
+        for (const filePath of getProtectedPaths(tool.name, args)) {
+          try {
+            assertNotProtected(filePath, 'modified by AI agent');
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            return textToolResult(`Write-protection error: ${errorMsg}. You CANNOT modify ${filePath} because it is system-protected. Please tell the user you don't have permission to do this.`);
+          }
+        }
+      }
+
+      const result = await tool.execute(toolCallId, params, signal, onUpdate as any);
+      const outputText = result?.content
+        ?.filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join('') ?? '';
+
+      try {
+        logAgentOp({
+          ts: new Date().toISOString(),
+          tool: tool.name,
+          params: args,
+          result: outputText.startsWith('Error:') ? 'error' : 'ok',
+          message: outputText.slice(0, 200),
+        });
+      } catch {
+        // logging must never kill the stream
+      }
+
+      return result;
+    },
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -328,90 +393,59 @@ export async function POST(req: NextRequest) {
     const historyMessages = agentMessages.slice(0, -1);
 
     // Capture API key for this request — safe since each POST creates a new Agent instance.
-    // Even though JS closures are lexically scoped, being explicit guards against future refactors.
     const requestApiKey = apiKey;
+    const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const requestTools = await getRequestScopedTools();
+    const customTools = toPiCustomToolDefinitions(requestTools);
+
+    const authStorage = AuthStorage.create();
+    authStorage.setRuntimeApiKey(provider, requestApiKey);
+    const modelRegistry = new ModelRegistry(authStorage);
+    const settingsManager = SettingsManager.inMemory({
+      enableSkillCommands: true,
+      ...(enableThinking && provider === 'anthropic' ? { thinkingBudgets: { medium: thinkingBudget } } : {}),
+      ...(contextStrategy === 'off' ? { compaction: { enabled: false } } : {}),
+    });
+
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: projectRoot,
+      settingsManager,
+      systemPromptOverride: () => systemPrompt,
+      appendSystemPromptOverride: () => [],
+      additionalSkillPaths: [
+        path.join(projectRoot, 'app', 'data', 'skills'),
+        path.join(projectRoot, 'skills'),
+        path.join(getMindRoot(), '.skills'),
+      ],
+    });
+    await resourceLoader.reload();
+
+    const { session } = await createAgentSession({
+      cwd: projectRoot,
+      model,
+      thinkingLevel: (enableThinking && provider === 'anthropic') ? 'medium' : 'off',
+      authStorage,
+      modelRegistry,
+      resourceLoader,
+      sessionManager: SessionManager.inMemory(),
+      settingsManager,
+      tools: [],
+      customTools,
+    });
+
+    const llmHistoryMessages = convertToLlm(historyMessages);
+    await session.newSession({
+      setup: async (sessionManager) => {
+        for (const message of llmHistoryMessages) {
+          sessionManager.appendMessage(message);
+        }
+      },
+    });
 
     // ── Loop detection state ──
     const stepHistory: Array<{ tool: string; input: string }> = [];
     let stepCount = 0;
     let loopCooldown = 0;
-
-    // ── Create Agent (per-request lifecycle) ──
-    const agent = new Agent({
-      initialState: {
-        systemPrompt,
-        model,
-        thinkingLevel: (enableThinking && provider === 'anthropic') ? 'medium' : 'off',
-        tools: knowledgeBaseTools,
-        messages: historyMessages,
-      },
-      getApiKey: async () => requestApiKey,
-      toolExecution: 'parallel',
-
-      // Context management: truncate → compact → prune
-      transformContext: createTransformContext(
-        systemPrompt,
-        modelName,
-        () => model,
-        apiKey,
-        contextStrategy,
-      ),
-
-      // Write-protection: block writes to protected files gracefully
-      beforeToolCall: async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
-        const { toolCall, args } = context;
-        // toolCall is an object with type "toolCall" and contains the tool name and ID
-        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
-        if (toolName && WRITE_TOOLS.has(toolName)) {
-          // Special handling for batch creations where we need to check multiple files
-          const pathsToCheck: string[] = [];
-          if (toolName === 'batch_create_files' && Array.isArray((args as any).files)) {
-            (args as any).files.forEach((f: any) => { if (f.path) pathsToCheck.push(f.path); });
-          } else {
-            const singlePath = (args as any).path ?? (args as any).from_path;
-            if (singlePath) pathsToCheck.push(singlePath);
-          }
-
-          for (const filePath of pathsToCheck) {
-            try {
-              assertNotProtected(filePath, 'modified by AI agent');
-            } catch (e) {
-              const errorMsg = e instanceof Error ? e.message : String(e);
-              return {
-                block: true,
-                reason: `Write-protection error: ${errorMsg}. You CANNOT modify ${filePath} because it is system-protected. Please tell the user you don't have permission to do this.`,
-              };
-            }
-          }
-        }
-        return undefined;
-      },
-
-      // Logging: record all tool executions
-      afterToolCall: async (context: AfterToolCallContext): Promise<AfterToolCallResult | undefined> => {
-        const ts = new Date().toISOString();
-        const { toolCall, args, result, isError } = context;
-        const toolName = (toolCall as any).toolName ?? (toolCall as any).name;
-        const outputText = result?.content
-          ?.filter((p: any) => p.type === 'text')
-          .map((p: any) => p.text)
-          .join('') ?? '';
-        try {
-          logAgentOp({
-            ts,
-            tool: toolName ?? 'unknown',
-            params: args as Record<string, unknown>,
-            result: isError ? 'error' : 'ok',
-            message: outputText.slice(0, 200),
-          });
-        } catch { /* logging must never kill the stream */ }
-        return undefined;
-      },
-
-      ...(enableThinking && provider === 'anthropic' ? {
-        thinkingBudgets: { medium: thinkingBudget },
-      } : {}),
-    });
 
     // ── SSE Stream ──
     const encoder = new TextEncoder();
@@ -424,7 +458,7 @@ export async function POST(req: NextRequest) {
           } catch { /* controller may be closed */ }
         }
 
-        agent.subscribe((event: AgentEvent) => {
+        session.subscribe((event: AgentEvent) => {
           if (isTextDeltaEvent(event)) {
             send({ type: 'text_delta', delta: getTextDelta(event) });
           } else if (isThinkingDeltaEvent(event)) {
@@ -476,24 +510,20 @@ export async function POST(req: NextRequest) {
               if (lastN.every(s => s.tool === lastN[0].tool && s.input === lastN[0].input)) {
                 loopCooldown = 3;
                 // TODO (metrics): Track loop detection rate — metrics.increment('agent.loop_detected', { model: modelName })
-                agent.steer({
-                  role: 'user',
-                  content: '[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.',
-                  timestamp: Date.now(),
-                } as any);
+                void session.steer('[SYSTEM WARNING] You have called the same tool with identical arguments 3 times in a row. This appears to be a loop. Try a completely different approach or ask the user for clarification.');
               }
             }
 
             // Step limit enforcement
             if (stepCount >= stepLimit) {
-              agent.abort();
+              void session.abort();
             }
 
             console.log(`[ask] Step ${stepCount}/${stepLimit}`);
           }
         });
 
-        agent.prompt(lastUserContent).then(() => {
+        session.prompt(lastUserContent).then(() => {
           metrics.recordRequest(Date.now() - requestStartTime);
           send({ type: 'done' });
           controller.close();

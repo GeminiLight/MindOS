@@ -1,5 +1,5 @@
 export { getModelConfig } from './model';
-export { knowledgeBaseTools, WRITE_TOOLS, truncate } from './tools';
+export { getRequestScopedTools, knowledgeBaseTools, WRITE_TOOLS, truncate } from './tools';
 export { AGENT_SYSTEM_PROMPT } from './prompt';
 export {
   estimateTokens, estimateStringTokens, getContextLimit, needsCompact,
