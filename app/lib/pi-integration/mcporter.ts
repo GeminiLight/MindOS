@@ -1,13 +1,13 @@
-import { execFile } from 'child_process';
-import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { promisify } from 'util';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-
-const execFileAsync = promisify(execFile);
-const APP_ROOT = process.env.MINDOS_PROJECT_ROOT ? path.join(process.env.MINDOS_PROJECT_ROOT, 'app') : process.cwd();
-const PROJECT_ROOT = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+import {
+  createRuntime,
+  createCallResult,
+  type Runtime,
+  type ServerToolInfo,
+} from 'mcporter';
 
 export interface McporterServerSummary {
   name: string;
@@ -49,12 +49,6 @@ function toToolSchema(inputSchema?: Record<string, unknown>) {
   return Type.Unsafe(inputSchema as any);
 }
 
-function resolveMcporterBin(): string {
-  const localBin = path.join(APP_ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'mcporter.cmd' : 'mcporter');
-  if (fs.existsSync(localBin)) return localBin;
-  return 'mcporter';
-}
-
 export function extractJsonObject(text: string): string {
   const first = text.indexOf('{');
   const last = text.lastIndexOf('}');
@@ -64,39 +58,128 @@ export function extractJsonObject(text: string): string {
   return text.slice(first, last + 1);
 }
 
-async function runMcporter(args: string[]): Promise<string> {
-  const bin = resolveMcporterBin();
-  const { stdout, stderr } = await execFileAsync(bin, args, {
-    cwd: PROJECT_ROOT,
-    maxBuffer: 10 * 1024 * 1024,
-    env: process.env,
-  });
-  return `${stdout ?? ''}${stderr ?? ''}`;
+// ─── Singleton mcporter Runtime ──────────────────────────────────────────────
+
+const MCP_CONFIG_PATH = path.join(os.homedir(), '.mindos', 'mcp.json');
+const TOOL_TIMEOUT_MS = 30_000;
+
+let _runtime: Runtime | null = null;
+let _runtimePromise: Promise<Runtime | null> | null = null;
+
+async function getRuntime(): Promise<Runtime | null> {
+  if (_runtime) return _runtime;
+  if (_runtimePromise) return _runtimePromise;
+
+  _runtimePromise = (async () => {
+    try {
+      const rt = await createRuntime({
+        configPath: MCP_CONFIG_PATH,
+        clientInfo: { name: 'mindos', version: '1.0.0' },
+      });
+      _runtime = rt;
+      return rt;
+    } catch (err) {
+      console.warn('[mcporter] Failed to create runtime:', err instanceof Error ? err.message : err);
+      _runtimePromise = null;
+      return null;
+    }
+  })();
+  return _runtimePromise;
+}
+
+if (typeof process !== 'undefined') {
+  const cleanup = () => {
+    if (_runtime) {
+      _runtime.close().catch(() => {});
+      _runtime = null;
+      _runtimePromise = null;
+    }
+  };
+  process.on('exit', cleanup);
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }
 
 export async function listMcporterServers(): Promise<McporterServerList> {
-  const output = await runMcporter(['list', '--json']);
-  return JSON.parse(extractJsonObject(output)) as McporterServerList;
+  const rt = await getRuntime();
+  if (!rt) return { servers: [] };
+
+  try {
+    const names = rt.listServers();
+    if (names.length === 0) return { servers: [] };
+
+    const servers: McporterServerSummary[] = await Promise.all(
+      names.map(async (name) => {
+        try {
+          const def = rt.getDefinition(name);
+          const transport = def.command.kind;
+          const tools = await rt.listTools(name, { includeSchema: false });
+          return {
+            name,
+            status: 'ok',
+            transport,
+            tools: tools.map(toToolSummary),
+          };
+        } catch (err) {
+          return {
+            name,
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+
+    return { servers };
+  } catch (err) {
+    console.warn('[mcporter] listServers failed:', err instanceof Error ? err.message : err);
+    return { servers: [] };
+  }
+}
+
+function toToolSummary(tool: ServerToolInfo): McporterToolSummary {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
+  };
 }
 
 export async function listMcporterTools(serverName: string): Promise<McporterServerSummary> {
-  const output = await runMcporter(['list', serverName, '--schema', '--json']);
-  return JSON.parse(extractJsonObject(output)) as McporterServerSummary;
+  const rt = await getRuntime();
+  if (!rt) return { name: serverName, status: 'not_configured', tools: [] };
+
+  try {
+    const tools = await rt.listTools(serverName, { includeSchema: true });
+    return {
+      name: serverName,
+      status: 'ok',
+      tools: tools.map(toToolSummary),
+    };
+  } catch (err) {
+    return {
+      name: serverName,
+      status: 'error',
+      error: err instanceof Error ? err.message : String(err),
+      tools: [],
+    };
+  }
 }
 
-export async function callMcporterTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<string> {
-  const output = await runMcporter([
-    'call',
-    '--server',
-    serverName,
-    '--tool',
-    toolName,
-    '--args',
-    JSON.stringify(args),
-    '--output',
-    'markdown',
-  ]);
-  return output.trim();
+export async function callMcporterTool(
+  serverName: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const rt = await getRuntime();
+  if (!rt) throw new Error(`MCP runtime not available. Ensure ~/.mindos/mcp.json is configured.`);
+
+  const raw = await rt.callTool(serverName, toolName, {
+    args,
+    timeoutMs: TOOL_TIMEOUT_MS,
+  });
+  const result = createCallResult(raw);
+  return result.text('\n') ?? JSON.stringify(raw);
 }
 
 export function createMcporterAgentTools(servers: McporterServerSummary[]): AgentTool<any>[] {
@@ -118,7 +201,7 @@ export function createMcporterAgentTools(servers: McporterServerSummary[]): Agen
       tools.push({
         name,
         label: `MCP ${server.name}: ${tool.name}`,
-        description: `Dynamically discovered via mcporter from server "${server.name}". Original MCP tool name: "${tool.name}".${tool.description ? ` ${tool.description}` : ''}`,
+        description: `MCP tool "${tool.name}" from server "${server.name}".${tool.description ? ` ${tool.description}` : ''}`,
         parameters: toToolSchema(tool.inputSchema),
         execute: async (_toolCallId, params) => {
           try {

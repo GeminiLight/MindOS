@@ -1,14 +1,17 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, Send, AtSign, Paperclip, StopCircle, RotateCcw, History, X, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
+import { Sparkles, Send, Paperclip, StopCircle, RotateCcw, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { Message } from '@/lib/types';
 import { useAskSession } from '@/hooks/useAskSession';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useMention } from '@/hooks/useMention';
+import { useSlashCommand } from '@/hooks/useSlashCommand';
+import type { SlashItem } from '@/hooks/useSlashCommand';
 import MessageList from '@/components/ask/MessageList';
 import MentionPopover from '@/components/ask/MentionPopover';
+import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
 import FileChip from '@/components/ask/FileChip';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
@@ -173,9 +176,12 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
+
   const session = useAskSession(currentFile);
   const upload = useFileUpload();
   const mention = useMention();
+  const slash = useSlashCommand();
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -203,6 +209,8 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       setAttachedFiles(currentFile ? [currentFile] : []);
       upload.clearAttachments();
       mention.resetMention();
+      slash.resetSlash();
+      setSelectedSkill(null);
       setShowHistory(false);
     } else if (!visible && variant === 'modal') {
       // Modal: abort streaming on close
@@ -226,12 +234,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (mention.mentionQuery !== null) { mention.resetMention(); return; }
+        if (slash.slashQuery !== null) { slash.resetSlash(); return; }
         onClose();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [variant, visible, onClose, mention]);
+  }, [variant, visible, onClose, mention, slash]);
 
   useEffect(() => {
     if (!isPanel) return;
@@ -252,29 +261,67 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   }, [input, isPanel, isLoading, visible, panelComposerHeight]);
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleInputChange = useCallback((val: string) => {
+  const slashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     setInput(val);
+    const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-    mentionTimerRef.current = setTimeout(() => mention.updateMentionFromInput(val), 80);
-  }, [mention]);
+    if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
+    mentionTimerRef.current = setTimeout(() => mention.updateMentionFromInput(val, pos), 80);
+    slashTimerRef.current = setTimeout(() => slash.updateSlashFromInput(val, pos), 80);
+  }, [mention, slash]);
 
   useEffect(() => {
-    return () => { if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current); };
+    return () => {
+      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+      if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
+    };
   }, []);
 
   const selectMention = useCallback((filePath: string) => {
-    const atIdx = input.lastIndexOf('@');
-    setInput(input.slice(0, atIdx));
+    const el = inputRef.current;
+    const cursorPos = el
+      ? (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.selectionStart ?? input.length : input.length)
+      : input.length;
+    const before = input.slice(0, cursorPos);
+    const atIdx = before.lastIndexOf('@');
+    const newVal = input.slice(0, atIdx) + input.slice(cursorPos);
+    setInput(newVal);
     mention.resetMention();
     if (!attachedFiles.includes(filePath)) {
       setAttachedFiles(prev => [...prev, filePath]);
     }
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(atIdx, atIdx);
+    }, 0);
   }, [input, attachedFiles, mention]);
+
+  const selectSlashCommand = useCallback((item: SlashItem) => {
+    const el = inputRef.current;
+    const cursorPos = el
+      ? (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.selectionStart ?? input.length : input.length)
+      : input.length;
+    const before = input.slice(0, cursorPos);
+    const slashIdx = before.lastIndexOf('/');
+    const newVal = input.slice(0, slashIdx) + input.slice(cursorPos);
+    setInput(newVal);
+    setSelectedSkill(item);
+    slash.resetSlash();
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(slashIdx, slashIdx);
+    }, 0);
+  }, [input, slash]);
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (mention.mentionQuery !== null) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          mention.resetMention();
+          return;
+        }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           mention.navigateMention('down');
@@ -290,29 +337,51 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         }
         return;
       }
-      // Panel: multiline input — Enter sends, Shift+Enter inserts newline (textarea default).
+      if (slash.slashQuery !== null) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          slash.resetSlash();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          slash.navigateSlash('down');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          slash.navigateSlash('up');
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          if (e.key === 'Enter' && e.shiftKey) return;
+          if (slash.slashResults.length > 0) {
+            e.preventDefault();
+            selectSlashCommand(slash.slashResults[slash.slashIndex]);
+          }
+        }
+        return;
+      }
       if (variant === 'panel' && e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
     },
-    [mention, selectMention, variant, isLoading, input],
+    [mention, selectMention, slash, selectSlashCommand, variant, isLoading, input],
   );
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mention.mentionQuery !== null) return;
+    if (mention.mentionQuery !== null || slash.slashQuery !== null) return;
     const text = input.trim();
     if (!text || isLoading) return;
 
-    // Attach current timestamp so backend knows EXACTLY when the user typed this message
-    const userMsg: Message = { role: 'user', content: text, timestamp: Date.now() };
+    const content = selectedSkill
+      ? `Use the skill ${selectedSkill.name}: ${text}`
+      : text;
+    const userMsg: Message = { role: 'user', content, timestamp: Date.now() };
     const requestMessages = [...session.messages, userMsg];
-    // And for the incoming assistant response, give it an initial timestamp
     session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
+    setSelectedSkill(null);
     if (onFirstMessage && !firstMessageFired.current) {
       firstMessageFired.current = true;
       onFirstMessage();
@@ -410,7 +479,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
+  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, slash.slashQuery, selectedSkill, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
 
   const handleResetSession = useCallback(() => {
     if (isLoading) return;
@@ -419,9 +488,11 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setAttachedFiles(currentFile ? [currentFile] : []);
     upload.clearAttachments();
     mention.resetMention();
+    slash.resetSlash();
+    setSelectedSkill(null);
     setShowHistory(false);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [isLoading, currentFile, session, upload, mention]);
+  }, [isLoading, currentFile, session, upload, mention, slash]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('text/mindos-path')) {
@@ -449,8 +520,10 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setAttachedFiles(currentFile ? [currentFile] : []);
     upload.clearAttachments();
     mention.resetMention();
+    slash.resetSlash();
+    setSelectedSkill(null);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [session, currentFile, upload, mention]);
+  }, [session, currentFile, upload, mention, slash]);
 
   const iconSize = isPanel ? 13 : 14;
   const inputIconSize = isPanel ? 14 : 15;
@@ -520,6 +593,27 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         labels={{ connecting: t.ask.connecting, thinking: t.ask.thinking, generating: t.ask.generating }}
       />
 
+      {/* Popovers — rendered outside overflow containers so they can extend freely */}
+      {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
+        <div className="shrink-0 px-2 pb-1">
+          <MentionPopover
+            results={mention.mentionResults}
+            selectedIndex={mention.mentionIndex}
+            onSelect={selectMention}
+          />
+        </div>
+      )}
+
+      {slash.slashQuery !== null && slash.slashResults.length > 0 && (
+        <div className="shrink-0 px-2 pb-1">
+          <SlashCommandPopover
+            results={slash.slashResults}
+            selectedIndex={slash.slashIndex}
+            onSelect={selectSlashCommand}
+          />
+        </div>
+      )}
+
       {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
       <div
         className={cn(
@@ -558,7 +652,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           {attachedFiles.length > 0 && (
             <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
               <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-                {isPanel ? 'Context' : 'Knowledge Base Context'}
+                {t.ask.attachFile}
               </div>
               <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
                 {attachedFiles.map(f => (
@@ -571,7 +665,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           {upload.localAttachments.length > 0 && (
             <div className={cn('shrink-0', isPanel ? 'px-3 pb-1' : 'px-4 pb-1')}>
               <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-                {isPanel ? 'Uploaded' : 'Uploaded Files'}
+                {t.ask.uploadedFiles}
               </div>
               <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
                 {upload.localAttachments.map((f, idx) => (
@@ -581,16 +675,25 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             </div>
           )}
 
-          {upload.uploadError && (
-            <div className={cn('shrink-0 pb-1 text-xs text-error', isPanel ? 'px-3' : 'px-4')}>{upload.uploadError}</div>
+          {selectedSkill && (
+            <div className={cn('shrink-0', isPanel ? 'px-3 pt-1.5 pb-1' : 'px-4 pt-2 pb-1')}>
+              <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md text-xs bg-[var(--amber)]/10 border border-[var(--amber)]/25 text-foreground">
+                <Zap size={11} className="text-[var(--amber)] shrink-0" />
+                <span className="font-medium">{selectedSkill.name}</span>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
+                  className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  aria-label={`Remove skill ${selectedSkill.name}`}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            </div>
           )}
 
-          {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
-            <MentionPopover
-              results={mention.mentionResults}
-              selectedIndex={mention.mentionIndex}
-              onSelect={selectMention}
-            />
+          {upload.uploadError && (
+            <div className={cn('shrink-0 pb-1 text-xs text-error', isPanel ? 'px-3' : 'px-4')}>{upload.uploadError}</div>
           )}
 
           <form
@@ -618,32 +721,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             }}
           />
 
-          <button
-            type="button"
-            onClick={() => {
-              const el = inputRef.current;
-              if (!el) return;
-              const pos = el.selectionStart ?? input.length;
-              const newVal = input.slice(0, pos) + '@' + input.slice(pos);
-              handleInputChange(newVal);
-              setTimeout(() => {
-                el.focus();
-                el.setSelectionRange(pos + 1, pos + 1);
-              }, 0);
-            }}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            title="@ mention file"
-          >
-            <AtSign size={inputIconSize} />
-          </button>
-
           {isPanel ? (
             <textarea
               ref={(el) => {
                 inputRef.current = el;
               }}
               value={input}
-              onChange={e => handleInputChange(e.target.value)}
+              onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
               onKeyDown={handleInputKeyDown}
               placeholder={t.ask.placeholder}
               rows={1}
@@ -655,7 +739,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
                 inputRef.current = el;
               }}
               value={input}
-              onChange={e => handleInputChange(e.target.value)}
+              onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
               onKeyDown={handleInputKeyDown}
               placeholder={t.ask.placeholder}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
@@ -667,7 +751,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               <StopCircle size={inputIconSize} />
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
               <Send size={isPanel ? 13 : 14} />
             </button>
           )}
@@ -695,6 +779,9 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         ) : null}
         <span suppressHydrationWarning>
           <kbd className="font-mono">@</kbd> {t.ask.attachFile}
+        </span>
+        <span suppressHydrationWarning>
+          <kbd className="font-mono">/</kbd> {t.ask.skillsHint}
         </span>
         {!isPanel && (
           <span suppressHydrationWarning>
