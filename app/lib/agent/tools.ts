@@ -94,6 +94,14 @@ const AppendParams = Type.Object({
   content: Type.String({ description: 'Content to append' }),
 });
 
+const FetchUrlParams = Type.Object({
+  url: Type.String({ description: 'The HTTP/HTTPS URL to fetch' }),
+});
+
+const WebSearchParams = Type.Object({
+  query: Type.String({ description: 'The search query or keywords to look up on the internet' }),
+});
+
 const InsertHeadingParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   heading: Type.String({ description: 'Heading text to find (e.g. "## Tasks" or just "Tasks")' }),
@@ -240,6 +248,144 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
       const results = searchFiles(params.query);
       if (results.length === 0) return textResult('No results found.');
       return textResult(results.map(r => `- **${r.path}**: ${r.snippet}`).join('\n'));
+    }),
+  },
+
+  {
+    name: 'web_search',
+    label: 'Web Search',
+    description: 'Search the internet for up-to-date information. Uses DuckDuckGo HTML search. Returns top search results with titles, snippets, and URLs.',
+    parameters: WebSearchParams,
+    execute: safeExecute(async (_id, params: Static<typeof WebSearchParams>) => {
+      try {
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`;
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (!res.ok) {
+          return textResult(`Failed to search: HTTP ${res.status}`);
+        }
+        
+        const html = await res.text();
+        const results: string[] = [];
+        
+        // Simple regex parsing for DuckDuckGo HTML results
+        const resultBlocks = html.split('class="result__body"').slice(1);
+        
+        for (let i = 0; i < Math.min(resultBlocks.length, 5); i++) {
+          const block = resultBlocks[i];
+          
+          const titleMatch = block.match(/class="result__title"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+          const snippetMatch = block.match(/class="result__snippet[^>]*>([\s\S]*?)(?:<\/a>|<\/div>)/i);
+          
+          if (titleMatch) {
+            let link = titleMatch[1];
+            // Decode DuckDuckGo redirect URL if necessary
+            if (link.startsWith('//duckduckgo.com/l/?uddg=')) {
+              const urlParam = new URL('https:' + link).searchParams.get('uddg');
+              if (urlParam) link = decodeURIComponent(urlParam);
+            }
+            
+            // Clean up tags
+            const title = titleMatch[2].replace(/<[^>]+>/g, '').trim();
+            const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+            
+            results.push(`### ${i+1}. ${title}\n**URL:** ${link}\n**Snippet:** ${snippet}\n`);
+          }
+        }
+        
+        if (results.length === 0) {
+          return textResult(`No web search results found for: ${params.query}`);
+        }
+        
+        return textResult(`## Web Search Results for: "${params.query}"\n\n${results.join('\n')}\n\n*Note: Use web_fetch tool with any of the URLs above to read the full page content.*`);
+      } catch (err) {
+        return textResult(`Web search failed: ${formatToolError(err)}`);
+      }
+    }),
+  },
+
+  {
+    name: 'web_fetch',
+    label: 'Web Fetch',
+    description: 'Fetch the text content of any public URL. Extracts main text from HTML and converts it to Markdown. Use this to read external docs, repos, or articles.',
+    parameters: FetchUrlParams,
+    execute: safeExecute(async (_id, params: Static<typeof FetchUrlParams>) => {
+      let url = params.url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          },
+          // Don't wait forever
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (!res.ok) {
+          return textResult(`Failed to fetch URL: HTTP ${res.status} ${res.statusText}`);
+        }
+        
+        const contentType = res.headers.get('content-type') || '';
+        
+        // If it's a raw file (like raw.githubusercontent.com or a raw text file)
+        if (contentType.includes('text/plain') || contentType.includes('application/json') || url.includes('raw.githubusercontent.com')) {
+          const text = await res.text();
+          return textResult(truncate(text));
+        }
+        
+        // For HTML, we do a basic extraction (in a real app you might use JSDOM/Readability, but we'll do a robust regex cleanup here to avoid new dependencies)
+        let html = await res.text();
+        
+        // Extract title if possible
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const title = titleMatch ? titleMatch[1].trim() : url;
+        
+        // Strip out scripts, styles, svg, and headers/footers roughly
+        html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+                   .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+                   .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
+                   .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
+                   .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
+                   .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ');
+
+        // Convert some basic tags to markdown equivalents roughly before stripping all HTML
+        html = html.replace(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/gi, '\n\n# $1\n\n')
+                   .replace(/<h[3-6][^>]*>(.*?)<\/h[3-6]>/gi, '\n\n## $1\n\n')
+                   .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
+                   .replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1')
+                   .replace(/<br\s*\/?>/gi, '\n');
+                   
+        // Strip remaining HTML tags
+        let text = html.replace(/<[^>]+>/g, ' ');
+        
+        // Decode common HTML entities
+        text = text.replace(/&nbsp;/g, ' ')
+                   .replace(/&amp;/g, ' ')
+                   .replace(/&lt;/g, '<')
+                   .replace(/&gt;/g, '>')
+                   .replace(/&quot;/g, '"')
+                   .replace(/&#39;/g, "'");
+
+        // Clean up whitespace: remove empty lines and extra spaces
+        text = text.replace(/[ \t]+/g, ' ')
+                   .replace(/\n\s*\n\s*\n/g, '\n\n')
+                   .trim();
+                   
+        const result = `# ${title}\nSource: ${url}\n\n${text}`;
+        return textResult(truncate(result));
+      } catch (err) {
+        return textResult(`Failed to fetch URL: ${formatToolError(err)}`);
+      }
     }),
   },
 

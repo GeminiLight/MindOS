@@ -142,8 +142,10 @@ export default function AgentsMcpSection({
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
-            <Server size={15} className="text-muted-foreground" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+              <Server size={13} className="text-muted-foreground/70" aria-hidden="true" />
+            </div>
             {copy.title}
           </h2>
           <button
@@ -164,8 +166,8 @@ export default function AgentsMcpSection({
       </div>
 
       {/* Compact status strip + risk alerts */}
-      <div className="rounded-lg border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+      <div className="rounded-xl border border-border/60 bg-gradient-to-r from-card to-card/80 p-3.5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
           <StatusDot tone="ok" label={copy.filters.connected} count={buckets.connected.length} />
           <StatusDot tone="warn" label={copy.filters.detected} count={buckets.detected.length} />
           {buckets.notFound.length > 0 && (
@@ -294,7 +296,7 @@ function ByAgentView({
             const mcpServers = agent.configuredMcpServers ?? [];
             const nativeSkillCount = (agent.installedSkillNames ?? []).length;
             return (
-              <div key={agent.key} className="rounded-lg border border-border bg-card group hover:border-border/60 hover:shadow-sm transition-all duration-150">
+              <div key={agent.key} className={`rounded-xl border bg-card group hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-150 ${status === 'connected' ? 'border-l-2 border-l-[var(--success)] border-border' : status === 'detected' ? 'border-l-2 border-l-[var(--amber)] border-border' : 'border-border'}`}>
                 {/* Card header with avatar */}
                 <div className="flex items-center gap-3 p-3">
                   <AgentAvatar name={agent.name} status={status} />
@@ -344,8 +346,8 @@ function ByAgentView({
                 {mcpServers.length > 0 && (
                   <div className="flex flex-wrap gap-1 px-3 pb-3 ml-12">
                     {mcpServers.map((name) => (
-                      <span key={name} className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-2xs text-muted-foreground">
-                        <Server size={9} className="text-[var(--amber)] shrink-0" aria-hidden="true" />
+                      <span key={name} className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 border border-border/30 px-2.5 py-0.5 text-2xs text-muted-foreground hover:bg-muted/60 transition-colors duration-100">
+                        <span className="w-1 h-1 rounded-full bg-[var(--amber)]" aria-hidden="true" />
                         {name}
                       </span>
                     ))}
@@ -450,12 +452,14 @@ function ByServerView({
           const notFoundCount = agentDetails.length - connectedCount - detectedCount + orphanNames.length;
 
           return (
-            <div key={srv.serverName} className="rounded-lg border border-border bg-card p-4 hover:border-border/60 hover:shadow-sm transition-all duration-150">
+            <div key={srv.serverName} className="rounded-xl border border-border bg-card p-4 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200">
               {/* Server header */}
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Server size={14} className="text-[var(--amber)] shrink-0" aria-hidden="true" />
-                  <span className="text-sm font-medium text-foreground truncate">{srv.serverName}</span>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--amber)]/[0.08] flex items-center justify-center shrink-0">
+                    <Server size={13} className="text-[var(--amber)]" aria-hidden="true" />
+                  </div>
+                  <span className="text-sm font-semibold text-foreground truncate">{srv.serverName}</span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {canManage && agentDetails.length > 0 && (

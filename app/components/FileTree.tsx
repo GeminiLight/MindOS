@@ -6,7 +6,7 @@ import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
-  Trash2, Pencil, Layers, ScrollText,
+  Trash2, Pencil, Layers, ScrollText, FolderInput,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
@@ -23,6 +23,7 @@ interface FileTreeProps {
   onNavigate?: () => void;
   maxOpenDepth?: number | null;
   parentIsSpace?: boolean;
+  onImport?: (space: string) => void;
 }
 
 function getIcon(node: FileNode) {
@@ -96,8 +97,8 @@ const MENU_DIVIDER = "my-1 border-t border-border/50";
 
 // ─── SpaceContextMenu ─────────────────────────────────────────────────────────
 
-function SpaceContextMenu({ x, y, node, onClose, onRename }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
+function SpaceContextMenu({ x, y, node, onClose, onRename, onImport }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onImport?: (space: string) => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
@@ -108,6 +109,11 @@ function SpaceContextMenu({ x, y, node, onClose, onRename }: {
       <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
         <ScrollText size={14} className="shrink-0" /> {t.fileTree.editRules}
       </button>
+      {onImport && (
+        <button className={MENU_ITEM} onClick={() => { onImport(node.path); onClose(); }}>
+          <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
+        </button>
+      )}
       <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
         <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
       </button>
@@ -240,9 +246,9 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
 
 // ─── DirectoryNode ────────────────────────────────────────────────────────────
 
-function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
+function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onImport }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
-  maxOpenDepth?: number | null;
+  maxOpenDepth?: number | null; onImport?: (space: string) => void;
 }) {
   const router = useRouter();
   const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
@@ -255,6 +261,8 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
   const renameRef = useRef<HTMLInputElement>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [plusPopover, setPlusPopover] = useState(false);
+  const plusRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
 
   const toggle = useCallback(() => setOpen(v => !v), []);
@@ -391,12 +399,12 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
         </button>
         <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
           <button
+            ref={plusRef}
             type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setOpen(true);
-              setShowNewFile(true);
+              setPlusPopover(v => !v);
             }}
             className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={t.fileTree.newFileTitle}
@@ -444,6 +452,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
             onNavigate={onNavigate}
             maxOpenDepth={maxOpenDepth}
             parentIsSpace={isSpace}
+            onImport={onImport}
           />
         )}
         {showNewFile && (
@@ -462,6 +471,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
+          onImport={onImport}
         />
       ) : (
         <FolderContextMenu
@@ -472,6 +482,22 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth }: {
           onRename={() => startRename()}
         />
       ))}
+
+      {plusPopover && plusRef.current && (() => {
+        const rect = plusRef.current!.getBoundingClientRect();
+        return (
+          <ContextMenuShell x={rect.left} y={rect.bottom + 4} onClose={() => setPlusPopover(false)} menuHeight={80}>
+            <button className={MENU_ITEM} onClick={() => { setPlusPopover(false); setOpen(true); setShowNewFile(true); }}>
+              <FileText size={14} className="shrink-0" /> {t.fileTree.newFile}
+            </button>
+            {onImport && (
+              <button className={MENU_ITEM} onClick={() => { setPlusPopover(false); onImport(node.path); }}>
+                <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
+              </button>
+            )}
+          </ContextMenuShell>
+        );
+      })()}
     </div>
   );
 }
@@ -589,7 +615,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
 
 // ─── FileTree (root) ──────────────────────────────────────────────────────────
 
-export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, parentIsSpace }: FileTreeProps) {
+export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, parentIsSpace, onImport }: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
 
@@ -609,7 +635,7 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, p
     <div className="flex flex-col gap-0.5">
       {visibleNodes.map((node) =>
         node.type === 'directory' ? (
-          <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} />
+          <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         ) : (
           <FileNodeItem key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} />
         )

@@ -177,6 +177,17 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const upload = useFileUpload();
   const mention = useMention();
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const files = (e as CustomEvent).detail?.files;
+      if (Array.isArray(files) && files.length > 0) {
+        upload.injectFiles(files);
+      }
+    };
+    window.addEventListener('mindos:inject-ask-files', handler);
+    return () => window.removeEventListener('mindos:inject-ask-files', handler);
+  }, [upload]);
+
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
   useEffect(() => {

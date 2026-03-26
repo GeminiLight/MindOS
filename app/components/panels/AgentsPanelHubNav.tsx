@@ -27,18 +27,18 @@ export function AgentsPanelHubNav({
       <PanelNavRow
         icon={<LayoutDashboard size={14} className="text-[var(--amber)]" />}
         title={copy.navOverview}
-        badge={<span className="text-2xs tabular-nums text-muted-foreground">{connectedCount}</span>}
+        badge={<span className="text-2xs tabular-nums text-muted-foreground/60 px-1.5 py-0.5 rounded bg-muted/40 font-medium">{connectedCount}</span>}
         href="/agents"
         active={inAgentsRoute && (tab === null || tab === 'overview')}
       />
       <PanelNavRow
-        icon={<Server size={14} className="text-muted-foreground" />}
+        icon={<Server size={14} className={inAgentsRoute && tab === 'mcp' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navMcp}
         href="/agents?tab=mcp"
         active={inAgentsRoute && tab === 'mcp'}
       />
       <PanelNavRow
-        icon={<Zap size={14} className="text-muted-foreground" />}
+        icon={<Zap size={14} className={inAgentsRoute && tab === 'skills' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navSkills}
         href="/agents?tab=skills"
         active={inAgentsRoute && tab === 'skills'}
