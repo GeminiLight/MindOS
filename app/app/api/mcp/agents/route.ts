@@ -1,4 +1,7 @@
 export const dynamic = 'force-dynamic';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import { NextResponse } from 'next/server';
 import {
   MCP_AGENTS,
@@ -9,6 +12,50 @@ import {
   detectAgentInstalledSkills,
   resolveSkillWorkspaceProfile,
 } from '@/lib/mcp-agents';
+import { readSettings } from '@/lib/settings';
+import { scanSkillDirs } from '@/lib/pi-integration/skills';
+import { getMindRoot } from '@/lib/fs';
+
+function enrichMindOsAgent(agent: Record<string, unknown>) {
+  agent.present = true;
+  agent.installed = true;
+  agent.scope = 'builtin';
+
+  try {
+    const settings = readSettings();
+    const port = Number(process.env.MINDOS_MCP_PORT) || settings.mcpPort || 8781;
+    agent.transport = `http :${port}`;
+  } catch {
+    agent.transport = 'http :8781';
+  }
+
+  try {
+    const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+    const skills = scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
+    const enabledSkills = skills.filter(s => s.enabled);
+    agent.installedSkillNames = enabledSkills.map(s => s.name);
+    agent.installedSkillCount = enabledSkills.length;
+    agent.installedSkillSourcePath = path.join(projectRoot, 'skills');
+    agent.skillMode = 'universal';
+    agent.skillWorkspacePath = path.join(os.homedir(), '.agents', 'skills');
+  } catch { /* skill scan unavailable */ }
+
+  const mcpConfigPath = path.join(os.homedir(), '.mindos', 'mcp.json');
+  try {
+    if (fs.existsSync(mcpConfigPath)) {
+      const raw = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
+      const servers = Object.keys(raw.mcpServers ?? {});
+      agent.configuredMcpServers = servers;
+      agent.configuredMcpServerCount = servers.length;
+      agent.configuredMcpSources = servers.length > 0 ? [`local:${mcpConfigPath}`] : [];
+    }
+  } catch { /* ignore */ }
+
+  agent.runtimeConversationSignal = true;
+  agent.runtimeLastActivityAt = new Date().toISOString();
+  agent.hiddenRootPath = path.join(os.homedir(), '.mindos');
+  agent.hiddenRootPresent = true;
+}
 
 export async function GET() {
   try {
@@ -30,7 +77,6 @@ export async function GET() {
         hasProjectScope: !!agent.project,
         hasGlobalScope: !!agent.global,
         preferredTransport: agent.preferredTransport,
-        // Snippet generation fields
         format: agent.format ?? 'json',
         configKey: agent.key,
         globalNestedKey: agent.globalNestedKey,
@@ -53,13 +99,8 @@ export async function GET() {
       };
     });
 
-    // MindOS is always installed (built-in MCP)
-    const mindosAgent = agents.find((a) => a.key === 'mindos');
-    if (mindosAgent) {
-      mindosAgent.installed = true;
-      mindosAgent.scope = 'builtin';
-      mindosAgent.transport = 'stdio';
-    }
+    const mindos = agents.find(a => a.key === 'mindos');
+    if (mindos) enrichMindOsAgent(mindos as unknown as Record<string, unknown>);
 
     // Sort: mindos first, then installed, then detected, then not found
     agents.sort((a, b) => {

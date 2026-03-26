@@ -46,8 +46,9 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         detectedCount: buckets.detected.length,
         notFoundCount: buckets.notFound.length,
         allSkillsDisabled: mcp.skills.length > 0 && mcp.skills.every((s) => !s.enabled),
+        copy: a.overview,
       }),
-    [mcp.skills, mcp.status?.running, buckets.detected.length, buckets.notFound.length],
+    [mcp.skills, mcp.status?.running, buckets.detected.length, buckets.notFound.length, a.overview],
   );
   const enabledSkillCount = useMemo(
     () => mcp.skills.filter((skill) => skill.enabled).length,

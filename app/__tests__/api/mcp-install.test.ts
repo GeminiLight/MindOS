@@ -232,7 +232,7 @@ describe('POST /api/mcp/install', () => {
 });
 
 describe('GET /api/mcp/agents', () => {
-  it('returns all 19 agents', async () => {
+  it('returns all 20 agents (1 builtin + 19 registry)', async () => {
     const { GET } = await importAgentsRoute();
     const res = await GET();
     const body = await res.json();

@@ -361,6 +361,9 @@ export const en = {
       enabledUnit: (n: number) => `${n} enabled`,
       agentCount: (n: number) => `${n} agent${n !== 1 ? 's' : ''}`,
       runtimeActive: 'Active',
+      riskMcpStopped: 'MCP server is not running.',
+      riskDetected: (n: number) => `${n} detected agent(s) need configuration.`,
+      riskSkillsDisabled: 'All skills are disabled.',
     },
     mcp: {
       title: 'MCP Connections',
@@ -394,6 +397,7 @@ export const en = {
       riskMcpStopped: 'MCP server is not running.',
       riskDetected: (n: number) => `${n} detected agent(s) need configuration.`,
       riskNotFound: (n: number) => `${n} agent(s) not found on this machine.`,
+      riskSkillsDisabled: 'All skills are disabled.',
       bulkReconnectFiltered: 'Reconnect all',
       bulkRunning: 'Running reconnect...',
       bulkSummary: (ok: number, failed: number) => `Reconnected ${ok}, failed ${failed}.`,
