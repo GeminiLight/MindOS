@@ -7,7 +7,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import RegisterSW from './register-sw';
-import UpdateBanner from '@/components/UpdateBanner';
 import UpdateOverlay from '@/components/UpdateOverlay';
 import { cookies } from 'next/headers';
 import type { Locale } from '@/lib/i18n';
@@ -107,7 +106,6 @@ export default async function RootLayout({
         suppressHydrationWarning
       >
         <LocaleProvider ssrLocale={ssrLocale}>
-          <UpdateBanner />
           <TooltipProvider delay={300}>
             <ErrorBoundary>
               <ShellLayout fileTree={fileTree}>

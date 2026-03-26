@@ -89,26 +89,48 @@ export default function ActivityBar({
   const syncBtnRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
 
-  // Update available badge — check localStorage for persisted state
-  const [hasUpdate, setHasUpdate] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  // Update badge: Desktop → electron-updater IPC; Browser → npm registry check
+  const [hasUpdate, setHasUpdate] = useState(false);
+  useEffect(() => {
+    const bridge = typeof window !== 'undefined'
+      ? (window as unknown as { mindos?: { checkUpdate?: () => Promise<{ available: boolean }>; onUpdateAvailable?: (cb: () => void) => () => void } }).mindos
+      : undefined;
+
+    if (bridge?.checkUpdate) {
+      // Desktop: check via electron-updater IPC
+      const timer = setTimeout(async () => {
+        try {
+          const r = await bridge.checkUpdate();
+          if (r.available) setHasUpdate(true);
+        } catch { /* silent */ }
+      }, 10_000);
+      const cleanup = bridge.onUpdateAvailable?.(() => setHasUpdate(true));
+      return () => { clearTimeout(timer); cleanup?.(); };
+    }
+
+    // Browser/CLI: check npm registry
     const dismissed = localStorage.getItem('mindos_update_dismissed');
     const latest = localStorage.getItem('mindos_update_latest');
-    return !!latest && latest !== dismissed;
-  });
-  useEffect(() => {
-    const onAvail = (e: Event) => {
-      const latest = (e as CustomEvent).detail?.latest;
-      if (latest) localStorage.setItem('mindos_update_latest', latest);
-      setHasUpdate(true);
-    };
+    if (latest && latest !== dismissed) { setHasUpdate(true); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/update-check');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.hasUpdate) {
+          localStorage.removeItem('mindos_update_latest');
+          localStorage.removeItem('mindos_update_dismissed');
+          return;
+        }
+        const d = localStorage.getItem('mindos_update_dismissed');
+        if (data.latest === d) return;
+        localStorage.setItem('mindos_update_latest', data.latest);
+        setHasUpdate(true);
+      } catch { /* silent */ }
+    }, 5000);
     const onDismiss = () => setHasUpdate(false);
-    window.addEventListener('mindos:update-available', onAvail);
     window.addEventListener('mindos:update-dismissed', onDismiss);
-    return () => {
-      window.removeEventListener('mindos:update-available', onAvail);
-      window.removeEventListener('mindos:update-dismissed', onDismiss);
-    };
+    return () => { clearTimeout(timer); window.removeEventListener('mindos:update-dismissed', onDismiss); };
   }, []);
 
   /** Debounce rapid clicks (300ms) — shared across all Rail buttons */
