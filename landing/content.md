@@ -35,11 +35,11 @@
   - zh: 你思考的地方，AI 行动的起点
   - en: Where You Think, Agents Act
 - **Headline**
-  - zh: 让认知沉淀，让心手并进。
-  - en: Let cognition compound. Let mind and action move together.
+  - zh: 人在此思考，Agents 依次执行。
+  - en: You Think Here, Agents Act in Turn.
 - **Subhead**
-  - zh: 在 AI 时代，心负责判断，手交给 Agent。MindOS 把你的判断、偏好和方法论沉淀成所有 Agent 都能复用的本地认知资产。
-  - en: In the AI era, your mind makes the calls. Agents do the work. MindOS turns your judgment, preferences, and workflows into local cognitive assets every Agent can reuse.
+  - zh: 让心手并进，让认知沉淀。MindOS 把你的判断、偏好和方法论沉淀成所有 Agent 都能复用的本地认知资产。
+  - en: Let mind and action move together. Let cognition compound. MindOS turns your judgment, preferences, and workflows into local cognitive assets every Agent can reuse.
 - **CTA Primary**
   - zh: 开始构建
   - en: Get Started
