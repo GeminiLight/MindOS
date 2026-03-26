@@ -27,7 +27,6 @@ const DEFAULT_PANEL_WIDTH: Record<PanelId, number> = {
   files: 280,
   search: 280,
   echo: 280,
-  plugins: 280,
   agents: 280,
   discover: 280,
 };
