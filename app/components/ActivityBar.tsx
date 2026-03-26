@@ -162,7 +162,6 @@ export default function ActivityBar({
       role="toolbar"
       aria-label="Navigation"
       aria-orientation="vertical"
-      data-walkthrough="activity-bar"
     >
       {/* Content wrapper — overflow-hidden prevents text flash during width transitions */}
       <div className="flex flex-col h-full w-full overflow-hidden">
@@ -181,14 +180,15 @@ export default function ActivityBar({
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
-          <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} walkthroughId="search-button" />
-          <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => toggle('echo')} />
+          <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
+          <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => toggle('echo')} walkthroughId="echo-panel" />
           <RailButton
             icon={<Bot size={18} />}
             label={t.sidebar.agents}
             active={activePanel === 'agents'}
             expanded={expanded}
             onClick={() => onAgentsClick ? debounced(onAgentsClick) : toggle('agents')}
+            walkthroughId="agents-panel"
           />
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => toggle('discover')} />
         </div>
@@ -211,7 +211,6 @@ export default function ActivityBar({
             shortcut="⌘,"
             expanded={expanded}
             onClick={() => debounced(onSettingsClick)}
-            walkthroughId="settings-button"
             badge={hasUpdate ? (
               <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-error`} />
             ) : undefined}

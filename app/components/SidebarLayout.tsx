@@ -26,6 +26,7 @@ import AskModal from './AskModal';
 import SettingsModal from './SettingsModal';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
+import SpaceInitToast from './SpaceInitToast';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
@@ -126,6 +127,16 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     window.addEventListener('mindos:open-import', handler);
     return () => window.removeEventListener('mindos:open-import', handler);
   }, [handleOpenImport]);
+
+  // Listen for cross-component "open panel" events (e.g. GuideCard → Agents)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const panel = (e as CustomEvent).detail?.panel;
+      if (panel) lp.setActivePanel(panel);
+    };
+    window.addEventListener('mindos:open-panel', handler);
+    return () => window.removeEventListener('mindos:open-panel', handler);
+  }, [lp]);
 
   // GuideCard first message handler
   const handleFirstMessage = useCallback(() => {
@@ -458,6 +469,8 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           <ChangesBanner />
           {children}
         </div>
+
+        <SpaceInitToast />
 
         {/* Global drag overlay */}
         {dragOverlay && !importModalOpen && (

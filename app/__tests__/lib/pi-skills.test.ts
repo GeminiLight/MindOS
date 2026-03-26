@@ -38,26 +38,42 @@ describe('pi skill integration', () => {
     expect(result).toEqual({ name: 'test-skill', description: 'useful helper' });
   });
 
-  it('scans MindOS and pi skill directories with precedence and metadata', () => {
+  it('scans MindOS skill directories with precedence and metadata', () => {
     writeSkill(path.join(projectRoot, 'app', 'data', 'skills'), 'mindos', '---\nname: mindos\ndescription: builtin\n---\n');
     writeSkill(path.join(projectRoot, 'skills'), 'project-helper', '---\nname: project-helper\ndescription: project builtin\n---\n');
     writeSkill(path.join(mindRoot, '.skills'), 'user-helper', '---\nname: user-helper\ndescription: user custom\n---\n');
-    writeSkill(path.join(projectRoot, '.pi', 'skills'), 'pi-local', '---\nname: pi-local\ndescription: local pi skill\n---\n');
-    writeSkill(path.join(tempRoot, '.pi', 'agent', 'skills'), 'pi-global', '---\nname: pi-global\ndescription: global pi skill\n---\n');
+    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'global-helper', '---\nname: global-helper\ndescription: global skill\n---\n');
 
-    const skills = scanSkillDirs({ projectRoot, mindRoot, disabledSkills: ['pi-local'] });
+    const skills = scanSkillDirs({ projectRoot, mindRoot, disabledSkills: ['project-helper'] });
 
-    expect(skills.map((skill) => skill.name)).toEqual(['mindos', 'project-helper', 'user-helper', 'pi-local', 'pi-global']);
+    expect(skills.map((skill) => skill.name)).toEqual(['mindos', 'project-helper', 'user-helper', 'global-helper']);
     expect(skills.find((skill) => skill.name === 'mindos')).toMatchObject({ source: 'builtin', editable: false, origin: 'app-builtin', enabled: true });
     expect(skills.find((skill) => skill.name === 'user-helper')).toMatchObject({ source: 'user', editable: true, origin: 'mindos-user', enabled: true });
-    expect(skills.find((skill) => skill.name === 'pi-local')).toMatchObject({ source: 'user', editable: false, origin: 'pi-project', enabled: false });
-    expect(skills.find((skill) => skill.name === 'pi-global')).toMatchObject({ source: 'user', editable: false, origin: 'pi-global', enabled: true });
+    expect(skills.find((skill) => skill.name === 'project-helper')).toMatchObject({ source: 'builtin', editable: false, origin: 'project-builtin', enabled: false });
+    expect(skills.find((skill) => skill.name === 'global-helper')).toMatchObject({ source: 'user', editable: true, origin: 'mindos-global', enabled: true });
   });
 
-  it('reads skill content by name across pi-compatible directories', () => {
-    writeSkill(path.join(projectRoot, '.pi', 'skills'), 'pi-local', '---\nname: pi-local\ndescription: local pi skill\n---\n\nHello from pi');
+  it('knowledge base skill takes precedence over global skill with same name', () => {
+    writeSkill(path.join(mindRoot, '.skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from kb\n---\n');
+    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from global\n---\n');
 
-    const content = readSkillContentByName('pi-local', { projectRoot, mindRoot });
-    expect(content).toContain('Hello from pi');
+    const skills = scanSkillDirs({ projectRoot, mindRoot });
+    const matched = skills.filter((s) => s.name === 'shared-skill');
+    expect(matched).toHaveLength(1);
+    expect(matched[0].origin).toBe('mindos-user');
+  });
+
+  it('reads skill content by name across skill directories', () => {
+    writeSkill(path.join(mindRoot, '.skills'), 'user-skill', '---\nname: user-skill\ndescription: user skill\n---\n\nHello from user');
+
+    const content = readSkillContentByName('user-skill', { projectRoot, mindRoot });
+    expect(content).toContain('Hello from user');
+  });
+
+  it('reads skill from ~/.mindos/skills', () => {
+    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'global-skill', '---\nname: global-skill\ndescription: global\n---\n\nHello from global');
+
+    const content = readSkillContentByName('global-skill', { projectRoot, mindRoot });
+    expect(content).toContain('Hello from global');
   });
 });
