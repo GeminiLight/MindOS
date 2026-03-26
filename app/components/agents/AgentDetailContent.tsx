@@ -73,6 +73,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     return map;
   }, [mcp.agents]);
 
+  const isMindOS = agentKey === 'mindos';
   const status = agent ? resolveAgentStatus(agent) : 'notFound';
   const currentScope = agent?.scope === 'project' ? 'project' : 'global';
   const currentTransport: 'stdio' | 'http' = agent?.transport === 'http' ? 'http' : 'stdio';
@@ -249,9 +250,19 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
         {/* MCP status row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <DetailLine label={a.detail.mcpInstalled} value={agent.installed ? a.detail.yes : a.detail.no} />
-          <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
-          <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
+          {isMindOS ? (
+            <>
+              <DetailLine label="Status" value={mcp.status?.running ? '● Running' : '○ Stopped'} />
+              <DetailLine label="Endpoint" value={mcp.status?.endpoint ?? a.na} />
+              <DetailLine label="Tools" value={mcp.status?.toolCount != null ? String(mcp.status.toolCount) : a.na} />
+            </>
+          ) : (
+            <>
+              <DetailLine label={a.detail.mcpInstalled} value={agent.installed ? a.detail.yes : a.detail.no} />
+              <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
+              <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
+            </>
+          )}
         </div>
 
         {/* Configured MCP servers with management */}
@@ -304,27 +315,31 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
         {/* MCP actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <ActionButton
-            onClick={() => void handleCopySnippet()}
-            disabled={false}
-            busy={false}
-            label={snippetCopied ? a.detail.mcpCopied : a.detail.mcpCopySnippet}
-          />
+          {!isMindOS && (
+            <ActionButton
+              onClick={() => void handleCopySnippet()}
+              disabled={false}
+              busy={false}
+              label={snippetCopied ? a.detail.mcpCopied : a.detail.mcpCopySnippet}
+            />
+          )}
           <ActionButton
             onClick={() => void mcp.refresh()}
             disabled={false}
             busy={false}
             label={a.detail.mcpRefresh}
           />
-          <ActionButton
-            onClick={() => void handleApplyMcpConfig(currentScope, currentTransport)}
-            disabled={mcpBusy}
-            busy={mcpBusy}
-            label={a.detail.mcpReconnect}
-            variant="primary"
-          />
+          {!isMindOS && (
+            <ActionButton
+              onClick={() => void handleApplyMcpConfig(currentScope, currentTransport)}
+              disabled={mcpBusy}
+              busy={mcpBusy}
+              label={a.detail.mcpReconnect}
+              variant="primary"
+            />
+          )}
         </div>
-        <p className="text-2xs text-muted-foreground truncate">{snippet.path}</p>
+        {!isMindOS && <p className="text-2xs text-muted-foreground truncate">{snippet.path}</p>}
         {mcpMessage && <p className="text-xs text-muted-foreground animate-in fade-in duration-200">{mcpMessage}</p>}
       </section>
 

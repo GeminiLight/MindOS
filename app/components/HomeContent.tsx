@@ -178,18 +178,13 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-2.5 mt-4 pl-4">
-          {lastFile && (
-            <Link
-              href={`/view/${encodePath(lastFile.path)}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber)]"
-            >
-              <ArrowRight size={14} />
-              <span>{t.home.continueEditing}</span>
-              <span className="text-xs opacity-60 truncate max-w-[160px]" suppressHydrationWarning>
-                {lastFile.path.split('/').pop()}
-              </span>
-            </Link>
-          )}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber)]"
+          >
+            <FolderInput size={14} />
+            <span>{t.fileTree.importFile}</span>
+          </button>
           <Link
             href="/view/Untitled.md"
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground"
@@ -197,13 +192,18 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
           </Link>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground"
-          >
-            <FolderInput size={14} />
-            <span>{t.fileTree.importFile}</span>
-          </button>
+          {lastFile && (
+            <Link
+              href={`/view/${encodePath(lastFile.path)}`}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <ArrowRight size={14} />
+              <span>{t.home.continueEditing}</span>
+              <span className="text-xs opacity-50 truncate max-w-[140px]" suppressHydrationWarning>
+                {lastFile.path.split('/').pop()}
+              </span>
+            </Link>
+          )}
           <Link
             href="/explore"
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 text-[var(--amber)]"

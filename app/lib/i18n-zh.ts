@@ -385,6 +385,9 @@ export const zh = {
       enabledUnit: (n: number) => `${n} 已启用`,
       agentCount: (n: number) => `${n} 个 Agent`,
       runtimeActive: '活跃',
+      riskMcpStopped: 'MCP 服务未运行。',
+      riskDetected: (n: number) => `${n} 个已检测 Agent 待配置。`,
+      riskSkillsDisabled: '所有技能已禁用。',
     },
     mcp: {
       title: 'MCP 连接',
@@ -418,6 +421,7 @@ export const zh = {
       riskMcpStopped: 'MCP 服务未运行。',
       riskDetected: (n: number) => `${n} 个已检测 Agent 待配置。`,
       riskNotFound: (n: number) => `${n} 个 Agent 未在本机检测到。`,
+      riskSkillsDisabled: '所有技能已禁用。',
       bulkReconnectFiltered: '全部重连',
       bulkRunning: '正在批量重连...',
       bulkSummary: (ok: number, failed: number) => `重连成功 ${ok} 个，失败 ${failed} 个。`,
