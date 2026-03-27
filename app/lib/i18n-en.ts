@@ -718,13 +718,30 @@ export const en = {
     dropOverlay: 'Drop files to import into knowledge base',
     dropOverlayFormats: 'Supports .md .txt .pdf .csv .json .yaml .html',
     onboardingHint: 'Already have notes? Import files →',
-    digestPromptSingle: (name: string) => `Please read ${name}, extract key information and organize it into the appropriate place in my knowledge base.`,
-    digestPromptMulti: (n: number) => `Please read these ${n} files, extract key information and organize each into the appropriate place in my knowledge base.`,
+    digestPromptSingle: (name: string, targetSpace?: string) => {
+      const loc = targetSpace ? ` under the "${targetSpace}" space` : '';
+      return `The user uploaded "${name}". You MUST:\n1. Read the content from the "USER-UPLOADED FILES" section above\n2. Extract and reorganize the key information into well-structured Markdown notes\n3. Save the result${loc} in the knowledge base — create new files or update existing ones as appropriate\n\nDo NOT just reply with a text summary. You must actually write to the knowledge base.`;
+    },
+    digestPromptMulti: (n: number, targetSpace?: string) => {
+      const loc = targetSpace ? ` under the "${targetSpace}" space` : '';
+      return `The user uploaded ${n} files. You MUST:\n1. Read their content from the "USER-UPLOADED FILES" section above\n2. Extract and reorganize the key information into well-structured Markdown notes\n3. Save the results${loc} in the knowledge base — create new files or update existing ones as appropriate\n\nDo NOT just reply with a text summary. You must actually write to the knowledge base.`;
+    },
     arrowTo: '→',
     remove: 'Remove',
     conflictsFound: (n: number) => `${n} file${n !== 1 ? 's' : ''} already exist${n === 1 ? 's' : ''}`,
     organizeTitle: 'AI Organizing',
     organizeProcessing: 'AI is analyzing and organizing your files...',
+    organizeConnecting: 'Connecting to AI...',
+    organizeAnalyzing: 'AI is analyzing your files...',
+    organizeReading: (detail?: string) => detail ? `Reading ${detail}...` : 'Reading files...',
+    organizeThinking: 'AI is thinking deeply...',
+    organizeWriting: (detail?: string) => detail ? `Writing ${detail}...` : 'Writing files...',
+    organizeElapsed: (seconds: number) => {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    },
+    organizeCancel: 'Cancel',
     organizeCreating: (path: string) => `Creating ${path}`,
     organizeUpdating: (path: string) => `Updating ${path}`,
     organizeReviewTitle: 'Organization Complete',
