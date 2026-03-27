@@ -729,58 +729,19 @@
 
 ## 构建优化 / Bundle Size
 
-### lucide-react 全量导入导致 Desktop 包体积膨胀 15-25MB
-- **现象：** Desktop 安装包体积 140-150MB，其中 lucide-react 约占 15-25MB
-- **原因：** lucide-react 库包含 1000+ 图标定义，虽然有 `sideEffects: false` 支持树摇，但 Next.js build 时需显式配置 `experimental.optimizePackageImports` 才能有效触发 SWC 层级的深度优化
-- **现状：** `app/next.config.ts` 未配置 `optimizePackageImports`，依赖隐式 tree-shaking 效果不稳定
-- **分析：** 项目实际使用 117 个图标，但 bundler 可能仍保留 883 个未使用的图标定义为"备选集"
-- **解决：** `app/next.config.ts` 增加 `experimental: { optimizePackageImports: ['lucide-react'] }`，显式告诉 Next.js SWC 对 lucide-react 做深度树摇，将 1000+ 图标候选集缩减到实际使用的 117 个
-- **验证：**
-  - 本地 `npm run build` 后检查 `.next/standalone/` 中 lucide 相关文件体积应 < 500KB
-  - Desktop build 后各平台包体积应各减少 5-10MB
-- **规则：** 大型图标库、icon 库引入时必须在 next.config.ts 加入 `optimizePackageImports` 列表，确保树摇生效
-- **文件：** `app/next.config.ts`、spec 文档 `wiki/specs/spec-lucide-react-optimization.md`
+### Desktop 内置 runtime 过期导致 mcp/node_modules 73MB 冗余
+- **现象：** `desktop/resources/mindos-runtime/mcp/node_modules/` 占 73MB，但 v0.6.6 已改为 esbuild 预编译（`mcp/dist/index.cjs` 仅 1.2MB）
+- **原因：** `prepare-mindos-runtime.mjs` 脚本逻辑正确（先 copyTree → 再 rmSync node_modules → 复制 dist/index.cjs），但**脚本未被重新运行**，runtime 目录仍是旧版产物
+- **解决：** 每次发版 Desktop 前必须重跑 `cd desktop && node scripts/prepare-mindos-runtime.mjs`
+- **验证：** 重跑后 runtime 从 198MB 降至 134MB（-64MB），mcp/node_modules 不存在，mcp/dist/index.cjs 1.2MB
+- **规则：** Desktop 发版 checklist 必须包含 prepare-mindos-runtime 步骤，不能复用旧产物
 
-### Build-time 和 CLI-only 依赖泄露进 .next/standalone，导致包体积膨胀 140MB
-- **现象：** Desktop 安装包体积 140-150MB，其中 142MB 是完全不需要的库
-- **根因：** `app/next.config.ts` 的 `serverExternalPackages` 列表不完整，以下包被 Next.js bundler 当作"运行时依赖"复制进 `.next/standalone/`:
-  - `koffi` (87 MB) — C FFI 库，仅在 CLI 工具中使用，Web 服务无需
-  - `@img/*` (33 MB) — 图像处理原生二进制，Next.js build-time 图像优化用，runtime 无需
-  - `typescript` (20 MB) — TypeScript 编译器，build-time only
-  - `cli-highlight` (2.3 MB) — 终端代码高亮，CLI-only
-  - `@mariozechner/pi-tui` (1.8 MB) — 终端 UI，CLI-only
-  - **合计：142 MB 完全冗余**
-
-- **为什么现在才发现：**
-  - `serverExternalPackages` 已有 `pi-coding-agent` 等库
-  - 但 `koffi` 作为传递依赖（`pi-coding-agent` → `pi-tui` → `koffi`）未被显式标记
-  - `sharp` 和 `@img/*` 虽然是 Next.js 内置库，但配置不完整
-
-- **解决：** `app/next.config.ts` 更新 `serverExternalPackages` 数组，加入 6 个包和注释说明
-  ```typescript
-  serverExternalPackages: [
-    // 原有的
-    'chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', 
-    '@mariozechner/pi-coding-agent', 'mcporter',
-    // 新增以下
-    'sharp',                    // Build-time image optimization
-    '@img/*',                   // Image processing native binaries
-    'typescript',               // Build-time TypeScript compiler
-    'cli-highlight',            // CLI-only terminal UI
-    '@mariozechner/pi-tui',     // CLI-only terminal UI
-    'koffi',                    // CLI-only C FFI (transitive from pi-coding-agent)
-  ]
-  ```
-
-- **验证：** 修改后 `npm run build` 时 `.next/standalone/node_modules/` 应不含上述 6 个包
-  ```bash
-  du -sh .next/standalone/node_modules/{koffi,@img,typescript,cli-highlight}
-  # 应全部返回 "cannot access"
-  ```
-
-- **安全性：** CLI 进程仍能访问这些包（通过全局 npm install 或项目 node_modules hoisting）
-  - Desktop 本地模式无 CLI 执行，无影响
-  - CLI 命令在开发/生产环境中有完整 node_modules，无影响
-
-- **预期收益：** Desktop 各平台包体积各减少 ~8-12%（142 MB 原始减少，gzip 后 ~40-50 MB）
-- **文件：** `app/next.config.ts`、spec 文档 `wiki/specs/spec-exclude-buildtime-deps.md`、测试 `app/__tests__/build/buildtime-deps-exclusion.test.ts`
+### Turbopack standalone 不尊重 serverExternalPackages（Next.js 16.1.x 已知问题）
+- **现象：** `serverExternalPackages` 新增的包仍被复制到 `.next/standalone/node_modules/`，standalone 体积不变
+- **原因：** Turbopack 16.1.x 中 `serverExternalPackages` 仅控制"是否内联打包进 JS bundle"，但**不影响 standalone trace**——被标记的包仍会被复制到 standalone/node_modules。[GitHub discussion #88842](https://github.com/vercel/next.js/discussions/88842)
+- **验证（已确认）：**
+  - 在 `serverExternalPackages` 中加入 `koffi`/`sharp`/`typescript` 等 6 个包后 Turbopack build，standalone 体积**不变**（200MB），koffi 87MB、@img 33MB、typescript 20MB 仍在
+  - 用 `next build --webpack` 构建，koffi 被正确排除（standalone 降至 110MB），但 @img/typescript 仍被保留（Next.js runtime 依赖）
+- **当前策略：** 不在 serverExternalPackages 中添加无效配置。等 Turbopack 修复此 issue 或评估切换到 webpack 构建
+- **注意：** `optimizePackageImports: ['lucide-react']` 也已验证为冗余——Turbopack 16.1.6 已内置 lucide-react 优化，有无此配置构建产物**完全一致**（static 4.3M, server 22M）
+- **教训：** 配置改动必须做 before/after 对比验证。不能信赖文档描述或 agent 推断，要用 `du -sh` 实测
