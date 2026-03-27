@@ -51,6 +51,8 @@ export function stripThinkingTags(text: string): string {
   return cleaned.trim();
 }
 
+export const CLIENT_TRUNCATE_CHARS = 20_000;
+
 const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
@@ -226,13 +228,20 @@ export function useAiOrganize() {
 
     const messages: Message[] = [{ role: 'user', content: prompt }];
 
+    const truncatedFiles = files.map(f => ({
+      name: f.name,
+      content: f.content.length > CLIENT_TRUNCATE_CHARS
+        ? f.content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
+        : f.content,
+    }));
+
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages,
-          uploadedFiles: files,
+          uploadedFiles: truncatedFiles,
           maxSteps: 15,
         }),
         signal: controller.signal,

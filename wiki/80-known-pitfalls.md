@@ -765,3 +765,16 @@
 - **原因：** `useFileImport` 统一用 `file.text()` 读取所有文件类型。PDF 是二进制格式，`.text()` 返回乱码，AI 无法理解内容
 - **解决：** PDF 文件改用 `/api/extract-pdf` 提取纯文本（该 API 早已存在，但未集成到上传流程）
 - **教训：** 新功能复用现有代码路径时，必须检查路径是否覆盖所有文件类型
+
+### 大文件上传导致 "Failed to fetch"（请求体过大）
+- **现象：** 上传文件后选择 AI Organize，报 "整理失败 - Failed to fetch"
+- **原因：** 客户端将完整文件内容（最大 5MB）嵌入 JSON 请求体发送至 `/api/ask`。Next.js/HTTP 层有隐式请求体大小限制，超出时直接断开连接，浏览器报 `TypeError: Failed to fetch`
+- **根因链：** 服务端 `truncate()` 限制每文件 20k 字符，但截断发生在请求体解析之后——如果请求体本身超限，route handler 根本不会执行
+- **解决：** 在客户端发送前先截断文件内容到 20k 字符（`CLIENT_TRUNCATE_CHARS`），与服务端限制对齐。同时修复了 `AskContent.tsx`（常规对话）的同一模式
+- **教训：** 服务端截断不能替代客户端截断。如果请求体过大导致连接被拒，服务端代码根本不会执行
+
+### btoa() + reduce() 对大文件 base64 编码效率极差
+- **现象：** 大 PDF 文件 base64 编码极慢或导致浏览器卡死
+- **原因：** `new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), '')` 每次迭代都创建新字符串，对 5MB+ 文件产生海量中间对象
+- **解决：** 改用 `FileReader.readAsDataURL()` 让浏览器原生处理 base64 编码
+- **注意：** `useFileUpload.ts`（常规对话）使用分块 `String.fromCharCode(...chunk)` 方式，性能可接受无需修改
