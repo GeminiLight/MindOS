@@ -42,29 +42,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      # macOS: import Developer ID certificate for code signing + notarization
-      - name: Import Apple certificate
-        if: matrix.platform == 'mac'
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          if [ -z "$CERTIFICATE_BASE64" ]; then
-            echo "No certificate configured, skipping code signing setup"
-            exit 0
-          fi
-          CERT_FILE=$(mktemp /tmp/cert.XXXXXX.p12)
-          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT_FILE"
-          KEYCHAIN_FILE="/tmp/mindos-build-$$.keychain"
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
-          security import "$CERT_FILE" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
-          security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
-          rm "$CERT_FILE"
-
       # Windows: recursively remove all NTFS junction points in user profile
       # to prevent webpack glob EPERM errors during Next.js standalone build
       - name: Fix Windows NTFS junctions
@@ -128,6 +105,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
           EP_DRAFT: false
+          # macOS code signing — electron-builder manages keychain automatically
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # macOS notarization (only when secrets are configured)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

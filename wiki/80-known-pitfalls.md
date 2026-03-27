@@ -803,7 +803,14 @@
   4. "has changes" 分支的 summary 也使用同一清洗函数
 - **教训：** 给用户看的文案不能基于内部技术指标的简单映射。`toolCallCount` 包含读写所有操作，不能用"执行了 N 个操作"暗示"改了 N 个文件"
 
-### Desktop CI: macOS keychain 创建失败 + Windows EPERM glob error
+### Desktop CI: macOS codesign 卡死（手动 keychain 权限问题）
+- **现象：** CI macOS runner 上 `Package (mac)` 步骤卡在 `codesign` 调用超过 55 分钟，永不返回
+- **原因：** 手动创建的临时 keychain（`Import Apple certificate` step）跨 step 传递到 `electron-builder` 时，`codesign` 无法静默访问私钥，弹出隐藏的密码授权对话框。headless CI 无人操作，进程永久挂起
+- **根因链：** `security create-keychain` → `security import` → `security set-key-partition-list`（权限不完整）→ 新 step 中 `electron-builder` 调用 `codesign` → 系统弹隐藏授权框 → 卡死
+- **解决：** 删掉整个 `Import Apple certificate` 步骤，改用 `CSC_LINK`（base64 证书）+ `CSC_KEY_PASSWORD` 环境变量传给 electron-builder。electron-builder 在同一进程内自动创建临时 keychain、导入证书、正确设置权限、签名、清理，不会弹框
+- **规则：** macOS CI 签名永远不要手动管理 keychain，让 electron-builder 通过 `CSC_LINK` 自行管理。手动 keychain 脚本的权限配置极易出错且难以调试
+
+### Desktop CI: macOS keychain 创建失败 + Windows EPERM glob error（历史，已被上条取代）
 - **现象：**
   - macOS: `security: SecKeychainCreate /tmp/keychain.XXXXXX: A keychain with the same name already exists.`
   - Windows: `glob error [Error: EPERM: operation not permitted, scandir 'C:\Users\runneradmin\Application Data']`
@@ -811,6 +818,6 @@
   - macOS: `mktemp` 创建了临时文件，`security create-keychain` 在同一路径失败（文件已存在）。CI runner 镜像更新后行为变化
   - Windows: `C:\Users\runneradmin\Application Data` 是 NTFS 旧版 junction point（指向 AppData\Roaming），权限受限。webpack `next build` 期间 `@vercel/nft` 文件追踪扫描到此路径触发 EPERM
 - **解决：**
-  - macOS: 改用 `"/tmp/mindos-build-$$.keychain"` 确定性路径（不预创建文件），`security create-keychain` 自行创建
-  - Windows: 在 build 前增加 `Fix Windows NTFS junctions` step，用 `rd` 移除 10 个旧版 junction point（只删链接不删目标内容）
-- **教训：** CI workflow 必须防御 runner 镜像更新带来的环境差异。`mktemp` + 需要自行创建文件的工具会冲突。Windows CI 特有的 NTFS junction 问题需预清理
+  - macOS: ~~改用确定性路径~~ → 已彻底删掉手动 keychain 脚本，改用 `CSC_LINK`
+  - Windows: 在 build 前增加 `Fix Windows NTFS junctions` step + `outputFileTracingExcludes` 排除 AppData
+- **教训：** CI workflow 必须防御 runner 镜像更新带来的环境差异
