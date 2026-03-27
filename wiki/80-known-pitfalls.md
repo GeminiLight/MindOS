@@ -716,3 +716,17 @@
 - **原因：** pkill 模式只匹配旧路径 `mcp/src/index`，不匹配新的 `mcp/dist/index`
 - **解决：** 将 pkill 模式改为 `mcp/(src/index|dist/index)`，覆盖新旧两种路径
 - **规则：** 进程清理逻辑必须跟随进程启动方式同步更新
+
+## 构建优化 / Bundle Size
+
+### lucide-react 全量导入导致 Desktop 包体积膨胀 15-25MB
+- **现象：** Desktop 安装包体积 140-150MB，其中 lucide-react 约占 15-25MB
+- **原因：** lucide-react 库包含 1000+ 图标定义，虽然有 `sideEffects: false` 支持树摇，但 Next.js build 时需显式配置 `experimental.optimizePackageImports` 才能有效触发 SWC 层级的深度优化
+- **现状：** `app/next.config.ts` 未配置 `optimizePackageImports`，依赖隐式 tree-shaking 效果不稳定
+- **分析：** 项目实际使用 117 个图标，但 bundler 可能仍保留 883 个未使用的图标定义为"备选集"
+- **解决：** `app/next.config.ts` 增加 `experimental: { optimizePackageImports: ['lucide-react'] }`，显式告诉 Next.js SWC 对 lucide-react 做深度树摇，将 1000+ 图标候选集缩减到实际使用的 117 个
+- **验证：**
+  - 本地 `npm run build` 后检查 `.next/standalone/` 中 lucide 相关文件体积应 < 500KB
+  - Desktop build 后各平台包体积应各减少 5-10MB
+- **规则：** 大型图标库、icon 库引入时必须在 next.config.ts 加入 `optimizePackageImports` 列表，确保树摇生效
+- **文件：** `app/next.config.ts`、spec 文档 `wiki/specs/spec-lucide-react-optimization.md`
