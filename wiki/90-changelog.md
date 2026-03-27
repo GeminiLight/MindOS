@@ -1,6 +1,22 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-03-27 | Current stage: P1 -->
 
 # 变更日志 (CHANGELOG)
+
+## Unreleased (after v0.6.7)
+
+### 构建优化
+- **生产构建切换到 webpack**：Turbopack 16.1.x 的 `serverExternalPackages` 不影响 standalone trace（[#88842](https://github.com/vercel/next.js/discussions/88842)），切换后 standalone 从 200MB 降至 110MB（-45%），koffi 87MB 被正确排除。dev 模式仍用 Turbopack
+- **清理过期 mcp/node_modules**：Desktop runtime 中 73MB 的 mcp/node_modules 是 v0.6.6 esbuild 方案落地前的旧产物，重跑 prepare 脚本后替换为 1.2MB 的 dist/index.cjs
+- **Desktop 安装包体积**：macOS arm64 zip 144MB → 129MB（-10%），runtime 层 198MB → 133MB（-33%）
+
+### 修复
+- **Setup Wizard MCP 端口误报**：首次安装时 check-port 错误报告 MCP 端口"已被占用"（实际是自己的进程）
+- **MCP 端口竞争**：`/api/mcp/restart` 和 Desktop ProcessManager 同时操作 MCP 端口导致冲突
+- **AI Organize "无更改" 误报**：PDF 上传走 `file.text()` 返回二进制乱码；AI 返回含 `<thinking>` 标签被误解析；prompt 未明确要求写入文件
+- **CLI `--turbo` 参数冲突**：`mindos build --turbo` 会与硬编码的 `--webpack` 冲突，现已从 extra args 中过滤
+
+### 新增
+- **AI Organize 进度 UX**：ImportModal 内嵌进度展示（streaming 解析 + 实时文件列表），支持最小化后台运行
 
 ## v0.6.0 — Agent 框架迁移 pi-agent-core + Skill 渐进式加载 v4 (2026-03-20)
 
