@@ -10,6 +10,7 @@ import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/use
 import { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
+import type { OrganizeStageHint } from '@/hooks/useAiOrganize';
 
 interface ImportModalProps {
   open: boolean;
@@ -19,6 +20,118 @@ interface ImportModalProps {
 }
 
 const ACCEPT = Array.from(ALLOWED_IMPORT_EXTENSIONS).join(',');
+
+const THINKING_TIMEOUT_MS = 5000;
+
+function stageHintText(
+  t: { fileImport: Record<string, unknown> },
+  hint: { stage: OrganizeStageHint; detail?: string } | null,
+): string {
+  const fi = t.fileImport as {
+    organizeConnecting: string;
+    organizeAnalyzing: string;
+    organizeReading: (d?: string) => string;
+    organizeThinking: string;
+    organizeWriting: (d?: string) => string;
+    organizeProcessing: string;
+  };
+  if (!hint) return fi.organizeProcessing;
+  switch (hint.stage) {
+    case 'connecting': return fi.organizeConnecting;
+    case 'analyzing': return fi.organizeAnalyzing;
+    case 'reading': return fi.organizeReading(hint.detail);
+    case 'thinking': return fi.organizeThinking;
+    case 'writing': return fi.organizeWriting(hint.detail);
+    default: return fi.organizeProcessing;
+  }
+}
+
+/**
+ * Sub-component for the "organizing" phase with elapsed timer, stage hints, and cancel.
+ */
+function OrganizingProgress({
+  aiOrganize,
+  t,
+}: {
+  aiOrganize: ReturnType<typeof useAiOrganize>;
+  t: ReturnType<typeof useLocale>['t'];
+}) {
+  const [elapsed, setElapsed] = useState(0);
+  const [thinkingOverride, setThinkingOverride] = useState(false);
+  const lastEventRef = useRef(Date.now());
+
+  useEffect(() => {
+    lastEventRef.current = Date.now();
+    setThinkingOverride(false);
+  }, [aiOrganize.stageHint]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed(e => e + 1);
+      if (Date.now() - lastEventRef.current >= THINKING_TIMEOUT_MS) {
+        setThinkingOverride(true);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setElapsed(0);
+    setThinkingOverride(false);
+  }, [aiOrganize.phase]);
+
+  const displayHint = thinkingOverride
+    ? { stage: 'thinking' as const }
+    : aiOrganize.stageHint;
+
+  const fi = t.fileImport as { organizeElapsed: (s: number) => string };
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="flex flex-col items-center gap-3 py-6">
+        <div className="relative">
+          <Sparkles size={28} className="text-[var(--amber)]" />
+          <Loader2 size={16} className="absolute -bottom-1 -right-1 text-[var(--amber)] animate-spin" />
+        </div>
+        <p className="text-sm text-foreground font-medium">
+          {stageHintText(t, displayHint)}
+        </p>
+        <span className="text-xs text-muted-foreground/60 tabular-nums">
+          {fi.organizeElapsed(elapsed)}
+        </span>
+        {aiOrganize.currentTool && (
+          <p className="text-xs text-muted-foreground animate-pulse">
+            {aiOrganize.currentTool.name.startsWith('create')
+              ? (t.fileImport as { organizeCreating: (p: string) => string }).organizeCreating(aiOrganize.currentTool.path)
+              : (t.fileImport as { organizeUpdating: (p: string) => string }).organizeUpdating(aiOrganize.currentTool.path)}
+          </p>
+        )}
+        {aiOrganize.changes.length > 0 && (
+          <div className="w-full max-h-[120px] overflow-y-auto space-y-1 mt-2">
+            {aiOrganize.changes.map((c, idx) => (
+              <div key={`${c.path}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md text-xs">
+                {c.action === 'create' ? (
+                  <FilePlus size={13} className="text-success shrink-0" />
+                ) : (
+                  <FileEdit size={13} className="text-[var(--amber)] shrink-0" />
+                )}
+                <span className="truncate text-foreground">{c.path}</span>
+                <Check size={12} className="text-success shrink-0 ml-auto" />
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => aiOrganize.abort()}
+          className="mt-2 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-3 py-1.5"
+        >
+          {(t.fileImport as { organizeCancel: string }).organizeCancel}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function ImportModal({ open, onClose, defaultSpace, initialFiles }: ImportModalProps) {
   const { t } = useLocale();
@@ -100,9 +213,10 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
         name: f.name,
         content: f.content!,
       }));
+      const space = im.targetSpace || undefined;
       const prompt = attachments.length === 1
-        ? t.fileImport.digestPromptSingle(attachments[0].name)
-        : t.fileImport.digestPromptMulti(attachments.length);
+        ? (t.fileImport.digestPromptSingle as (name: string, space?: string) => string)(attachments[0].name, space)
+        : (t.fileImport.digestPromptMulti as (n: number, space?: string) => string)(attachments.length, space);
       im.setStep('organizing');
       aiOrganize.start(attachments, prompt);
     }
@@ -172,9 +286,10 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
       name: f.name,
       content: f.content!,
     }));
+    const space = im.targetSpace || undefined;
     const prompt = attachments.length === 1
-      ? t.fileImport.digestPromptSingle(attachments[0].name)
-      : t.fileImport.digestPromptMulti(attachments.length);
+      ? (t.fileImport.digestPromptSingle as (name: string, space?: string) => string)(attachments[0].name, space)
+      : (t.fileImport.digestPromptMulti as (n: number, space?: string) => string)(attachments.length, space);
     aiOrganize.reset();
     im.setStep('organizing');
     aiOrganize.start(attachments, prompt);
@@ -511,37 +626,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
 
             {/* AI Organizing (progress) */}
             {isOrganizing && (
-              <div className="mt-4 space-y-4">
-                <div className="flex flex-col items-center gap-3 py-6">
-                  <div className="relative">
-                    <Sparkles size={28} className="text-[var(--amber)]" />
-                    <Loader2 size={16} className="absolute -bottom-1 -right-1 text-[var(--amber)] animate-spin" />
-                  </div>
-                  <p className="text-sm text-foreground font-medium">{t.fileImport.organizeProcessing}</p>
-                  {aiOrganize.currentTool && (
-                    <p className="text-xs text-muted-foreground animate-pulse">
-                      {aiOrganize.currentTool.name.startsWith('create')
-                        ? t.fileImport.organizeCreating(aiOrganize.currentTool.path)
-                        : t.fileImport.organizeUpdating(aiOrganize.currentTool.path)}
-                    </p>
-                  )}
-                  {aiOrganize.changes.length > 0 && (
-                    <div className="w-full max-h-[120px] overflow-y-auto space-y-1 mt-2">
-                      {aiOrganize.changes.map((c, idx) => (
-                        <div key={`${c.path}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md text-xs">
-                          {c.action === 'create' ? (
-                            <FilePlus size={13} className="text-success shrink-0" />
-                          ) : (
-                            <FileEdit size={13} className="text-[var(--amber)] shrink-0" />
-                          )}
-                          <span className="truncate text-foreground">{c.path}</span>
-                          <Check size={12} className="text-success shrink-0 ml-auto" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <OrganizingProgress aiOrganize={aiOrganize} t={t} />
             )}
 
             {/* AI Organize review */}

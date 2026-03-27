@@ -17,11 +17,21 @@ export interface OrganizeFileChange {
   ok: boolean;
 }
 
+/** User-facing stage hint derived from SSE events */
+export type OrganizeStageHint =
+  | 'connecting'
+  | 'analyzing'
+  | 'reading'
+  | 'thinking'
+  | 'writing';
+
 export interface AiOrganizeState {
   phase: OrganizePhase;
   changes: OrganizeFileChange[];
   /** Current tool being executed (for live progress display) */
   currentTool: { name: string; path: string } | null;
+  /** User-facing stage hint with optional context (e.g. file being read) */
+  stageHint: { stage: OrganizeStageHint; detail?: string } | null;
   /** AI's text summary of what it did */
   summary: string;
   error: string | null;
@@ -45,6 +55,37 @@ const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
 ]);
+
+const FILE_READ_TOOLS = new Set([
+  'read_file', 'read_lines', 'search', 'list_files',
+]);
+
+/**
+ * Derive a user-facing stage hint from an SSE event.
+ * Returns null for events that don't change the stage (e.g. tool_end, done).
+ */
+export function deriveStageHint(
+  eventType: string,
+  toolName: string | undefined,
+  args: unknown,
+): { stage: OrganizeStageHint; detail?: string } | null {
+  if (eventType === 'text_delta') {
+    return { stage: 'analyzing' };
+  }
+  if (eventType === 'tool_start' && toolName) {
+    if (FILE_WRITE_TOOLS.has(toolName)) {
+      return { stage: 'writing', detail: extractPathFromArgs(toolName, args) || undefined };
+    }
+    if (FILE_READ_TOOLS.has(toolName)) {
+      const detail = (args && typeof args === 'object' && 'path' in args && typeof (args as Record<string, unknown>).path === 'string')
+        ? (args as Record<string, unknown>).path as string
+        : undefined;
+      return { stage: 'reading', detail };
+    }
+    return { stage: 'analyzing' };
+  }
+  return null;
+}
 
 function extractPathFromArgs(toolName: string, args: unknown): string {
   if (!args || typeof args !== 'object') return '';
@@ -98,6 +139,10 @@ async function consumeOrganizeStream(
             const toolName = event.toolName as string;
             const toolCallId = event.toolCallId as string;
             const args = event.args;
+
+            const hint = deriveStageHint(type, toolName, args);
+            if (hint) onProgress({ stageHint: hint });
+
             if (FILE_WRITE_TOOLS.has(toolName)) {
               const path = extractPathFromArgs(toolName, args);
               const action = (toolName === 'create_file' || toolName === 'batch_create_files')
@@ -128,6 +173,7 @@ async function consumeOrganizeStream(
 
           case 'text_delta': {
             summary += (event.delta as string) ?? '';
+            onProgress({ stageHint: { stage: 'analyzing' } });
             break;
           }
 
@@ -155,16 +201,20 @@ export function useAiOrganize() {
   const [phase, setPhase] = useState<OrganizePhase>('idle');
   const [changes, setChanges] = useState<OrganizeFileChange[]>([]);
   const [currentTool, setCurrentTool] = useState<{ name: string; path: string } | null>(null);
+  const [stageHint, setStageHint] = useState<{ stage: OrganizeStageHint; detail?: string } | null>(null);
   const [summary, setSummary] = useState('');
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastEventRef = useRef<number>(0);
 
   const start = useCallback(async (files: LocalAttachment[], prompt: string) => {
     setPhase('organizing');
     setChanges([]);
     setCurrentTool(null);
+    setStageHint({ stage: 'connecting' });
     setSummary('');
     setError(null);
+    lastEventRef.current = Date.now();
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -199,8 +249,10 @@ export function useAiOrganize() {
       const result = await consumeOrganizeStream(
         res.body,
         (partial) => {
+          lastEventRef.current = Date.now();
           if (partial.changes) setChanges(partial.changes);
           if (partial.currentTool !== undefined) setCurrentTool(partial.currentTool);
+          if (partial.stageHint) setStageHint(partial.stageHint);
         },
         controller.signal,
       );
@@ -245,14 +297,17 @@ export function useAiOrganize() {
     setPhase('idle');
     setChanges([]);
     setCurrentTool(null);
+    setStageHint(null);
     setSummary('');
     setError(null);
+    lastEventRef.current = 0;
   }, []);
 
   return {
     phase,
     changes,
     currentTool,
+    stageHint,
     summary,
     error,
     start,
