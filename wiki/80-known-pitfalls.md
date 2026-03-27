@@ -618,6 +618,13 @@
 
 ## Electron / 桌面端
 
+### Desktop ProcessManager 不安装 MCP 依赖 → MCP 崩溃循环
+- **现象：** Desktop 启动后 `[MindOS:mcp]` 反复报 `ERR_MODULE_NOT_FOUND: Cannot find package '@modelcontextprotocol/sdk'`，MCP 进程崩溃 3 次后放弃
+- **原因：** npm 包排除了 `mcp/node_modules`（`package.json` `files` 字段）。CLI 的 `spawnMcp()`（`mcp-spawn.js`）有自动安装逻辑，但 Desktop 的 `ProcessManager` 走的是 `ensureBundledMcpNodeModules()`——该函数只处理跨平台重装，`!existsSync(nm)` 时 **直接 return** 而非安装
+- **解决：** `ensureBundledMcpNodeModules()` 新增 Case 1：检查 `@modelcontextprotocol/sdk/package.json` 是否存在，不存在时 `npm install --omit=dev`（`--prefer-offline` + 在线 fallback）
+- **规则：** CLI 和 Desktop 两条启动路径都必须保证 `mcp/node_modules` 就绪后再 spawn MCP 进程。新增启动路径时必须验证依赖安装覆盖
+- **文件：** `desktop/src/ensure-mcp-native-deps.ts`
+
 ### SameSite=None 必须搭配 Secure
 - **现象：** 跨域 auth cookie 被浏览器静默丢弃
 - **原因：** Chrome 80+ 规范要求 `SameSite=None` 必须同时有 `Secure` 标志，但 HTTP 环境不能设 `Secure`
