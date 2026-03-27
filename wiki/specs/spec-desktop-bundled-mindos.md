@@ -47,12 +47,12 @@
 
 | 组件 | 路径 / 条件 | 说明 |
 |------|-------------|------|
-| MCP | `projectRoot/mcp` 存在 | `cwd` 为 `mcp/`；优先 `mcp/node_modules/.bin/tsx` + `src/index.ts`，否则回退 **`npxPath` + `tsx`**（代码注释说明 **packaged app 下 npx 不可靠**，故生产/内置应保证 **local tsx** 存在） |
+| MCP | `projectRoot/mcp` 存在 | `cwd` 为 `mcp/`；使用 `nodePath` + `dist/index.cjs`（esbuild 预编译 bundle），不再依赖 `tsx` 或 `node_modules`。旧版 Desktop 仍兼容 `tsx src/index.ts` 路径（`tsx` 保留在 `mcp/package.json` dependencies 中） |
 | Web | `projectRoot/app` 存在 | **优先** `app/.next/standalone/server.js` + **`nodePath`** 执行，`cwd`=`appDir`，`PORT`=`webPort`；否则 `app/node_modules/.bin/next start -p`；再否则 **`npxPath` + `next start`** |
 
 **环境变量（子进程）**：Web 使用 **`MINDOS_WEB_PORT`**、**`MIND_ROOT`**、**`NODE_ENV=production`**；MCP 使用 **`MCP_PORT`**、**`MCP_HOST=0.0.0.0`**、**`MINDOS_URL=http://127.0.0.1:{webPort}`** 等（与现实现一致）。
 
-因此内置产物不能只带「裸 `.next`」而缺少 **`mcp` 可运行依赖**（至少 tsx 链路）及 **`app` 侧 next/standalone 所需文件**。技术选型表（standalone vs 带 `node_modules`）必须对照上表验收。
+因此内置产物不能只带「裸 `.next`」而缺少 **`mcp/dist/index.cjs`** 预编译 bundle 及 **`app` 侧 next/standalone 所需文件**。技术选型表（standalone vs 带 `node_modules`）必须对照上表验收。
 
 ### 为什么不满足需求
 
