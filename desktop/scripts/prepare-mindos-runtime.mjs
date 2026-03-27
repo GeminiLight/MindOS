@@ -5,14 +5,12 @@
  *
  *   MINDOS_BUNDLE_SOURCE=/path/to/mindos-repo node scripts/prepare-mindos-runtime.mjs
  *
- * Optional env:
- *   SKIP_MCP_NPM_CI=1 — do not run `npm ci --omit=dev` under copied mcp/ (offline / air-gapped)
  *
  * @see wiki/specs/spec-desktop-bundled-mindos.md
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
@@ -63,69 +61,29 @@ copyTree('LICENSE');
 copyAppForBundledRuntime(appDir, path.join(dest, 'app'));
 copyTree('mcp');
 
+// MCP: only need dist/index.cjs (pre-bundled). Remove node_modules and source if copied.
 const destMcp = path.join(dest, 'mcp');
-const mcpLock = path.join(destMcp, 'package-lock.json');
-if (process.env.SKIP_MCP_NPM_CI === '1') {
-  console.warn('[prepare-mindos-runtime] SKIP_MCP_NPM_CI=1 — leaving mcp/node_modules as copied from source');
-} else if (!existsSync(mcpLock)) {
-  console.warn('[prepare-mindos-runtime] mcp/package-lock.json missing — skip npm ci (keep copied node_modules)');
-} else {
-  // In CI, source mcp/node_modules is already installed for the current platform.
-  // Only re-install if the copied node_modules is missing (e.g. excluded by .gitignore).
-  const destMcpNm = path.join(destMcp, 'node_modules');
-  if (!existsSync(destMcpNm) || readdirSync(destMcpNm).length === 0) {
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const r = spawnSync(npmCmd, ['ci', '--omit=dev'], {
-      cwd: destMcp,
-      stdio: 'inherit',
-      env: { ...process.env, NODE_ENV: 'production' },
-      shell: process.platform === 'win32',
-    });
-    if (r.status !== 0) {
-      fail('mcp npm ci --omit=dev failed (set SKIP_MCP_NPM_CI=1 to skip)');
-    }
-  } else {
-    console.log('[prepare-mindos-runtime] mcp/node_modules already present — skipping npm ci');
-  }
-}
-// Fix .bin/ symlinks: cpSync preserves absolute symlinks pointing to the build machine.
-// Convert to relative so they work on the target machine.
-const destMcpBin = path.join(destMcp, 'node_modules', '.bin');
-const destMcpNmAbs = path.join(destMcp, 'node_modules');
-if (existsSync(destMcpBin)) {
-  for (const name of readdirSync(destMcpBin)) {
-    const full = path.join(destMcpBin, name);
-    try {
-      const lst = lstatSync(full);
-      if (!lst.isSymbolicLink()) continue;
-      const target = readlinkSync(full);
-      if (!path.isAbsolute(target)) continue;
-      // Resolve where the absolute target would be inside our copied node_modules
-      const basename = path.basename(target);
-      // Walk up from .bin/ → node_modules/, then into the package
-      // e.g. /build/mcp/node_modules/tsx/dist/cli.mjs → find tsx/dist/cli.mjs inside destMcpNm
-      const normalized = target.replace(/\\/g, '/');
-      const nmIdx = normalized.lastIndexOf('/node_modules/');
-      if (nmIdx < 0) { rmSync(full, { force: true }); continue; }
-      const relInNm = normalized.slice(nmIdx + '/node_modules/'.length);
-      const localTarget = path.join(destMcpNmAbs, relInNm);
-      if (existsSync(localTarget)) {
-        rmSync(full, { force: true });
-        const rel = path.relative(destMcpBin, localTarget);
-        symlinkSync(rel, full);
-      } else {
-        rmSync(full, { force: true });
-      }
-    } catch { /* ignore */ }
-  }
-}
+const destMcpBundle = path.join(destMcp, 'dist', 'index.cjs');
+const destMcpNm = path.join(destMcp, 'node_modules');
+if (existsSync(destMcpNm)) rmSync(destMcpNm, { recursive: true, force: true });
 
-// Stamp the platform so Desktop can detect cross-platform mismatch at runtime
-writeFileSync(
-  path.join(destMcp, '.mindos-npm-ci-platform'),
-  `${process.platform}-${process.arch}`,
-  'utf-8',
-);
+// Build bundle if not already present
+if (!existsSync(destMcpBundle)) {
+  const sourceMcpBundle = path.join(source, 'mcp', 'dist', 'index.cjs');
+  if (existsSync(sourceMcpBundle)) {
+    mkdirSync(path.join(destMcp, 'dist'), { recursive: true });
+    cpSync(sourceMcpBundle, destMcpBundle);
+  } else {
+    // Build from source
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const srcMcp = path.join(source, 'mcp');
+    spawnSync(npmCmd, ['install'], { cwd: srcMcp, stdio: 'inherit', shell: process.platform === 'win32' });
+    spawnSync(npmCmd, ['run', 'build'], { cwd: srcMcp, stdio: 'inherit', shell: process.platform === 'win32' });
+    mkdirSync(path.join(destMcp, 'dist'), { recursive: true });
+    cpSync(path.join(srcMcp, 'dist', 'index.cjs'), destMcpBundle);
+  }
+}
+if (!existsSync(destMcpBundle)) fail('MCP bundle not found after build — check mcp/dist/index.cjs');
 
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');

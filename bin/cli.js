@@ -433,7 +433,7 @@ const commands = {
     if (process.env.MCP_TRANSPORT === 'http') {
       process.env.MCP_PORT = process.env.MINDOS_MCP_PORT || '8781';
     }
-    run(`npx tsx src/index.ts`, resolve(ROOT, 'mcp'));
+    run(`node dist/index.cjs`, resolve(ROOT, 'mcp'));
   },
 
   // ── stop / restart ─────────────────────────────────────────────────────────

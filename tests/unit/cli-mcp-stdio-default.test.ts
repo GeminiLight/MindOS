@@ -14,8 +14,7 @@ import { join } from 'path';
  * mcp/src/index.ts fell through to the default "http" transport.
  */
 
-const MCP_SRC = join(__dirname, '../../mcp/src/index.ts');
-const TSX_BIN = join(__dirname, '../../mcp/node_modules/.bin/tsx');
+const MCP_BUNDLE = join(__dirname, '../../mcp/dist/index.cjs');
 
 const children: ChildProcess[] = [];
 
@@ -62,7 +61,7 @@ describe('mindos mcp stdio transport (regression)', () => {
       blocker!.on('error', reject);
     });
 
-    const proc = spawn(TSX_BIN, [MCP_SRC], {
+    const proc = spawn(process.execPath, [MCP_BUNDLE], {
       env: {
         ...process.env,
         MCP_TRANSPORT: 'stdio',

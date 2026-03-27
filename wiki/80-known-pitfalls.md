@@ -618,15 +618,13 @@
 
 ## Electron / 桌面端
 
-### Desktop ProcessManager 不安装 MCP 依赖 → MCP 崩溃循环
-- **现象：** Desktop 启动后 `[MindOS:mcp]` 反复报 `ERR_MODULE_NOT_FOUND: Cannot find package '@modelcontextprotocol/sdk'`，MCP 进程崩溃 3 次后放弃
-- **原因：** npm 包排除了 `mcp/node_modules`（`package.json` `files` 字段）。CLI 的 `spawnMcp()`（`mcp-spawn.js`）有自动安装逻辑，但 Desktop 的 `ProcessManager` 走的是 `ensureBundledMcpNodeModules()`——该函数只处理跨平台重装，`!existsSync(nm)` 时 **直接 return** 而非安装
-- **解决（三层防御）：**
-  1. **npm postinstall**（`scripts/postinstall.js`）：`npm install -g` 时自动安装 mcp deps，根本消除运行时缺依赖问题——即使旧 Desktop binary 也受益
-  2. **Desktop 源码**（`desktop/src/ensure-mcp-native-deps.ts`）：`ensureBundledMcpNodeModules()` 新增 Case 1，检查 SDK 不存在时运行 `npm install`——新 Desktop build 的运行时二次保障
-  3. **CLI**（`bin/lib/mcp-spawn.js`）：保持已有自动安装逻辑——CLI 路径的运行时保障
-- **规则：** `mcp/node_modules` 安装必须有多层覆盖：安装时（postinstall）+ 运行时（CLI spawnMcp / Desktop ensureBundledMcpNodeModules）。新增启动路径时必须验证依赖安装覆盖
-- **文件：** `scripts/postinstall.js`、`desktop/src/ensure-mcp-native-deps.ts`、`package.json`
+### MCP 依赖缺失 → ERR_MODULE_NOT_FOUND 崩溃循环（已根治）
+- **现象：** `[MindOS:mcp]` 报 `ERR_MODULE_NOT_FOUND: Cannot find package '@modelcontextprotocol/sdk'`
+- **原因：** npm 包排除了 `mcp/node_modules`（含跨平台原生二进制），需要运行时动态安装。多个启动路径（CLI / Desktop / API restart）的安装逻辑不一致，漏装时即崩溃
+- **v0.6.4 方案：** 三层防御（postinstall + 运行时安装）——治标不治本，仍依赖网络 + npm 可用
+- **v0.6.6 根治：** esbuild 预编译 MCP → 单文件 `mcp/dist/index.cjs`（1.1MB），直接 `node dist/index.cjs` 运行。彻底消除 `node_modules`、`tsx`、跨平台原生依赖、运行时安装逻辑
+- **删除的文件：** `scripts/postinstall.js`、`desktop/src/ensure-mcp-native-deps.ts`（及其测试）
+- **规则：** MCP 服务器应始终以预编译 bundle 形态发布。修改 `mcp/src/` 后需 `cd mcp && npm run build` 重新打包。`npm pack` / `npm publish` 会通过 `prepack` 钩子自动触发构建
 
 ### SameSite=None 必须搭配 Secure
 - **现象：** 跨域 auth cookie 被浏览器静默丢弃

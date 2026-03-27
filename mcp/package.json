@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx tsx src/index.ts"
+    "build": "npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --target=node18 --minify",
+    "start": "node dist/index.cjs",
+    "dev": "npx tsx src/index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.0",
@@ -13,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "esbuild": "^0.25.0",
     "typescript": "^5"
   }
 }
