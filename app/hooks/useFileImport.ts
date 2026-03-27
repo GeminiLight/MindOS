@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 
 export type ImportIntent = 'archive' | 'digest';
-export type ImportStep = 'select' | 'archive_config' | 'importing' | 'done';
+export type ImportStep = 'select' | 'archive_config' | 'importing' | 'done' | 'organizing' | 'organize_review';
 export type ConflictMode = 'skip' | 'rename' | 'overwrite';
 
 export interface ImportFile {
