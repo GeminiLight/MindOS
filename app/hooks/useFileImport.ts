@@ -31,11 +31,23 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const commaIdx = dataUrl.indexOf(',');
+      resolve(commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : '');
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader error'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function extractPdfText(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const base64 = btoa(
-    new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), ''),
-  );
+  const base64 = await fileToBase64(file);
+  if (!base64) throw new Error('Empty PDF file');
+
   const res = await fetch('/api/extract-pdf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
