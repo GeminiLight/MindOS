@@ -621,9 +621,12 @@
 ### Desktop ProcessManager 不安装 MCP 依赖 → MCP 崩溃循环
 - **现象：** Desktop 启动后 `[MindOS:mcp]` 反复报 `ERR_MODULE_NOT_FOUND: Cannot find package '@modelcontextprotocol/sdk'`，MCP 进程崩溃 3 次后放弃
 - **原因：** npm 包排除了 `mcp/node_modules`（`package.json` `files` 字段）。CLI 的 `spawnMcp()`（`mcp-spawn.js`）有自动安装逻辑，但 Desktop 的 `ProcessManager` 走的是 `ensureBundledMcpNodeModules()`——该函数只处理跨平台重装，`!existsSync(nm)` 时 **直接 return** 而非安装
-- **解决：** `ensureBundledMcpNodeModules()` 新增 Case 1：检查 `@modelcontextprotocol/sdk/package.json` 是否存在，不存在时 `npm install --omit=dev`（`--prefer-offline` + 在线 fallback）
-- **规则：** CLI 和 Desktop 两条启动路径都必须保证 `mcp/node_modules` 就绪后再 spawn MCP 进程。新增启动路径时必须验证依赖安装覆盖
-- **文件：** `desktop/src/ensure-mcp-native-deps.ts`
+- **解决（三层防御）：**
+  1. **npm postinstall**（`scripts/postinstall.js`）：`npm install -g` 时自动安装 mcp deps，根本消除运行时缺依赖问题——即使旧 Desktop binary 也受益
+  2. **Desktop 源码**（`desktop/src/ensure-mcp-native-deps.ts`）：`ensureBundledMcpNodeModules()` 新增 Case 1，检查 SDK 不存在时运行 `npm install`——新 Desktop build 的运行时二次保障
+  3. **CLI**（`bin/lib/mcp-spawn.js`）：保持已有自动安装逻辑——CLI 路径的运行时保障
+- **规则：** `mcp/node_modules` 安装必须有多层覆盖：安装时（postinstall）+ 运行时（CLI spawnMcp / Desktop ensureBundledMcpNodeModules）。新增启动路径时必须验证依赖安装覆盖
+- **文件：** `scripts/postinstall.js`、`desktop/src/ensure-mcp-native-deps.ts`、`package.json`
 
 ### SameSite=None 必须搭配 Secure
 - **现象：** 跨域 auth cookie 被浏览器静默丢弃
