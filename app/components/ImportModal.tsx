@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, FolderInput, Sparkles, FileText, AlertCircle,
-  AlertTriangle, Loader2, Check, ArrowLeft,
+  AlertTriangle, Loader2, Check, FilePlus, FileEdit, Undo2,
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/useFileImport';
-import { openAskModal } from '@/hooks/useAskModal';
+import { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
 
@@ -23,11 +23,13 @@ const ACCEPT = Array.from(ALLOWED_IMPORT_EXTENSIONS).join(',');
 export default function ImportModal({ open, onClose, defaultSpace, initialFiles }: ImportModalProps) {
   const { t } = useLocale();
   const im = useFileImport();
+  const aiOrganize = useAiOrganize();
   const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [spaces, setSpaces] = useState<Array<{ name: string; path: string }>>([]);
   const [closing, setClosing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -38,6 +40,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     if (initializedRef.current) return;
     initializedRef.current = true;
     im.reset();
+    aiOrganize.reset();
+    setUndoing(false);
     if (defaultSpace) im.setTargetSpace(defaultSpace);
     if (initialFiles && initialFiles.length > 0) {
       im.addFiles(initialFiles);
@@ -49,12 +53,15 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
   }, [open, defaultSpace, initialFiles, im]);
 
   const handleClose = useCallback(() => {
-    if (im.files.length > 0 && im.step !== 'done') {
+    if (im.step === 'organizing') {
+      aiOrganize.abort();
+    }
+    if (im.files.length > 0 && im.step !== 'done' && im.step !== 'organize_review') {
       if (!confirm(t.fileImport.discardMessage(im.files.length))) return;
     }
     setClosing(true);
-    setTimeout(() => { setClosing(false); onClose(); im.reset(); }, 150);
-  }, [im, onClose, t]);
+    setTimeout(() => { setClosing(false); onClose(); im.reset(); aiOrganize.reset(); setUndoing(false); }, 150);
+  }, [im, onClose, t, aiOrganize]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,21 +81,13 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
         name: f.name,
         content: f.content!,
       }));
-      setClosing(true);
-      setTimeout(() => {
-        setClosing(false);
-        onClose();
-        window.dispatchEvent(new CustomEvent('mindos:inject-ask-files', {
-          detail: { files: attachments },
-        }));
-        const prompt = attachments.length === 1
-          ? t.fileImport.digestPromptSingle(attachments[0].name)
-          : t.fileImport.digestPromptMulti(attachments.length);
-        openAskModal(prompt);
-        im.reset();
-      }, 150);
+      const prompt = attachments.length === 1
+        ? t.fileImport.digestPromptSingle(attachments[0].name)
+        : t.fileImport.digestPromptMulti(attachments.length);
+      im.setStep('organizing');
+      aiOrganize.start(attachments, prompt);
     }
-  }, [im, onClose, t]);
+  }, [im, t, aiOrganize]);
 
   const handleArchiveSubmit = useCallback(async () => {
     await im.doArchive();
@@ -106,6 +105,53 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
       }, 600);
     }
   }, [im, onClose]);
+
+  useEffect(() => {
+    if (im.step === 'organizing' && (aiOrganize.phase === 'done' || aiOrganize.phase === 'error')) {
+      im.setStep('organize_review');
+    }
+  }, [im.step, aiOrganize.phase, im]);
+
+  const handleOrganizeDone = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+      im.reset();
+      aiOrganize.reset();
+      setUndoing(false);
+      window.dispatchEvent(new Event('mindos:files-changed'));
+    }, 150);
+  }, [onClose, im, aiOrganize]);
+
+  const handleOrganizeUndo = useCallback(async () => {
+    setUndoing(true);
+    const reverted = await aiOrganize.undoAll();
+    setUndoing(false);
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+      im.reset();
+      aiOrganize.reset();
+      if (reverted > 0) {
+        window.dispatchEvent(new Event('mindos:files-changed'));
+      }
+    }, 150);
+  }, [onClose, im, aiOrganize]);
+
+  const handleOrganizeRetry = useCallback(() => {
+    const attachments: LocalAttachment[] = im.validFiles.map(f => ({
+      name: f.name,
+      content: f.content!,
+    }));
+    const prompt = attachments.length === 1
+      ? t.fileImport.digestPromptSingle(attachments[0].name)
+      : t.fileImport.digestPromptMulti(attachments.length);
+    aiOrganize.reset();
+    im.setStep('organizing');
+    aiOrganize.start(attachments, prompt);
+  }, [im, t, aiOrganize]);
 
   useEffect(() => {
     if (im.step === 'done' && im.result) {
@@ -132,6 +178,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
   const isSelectStep = im.step === 'select';
   const isArchiveConfig = im.step === 'archive_config';
   const isImporting = im.step === 'importing';
+  const isOrganizing = im.step === 'organizing';
+  const isOrganizeReview = im.step === 'organize_review';
 
   return (
     <>
@@ -158,10 +206,18 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                 </button>
               )}
               <h2 className="text-base font-semibold text-foreground">
-                {isArchiveConfig ? t.fileImport.archiveConfigTitle : t.fileImport.title}
+                {isOrganizing ? t.fileImport.organizeTitle
+                  : isOrganizeReview ? t.fileImport.organizeReviewTitle
+                  : isArchiveConfig ? t.fileImport.archiveConfigTitle
+                  : t.fileImport.title}
               </h2>
               {isSelectStep && (
                 <p className="text-xs text-muted-foreground mt-0.5">{t.fileImport.subtitle}</p>
+              )}
+              {isOrganizeReview && aiOrganize.phase === 'done' && aiOrganize.changes.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {t.fileImport.organizeReviewDesc(aiOrganize.changes.filter(c => c.ok).length)}
+                </p>
               )}
             </div>
             <button
@@ -226,7 +282,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
             />
 
             {/* File list */}
-            {hasFiles && (
+            {hasFiles && !isOrganizing && !isOrganizeReview && (
               <div className="mt-3">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-muted-foreground">{t.fileImport.fileCount(im.files.length)}</span>
@@ -405,6 +461,128 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                     )}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* AI Organizing (progress) */}
+            {isOrganizing && (
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <div className="relative">
+                    <Sparkles size={28} className="text-[var(--amber)]" />
+                    <Loader2 size={16} className="absolute -bottom-1 -right-1 text-[var(--amber)] animate-spin" />
+                  </div>
+                  <p className="text-sm text-foreground font-medium">{t.fileImport.organizeProcessing}</p>
+                  {aiOrganize.currentTool && (
+                    <p className="text-xs text-muted-foreground animate-pulse">
+                      {aiOrganize.currentTool.name.startsWith('create')
+                        ? t.fileImport.organizeCreating(aiOrganize.currentTool.path)
+                        : t.fileImport.organizeUpdating(aiOrganize.currentTool.path)}
+                    </p>
+                  )}
+                  {aiOrganize.changes.length > 0 && (
+                    <div className="w-full max-h-[120px] overflow-y-auto space-y-1 mt-2">
+                      {aiOrganize.changes.map((c, idx) => (
+                        <div key={`${c.path}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md text-xs">
+                          {c.action === 'create' ? (
+                            <FilePlus size={13} className="text-success shrink-0" />
+                          ) : (
+                            <FileEdit size={13} className="text-[var(--amber)] shrink-0" />
+                          )}
+                          <span className="truncate text-foreground">{c.path}</span>
+                          <Check size={12} className="text-success shrink-0 ml-auto" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AI Organize review */}
+            {isOrganizeReview && (
+              <div className="mt-4 space-y-4">
+                {aiOrganize.phase === 'error' ? (
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <AlertCircle size={28} className="text-error" />
+                    <p className="text-sm text-error font-medium">{t.fileImport.organizeError}</p>
+                    <p className="text-xs text-muted-foreground text-center max-w-[300px]">{aiOrganize.error}</p>
+                    <div className="flex gap-3 mt-2">
+                      <button
+                        onClick={handleClose}
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
+                      >
+                        {t.fileImport.cancel}
+                      </button>
+                      <button
+                        onClick={handleOrganizeRetry}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
+                      >
+                        {t.fileImport.organizeRetry}
+                      </button>
+                    </div>
+                  </div>
+                ) : aiOrganize.changes.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <Sparkles size={28} className="text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">{t.fileImport.organizeNoChanges}</p>
+                    {aiOrganize.summary && (
+                      <p className="text-xs text-muted-foreground text-center max-w-[300px] whitespace-pre-wrap">{aiOrganize.summary.slice(0, 300)}</p>
+                    )}
+                    <button
+                      onClick={handleOrganizeDone}
+                      className="mt-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
+                    >
+                      {t.fileImport.organizeDone}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="max-h-[200px] overflow-y-auto space-y-1">
+                      {aiOrganize.changes.map((c, idx) => (
+                        <div key={`${c.path}-${idx}`} className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md text-sm">
+                          {c.action === 'create' ? (
+                            <FilePlus size={14} className="text-success shrink-0" />
+                          ) : (
+                            <FileEdit size={14} className="text-[var(--amber)] shrink-0" />
+                          )}
+                          <span className="truncate flex-1 text-foreground">{c.path}</span>
+                          <span className={`text-xs shrink-0 ${c.ok ? 'text-muted-foreground' : 'text-error'}`}>
+                            {!c.ok ? t.fileImport.organizeFailed
+                              : c.action === 'create' ? t.fileImport.organizeCreated
+                              : t.fileImport.organizeUpdated}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {aiOrganize.summary && (
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">{aiOrganize.summary.slice(0, 300)}</p>
+                    )}
+                    <div className="flex items-center justify-end gap-3 pt-2">
+                      {aiOrganize.changes.some(c => c.action === 'create' && c.ok) && (
+                        <button
+                          onClick={handleOrganizeUndo}
+                          disabled={undoing}
+                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 disabled:opacity-50"
+                        >
+                          {undoing ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Undo2 size={14} />
+                          )}
+                          {t.fileImport.organizeUndoAll}
+                        </button>
+                      )}
+                      <button
+                        onClick={handleOrganizeDone}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
+                      >
+                        <Check size={14} />
+                        {t.fileImport.organizeDone}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
