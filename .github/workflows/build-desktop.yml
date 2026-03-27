@@ -185,14 +185,22 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          # Strip version from filename for CDN latest/ path so landing page URLs stay fixed.
+          # e.g. "MindOS-0.1.0-arm64.dmg" → "MindOS-arm64.dmg"
+          #      "MindOS Setup 0.1.0.exe" → "MindOS-Setup.exe"
+          #      "MindOS-0.1.0.AppImage"  → "MindOS.AppImage"
+          strip_version() {
+            echo "$1" | sed "s/-${VERSION}//g; s/ ${VERSION}//g; s/ /-/g"
+          }
           for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
             [ -f "$file" ] || continue
             BASENAME=$(basename "$file")
-            # Versioned path
+            LATEST_NAME=$(strip_version "$BASENAME")
+            # Versioned path (original filename)
             aws s3 cp "$file" "s3://mindos-releases/desktop/v${VERSION}/${BASENAME}" \
               --endpoint-url "$R2_ENDPOINT" --no-progress
-            # Latest path (overwrite)
-            aws s3 cp "$file" "s3://mindos-releases/desktop/latest/${BASENAME}" \
+            # Latest path (version-stripped filename)
+            aws s3 cp "$file" "s3://mindos-releases/desktop/latest/${LATEST_NAME}" \
               --endpoint-url "$R2_ENDPOINT" --no-progress
           done
           echo "✅ Uploaded to Cloudflare R2: desktop/v${VERSION}/ + desktop/latest/"
@@ -211,13 +219,17 @@ jobs:
           ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
 
           VERSION="${{ steps.version.outputs.version }}"
+          strip_version() {
+            echo "$1" | sed "s/-${VERSION}//g; s/ ${VERSION}//g; s/ /-/g"
+          }
           for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
             [ -f "$file" ] || continue
             BASENAME=$(basename "$file")
-            # Versioned path
+            LATEST_NAME=$(strip_version "$BASENAME")
+            # Versioned path (original filename)
             ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" -f
-            # Latest path (overwrite)
-            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/latest/${BASENAME}" -f
+            # Latest path (version-stripped filename)
+            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/latest/${LATEST_NAME}" -f
           done
           echo "✅ Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
 
