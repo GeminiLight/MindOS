@@ -60,27 +60,39 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
-          security import "$CERT_FILE" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
+          # Try with provided password first, fall back to empty password
+          if ! security import "$CERT_FILE" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE" 2>/dev/null; then
+            echo "Retrying certificate import with empty password..."
+            security import "$CERT_FILE" -P "" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
+          fi
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_FILE"
 
-      # Windows: remove legacy NTFS junction points that cause EPERM during webpack glob
+      # Windows: recursively remove all NTFS junction points in user profile
+      # to prevent webpack glob EPERM errors during Next.js standalone build
       - name: Fix Windows NTFS junctions
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          rd "%USERPROFILE%\Application Data" 2>nul
-          rd "%USERPROFILE%\Cookies" 2>nul
-          rd "%USERPROFILE%\Local Settings" 2>nul
-          rd "%USERPROFILE%\My Documents" 2>nul
-          rd "%USERPROFILE%\NetHood" 2>nul
-          rd "%USERPROFILE%\PrintHood" 2>nul
-          rd "%USERPROFILE%\Recent" 2>nul
-          rd "%USERPROFILE%\SendTo" 2>nul
-          rd "%USERPROFILE%\Start Menu" 2>nul
-          rd "%USERPROFILE%\Templates" 2>nul
-          echo Junction cleanup done
+          $queue = [System.Collections.Generic.Queue[string]]::new()
+          $queue.Enqueue($env:USERPROFILE)
+          $removed = 0
+          while ($queue.Count -gt 0) {
+            $dir = $queue.Dequeue()
+            try {
+              foreach ($entry in [System.IO.Directory]::GetFileSystemEntries($dir)) {
+                $attrs = [System.IO.File]::GetAttributes($entry)
+                if ($attrs -band [System.IO.FileAttributes]::ReparsePoint) {
+                  [System.IO.Directory]::Delete($entry)
+                  $removed++
+                } elseif ($attrs -band [System.IO.FileAttributes]::Directory) {
+                  $queue.Enqueue($entry)
+                }
+              }
+            } catch { }
+          }
+          Write-Host "Removed $removed NTFS junction(s)"
 
       # Install all dependencies (app + mcp + desktop)
       - name: Install dependencies
