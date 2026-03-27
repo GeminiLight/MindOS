@@ -54,6 +54,7 @@ export function stripThinkingTags(text: string): string {
 const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
+  'edit_lines',
 ]);
 
 const FILE_READ_TOOLS = new Set([
@@ -104,7 +105,7 @@ async function consumeOrganizeStream(
   body: ReadableStream<Uint8Array>,
   onProgress: (state: Partial<AiOrganizeState>) => void,
   signal?: AbortSignal,
-): Promise<{ changes: OrganizeFileChange[]; summary: string }> {
+): Promise<{ changes: OrganizeFileChange[]; summary: string; toolCallCount: number }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -112,6 +113,7 @@ async function consumeOrganizeStream(
   const changes: OrganizeFileChange[] = [];
   const pendingTools = new Map<string, { name: string; path: string; action: 'create' | 'update' | 'unknown' }>();
   let summary = '';
+  let toolCallCount = 0;
 
   try {
     while (true) {
@@ -139,6 +141,7 @@ async function consumeOrganizeStream(
             const toolName = event.toolName as string;
             const toolCallId = event.toolCallId as string;
             const args = event.args;
+            toolCallCount++;
 
             const hint = deriveStageHint(type, toolName, args);
             if (hint) onProgress({ stageHint: hint });
@@ -190,7 +193,7 @@ async function consumeOrganizeStream(
     reader.releaseLock();
   }
 
-  return { changes, summary: stripThinkingTags(summary) };
+  return { changes, summary: stripThinkingTags(summary), toolCallCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +207,7 @@ export function useAiOrganize() {
   const [stageHint, setStageHint] = useState<{ stage: OrganizeStageHint; detail?: string } | null>(null);
   const [summary, setSummary] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [toolCallCount, setToolCallCount] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastEventRef = useRef<number>(0);
 
@@ -214,6 +218,7 @@ export function useAiOrganize() {
     setStageHint({ stage: 'connecting' });
     setSummary('');
     setError(null);
+    setToolCallCount(0);
     lastEventRef.current = Date.now();
 
     const controller = new AbortController();
@@ -259,6 +264,7 @@ export function useAiOrganize() {
 
       setChanges(result.changes);
       setSummary(result.summary);
+      setToolCallCount(result.toolCallCount);
       setCurrentTool(null);
       setPhase('done');
     } catch (err) {
@@ -300,6 +306,7 @@ export function useAiOrganize() {
     setStageHint(null);
     setSummary('');
     setError(null);
+    setToolCallCount(0);
     lastEventRef.current = 0;
   }, []);
 
@@ -310,6 +317,7 @@ export function useAiOrganize() {
     stageHint,
     summary,
     error,
+    toolCallCount,
     start,
     abort,
     undoAll,

@@ -742,6 +742,8 @@ export const en = {
       return `${m}:${s.toString().padStart(2, '0')}`;
     },
     organizeCancel: 'Cancel',
+    organizeMinimize: 'Continue browsing',
+    organizeExpand: 'View',
     organizeCreating: (path: string) => `Creating ${path}`,
     organizeUpdating: (path: string) => `Updating ${path}`,
     organizeReviewTitle: 'Organization Complete',
