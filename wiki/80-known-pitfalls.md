@@ -792,3 +792,13 @@
   4. "no changes" 视图现在显示 AI 的文字总结 + toolCallCount 诊断信息
   5. 组织中进度区域改为实时活动流：展示 AI 文字流、当前工具调用、已完成文件列表
 - **教训：** `catch {}` 是 bug 温床。SSE 事件只传递进度信息，不需要传完整文件内容。写操作工具集必须与服务端 `WRITE_TOOLS` 保持同步
+
+### AI Organize "no changes" 与 "N 个操作" 文案自相矛盾
+- **现象：** 弹窗同时显示"没有做任何更改"和"AI 执行了 7 个操作"，并附带 AI 的工作总结。三条信息互相矛盾
+- **原因：** `changes[]`（跟踪到的文件写入）和 `toolCallCount`（所有工具调用，含读操作）是两个独立指标。当 AI 执行了大量读操作但写操作未被 SSE 捕获时，两个指标不一致。另外 AI 的原始 Markdown 总结（##、表格、emoji）直接以纯文本 dump 给用户
+- **解决：**
+  1. 拆分为两个 UX 状态：有 summary 时以 AI 总结为主体（不显示"没有更改"），无 summary 时才显示"已是最新状态"
+  2. `organizeToolCallsInfo` 改为中性文案："共 N 步分析 · 请查看知识库确认"（不暗示写操作）
+  3. 新增 `cleanSummaryForDisplay()` 清洗 AI Markdown：去掉 ## heading、折叠多余空行、截断 500 字符
+  4. "has changes" 分支的 summary 也使用同一清洗函数
+- **教训：** 给用户看的文案不能基于内部技术指标的简单映射。`toolCallCount` 包含读写所有操作，不能用"执行了 N 个操作"暗示"改了 N 个文件"
