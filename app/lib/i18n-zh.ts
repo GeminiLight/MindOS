@@ -742,13 +742,30 @@ export const zh = {
     dropOverlay: '松开鼠标，导入文件到知识库',
     dropOverlayFormats: '支持 .md .txt .pdf .csv .json .yaml .html',
     onboardingHint: '已有笔记？导入文件到知识库 →',
-    digestPromptSingle: (name: string) => `请阅读 ${name}，提取关键信息整理到知识库中合适的位置。`,
-    digestPromptMulti: (n: number) => `请阅读这 ${n} 个文件，提取关键信息分别整理到知识库中合适的位置。`,
+    digestPromptSingle: (name: string, targetSpace?: string) => {
+      const loc = targetSpace ? `"${targetSpace}" 空间下` : '知识库中合适的位置';
+      return `用户上传了「${name}」。你必须：\n1. 从上方「USER-UPLOADED FILES」区域读取文件内容\n2. 提取和重新整理关键信息为结构清晰的 Markdown 笔记\n3. 将整理后的内容保存到${loc}——可以创建新文件，也可以更新已有文件\n\n不要只做文字回复。你必须实际写入知识库。`;
+    },
+    digestPromptMulti: (n: number, targetSpace?: string) => {
+      const loc = targetSpace ? `"${targetSpace}" 空间下` : '知识库中合适的位置';
+      return `用户上传了 ${n} 个文件。你必须：\n1. 从上方「USER-UPLOADED FILES」区域读取它们的内容\n2. 提取和重新整理关键信息为结构清晰的 Markdown 笔记\n3. 将整理后的内容保存到${loc}——可以创建新文件，也可以更新已有文件\n\n不要只做文字回复。你必须实际写入知识库。`;
+    },
     arrowTo: '→',
     remove: '移除',
     conflictsFound: (n: number) => `${n} 个文件已存在`,
     organizeTitle: 'AI 整理中',
     organizeProcessing: 'AI 正在分析和整理你的文件...',
+    organizeConnecting: '正在连接 AI...',
+    organizeAnalyzing: 'AI 正在分析你的文件...',
+    organizeReading: (detail?: string) => detail ? `正在阅读 ${detail}...` : '正在阅读文件...',
+    organizeThinking: 'AI 正在深度思考...',
+    organizeWriting: (detail?: string) => detail ? `正在写入 ${detail}...` : '正在写入文件...',
+    organizeElapsed: (seconds: number) => {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    },
+    organizeCancel: '取消',
     organizeCreating: (path: string) => `正在创建 ${path}`,
     organizeUpdating: (path: string) => `正在更新 ${path}`,
     organizeReviewTitle: '整理完成',
