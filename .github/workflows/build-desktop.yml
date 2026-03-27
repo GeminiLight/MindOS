@@ -76,7 +76,7 @@ jobs:
       - name: Build MindOS (Next.js standalone)
         run: |
           node scripts/gen-renderer-index.js
-          cd app && npx next build
+          cd app && npx next build --webpack
 
       # Build Electron (compile TS → JS)
       - name: Build Electron

@@ -21,7 +21,7 @@ echo ""
 # 3. Verify Next.js build
 echo "🔨 Verifying Next.js build..."
 cd app
-if npx next build 2>&1 | tail -5; then
+if npx next build --webpack 2>&1 | tail -5; then
   echo "   ✅ Next.js build succeeded"
 else
   echo "❌ Next.js build failed"
