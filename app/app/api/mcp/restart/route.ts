@@ -60,8 +60,9 @@ export async function POST() {
     const root = process.env.MINDOS_PROJECT_ROOT || resolve(process.cwd(), '..');
     const mcpDir = resolve(root, 'mcp');
 
-    if (!existsSync(resolve(mcpDir, 'node_modules'))) {
-      return NextResponse.json({ error: 'MCP dependencies not installed' }, { status: 500 });
+    const mcpBundle = resolve(mcpDir, 'dist', 'index.cjs');
+    if (!existsSync(mcpBundle)) {
+      return NextResponse.json({ error: 'MCP bundle not found — reinstall @geminilight/mindos' }, { status: 500 });
     }
 
     const env: NodeJS.ProcessEnv = {
@@ -73,7 +74,7 @@ export async function POST() {
       ...(authToken ? { AUTH_TOKEN: authToken } : {}),
     };
 
-    const child = spawn('npx', ['tsx', 'src/index.ts'], {
+    const child = spawn(process.execPath, [mcpBundle], {
       cwd: mcpDir,
       detached: true,
       stdio: 'ignore',
