@@ -740,3 +740,47 @@
   - Desktop build 后各平台包体积应各减少 5-10MB
 - **规则：** 大型图标库、icon 库引入时必须在 next.config.ts 加入 `optimizePackageImports` 列表，确保树摇生效
 - **文件：** `app/next.config.ts`、spec 文档 `wiki/specs/spec-lucide-react-optimization.md`
+
+### Build-time 和 CLI-only 依赖泄露进 .next/standalone，导致包体积膨胀 140MB
+- **现象：** Desktop 安装包体积 140-150MB，其中 142MB 是完全不需要的库
+- **根因：** `app/next.config.ts` 的 `serverExternalPackages` 列表不完整，以下包被 Next.js bundler 当作"运行时依赖"复制进 `.next/standalone/`:
+  - `koffi` (87 MB) — C FFI 库，仅在 CLI 工具中使用，Web 服务无需
+  - `@img/*` (33 MB) — 图像处理原生二进制，Next.js build-time 图像优化用，runtime 无需
+  - `typescript` (20 MB) — TypeScript 编译器，build-time only
+  - `cli-highlight` (2.3 MB) — 终端代码高亮，CLI-only
+  - `@mariozechner/pi-tui` (1.8 MB) — 终端 UI，CLI-only
+  - **合计：142 MB 完全冗余**
+
+- **为什么现在才发现：**
+  - `serverExternalPackages` 已有 `pi-coding-agent` 等库
+  - 但 `koffi` 作为传递依赖（`pi-coding-agent` → `pi-tui` → `koffi`）未被显式标记
+  - `sharp` 和 `@img/*` 虽然是 Next.js 内置库，但配置不完整
+
+- **解决：** `app/next.config.ts` 更新 `serverExternalPackages` 数组，加入 6 个包和注释说明
+  ```typescript
+  serverExternalPackages: [
+    // 原有的
+    'chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', 
+    '@mariozechner/pi-coding-agent', 'mcporter',
+    // 新增以下
+    'sharp',                    // Build-time image optimization
+    '@img/*',                   // Image processing native binaries
+    'typescript',               // Build-time TypeScript compiler
+    'cli-highlight',            // CLI-only terminal UI
+    '@mariozechner/pi-tui',     // CLI-only terminal UI
+    'koffi',                    // CLI-only C FFI (transitive from pi-coding-agent)
+  ]
+  ```
+
+- **验证：** 修改后 `npm run build` 时 `.next/standalone/node_modules/` 应不含上述 6 个包
+  ```bash
+  du -sh .next/standalone/node_modules/{koffi,@img,typescript,cli-highlight}
+  # 应全部返回 "cannot access"
+  ```
+
+- **安全性：** CLI 进程仍能访问这些包（通过全局 npm install 或项目 node_modules hoisting）
+  - Desktop 本地模式无 CLI 执行，无影响
+  - CLI 命令在开发/生产环境中有完整 node_modules，无影响
+
+- **预期收益：** Desktop 各平台包体积各减少 ~8-12%（142 MB 原始减少，gzip 后 ~40-50 MB）
+- **文件：** `app/next.config.ts`、spec 文档 `wiki/specs/spec-exclude-buildtime-deps.md`、测试 `app/__tests__/build/buildtime-deps-exclusion.test.ts`
