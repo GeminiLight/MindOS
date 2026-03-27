@@ -388,7 +388,7 @@ const commands = {
       console.log(yellow('Building MindOS (first run or new version detected)...\n'));
       cleanNextDir();
       run('node scripts/gen-renderer-index.js', ROOT);
-      run(`${NEXT_BIN} build`, resolve(ROOT, 'app'));
+      run(`${NEXT_BIN} build --webpack`, resolve(ROOT, 'app'));
       writeBuildStamp();
     }
     const mcp = spawnMcp(isVerbose);
@@ -412,7 +412,7 @@ const commands = {
     ensureAppDeps();
     cleanNextDir();
     run('node scripts/gen-renderer-index.js', ROOT);
-    run(`${NEXT_BIN} build ${extra}`, resolve(ROOT, 'app'));
+    run(`${NEXT_BIN} build --webpack ${extra}`, resolve(ROOT, 'app'));
     writeBuildStamp();
   },
 
