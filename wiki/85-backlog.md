@@ -50,6 +50,8 @@
 
 ### 🔴 高优先（下一批做）
 
+- [x] **Inline AI Organize** — 上传文件选择「AI Organize」后不再弹出 ChatBot，改为在 ImportModal 内原地展示处理进度和结果，支持 review 和撤销。[spec](./specs/spec-inline-ai-organize.md)
+
 - [x] **Desktop：MindOS 运行时择优（代码层）** — `pickMindOsRuntime` + `resolveLocalMindOsProjectRoot` 接入 `startLocalMode`；`config`/`MINDOS_RUNTIME_ROOT`/`MINDOS_DEV_BUNDLED_ROOT`；Desktop `npm test` 覆盖 pick+layout。内置 `extraResources` 产物与三平台冒烟仍待办。[spec](./specs/spec-desktop-bundled-mindos.md)
 - [x] **Desktop：内置运行时 Next standalone + 精简 prepare** — `app/next.config` `output: 'standalone'`；`prepare-mindos-bundle.mjs` 合并 static/public、拷贝 app 时去掉 `node_modules` / `.next/cache` / `.next/dev`。[spec](./specs/spec-desktop-standalone-runtime.md)
 - [ ] **Electron Desktop App（Phase 1）** — 本地+远程双模式桌面端，含共享连接 SDK、服务端 CORS 增强、系统托盘/快捷键/自动更新。[spec](./specs/spec-electron-desktop-app.md)
