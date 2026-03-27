@@ -766,6 +766,8 @@ export const zh = {
       return `${m}:${s.toString().padStart(2, '0')}`;
     },
     organizeCancel: '取消',
+    organizeMinimize: '继续浏览',
+    organizeExpand: '查看',
     organizeCreating: (path: string) => `正在创建 ${path}`,
     organizeUpdating: (path: string) => `正在更新 ${path}`,
     organizeReviewTitle: '整理完成',
