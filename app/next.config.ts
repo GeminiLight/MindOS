@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'mcporter'],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
+  // Exclude Windows system directories from webpack file tracing.
+  // GitHub Actions Windows runner has App Execution Aliases in AppData
+  // that cause EACCES errors during standalone trace.
+  outputFileTracingExcludes: {
+    '*': ['**/AppData/**', '**/WindowsApps/**'],
+  },
   turbopack: {
     root: path.join(__dirname),
   },
