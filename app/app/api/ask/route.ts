@@ -103,6 +103,34 @@ function getTurnEndData(e: AgentEvent): { toolResults: Array<{ toolName: string;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip large fields (file content) from tool args before SSE serialization.
+ * The client only needs path/name for progress display, not the full content.
+ * This prevents JSON.stringify failures on oversized payloads.
+ */
+function sanitizeToolArgs(toolName: string, args: unknown): unknown {
+  if (!args || typeof args !== 'object') return args;
+  const a = args as Record<string, unknown>;
+
+  if (toolName === 'batch_create_files' && Array.isArray(a.files)) {
+    return {
+      ...a,
+      files: (a.files as Array<Record<string, unknown>>).map(f => ({
+        path: f.path,
+        ...(f.description ? { description: f.description } : {}),
+      })),
+    };
+  }
+
+  if (typeof a.content === 'string' && a.content.length > 200) {
+    return { ...a, content: `[${a.content.length} chars]` };
+  }
+  if (typeof a.text === 'string' && a.text.length > 200) {
+    return { ...a, text: `[${a.text.length} chars]` };
+  }
+  return args;
+}
+
 function readKnowledgeFile(filePath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
   try {
     const raw = getFileContent(filePath);
@@ -457,7 +485,11 @@ export async function POST(req: NextRequest) {
         function send(event: MindOSSSEvent) {
           try {
             controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
-          } catch { /* controller may be closed */ }
+          } catch (err) {
+            if (err instanceof TypeError) {
+              console.error('[ask] SSE send failed (serialization):', (err as Error).message, 'event type:', (event as { type?: string }).type);
+            }
+          }
         }
 
         session.subscribe((event: AgentEvent) => {
@@ -467,11 +499,12 @@ export async function POST(req: NextRequest) {
             send({ type: 'thinking_delta', delta: getThinkingDelta(event) });
           } else if (isToolExecutionStartEvent(event)) {
             const { toolCallId, toolName, args } = getToolExecutionStart(event);
+            const safeArgs = sanitizeToolArgs(toolName, args);
             send({
               type: 'tool_start',
               toolCallId,
               toolName,
-              args,
+              args: safeArgs,
             });
           } else if (isToolExecutionEndEvent(event)) {
             const { toolCallId, output, isError } = getToolExecutionEnd(event);

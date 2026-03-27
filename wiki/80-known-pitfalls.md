@@ -778,3 +778,17 @@
 - **原因：** `new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), '')` 每次迭代都创建新字符串，对 5MB+ 文件产生海量中间对象
 - **解决：** 改用 `FileReader.readAsDataURL()` 让浏览器原生处理 base64 编码
 - **注意：** `useFileUpload.ts`（常规对话）使用分块 `String.fromCharCode(...chunk)` 方式，性能可接受无需修改
+
+### AI Organize 工具事件被服务端 SSE 序列化静默丢失
+- **现象：** AI 实际修改了文件（通知显示"4 条内容变更"），但 Organize 弹窗显示"没有做任何更改"
+- **原因（三层）：**
+  1. 服务端 `send()` 函数将 `tool_start` 事件的完整 `args`（含 20KB+ 文件内容）通过 `JSON.stringify` 序列化。如果序列化失败（非序列化值、极端编码），`catch {}` 静默吞掉错误，`tool_start` 事件不发送
+  2. 没有 `tool_start` 事件，客户端无法匹配后续的 `tool_end` 事件，`changes[]` 保持空数组
+  3. "no changes" 视图隐藏了 AI 的文字输出（summary），用户完全看不到 AI 做了什么
+- **解决：**
+  1. 新增 `sanitizeToolArgs()` — 发送 SSE 前将大字段（content/text）替换为 `[N chars]` 占位符，客户端只需 path 信息
+  2. `send()` 的 catch 块增加 TypeError 日志，不再完全静默
+  3. `FILE_WRITE_TOOLS` 扩展：增加 `delete_file`/`rename_file`/`move_file`/`append_csv` 四个遗漏的写操作工具
+  4. "no changes" 视图现在显示 AI 的文字总结 + toolCallCount 诊断信息
+  5. 组织中进度区域改为实时活动流：展示 AI 文字流、当前工具调用、已完成文件列表
+- **教训：** `catch {}` 是 bug 温床。SSE 事件只传递进度信息，不需要传完整文件内容。写操作工具集必须与服务端 `WRITE_TOOLS` 保持同步
