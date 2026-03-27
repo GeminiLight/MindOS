@@ -47,7 +47,6 @@ jobs:
         if: matrix.platform == 'mac'
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -z "$CERTIFICATE_BASE64" ]; then
             echo "No certificate configured, skipping code signing setup"
@@ -60,11 +59,7 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
-          # Try with provided password first, fall back to empty password
-          if ! security import "$CERT_FILE" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE" 2>/dev/null; then
-            echo "Retrying certificate import with empty password..."
-            security import "$CERT_FILE" -P "" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
-          fi
+          security import "$CERT_FILE" -P "" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_FILE"
