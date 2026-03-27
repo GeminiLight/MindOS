@@ -140,7 +140,7 @@ if (cmd === '--version' || cmd === '-v') {
 
 const isDaemon  = process.argv.includes('--daemon') || (!cmd && isDaemonMode());
 const isVerbose = process.argv.includes('--verbose');
-const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '--verbose').join(' ');
+const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '--verbose' && a !== '--turbo').join(' ');
 
 const commands = {
   // ── onboard ────────────────────────────────────────────────────────────────
