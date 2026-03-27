@@ -17,6 +17,10 @@
 
 ### 新增
 - **AI Organize 进度 UX**：ImportModal 内嵌进度展示（streaming 解析 + 实时文件列表），支持最小化后台运行
+- **AI Organize 结果视图优化**：新增 `OrganizeNoChangesView` 组件 + `cleanSummaryForDisplay` 函数，解决"无更改"与"N 个操作"文案自相矛盾问题；服务端 `sanitizeToolArgs` 防止 SSE 序列化静默丢失
+
+### 已知性能瓶颈
+- **AI Organize 单文件上传耗时长**（30-60s）：根因是每次 organize 等同一次 5-10 轮 Agent 对话，每轮携带 30-50k tokens 上下文。主要耗时分布：LLM 多轮推理 70-90%、上下文装载 10-20%、session 初始化 1-3s、PDF 提取 1-2s。待优化方向：轻量模型专用通道、精简 organize 专用 prompt、减少 Agent 探索步数
 
 ## v0.6.0 — Agent 框架迁移 pi-agent-core + Skill 渐进式加载 v4 (2026-03-20)
 
