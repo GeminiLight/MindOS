@@ -119,6 +119,22 @@ jobs:
       # When publishing: electron-builder --publish always uploads to a GitHub Release
       # named after package.json version (e.g. v0.1.0). We set EP_DRAFT=false so the
       # release is immediately visible. The finalize job renames/edits it if needed.
+
+      # macOS: decode App Store Connect API Key (.p8) for notarization
+      - name: Prepare Apple API Key
+        if: matrix.platform == 'mac'
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          if [ -z "$APPLE_API_KEY_BASE64" ] || [ -z "$APPLE_API_KEY_ID" ]; then
+            echo "API Key not configured, skipping (will fall back to Apple ID notarization)"
+            exit 0
+          fi
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          echo "✅ API Key written to ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
+
       - name: Package (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,7 +143,11 @@ jobs:
           # macOS code signing — electron-builder manages keychain automatically
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # macOS notarization (only when secrets are configured)
+          # macOS notarization via App Store Connect API Key (preferred over Apple ID)
+          # electron-builder/notarize auto-discovers .p8 in ~/private_keys/
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Legacy Apple ID notarization (fallback if API Key not configured)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
