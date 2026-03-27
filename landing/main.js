@@ -485,3 +485,43 @@ function toggleMacSec(event) {
         notice.classList.toggle('show');
     }
 }
+
+/* --- Download Geo-Routing ---
+   China users → Alibaba Cloud OSS (native domain)
+   Others     → Cloudflare R2    (native .r2.dev domain)
+   Fallback   → GitHub Releases
+
+   After creating your buckets, replace the two URLs below:
+     DL_INTL → R2 public URL from: Dashboard → R2 → mindos-releases → Settings → Public access
+     DL_CN   → OSS endpoint from: Console → Bucket → Overview → "外网访问"
+*/
+(function initDownloadRouting() {
+    var DL_INTL = 'https://pub-ea226357c90d4b1d9779ff34538ce45f.r2.dev/desktop/latest/';
+    var DL_CN   = 'https://mindos-cn-release.oss-cn-hangzhou.aliyuncs.com/desktop/latest/';
+    var DL_GH   = 'https://github.com/GeminiLight/MindOS/releases/latest';
+
+    function applyMirror(base) {
+        document.querySelectorAll('[data-dl-file]').forEach(function(el) {
+            el.href = base + el.getAttribute('data-dl-file');
+        });
+    }
+
+    var isCN = (navigator.language || '').match(/^zh/i)
+            || Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Shanghai';
+
+    if (isCN) {
+        applyMirror(DL_CN);
+    } else {
+        applyMirror(DL_INTL);
+    }
+
+    // Verify the chosen mirror is reachable; fall back to GitHub if not
+    var testLink = document.querySelector('[data-dl-file]');
+    if (testLink) {
+        fetch(testLink.href, { method: 'HEAD', mode: 'no-cors' }).catch(function() {
+            document.querySelectorAll('[data-dl-file]').forEach(function(el) {
+                el.href = DL_GH;
+            });
+        });
+    }
+})();
