@@ -31,6 +31,25 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function extractPdfText(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const base64 = btoa(
+    new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), ''),
+  );
+  const res = await fetch('/api/extract-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name, dataBase64: base64 }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || 'PDF extraction failed');
+  }
+  const data = await res.json() as { text?: string; extracted?: boolean };
+  if (!data.extracted || !data.text) throw new Error('No text extracted from PDF');
+  return data.text;
+}
+
 export function useFileImport() {
   const [files, setFiles] = useState<ImportFile[]>([]);
   const [step, setStep] = useState<ImportStep>('select');
@@ -85,7 +104,13 @@ export function useFileImport() {
     for (const f of newFiles) {
       if (f.error) continue;
       try {
-        const text = await f.file.text();
+        const ext = getExt(f.name);
+        let text: string;
+        if (ext === '.pdf') {
+          text = await extractPdfText(f.file);
+        } else {
+          text = await f.file.text();
+        }
         setFiles(prev => prev.map(p =>
           p.name === f.name && p.size === f.size
             ? { ...p, content: text, loading: false }
