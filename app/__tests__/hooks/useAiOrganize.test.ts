@@ -10,12 +10,14 @@ import { stripThinkingTags, deriveStageHint, CLIENT_TRUNCATE_CHARS, type Organiz
 const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
+  'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
 ]);
 
 function extractPathFromArgs(toolName: string, args: unknown): string {
   if (!args || typeof args !== 'object') return '';
   const a = args as Record<string, unknown>;
   if (typeof a.path === 'string') return a.path;
+  if (typeof a.from_path === 'string') return a.from_path;
   if (toolName === 'batch_create_files' && Array.isArray(a.files)) {
     return (a.files as Array<{ path?: string }>)
       .map(f => f.path ?? '')
@@ -482,5 +484,96 @@ describe('CLIENT_TRUNCATE_CHARS', () => {
       ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
       : content;
     expect(truncated.length).toBeLessThan(25_000);
+  });
+});
+
+describe('sanitizeToolArgs (server-side SSE safety)', () => {
+  function sanitizeToolArgs(toolName: string, args: unknown): unknown {
+    if (!args || typeof args !== 'object') return args;
+    const a = args as Record<string, unknown>;
+    if (toolName === 'batch_create_files' && Array.isArray(a.files)) {
+      return {
+        ...a,
+        files: (a.files as Array<Record<string, unknown>>).map(f => ({
+          path: f.path,
+          ...(f.description ? { description: f.description } : {}),
+        })),
+      };
+    }
+    if (typeof a.content === 'string' && a.content.length > 200) {
+      return { ...a, content: `[${a.content.length} chars]` };
+    }
+    if (typeof a.text === 'string' && a.text.length > 200) {
+      return { ...a, text: `[${a.text.length} chars]` };
+    }
+    return args;
+  }
+
+  it('preserves small args unchanged', () => {
+    const args = { path: 'notes/test.md', content: 'short' };
+    expect(sanitizeToolArgs('create_file', args)).toBe(args);
+  });
+
+  it('truncates large content field', () => {
+    const args = { path: 'notes/test.md', content: 'x'.repeat(5000) };
+    const result = sanitizeToolArgs('create_file', args) as Record<string, unknown>;
+    expect(result.path).toBe('notes/test.md');
+    expect(result.content).toBe('[5000 chars]');
+  });
+
+  it('truncates large text field', () => {
+    const args = { path: 'notes/test.md', text: 'y'.repeat(1000) };
+    const result = sanitizeToolArgs('write_file', args) as Record<string, unknown>;
+    expect(result.text).toBe('[1000 chars]');
+  });
+
+  it('strips content from batch_create_files', () => {
+    const args = {
+      files: [
+        { path: 'a.md', content: 'x'.repeat(5000) },
+        { path: 'b.md', content: 'y'.repeat(3000), description: 'desc' },
+      ],
+    };
+    const result = sanitizeToolArgs('batch_create_files', args) as { files: Array<Record<string, unknown>> };
+    expect(result.files).toHaveLength(2);
+    expect(result.files[0]).toEqual({ path: 'a.md' });
+    expect(result.files[1]).toEqual({ path: 'b.md', description: 'desc' });
+  });
+
+  it('handles null/undefined args', () => {
+    expect(sanitizeToolArgs('create_file', null)).toBe(null);
+    expect(sanitizeToolArgs('create_file', undefined)).toBe(undefined);
+  });
+});
+
+describe('Extended FILE_WRITE_TOOLS coverage', () => {
+  it('tracks delete_file as write tool', () => {
+    expect(FILE_WRITE_TOOLS.has('delete_file')).toBe(true);
+  });
+  it('tracks rename_file as write tool', () => {
+    expect(FILE_WRITE_TOOLS.has('rename_file')).toBe(true);
+  });
+  it('tracks move_file as write tool', () => {
+    expect(FILE_WRITE_TOOLS.has('move_file')).toBe(true);
+  });
+  it('tracks append_csv as write tool', () => {
+    expect(FILE_WRITE_TOOLS.has('append_csv')).toBe(true);
+  });
+  it('tracks edit_lines as write tool', () => {
+    expect(FILE_WRITE_TOOLS.has('edit_lines')).toBe(true);
+  });
+});
+
+describe('extractPathFromArgs extended', () => {
+  it('extracts from_path for move/rename tools', () => {
+    expect(extractPathFromArgs('move_file', { from_path: 'a.md', to_path: 'b.md' })).toBe('a.md');
+    expect(extractPathFromArgs('rename_file', { from_path: 'old.md', new_name: 'new.md' })).toBe('old.md');
+  });
+  it('prefers path over from_path when both exist', () => {
+    expect(extractPathFromArgs('write_file', { path: 'main.md', from_path: 'other.md' })).toBe('main.md');
+  });
+  it('returns empty for delete_file with no args', () => {
+    expect(extractPathFromArgs('delete_file', undefined)).toBe('');
+    expect(extractPathFromArgs('delete_file', null)).toBe('');
   });
 });
