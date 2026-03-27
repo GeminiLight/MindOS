@@ -72,15 +72,15 @@ jobs:
         shell: bash
 
       # Package for the target platform.
-      # --publish always: electron-builder generates latest-mac.yml / latest-linux.yml / latest.yml
-      # and uploads to the GitHub Release (required for electron-updater auto-update).
-      # --publish never: local build only (artifact upload, no release).
+      # When publishing: electron-builder --publish always uploads to a GitHub Release
+      # named after package.json version (e.g. v0.1.0). We set EP_DRAFT=false so the
+      # release is immediately visible. The finalize job renames/edits it if needed.
       - name: Package (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
+          EP_DRAFT: false
         run: |
-          TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
           if [ "${{ inputs.publish }}" = "true" ]; then
             cd desktop && npx electron-builder --${{ matrix.platform }} --publish always
           else
@@ -103,7 +103,7 @@ jobs:
             desktop/dist/*.yaml
           if-no-files-found: warn
 
-  # After all platforms finish, un-draft the release so it becomes visible
+  # After all platforms finish, rename release to use desktop-vX.Y.Z tag and mark as Latest
   finalize:
     if: inputs.publish
     needs: build
@@ -117,9 +117,30 @@ jobs:
           VERSION=$(cd desktop && node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Publish release (un-draft)
+      - name: Finalize release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
-          gh release edit "$TAG" --draft=false
+          EB_TAG="v${{ steps.version.outputs.version }}"
+          DESIRED_TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
+
+          # electron-builder creates release with tag vX.Y.Z (from package.json).
+          # If we want a different tag (desktop-vX.Y.Z), rename it.
+          if [ "$EB_TAG" != "$DESIRED_TAG" ]; then
+            # Create the desired tag pointing to HEAD
+            git tag "$DESIRED_TAG" 2>/dev/null || true
+            git push origin "$DESIRED_TAG" 2>/dev/null || true
+
+            # Edit the electron-builder release to use our tag and title
+            if gh release view "$EB_TAG" >/dev/null 2>&1; then
+              gh release edit "$EB_TAG" \
+                --tag "$DESIRED_TAG" \
+                --title "MindOS Desktop $DESIRED_TAG" \
+                --draft=false \
+                --latest
+            fi
+          else
+            if gh release view "$EB_TAG" >/dev/null 2>&1; then
+              gh release edit "$EB_TAG" --draft=false --latest
+            fi
+          fi
