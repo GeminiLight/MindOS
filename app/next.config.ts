@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
     staleTimes: {
       dynamic: 0,
     },
+    // Optimize lucide-react bundle: tree-shake unused icons (1000+ → 117 actual)
+    // Next.js SWC plugin converts named imports to deep imports for bundler to tree-shake
+    optimizePackageImports: ['lucide-react'],
   },
 };
 
