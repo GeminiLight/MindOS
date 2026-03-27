@@ -756,7 +756,7 @@
 - **验证（已确认）：**
   - 在 `serverExternalPackages` 中加入 `koffi`/`sharp`/`typescript` 等 6 个包后 Turbopack build，standalone 体积**不变**（200MB），koffi 87MB、@img 33MB、typescript 20MB 仍在
   - 用 `next build --webpack` 构建，koffi 被正确排除（standalone 降至 110MB），但 @img/typescript 仍被保留（Next.js runtime 依赖）
-- **当前策略：** 不在 serverExternalPackages 中添加无效配置。等 Turbopack 修复此 issue 或评估切换到 webpack 构建
+- **已解决：** 生产构建已切换到 `next build --webpack`。改动 5 处：`bin/cli.js`(2)、`scripts/release.sh`(1)、`.github/workflows/build-desktop.yml`(1)、`app/package.json`(1)。dev 模式仍用 Turbopack。standalone 从 200MB 降至 115MB（-85MB），koffi 87MB 被正确排除，verify-standalone 通过
 - **注意：** `optimizePackageImports: ['lucide-react']` 也已验证为冗余——Turbopack 16.1.6 已内置 lucide-react 优化，有无此配置构建产物**完全一致**（static 4.3M, server 22M）
 - **教训：** 配置改动必须做 before/after 对比验证。不能信赖文档描述或 agent 推断，要用 `du -sh` 实测
 

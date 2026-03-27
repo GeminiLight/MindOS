@@ -47,13 +47,12 @@ vi.mock('@/lib/LocaleContext', () => ({
 }));
 
 describe('AgentsPanel hub layout', () => {
-  it('renders three hub nav rows (Overview, MCP, Skills), roster label, and agent name', () => {
+  it('renders three hub nav rows (Overview, MCP, Skills) and agent name', () => {
     const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
     const a = messages.en.panels.agents;
     expect(html).toContain(a.navOverview);
     expect(html).toContain(a.navMcp);
     expect(html).toContain(a.navSkills);
-    expect(html).toContain(a.rosterLabel);
     expect(html).toContain('href="/agents"');
     expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=skills"');
