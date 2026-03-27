@@ -115,6 +115,7 @@
 
 ### 已完成 / 不做
 
+- [x] **`/api/mcp/restart` 与 Desktop ProcessManager 竞争修复** — Desktop 设 `MINDOS_MANAGED=1`，API 路由据此跳过自行 spawn；修复 `monitoring` 路由端口默认值 3457→8781；`stop.js` pkill 覆盖 `dist/index.cjs` 路径。详见 `wiki/80-known-pitfalls.md`
 - [x] **`mindos mcp` stdio EADDRINUSE 修复** — `mindos mcp` 默认 `MCP_TRANSPORT=stdio`，所有 HTTP 场景显式声明 `MCP_TRANSPORT=http`。详见 `wiki/80-known-pitfalls.md`
 - [x] **I9：Onboarding 端口分离** — Setup wizard 用临时端口（9100+），完成后按配置端口重启 — v0.5.4
 - [x] **I10：目录视图卡片密度优化** — 文件夹 `p-3` + 22px 图标（紧凑），文件 `p-4` + 28px 图标（保持信息量）。Breadcrumb 增加 FileTypeIcon。FindInPage 阅读模式搜索
