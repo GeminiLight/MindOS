@@ -3,7 +3,23 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['github-slugger'],
-  serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'mcporter'],
+  serverExternalPackages: [
+    'chokidar',
+    'openai',
+    '@mariozechner/pi-ai',
+    '@mariozechner/pi-agent-core',
+    '@mariozechner/pi-coding-agent',
+    'mcporter',
+    // Build-time only: Next.js image optimization
+    'sharp',
+    '@img/*',
+    // Build-time only: TypeScript compiler
+    'typescript',
+    // CLI-only: Terminal UI and native FFI
+    'cli-highlight',
+    '@mariozechner/pi-tui',
+    'koffi',
+  ],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
   turbopack: {
