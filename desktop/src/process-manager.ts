@@ -7,7 +7,6 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
 import { readFileSync, existsSync } from 'fs';
-import { ensureBundledMcpNodeModules } from './ensure-mcp-native-deps';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -41,8 +40,6 @@ export class ProcessManager extends EventEmitter {
   async start(): Promise<void> {
     this.stopped = false;
     this.emit('status-change', 'starting');
-
-    ensureBundledMcpNodeModules(this.opts.projectRoot, this.opts.nodePath, this.opts.env || {});
 
     // 1. Spawn MCP server
     this.mcpProcess = this.spawnMcp();
@@ -118,14 +115,15 @@ export class ProcessManager extends EventEmitter {
   private spawnMcp(): ChildProcess {
     const { projectRoot, mcpPort, webPort, authToken, verbose } = this.opts;
     const mcpDir = path.join(projectRoot, 'mcp');
+    const mcpBundle = path.join(mcpDir, 'dist', 'index.cjs');
 
-    if (!existsSync(mcpDir)) {
+    if (!existsSync(mcpBundle)) {
       throw new Error(
-        `MCP directory not found: ${mcpDir}\nPlease ensure @geminilight/mindos is installed: npm install -g @geminilight/mindos`
+        `MCP bundle not found: ${mcpBundle}\n` +
+        `Please ensure @geminilight/mindos is installed: npm install -g @geminilight/mindos@latest`,
       );
     }
 
-    // Read auth token from config if not provided
     let token = authToken;
     if (!token) {
       try {
@@ -145,12 +143,7 @@ export class ProcessManager extends EventEmitter {
       ...(verbose ? { MCP_VERBOSE: '1' } : {}),
     };
 
-    // Use local tsx from mcp/node_modules/.bin — don't rely on npx (broken in packaged app)
-    const localTsx = path.join(mcpDir, 'node_modules', '.bin', 'tsx');
-    const tsxBin = existsSync(localTsx) ? localTsx : this.opts.npxPath;
-    const args = existsSync(localTsx) ? ['src/index.ts'] : ['tsx', 'src/index.ts'];
-
-    return spawn(tsxBin, args, {
+    return spawn(this.opts.nodePath, [mcpBundle], {
       cwd: mcpDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
