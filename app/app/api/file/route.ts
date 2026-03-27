@@ -1,6 +1,11 @@
 export const dynamic = 'force-dynamic';
+import fs from 'fs';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import { resolveSafe } from '@/lib/core/security';
+import { sanitizeFileName, convertToMarkdown } from '@/lib/core/file-convert';
+import { effectiveSopRoot } from '@/lib/settings';
 import {
   getFileContent,
   saveFileContent,
@@ -52,6 +57,28 @@ export async function GET(req: NextRequest) {
   if (op === 'list_spaces') {
     try {
       return NextResponse.json({ spaces: listMindSpaces() });
+    } catch (e) {
+      return err((e as Error).message, 500);
+    }
+  }
+
+  if (op === 'check_conflicts') {
+    const names = req.nextUrl.searchParams.get('names');
+    const space = req.nextUrl.searchParams.get('space') ?? '';
+    if (!names) return err('missing names');
+    try {
+      const mindRoot = effectiveSopRoot().trim();
+      if (!mindRoot) return err('MIND_ROOT not configured');
+      const fileNames = names.split(',').map(n => n.trim()).filter(Boolean);
+      const conflicts: string[] = [];
+      for (const name of fileNames) {
+        const sanitized = sanitizeFileName(name);
+        const { targetName } = convertToMarkdown(sanitized, '');
+        const rel = space ? path.posix.join(space, targetName) : targetName;
+        const resolved = resolveSafe(mindRoot, rel);
+        if (fs.existsSync(resolved)) conflicts.push(name);
+      }
+      return NextResponse.json({ conflicts });
     } catch (e) {
       return err((e as Error).message, 500);
     }
