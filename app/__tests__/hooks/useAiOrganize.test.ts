@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripThinkingTags, deriveStageHint, type OrganizeStageHint } from '@/hooks/useAiOrganize';
+import { stripThinkingTags, deriveStageHint, CLIENT_TRUNCATE_CHARS, type OrganizeStageHint } from '@/hooks/useAiOrganize';
 
 /**
  * Unit tests for the AI Organize SSE stream parser, helper functions,
@@ -437,5 +437,50 @@ describe('deriveStageHint', () => {
       files: [{ path: 'a.md' }, { path: 'b.md' }],
     });
     expect(hint).toEqual({ stage: 'writing', detail: 'a.md, b.md' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLIENT_TRUNCATE_CHARS & truncation behavior
+// ---------------------------------------------------------------------------
+
+describe('CLIENT_TRUNCATE_CHARS', () => {
+  it('is 20000', () => {
+    expect(CLIENT_TRUNCATE_CHARS).toBe(20_000);
+  });
+
+  it('short content is not truncated', () => {
+    const content = 'Hello world';
+    const truncated = content.length > CLIENT_TRUNCATE_CHARS
+      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
+      : content;
+    expect(truncated).toBe('Hello world');
+  });
+
+  it('content exactly at limit is not truncated', () => {
+    const content = 'a'.repeat(CLIENT_TRUNCATE_CHARS);
+    const truncated = content.length > CLIENT_TRUNCATE_CHARS
+      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
+      : content;
+    expect(truncated).toBe(content);
+    expect(truncated.length).toBe(CLIENT_TRUNCATE_CHARS);
+  });
+
+  it('content exceeding limit is truncated with marker', () => {
+    const content = 'x'.repeat(CLIENT_TRUNCATE_CHARS + 5000);
+    const truncated = content.length > CLIENT_TRUNCATE_CHARS
+      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
+      : content;
+    expect(truncated.length).toBeLessThan(content.length);
+    expect(truncated).toContain('[...truncated');
+    expect(truncated.startsWith('x'.repeat(100))).toBe(true);
+  });
+
+  it('5MB content is truncated to manageable size', () => {
+    const content = 'y'.repeat(5 * 1024 * 1024);
+    const truncated = content.length > CLIENT_TRUNCATE_CHARS
+      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
+      : content;
+    expect(truncated.length).toBeLessThan(25_000);
   });
 });

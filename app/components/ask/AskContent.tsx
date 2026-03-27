@@ -401,7 +401,12 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           messages: requestMessages,
           currentFile,
           attachedFiles,
-          uploadedFiles: upload.localAttachments,
+          uploadedFiles: upload.localAttachments.map(f => ({
+            name: f.name,
+            content: f.content.length > 20_000
+              ? f.content.slice(0, 20_000) + '\n\n[...truncated to first ~20000 chars]'
+              : f.content,
+          })),
         }),
         signal: controller.signal,
       });
