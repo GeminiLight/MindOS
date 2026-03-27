@@ -753,6 +753,7 @@ export const en = {
     organizeUpdated: 'Updated',
     organizeFailed: 'Failed',
     organizeNoChanges: 'AI analyzed your files but made no changes.',
+    organizeToolCallsInfo: (n: number) => `AI executed ${n} operation${n > 1 ? 's' : ''} — check knowledge base for updates`,
     organizeError: 'Organization failed',
     organizeRetry: 'Retry',
     organizeDone: 'Done',

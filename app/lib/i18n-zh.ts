@@ -777,6 +777,7 @@ export const zh = {
     organizeUpdated: '已更新',
     organizeFailed: '失败',
     organizeNoChanges: 'AI 分析了你的文件，但没有做任何更改。',
+    organizeToolCallsInfo: (n: number) => `AI 执行了 ${n} 个操作 — 请检查知识库查看更新`,
     organizeError: '整理失败',
     organizeRetry: '重试',
     organizeDone: '完成',

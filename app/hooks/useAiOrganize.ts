@@ -56,7 +56,7 @@ export const CLIENT_TRUNCATE_CHARS = 20_000;
 const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
-  'edit_lines',
+  'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
 ]);
 
 const FILE_READ_TOOLS = new Set([
@@ -94,6 +94,7 @@ function extractPathFromArgs(toolName: string, args: unknown): string {
   if (!args || typeof args !== 'object') return '';
   const a = args as Record<string, unknown>;
   if (typeof a.path === 'string') return a.path;
+  if (typeof a.from_path === 'string') return a.from_path;
   if (toolName === 'batch_create_files' && Array.isArray(a.files)) {
     return (a.files as Array<{ path?: string }>)
       .map(f => f.path ?? '')
@@ -105,7 +106,7 @@ function extractPathFromArgs(toolName: string, args: unknown): string {
 
 async function consumeOrganizeStream(
   body: ReadableStream<Uint8Array>,
-  onProgress: (state: Partial<AiOrganizeState>) => void,
+  onProgress: (state: Partial<AiOrganizeState> & { summary?: string }) => void,
   signal?: AbortSignal,
 ): Promise<{ changes: OrganizeFileChange[]; summary: string; toolCallCount: number }> {
   const reader = body.getReader();
@@ -150,8 +151,9 @@ async function consumeOrganizeStream(
 
             if (FILE_WRITE_TOOLS.has(toolName)) {
               const path = extractPathFromArgs(toolName, args);
-              const action = (toolName === 'create_file' || toolName === 'batch_create_files')
-                ? 'create' as const : 'update' as const;
+              let action: 'create' | 'update' | 'unknown' = 'update';
+              if (toolName === 'create_file' || toolName === 'batch_create_files') action = 'create';
+              else if (toolName === 'delete_file' || toolName === 'rename_file' || toolName === 'move_file') action = 'unknown';
               pendingTools.set(toolCallId, { name: toolName, path, action });
               onProgress({ currentTool: { name: toolName, path } });
             }
@@ -178,7 +180,7 @@ async function consumeOrganizeStream(
 
           case 'text_delta': {
             summary += (event.delta as string) ?? '';
-            onProgress({ stageHint: { stage: 'analyzing' } });
+            onProgress({ stageHint: { stage: 'analyzing' }, summary: stripThinkingTags(summary) });
             break;
           }
 
@@ -267,6 +269,7 @@ export function useAiOrganize() {
           if (partial.changes) setChanges(partial.changes);
           if (partial.currentTool !== undefined) setCurrentTool(partial.currentTool);
           if (partial.stageHint) setStageHint(partial.stageHint);
+          if (partial.summary !== undefined) setSummary(partial.summary);
         },
         controller.signal,
       );
