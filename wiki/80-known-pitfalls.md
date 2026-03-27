@@ -698,3 +698,21 @@
 - **原因：** `bin/cli.js` 的 `mcp` 命令处理器未设置 `MCP_TRANSPORT`，`mcp/src/index.ts` 默认 `"http"` → 尝试绑定已被占用的 8781 端口
 - **解决：** `mindos mcp` 默认 `MCP_TRANSPORT=stdio`（HTTP 模式由 `mindos start` → `spawnMcp()` 处理）；同时所有 HTTP 场景显式设置 `MCP_TRANSPORT=http` 消除隐式依赖
 - **规则：** 进程间 transport 类型必须显式声明，不能依赖接收端默认值——尤其当同一入口可能被不同上下文调用时
+
+### `/api/mcp/restart` 与 Desktop ProcessManager 竞争导致 EADDRINUSE
+- **现象：** 用户在 Desktop 中点击"重启 MCP"，MCP 进程被 kill 后连续崩溃 3 次
+- **原因：** `/api/mcp/restart` 路由杀死 MCP 后自行 spawn 新 MCP，但 Desktop 的 ProcessManager crash handler 也在 MCP exit 事件后重新 spawn，两个 MCP 进程争抢同一端口
+- **解决：** Desktop 的 spawnWeb 设置 `MINDOS_MANAGED=1` 环境变量；API 路由检测到此标志时只 kill 不 spawn，让 ProcessManager crash handler 独自负责重启
+- **规则：** 当子进程由父进程管理器托管时，其他组件不应绕过管理器自行重启子进程——通过环境变量/标志声明托管关系
+
+### `monitoring/route.ts` MCP 端口默认值 3457（应为 8781）
+- **现象：** 监控 API 返回错误的 MCP 端口号
+- **原因：** 读取 `MCP_PORT` 环境变量（MCP 进程内部使用），而 Web 进程中该变量未设置，fallback 硬编码为 3457（错误值）
+- **解决：** 优先读 `MINDOS_MCP_PORT`，再 fallback `MCP_PORT`，最终 fallback `8781`
+- **规则：** Web 进程内端口配置统一使用 `MINDOS_*` 前缀环境变量；`MCP_PORT` 仅在 MCP 进程内部使用
+
+### `bin/lib/stop.js` pkill 模式未覆盖 esbuild 产物路径
+- **现象：** 当 lsof/ss 不可用时，`mindos stop` 无法清理以 `mcp/dist/index.cjs` 启动的 MCP 进程
+- **原因：** pkill 模式只匹配旧路径 `mcp/src/index`，不匹配新的 `mcp/dist/index`
+- **解决：** 将 pkill 模式改为 `mcp/(src/index|dist/index)`，覆盖新旧两种路径
+- **规则：** 进程清理逻辑必须跟随进程启动方式同步更新

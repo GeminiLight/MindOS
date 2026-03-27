@@ -42,21 +42,34 @@ function killByPort(port: number) {
  *
  * Unlike /api/restart which restarts the entire MindOS (Web + MCP),
  * this endpoint only restarts the MCP server. The Web UI stays up.
+ *
+ * When running under Desktop's ProcessManager, the crash handler
+ * auto-respawns MCP when it exits. We wait for the port to free,
+ * then spawn only if nothing re-bound (i.e. CLI mode with no crash
+ * handler). This avoids spawning a duplicate that races for the port.
  */
 export async function POST() {
   try {
     const cfg = readConfig();
-    const mcpPort = (cfg.mcpPort as number) ?? 8781;
+    const mcpPort = Number(process.env.MINDOS_MCP_PORT) || Number(cfg.mcpPort) || 8781;
     const webPort = process.env.MINDOS_WEB_PORT || '3456';
-    const authToken = cfg.authToken as string | undefined;
+    const authToken = process.env.AUTH_TOKEN || (cfg.authToken as string | undefined);
+    const managed = process.env.MINDOS_MANAGED === '1';
 
     // Step 1: Kill process on MCP port
     killByPort(mcpPort);
 
-    // Step 2: Wait briefly for port to free
-    await new Promise(r => setTimeout(r, 1000));
+    if (managed) {
+      // Desktop ProcessManager will auto-respawn MCP via its crash handler.
+      return NextResponse.json({ ok: true, port: mcpPort, note: 'ProcessManager will respawn' });
+    }
 
-    // Step 3: Spawn new MCP server
+    // Step 2 (CLI mode only): Wait for port to free, then spawn a new MCP
+    const portFree = await waitForPortFree(mcpPort, 5000);
+    if (!portFree) {
+      return NextResponse.json({ error: `MCP port ${mcpPort} still in use after kill` }, { status: 500 });
+    }
+
     const root = process.env.MINDOS_PROJECT_ROOT || resolve(process.cwd(), '..');
     const mcpDir = resolve(root, 'mcp');
 
@@ -87,4 +100,23 @@ export async function POST() {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+function isPortInUse(port: number): Promise<boolean> {
+  return new Promise((res) => {
+    const net = require('net');
+    const server = net.createServer();
+    server.once('error', () => res(true));
+    server.once('listening', () => { server.close(); res(false); });
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+async function waitForPortFree(port: number, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!(await isPortInUse(port))) return true;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return false;
 }
