@@ -802,3 +802,15 @@
   3. 新增 `cleanSummaryForDisplay()` 清洗 AI Markdown：去掉 ## heading、折叠多余空行、截断 500 字符
   4. "has changes" 分支的 summary 也使用同一清洗函数
 - **教训：** 给用户看的文案不能基于内部技术指标的简单映射。`toolCallCount` 包含读写所有操作，不能用"执行了 N 个操作"暗示"改了 N 个文件"
+
+### Desktop CI: macOS keychain 创建失败 + Windows EPERM glob error
+- **现象：**
+  - macOS: `security: SecKeychainCreate /tmp/keychain.XXXXXX: A keychain with the same name already exists.`
+  - Windows: `glob error [Error: EPERM: operation not permitted, scandir 'C:\Users\runneradmin\Application Data']`
+- **原因：**
+  - macOS: `mktemp` 创建了临时文件，`security create-keychain` 在同一路径失败（文件已存在）。CI runner 镜像更新后行为变化
+  - Windows: `C:\Users\runneradmin\Application Data` 是 NTFS 旧版 junction point（指向 AppData\Roaming），权限受限。webpack `next build` 期间 `@vercel/nft` 文件追踪扫描到此路径触发 EPERM
+- **解决：**
+  - macOS: 改用 `"/tmp/mindos-build-$$.keychain"` 确定性路径（不预创建文件），`security create-keychain` 自行创建
+  - Windows: 在 build 前增加 `Fix Windows NTFS junctions` step，用 `rd` 移除 10 个旧版 junction point（只删链接不删目标内容）
+- **教训：** CI workflow 必须防御 runner 镜像更新带来的环境差异。`mktemp` + 需要自行创建文件的工具会冲突。Windows CI 特有的 NTFS junction 问题需预清理

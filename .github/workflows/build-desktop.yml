@@ -55,7 +55,7 @@ jobs:
           fi
           CERT_FILE=$(mktemp /tmp/cert.XXXXXX.p12)
           echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT_FILE"
-          KEYCHAIN_FILE=$(mktemp /tmp/keychain.XXXXXX)
+          KEYCHAIN_FILE="/tmp/mindos-build-$$.keychain"
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
@@ -64,6 +64,23 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
           security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_FILE"
+
+      # Windows: remove legacy NTFS junction points that cause EPERM during webpack glob
+      - name: Fix Windows NTFS junctions
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          rd "%USERPROFILE%\Application Data" 2>nul
+          rd "%USERPROFILE%\Cookies" 2>nul
+          rd "%USERPROFILE%\Local Settings" 2>nul
+          rd "%USERPROFILE%\My Documents" 2>nul
+          rd "%USERPROFILE%\NetHood" 2>nul
+          rd "%USERPROFILE%\PrintHood" 2>nul
+          rd "%USERPROFILE%\Recent" 2>nul
+          rd "%USERPROFILE%\SendTo" 2>nul
+          rd "%USERPROFILE%\Start Menu" 2>nul
+          rd "%USERPROFILE%\Templates" 2>nul
+          echo Junction cleanup done
 
       # Install all dependencies (app + mcp + desktop)
       - name: Install dependencies
@@ -130,7 +147,7 @@ jobs:
             desktop/dist/*.yaml
           if-no-files-found: warn
 
-  # After all platforms finish, rename release to use desktop-vX.Y.Z tag and mark as Latest
+  # After all platforms finish: upload to CDN mirrors + finalize GitHub Release
   finalize:
     if: inputs.publish
     needs: build
@@ -144,6 +161,59 @@ jobs:
           VERSION=$(cd desktop && node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      # Download all platform artifacts into a single directory
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # ── Cloudflare R2 upload (international CDN) ──
+      - name: Upload to Cloudflare R2
+        if: env.R2_ACCESS_KEY_ID != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            # Versioned path
+            aws s3 cp "$file" "s3://mindos-releases/desktop/v${VERSION}/${BASENAME}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+            # Latest path (overwrite)
+            aws s3 cp "$file" "s3://mindos-releases/desktop/latest/${BASENAME}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+          done
+          echo "✅ Uploaded to Cloudflare R2: desktop/v${VERSION}/ + desktop/latest/"
+
+      # ── Alibaba Cloud OSS upload (China CDN) ──
+      - name: Upload to Alibaba Cloud OSS
+        if: env.OSS_ACCESS_KEY_ID != ''
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+        run: |
+          # Install ossutil
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash
+          ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+
+          VERSION="${{ steps.version.outputs.version }}"
+          for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            # Versioned path
+            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" -f
+            # Latest path (overwrite)
+            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/latest/${BASENAME}" -f
+          done
+          echo "✅ Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
+
+      # ── Finalize GitHub Release ──
       - name: Finalize release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -151,14 +221,10 @@ jobs:
           EB_TAG="v${{ steps.version.outputs.version }}"
           DESIRED_TAG=${{ inputs.tag != '' && inputs.tag || format('desktop-v{0}', steps.version.outputs.version) }}
 
-          # electron-builder creates release with tag vX.Y.Z (from package.json).
-          # If we want a different tag (desktop-vX.Y.Z), rename it.
           if [ "$EB_TAG" != "$DESIRED_TAG" ]; then
-            # Create the desired tag pointing to HEAD
             git tag "$DESIRED_TAG" 2>/dev/null || true
             git push origin "$DESIRED_TAG" 2>/dev/null || true
 
-            # Edit the electron-builder release to use our tag and title
             if gh release view "$EB_TAG" >/dev/null 2>&1; then
               gh release edit "$EB_TAG" \
                 --tag "$DESIRED_TAG" \
