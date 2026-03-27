@@ -2,12 +2,11 @@ import os from 'os';
 import path from 'path';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import {
-  createRuntime,
-  createCallResult,
-  type Runtime,
-  type ServerToolInfo,
-} from 'mcporter';
+
+// mcporter is ESM-only — must use dynamic import() to avoid CJS resolution failure
+type McporterModule = typeof import('mcporter');
+type Runtime = Awaited<ReturnType<McporterModule['createRuntime']>>;
+type ServerToolInfo = { name: string; description?: string; inputSchema?: unknown };
 
 export interface McporterServerSummary {
   name: string;
@@ -65,6 +64,13 @@ const TOOL_TIMEOUT_MS = 30_000;
 
 let _runtime: Runtime | null = null;
 let _runtimePromise: Promise<Runtime | null> | null = null;
+let _mcporter: McporterModule | null = null;
+
+async function loadMcporter(): Promise<McporterModule> {
+  if (_mcporter) return _mcporter;
+  _mcporter = await import('mcporter');
+  return _mcporter;
+}
 
 async function getRuntime(): Promise<Runtime | null> {
   if (_runtime) return _runtime;
@@ -72,7 +78,8 @@ async function getRuntime(): Promise<Runtime | null> {
 
   _runtimePromise = (async () => {
     try {
-      const rt = await createRuntime({
+      const mod = await loadMcporter();
+      const rt = await mod.createRuntime({
         configPath: MCP_CONFIG_PATH,
         clientInfo: { name: 'mindos', version: '1.0.0' },
       });
@@ -178,7 +185,8 @@ export async function callMcporterTool(
     args,
     timeoutMs: TOOL_TIMEOUT_MS,
   });
-  const result = createCallResult(raw);
+  const mod = await loadMcporter();
+  const result = mod.createCallResult(raw);
   return result.text('\n') ?? JSON.stringify(raw);
 }
 
