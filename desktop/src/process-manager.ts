@@ -30,6 +30,8 @@ export class ProcessManager extends EventEmitter {
   private crashCount = { web: 0, mcp: 0 };
   private stopped = false;
   private crashHandlers = new Map<ChildProcess, (...args: unknown[]) => void>();
+  /** When true, the next MCP exit is expected (e.g. /api/mcp/restart killed it) — skip crash handler respawn */
+  private mcpRestartInProgress = false;
 
   constructor(opts: ProcessManagerOptions) {
     super();
@@ -107,7 +109,18 @@ export class ProcessManager extends EventEmitter {
   async restart(): Promise<void> {
     await this.stop();
     this.crashCount = { web: 0, mcp: 0 };
+    this.mcpRestartInProgress = false;
     await this.start();
+  }
+
+  /**
+   * Suppress crash-handler respawn for MCP. Call this before an external kill
+   * (e.g. /api/mcp/restart) so ProcessManager does not race with the new MCP
+   * that the API route spawns.
+   */
+  suppressMcpCrashRestart(): void {
+    this.mcpRestartInProgress = true;
+    this.crashCount.mcp = 0;
   }
 
   // ── Private ──
@@ -168,6 +181,7 @@ export class ProcessManager extends EventEmitter {
       NODE_ENV: 'production',
       MINDOS_PROJECT_ROOT: projectRoot,
       MINDOS_CLI_PATH: path.join(projectRoot, 'bin', 'cli.js'),
+      MINDOS_MANAGED: '1',
     };
     if (authToken) env.AUTH_TOKEN = authToken;
     if (webPassword) env.WEB_PASSWORD = webPassword;
@@ -257,11 +271,17 @@ export class ProcessManager extends EventEmitter {
       console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
       if (this.stopped) return;
 
+      // /api/mcp/restart kills the old MCP and spawns its own replacement.
+      // Don't race with it by also respawning here.
+      if (which === 'mcp' && this.mcpRestartInProgress) {
+        this.mcpRestartInProgress = false;
+        return;
+      }
+
       this.crashCount[which]++;
       this.emit('crash', which, this.crashCount[which]);
 
       if (this.crashCount[which] < 3) {
-        // Auto-restart with increasing delay: 1s, 3s
         const delay = this.crashCount[which] === 1 ? 1000 : 3000;
         setTimeout(() => {
           if (this.stopped) return;
@@ -274,8 +294,6 @@ export class ProcessManager extends EventEmitter {
           this.setupCrashHandler(newProc, which);
         }, delay);
       } else {
-        // Only mark overall status as 'error' if web crashes
-        // MCP crash is a degraded state, not a fatal error
         if (which === 'web') {
           this.emit('status-change', 'error');
         }

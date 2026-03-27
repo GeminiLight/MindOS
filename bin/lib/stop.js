@@ -111,7 +111,7 @@ export function stopMindos(opts = {}) {
   if (!pids.length && portKilled === 0) {
     // Last resort: pattern match (for envs without lsof)
     try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
-    try { execSync('pkill -f "mcp/src/index"       2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+    try { execSync('pkill -f "mcp/(src/index|dist/index)" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
   }
 
   if (!pids.length) console.log(green('\u2714 Done'));

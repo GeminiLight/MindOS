@@ -63,7 +63,7 @@ export async function GET() {
   const kbStats = getCachedKbStats(mindRoot);
 
   // Detect MCP status from environment / config
-  const mcpPort = Number(process.env.MCP_PORT) || 3457;
+  const mcpPort = Number(process.env.MINDOS_MCP_PORT) || Number(process.env.MCP_PORT) || 8781;
 
   return NextResponse.json({
     system: {
