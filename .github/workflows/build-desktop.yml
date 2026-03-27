@@ -42,12 +42,25 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Windows: recursively remove all NTFS junction points in user profile
-      # to prevent webpack glob EPERM errors during Next.js standalone build
-      - name: Fix Windows NTFS junctions
+      # Windows: remove problematic paths that cause webpack EACCES during build.
+      # 1. NTFS junction points (legacy aliases like "Application Data" → AppData\Roaming)
+      # 2. WindowsApps directory (App Execution Aliases are reparse points that scandir can't read)
+      - name: Fix Windows filesystem issues
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # Remove WindowsApps from PATH to prevent webpack glob from scanning it
+          $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'WindowsApps' }) -join ';'
+          echo "PATH=$cleanPath" >> $env:GITHUB_ENV
+
+          # Also remove the directory itself so @vercel/nft file tracing can't reach it
+          $winApps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+          if (Test-Path $winApps) {
+            Remove-Item $winApps -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "Removed $winApps"
+          }
+
+          # Remove NTFS junction points that cause EPERM
           $queue = [System.Collections.Generic.Queue[string]]::new()
           $queue.Enqueue($env:USERPROFILE)
           $removed = 0
@@ -57,15 +70,21 @@ jobs:
               foreach ($entry in [System.IO.Directory]::GetFileSystemEntries($dir)) {
                 $attrs = [System.IO.File]::GetAttributes($entry)
                 if ($attrs -band [System.IO.FileAttributes]::ReparsePoint) {
-                  [System.IO.Directory]::Delete($entry)
-                  $removed++
+                  try {
+                    if ($attrs -band [System.IO.FileAttributes]::Directory) {
+                      [System.IO.Directory]::Delete($entry)
+                    } else {
+                      [System.IO.File]::Delete($entry)
+                    }
+                    $removed++
+                  } catch { }
                 } elseif ($attrs -band [System.IO.FileAttributes]::Directory) {
                   $queue.Enqueue($entry)
                 }
               }
             } catch { }
           }
-          Write-Host "Removed $removed NTFS junction(s)"
+          Write-Host "Removed $removed reparse point(s)"
 
       # Install all dependencies (app + mcp + desktop)
       - name: Install dependencies
