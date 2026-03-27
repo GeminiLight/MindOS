@@ -58,6 +58,7 @@
     "!app/package-lock.json"
   ],
   "scripts": {
+    "postinstall": "node scripts/postinstall.js",
     "setup": "node scripts/setup.js",
     "dev": "mindos dev",
     "build": "mindos build",
