@@ -36,7 +36,7 @@
   - en: Where You Think, Agents Act
 - **Headline**
   - zh: 人类在此思考，Agents 依此执行。
-  - en: Humans Think Here, Agents Act Accordingly.
+  - en: Humans Think Here, Agents Act There.
 - **Subhead**
   - zh: 和所有AI共享你的大脑，让心手并进，让认知沉淀。
   - en: Share your mind with every AI. Let mind and action move together. Let cognition compound.
@@ -573,8 +573,8 @@
 
 | Variant | zh Label | en Label | File | URL |
 |---------|----------|----------|------|-----|
-| Apple Silicon | Apple Silicon (M1/M2/M3/M4) | Apple Silicon (M1/M2/M3/M4) | MindOS-mac-arm64.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.dmg` |
-| Intel | Intel | Intel | MindOS-mac-x64.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-x64.dmg` |
+| Apple Silicon | Apple Silicon (M1/M2/M3/M4) | Apple Silicon (M1/M2/M3/M4) | MindOS-arm64.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-arm64.dmg` |
+| Intel | Intel | Intel | MindOS.dmg | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.dmg` |
 
 - **macOS Hint**
   - zh: 首次打开：右键 → 打开，或运行 `xattr -cr /Applications/MindOS.app`
@@ -584,13 +584,13 @@
 
 | Variant | zh Label | en Label | File | URL |
 |---------|----------|----------|------|-----|
-| Windows | Windows (x64) | Windows (x64) | MindOS-win-x64.exe | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-win-x64.exe` |
+| Windows | Windows (x64) | Windows (x64) | MindOS-Setup.exe | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-Setup.exe` |
 
 #### Linux
 
 | Variant | zh Label | en Label | File | URL |
 |---------|----------|----------|------|-----|
-| AppImage | Linux (AppImage) | Linux (AppImage) | MindOS-linux-x64.AppImage | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-linux-x64.AppImage` |
+| AppImage | Linux (AppImage) | Linux (AppImage) | MindOS.AppImage | `https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.AppImage` |
 
 ### Tab: Web + CLI
 
