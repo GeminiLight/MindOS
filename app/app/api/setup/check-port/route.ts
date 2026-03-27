@@ -37,16 +37,20 @@ async function findFreePort(start: number, selfPorts: Set<number>): Promise<numb
 }
 
 /**
- * The port this MindOS web server is actually listening on.
- * Derived from the incoming request URL — always reliable, no network round-trip.
+ * Ports this MindOS instance is known to be using.
  *
- * Note: We intentionally do NOT read settings here. Settings contain *configured*
- * ports (webPort / mcpPort), which may not actually be listening yet (e.g. during
- * first onboard, or if MCP server hasn't started). Treating configured-but-not-
- * listening ports as "self" would mask real conflicts.
+ * myWebPort:  derived from the incoming request URL — always reliable.
+ * myMcpPort:  from MINDOS_MCP_PORT env var set by CLI / Desktop ProcessManager.
+ *
+ * We do NOT read ~/.mindos/config.json here. Config contains *configured* ports
+ * which may not actually be listening yet (e.g. first onboard before MCP starts).
+ * Env vars are only set when a process IS running, so they're safe to trust.
  */
-function getListeningPort(req: NextRequest): number {
-  return parseInt(req.nextUrl.port || '0', 10);
+function getKnownPorts(req: NextRequest): { myWebPort: number; myMcpPort: number } {
+  return {
+    myWebPort: parseInt(req.nextUrl.port || '0', 10),
+    myMcpPort: Number(process.env.MINDOS_MCP_PORT) || 0,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -56,10 +60,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid port' }, { status: 400 });
     }
 
-    const myPort = getListeningPort(req);
+    const { myWebPort, myMcpPort } = getKnownPorts(req);
 
-    // Fast path: if checking the port we're currently listening on, skip network round-trip
-    if (myPort > 0 && port === myPort) {
+    // Fast path: port belongs to this MindOS instance (deterministic, no network)
+    if ((myWebPort > 0 && port === myWebPort) || (myMcpPort > 0 && port === myMcpPort)) {
       return NextResponse.json({ available: true, isSelf: true });
     }
 
@@ -67,13 +71,14 @@ export async function POST(req: NextRequest) {
     if (!inUse) {
       return NextResponse.json({ available: true, isSelf: false });
     }
-    // Port is occupied — check if it's another MindOS instance
+    // Port is occupied by something else — check if it's another MindOS instance
     const self = await isSelfPort(port);
     if (self) {
       return NextResponse.json({ available: true, isSelf: true });
     }
     const skipPorts = new Set<number>();
-    if (myPort > 0) skipPorts.add(myPort);
+    if (myWebPort > 0) skipPorts.add(myWebPort);
+    if (myMcpPort > 0) skipPorts.add(myMcpPort);
     const suggestion = await findFreePort(port + 1, skipPorts);
     return NextResponse.json({ available: false, isSelf: false, suggestion });
   } catch (err) {

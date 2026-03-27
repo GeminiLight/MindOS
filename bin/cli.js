@@ -267,10 +267,12 @@ const commands = {
   // ── dev ────────────────────────────────────────────────────────────────────
   dev: async () => {
     loadConfig();
+    if (!process.env.MINDOS_WEB_PORT) process.env.MINDOS_WEB_PORT = '3456';
+    if (!process.env.MINDOS_MCP_PORT) process.env.MINDOS_MCP_PORT = '8781';
     process.env.MINDOS_CLI_PATH = resolve(ROOT, 'bin', 'cli.js');
     process.env.MINDOS_NODE_BIN = process.execPath;
-    const webPort = process.env.MINDOS_WEB_PORT || '3456';
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+    const webPort = process.env.MINDOS_WEB_PORT;
+    const mcpPort = process.env.MINDOS_MCP_PORT;
     await assertPortFree(Number(webPort), 'web');
     await assertPortFree(Number(mcpPort), 'mcp');
     ensureAppDeps();
@@ -303,8 +305,10 @@ const commands = {
         console.warn(yellow('Warning: daemon mode not supported on this platform. Falling back to foreground.'));
       } else {
         loadConfig();
-        const webPort = process.env.MINDOS_WEB_PORT || '3456';
-        const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+        if (!process.env.MINDOS_WEB_PORT) process.env.MINDOS_WEB_PORT = '3456';
+        if (!process.env.MINDOS_MCP_PORT) process.env.MINDOS_MCP_PORT = '8781';
+        const webPort = process.env.MINDOS_WEB_PORT;
+        const mcpPort = process.env.MINDOS_MCP_PORT;
         console.log(cyan(`Installing MindOS as a background service (${platform})...`));
         await runGatewayCommand('install');
         // install() already starts the service via launchctl bootstrap + RunAtLoad=true.
@@ -334,8 +338,10 @@ const commands = {
       }
     }
     loadConfig();
-    const webPort = process.env.MINDOS_WEB_PORT || '3456';
-    const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
+    if (!process.env.MINDOS_WEB_PORT) process.env.MINDOS_WEB_PORT = '3456';
+    if (!process.env.MINDOS_MCP_PORT) process.env.MINDOS_MCP_PORT = '8781';
+    const webPort = process.env.MINDOS_WEB_PORT;
+    const mcpPort = process.env.MINDOS_MCP_PORT;
 
     // ── Auto-migrate user-rules.md to root user-skill-rules.md ─────────────
     try {
