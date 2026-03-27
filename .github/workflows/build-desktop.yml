@@ -42,25 +42,32 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Windows: remove problematic paths that cause webpack EACCES during build.
-      # 1. NTFS junction points (legacy aliases like "Application Data" → AppData\Roaming)
-      # 2. WindowsApps directory (App Execution Aliases are reparse points that scandir can't read)
+      # Windows: sanitize filesystem to prevent webpack EACCES/EPERM during build.
+      # webpack glob scans broadly during compilation and hits protected system dirs
+      # (WindowsApps, INetCache, etc.) that return permission errors on CI runners.
       - name: Fix Windows filesystem issues
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Remove WindowsApps from PATH to prevent webpack glob from scanning it
+          # Remove protected directories under AppData that webpack glob cannot scan
+          $protectedDirs = @(
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\INetCache'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\INetCookies'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\History')
+          )
+          foreach ($dir in $protectedDirs) {
+            if (Test-Path $dir) {
+              Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+              Write-Host "Removed $dir"
+            }
+          }
+
+          # Strip WindowsApps from PATH
           $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'WindowsApps' }) -join ';'
           echo "PATH=$cleanPath" >> $env:GITHUB_ENV
 
-          # Also remove the directory itself so @vercel/nft file tracing can't reach it
-          $winApps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
-          if (Test-Path $winApps) {
-            Remove-Item $winApps -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "Removed $winApps"
-          }
-
-          # Remove NTFS junction points that cause EPERM
+          # Remove NTFS reparse points (junctions + app execution aliases)
           $queue = [System.Collections.Generic.Queue[string]]::new()
           $queue.Enqueue($env:USERPROFILE)
           $removed = 0
