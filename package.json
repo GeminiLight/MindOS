@@ -52,13 +52,12 @@
     "!assets/demo-flow-zh.html",
     "!assets/images",
     "!mcp/node_modules",
-    "!mcp/dist",
     "!mcp/package-lock.json",
     "!mcp/*.tgz",
     "!app/package-lock.json"
   ],
   "scripts": {
-    "postinstall": "node scripts/postinstall.js",
+    "prepack": "cd mcp && npm install --include=dev && npm run build",
     "setup": "node scripts/setup.js",
     "dev": "mindos dev",
     "build": "mindos build",
