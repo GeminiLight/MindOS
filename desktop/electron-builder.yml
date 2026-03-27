@@ -28,13 +28,11 @@ mac:
       arch:
         - arm64
         - x64
-  # Ad-Hoc signing: allows the app to run on Apple Silicon Macs
-  # without a paid developer account. Users will still see Gatekeeper
-  # warnings, but the app won't crash with "Killed: 9"
-  # To disable signing completely, use: identity: null
-  identity: '-'
   hardenedRuntime: true
   gatekeeperAssess: false
+  notarize: true
+  entitlements: src/entitlements.mac.plist
+  entitlementsInherit: src/entitlements.mac.plist
 
 asar: true
 # macOS Chromium often returns ERR_FAILED for file:// pages loaded from inside app.asar; mirror these out.
