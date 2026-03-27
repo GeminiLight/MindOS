@@ -717,6 +717,16 @@
 - **解决：** 将 pkill 模式改为 `mcp/(src/index|dist/index)`，覆盖新旧两种路径
 - **规则：** 进程清理逻辑必须跟随进程启动方式同步更新
 
+### Setup Wizard MCP 端口误报"已被占用"（自我占用）
+- **现象：** Desktop/CLI 首次安装时，Setup Wizard Step 3 显示 "Port 8781 is already in use"，但占用者是自己的 MCP
+- **原因双重：**
+  1. `check-port` API 的 `isSelfPort()` 依赖 HTTP 探测 `/api/health`，但 MCP 在旧版本可能不响应此端点
+  2. 首次安装时 `loadConfig()` 无 config.json → `MINDOS_MCP_PORT` 环境变量未设置 → Web 进程不知道 MCP 使用的是哪个端口
+- **解决双重：**
+  1. `check-port` 新增 `MINDOS_MCP_PORT` env 快速路径，确定性判断自身端口（不依赖 HTTP 探测）
+  2. `bin/cli.js` 的 `start`/`dev` 命令在 `loadConfig()` 后补设默认值，确保 env 始终传播到子进程
+- **规则：** 进程间端口信息必须通过环境变量确定性传递，不能依赖"探测自己的服务"这种非确定性方式
+
 ## 构建优化 / Bundle Size
 
 ### lucide-react 全量导入导致 Desktop 包体积膨胀 15-25MB
