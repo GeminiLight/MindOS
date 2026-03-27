@@ -47,15 +47,10 @@ function stageHintText(
 }
 
 /**
- * Sub-component for the "organizing" phase with elapsed timer, stage hints, and cancel.
+ * Hook: elapsed timer + thinking-override for the organizing phase.
+ * Lifted to ImportModal level so both full modal and minimized bar share the same state.
  */
-function OrganizingProgress({
-  aiOrganize,
-  t,
-}: {
-  aiOrganize: ReturnType<typeof useAiOrganize>;
-  t: ReturnType<typeof useLocale>['t'];
-}) {
+function useOrganizeTimer(isOrganizing: boolean, stageHint: ReturnType<typeof useAiOrganize>['stageHint']) {
   const [elapsed, setElapsed] = useState(0);
   const [thinkingOverride, setThinkingOverride] = useState(false);
   const lastEventRef = useRef(Date.now());
@@ -63,9 +58,10 @@ function OrganizingProgress({
   useEffect(() => {
     lastEventRef.current = Date.now();
     setThinkingOverride(false);
-  }, [aiOrganize.stageHint]);
+  }, [stageHint]);
 
   useEffect(() => {
+    if (!isOrganizing) { setElapsed(0); setThinkingOverride(false); return; }
     const timer = setInterval(() => {
       setElapsed(e => e + 1);
       if (Date.now() - lastEventRef.current >= THINKING_TIMEOUT_MS) {
@@ -73,17 +69,33 @@ function OrganizingProgress({
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    setElapsed(0);
-    setThinkingOverride(false);
-  }, [aiOrganize.phase]);
+  }, [isOrganizing]);
 
   const displayHint = thinkingOverride
     ? { stage: 'thinking' as const }
-    : aiOrganize.stageHint;
+    : stageHint;
 
+  return { elapsed, displayHint };
+}
+
+/**
+ * Full-size organizing progress view (shown inside the modal).
+ */
+function OrganizingProgress({
+  aiOrganize,
+  t,
+  elapsed,
+  displayHint,
+  onMinimize,
+  onCancel,
+}: {
+  aiOrganize: ReturnType<typeof useAiOrganize>;
+  t: ReturnType<typeof useLocale>['t'];
+  elapsed: number;
+  displayHint: { stage: OrganizeStageHint; detail?: string } | null;
+  onMinimize: () => void;
+  onCancel: () => void;
+}) {
   const fi = t.fileImport as { organizeElapsed: (s: number) => string };
 
   return (
@@ -121,13 +133,22 @@ function OrganizingProgress({
             ))}
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => aiOrganize.abort()}
-          className="mt-2 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-3 py-1.5"
-        >
-          {(t.fileImport as { organizeCancel: string }).organizeCancel}
-        </button>
+        <div className="flex items-center gap-4 mt-2">
+          <button
+            type="button"
+            onClick={onMinimize}
+            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors px-3 py-1.5"
+          >
+            {(t.fileImport as { organizeMinimize: string }).organizeMinimize}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-3 py-1.5"
+          >
+            {(t.fileImport as { organizeCancel: string }).organizeCancel}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -145,6 +166,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
   const [undoing, setUndoing] = useState(false);
   const [conflictFiles, setConflictFiles] = useState<string[]>([]);
   const [showConflictOptions, setShowConflictOptions] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -159,6 +181,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     setUndoing(false);
     setConflictFiles([]);
     setShowConflictOptions(false);
+    setMinimized(false);
     if (defaultSpace) im.setTargetSpace(defaultSpace);
     if (initialFiles && initialFiles.length > 0) {
       im.addFiles(initialFiles);
@@ -171,13 +194,14 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
 
   const handleClose = useCallback(() => {
     if (im.step === 'organizing') {
-      aiOrganize.abort();
+      setMinimized(true);
+      return;
     }
     if (im.files.length > 0 && im.step !== 'done' && im.step !== 'organize_review') {
       if (!confirm(t.fileImport.discardMessage(im.files.length))) return;
     }
     setClosing(true);
-    setTimeout(() => { setClosing(false); onClose(); im.reset(); aiOrganize.reset(); setUndoing(false); setConflictFiles([]); setShowConflictOptions(false); }, 150);
+    setTimeout(() => { setClosing(false); onClose(); im.reset(); aiOrganize.reset(); setUndoing(false); setConflictFiles([]); setShowConflictOptions(false); setMinimized(false); }, 150);
   }, [im, onClose, t, aiOrganize]);
 
   useEffect(() => {
@@ -314,14 +338,59 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     }
   }, [im.step, im.result, onClose, im]);
 
-  if (!open && !closing) return null;
-
   const hasFiles = im.files.length > 0;
   const isSelectStep = im.step === 'select';
   const isArchiveConfig = im.step === 'archive_config';
   const isImporting = im.step === 'importing';
   const isOrganizing = im.step === 'organizing';
   const isOrganizeReview = im.step === 'organize_review';
+
+  const { elapsed, displayHint } = useOrganizeTimer(isOrganizing, aiOrganize.stageHint);
+
+  useEffect(() => {
+    if (minimized && im.step === 'organize_review') {
+      setMinimized(false);
+    }
+  }, [minimized, im.step]);
+
+  if (!open && !closing) return null;
+
+  const fi = t.fileImport as {
+    organizeElapsed: (s: number) => string;
+    organizeCancel: string;
+    organizeExpand: string;
+  };
+
+  if (minimized && isOrganizing) {
+    return (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-xl shadow-lg px-4 py-3 max-w-sm">
+        <div className="relative shrink-0">
+          <Sparkles size={16} className="text-[var(--amber)]" />
+          <Loader2 size={10} className="absolute -bottom-0.5 -right-0.5 text-[var(--amber)] animate-spin" />
+        </div>
+        <span className="text-xs text-foreground truncate">
+          {stageHintText(t, displayHint)}
+        </span>
+        <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">
+          {fi.organizeElapsed(elapsed)}
+        </span>
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          className="text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors shrink-0"
+        >
+          {fi.organizeExpand}
+        </button>
+        <button
+          type="button"
+          onClick={() => { aiOrganize.abort(); aiOrganize.reset(); im.setStep('select'); setMinimized(false); }}
+          className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors shrink-0"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -626,7 +695,14 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
 
             {/* AI Organizing (progress) */}
             {isOrganizing && (
-              <OrganizingProgress aiOrganize={aiOrganize} t={t} />
+              <OrganizingProgress
+                aiOrganize={aiOrganize}
+                t={t}
+                elapsed={elapsed}
+                displayHint={displayHint}
+                onMinimize={() => setMinimized(true)}
+                onCancel={() => { aiOrganize.abort(); aiOrganize.reset(); im.setStep('select'); }}
+              />
             )}
 
             {/* AI Organize review */}

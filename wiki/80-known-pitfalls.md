@@ -759,3 +759,9 @@
 - **当前策略：** 不在 serverExternalPackages 中添加无效配置。等 Turbopack 修复此 issue 或评估切换到 webpack 构建
 - **注意：** `optimizePackageImports: ['lucide-react']` 也已验证为冗余——Turbopack 16.1.6 已内置 lucide-react 优化，有无此配置构建产物**完全一致**（static 4.3M, server 22M）
 - **教训：** 配置改动必须做 before/after 对比验证。不能信赖文档描述或 agent 推断，要用 `du -sh` 实测
+
+### PDF 上传走 file.text() 导致 AI Organize 收到二进制垃圾
+- **现象：** 上传 PDF 文件后选择 AI Organize，AI 始终返回"没有更改"
+- **原因：** `useFileImport` 统一用 `file.text()` 读取所有文件类型。PDF 是二进制格式，`.text()` 返回乱码，AI 无法理解内容
+- **解决：** PDF 文件改用 `/api/extract-pdf` 提取纯文本（该 API 早已存在，但未集成到上传流程）
+- **教训：** 新功能复用现有代码路径时，必须检查路径是否覆盖所有文件类型
