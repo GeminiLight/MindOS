@@ -28,6 +28,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install MCP build dependencies
+        run: cd mcp && npm install
+
       - name: Publish to npm
         run: npm publish --access public
         env:

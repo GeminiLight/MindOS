@@ -57,7 +57,7 @@
     "!app/package-lock.json"
   ],
   "scripts": {
-    "prepack": "cd mcp && npm run build",
+    "prepack": "cd mcp && npm install --include=dev && npm run build",
     "setup": "node scripts/setup.js",
     "dev": "mindos dev",
     "build": "mindos build",
