@@ -7,10 +7,10 @@ import {
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/useFileImport';
-import { useAiOrganize } from '@/hooks/useAiOrganize';
+import { useAiOrganize, stripThinkingTags } from '@/hooks/useAiOrganize';
+import type { OrganizeStageHint } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
-import type { OrganizeStageHint } from '@/hooks/useAiOrganize';
 
 interface ImportModalProps {
   open: boolean;
@@ -97,58 +97,89 @@ function OrganizingProgress({
   onCancel: () => void;
 }) {
   const fi = t.fileImport as { organizeElapsed: (s: number) => string };
+  const summaryPreview = aiOrganize.summary ? stripThinkingTags(aiOrganize.summary).trim().slice(0, 200) : '';
 
   return (
-    <div className="mt-4 space-y-4">
-      <div className="flex flex-col items-center gap-3 py-6">
-        <div className="relative">
-          <Sparkles size={28} className="text-[var(--amber)]" />
-          <Loader2 size={16} className="absolute -bottom-1 -right-1 text-[var(--amber)] animate-spin" />
+    <div className="mt-4 space-y-3">
+      {/* Status header */}
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <Sparkles size={20} className="text-[var(--amber)]" />
+          <Loader2 size={12} className="absolute -bottom-0.5 -right-0.5 text-[var(--amber)] animate-spin" />
         </div>
-        <p className="text-sm text-foreground font-medium">
-          {stageHintText(t, displayHint)}
-        </p>
-        <span className="text-xs text-muted-foreground/60 tabular-nums">
-          {fi.organizeElapsed(elapsed)}
-        </span>
-        {aiOrganize.currentTool && (
-          <p className="text-xs text-muted-foreground animate-pulse">
-            {aiOrganize.currentTool.name.startsWith('create')
-              ? (t.fileImport as { organizeCreating: (p: string) => string }).organizeCreating(aiOrganize.currentTool.path)
-              : (t.fileImport as { organizeUpdating: (p: string) => string }).organizeUpdating(aiOrganize.currentTool.path)}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-foreground font-medium truncate">
+            {stageHintText(t, displayHint)}
           </p>
-        )}
-        {aiOrganize.changes.length > 0 && (
-          <div className="w-full max-h-[120px] overflow-y-auto space-y-1 mt-2">
-            {aiOrganize.changes.map((c, idx) => (
-              <div key={`${c.path}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md text-xs">
-                {c.action === 'create' ? (
-                  <FilePlus size={13} className="text-success shrink-0" />
-                ) : (
-                  <FileEdit size={13} className="text-[var(--amber)] shrink-0" />
-                )}
-                <span className="truncate text-foreground">{c.path}</span>
-                <Check size={12} className="text-success shrink-0 ml-auto" />
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-4 mt-2">
-          <button
-            type="button"
-            onClick={onMinimize}
-            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors px-3 py-1.5"
-          >
-            {(t.fileImport as { organizeMinimize: string }).organizeMinimize}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-3 py-1.5"
-          >
-            {(t.fileImport as { organizeCancel: string }).organizeCancel}
-          </button>
+          <span className="text-xs text-muted-foreground/60 tabular-nums">
+            {fi.organizeElapsed(elapsed)}
+          </span>
         </div>
+      </div>
+
+      {/* Live activity feed */}
+      <div className="bg-muted/30 rounded-lg border border-border/50 overflow-hidden">
+        <div className="max-h-[180px] overflow-y-auto p-3 space-y-2">
+          {/* Streaming AI text */}
+          {summaryPreview && (
+            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {summaryPreview}
+              {summaryPreview.length >= 200 ? '...' : ''}
+            </p>
+          )}
+
+          {/* Current tool being executed */}
+          {aiOrganize.currentTool && (
+            <div className="flex items-center gap-2 text-xs text-[var(--amber)] animate-pulse">
+              <Loader2 size={11} className="animate-spin shrink-0" />
+              <span className="truncate">
+                {aiOrganize.currentTool.name.startsWith('create')
+                  ? (t.fileImport as { organizeCreating: (p: string) => string }).organizeCreating(aiOrganize.currentTool.path)
+                  : (t.fileImport as { organizeUpdating: (p: string) => string }).organizeUpdating(aiOrganize.currentTool.path)}
+              </span>
+            </div>
+          )}
+
+          {/* Completed file operations */}
+          {aiOrganize.changes.map((c, idx) => (
+            <div key={`${c.path}-${idx}`} className="flex items-center gap-2 text-xs">
+              {c.action === 'create' ? (
+                <FilePlus size={12} className="text-success shrink-0" />
+              ) : (
+                <FileEdit size={12} className="text-[var(--amber)] shrink-0" />
+              )}
+              <span className="truncate text-foreground/80">{c.path}</span>
+              <Check size={11} className="text-success shrink-0 ml-auto" />
+            </div>
+          ))}
+
+          {/* Empty state — show pulsing dots */}
+          {!summaryPreview && !aiOrganize.currentTool && aiOrganize.changes.length === 0 && (
+            <div className="flex items-center justify-center gap-1 py-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]/40 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]/40 animate-pulse [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]/40 animate-pulse [animation-delay:300ms]" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={onMinimize}
+          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors px-3 py-1.5"
+        >
+          {(t.fileImport as { organizeMinimize: string }).organizeMinimize}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-3 py-1.5"
+        >
+          {(t.fileImport as { organizeCancel: string }).organizeCancel}
+        </button>
       </div>
     </div>
   );
@@ -731,6 +762,19 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                   <div className="flex flex-col items-center gap-3 py-4">
                     <Sparkles size={28} className="text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">{t.fileImport.organizeNoChanges}</p>
+                    {aiOrganize.summary?.trim() && (
+                      <div className="w-full bg-muted/30 rounded-lg border border-border/50 p-3 mt-1">
+                        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                          {stripThinkingTags(aiOrganize.summary.trim()).slice(0, 300)}
+                        </p>
+                      </div>
+                    )}
+                    {aiOrganize.toolCallCount > 0 && (
+                      <p className="text-xs text-muted-foreground/50">
+                        {(t.fileImport as unknown as { organizeToolCallsInfo?: (n: number) => string }).organizeToolCallsInfo?.(aiOrganize.toolCallCount) ??
+                          `AI executed ${aiOrganize.toolCallCount} operations — check knowledge base for updates`}
+                      </p>
+                    )}
                     <button
                       onClick={handleOrganizeDone}
                       className="mt-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
