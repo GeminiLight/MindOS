@@ -570,9 +570,6 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                   <div className="flex flex-col items-center gap-3 py-4">
                     <Sparkles size={28} className="text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">{t.fileImport.organizeNoChanges}</p>
-                    {aiOrganize.summary && (
-                      <p className="text-xs text-muted-foreground text-center max-w-[300px] whitespace-pre-wrap">{aiOrganize.summary.slice(0, 300)}</p>
-                    )}
                     <button
                       onClick={handleOrganizeDone}
                       className="mt-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
@@ -599,8 +596,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                         </div>
                       ))}
                     </div>
-                    {aiOrganize.summary && (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">{aiOrganize.summary.slice(0, 300)}</p>
+                    {aiOrganize.summary?.trim() && (
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">{aiOrganize.summary.trim().slice(0, 300)}</p>
                     )}
                     <div className="flex items-center justify-end gap-3 pt-2">
                       {aiOrganize.changes.some(c => c.action === 'create' && c.ok) && (

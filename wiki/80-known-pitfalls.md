@@ -87,6 +87,13 @@
 - **规则：** 凡是 JSX 中直接渲染 emoji 字符的元素，**一律加 `suppressHydrationWarning`**。新增 emoji 渲染时必须检查此规则，不要等报错再修
 - **检查方法：** `grep -rn 'emoji\|📝\|🎯\|🚀\|👤\|📥\|🔄\|🔁\|💡\|🤝\|🛡️\|🧩\|⚡\|🧠\|🕐' --include='*.tsx' | grep -v suppressHydrationWarning`
 
+### AI `<thinking>` 标签泄露给终端用户 ✅ 已解决
+- **现象：** AI Organize 完成后，Modal 里直接显示了 AI 内部推理过程 `<thinking>The user wants me to read the uploaded PDF file...`
+- **原因：** `useAiOrganize` 的 `consumeOrganizeStream` 把所有 `text_delta` 事件无差别拼入 `summary`。当模型未开启 extended thinking（Anthropic `thinking_delta` 事件）而是在 text 中直接输出 `<thinking>` XML 标签时，原始推理过程被当作用户可见文本
+- **解决：** 新增 `stripThinkingTags()` 函数，在 stream 消费结束后清洗 `<thinking>...</thinking>` 块和未闭合的 trailing tag；"无更改"状态下不再展示 summary（AI 的技术描述对用户无价值）
+- **规则：** 任何面向终端用户的 AI 输出展示，都必须过滤 `<thinking>`、`<reasoning>`、`<scratchpad>` 等模型内部标签。不能直接 `.slice(0, 300)` 截断展示
+- **文件：** `app/hooks/useAiOrganize.ts`、`app/components/ImportModal.tsx`
+
 ### Modal 标题在 error 状态下仍显示 "完成" ✅ 已解决
 - **现象：** AI Organize 失败时，Modal 标题显示"整理完成"但内容显示"整理失败" + 错误信息，矛盾混淆用户
 - **原因：** `isOrganizeReview` 状态在 success 和 error 时都为 true，标题只按 step 判断（`organizeReviewTitle`），未区分 `aiOrganize.phase` 是 `'done'` 还是 `'error'`
