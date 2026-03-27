@@ -6,7 +6,7 @@
  *
  * Prerequisites:
  *   - App server running at MINDOS_URL (default http://localhost:3456)
- *   - `npx tsx` available (mcp/ dev dependency)
+ *   - MCP bundle built: `cd mcp && npm run build`
  *
  * Run:
  *   cd tests/integration && npx vitest run mcp-transport.test.ts
@@ -35,8 +35,7 @@ function resolveAuthToken(): string {
 }
 
 const AUTH_TOKEN = resolveAuthToken();
-const MCP_SRC = join(__dirname, '../../mcp/src/index.ts');
-const TSX_BIN = join(__dirname, '../../mcp/node_modules/.bin/tsx');
+const MCP_BUNDLE = join(__dirname, '../../mcp/dist/index.cjs');
 
 // Track spawned processes for cleanup
 const children: ChildProcess[] = [];
@@ -90,7 +89,7 @@ describe('MCP HTTP transport', () => {
   it('initializes and lists tools via Streamable HTTP', async () => {
     mcpPort = await getFreePort();
 
-    proc = spawn(TSX_BIN, [MCP_SRC], {
+    proc = spawn(process.execPath, [MCP_BUNDLE], {
       env: {
         ...process.env,
         MCP_TRANSPORT: 'http',
@@ -207,7 +206,7 @@ describe('MCP HTTP transport', () => {
 
 describe('MCP stdio transport', () => {
   it('initializes and lists tools via stdio', async () => {
-    const proc = spawn(TSX_BIN, [MCP_SRC], {
+    const proc = spawn(process.execPath, [MCP_BUNDLE], {
       env: {
         ...process.env,
         MCP_TRANSPORT: 'stdio',
@@ -218,11 +217,9 @@ describe('MCP stdio transport', () => {
     });
     children.push(proc);
 
-    // Collect stderr for debugging
     let stderr = '';
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
 
-    // Helper: send JSON-RPC over stdin and read response from stdout
     function sendAndReceive(msg: Record<string, unknown>): Promise<Record<string, unknown>> {
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('stdio response timeout')), 10_000);
@@ -294,7 +291,7 @@ describe('MCP stdio transport', () => {
 
 describe('MCP tool call via stdio', () => {
   it('calls mindos_list_files and gets response', async () => {
-    const proc = spawn(TSX_BIN, [MCP_SRC], {
+    const proc = spawn(process.execPath, [MCP_BUNDLE], {
       env: {
         ...process.env,
         MCP_TRANSPORT: 'stdio',
