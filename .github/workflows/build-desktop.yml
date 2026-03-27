@@ -42,6 +42,25 @@ jobs:
           node-version: 22
           cache: npm
 
+      # macOS: import Developer ID certificate for code signing + notarization
+      - name: Import Apple certificate
+        if: matrix.platform == 'mac' && secrets.APPLE_CERTIFICATE_BASE64 != ''
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          CERT_FILE=$(mktemp /tmp/cert.XXXXXX.p12)
+          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT_FILE"
+          KEYCHAIN_FILE=$(mktemp /tmp/keychain.XXXXXX)
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security import "$CERT_FILE" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
+          rm "$CERT_FILE"
+
       # Install all dependencies (app + mcp + desktop)
       - name: Install dependencies
         run: |
@@ -80,6 +99,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
           EP_DRAFT: false
+          # macOS notarization (only when secrets are configured)
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ "${{ inputs.publish }}" = "true" ]; then
             cd desktop && npx electron-builder --${{ matrix.platform }} --publish always
