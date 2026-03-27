@@ -5,6 +5,8 @@ import {
   X, FolderInput, FolderOpen, Sparkles, FileText, AlertCircle,
   AlertTriangle, Loader2, Check, FilePlus, FileEdit, Undo2, ChevronDown,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useLocale } from '@/lib/LocaleContext';
 import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/useFileImport';
 import { useAiOrganize, stripThinkingTags } from '@/hooks/useAiOrganize';
@@ -185,9 +187,22 @@ function OrganizingProgress({
   );
 }
 
+const SUMMARY_PROSE = [
+  'prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground',
+  'prose-p:my-1 prose-p:leading-relaxed',
+  'prose-headings:font-semibold prose-headings:my-2 prose-headings:text-[13px]',
+  'prose-ul:my-1 prose-li:my-0.5 prose-ol:my-1',
+  'prose-code:text-[0.8em] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none',
+  'prose-pre:bg-muted prose-pre:text-foreground prose-pre:text-xs',
+  'prose-blockquote:border-l-amber-400 prose-blockquote:text-muted-foreground',
+  'prose-a:text-amber-500 prose-a:no-underline hover:prose-a:underline',
+  'prose-strong:text-foreground prose-strong:font-semibold',
+  'prose-table:text-xs prose-th:py-1 prose-td:py-1',
+].join(' ');
+
 /**
- * Clean raw AI markdown summary for display:
- * strip heading markers, excess blank lines, leading/trailing whitespace.
+ * Clean raw AI markdown for plain-text preview (progress view):
+ * strip heading markers, excess blank lines, truncate.
  */
 function cleanSummaryForDisplay(raw: string): string {
   return stripThinkingTags(raw)
@@ -195,6 +210,16 @@ function cleanSummaryForDisplay(raw: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 500);
+}
+
+/**
+ * Clean raw AI markdown for rendered display:
+ * strip thinking tags & excess blank lines, keep markdown formatting.
+ */
+function cleanSummaryForMarkdown(raw: string): string {
+  return stripThinkingTags(raw)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**
@@ -215,8 +240,8 @@ function OrganizeNoChangesView({
   onDone: () => void;
 }) {
   const fi = t.fileImport as Record<string, unknown>;
-  const cleanSummary = summary ? cleanSummaryForDisplay(summary) : '';
-  const hasSubstance = !!cleanSummary;
+  const mdSummary = summary ? cleanSummaryForMarkdown(summary) : '';
+  const hasSubstance = !!mdSummary;
 
   return (
     <div className="flex flex-col gap-3 py-4">
@@ -224,9 +249,9 @@ function OrganizeNoChangesView({
         <>
           <div className="flex items-start gap-2.5">
             <Sparkles size={16} className="text-[var(--amber)] mt-0.5 shrink-0" />
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-              {cleanSummary}
-            </p>
+            <div className={SUMMARY_PROSE}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{mdSummary}</ReactMarkdown>
+            </div>
           </div>
           {toolCallCount > 0 && (
             <p className="text-xs text-muted-foreground/50 text-center">
@@ -500,13 +525,13 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
         onClick={(e) => { if (e.target === overlayRef.current) handleClose(); }}
       >
         <div
-          className={`w-full max-w-lg bg-card rounded-xl shadow-xl border border-border transition-all duration-200 ${closing ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'}`}
+          className={`w-full max-w-lg max-h-[80vh] flex flex-col bg-card rounded-xl shadow-xl border border-border transition-all duration-200 ${closing ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'}`}
           role="dialog"
           aria-modal="true"
           aria-label={t.fileImport.title}
         >
           {/* Header */}
-          <div className="flex items-start justify-between px-5 pt-5 pb-2">
+          <div className="flex items-start justify-between px-5 pt-5 pb-2 shrink-0">
             <div>
               {isArchiveConfig && (
                 <button
@@ -541,7 +566,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
             </button>
           </div>
 
-          <div className="px-5 pb-5">
+          <div className="px-5 pb-5 overflow-y-auto min-h-0">
             {/* DropZone */}
             {isSelectStep && (
               <div
@@ -854,9 +879,11 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                       ))}
                     </div>
                     {aiOrganize.summary?.trim() && (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">
-                        {cleanSummaryForDisplay(aiOrganize.summary)}
-                      </p>
+                      <div className={SUMMARY_PROSE}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {cleanSummaryForMarkdown(aiOrganize.summary)}
+                        </ReactMarkdown>
+                      </div>
                     )}
                     <div className="flex items-center justify-end gap-3 pt-2">
                       {aiOrganize.changes.some(c => c.action === 'create' && c.ok) && (
