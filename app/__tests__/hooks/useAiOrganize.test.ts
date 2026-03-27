@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripThinkingTags } from '@/hooks/useAiOrganize';
+import { stripThinkingTags, deriveStageHint, type OrganizeStageHint } from '@/hooks/useAiOrganize';
 
 /**
  * Unit tests for the AI Organize SSE stream parser, helper functions,
@@ -379,5 +379,63 @@ describe('stripThinkingTags', () => {
     expect(result).not.toContain('<thinking>');
     expect(result).not.toContain('The user wants me to read');
     expect(result).toBe('The file appears to be a CV (curr');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveStageHint — maps SSE event to user-facing stage
+// ---------------------------------------------------------------------------
+
+describe('deriveStageHint', () => {
+  it('returns analyzing for text_delta events', () => {
+    const hint = deriveStageHint('text_delta', undefined, undefined);
+    expect(hint).toEqual({ stage: 'analyzing' });
+  });
+
+  it('returns reading with filename for read_file tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'read_file', { path: 'notes/meeting.md' });
+    expect(hint).toEqual({ stage: 'reading', detail: 'notes/meeting.md' });
+  });
+
+  it('returns reading with filename for search tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'search', { query: 'test' });
+    expect(hint).toEqual({ stage: 'reading', detail: undefined });
+  });
+
+  it('returns reading for list_files tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'list_files', { path: '/' });
+    expect(hint).toEqual({ stage: 'reading', detail: '/' });
+  });
+
+  it('returns writing for create_file tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'create_file', { path: 'notes/new.md' });
+    expect(hint).toEqual({ stage: 'writing', detail: 'notes/new.md' });
+  });
+
+  it('returns writing for write_file tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'write_file', { path: 'README.md' });
+    expect(hint).toEqual({ stage: 'writing', detail: 'README.md' });
+  });
+
+  it('returns null for tool_end events', () => {
+    const hint = deriveStageHint('tool_end', undefined, undefined);
+    expect(hint).toBeNull();
+  });
+
+  it('returns null for done events', () => {
+    const hint = deriveStageHint('done', undefined, undefined);
+    expect(hint).toBeNull();
+  });
+
+  it('returns reading for read_lines tool_start', () => {
+    const hint = deriveStageHint('tool_start', 'read_lines', { path: 'data.csv' });
+    expect(hint).toEqual({ stage: 'reading', detail: 'data.csv' });
+  });
+
+  it('returns writing for batch_create_files', () => {
+    const hint = deriveStageHint('tool_start', 'batch_create_files', {
+      files: [{ path: 'a.md' }, { path: 'b.md' }],
+    });
+    expect(hint).toEqual({ stage: 'writing', detail: 'a.md, b.md' });
   });
 });
