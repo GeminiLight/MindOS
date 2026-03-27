@@ -31,6 +31,16 @@ export interface AiOrganizeState {
 // SSE stream parser — extracts file operations from /api/ask stream
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip model chain-of-thought tags that should never be shown to users.
+ * Handles both complete `<thinking>...</thinking>` blocks and unclosed trailing tags.
+ */
+export function stripThinkingTags(text: string): string {
+  let cleaned = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+  cleaned = cleaned.replace(/<thinking>[\s\S]*$/gi, '');
+  return cleaned.trim();
+}
+
 const FILE_WRITE_TOOLS = new Set([
   'create_file', 'write_file', 'batch_create_files',
   'append_to_file', 'insert_after_heading', 'update_section',
@@ -134,7 +144,7 @@ async function consumeOrganizeStream(
     reader.releaseLock();
   }
 
-  return { changes, summary };
+  return { changes, summary: stripThinkingTags(summary) };
 }
 
 // ---------------------------------------------------------------------------
