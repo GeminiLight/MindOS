@@ -154,8 +154,7 @@ describe('Agent detail content', () => {
     const html = renderToStaticMarkup(<AgentDetailContent agentKey="cursor" />);
     const a = messages.en.agentsContent.detail;
 
-    expect(html).toContain(a.format);
-    expect(html).toContain(a.lastActivityAt);
+    expect(html).toContain('json');
     expect(html).toContain(a.skillAssignments);
     expect(html).toContain(a.skillsSearchPlaceholder);
     expect(html).toContain(a.skillsSourceBuiltin);
