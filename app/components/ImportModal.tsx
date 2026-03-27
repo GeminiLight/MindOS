@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  X, FolderInput, Sparkles, FileText, AlertCircle,
-  AlertTriangle, Loader2, Check, FilePlus, FileEdit, Undo2,
+  X, FolderInput, FolderOpen, Sparkles, FileText, AlertCircle,
+  AlertTriangle, Loader2, Check, FilePlus, FileEdit, Undo2, ChevronDown,
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/useFileImport';
@@ -30,6 +30,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
   const [closing, setClosing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [conflictFiles, setConflictFiles] = useState<string[]>([]);
+  const [showConflictOptions, setShowConflictOptions] = useState(false);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -42,6 +44,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     im.reset();
     aiOrganize.reset();
     setUndoing(false);
+    setConflictFiles([]);
+    setShowConflictOptions(false);
     if (defaultSpace) im.setTargetSpace(defaultSpace);
     if (initialFiles && initialFiles.length > 0) {
       im.addFiles(initialFiles);
@@ -60,7 +64,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
       if (!confirm(t.fileImport.discardMessage(im.files.length))) return;
     }
     setClosing(true);
-    setTimeout(() => { setClosing(false); onClose(); im.reset(); aiOrganize.reset(); setUndoing(false); }, 150);
+    setTimeout(() => { setClosing(false); onClose(); im.reset(); aiOrganize.reset(); setUndoing(false); setConflictFiles([]); setShowConflictOptions(false); }, 150);
   }, [im, onClose, t, aiOrganize]);
 
   useEffect(() => {
@@ -72,10 +76,25 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     return () => window.removeEventListener('keydown', handler, true);
   }, [open, handleClose]);
 
+  const checkConflicts = useCallback(async (fileNames: string[], space: string) => {
+    try {
+      const names = fileNames.map(encodeURIComponent).join(',');
+      const spaceParam = space ? `&space=${encodeURIComponent(space)}` : '';
+      const res = await fetch(`/api/file?op=check_conflicts&names=${names}${spaceParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConflictFiles(data.conflicts ?? []);
+        setShowConflictOptions((data.conflicts ?? []).length > 0);
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
   const handleIntentSelect = useCallback((intent: ImportIntent) => {
     im.setIntent(intent);
     if (intent === 'archive') {
       im.setStep('archive_config');
+      const names = im.validFiles.map(f => f.name);
+      checkConflicts(names, im.targetSpace);
     } else {
       const attachments: LocalAttachment[] = im.validFiles.map(f => ({
         name: f.name,
@@ -105,6 +124,14 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
       }, 600);
     }
   }, [im, onClose]);
+
+  useEffect(() => {
+    if (im.step === 'archive_config') {
+      const names = im.validFiles.map(f => f.name);
+      checkConflicts(names, im.targetSpace);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [im.targetSpace]);
 
   useEffect(() => {
     if (im.step === 'organizing' && (aiOrganize.phase === 'done' || aiOrganize.phase === 'error')) {
@@ -207,7 +234,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
               )}
               <h2 className="text-base font-semibold text-foreground">
                 {isOrganizing ? t.fileImport.organizeTitle
-                  : isOrganizeReview ? t.fileImport.organizeReviewTitle
+                  : isOrganizeReview
+                    ? (aiOrganize.phase === 'error' ? t.fileImport.organizeErrorTitle : t.fileImport.organizeReviewTitle)
                   : isArchiveConfig ? t.fileImport.archiveConfigTitle
                   : t.fileImport.title}
               </h2>
@@ -345,9 +373,14 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                       const stem = f.name.replace(/\.[^.]+$/, '');
                       const targetName = `${stem}.${targetExt}`;
                       const targetPath = im.targetSpace ? `${im.targetSpace}/${targetName}` : targetName;
+                      const hasConflict = conflictFiles.includes(f.name);
                       return (
-                        <div key={`preview-${idx}`} className="text-xs text-muted-foreground px-3">
-                          {f.name} <span className="text-muted-foreground/50">{t.fileImport.arrowTo}</span> {targetPath}
+                        <div key={`preview-${idx}`} className="flex items-center gap-1.5 text-xs text-muted-foreground px-3">
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-muted-foreground/50 shrink-0">{t.fileImport.arrowTo}</span>
+                          <FolderOpen size={12} className="text-muted-foreground/60 shrink-0" />
+                          <span className={`truncate ${hasConflict ? 'text-[var(--amber)]' : ''}`}>{targetPath}</span>
+                          {hasConflict && <AlertTriangle size={11} className="text-[var(--amber)] shrink-0" />}
                         </div>
                       );
                     })}
@@ -398,46 +431,58 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                   </select>
                 </div>
 
-                {/* Conflict strategy */}
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1.5 block">{t.fileImport.conflictLabel}</label>
-                  <div className="flex flex-col gap-1.5">
-                    {([
-                      { value: 'rename' as ConflictMode, label: t.fileImport.conflictRename },
-                      { value: 'skip' as ConflictMode, label: t.fileImport.conflictSkip },
-                      { value: 'overwrite' as ConflictMode, label: t.fileImport.conflictOverwrite },
-                    ]).map(opt => (
-                      <label
-                        key={opt.value}
-                        className={`flex items-center gap-2 py-1 text-sm cursor-pointer ${
-                          opt.value === 'overwrite' ? 'text-error' : 'text-foreground'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="conflict"
-                          value={opt.value}
-                          checked={im.conflict === opt.value}
-                          onChange={() => im.setConflict(opt.value)}
-                          className="accent-[var(--amber)]"
-                        />
-                        {opt.label}
-                        {opt.value === 'overwrite' && (
-                          <AlertTriangle size={13} className="text-error shrink-0" />
+                {/* Conflict strategy — progressive disclosure */}
+                {conflictFiles.length > 0 ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowConflictOptions(v => !v)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors"
+                    >
+                      <AlertTriangle size={12} className="shrink-0" />
+                      {t.fileImport.conflictsFound(conflictFiles.length)}
+                      <ChevronDown size={12} className={`shrink-0 transition-transform duration-200 ${showConflictOptions ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showConflictOptions && (
+                      <div className="flex flex-col gap-1.5 mt-2 pl-0.5">
+                        {([
+                          { value: 'rename' as ConflictMode, label: t.fileImport.conflictRename },
+                          { value: 'skip' as ConflictMode, label: t.fileImport.conflictSkip },
+                          { value: 'overwrite' as ConflictMode, label: t.fileImport.conflictOverwrite },
+                        ]).map(opt => (
+                          <label
+                            key={opt.value}
+                            className={`flex items-center gap-2 py-0.5 text-xs cursor-pointer ${
+                              opt.value === 'overwrite' ? 'text-error' : 'text-foreground'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="conflict"
+                              value={opt.value}
+                              checked={im.conflict === opt.value}
+                              onChange={() => im.setConflict(opt.value)}
+                              className="accent-[var(--amber)]"
+                            />
+                            {opt.label}
+                            {opt.value === 'overwrite' && (
+                              <AlertTriangle size={11} className="text-error shrink-0" />
+                            )}
+                          </label>
+                        ))}
+                        {im.conflict === 'overwrite' && (
+                          <p className="text-2xs text-error/80 pl-5">{t.fileImport.overwriteWarn}</p>
                         )}
-                      </label>
-                    ))}
-                    {im.conflict === 'overwrite' && (
-                      <p className="text-2xs text-error/80 pl-6">{t.fileImport.overwriteWarn}</p>
+                      </div>
                     )}
                   </div>
-                </div>
+                ) : null}
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     onClick={handleClose}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
+                    className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-2 py-1.5"
                   >
                     {t.fileImport.cancel}
                   </button>
@@ -505,7 +550,6 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                 {aiOrganize.phase === 'error' ? (
                   <div className="flex flex-col items-center gap-3 py-4">
                     <AlertCircle size={28} className="text-error" />
-                    <p className="text-sm text-error font-medium">{t.fileImport.organizeError}</p>
                     <p className="text-xs text-muted-foreground text-center max-w-[300px]">{aiOrganize.error}</p>
                     <div className="flex gap-3 mt-2">
                       <button

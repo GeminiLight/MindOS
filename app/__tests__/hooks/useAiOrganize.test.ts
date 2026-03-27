@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Unit tests for the AI Organize SSE stream parser and helper functions.
- * Tests the pure logic extracted from useAiOrganize hook.
+ * Unit tests for the AI Organize SSE stream parser, helper functions,
+ * and ImportModal title-selection logic.
  */
 
 // Replicate pure functions from useAiOrganize for testability
@@ -255,5 +255,75 @@ describe('parseOrganizeEvents', () => {
     ];
     const { changes } = parseOrganizeEvents(events);
     expect(changes[0].action).toBe('update');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ImportModal organize title selection logic
+// ---------------------------------------------------------------------------
+
+type OrganizePhase = 'idle' | 'organizing' | 'done' | 'error';
+type ImportStep = 'select' | 'archive_config' | 'importing' | 'done' | 'organizing' | 'organize_review';
+
+function resolveOrganizeTitle(
+  step: ImportStep,
+  organizePhase: OrganizePhase,
+  titles: { organizing: string; reviewDone: string; reviewError: string; archiveConfig: string; default: string },
+): string {
+  const isOrganizing = step === 'organizing';
+  const isOrganizeReview = step === 'organize_review';
+  const isArchiveConfig = step === 'archive_config';
+
+  if (isOrganizing) return titles.organizing;
+  if (isOrganizeReview) {
+    return organizePhase === 'error' ? titles.reviewError : titles.reviewDone;
+  }
+  if (isArchiveConfig) return titles.archiveConfig;
+  return titles.default;
+}
+
+describe('ImportModal organize title selection', () => {
+  const titles = {
+    organizing: 'AI Organizing',
+    reviewDone: 'Organization Complete',
+    reviewError: 'Organization Failed',
+    archiveConfig: 'Save to Knowledge Base',
+    default: 'Import Files',
+  };
+
+  it('shows organizing title during AI processing', () => {
+    expect(resolveOrganizeTitle('organizing', 'organizing', titles)).toBe('AI Organizing');
+  });
+
+  it('shows complete title when organize succeeds', () => {
+    expect(resolveOrganizeTitle('organize_review', 'done', titles)).toBe('Organization Complete');
+  });
+
+  it('shows error title when organize fails — NOT "complete"', () => {
+    expect(resolveOrganizeTitle('organize_review', 'error', titles)).toBe('Organization Failed');
+  });
+
+  it('shows archive config title for save step', () => {
+    expect(resolveOrganizeTitle('archive_config', 'idle', titles)).toBe('Save to Knowledge Base');
+  });
+
+  it('shows default title for select step', () => {
+    expect(resolveOrganizeTitle('select', 'idle', titles)).toBe('Import Files');
+  });
+
+  it('shows complete title for organize_review with idle phase (edge case)', () => {
+    expect(resolveOrganizeTitle('organize_review', 'idle', titles)).toBe('Organization Complete');
+  });
+
+  it('shows complete title for organize_review with organizing phase (edge case)', () => {
+    expect(resolveOrganizeTitle('organize_review', 'organizing', titles)).toBe('Organization Complete');
+  });
+
+  it('shows default title for importing step', () => {
+    expect(resolveOrganizeTitle('importing', 'idle', titles)).toBe('Import Files');
+  });
+
+  it('shows default title for done step', () => {
+    expect(resolveOrganizeTitle('done', 'idle', titles)).toBe('Import Files');
   });
 });

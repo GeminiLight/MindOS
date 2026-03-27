@@ -87,6 +87,13 @@
 - **规则：** 凡是 JSX 中直接渲染 emoji 字符的元素，**一律加 `suppressHydrationWarning`**。新增 emoji 渲染时必须检查此规则，不要等报错再修
 - **检查方法：** `grep -rn 'emoji\|📝\|🎯\|🚀\|👤\|📥\|🔄\|🔁\|💡\|🤝\|🛡️\|🧩\|⚡\|🧠\|🕐' --include='*.tsx' | grep -v suppressHydrationWarning`
 
+### Modal 标题在 error 状态下仍显示 "完成" ✅ 已解决
+- **现象：** AI Organize 失败时，Modal 标题显示"整理完成"但内容显示"整理失败" + 错误信息，矛盾混淆用户
+- **原因：** `isOrganizeReview` 状态在 success 和 error 时都为 true，标题只按 step 判断（`organizeReviewTitle`），未区分 `aiOrganize.phase` 是 `'done'` 还是 `'error'`
+- **解决：** 标题逻辑增加 phase 判断：`phase === 'error'` 时显示 `organizeErrorTitle`（"整理失败"），否则显示 `organizeReviewTitle`（"整理完成"）；同时移除 body 中重复的错误标签
+- **规则：** 当同一个 UI step 同时承载 success 和 error 两种状态时，所有展示元素（标题、图标、描述）都必须根据实际状态分支渲染，不能只用一套文案
+- **文件：** `app/components/ImportModal.tsx`、`app/lib/i18n-en.ts`、`app/lib/i18n-zh.ts`
+
 ### AskPanel/SettingsPanel 与 Modal 版本代码重复 ✅ 已解决
 - **现象：** `panels/AskPanel.tsx` 与 `AskModal.tsx` 约 80% 逻辑重复
 - **解决：** 提取 `ask/AskContent.tsx` 和 `settings/SettingsContent.tsx` 共享核心组件。AskModal/AskPanel、SettingsModal/SettingsPanel 各缩减为 ~20 行 thin wrapper。`variant: 'modal' | 'panel'` 控制差异（ESC handler、close 按钮、abort-on-close、尺寸微调）
