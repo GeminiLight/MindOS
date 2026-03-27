@@ -577,3 +577,57 @@ describe('extractPathFromArgs extended', () => {
     expect(extractPathFromArgs('delete_file', null)).toBe('');
   });
 });
+
+describe('cleanSummaryForDisplay', () => {
+  function cleanSummaryForDisplay(raw: string): string {
+    return stripThinkingTags(raw)
+      .replace(/^#{1,4}\s+/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      .slice(0, 500);
+  }
+
+  it('strips markdown headings', () => {
+    expect(cleanSummaryForDisplay('## 写入结果\n内容')).toBe('写入结果\n内容');
+    expect(cleanSummaryForDisplay('### 现有文件\n说明')).toBe('现有文件\n说明');
+    expect(cleanSummaryForDisplay('# Title\n## Sub\nbody')).toBe('Title\nSub\nbody');
+  });
+
+  it('collapses excessive blank lines', () => {
+    expect(cleanSummaryForDisplay('a\n\n\n\nb')).toBe('a\n\nb');
+  });
+
+  it('strips thinking tags', () => {
+    expect(cleanSummaryForDisplay('<thinking>internal</thinking>result')).toBe('result');
+  });
+
+  it('trims whitespace', () => {
+    expect(cleanSummaryForDisplay('  hello  ')).toBe('hello');
+  });
+
+  it('truncates to 500 chars', () => {
+    const long = 'x'.repeat(600);
+    expect(cleanSummaryForDisplay(long).length).toBe(500);
+  });
+
+  it('handles empty string', () => {
+    expect(cleanSummaryForDisplay('')).toBe('');
+  });
+
+  it('handles real-world AI summary with mixed markdown', () => {
+    const real = `已发现这份 CV 今天早些时候已有一次处理记录。
+
+## ✅ 写入结果
+
+### 现有文件（本次上传 = 同一份 CV，内容已完整录入）
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| 简历.md | ✅ 已有 | 个人信息 |`;
+    const result = cleanSummaryForDisplay(real);
+    expect(result).not.toContain('## ');
+    expect(result).not.toContain('### ');
+    expect(result).toContain('写入结果');
+    expect(result).toContain('现有文件');
+  });
+});

@@ -185,6 +185,75 @@ function OrganizingProgress({
   );
 }
 
+/**
+ * Clean raw AI markdown summary for display:
+ * strip heading markers, excess blank lines, leading/trailing whitespace.
+ */
+function cleanSummaryForDisplay(raw: string): string {
+  return stripThinkingTags(raw)
+    .replace(/^#{1,4}\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 500);
+}
+
+/**
+ * Organize result when no tracked file changes were detected.
+ * Two sub-states:
+ * 1. AI completed work + provided summary → show summary as primary content
+ * 2. No summary → brief "up to date" message
+ */
+function OrganizeNoChangesView({
+  summary,
+  toolCallCount,
+  t,
+  onDone,
+}: {
+  summary: string;
+  toolCallCount: number;
+  t: ReturnType<typeof useLocale>['t'];
+  onDone: () => void;
+}) {
+  const fi = t.fileImport as Record<string, unknown>;
+  const cleanSummary = summary ? cleanSummaryForDisplay(summary) : '';
+  const hasSubstance = !!cleanSummary;
+
+  return (
+    <div className="flex flex-col gap-3 py-4">
+      {hasSubstance ? (
+        <>
+          <div className="flex items-start gap-2.5">
+            <Sparkles size={16} className="text-[var(--amber)] mt-0.5 shrink-0" />
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+              {cleanSummary}
+            </p>
+          </div>
+          {toolCallCount > 0 && (
+            <p className="text-xs text-muted-foreground/50 text-center">
+              {(fi.organizeToolCallsInfo as ((n: number) => string) | undefined)?.(toolCallCount)}
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <Sparkles size={24} className="text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {fi.organizeNoChanges as string}
+          </p>
+        </div>
+      )}
+      <div className="flex justify-center pt-1">
+        <button
+          onClick={onDone}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
+        >
+          {fi.organizeDone as string}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ImportModal({ open, onClose, defaultSpace, initialFiles }: ImportModalProps) {
   const { t } = useLocale();
   const im = useFileImport();
@@ -759,29 +828,12 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                     </div>
                   </div>
                 ) : aiOrganize.changes.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 py-4">
-                    <Sparkles size={28} className="text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">{t.fileImport.organizeNoChanges}</p>
-                    {aiOrganize.summary?.trim() && (
-                      <div className="w-full bg-muted/30 rounded-lg border border-border/50 p-3 mt-1">
-                        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                          {stripThinkingTags(aiOrganize.summary.trim()).slice(0, 300)}
-                        </p>
-                      </div>
-                    )}
-                    {aiOrganize.toolCallCount > 0 && (
-                      <p className="text-xs text-muted-foreground/50">
-                        {(t.fileImport as unknown as { organizeToolCallsInfo?: (n: number) => string }).organizeToolCallsInfo?.(aiOrganize.toolCallCount) ??
-                          `AI executed ${aiOrganize.toolCallCount} operations — check knowledge base for updates`}
-                      </p>
-                    )}
-                    <button
-                      onClick={handleOrganizeDone}
-                      className="mt-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all duration-200"
-                    >
-                      {t.fileImport.organizeDone}
-                    </button>
-                  </div>
+                  <OrganizeNoChangesView
+                    summary={aiOrganize.summary}
+                    toolCallCount={aiOrganize.toolCallCount}
+                    t={t}
+                    onDone={handleOrganizeDone}
+                  />
                 ) : (
                   <>
                     <div className="max-h-[200px] overflow-y-auto space-y-1">
@@ -802,7 +854,9 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
                       ))}
                     </div>
                     {aiOrganize.summary?.trim() && (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">{aiOrganize.summary.trim().slice(0, 300)}</p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">
+                        {cleanSummaryForDisplay(aiOrganize.summary)}
+                      </p>
                     )}
                     <div className="flex items-center justify-end gap-3 pt-2">
                       {aiOrganize.changes.some(c => c.action === 'create' && c.ok) && (
