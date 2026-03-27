@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { stripThinkingTags } from '@/hooks/useAiOrganize';
 
 /**
  * Unit tests for the AI Organize SSE stream parser, helper functions,
@@ -325,5 +326,58 @@ describe('ImportModal organize title selection', () => {
 
   it('shows default title for done step', () => {
     expect(resolveOrganizeTitle('done', 'idle', titles)).toBe('Import Files');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripThinkingTags
+// ---------------------------------------------------------------------------
+
+describe('stripThinkingTags', () => {
+  it('strips a complete <thinking> block', () => {
+    const input = '<thinking>Internal reasoning here</thinking>The actual summary.';
+    expect(stripThinkingTags(input)).toBe('The actual summary.');
+  });
+
+  it('strips multiple <thinking> blocks', () => {
+    const input = '<thinking>First thought</thinking>Hello <thinking>Second thought</thinking>World';
+    expect(stripThinkingTags(input)).toBe('Hello World');
+  });
+
+  it('strips multiline <thinking> blocks', () => {
+    const input = '<thinking>\nThe user wants me to read the PDF.\nLet me analyze.\n</thinking>\nI organized your files.';
+    expect(stripThinkingTags(input)).toBe('I organized your files.');
+  });
+
+  it('strips unclosed trailing <thinking> tag', () => {
+    const input = 'Summary text<thinking>Partial reasoning that got cut off';
+    expect(stripThinkingTags(input)).toBe('Summary text');
+  });
+
+  it('returns empty string when entire content is thinking', () => {
+    const input = '<thinking>All internal reasoning, no user-facing text</thinking>';
+    expect(stripThinkingTags(input)).toBe('');
+  });
+
+  it('leaves normal text untouched', () => {
+    const input = 'I created 3 files and organized your notes.';
+    expect(stripThinkingTags(input)).toBe('I created 3 files and organized your notes.');
+  });
+
+  it('handles empty string', () => {
+    expect(stripThinkingTags('')).toBe('');
+  });
+
+  it('is case-insensitive', () => {
+    const input = '<Thinking>Internal</Thinking>Visible';
+    expect(stripThinkingTags(input)).toBe('Visible');
+  });
+
+  it('handles the exact bug scenario from the screenshot', () => {
+    const input = '<thinking>\nThe user wants me to read the uploaded PDF file and extract key information to store in the knowledge base. The PDF is already in the content as an uploaded file, but it\'s in binary format (PDF). Let me analyze what I can see from the truncated content.\n</thinking>\n\nThe file appears to be a CV (curr';
+    const result = stripThinkingTags(input);
+    expect(result).not.toContain('<thinking>');
+    expect(result).not.toContain('The user wants me to read');
+    expect(result).toBe('The file appears to be a CV (curr');
   });
 });
