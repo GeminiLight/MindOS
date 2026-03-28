@@ -6,6 +6,7 @@ import { ChildProcess, spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
+import net from 'net';
 import { readFileSync, existsSync } from 'fs';
 
 export interface ProcessManagerOptions {
@@ -29,6 +30,8 @@ export class ProcessManager extends EventEmitter {
   private opts: ProcessManagerOptions;
   private crashCount = { web: 0, mcp: 0 };
   private stopped = false;
+  /** True when an external MCP (CLI-started) is reused instead of spawning our own */
+  private externalMcp = false;
   private crashHandlers = new Map<ChildProcess, (...args: unknown[]) => void>();
   private respawnTimers: ReturnType<typeof setTimeout>[] = [];
   /** When true, the next MCP exit is expected (e.g. /api/mcp/restart killed it) — skip crash handler respawn */
@@ -43,17 +46,28 @@ export class ProcessManager extends EventEmitter {
     this.opts = opts;
   }
 
+  /** Current effective ports (may change on respawn if original port is occupied) */
+  get webPort(): number { return this.opts.webPort; }
+  get mcpPort(): number { return this.opts.mcpPort; }
+
   /** Start MCP + Next.js, then wait for health check */
   async start(): Promise<void> {
     this.stopped = false;
     this.webProcessDied = false;
     this.webStderrLines = [];
+    this.externalMcp = false;
     this.emit('status-change', 'starting');
 
-    // 1. Spawn MCP server
-    this.mcpProcess = this.spawnMcp();
-    this.guardSpawnError(this.mcpProcess, 'mcp');
-    this.setupCrashHandler(this.mcpProcess, 'mcp');
+    // 1. Spawn MCP server — or detect an existing one on the target port
+    const mcpAlreadyRunning = await this.checkMcpHealth(this.opts.mcpPort);
+    if (mcpAlreadyRunning) {
+      console.info(`[MindOS] Existing MCP detected on port ${this.opts.mcpPort} — reusing`);
+      this.externalMcp = true;
+    } else {
+      this.mcpProcess = this.spawnMcp();
+      this.guardSpawnError(this.mcpProcess, 'mcp');
+      this.setupCrashHandler(this.mcpProcess, 'mcp');
+    }
 
     // 2. Spawn Next.js
     this.webProcess = this.spawnWeb();
@@ -118,7 +132,8 @@ export class ProcessManager extends EventEmitter {
 
     await Promise.all([
       killProcess(this.webProcess),
-      killProcess(this.mcpProcess),
+      // Don't kill external MCP (owned by CLI)
+      this.externalMcp ? Promise.resolve() : killProcess(this.mcpProcess),
     ]);
 
     this.webProcess = null;
@@ -319,6 +334,39 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
+  /** Quick check if a MindOS MCP is already listening on a port */
+  private checkMcpHealth(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const req = http.get({
+        hostname: '127.0.0.1',
+        port,
+        path: '/api/health',
+        timeout: 1500,
+      }, (res) => {
+        resolve(res.statusCode === 200);
+        res.resume();
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+  }
+
+  /** Find next available port starting from the given one */
+  private findFreePort(start: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const tryPort = (port: number) => {
+        if (attempts++ > 10) { reject(new Error(`No free port in range ${start}-${start + 10}`)); return; }
+        const srv = net.createServer();
+        srv.once('error', () => tryPort(port + 1));
+        srv.listen(port, '127.0.0.1', () => {
+          srv.close(() => resolve(port));
+        });
+      };
+      tryPort(start);
+    });
+  }
+
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
     this.pipeChildOutput(proc, which);
     const handler = (code: number | null, signal: string | null) => {
@@ -338,15 +386,37 @@ export class ProcessManager extends EventEmitter {
 
       if (this.crashCount[which] < 3) {
         const delay = this.crashCount[which] === 1 ? 1000 : 3000;
-        const timer = setTimeout(() => {
+        const timer = setTimeout(async () => {
           if (this.stopped) return;
-          const newProc = which === 'mcp' ? this.spawnMcp() : this.spawnWeb();
-          if (which === 'mcp') {
-            this.mcpProcess = newProc;
-          } else {
-            this.webProcess = newProc;
+          try {
+            // Try a fresh port — the old one may still be in TIME_WAIT or occupied
+            const currentPort = which === 'mcp' ? this.opts.mcpPort : this.opts.webPort;
+            const newPort = await this.findFreePort(currentPort).catch(() => currentPort);
+            if (newPort !== currentPort) {
+              console.info(`[MindOS:${which}] port ${currentPort} still occupied, switching to ${newPort}`);
+              if (which === 'mcp') this.opts.mcpPort = newPort;
+              else this.opts.webPort = newPort;
+            }
+            // For MCP: check if someone else started one while we were down
+            if (which === 'mcp') {
+              const externalOk = await this.checkMcpHealth(this.opts.mcpPort);
+              if (externalOk) {
+                console.info(`[MindOS] External MCP now available on port ${this.opts.mcpPort} — reusing`);
+                this.externalMcp = true;
+                this.mcpProcess = null;
+                return;
+              }
+            }
+            const newProc = which === 'mcp' ? this.spawnMcp() : this.spawnWeb();
+            if (which === 'mcp') {
+              this.mcpProcess = newProc;
+            } else {
+              this.webProcess = newProc;
+            }
+            this.setupCrashHandler(newProc, which);
+          } catch (err) {
+            console.error(`[MindOS:${which}] respawn failed:`, err);
           }
-          this.setupCrashHandler(newProc, which);
         }, delay);
         this.respawnTimers.push(timer);
       } else {

@@ -440,18 +440,24 @@ async function startLocalMode(): Promise<string | null> {
     }
   }
 
-  currentWebPort = webPort;
-  currentMcpPort = mcpPort;
+  // Read effective ports (may have changed during EADDRINUSE retry or respawn)
+  currentWebPort = processManager.webPort;
+  currentMcpPort = processManager.mcpPort;
+  webPort = currentWebPort;
+  mcpPort = currentMcpPort;
 
   let crashDialogShown = false;
   let mcpFailed = false;
+  let startupComplete = false;  // Only show crash dialog after successful startup
 
   processManager.on('crash', (which: string, count: number) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
       updateTrayMenu(currentMode, 'running', undefined, webPort, mcpPort);
     }
-    if (which === 'web' && count >= 3 && !crashDialogShown) {
+    // During startup, crashes are handled by start()'s throw → splash error.
+    // Only show crash dialog for post-startup failures.
+    if (which === 'web' && count >= 3 && !crashDialogShown && startupComplete) {
       // Check if MindOS update is in progress — don't show crash dialog during update
       const updateStatusPath = path.join(CONFIG_DIR, 'update-status.json');
       let isUpdating = false;
@@ -507,6 +513,7 @@ async function startLocalMode(): Promise<string | null> {
 
   try {
     await processManager.start();
+    startupComplete = true;
     splashStatus({ status: 'ready', done: true });
     return `http://127.0.0.1:${webPort}`;
   } catch (err) {
