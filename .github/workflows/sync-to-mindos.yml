@@ -86,6 +86,10 @@ jobs:
             exit 1
           }
 
+          # Clean slate: remove everything except .git so only explicitly
+          # synced content remains. Prevents stale private files from persisting.
+          find /tmp/mindos -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
           rsync -av --delete --exclude='node_modules' --exclude='.next' app/ /tmp/mindos/app/
           rsync -av --delete --exclude='node_modules' mcp/ /tmp/mindos/mcp/
           [ -d desktop/ ] && rsync -av --delete --exclude='node_modules' --exclude='dist' --exclude='dist-electron' --exclude='dist-renderer' desktop/ /tmp/mindos/desktop/
