@@ -12,7 +12,17 @@
 ### Next 生产进程绑定机器 hostname，`127.0.0.1` 健康检查永远超时
 - **现象：** Desktop 或 `verify-standalone` 等不到 `/api/health`，但本机 `curl http://$(hostname):PORT/api/health` 有响应
 - **原因：** Next 默认把监听地址设成 **系统 hostname**，未监听 loopback
-- **解决：** 未显式设置 `HOSTNAME` 时，Desktop `ProcessManager` 与 CLI `mindos start`（`next start`）注入 `HOSTNAME=127.0.0.1`；需要对外监听时用户自行 export `HOSTNAME=0.0.0.0`
+- **解决：** Desktop `ProcessManager` 与 CLI `mindos start`（`next start`）**无条件**注入 `HOSTNAME=127.0.0.1`（旧版条件判断 `if (!env.HOSTNAME)` 在有系统 HOSTNAME 时不生效，已改为无条件赋值）；需要对外监听时用户自行 export `HOSTNAME=0.0.0.0`
+
+### Web 进程启动即崩溃，`waitForReady` 傻等 120 秒才报超时
+- **现象：** Desktop 首次安装后报 "MindOS web server did not start within 120 seconds on port 3456"，但实际 Web 进程在数秒内就已崩溃退出
+- **原因：** `waitForReady()` 只轮询 HTTP `/api/health`，**不检测子进程是否已死亡**。即使 Web 进程在第 1 秒就崩了（Gatekeeper 拦截、native 模块不兼容、.next 损坏等），也要等满 120 秒超时才返回错误
+- **解决：** `waitForReady()` 同时监听 `webProcess.exit` 事件，进程死亡后给 crash handler 5 秒重试窗口（最多 3 次），若仍无法存活则立即终止等待、抛出包含 stderr 日志的错误信息。同时为 `spawn()` 添加 `error` 事件监听防止 ENOENT 导致 Electron 崩溃
+
+### macOS Gatekeeper 隔离属性静默杀死下载的 Node.js 二进制
+- **现象：** Desktop 下载私有 Node.js 到 `~/.mindos/node/` 后，spawn 的 Web/MCP 进程被 macOS 立即 SIGKILL，无任何错误输出
+- **原因：** `downloadNode()` 通过 HTTPS 下载并解压 Node.js tar.gz，解压后文件带有 `com.apple.quarantine` 扩展属性；macOS Gatekeeper 对未签名的受隔离可执行文件执行静默拦截
+- **解决：** `node-bootstrap.ts` 在 `chmodSync(nodeBin, 0o755)` 后，对 macOS 额外执行 `xattr -dr com.apple.quarantine` 清除整个 Node 目录的隔离标记
 
 ### `prepare-mindos-runtime` 把 `.next/dev` 打进安装包 → 体积暴涨
 - **现象：** Desktop 内置 `mindos-runtime/app` 数百 MB，其中 `.next/dev` 占大头

@@ -200,22 +200,30 @@ async function selectMode(mode: 'local' | 'remote'): Promise<void> {
   // Immediate visual feedback on the clicked card
   const cards = document.querySelectorAll('.mode-card');
   const clickedCard = cards[mode === 'local' ? 0 : 1] as HTMLElement | undefined;
+  let spinnerEl: HTMLElement | null = null;
   if (clickedCard) {
     clickedCard.style.opacity = '0.7';
     clickedCard.style.pointerEvents = 'none';
-    clickedCard.innerHTML = clickedCard.innerHTML.replace(
-      /<\/h3>/,
-      `</h3><p style="margin-top:4px;font-size:12px;color:var(--amber)"><span class="spinner"></span> ${t('checking')}</p>`
-    );
+    // Append spinner via DOM API instead of fragile innerHTML regex
+    spinnerEl = document.createElement('p');
+    spinnerEl.style.cssText = 'margin-top:4px;font-size:12px;color:var(--amber)';
+    const spinIcon = document.createElement('span');
+    spinIcon.className = 'spinner';
+    spinnerEl.appendChild(spinIcon);
+    spinnerEl.appendChild(document.createTextNode(` ${t('checking')}`));
+    const h3 = clickedCard.querySelector('h3');
+    if (h3 && h3.parentElement) {
+      h3.parentElement.insertBefore(spinnerEl, h3.nextSibling);
+    } else {
+      clickedCard.appendChild(spinnerEl);
+    }
   }
 
   const restoreCard = () => {
     if (clickedCard) {
       clickedCard.style.opacity = '1';
       clickedCard.style.pointerEvents = '';
-      // Remove the spinner paragraph
-      const spinner = clickedCard.querySelector('p[style*="amber"]');
-      if (spinner) spinner.remove();
+      if (spinnerEl && spinnerEl.parentElement) spinnerEl.remove();
     }
     selectInProgress = false;
   };
@@ -426,21 +434,35 @@ function renderRecent(): void {
   for (const conn of recentConnections) {
     const item = document.createElement('div');
     item.className = 'recent-item';
-    item.innerHTML = `
-      <div class="recent-dot"></div>
-      <div class="recent-info">
-        <div class="recent-label-text">${conn.label || conn.address}</div>
-        <div class="recent-address">${conn.address}</div>
-      </div>
-      <button class="recent-forget" data-addr="${conn.address}">${t('forgot')}</button>
-    `;
-    item.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('recent-forget')) {
-        e.stopPropagation();
-        void handleForget(conn.address);
-        return;
-      }
+
+    // Build DOM nodes instead of innerHTML to prevent XSS from stored addresses/labels
+    const dot = document.createElement('div');
+    dot.className = 'recent-dot';
+
+    const info = document.createElement('div');
+    info.className = 'recent-info';
+    const labelEl = document.createElement('div');
+    labelEl.className = 'recent-label-text';
+    labelEl.textContent = conn.label || conn.address;
+    const addrEl = document.createElement('div');
+    addrEl.className = 'recent-address';
+    addrEl.textContent = conn.address;
+    info.appendChild(labelEl);
+    info.appendChild(addrEl);
+
+    const forgetBtn = document.createElement('button');
+    forgetBtn.className = 'recent-forget';
+    forgetBtn.textContent = t('forgot');
+    forgetBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void handleForget(conn.address);
+    });
+
+    item.appendChild(dot);
+    item.appendChild(info);
+    item.appendChild(forgetBtn);
+
+    item.addEventListener('click', () => {
       const addressInput = $('address') as HTMLInputElement;
       if (addressInput) {
         addressInput.value = conn.address;
@@ -460,7 +482,10 @@ async function handleForget(address: string): Promise<void> {
 }
 
 // ── Test Connection ──
+let testInProgress = false;
+
 async function handleTest(): Promise<void> {
+  if (testInProgress) return;
   const ipc = getIpc();
   if (!ipc) return;
 
@@ -475,6 +500,7 @@ async function handleTest(): Promise<void> {
 
   if (!btn || !status) return;
 
+  testInProgress = true;
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> ${t('connecting')}`;
   status.classList.remove('hidden');
@@ -487,6 +513,7 @@ async function handleTest(): Promise<void> {
     testResult = { status: 'error', error: String(err) };
   }
 
+  testInProgress = false;
   btn.disabled = false;
   btn.textContent = t('testConnection');
 
@@ -518,7 +545,10 @@ async function handleTest(): Promise<void> {
 }
 
 // ── Connect ──
+let connectInProgress = false;
+
 async function handleConnect(): Promise<void> {
+  if (connectInProgress) return;
   const ipc = getIpc();
   if (!ipc) return;
 
@@ -536,6 +566,7 @@ async function handleConnect(): Promise<void> {
     return;
   }
 
+  connectInProgress = true;
   if (btn) btn.disabled = true;
   if (btn) btn.textContent = t('connecting');
 
@@ -548,6 +579,7 @@ async function handleConnect(): Promise<void> {
         status.className = 'status-bar error';
         status.textContent = result.error || t('connectionFailed');
       }
+      connectInProgress = false;
       if (btn) { btn.disabled = false; btn.textContent = t('connect'); }
     }
   } catch (err) {
@@ -555,6 +587,7 @@ async function handleConnect(): Promise<void> {
       status.className = 'status-bar error';
       status.textContent = `Error: ${err instanceof Error ? err.message : String(err)}`;
     }
+    connectInProgress = false;
     if (btn) { btn.disabled = false; btn.textContent = t('connect'); }
   }
 }
@@ -584,6 +617,12 @@ function init(): void {
   document.querySelectorAll('.mode-card').forEach((card, idx) => {
     card.addEventListener('click', () => {
       void selectMode(idx === 0 ? 'local' : 'remote');
+    });
+    card.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') {
+        e.preventDefault();
+        void selectMode(idx === 0 ? 'local' : 'remote');
+      }
     });
   });
 

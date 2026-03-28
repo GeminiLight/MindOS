@@ -115,7 +115,7 @@ describe('testConnection', () => {
 
     const result = await testConnection('http://localhost:9999');
     expect(result.status).toBe('offline');
-    expect(result.error).toBe('Connection refused');
+    expect(result.error).toBe('ECONNREFUSED');
   });
 
   it('returns error for empty address', async () => {
