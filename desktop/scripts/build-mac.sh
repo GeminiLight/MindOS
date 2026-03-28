@@ -78,10 +78,10 @@ if [ "$SIGN" = true ]; then
     fi
     echo -e "${GREEN}Found $CERT_COUNT Developer ID certificate(s)${NC}"
     # notarize: false in electron-builder.yml, so this only signs
-    electron-builder --mac --publish never
+    npx electron-builder --mac --publish never
 else
     echo "Building unsigned..."
-    CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never
+    CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish never
 fi
 
 # ── Step 5: Notarize ──
