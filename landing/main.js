@@ -497,7 +497,7 @@ function toggleMacSec(event) {
 */
 (function initDownloadRouting() {
     var DL_INTL = 'https://pub-a5b6991b1e3c4068b1ec9a4106f4d116.r2.dev/desktop/latest/';
-    var DL_CN   = 'https://mindos-cn-release.oss-cn-hangzhou.aliyuncs.com/desktop/latest/';
+    var DL_CN   = 'https://mindos-cn-releases.oss-cn-hangzhou.aliyuncs.com/desktop/latest/';
     var DL_GH   = 'https://github.com/GeminiLight/MindOS/releases/latest';
 
     function applyMirror(base) {
