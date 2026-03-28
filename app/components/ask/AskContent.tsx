@@ -663,6 +663,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           <MentionPopover
             results={mention.mentionResults}
             selectedIndex={mention.mentionIndex}
+            query={mention.mentionQuery ?? undefined}
             onSelect={selectMention}
           />
         </div>
@@ -673,6 +674,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           <SlashCommandPopover
             results={slash.slashResults}
             selectedIndex={slash.slashIndex}
+            query={slash.slashQuery ?? undefined}
             onSelect={selectSlashCommand}
           />
         </div>

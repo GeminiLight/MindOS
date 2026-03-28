@@ -47,15 +47,33 @@ export function useMention() {
         return;
       }
       const q = query.toLowerCase();
-      const filtered = allFiles.filter((f) => f.toLowerCase().includes(q)).slice(0, 30);
-      if (filtered.length === 0) {
+      if (!q) {
+        setMentionQuery(query);
+        setMentionResults(allFiles.slice(0, 30));
+        setMentionIndex(0);
+        return;
+      }
+      const scored = allFiles
+        .map((f) => {
+          const name = (f.split('/').pop() ?? f).toLowerCase();
+          const fl = f.toLowerCase();
+          let score = 0;
+          if (name.startsWith(q)) score = 100;
+          else if (name.includes(q)) score = 50;
+          else if (fl.includes(q)) score = 10;
+          return { path: f, score };
+        })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30);
+      if (scored.length === 0) {
         setMentionQuery(null);
         setMentionResults([]);
         setMentionIndex(0);
         return;
       }
       setMentionQuery(query);
-      setMentionResults(filtered);
+      setMentionResults(scored.map((x) => x.path));
       setMentionIndex(0);
     },
     [allFiles],
