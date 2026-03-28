@@ -74,3 +74,4 @@ image.png
 TMUX_DOC.md
 tmux-manage.sh
 tmux-sessions.conf
+.mcp.json
