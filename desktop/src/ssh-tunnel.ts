@@ -3,13 +3,52 @@
  * Used by Remote mode to securely connect to MindOS servers without exposing ports.
  */
 import { ChildProcess, spawn } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { app } from 'electron';
 
 const execAsync = promisify(exec);
+
+// PID file for SSH tunnel — allows cleanup of orphaned tunnels on next launch
+const SSH_TUNNEL_PID_FILE = path.join(app.getPath('home'), '.mindos', 'ssh-tunnel.pid');
+
+/** Write SSH child PID to disk so we can clean up orphans on next launch */
+function writeTunnelPid(pid: number): void {
+  try { writeFileSync(SSH_TUNNEL_PID_FILE, String(pid), 'utf-8'); } catch { /* best effort */ }
+}
+
+/** Remove PID file when tunnel is intentionally stopped */
+function clearTunnelPid(): void {
+  try { if (existsSync(SSH_TUNNEL_PID_FILE)) unlinkSync(SSH_TUNNEL_PID_FILE); } catch { /* best effort */ }
+}
+
+/**
+ * Kill any orphaned SSH tunnel from a previous Desktop session.
+ * Call this once at app startup before starting new tunnels.
+ */
+export function cleanupOrphanedSshTunnel(): void {
+  try {
+    if (!existsSync(SSH_TUNNEL_PID_FILE)) return;
+    const pid = parseInt(readFileSync(SSH_TUNNEL_PID_FILE, 'utf-8').trim(), 10);
+    if (!pid || isNaN(pid)) { clearTunnelPid(); return; }
+    // Check if process is alive
+    try {
+      process.kill(pid, 0); // signal 0 = existence check
+      // Process alive — kill it
+      console.warn(`[MindOS] Killing orphaned SSH tunnel (PID ${pid})`);
+      process.kill(pid, 'SIGTERM');
+      // Give it a moment, then force-kill if still alive
+      setTimeout(() => {
+        try { process.kill(pid, 0); process.kill(pid, 'SIGKILL'); } catch { /* already dead */ }
+      }, 2000);
+    } catch {
+      // Process already dead — just clean up the PID file
+    }
+    clearTunnelPid();
+  } catch { /* non-critical */ }
+}
 
 export interface SshHost {
   name: string;
@@ -126,6 +165,9 @@ export class SshTunnel {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
+      // Write PID to disk for orphan cleanup on next launch
+      if (this.process.pid) writeTunnelPid(this.process.pid);
+
       let stderr = '';
       let settled = false;
 
@@ -144,6 +186,7 @@ export class SshTunnel {
 
       this.process.on('exit', (code) => {
         clearTimeout(successTimer);
+        clearTunnelPid();
         if (!settled) {
           settled = true;
           const msg = stderr.trim() || `SSH exited with code ${code}`;
@@ -165,6 +208,7 @@ export class SshTunnel {
   /** Gracefully stop the SSH tunnel */
   async stop(): Promise<void> {
     this.stopped = true;
+    clearTunnelPid();
     if (!this.process || this.process.killed) return;
 
     return new Promise((resolve) => {

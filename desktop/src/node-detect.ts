@@ -12,7 +12,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
-import { getPrivateNodePath, isPrivateNodeInstalled } from './node-bootstrap';
+import { getPrivateNodePath, isPrivateNodeInstalled, getBundledNodePath, isBundledNodeInstalled } from './node-bootstrap';
 
 const execAsync = promisify(exec);
 
@@ -29,7 +29,7 @@ function enrichedPath(extraBinDir?: string): string {
     `${home}/.local/bin`,
     process.env.PATH,
   ].filter(Boolean);
-  return dirs.join(':');
+  return dirs.join(path.delimiter);
 }
 
 /** Run a shell command with enriched PATH */
@@ -50,7 +50,12 @@ async function execWithPath(cmd: string, opts: { timeout?: number; cwd?: string;
 export async function getNodePath(): Promise<string | null> {
   const home = app.getPath('home');
 
-  // 0. MindOS private Node.js (~/.mindos/node/) — highest priority
+  // 0a. Bundled Node.js shipped with the Desktop app (highest priority — zero download)
+  if (isBundledNodeInstalled()) {
+    return getBundledNodePath();
+  }
+
+  // 0b. MindOS private Node.js (~/.mindos/node/) — downloaded on first run of older versions
   if (isPrivateNodeInstalled()) {
     return getPrivateNodePath();
   }
@@ -70,7 +75,8 @@ export async function getNodePath(): Promise<string | null> {
     if (existsSync(nvmVersionsDir)) {
       const versions = readdirSync(nvmVersionsDir)
         .filter((v: string) => v.startsWith('v'))
-        .sort().reverse();
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }))
+        ;
       for (const ver of versions) {
         const nodePath = path.join(nvmVersionsDir, ver, 'bin', 'node');
         if (existsSync(nodePath)) return nodePath;
