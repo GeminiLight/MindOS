@@ -2,64 +2,52 @@
 
 Electron 桌面客户端，支持 macOS / Windows / Linux。
 
-## 快速开始
-
-### 前置条件
+## Quick Commands
 
 ```bash
-# 仓库根目录安装依赖
-cd app && npm install && cd ..
-cd mcp && npm install && cd ..
-cd desktop && npm install
+# ── 开发 ──
+cd desktop && npm run dev                    # 本地开发（热重载）
+MINDOS_OPEN_DEVTOOLS=1 /Applications/MindOS.app/Contents/MacOS/MindOS  # 调试已安装的应用
+
+# ── 安装依赖 ──
+cd app && npm install && cd .. && cd mcp && npm install && cd .. && cd desktop && npm install
+
+# ── 打包 macOS（需要在 Mac 上运行）──
+./scripts/build-mac.sh                       # 签名 + 公证
+./scripts/build-mac.sh --no-notarize         # 仅签名
+./scripts/build-mac.sh --no-sign             # 无签名
+
+# ── 打包其他平台 ──
+npm run dist:win                             # Windows
+npm run dist:linux                           # Linux
+npm run dist:with-bundled                    # 一键（含 runtime）
+
+# ── 安装 DMG（命令行）──
+DMG=~/Downloads/MindOS-0.1.0-arm64.dmg
+VOL=$(hdiutil attach "$DMG" -nobrowse | grep '/Volumes/' | sed 's/.*\/Volumes/\/Volumes/')
+cp -R "$VOL/MindOS.app" /Applications/ && hdiutil detach "$VOL"
+xattr -cr /Applications/MindOS.app          # 未签名版本才需要
+
+# ── 安装 Linux ──
+chmod +x MindOS-*.AppImage && ./MindOS-*.AppImage   # AppImage
+sudo dpkg -i mindos-desktop_*_amd64.deb             # deb
+
+# ── CI 触发（需要 gh CLI）──
+gh workflow run build-desktop.yml -R GeminiLight/MindOS -f sign_mac=false -f publish=true
+gh workflow run build-desktop.yml -R GeminiLight/MindOS -f sign_mac=true -f publish=true
+
+# ── Secrets 生成 ──
+base64 -i cert.p12 | tr -d '\n'             # 证书 → APPLE_CERTIFICATE_BASE64
+base64 -i AuthKey_XXXXXXXX.p8 | tr -d '\n'  # API Key → APPLE_API_KEY_BASE64
 ```
 
-### 本地开发
-
-```bash
-cd desktop && npm run dev
-```
-
-### 调试已安装的应用
-
-```bash
-MINDOS_OPEN_DEVTOOLS=1 /Applications/MindOS.app/Contents/MacOS/MindOS
-```
-
-### 本地打包
-
-macOS（需要在 Mac 上运行）：
-
-```bash
-# 签名 + 公证（需要 Apple Developer ID 证书 + API Key）
-./scripts/build-mac.sh
-
-# 仅签名，跳过公证
-./scripts/build-mac.sh --no-notarize
-
-# 无签名（无需开发者账号）
-./scripts/build-mac.sh --no-sign
-```
-
-其他平台：
-
-```bash
-npm run dist:win     # Windows
-npm run dist:linux   # Linux
-```
-
-### 一键打包（含 runtime）
-
-```bash
-npm run dist:with-bundled
-```
+---
 
 ## CI/CD（GitHub Actions）
 
 三平台并行打包，通过 `build-desktop.yml` workflow 触发。
 
-### 触发方式
-
-GitHub Actions → Build Desktop → Run workflow，有三个选项：
+### 触发参数
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
@@ -72,12 +60,10 @@ GitHub Actions → Build Desktop → Run workflow，有三个选项：
 ```
 Install deps → Build Next.js (webpack) → Build Electron → Prepare runtime
   → Package (签名，不公证)
-  → Notarize (xcrun notarytool, 3 次重试)
+  → Notarize (xcrun notarytool, 3 次重试, 2h 超时)
   → Staple (xcrun stapler staple)
   → Upload artifacts
 ```
-
-签名和公证分离，公证有 3 次重试 + 30s 间隔，避免 Apple 服务器网络抖动导致整个 build 失败。
 
 `sign_mac=false` 时跳过签名、公证、staple 步骤。
 
@@ -108,25 +94,11 @@ Install deps → Build Next.js (webpack) → Build Electron → Prepare runtime
 
 API Key 和 Apple ID 同时配置时优先使用 API Key。
 
-### 生成 Secrets
-
-```bash
-# 证书 → base64
-base64 -i cert.p12 | tr -d '\n'
-
-# API Key → base64
-base64 -i AuthKey_XXXXXXXX.p8 | tr -d '\n'
-```
-
 ## 内置 MindOS 运行时
 
 安装包将已构建的 MindOS 打进 `Resources/mindos-runtime`，离线时也能启动本地模式。
 
-```bash
-# 手动准备 runtime
-cd app && npx next build --webpack && cd ..
-cd desktop && npm run prepare-mindos-runtime
-```
+手动准备：`cd app && ./node_modules/.bin/next build --webpack && cd .. && cd desktop && npm run prepare-mindos-runtime`
 
 或一键：`npm run dist:with-bundled`
 
@@ -148,32 +120,3 @@ CI publish 模式自动上传到：
 - **GitHub Releases**：原始文件名（带版本号）
 
 Landing 页面下载链接指向 CDN `latest/` 路径，每次发版自动覆盖。
-
-## 安装
-
-### 从 DMG 安装（命令行）
-
-```bash
-# 自动检测挂载点（Volume 名包含版本号，如 "MindOS 0.1.0-arm64"）
-DMG=~/Downloads/MindOS-0.1.0-arm64.dmg
-VOL=$(hdiutil attach "$DMG" -nobrowse | grep '/Volumes/' | sed 's/.*\/Volumes/\/Volumes/')
-cp -R "$VOL/MindOS.app" /Applications/
-hdiutil detach "$VOL"
-xattr -cr /Applications/MindOS.app
-```
-
-签名 + 公证过的 DMG 不需要 `xattr -cr`，双击拖入 Applications 即可。
-
-### 从 DMG 安装（图形界面）
-
-双击 `.dmg` 文件，将 MindOS.app 拖到 Applications 文件夹。
-
-### Linux
-
-```bash
-# AppImage
-chmod +x MindOS-0.1.0.AppImage && ./MindOS-0.1.0.AppImage
-
-# deb
-sudo dpkg -i mindos-desktop_0.1.0_amd64.deb
-```
