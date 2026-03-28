@@ -65,9 +65,13 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           # === 1. Deploy landing/ to mindos-dev gh-pages ===
-          git subtree split --prefix landing -b gh-pages-tmp
-          git push origin gh-pages-tmp:gh-pages --force
-          git branch -D gh-pages-tmp
+          if [ -d landing ]; then
+            git subtree split --prefix landing -b gh-pages-tmp
+            git push origin gh-pages-tmp:gh-pages --force
+            git branch -D gh-pages-tmp
+          else
+            echo "No landing/ directory — skipping gh-pages deploy to mindos-dev."
+          fi
 
           # PAT is required for cross-repo sync/publish to GeminiLight/mindos.
           if [ -z "${PAT:-}" ]; then
@@ -102,6 +106,10 @@ jobs:
               sync-to-mindos.yml|ci.yml|publish-npm.yml) continue ;;
             esac
             cp "$wf" /tmp/mindos/.github/workflows/
+          done
+          # Remove excluded workflows that may have been synced before exclusions existed
+          for excluded_wf in sync-to-mindos.yml ci.yml publish-npm.yml; do
+            rm -f /tmp/mindos/.github/workflows/$excluded_wf
           done
           # wiki/0*.md、wiki/specs、wiki/discussions — dev-only; not copied to GeminiLight/mindos
           [ -d wiki/ ] && rsync -av --delete \
@@ -159,27 +167,31 @@ jobs:
 
           # === 3. Deploy landing/ to mindos gh-pages ===
           cd "$GITHUB_WORKSPACE"
-          if git clone --depth 1 -b gh-pages "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git" /tmp/mindos-pages 2>/dev/null; then
-            echo "Cloned existing gh-pages branch."
-          else
-            # gh-pages branch doesn't exist yet — create an orphan branch
-            mkdir -p /tmp/mindos-pages
+          if [ -d landing ]; then
+            if git clone --depth 1 -b gh-pages "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git" /tmp/mindos-pages 2>/dev/null; then
+              echo "Cloned existing gh-pages branch."
+            else
+              # gh-pages branch doesn't exist yet — create an orphan branch
+              mkdir -p /tmp/mindos-pages
+              cd /tmp/mindos-pages
+              git init
+              git remote add origin "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git"
+              git checkout --orphan gh-pages
+            fi
+
+            cd "$GITHUB_WORKSPACE"
+            rsync -av --delete --exclude='.git' landing/ /tmp/mindos-pages/
+
             cd /tmp/mindos-pages
-            git init
-            git remote add origin "https://x-access-token:${PAT}@github.com/GeminiLight/mindos.git"
-            git checkout --orphan gh-pages
-          fi
-
-          cd "$GITHUB_WORKSPACE"
-          rsync -av --delete --exclude='.git' landing/ /tmp/mindos-pages/
-
-          cd /tmp/mindos-pages
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No landing changes to deploy."
+            git add -A
+            if git diff --cached --quiet; then
+              echo "No landing changes to deploy."
+            else
+              git commit -m "deploy: ${DEV_MSG}"
+              git push origin gh-pages
+            fi
           else
-            git commit -m "deploy: ${DEV_MSG}"
-            git push origin gh-pages
+            echo "No landing/ directory — skipping gh-pages deploy to mindos."
           fi
 
           # === 4. Sync version tag to public repo + trigger workflows ===

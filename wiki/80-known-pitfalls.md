@@ -896,3 +896,9 @@
 - **根因：** `checkMindosStatus` handler 在 bundled 检测失败后没有区分 packaged/dev 模式，直接 fallthrough 到 npm 检查路径。另外 `existsSync` 在 `connect-window.ts` 中未被 import（latent bug）
 - **解决：** 新增 `bundled-incomplete` 状态；packaged 模式下 bundled runtime 是唯一路径，不再 fallthrough；区分"有源码可构建"（`installed-not-built`）和"结构损坏需重装"（`bundled-incomplete`）
 - **规则：** packaged 模式的运行时检测不应 fallthrough 到 npm 全局安装路径——两者是完全不同的分发模式
+
+### CI: sync-to-mindos.yml 被同步到 public repo 导致 landing subtree 失败
+- **现象：** GeminiLight/MindOS (public repo) 的 "Sync to MindOS" workflow 每次 push 都失败，报 `fatal: 'landing' does not exist; use 'git subtree add'`
+- **根因：** `sync-to-mindos.yml` 在 exclusion 规则（`case` 跳过列表）添加之前已被 rsync 到 public repo。public repo 不含 `landing/` 目录，`git subtree split --prefix landing` 必然失败
+- **解决：** 1) 在 sync workflow 中添加清理步骤，`rm -f` 删除 public repo 中残留的被排除 workflow；2) 为 `landing/` subtree split 和 gh-pages deploy 添加 `[ -d landing ]` 前置检查
+- **规则：** 排除列表只防止「新增」，不能清理「已存在」——需要 `rm -f` 主动清理历史残留
