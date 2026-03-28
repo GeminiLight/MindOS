@@ -275,6 +275,9 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     // ── IPC Handlers ──
 
     safeHandle('connect:check-node', async () => {
+      // Packaged app bundles Node.js; if bundled node is missing,
+      // checkMindosStatus will report bundled-incomplete (the real problem).
+      if (app.isPackaged) return true;
       return !!(await getNodePath());
     });
 
@@ -291,17 +294,19 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
             return { status: 'ready', path: bundledDir };
           }
 
-          // Not runnable — but if source dirs exist, it can be built
-          const hasAppSrc = existsSync(path.join(bundledDir, 'app'));
-          const hasMcpSrc = existsSync(path.join(bundledDir, 'mcp'));
-          if (hasAppSrc && hasMcpSrc) {
-            return { status: 'installed-not-built', path: bundledDir };
+          // Not runnable — in dev mode, source dirs can be built in place
+          if (!app.isPackaged) {
+            const hasAppSrc = existsSync(path.join(bundledDir, 'app'));
+            const hasMcpSrc = existsSync(path.join(bundledDir, 'mcp'));
+            if (hasAppSrc && hasMcpSrc) {
+              return { status: 'installed-not-built', path: bundledDir };
+            }
           }
         }
 
-        // Packaged app: bundled runtime is the only supported path
+        // Packaged app: resources are read-only, user must reinstall
         if (app.isPackaged) {
-          return { status: 'bundled-incomplete', path: bundledDir };
+          return { status: 'bundled-incomplete', path: bundledDir ?? null };
         }
       } catch (err) {
         console.error('[MindOS] Bundled runtime check failed:', err);
@@ -330,14 +335,12 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     safeHandle('connect:build-mindos', async (_: unknown, modulePath: string) => {
       const { exec } = require('child_process');
       const { promisify } = require('util');
-      const fs = require('fs');
-      const pathMod = require('path');
       const execBuild = promisify(exec);
 
       try {
-        const standaloneServer = pathMod.join(modulePath, 'app', '.next', 'standalone', 'server.js');
-        const nextDir = pathMod.join(modulePath, 'app', '.next');
-        if (fs.existsSync(standaloneServer) || fs.existsSync(nextDir)) {
+        const standaloneServer = path.join(modulePath, 'app', '.next', 'standalone', 'server.js');
+        const nextDir = path.join(modulePath, 'app', '.next');
+        if (existsSync(standaloneServer) || existsSync(nextDir)) {
           return { success: true, output: 'Already built' };
         }
 
@@ -349,7 +352,7 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
           { cwd: modulePath, timeout: 300000, encoding: 'utf-8', env: enrichedEnv }
         );
 
-        if (fs.existsSync(nextDir)) {
+        if (existsSync(nextDir)) {
           return { success: true, output: stdout || 'Build completed' };
         } else {
           return { success: false, error: 'Build completed but app/.next not found', stderr };
