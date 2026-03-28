@@ -843,3 +843,27 @@
   - macOS: ~~改用确定性路径~~ → 已彻底删掉手动 keychain 脚本，改用 `CSC_LINK`
   - Windows: 在 build 前增加 `Fix Windows NTFS junctions` step + `outputFileTracingExcludes` 排除 AppData
 - **教训：** CI workflow 必须防御 runner 镜像更新带来的环境差异
+
+### Desktop CI: electron-builder 公证流程 5 个陷阱（已全部修复）
+- **现象：** macOS CI 公证步骤各种失败模式：Package 阶段提前公证失败、公证成功误判、ZIP 公证报错、超时、参数展开错误
+- **5 个问题及修复：**
+  1. **Package 步骤缺少 `ELECTRON_BUILDER_SKIP_NOTARIZE=true`** — electron-builder 在 `notarize: false` 配置外仍可能自动公证。加上环境变量双重保险
+  2. **`notarize_file` 管道退出码 bug** — `cmd | tee log` 的 `if` 判断的是 `tee` 的退出码（永远 0），不是 `notarytool` 的。改为直接 `tee` + `grep "status: Accepted"` 判断
+  3. **ZIP 不能公证** — Apple notarytool 只接受 DMG/PKG/APP，ZIP 会报 `Asset type not supported`。公证循环改为只遍历 `*.dmg`
+  4. **`--timeout 30m` 不够** — 新注册 Apple Developer 账号首次公证可能等数小时。改为 `--timeout 2h`
+  5. **`AUTH_ARGS` 字符串展开有 word-splitting 风险** — 改为 bash 数组 `AUTH_ARGS=(...)` + `"${AUTH_ARGS[@]}"`
+- **规则：** shell 管道中判断退出码要用 `$PIPESTATUS` 或拆开写。Apple 公证超时要留足余量。环境变量和配置文件双重防御
+
+### Desktop CI: Windows webpack EPERM（系统保护目录不可删除）
+- **现象：** Windows CI 上 `next build --webpack` 报 `EPERM: operation not permitted, scandir 'C:\Users\runneradmin\AppData\Local\Microsoft\Windows\INetCache\Content.IE5'`
+- **原因：** webpack compile 阶段的 glob 扫描 `USERPROFILE` 下的所有目录，碰到 OS 保护目录（INetCache、WindowsApps、History 等）返回 EPERM。`Remove-Item -Force` 对这些目录无效（OS 保护）。`outputFileTracingExcludes` 也无效（只影响 trace 阶段不影响 compile 阶段）
+- **解决：** 将 `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA` 全部重定向到 `$GITHUB_WORKSPACE/.home`（干净目录）。webpack glob 永远碰不到真实的系统保护路径
+- **规则：** Windows CI 上 webpack 问题不要逐个删系统目录（打地鼠），直接重定向 HOME 一劳永逸
+
+### Desktop CI: CDN 上传失败阻塞 GitHub Release
+- **现象：** finalize job 中 Cloudflare R2 上传报 `NoSuchBucket`，Alibaba OSS 安装 ossutil 报 `Permission denied`，导致整个 finalize 失败，GitHub Release 无法发布
+- **原因（双重）：**
+  1. `if: env.X != ''` 在 step 级别的 `if:` 中引用的是 step 的 env block（还没求值），无法正确跳过
+  2. `if: secrets.X != ''` 不合法——GitHub Actions 不允许在 `if:` 条件中直接引用 `secrets` context
+- **解决：** 改为 shell 内检查 `if [ -z "$VAR" ]; then exit 0; fi` + `continue-on-error: true`。CDN 上传失败不阻塞 release
+- **规则：** GitHub Actions 中跳过可选步骤，不要用 `if: env.X` 或 `if: secrets.X`，用 shell 内判空 + `continue-on-error`
