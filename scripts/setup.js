@@ -906,9 +906,9 @@ async function startGuiSetup() {
     write(c.dim('  First run: installing dependencies and building app (may take a few minutes)...\n'));
   }
 
-  // Wait for the server to be ready (120s timeout)
+  // Wait for the server to be ready (10min timeout — first run involves npm install + build)
   const { waitForHttp } = await import('../bin/lib/gateway.js');
-  const ready = await waitForHttp(usePort, { retries: 180, intervalMs: 1000, label: 'MindOS', logFile: LOG_PATH });
+  const ready = await waitForHttp(usePort, { retries: 600, intervalMs: 1000, label: 'MindOS', logFile: LOG_PATH });
 
   if (!ready) {
     write(c.red('\n✘ Server failed to start.\n'));
