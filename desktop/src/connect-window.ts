@@ -3,6 +3,8 @@
  * Loads connect.html and bridges IPC to shared/connection SDK.
  */
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
+import { existsSync } from 'fs';
+import path from 'path';
 import { resolvePreferUnpacked } from './resolve-packaged-asset';
 import { mindosConnectPageUrl } from './mindos-connect-protocol';
 import Store from 'electron-store';
@@ -282,15 +284,33 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
         const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
         const { analyzeMindOsLayout } = await import('./mindos-runtime-layout');
         const bundledDir = getDefaultBundledMindOsDirectory();
+
         if (bundledDir && existsSync(bundledDir)) {
           const analysis = analyzeMindOsLayout(bundledDir);
           if (analysis.runnable) {
             return { status: 'ready', path: bundledDir };
           }
-        }
-      } catch { /* bundled check failed, fall through to npm check */ }
 
-      // Fallback: check npm global install
+          // Not runnable — but if source dirs exist, it can be built
+          const hasAppSrc = existsSync(path.join(bundledDir, 'app'));
+          const hasMcpSrc = existsSync(path.join(bundledDir, 'mcp'));
+          if (hasAppSrc && hasMcpSrc) {
+            return { status: 'installed-not-built', path: bundledDir };
+          }
+        }
+
+        // Packaged app: bundled runtime is the only supported path
+        if (app.isPackaged) {
+          return { status: 'bundled-incomplete', path: bundledDir };
+        }
+      } catch (err) {
+        console.error('[MindOS] Bundled runtime check failed:', err);
+        if (app.isPackaged) {
+          return { status: 'bundled-incomplete', path: null };
+        }
+      }
+
+      // Fallback: check npm global install (dev/standalone mode only)
       const nodePath = await getNodePath();
       const mindosPath = await getMindosInstallPath(nodePath);
 
@@ -298,9 +318,7 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
         return { status: 'not-installed', path: null };
       }
 
-      // Check build status
-      const p = require('path');
-      const nextDir = p.join(mindosPath, 'app', '.next');
+      const nextDir = path.join(mindosPath, 'app', '.next');
       const isBuilt = existsSync(nextDir);
 
       return {
@@ -359,12 +377,14 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
         }
       } catch { /* fall through */ }
 
-      // Fallback: npm global install
+      // In packaged mode, bundled is the only path
+      if (app.isPackaged) return null;
+
+      // Fallback: npm global install (dev mode only)
       const nodePath = await getNodePath();
       const mindosPath = await getMindosInstallPath(nodePath);
       if (mindosPath) {
-        const p = require('path');
-        const nextDir = p.join(mindosPath, 'app', '.next');
+        const nextDir = path.join(mindosPath, 'app', '.next');
         if (existsSync(nextDir)) {
           return { path: mindosPath, source: 'user' as const };
         }

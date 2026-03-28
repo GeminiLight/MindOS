@@ -890,3 +890,9 @@
   - MCP stdio 传输模式 stdin 已被 MCP 协议使用，不能加 watchdog（通过 `MCP_TRANSPORT === 'http'` 条件隔离）
   - CLI 启动的 MCP 用 `stdio: 'inherit'`，`isTTY === true`，不受影响
 - **规则：** 管理子进程生命周期优先用 stdin pipe 而非 PID 文件——零轮询、零文件 IO、管道断开即感知
+
+### Desktop 本地模式：bundled runtime 不完整时显示 "Install CLI"
+- **现象：** 打包后的 Desktop 点击"本地模式"，如果 `resources/mindos-runtime/` 存在但未构建（缺 `app/.next`），会 fallthrough 到 npm 全局检查 → 返回 `not-installed` → 显示"安装 MindOS CLI"按钮，用户困惑
+- **根因：** `checkMindosStatus` handler 在 bundled 检测失败后没有区分 packaged/dev 模式，直接 fallthrough 到 npm 检查路径。另外 `existsSync` 在 `connect-window.ts` 中未被 import（latent bug）
+- **解决：** 新增 `bundled-incomplete` 状态；packaged 模式下 bundled runtime 是唯一路径，不再 fallthrough；区分"有源码可构建"（`installed-not-built`）和"结构损坏需重装"（`bundled-incomplete`）
+- **规则：** packaged 模式的运行时检测不应 fallthrough 到 npm 全局安装路径——两者是完全不同的分发模式
