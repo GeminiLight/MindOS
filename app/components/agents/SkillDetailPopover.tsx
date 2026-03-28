@@ -14,6 +14,7 @@ import {
   ToggleLeft,
   Trash2,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -100,6 +101,7 @@ export default function SkillDetailPopover({
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const fetchContent = useCallback(async () => {
     if (!skillName) return;
@@ -248,12 +250,26 @@ export default function SkillDetailPopover({
 
         {/* ─── Body (scrollable) ─── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-          {/* Description */}
-          {description ? (
-            <p className="text-sm text-foreground leading-relaxed">{description}</p>
-          ) : !isNative ? (
-            <p className="text-sm text-muted-foreground italic">{copy.noDescription}</p>
-          ) : null}
+        {/* Description */}
+        {description ? (
+          <div className="space-y-2">
+            <p className={`text-sm text-foreground leading-relaxed whitespace-pre-wrap ${!descriptionExpanded ? 'line-clamp-3' : ''}`}>
+              {description}
+            </p>
+            {description.split('\n').length > 3 && (
+              <button
+                type="button"
+                onClick={() => setDescriptionExpanded(!descriptionExpanded)}
+                className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                <ChevronDown size={12} className={`transition-transform duration-200 ${descriptionExpanded ? 'rotate-180' : ''}`} />
+                <span>{descriptionExpanded ? '收起' : '查看全部'}</span>
+              </button>
+            )}
+          </div>
+        ) : !isNative ? (
+          <p className="text-sm text-muted-foreground italic">{copy.noDescription}</p>
+        ) : null}
 
           {/* Quick meta */}
           <div className="grid grid-cols-2 gap-3">
