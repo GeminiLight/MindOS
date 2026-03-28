@@ -300,14 +300,32 @@ jobs:
             echo "OSS not configured, skipping"
             exit 0
           fi
-          # Install ossutil binary directly (install.sh doesn't support --install-dir)
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o /tmp/ossutil.zip https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip
-          unzip -q -o /tmp/ossutil.zip -d /tmp/ossutil
-          cp /tmp/ossutil/ossutil-v1.7.19-linux-amd64/ossutil64 "$HOME/.local/bin/ossutil"
-          chmod +x "$HOME/.local/bin/ossutil"
-          export PATH="$HOME/.local/bin:$PATH"
-          ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+
+          # Upload via curl + OSS REST API signing (no CLI tools needed)
+          oss_upload() {
+            local file="$1"
+            local object_key="$2"
+            local content_type="application/octet-stream"
+            local date=$(date -u +"%a, %d %b %Y %H:%M:%S GMT")
+            local resource="/${OSS_BUCKET}/${object_key}"
+            local string_to_sign="PUT\n\n${content_type}\n${date}\n${resource}"
+            local signature=$(printf "$string_to_sign" | openssl dgst -sha1 -hmac "$OSS_ACCESS_KEY_SECRET" -binary | base64)
+
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X PUT \
+              -H "Date: ${date}" \
+              -H "Content-Type: ${content_type}" \
+              -H "Authorization: OSS ${OSS_ACCESS_KEY_ID}:${signature}" \
+              -T "$file" \
+              "https://${OSS_BUCKET}.${OSS_ENDPOINT}/${object_key}")
+
+            if [ "$http_code" = "200" ]; then
+              echo "  Uploaded: $object_key"
+            else
+              echo "  Failed ($http_code): $object_key"
+              return 1
+            fi
+          }
 
           VERSION="${{ steps.version.outputs.version }}"
           strip_version() {
@@ -317,12 +335,10 @@ jobs:
             [ -f "$file" ] || continue
             BASENAME=$(basename "$file")
             LATEST_NAME=$(strip_version "$BASENAME")
-            # Versioned path (original filename)
-            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" -f
-            # Latest path (version-stripped filename)
-            ossutil cp "$file" "oss://${OSS_BUCKET}/desktop/latest/${LATEST_NAME}" -f
+            oss_upload "$file" "desktop/v${VERSION}/${BASENAME}" || true
+            oss_upload "$file" "desktop/latest/${LATEST_NAME}" || true
           done
-          echo "✅ Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
+          echo "Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
 
       # ── Finalize GitHub Release ──
       - name: Finalize release
