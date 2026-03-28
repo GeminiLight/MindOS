@@ -13,7 +13,8 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { randomBytes } from 'crypto';
 import { spawn as spawnChild } from 'child_process';
 import { ProcessManager } from './process-manager';
 import { findAvailablePort } from './port-finder';
@@ -104,7 +105,22 @@ function readMindOsConfigFileUncached(): MindOSConfig {
 function loadConfig(): MindOSConfig {
   if (cachedConfig) return cachedConfig;
   cachedConfig = readMindOsConfigFileUncached();
+  ensureAuthToken(cachedConfig);
   return cachedConfig;
+}
+
+/** Auto-generate authToken if missing — prevents unauthenticated MCP exposure on 0.0.0.0 */
+function ensureAuthToken(config: MindOSConfig): void {
+  if (config.authToken) return;
+  const token = randomBytes(24).toString('hex').slice(0, 24);
+  config.authToken = token;
+  try {
+    mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+    console.info('[MindOS] Auto-generated authToken (no onboard config found)');
+  } catch (err) {
+    console.warn('[MindOS] Failed to save auto-generated authToken:', err instanceof Error ? err.message : err);
+  }
 }
 
 function invalidateConfig(): void { cachedConfig = null; }
@@ -693,6 +709,96 @@ function refreshTray(status: 'starting' | 'running' | 'error'): void {
   updateTrayMenu(currentMode, status, currentRemoteAddress, currentWebPort, currentMcpPort);
 }
 
+/**
+ * Detect and clean up a conflicting CLI launchd service (com.mindos.app).
+ *
+ * When users delete MindOS.app from Finder without quitting first, the CLI's
+ * launchd daemon keeps running and auto-restarting `mindos start`, occupying
+ * all available ports. Desktop needs to stop it before starting its own services.
+ *
+ * Only acts on macOS. Only stops the service if it exists and conflicts with
+ * Desktop's own startup (i.e. Desktop is about to manage its own processes).
+ */
+function cleanupConflictingLaunchdService(): void {
+  if (process.platform !== 'darwin') return;
+
+  try {
+    const { execSync: exec } = require('child_process');
+
+    // Check if com.mindos.app service is registered with launchd
+    let serviceExists = false;
+    try {
+      const output = exec('launchctl list com.mindos.app', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 3000,
+      });
+      serviceExists = output.includes('com.mindos.app');
+    } catch {
+      // launchctl list exits non-zero if service doesn't exist — that's fine
+      return;
+    }
+
+    if (!serviceExists) return;
+
+    console.warn('[MindOS] Detected conflicting launchd service com.mindos.app — stopping it');
+
+    // Step 1: bootout the service so launchd stops restarting it
+    try {
+      exec(`launchctl bootout gui/$(id -u)/com.mindos.app`, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 5000,
+      });
+      console.info('[MindOS] Stopped launchd service com.mindos.app');
+    } catch (err) {
+      // Try `launchctl remove` as fallback (works on some macOS versions)
+      try {
+        exec('launchctl remove com.mindos.app', {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 5000,
+        });
+        console.info('[MindOS] Removed launchd service com.mindos.app via fallback');
+      } catch {
+        console.warn('[MindOS] Could not stop launchd service:', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Step 2: Remove the plist file to prevent re-registration on next login
+    const plistPath = path.join(app.getPath('home'), 'Library', 'LaunchAgents', 'com.mindos.app.plist');
+    if (existsSync(plistPath)) {
+      try {
+        unlinkSync(plistPath);
+        console.info(`[MindOS] Removed ${plistPath}`);
+      } catch (err) {
+        console.warn('[MindOS] Could not remove plist:', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Step 3: Kill residual CLI mindos processes still holding ports.
+    // Use full path pattern to avoid killing our own Desktop process.
+    try {
+      exec('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 3000,
+      });
+    } catch { /* no matching processes — fine */ }
+    // Also kill Next.js workers spawned by the CLI
+    try {
+      exec('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 3000,
+      });
+    } catch { /* no matching processes — fine */ }
+
+    // Step 4: Brief wait for ports to release
+    exec('sleep 1', { stdio: 'ignore' });
+
+  } catch (err) {
+    // Non-critical — if cleanup fails, findAvailablePort will still work as fallback
+    console.warn('[MindOS] launchd cleanup failed:', err instanceof Error ? err.message : err);
+  }
+}
+
 /** Spawn a process with enriched env, wait for exit. Rejects on non-zero or timeout. */
 function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -1091,6 +1197,7 @@ app.whenReady().then(async () => {
   ensureMindosCliShim();
   cleanupOrphanedSshTunnel();
   ProcessManager.cleanupOrphanedChildren();
+  cleanupConflictingLaunchdService();
 
   if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();
