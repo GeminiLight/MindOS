@@ -72,3 +72,5 @@ image.png
 *.png
 .tmux.conf
 TMUX_DOC.md
+tmux-manage.sh
+tmux-sessions.conf
