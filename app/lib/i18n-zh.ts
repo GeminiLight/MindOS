@@ -105,6 +105,7 @@ export const zh = {
     collapseLevel: '折叠一级',
     expandLevel: '展开一级',
     importFile: '导入文件',
+    newFile: '新建文件',
     sync: {
       synced: '已同步',
       unpushed: '待推送',
