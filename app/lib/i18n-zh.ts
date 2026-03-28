@@ -103,6 +103,7 @@ export const zh = {
     expandTitle: '展开侧栏',
     collapseLevel: '折叠一级',
     expandLevel: '展开一级',
+    importFile: '导入文件',
     sync: {
       synced: '已同步',
       unpushed: '待推送',
