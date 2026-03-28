@@ -1,14 +1,8 @@
 {
   "mcpServers": {
     "mindos": {
-      "type": "stdio",
-      "command": "mindos",
-      "args": [
-        "mcp"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio"
-      }
+      "type": "http",
+      "url": "http://127.0.0.1:8567/mcp"
     }
   }
 }

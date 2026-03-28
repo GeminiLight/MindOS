@@ -13,6 +13,7 @@ import SearchPanel from './panels/SearchPanel';
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
+import ImportHistoryPanel from './panels/ImportHistoryPanel';
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
   RIGHT_AGENT_DETAIL_DEFAULT_WIDTH,
@@ -27,6 +28,7 @@ import SettingsModal from './SettingsModal';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
 import SpaceInitToast from './SpaceInitToast';
+import OrganizeToast from './OrganizeToast';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
@@ -38,6 +40,7 @@ import McpProvider from '@/hooks/useMcpData';
 import '@/lib/renderers/index'; // client-side renderer registration source of truth
 import { useLeftPanel } from '@/hooks/useLeftPanel';
 import { useAskPanel } from '@/hooks/useAskPanel';
+import { useAiOrganize } from '@/hooks/useAiOrganize';
 import type { Tab } from './settings/types';
 
 interface SidebarLayoutProps {
@@ -73,6 +76,33 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     } catch { /* ignore */ }
     return RIGHT_AGENT_DETAIL_DEFAULT_WIDTH;
   });
+
+  // ── AI Organize (lifted from ImportModal so toast shares state) ──
+  const aiOrganize = useAiOrganize();
+  const [organizeToastVisible, setOrganizeToastVisible] = useState(false);
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
+
+  // Show toast whenever organize is active
+  useEffect(() => {
+    if (aiOrganize.phase === 'organizing' || aiOrganize.phase === 'done' || aiOrganize.phase === 'error') {
+      setOrganizeToastVisible(true);
+    }
+  }, [aiOrganize.phase]);
+
+  const handleOrganizeToastDismiss = useCallback(() => {
+    setOrganizeToastVisible(false);
+    if (aiOrganize.phase !== 'organizing') {
+      aiOrganize.reset();
+    } else {
+      aiOrganize.abort();
+      aiOrganize.reset();
+    }
+  }, [aiOrganize]);
+
+  const handleHistoryUpdate = useCallback(() => {
+    setHistoryRefreshToken(t => t + 1);
+    window.dispatchEvent(new Event('mindos:organize-history-update'));
+  }, []);
 
   // ── Import modal state ──
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -345,6 +375,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
           <DiscoverPanel active={lp.activePanel === 'discover'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
+        <div className={`flex flex-col h-full ${lp.activePanel === 'history' ? '' : 'hidden'}`}>
+          <ImportHistoryPanel active={lp.activePanel === 'history'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} refreshToken={historyRefreshToken} />
+        </div>
       </Panel>
 
       {/* ── Right-side Ask AI Panel ── */}
@@ -489,7 +522,17 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onClose={handleCloseImport}
         defaultSpace={importDefaultSpace}
         initialFiles={importInitialFiles}
+        aiOrganize={aiOrganize}
       />
+
+      {organizeToastVisible && (
+        <OrganizeToast
+          aiOrganize={aiOrganize}
+          onDismiss={handleOrganizeToastDismiss}
+          onCancel={() => { aiOrganize.abort(); aiOrganize.reset(); setOrganizeToastVisible(false); }}
+          onHistoryUpdate={handleHistoryUpdate}
+        />
+      )}
 
       <style>{`
         @media (min-width: 768px) {
