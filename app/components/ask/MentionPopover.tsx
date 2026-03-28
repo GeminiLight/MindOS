@@ -2,14 +2,16 @@
 
 import { useEffect, useRef } from 'react';
 import { FileText, Table, FolderOpen } from 'lucide-react';
+import HighlightMatch from './HighlightMatch';
 
 interface MentionPopoverProps {
   results: string[];
   selectedIndex: number;
+  query?: string;
   onSelect: (filePath: string) => void;
 }
 
-export default function MentionPopover({ results, selectedIndex, onSelect }: MentionPopoverProps) {
+export default function MentionPopover({ results, selectedIndex, query, onSelect }: MentionPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,10 +54,10 @@ export default function MentionPopover({ results, selectedIndex, onSelect }: Men
             ) : (
               <FileText size={13} className="text-muted-foreground shrink-0" />
             )}
-            <span className="truncate font-medium flex-1">{name}</span>
+            <span className="truncate font-medium flex-1"><HighlightMatch text={name} query={query} /></span>
             {dir && (
               <span className="text-2xs text-muted-foreground/40 truncate max-w-[140px] shrink-0">
-                {dir}
+                <HighlightMatch text={dir} query={query} />
               </span>
             )}
           </button>

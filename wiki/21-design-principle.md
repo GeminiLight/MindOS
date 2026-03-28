@@ -165,6 +165,7 @@
 - **模态框：** 居中，`modal-backdrop` 毛玻璃遮罩 `blur(8px)`，max-width 600px
 - **辅助浮层：** 侧滑面板/确认弹窗等使用 `overlay-backdrop` 轻遮罩 `blur(2px)`，不切断上下文
 - **浮动菜单/Popover：** `bg-card border-border shadow-lg rounded-lg`，无遮罩
+- **Select 下拉：** 自定义组件（`settings/Primitives.tsx`），禁止原生 `<select>`。触发器样式同 Input；下拉面板 `bg-card border-border shadow-lg rounded-lg`；选中项 amber `✓` + `bg-accent`；键盘 ↑↓/Enter/Escape/Tab；`useId()` 确保多实例 ID 唯一
 - **Badge：** `text-[10px] px-1.5 py-0.5 rounded font-mono`，色彩按状态区分
 - **Toggle/Switch：** `w-9 h-5 rounded-full`，开启 `bg-amber-600`，关闭 `bg-muted`
 
