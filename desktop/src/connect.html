@@ -162,6 +162,11 @@
     .mode-card:active {
       transform: scale(0.98);
     }
+    .mode-card:focus-visible {
+      border-color: var(--amber);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(200, 135, 58, 0.3);
+    }
     .mode-icon {
       width: 42px;
       height: 42px;
@@ -438,7 +443,7 @@
 
       <div class="mode-cards">
         <!-- Events bound by JS via querySelectorAll('.mode-card') -->
-        <div class="mode-card">
+        <div class="mode-card" role="button" tabindex="0" aria-label="Local mode">
           <div class="mode-icon">⚡</div>
           <div class="mode-info">
             <h3 data-i18n="localTitle"></h3>
@@ -446,7 +451,7 @@
           </div>
         </div>
 
-        <div class="mode-card">
+        <div class="mode-card" role="button" tabindex="0" aria-label="Remote mode">
           <div class="mode-icon">🌐</div>
           <div class="mode-info">
             <h3 data-i18n="remoteTitle"></h3>

@@ -33,6 +33,12 @@ export function normalizeAddress(input: string): string {
   if (!/^https?:\/\//.test(addr)) {
     addr = `http://${addr}`;
   }
+  // Validate URL structure
+  try {
+    new URL(addr);
+  } catch {
+    return '';
+  }
   return addr;
 }
 
@@ -81,6 +87,6 @@ export async function testConnection(address: string): Promise<HealthCheckResult
     if (err instanceof Error && err.name === 'AbortError') {
       return { status: 'offline', error: 'Connection timed out' };
     }
-    return { status: 'offline', error: 'Connection refused' };
+    return { status: 'offline', error: err instanceof Error ? err.message : 'Connection refused' };
   }
 }
