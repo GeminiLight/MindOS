@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { applyTemplate } from '@/lib/template';
+import { expandSetupPathHome } from './path-utils';
 
 function maskApiKey(key: string): string {
   if (!key || key.length < 6) return key ? '***' : '';
@@ -40,12 +41,6 @@ export async function GET() {
   }
 }
 
-function expandHome(p: string): string {
-  if (p.startsWith('~/')) return p.replace('~', os.homedir());
-  if (p === '~') return os.homedir();
-  return p;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -56,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'mindRoot is required' }, { status: 400 });
     }
 
-    const resolvedRoot = expandHome(mindRoot.trim());
+    const resolvedRoot = expandSetupPathHome(mindRoot.trim());
 
     // Validate ports
     const webPort = typeof port === 'number' ? port : 3456;
