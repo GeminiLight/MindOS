@@ -585,6 +585,7 @@ export type { MindSpaceSummary } from './core';
 export type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary, ContentChangeSource } from './core';
 
 export function findBacklinks(targetPath: string): BacklinkEntry[] {
-  return coreFindBacklinks(getMindRoot(), targetPath);
+  const { allFiles } = ensureCache();
+  return coreFindBacklinks(getMindRoot(), targetPath, allFiles);
 }
 
