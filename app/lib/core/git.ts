@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolveSafe } from './security';
 import type { GitLogEntry } from './types';
 
@@ -7,7 +7,7 @@ import type { GitLogEntry } from './types';
  */
 export function isGitRepo(mindRoot: string): boolean {
   try {
-    execSync('git rev-parse --is-inside-work-tree', { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: mindRoot, stdio: 'pipe' });
     return true;
   } catch { return false; }
 }
@@ -17,8 +17,9 @@ export function isGitRepo(mindRoot: string): boolean {
  */
 export function gitLog(mindRoot: string, filePath: string, limit: number): GitLogEntry[] {
   const resolved = resolveSafe(mindRoot, filePath);
-  const output = execSync(
-    `git log --follow --format="%H%x00%aI%x00%s%x00%an" -n ${limit} -- "${resolved}"`,
+  const output = execFileSync(
+    'git',
+    ['log', '--follow', '--format=%H%x00%aI%x00%s%x00%an', '-n', String(limit), '--', resolved],
     { cwd: mindRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
   ).trim();
   if (!output) return [];
@@ -33,18 +34,21 @@ export function gitLog(mindRoot: string, filePath: string, limit: number): GitLo
  */
 export function gitShowFile(mindRoot: string, filePath: string, commitHash: string): string {
   const resolved = resolveSafe(mindRoot, filePath);
-  const relFromGitRoot = execSync(
-    `git ls-files --full-name "${resolved}"`,
+  const relFromGitRoot = execFileSync(
+    'git',
+    ['ls-files', '--full-name', resolved],
     { cwd: mindRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
   ).trim();
   if (!relFromGitRoot) {
-    return execSync(
-      `git show ${commitHash}:"${filePath}"`,
+    return execFileSync(
+      'git',
+      ['show', `${commitHash}:${filePath}`],
       { cwd: mindRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
   }
-  return execSync(
-    `git show ${commitHash}:"${relFromGitRoot}"`,
+  return execFileSync(
+    'git',
+    ['show', `${commitHash}:${relFromGitRoot}`],
     { cwd: mindRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
   );
 }
