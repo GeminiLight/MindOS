@@ -61,13 +61,13 @@ npm run prepare-mindos-runtime
 # Package
 if [ "$MAC_ZIP" = true ]; then
     echo -e "\n${YELLOW}Building macOS zip (unsigned, cross-compile from Linux)...${NC}"
-    CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --publish never
+    CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac zip --publish never
     echo -e "\n${GREEN}Done!${NC}"
     ls -lh dist/*.zip 2>/dev/null
     echo -e "\n${YELLOW}These builds are UNSIGNED. Users need: xattr -cr /Applications/MindOS.app${NC}"
 else
     echo -e "\n${YELLOW}Building Linux packages...${NC}"
-    electron-builder --linux --publish never
+    npx electron-builder --linux --publish never
     echo -e "\n${GREEN}Done!${NC}"
     ls -lh dist/*.AppImage dist/*.deb 2>/dev/null
 fi
