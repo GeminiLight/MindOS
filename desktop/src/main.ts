@@ -27,6 +27,7 @@ import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
+import { isNextBuildValid } from './mindos-runtime-layout';
 import {
   getEffectiveMindRootFromConfig,
   localBrowseNeedsSetupWizard,
@@ -353,9 +354,11 @@ async function startLocalMode(): Promise<string | null> {
   }
 
   // 4. Ensure app is built (first run or after update — npm package has no .next)
+  //    Check for valid build (BUILD_ID or standalone/server.js), not just .next dir existence.
+  //    An incomplete .next (interrupted build, empty dir) would let Next.js crash at startup.
   const appDir = path.join(projectRoot, 'app');
   const nextDir = path.join(appDir, '.next');
-  if (!existsSync(nextDir)) {
+  if (!isNextBuildValid(appDir)) {
     splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
