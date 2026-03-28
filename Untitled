@@ -1,0 +1,120 @@
+[MindOS] CLI shim: /Users/geminilight/.mindos/bin/mindos → /Applications/MindOS.app/Contents/Resources/mindos-runtime/bin/cli.js
+[MindOS] Node.js: /Applications/MindOS.app/Contents/Resources/mindos-runtime/node/bin/node
+[MindOS] runtime pick source=bundled root=/Applications/MindOS.app/Contents/Resources/mindos-runtime version=0.6.8
+[MindOS:mcp] Warning: Server is binding to 0.0.0.0 without DNS rebinding protection. Consider using the allowedHosts option to restrict allowed hosts, or use authentication to protect your server.
+[MindOS:mcp] node:events:496
+[MindOS:mcp]       throw er; // Unhandled 'error' event
+[MindOS:mcp]       ^
+[MindOS:mcp] Error: listen EADDRINUSE: address already in use 0.0.0.0:8783
+[MindOS:mcp]     at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+[MindOS:mcp]     at listenInCluster (node:net:1996:12)
+[MindOS:mcp]     at node:net:2205:7
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[MindOS:mcp] Emitted 'error' event on Server instance at:
+[MindOS:mcp]     at emitErrorNT (node:net:1975:8)
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[MindOS:mcp]   code: 'EADDRINUSE',
+[MindOS:mcp]   errno: -48,
+[MindOS:mcp]   syscall: 'listen',
+[MindOS:mcp]   address: '0.0.0.0',
+[MindOS:mcp]   port: 8783
+[MindOS:mcp] }
+[MindOS:mcp] Node.js v22.16.0
+[MindOS:mcp] process exited code=1 signal=null
+[MindOS:web] ▲ Next.js 16.1.6
+[MindOS:web] - Local:         http://127.0.0.1:3457
+[MindOS:web] - Network:       http://127.0.0.1:3457
+[MindOS:web] ✓ Starting...
+[MindOS:web] ✓ Ready in 110ms
+[MindOS:mcp] Warning: Server is binding to 0.0.0.0 without DNS rebinding protection. Consider using the allowedHosts option to restrict allowed hosts, or use authentication to protect your server.
+[MindOS:mcp] node:events:496
+[MindOS:mcp]       throw er; // Unhandled 'error' event
+[MindOS:mcp]       ^
+[MindOS:mcp] Error: listen EADDRINUSE: address already in use 0.0.0.0:8783
+[MindOS:mcp]     at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+[MindOS:mcp]     at listenInCluster (node:net:1996:12)
+[MindOS:mcp]     at node:net:2205:7
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[MindOS:mcp] Emitted 'error' event on Server instance at:
+[MindOS:mcp]     at emitErrorNT (node:net:1975:8)
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[MindOS:mcp]   code: 'EADDRINUSE',
+[MindOS:mcp]   errno: -48,
+[MindOS:mcp]   syscall: 'listen',
+[MindOS:mcp]   address: '0.0.0.0',
+[MindOS:mcp]   port: 8783
+[MindOS:mcp] }
+[MindOS:mcp] Node.js v22.16.0
+[MindOS:mcp] process exited code=1 signal=null
+[MindOS:mcp] Warning: Server is binding to 0.0.0.0 without DNS rebinding protection. Consider using the allowedHosts option to restrict allowed hosts, or use authentication to protect your server.
+[MindOS:mcp] node:events:496
+[MindOS:mcp]       throw er; // Unhandled 'error' event
+[MindOS:mcp]       ^
+[MindOS:mcp] Error: listen EADDRINUSE: address already in use 0.0.0.0:8783
+[MindOS:mcp]     at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+[MindOS:mcp]     at listenInCluster (node:net:1996:12)
+[MindOS:mcp]     at node:net:2205:7
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[MindOS:mcp] Emitted 'error' event on Server instance at:
+[MindOS:mcp]     at emitErrorNT (node:net:1975:8)
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[MindOS:mcp]   code: 'EADDRINUSE',
+[MindOS:mcp]   errno: -48,
+[MindOS:mcp]   syscall: 'listen',
+[MindOS:mcp]   address: '0.0.0.0',
+[MindOS:mcp]   port: 8783
+[MindOS:mcp] }
+[MindOS:mcp] Node.js v22.16.0
+[MindOS:mcp] process exited code=1 signal=null
+[MindOS:web] ⨯ Failed to start server
+[MindOS:web] Error: listen EADDRINUSE: address already in use 127.0.0.1:3457
+[MindOS:web]     at <unknown> (Error: listen EADDRINUSE: address already in use 127.0.0.1:3457) {
+[MindOS:web]   code: 'EADDRINUSE',
+[MindOS:web]   errno: -48,
+[MindOS:web]   syscall: 'listen',
+[MindOS:web]   address: '127.0.0.1',
+[MindOS:web]   port: 3457
+[MindOS:web] }
+[MindOS:web] process exited code=1 signal=null
+[MindOS:web] ⨯ Failed to start server
+[MindOS:web] Error: listen EADDRINUSE: address already in use 127.0.0.1:3457
+[MindOS:web]     at <unknown> (Error: listen EADDRINUSE: address already in use 127.0.0.1:3457) {
+[MindOS:web]   code: 'EADDRINUSE',
+[MindOS:web]   errno: -48,
+[MindOS:web]   syscall: 'listen',
+[MindOS:web]   address: '127.0.0.1',
+[MindOS:web]   port: 3457
+[MindOS:web] }
+[MindOS:web] process exited code=1 signal=null
+[90002:0328/145846.029260:ERROR:CONSOLE(1)] "Request Autofill.enable failed. {"code":-32601,"message":"'Autofill.enable' wasn't found"}", source: devtools://devtools/bundled/core/protocol_client/protocol_client.js (1)
+[90002:0328/145846.029292:ERROR:CONSOLE(1)] "Request Autofill.setAddresses failed. {"code":-32601,"message":"'Autofill.setAddresses' wasn't found"}", source: devtools://devtools/bundled/core/protocol_client/protocol_client.js (1)
+[MindOS:mcp] Warning: Server is binding to 0.0.0.0 without DNS rebinding protection. Consider using the allowedHosts option to restrict allowed hosts, or use authentication to protect your server.
+[MindOS:mcp] node:events:496
+[MindOS:mcp]       throw er; // Unhandled 'error' event
+[MindOS:mcp]       ^
+[MindOS:mcp] Error: listen EADDRINUSE: address already in use 0.0.0.0:8783
+[MindOS:mcp]     at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+[MindOS:mcp]     at listenInCluster (node:net:1996:12)
+[MindOS:mcp]     at node:net:2205:7
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[MindOS:mcp] Emitted 'error' event on Server instance at:
+[MindOS:mcp]     at emitErrorNT (node:net:1975:8)
+[MindOS:mcp]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[MindOS:mcp]   code: 'EADDRINUSE',
+[MindOS:mcp]   errno: -48,
+[MindOS:mcp]   syscall: 'listen',
+[MindOS:mcp]   address: '0.0.0.0',
+[MindOS:mcp]   port: 8783
+[MindOS:mcp] }
+[MindOS:mcp] Node.js v22.16.0
+[MindOS:mcp] process exited code=1 signal=null
+[MindOS:web] ⨯ Failed to start server
+[MindOS:web] Error: listen EADDRINUSE: address already in use 127.0.0.1:3457
+[MindOS:web]     at <unknown> (Error: listen EADDRINUSE: address already in use 127.0.0.1:3457) {
+[MindOS:web]   code: 'EADDRINUSE',
+[MindOS:web]   errno: -48,
+[MindOS:web]   syscall: 'listen',
+[MindOS:web]   address: '127.0.0.1',
+[MindOS:web]   port: 3457
+[MindOS:web] }
+[MindOS:web] process exited code=1 signal=null

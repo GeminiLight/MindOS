@@ -57,6 +57,7 @@ import { stopMindos } from './lib/stop.js';
 import { getPlatform, ensureMindosDir, waitForHttp, waitForPortFree, runGatewayCommand } from './lib/gateway.js';
 import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
+import { ensureMcpBundle } from './lib/mcp-build.js';
 import { mcpInstall } from './lib/mcp-install.js';
 import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
 
@@ -422,11 +423,7 @@ const commands = {
     const hasInstallFlags = restArgs.some(a => ['-g', '--global', '-y', '--yes'].includes(a));
     if (sub === 'install' || hasInstallFlags) { await mcpInstall(); return; }
     loadConfig();
-    const mcpSdk = resolve(ROOT, 'mcp', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
-    if (!existsSync(mcpSdk)) {
-      console.log(yellow('Installing MCP dependencies (first run)...\n'));
-      npmInstall(resolve(ROOT, 'mcp'), '--no-workspaces');
-    }
+    ensureMcpBundle();
     // `mindos mcp` is the entry point for MCP clients (Claude Code, Cursor, etc.)
     // which communicate over stdin/stdout. Default to stdio; HTTP is handled by
     // `mindos start` via spawnMcp(). Callers can still override via env.
