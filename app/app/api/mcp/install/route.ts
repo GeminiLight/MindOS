@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { MCP_AGENTS, expandHome } from '@/lib/mcp-agents';
+import { readSettings } from '@/lib/settings';
 
 /** Parse JSONC — strips single-line (//) and block comments before JSON.parse */
 function parseJsonc(text: string): Record<string, unknown> {
@@ -104,7 +105,9 @@ function buildEntry(transport: string, url?: string, token?: string) {
   if (transport === 'stdio') {
     return { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
   }
-  const entry: Record<string, unknown> = { url: url || 'http://localhost:8781/mcp' };
+  // Resolve MCP port from env → config → default, not hardcoded
+  const fallbackPort = Number(process.env.MINDOS_MCP_PORT) || readSettings().mcpPort || 8781;
+  const entry: Record<string, unknown> = { url: url || `http://localhost:${fallbackPort}/mcp` };
   if (token) entry.headers = { Authorization: `Bearer ${token}` };
   return entry;
 }
