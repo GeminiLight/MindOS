@@ -148,10 +148,11 @@ export class ProcessManager extends EventEmitter {
     await this.stop();
     this.crashCount = { web: 0, mcp: 0 };
     this.mcpRestartInProgress = false;
-    // After stop, old ports may be in TIME_WAIT — find fresh ones to avoid EADDRINUSE on restart
-    this.opts.webPort = await this.findFreePort(oldWebPort).catch(() => oldWebPort);
+    // Prefer reusing the same ports (stable for bookmarks, MCP clients, etc.).
+    // Wait briefly for the OS to release them after process exit.
+    this.opts.webPort = await this.waitForPortOrFallback(oldWebPort);
     if (!this.externalMcp) {
-      this.opts.mcpPort = await this.findFreePort(oldMcpPort).catch(() => oldMcpPort);
+      this.opts.mcpPort = await this.waitForPortOrFallback(oldMcpPort);
     }
     await this.start();
   }
@@ -372,6 +373,22 @@ export class ProcessManager extends EventEmitter {
       };
       tryPort(start);
     });
+  }
+
+  /**
+   * Wait up to 3s for a port to become free, then fall back to findFreePort.
+   * Keeps ports stable across restarts (important for bookmarks, MCP client configs).
+   */
+  private async waitForPortOrFallback(port: number): Promise<number> {
+    for (let i = 0; i < 6; i++) {
+      try {
+        await this.findFreePort(port);
+        return port; // port is free, reuse it
+      } catch { /* still occupied */ }
+      await new Promise((r) => setTimeout(r, 500)); // wait 500ms, retry
+    }
+    // 3s elapsed, port still occupied — fall back to next available
+    return this.findFreePort(port + 1).catch(() => port);
   }
 
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
