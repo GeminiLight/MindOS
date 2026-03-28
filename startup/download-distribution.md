@@ -95,8 +95,8 @@ dl.mindos.ai/desktop/latest/MindOS-mac-arm64.dmg  (每次构建覆盖)
 - 开启公共访问（Public Access），获得 `pub-xxx.r2.dev` 域名
 
 #### 阿里云 OSS
-- Bucket：`mindos-cn-release`（华东1 杭州），权限"公共读"
-- 原生端点：`mindos-cn-release.oss-cn-hangzhou.aliyuncs.com`
+- Bucket：`mindos-cn-releases`（华东1 杭州），权限"公共读"
+- 原生端点：`mindos-cn-releases.oss-cn-hangzhou.aliyuncs.com`
 
 #### GitHub Secrets
 
