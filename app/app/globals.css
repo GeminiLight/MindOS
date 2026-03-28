@@ -75,6 +75,7 @@ body {
   --ring: var(--amber);
   --radius: 0.5rem;
   --amber: #c8873a;
+  --amber-text: #9a6a2b;
   --amber-dim: rgba(200, 135, 58, 0.18);
   --amber-subtle: rgba(200, 135, 30, 0.08);
   --amber-foreground: #131210;
@@ -110,6 +111,7 @@ body {
   --input: rgba(232, 228, 220, 0.1);
   --ring: var(--amber);
   --amber: #d4954a;
+  --amber-text: #e0a85e;
   --amber-dim: rgba(212, 149, 74, 0.20);
   --amber-subtle: rgba(212, 149, 74, 0.10);
   --amber-foreground: #131210;

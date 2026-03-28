@@ -239,7 +239,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
                 onClick={() => handleLangSwitch('en')}
                 disabled={switchingLang}
                 className={`px-2.5 py-1 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  currentLang === 'en' ? 'bg-[var(--amber-subtle)] text-[var(--amber)] font-medium' : 'text-muted-foreground hover:bg-muted'
+                  currentLang === 'en' ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)] font-medium' : 'text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {m?.skillLangEn ?? 'English'}
@@ -248,7 +248,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
                 onClick={() => handleLangSwitch('zh')}
                 disabled={switchingLang}
                 className={`px-2.5 py-1 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-l border-border ${
-                  currentLang === 'zh' ? 'bg-[var(--amber-subtle)] text-[var(--amber)] font-medium' : 'text-muted-foreground hover:bg-muted'
+                  currentLang === 'zh' ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)] font-medium' : 'text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {m?.skillLangZh ?? '中文'}

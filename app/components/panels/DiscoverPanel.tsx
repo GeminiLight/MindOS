@@ -35,7 +35,7 @@ function UseCaseRow({
       <span className="text-xs text-foreground truncate flex-1">{title}</span>
       <button
         onClick={() => openAskModal(prompt, 'user')}
-        className="opacity-0 group-hover:opacity-100 text-2xs px-2 py-0.5 rounded text-[var(--amber)] bg-[var(--amber-dim)] hover:opacity-80 transition-all duration-150 shrink-0"
+        className="opacity-0 group-hover:opacity-100 text-2xs px-2 py-0.5 rounded text-[var(--amber-text)] bg-[var(--amber-dim)] hover:opacity-80 transition-all duration-150 shrink-0"
       >
         {tryLabel}
       </button>

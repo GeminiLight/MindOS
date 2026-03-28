@@ -229,7 +229,7 @@ export default function SkillDetailPopover({
                   ? 'bg-muted text-muted-foreground'
                   : skill?.source === 'builtin'
                     ? 'bg-muted text-muted-foreground'
-                    : 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                    : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
               }`}>
                 {sourceLabel}
               </span>

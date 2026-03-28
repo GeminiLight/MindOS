@@ -129,7 +129,7 @@ export default function SkillCreateForm({ onSave, onCancel, saving, error, m }: 
               onClick={() => handleTemplateChange(tmpl)}
               className={`px-2.5 py-1 text-xs transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                 selectedTemplate === tmpl
-                  ? 'bg-[var(--amber-subtle)] text-[var(--amber)] font-medium'
+                  ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)] font-medium'
                   : 'text-muted-foreground hover:bg-muted'
               }`}
             >

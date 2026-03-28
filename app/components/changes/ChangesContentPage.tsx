@@ -7,6 +7,14 @@ import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
 import { collapseDiffContext, buildLineDiff } from './line-diff';
 
+/** Semantic color for operation type badges */
+function opColorClass(op: string): string {
+  if (op.startsWith('create') || op === 'import_file') return 'text-success';
+  if (op.startsWith('delete')) return 'text-error';
+  if (op.startsWith('rename') || op.startsWith('move')) return 'text-muted-foreground';
+  return ''; // update_lines, update_section — default foreground
+}
+
 interface ChangeEvent {
   id: string;
   ts: string;
@@ -225,7 +233,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                         >
                           {event.path}
                         </span>
-                        <span>{event.op}</span>
+                        <span className={opColorClass(event.op)}>{event.op}</span>
                         <span>·</span>
                         <span>{sourceLabel(event.source)}</span>
                         <span>·</span>
@@ -234,7 +242,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                     </div>
                     <Link
                       href={`/view/${event.path.split('/').map(encodeURIComponent).join('/')}`}
-                      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90"
+                      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber-text)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {t.changes.open}

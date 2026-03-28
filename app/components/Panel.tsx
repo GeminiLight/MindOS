@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, Import } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
 import type { FileNode } from '@/lib/types';
 import FileTree from './FileTree';
@@ -52,7 +52,7 @@ interface PanelProps {
   /** Callback to toggle maximize */
   onMaximize?: () => void;
   /** Callback to open import modal for a space */
-  onImport?: (space: string) => void;
+  onImport?: (space?: string) => void;
   /** Lazy-loaded panel content for search/ask/plugins */
   children?: React.ReactNode;
 }
@@ -108,6 +108,15 @@ export default function Panel({
       <div className={`flex flex-col h-full ${activePanel === 'files' ? '' : 'hidden'}`}>
         <PanelHeader title={t.sidebar.files}>
           <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onImport?.()}
+              className="p-1 rounded text-[var(--amber)] hover:bg-muted hover:text-[var(--amber)] transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+              aria-label={t.sidebar.importFile}
+              title={t.sidebar.importFile}
+            >
+              <Import size={13} />
+            </button>
             <button
               onClick={() => setMaxOpenDepth(prev => {
                 const current = prev ?? treeMaxDepth;

@@ -28,5 +28,7 @@ export async function findAvailablePort(start: number, maxAttempts = 10): Promis
     const inUse = await isPortInUse(port);
     if (!inUse) return port;
   }
-  throw new Error(`No available port found in range ${start}-${start + maxAttempts - 1}`);
+  const err = new Error(`No available port found in range ${start}-${start + maxAttempts - 1}`);
+  (err as Error & { code: string }).code = 'ERR_NO_PORT';
+  throw err;
 }

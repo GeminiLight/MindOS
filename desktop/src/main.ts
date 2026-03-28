@@ -407,8 +407,32 @@ async function startLocalMode(): Promise<string | null> {
   splashStatus({ status: 'starting' });
 
   // 5. Find ports + spawn (retry once if port was stolen between check and bind)
-  let webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
-  let mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
+  let webPort: number;
+  let mcpPort: number;
+  try {
+    webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
+    mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
+  } catch (portErr) {
+    // Port range exhausted — likely orphaned processes from a previous crash.
+    // Kill them and retry instead of showing a dead-end error.
+    ProcessManager.cleanupOrphanedChildren();
+    try {
+      webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
+      mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
+    } catch {
+      const basePort = config.port || DEFAULT_WEB_PORT;
+      splashStatus({
+        error: zh
+          ? `端口 ${basePort}-${basePort + 9} 均被占用。\n请关闭其他占用这些端口的程序，或在终端运行:\n  lsof -ti:${basePort} | xargs kill`
+          : `Ports ${basePort}-${basePort + 9} are all in use.\nClose other programs using these ports, or run:\n  lsof -ti:${basePort} | xargs kill`,
+        actions: [
+          { id: 'retry', label: 'retry', primary: true },
+          { id: 'quit', label: 'quit' },
+        ],
+      });
+      return null;
+    }
+  }
 
   const createProcessManager = (wp: number, mp: number) => new ProcessManager({
     nodePath, npxPath, projectRoot, webPort: wp, mcpPort: mp,
