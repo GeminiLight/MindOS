@@ -91,7 +91,7 @@ export class ProcessManager extends EventEmitter {
     this.writeChildPids();
 
     // 3. Wait for health (exits early if web process dies)
-    const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 120_000);
+    const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 180_000);
     if (!healthy) {
       const stderr = this.webStderrLines.slice(-20).join('\n');
       const detail = this.webProcessDied
