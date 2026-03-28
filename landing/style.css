@@ -1037,8 +1037,8 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     margin-top: 1.5rem;
     padding: 1.25rem;
     border-radius: 12px;
-    background: rgba(245, 243, 240, 0.6);
-    border: 1px solid rgba(139, 123, 108, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     cursor: pointer;
     transition: all 0.3s var(--ease-out-expo);
     opacity: 0;
@@ -1066,13 +1066,18 @@ html[lang="zh"] ul[data-zh], html[lang="zh"] ol[data-zh] { display: flex !import
     margin-top: 1.5rem;
 }
 .qs-security-notice:hover {
-    background: rgba(245, 243, 240, 0.85);
-    border-color: rgba(139, 123, 108, 0.25);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 body.light .qs-security-notice {
-    background: rgba(250, 249, 247, 0.8);
-    border-color: rgba(139, 123, 108, 0.12);
+    background: rgba(245, 243, 240, 0.7);
+    border-color: rgba(139, 123, 108, 0.15);
+}
+body.light .qs-security-notice:hover {
+    background: rgba(245, 243, 240, 0.9);
+    border-color: rgba(139, 123, 108, 0.25);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 .qs-security-header {
     display: flex;
@@ -1080,7 +1085,7 @@ body.light .qs-security-notice {
     gap: 0.5rem;
     font-size: 0.8rem;
     font-weight: 600;
-    color: #8b6c5c;
+    color: var(--accent);
     margin-bottom: 0.5rem;
 }
 .qs-security-header svg {
@@ -1100,15 +1105,23 @@ body.light .qs-security-notice {
     font-size: 0.78rem;
     padding: 0.625rem 0.875rem;
     border-radius: 8px;
-    background: rgba(0,0,0,0.03);
-    border: 1px solid rgba(0,0,0,0.06);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--fg);
     word-break: break-all;
     transition: all 0.2s ease;
 }
 .qs-security-notice:hover .qs-security-cmd {
-    background: rgba(0,0,0,0.05);
-    border-color: rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+body.light .qs-security-cmd {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.06);
+}
+body.light .qs-security-notice:hover .qs-security-cmd {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
 }
 .qs-copy-hint {
     display: flex;
