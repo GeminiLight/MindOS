@@ -158,7 +158,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center" onKeyDown={handleKeyDown}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60" onClick={close} />
+      <div className="absolute inset-0 overlay-backdrop" onClick={close} />
       {/* Dialog */}
       <div
         role="dialog"

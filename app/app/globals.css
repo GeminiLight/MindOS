@@ -306,6 +306,15 @@ body {
   background: rgba(0, 0, 0, 0.65);
 }
 
+.overlay-backdrop {
+  background: rgba(10, 9, 6, 0.35);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.dark .overlay-backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
 /* Micro type scale: text-2xs = 10px (between nothing and text-xs 12px) */
 @layer utilities {
   .text-2xs { font-size: 10px; line-height: 1.4; }

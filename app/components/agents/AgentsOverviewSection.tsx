@@ -158,7 +158,7 @@ export default function AgentsOverviewSection({
               riskOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
             )}
           >
-            <div className="overflow-hidden">
+            <div className="overflow-hidden" {...(!riskOpen && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
               <ul className="mt-3 space-y-2" role="list">
                 {riskQueue.map((risk, i) => (
                   <li

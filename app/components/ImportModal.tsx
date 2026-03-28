@@ -521,7 +521,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles 
     <>
       <div
         ref={overlayRef}
-        className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200 ${closing ? 'opacity-0' : 'opacity-100'}`}
+        className={`fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 transition-opacity duration-200 ${closing ? 'opacity-0' : 'opacity-100'}`}
         onClick={(e) => { if (e.target === overlayRef.current) handleClose(); }}
       >
         <div
