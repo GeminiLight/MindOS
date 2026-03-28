@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const CLI = path.join(ROOT, 'bin', 'cli.js');
+const CURRENT_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).version;
 
 let tempDir: string;
 let fakeBinDir: string;
@@ -54,7 +55,7 @@ describe('mindos update root resolution', () => {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    expect(stdout).toContain('Updated: 0.6.8 → 9.9.9');
+    expect(stdout).toContain(`Updated: ${CURRENT_VERSION} → 9.9.9`);
     expect(stdout).not.toContain('Already on the latest version');
   });
 });
