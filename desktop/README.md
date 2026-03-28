@@ -19,6 +19,12 @@ cd desktop && npm install
 cd desktop && npm run dev
 ```
 
+### 调试已安装的应用
+
+```bash
+MINDOS_OPEN_DEVTOOLS=1 /Applications/MindOS.app/Contents/MacOS/MindOS
+```
+
 ### 本地打包
 
 macOS（需要在 Mac 上运行）：
