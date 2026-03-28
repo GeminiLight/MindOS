@@ -62,6 +62,8 @@ export class ProcessManager extends EventEmitter {
 
   /** Start MCP + Next.js, then wait for health check */
   async start(): Promise<void> {
+    // Diagnostic: trace who called start() to debug double-start issue
+    console.info('[MindOS:ProcessManager] start() called', new Error('start() call stack').stack?.split('\n').slice(1, 4).join(' <- '));
     this.stopped = false;
     this.webProcessDied = false;
     this.webStderrLines = [];
@@ -157,6 +159,7 @@ export class ProcessManager extends EventEmitter {
 
   /** Restart services */
   async restart(): Promise<void> {
+    console.info('[MindOS:ProcessManager] restart() called', new Error('restart() stack').stack?.split('\n').slice(1, 4).join(' <- '));
     const oldWebPort = this.opts.webPort;
     const oldMcpPort = this.opts.mcpPort;
     await this.stop();
