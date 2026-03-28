@@ -450,6 +450,16 @@ async function startLocalMode(): Promise<string | null> {
   let mcpFailed = false;
   let startupComplete = false;  // Only show crash dialog after successful startup
 
+  processManager.on('mcp-port-blocked', (blockedPort: number) => {
+    const zh = navigator_lang() === 'zh';
+    dialog.showErrorBox(
+      zh ? 'MCP 端口被占用' : 'MCP Port Blocked',
+      zh
+        ? `MCP 端口 ${blockedPort} 被其他程序占用，MindOS MCP 无法启动。\n\n请关闭占用该端口的程序，或在设置中修改 MCP 端口后重启。`
+        : `MCP port ${blockedPort} is occupied by another program. MindOS MCP cannot start.\n\nClose the program using that port, or change the MCP port in Settings and restart.`,
+    );
+  });
+
   processManager.on('crash', (which: string, count: number) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
