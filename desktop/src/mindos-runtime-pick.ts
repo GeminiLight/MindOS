@@ -88,8 +88,9 @@ export function pickMindOsRuntime(input: MindOsRuntimePickInput): MindOsRuntimeP
   }
 
   // prefer-newer (default)
+  // userAdoptionAllowed already validated userVersion with semver.valid
   const bundledOk = input.bundledRunnable && !!input.bundledRoot;
-  const uV = input.userVersion && semver.valid(input.userVersion) ? input.userVersion : null;
+  const uV = userOk.ok ? input.userVersion : null;
   const bV = input.bundledVersion && semver.valid(input.bundledVersion) ? input.bundledVersion : null;
 
   if (userOk.ok && uV && bundledOk && bV) {

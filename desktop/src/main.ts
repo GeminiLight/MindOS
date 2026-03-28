@@ -59,6 +59,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let connectionMonitor: ConnectionMonitor | null = null;
 let isQuitting = false;
+let activeRecoveryPoll: ReturnType<typeof setInterval> | null = null;
 let currentMode: 'local' | 'remote' = 'local';
 let currentWebPort: number | undefined;
 let currentMcpPort: number | undefined;
@@ -94,7 +95,8 @@ function readMindOsConfigFileUncached(): MindOSConfig {
     const raw = readFileSync(CONFIG_PATH, 'utf-8').trim();
     if (!raw) return {};
     return JSON.parse(raw) as MindOSConfig;
-  } catch {
+  } catch (err) {
+    console.warn('[MindOS] config.json is corrupt or unreadable, using defaults:', err instanceof Error ? err.message : err);
     return {};
   }
 }
@@ -473,11 +475,12 @@ async function startLocalMode(): Promise<string | null> {
         `);
         refreshTray('starting');
         // Poll for server recovery
-        const recoveryPoll = setInterval(async () => {
+        activeRecoveryPoll = setInterval(async () => {
           try {
             const res = await fetch(`http://127.0.0.1:${webPort}/api/health`, { signal: AbortSignal.timeout(3000) });
             if (res.ok) {
-              clearInterval(recoveryPoll);
+              clearInterval(activeRecoveryPoll!);
+              activeRecoveryPoll = null;
               mainWindow?.loadURL(
                 resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${webPort}`),
               );
@@ -486,7 +489,7 @@ async function startLocalMode(): Promise<string | null> {
           } catch { /* still down */ }
         }, 3000);
         // Timeout after 5 minutes
-        setTimeout(() => clearInterval(recoveryPoll), 300000);
+        setTimeout(() => { if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; } }, 300_000);
       } else {
         crashDialogShown = true;
         const zh = navigator_lang() === 'zh';
@@ -597,11 +600,17 @@ function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<stri
 
 // ── Tray Action: Switch Mode (show selection window, then switch if different) ──
 
+let isSwitchingMode = false;
 async function handleChangeMode(): Promise<void> {
-  const selectedMode = await showModeSelectWindow();
-  if (!selectedMode || selectedMode === currentMode) return;
-
-  await switchToMode(selectedMode);
+  if (isSwitchingMode) return;
+  isSwitchingMode = true;
+  try {
+    const selectedMode = await showModeSelectWindow();
+    if (!selectedMode || selectedMode === currentMode) return;
+    await switchToMode(selectedMode);
+  } finally {
+    isSwitchingMode = false;
+  }
 }
 
 // ── Tray Action: Switch Server (remote mode — show connect window) ──
@@ -672,8 +681,10 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
 
 // ── Tray Action: Restart Services ──
 
+let isRestarting = false;
 async function handleRestartServices(): Promise<void> {
-  if (currentMode !== 'local') return;
+  if (currentMode !== 'local' || isRestarting) return;
+  isRestarting = true;
   const zh = navigator_lang() === 'zh';
 
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -708,6 +719,8 @@ async function handleRestartServices(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     await removeOverlay('mindos-switch-overlay');
     dialog.showErrorBox(zh ? '重启失败' : 'Restart Failed', msg);
+  } finally {
+    isRestarting = false;
   }
 }
 
@@ -906,7 +919,7 @@ async function bootApp(): Promise<void> {
       }
       firstLoad = false;
     }
-    // macOS: inject CSS on every load (navigation resets injected stylesheets)
+    // macOS: inject titlebar CSS (navigation resets injected stylesheets, so re-inject)
     if (process.platform === 'darwin') {
       mainWindow?.webContents.insertCSS(`
         html { --electron-mac-titlebar-h: 28px; }
@@ -992,6 +1005,7 @@ app.on('before-quit', (e) => {
         if (processManager) await processManager.stop();
       } catch { /* best-effort */ }
       if (connectionMonitor) connectionMonitor.stop();
+      if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; }
       clearActiveTunnel();
       app.exit(0);
     };

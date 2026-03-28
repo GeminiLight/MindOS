@@ -30,6 +30,7 @@ export class ProcessManager extends EventEmitter {
   private crashCount = { web: 0, mcp: 0 };
   private stopped = false;
   private crashHandlers = new Map<ChildProcess, (...args: unknown[]) => void>();
+  private respawnTimers: ReturnType<typeof setTimeout>[] = [];
   /** When true, the next MCP exit is expected (e.g. /api/mcp/restart killed it) — skip crash handler respawn */
   private mcpRestartInProgress = false;
   /** Captured stderr from web process for diagnostics when startup fails */
@@ -88,6 +89,9 @@ export class ProcessManager extends EventEmitter {
       proc.removeListener('exit', handler);
     }
     this.crashHandlers.clear();
+    // Cancel any pending respawn timers
+    for (const t of this.respawnTimers) clearTimeout(t);
+    this.respawnTimers = [];
 
     const killProcess = (proc: ChildProcess | null): Promise<void> => {
       return new Promise((resolve) => {
@@ -334,7 +338,7 @@ export class ProcessManager extends EventEmitter {
 
       if (this.crashCount[which] < 3) {
         const delay = this.crashCount[which] === 1 ? 1000 : 3000;
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           if (this.stopped) return;
           const newProc = which === 'mcp' ? this.spawnMcp() : this.spawnWeb();
           if (which === 'mcp') {
@@ -344,6 +348,7 @@ export class ProcessManager extends EventEmitter {
           }
           this.setupCrashHandler(newProc, which);
         }, delay);
+        this.respawnTimers.push(timer);
       } else {
         if (which === 'web') {
           this.emit('status-change', 'error');
