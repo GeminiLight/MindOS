@@ -105,6 +105,14 @@ export async function downloadNode(
   // Ensure executable permission (macOS/Linux)
   if (process.platform !== 'win32') {
     chmodSync(nodeBin, 0o755);
+    // Remove macOS quarantine attribute — Gatekeeper may silently kill quarantined binaries
+    // spawned as child processes, causing the 120s health-check timeout.
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`xattr -dr com.apple.quarantine "${NODE_DIR}"`, { stdio: 'ignore' });
+      } catch { /* xattr may not exist or attribute already absent — safe to ignore */ }
+    }
   }
 
   // 4. Cleanup temp

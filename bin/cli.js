@@ -403,7 +403,7 @@ const commands = {
     run(
       `${NEXT_BIN} start -p ${webPort} ${extra}`,
       resolve(ROOT, 'app'),
-      process.env.HOSTNAME ? undefined : { HOSTNAME: '127.0.0.1' }
+      { HOSTNAME: '127.0.0.1' }
     );
   },
 

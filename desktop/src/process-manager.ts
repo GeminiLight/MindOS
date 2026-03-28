@@ -32,6 +32,10 @@ export class ProcessManager extends EventEmitter {
   private crashHandlers = new Map<ChildProcess, (...args: unknown[]) => void>();
   /** When true, the next MCP exit is expected (e.g. /api/mcp/restart killed it) — skip crash handler respawn */
   private mcpRestartInProgress = false;
+  /** Captured stderr from web process for diagnostics when startup fails */
+  private webStderrLines: string[] = [];
+  /** Set to true when web process exits during startup (before health check succeeds) */
+  private webProcessDied = false;
 
   constructor(opts: ProcessManagerOptions) {
     super();
@@ -41,20 +45,33 @@ export class ProcessManager extends EventEmitter {
   /** Start MCP + Next.js, then wait for health check */
   async start(): Promise<void> {
     this.stopped = false;
+    this.webProcessDied = false;
+    this.webStderrLines = [];
     this.emit('status-change', 'starting');
 
     // 1. Spawn MCP server
     this.mcpProcess = this.spawnMcp();
+    this.guardSpawnError(this.mcpProcess, 'mcp');
     this.setupCrashHandler(this.mcpProcess, 'mcp');
 
     // 2. Spawn Next.js
     this.webProcess = this.spawnWeb();
+    this.guardSpawnError(this.webProcess, 'web');
+    this.captureStderr(this.webProcess);
     this.setupCrashHandler(this.webProcess, 'web');
 
-    // 3. Wait for health
+    // 3. Wait for health (exits early if web process dies)
     const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 120_000);
     if (!healthy) {
-      throw new Error(`MindOS web server did not start within 120 seconds on port ${this.opts.webPort}`);
+      const stderr = this.webStderrLines.slice(-20).join('\n');
+      const detail = this.webProcessDied
+        ? `Web process crashed before becoming ready.`
+        : `Health check timed out after 120 seconds.`;
+      throw new Error(
+        `MindOS web server failed to start on port ${this.opts.webPort}.\n` +
+        `${detail}\n` +
+        (stderr ? `Last output:\n${stderr}` : 'No output captured from web process.'),
+      );
     }
 
     this.emit('status-change', 'running');
@@ -156,11 +173,12 @@ export class ProcessManager extends EventEmitter {
       ...(verbose ? { MCP_VERBOSE: '1' } : {}),
     };
 
-    return spawn(this.opts.nodePath, [mcpBundle], {
+    const proc = spawn(this.opts.nodePath, [mcpBundle], {
       cwd: mcpDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    return proc;
   }
 
   private spawnWeb(): ChildProcess {
@@ -185,8 +203,9 @@ export class ProcessManager extends EventEmitter {
     };
     if (authToken) env.AUTH_TOKEN = authToken;
     if (webPassword) env.WEB_PASSWORD = webPassword;
-    /** Next binds to OS hostname by default; health checks use 127.0.0.1 */
-    if (!env.HOSTNAME) env.HOSTNAME = '127.0.0.1';
+    /** Always bind to 127.0.0.1 for local mode (avoid OS hostname binding that breaks health checks).
+     * @see wiki/80-known-pitfalls.md — "Next 生产进程绑定机器 hostname" */
+    env.HOSTNAME = '127.0.0.1';
 
     // Check for standalone server.js first (much faster startup)
     const standaloneServer = path.join(appDir, '.next', 'standalone', 'server.js');
@@ -216,19 +235,29 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
-  /** Poll /api/health until 200 or timeout */
+  /**
+   * Poll /api/health until 200, timeout, or web process death.
+   * Exits early when the web process crashes (no point waiting 120s for a dead process).
+   */
   private waitForReady(port: number, urlPath: string, timeoutMs: number): Promise<boolean> {
     return new Promise((resolve) => {
+      let resolved = false;
+      const done = (result: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        clearInterval(interval);
+        resolve(result);
+      };
+
       const start = Date.now();
       const interval = setInterval(() => {
-        if (this.stopped) {
-          clearInterval(interval);
-          resolve(false);
-          return;
-        }
-        if (Date.now() - start > timeoutMs) {
-          clearInterval(interval);
-          resolve(false);
+        if (this.stopped) { done(false); return; }
+        if (Date.now() - start > timeoutMs) { done(false); return; }
+
+        // If web process has been marked dead AND crash handler exhausted retries (>=3),
+        // bail out immediately instead of polling until timeout.
+        if (this.webProcessDied && this.crashCount.web >= 3) {
+          done(false);
           return;
         }
 
@@ -239,14 +268,35 @@ export class ProcessManager extends EventEmitter {
           timeout: 2000,
         }, (res) => {
           if (res.statusCode === 200) {
-            clearInterval(interval);
-            resolve(true);
+            done(true);
           }
           res.resume(); // drain
         });
         req.on('error', () => { /* not ready yet */ });
         req.on('timeout', () => { req.destroy(); });
       }, 1000);
+    });
+  }
+
+  /** Prevent unhandled 'error' event (e.g. ENOENT when binary not found) from crashing Electron */
+  private guardSpawnError(proc: ChildProcess, label: string): void {
+    proc.on('error', (err) => {
+      console.error(`[MindOS:${label}] spawn error: ${err.message}`);
+      if (label === 'web') {
+        this.webStderrLines.push(`spawn error: ${err.message}`);
+        this.webProcessDied = true;
+      }
+    });
+  }
+
+  /** Capture web process stderr for diagnostic output on startup failure */
+  private captureStderr(proc: ChildProcess): void {
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        this.webStderrLines.push(line);
+        // Keep buffer bounded
+        if (this.webStderrLines.length > 100) this.webStderrLines.shift();
+      }
     });
   }
 
@@ -269,6 +319,7 @@ export class ProcessManager extends EventEmitter {
     this.pipeChildOutput(proc, which);
     const handler = (code: number | null, signal: string | null) => {
       console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
+      if (which === 'web') this.webProcessDied = true;
       if (this.stopped) return;
 
       // /api/mcp/restart kills the old MCP and spawns its own replacement.
