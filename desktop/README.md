@@ -148,3 +148,30 @@ CI publish 模式自动上传到：
 - **GitHub Releases**：原始文件名（带版本号）
 
 Landing 页面下载链接指向 CDN `latest/` 路径，每次发版自动覆盖。
+
+## 安装
+
+### 从 DMG 安装（命令行）
+
+```bash
+hdiutil attach ~/Downloads/MindOS-0.1.0-arm64.dmg -nobrowse && \
+cp -R /Volumes/MindOS/MindOS.app /Applications/ && \
+hdiutil detach /Volumes/MindOS && \
+xattr -cr /Applications/MindOS.app
+```
+
+签名 + 公证过的 DMG 不需要 `xattr -cr`，双击拖入 Applications 即可。
+
+### 从 DMG 安装（图形界面）
+
+双击 `.dmg` 文件，将 MindOS.app 拖到 Applications 文件夹。
+
+### Linux
+
+```bash
+# AppImage
+chmod +x MindOS-0.1.0.AppImage && ./MindOS-0.1.0.AppImage
+
+# deb
+sudo dpkg -i mindos-desktop_0.1.0_amd64.deb
+```
