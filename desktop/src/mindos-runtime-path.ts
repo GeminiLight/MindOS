@@ -3,16 +3,29 @@
  * Explicit override via env is handled in main before calling this.
  */
 import { app } from 'electron';
+import { existsSync } from 'fs';
 import path from 'path';
 
 /**
  * Directory where packaged builds may ship `mindos-runtime/` (see electron-builder extraResources).
- * In development, returns null unless MINDOS_DEV_BUNDLED_ROOT is set (dogfooding).
+ * In development: env override → monorepo root auto-detect → null.
  */
 export function getDefaultBundledMindOsDirectory(): string | null {
   if (!app.isPackaged) {
     const dev = process.env.MINDOS_DEV_BUNDLED_ROOT?.trim();
-    return dev && dev.length > 0 ? dev : null;
+    if (dev && dev.length > 0) return dev;
+
+    // Auto-detect: desktop/ sits inside the monorepo root which IS a MindOS runtime
+    const monorepoRoot = path.resolve(app.getAppPath(), '..');
+    if (
+      existsSync(path.join(monorepoRoot, 'app')) &&
+      existsSync(path.join(monorepoRoot, 'mcp')) &&
+      existsSync(path.join(monorepoRoot, 'package.json'))
+    ) {
+      return monorepoRoot;
+    }
+
+    return null;
   }
   return path.join(process.resourcesPath, 'mindos-runtime');
 }
