@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronsDownUp, ChevronsUpDown, Import } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, FilePlus, Import } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
 import type { FileNode } from '@/lib/types';
 import FileTree from './FileTree';
@@ -117,6 +117,15 @@ export default function Panel({
               title={t.sidebar.importFile}
             >
               <Import size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.assign('/view/Untitled.md')}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+              aria-label={t.sidebar.newFile}
+              title={t.sidebar.newFile}
+            >
+              <FilePlus size={13} />
             </button>
             <button
               onClick={() => setMaxOpenDepth(prev => {
