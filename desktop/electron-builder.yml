@@ -30,7 +30,8 @@ mac:
         - x64
   hardenedRuntime: true
   gatekeeperAssess: false
-  notarize: true
+  # Notarization is handled separately in CI with retry logic (not by electron-builder)
+  notarize: false
   entitlements: src/entitlements.mac.plist
   entitlementsInherit: src/entitlements.mac.plist
 
