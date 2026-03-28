@@ -145,13 +145,20 @@ function registerSshHandlers(
 
     if (password) {
       try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
         const res = await fetch(`${url}/api/auth`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password }),
+          signal: ctrl.signal,
         });
+        clearTimeout(timer);
         if (!res.ok) return { ok: false, error: 'Incorrect password' };
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return { ok: false, error: 'Auth request timed out' };
+        }
         return { ok: false, error: `Auth failed: ${err instanceof Error ? err.message : String(err)}` };
       }
     }
