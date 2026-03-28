@@ -15,7 +15,12 @@ export interface OrganizeFileChange {
   toolCallId: string;
   /** Whether the tool call completed successfully */
   ok: boolean;
+  /** Marked true after user undoes this change */
+  undone?: boolean;
 }
+
+/** In-memory file snapshots captured before AI writes, keyed by path */
+export type FileSnapshots = Map<string, string>;
 
 /** User-facing stage hint derived from SSE events */
 export type OrganizeStageHint =
@@ -105,9 +110,25 @@ function extractPathFromArgs(toolName: string, args: unknown): string {
   return '';
 }
 
+/**
+ * Fetch a file's current content for snapshot (best-effort, never throws).
+ * Returns empty string on failure — undo will be unavailable for that file.
+ */
+async function captureSnapshot(path: string): Promise<string> {
+  try {
+    const res = await fetch(`/api/file?path=${encodeURIComponent(path)}&op=read_file`);
+    if (!res.ok) return '';
+    const data = await res.json() as { content?: string };
+    return data.content ?? '';
+  } catch {
+    return '';
+  }
+}
+
 async function consumeOrganizeStream(
   body: ReadableStream<Uint8Array>,
   onProgress: (state: Partial<AiOrganizeState> & { summary?: string }) => void,
+  onSnapshot: (path: string, content: string) => void,
   signal?: AbortSignal,
 ): Promise<{ changes: OrganizeFileChange[]; summary: string; toolCallCount: number }> {
   const reader = body.getReader();
@@ -118,6 +139,7 @@ async function consumeOrganizeStream(
   const pendingTools = new Map<string, { name: string; path: string; action: 'create' | 'update' | 'unknown' }>();
   let summary = '';
   let toolCallCount = 0;
+  const snapshotted = new Set<string>();
 
   try {
     while (true) {
@@ -155,6 +177,15 @@ async function consumeOrganizeStream(
               let action: 'create' | 'update' | 'unknown' = 'update';
               if (toolName === 'create_file' || toolName === 'batch_create_files') action = 'create';
               else if (toolName === 'delete_file' || toolName === 'rename_file' || toolName === 'move_file') action = 'unknown';
+
+              // Capture snapshot for update operations (fire-and-forget)
+              if (action === 'update' && path && !snapshotted.has(path)) {
+                snapshotted.add(path);
+                captureSnapshot(path).then(content => {
+                  if (content) onSnapshot(path, content);
+                });
+              }
+
               pendingTools.set(toolCallId, { name: toolName, path, action });
               onProgress({ currentTool: { name: toolName, path } });
             }
@@ -215,6 +246,8 @@ export function useAiOrganize() {
   const [toolCallCount, setToolCallCount] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastEventRef = useRef<number>(0);
+  const snapshotsRef = useRef<FileSnapshots>(new Map());
+  const [sourceFileNames, setSourceFileNames] = useState<string[]>([]);
 
   const start = useCallback(async (files: LocalAttachment[], prompt: string) => {
     setPhase('organizing');
@@ -224,6 +257,8 @@ export function useAiOrganize() {
     setSummary('');
     setError(null);
     setToolCallCount(0);
+    setSourceFileNames(files.map(f => f.name));
+    snapshotsRef.current = new Map();
     lastEventRef.current = Date.now();
 
     const controller = new AbortController();
@@ -272,6 +307,9 @@ export function useAiOrganize() {
           if (partial.stageHint) setStageHint(partial.stageHint);
           if (partial.summary !== undefined) setSummary(partial.summary);
         },
+        (path, content) => {
+          snapshotsRef.current.set(path, content);
+        },
         controller.signal,
       );
 
@@ -296,21 +334,87 @@ export function useAiOrganize() {
     abortRef.current?.abort();
   }, []);
 
-  const undoAll = useCallback(async (): Promise<number> => {
-    const createdFiles = changes.filter(c => c.action === 'create' && c.ok);
-    let reverted = 0;
-    for (const file of createdFiles) {
-      try {
+  /** Undo a single file change — supports both create (delete) and update (restore snapshot) */
+  const undoOne = useCallback(async (path: string): Promise<boolean> => {
+    const target = changes.find(c => c.path === path && c.ok && !c.undone);
+    if (!target) return false;
+
+    try {
+      if (target.action === 'create') {
         const res = await fetch('/api/file', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ op: 'delete_file', path: file.path }),
+          body: JSON.stringify({ op: 'delete_file', path: target.path }),
         });
-        if (res.ok) reverted++;
+        if (!res.ok) return false;
+      } else if (target.action === 'update') {
+        const snapshot = snapshotsRef.current.get(path);
+        if (!snapshot) return false;
+        const res = await fetch('/api/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'write_file', path: target.path, content: snapshot }),
+        });
+        if (!res.ok) return false;
+      } else {
+        return false;
+      }
+
+      setChanges(prev => prev.map(c =>
+        c.path === path && c.ok && !c.undone ? { ...c, undone: true } : c,
+      ));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [changes]);
+
+  const undoAll = useCallback(async (): Promise<number> => {
+    const undoable = changes.filter(c => c.ok && !c.undone && (c.action === 'create' || (c.action === 'update' && snapshotsRef.current.has(c.path))));
+    let reverted = 0;
+    for (const file of undoable) {
+      try {
+        if (file.action === 'create') {
+          const res = await fetch('/api/file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ op: 'delete_file', path: file.path }),
+          });
+          if (res.ok) reverted++;
+        } else if (file.action === 'update') {
+          const snapshot = snapshotsRef.current.get(file.path);
+          if (snapshot) {
+            const res = await fetch('/api/file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ op: 'write_file', path: file.path, content: snapshot }),
+            });
+            if (res.ok) reverted++;
+          }
+        }
       } catch {}
+    }
+    if (reverted > 0) {
+      setChanges(prev => prev.map(c => {
+        if (!c.ok || c.undone) return c;
+        if (c.action === 'create') return { ...c, undone: true };
+        if (c.action === 'update' && snapshotsRef.current.has(c.path)) return { ...c, undone: true };
+        return c;
+      }));
     }
     return reverted;
   }, [changes]);
+
+  /** Check if a specific file can be undone */
+  const canUndo = useCallback((path: string): boolean => {
+    const c = changes.find(ch => ch.path === path && ch.ok && !ch.undone);
+    if (!c) return false;
+    if (c.action === 'create') return true;
+    if (c.action === 'update') return snapshotsRef.current.has(path);
+    return false;
+  }, [changes]);
+
+  const hasAnyUndoable = changes.some(c => c.ok && !c.undone && (c.action === 'create' || (c.action === 'update' && snapshotsRef.current.has(c.path))));
 
   const reset = useCallback(() => {
     setPhase('idle');
@@ -320,6 +424,8 @@ export function useAiOrganize() {
     setSummary('');
     setError(null);
     setToolCallCount(0);
+    setSourceFileNames([]);
+    snapshotsRef.current = new Map();
     lastEventRef.current = 0;
   }, []);
 
@@ -331,9 +437,14 @@ export function useAiOrganize() {
     summary,
     error,
     toolCallCount,
+    sourceFileNames,
+    snapshots: snapshotsRef,
     start,
     abort,
+    undoOne,
     undoAll,
+    canUndo,
+    hasAnyUndoable,
     reset,
   };
 }
