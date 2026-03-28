@@ -262,6 +262,12 @@ function BrowserUpdateTab() {
         localStorage.removeItem('mindos_update_latest');
         localStorage.removeItem('mindos_update_dismissed');
         window.dispatchEvent(new Event('mindos:update-dismissed'));
+      } else {
+        const dismissed = localStorage.getItem('mindos_update_dismissed');
+        localStorage.setItem('mindos_update_latest', data.latest);
+        window.dispatchEvent(new Event(
+          data.latest === dismissed ? 'mindos:update-dismissed' : 'mindos:update-available',
+        ));
       }
       setState('idle');
     } catch {

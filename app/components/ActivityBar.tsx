@@ -129,9 +129,15 @@ export default function ActivityBar({
         setHasUpdate(true);
       } catch { /* silent */ }
     }, 5000);
+    const onAvail = () => setHasUpdate(true);
     const onDismiss = () => setHasUpdate(false);
+    window.addEventListener('mindos:update-available', onAvail);
     window.addEventListener('mindos:update-dismissed', onDismiss);
-    return () => { clearTimeout(timer); window.removeEventListener('mindos:update-dismissed', onDismiss); };
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('mindos:update-available', onAvail);
+      window.removeEventListener('mindos:update-dismissed', onDismiss);
+    };
   }, []);
 
   /** Debounce rapid clicks (300ms) — shared across all Rail buttons */
