@@ -1,5 +1,8 @@
 'use client';
 
+import React, { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
+import { ChevronDown, Check } from 'lucide-react';
+
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
@@ -23,12 +26,121 @@ export function Input({ className = '', ...props }: React.InputHTMLAttributes<HT
   );
 }
 
-export function Select({ className = '', ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+interface SelectOption { value: string; label: string }
+
+export function Select({ value, onChange, children, className = '', disabled }: {
+  value?: string;
+  onChange?: (e: { target: { value: string } }) => void;
+  children?: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const uid = useId();
+  const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const options = useMemo<SelectOption[]>(() =>
+    React.Children.toArray(children)
+      .filter((c): c is React.ReactElement => React.isValidElement(c) && (c as React.ReactElement).type === 'option')
+      .map(c => ({
+        value: String((c as React.ReactElement<{ value?: string; children?: React.ReactNode }>).props.value ?? ''),
+        label: String((c as React.ReactElement<{ value?: string; children?: React.ReactNode }>).props.children ?? (c as React.ReactElement<{ value?: string }>).props.value ?? ''),
+      })),
+    [children],
+  );
+
+  const selectedIdx = options.findIndex(o => o.value === value);
+  const selectedLabel = options[selectedIdx]?.label ?? '';
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && listRef.current && focusIdx >= 0) {
+      const el = listRef.current.children[focusIdx] as HTMLElement | undefined;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [open, focusIdx]);
+
+  const select = useCallback((idx: number) => {
+    if (idx >= 0 && idx < options.length) {
+      onChange?.({ target: { value: options[idx].value } });
+      setOpen(false);
+    }
+  }, [options, onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!open) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault();
+        setOpen(true);
+        setFocusIdx(selectedIdx >= 0 ? selectedIdx : 0);
+      }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); setFocusIdx(i => Math.min(i + 1, options.length - 1)); break;
+      case 'ArrowUp':   e.preventDefault(); setFocusIdx(i => Math.max(i - 1, 0)); break;
+      case 'Enter': case ' ': e.preventDefault(); select(focusIdx); break;
+      case 'Escape': e.preventDefault(); setOpen(false); break;
+      case 'Tab': setOpen(false); break;
+    }
+  }, [open, options.length, selectedIdx, focusIdx, select]);
+
   return (
-    <select
-      {...props}
-      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 ${className}`}
-    />
+    <div ref={containerRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => { setOpen(o => !o); setFocusIdx(selectedIdx >= 0 ? selectedIdx : 0); }}
+        onKeyDown={handleKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground text-left flex items-center justify-between gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span className={`truncate ${selectedLabel ? '' : 'text-muted-foreground'}`}>{selectedLabel || '—'}</span>
+        <ChevronDown size={14} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-activedescendant={focusIdx >= 0 ? `${uid}-opt-${focusIdx}` : undefined}
+          className="absolute z-20 w-full mt-1 py-1 border border-border rounded-lg bg-card shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-100"
+        >
+          {options.map((opt, idx) => {
+            const isSelected = opt.value === value;
+            const isFocused = idx === focusIdx;
+            return (
+              <button
+                key={opt.value}
+                id={`${uid}-opt-${idx}`}
+                role="option"
+                aria-selected={isSelected}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); select(idx); }}
+                onMouseEnter={() => setFocusIdx(idx)}
+                className={`w-full px-3 py-1.5 text-sm text-left flex items-center gap-2 transition-colors ${
+                  isFocused ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                }`}
+              >
+                <Check size={14} className={`shrink-0 ${isSelected ? 'text-[var(--amber)]' : 'invisible'}`} />
+                <span className="truncate">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
