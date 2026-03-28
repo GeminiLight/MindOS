@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2, ExternalLink, Circle, Monitor } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
 
 interface MindosDesktopBridge {
@@ -387,7 +387,13 @@ function BrowserUpdateTab() {
 
     try {
       await apiFetch('/api/update', { method: 'POST' });
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError) {
+        localStorage.removeItem(UPDATE_STATE_KEY);
+        setUpdateError(err.message || 'Update failed');
+        setState('error');
+        return;
+      }
       // Expected — server may die during update
     }
 
