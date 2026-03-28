@@ -384,9 +384,8 @@ function AgentCard({
       className={`group rounded-xl border border-border bg-card p-3.5
         hover:border-[var(--amber)]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]
         active:scale-[0.98]
-        transition-all duration-150 animate-in
+        transition-all duration-150
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
     >
       {/* Top row: avatar + name + status */}
       <div className="flex items-center gap-2.5 mb-3">
