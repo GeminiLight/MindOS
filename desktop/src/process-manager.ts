@@ -393,6 +393,11 @@ export class ProcessManager extends EventEmitter {
 
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
     this.pipeChildOutput(proc, which);
+    // Capture stderr to detect EADDRINUSE vs other crash reasons
+    let lastStderr = '';
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      lastStderr = chunk.toString();
+    });
     const handler = (code: number | null, signal: string | null) => {
       console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
       if (which === 'web') this.webProcessDied = true;
@@ -405,6 +410,8 @@ export class ProcessManager extends EventEmitter {
         return;
       }
 
+      const wasPortConflict = lastStderr.includes('EADDRINUSE') || lastStderr.includes('address already in use');
+
       this.crashCount[which]++;
       this.emit('crash', which, this.crashCount[which]);
 
@@ -413,14 +420,19 @@ export class ProcessManager extends EventEmitter {
         const timer = setTimeout(async () => {
           if (this.stopped) return;
           try {
-            // Try a fresh port — the old one may still be in TIME_WAIT or occupied
             const currentPort = which === 'mcp' ? this.opts.mcpPort : this.opts.webPort;
-            const newPort = await this.findFreePort(currentPort).catch(() => currentPort);
-            if (newPort !== currentPort) {
-              console.info(`[MindOS:${which}] port ${currentPort} still occupied, switching to ${newPort}`);
-              if (which === 'mcp') this.opts.mcpPort = newPort;
-              else this.opts.webPort = newPort;
+
+            if (wasPortConflict) {
+              // Port conflict: wait for original port to free up, only fall back as last resort
+              const resolvedPort = await this.waitForPortOrFallback(currentPort);
+              if (resolvedPort !== currentPort) {
+                console.info(`[MindOS:${which}] port ${currentPort} still occupied, switching to ${resolvedPort}`);
+                if (which === 'mcp') this.opts.mcpPort = resolvedPort;
+                else this.opts.webPort = resolvedPort;
+              }
             }
+            // else: non-port crash — reuse same port (process is dead, port is free)
+
             // For MCP: check if someone else started one while we were down
             if (which === 'mcp') {
               const externalOk = await this.checkMcpHealth(this.opts.mcpPort);
