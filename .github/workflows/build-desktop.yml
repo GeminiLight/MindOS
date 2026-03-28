@@ -300,8 +300,9 @@ jobs:
             echo "OSS not configured, skipping"
             exit 0
           fi
-          # Install ossutil
-          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash
+          # Install ossutil to user-local path (no sudo needed)
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash -s -- --install-dir "$HOME/.local/bin"
+          export PATH="$HOME/.local/bin:$PATH"
           ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
 
           VERSION="${{ steps.version.outputs.version }}"
