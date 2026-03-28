@@ -1,17 +1,20 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT, CONFIG_PATH } from './constants.js';
 import { bold, red } from './colors.js';
+import { ensureMcpBundle, MCP_BUNDLE } from './mcp-build.js';
 
 export function spawnMcp(verbose = false) {
   const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
   const webPort = process.env.MINDOS_WEB_PORT || '3456';
 
-  const mcpBundle = resolve(ROOT, 'mcp', 'dist', 'index.cjs');
-  if (!existsSync(mcpBundle)) {
+  try {
+    ensureMcpBundle();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `MCP bundle not found: ${mcpBundle}\n` +
+      `${message}\n` +
       `This MindOS installation may be corrupted. Try: npm install -g @geminilight/mindos@latest`,
     );
   }
@@ -31,7 +34,7 @@ export function spawnMcp(verbose = false) {
     ...(configAuthToken ? { AUTH_TOKEN: configAuthToken } : {}),
     ...(verbose ? { MCP_VERBOSE: '1' } : {}),
   };
-  const child = spawn(process.execPath, [mcpBundle], {
+  const child = spawn(process.execPath, [MCP_BUNDLE], {
     cwd: resolve(ROOT, 'mcp'),
     stdio: 'inherit',
     env,
