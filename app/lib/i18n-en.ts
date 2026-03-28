@@ -80,6 +80,7 @@ export const en = {
     collapseLevel: 'Collapse one level',
     expandLevel: 'Expand one level',
     importFile: 'Import file',
+    newFile: 'New file',
     sync: {
       synced: 'Synced',
       unpushed: 'awaiting push',
