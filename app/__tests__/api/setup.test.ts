@@ -166,6 +166,20 @@ describe('POST /api/setup — config writing', () => {
     expect((writtenConfig as Record<string, unknown>).setupPending).toBe(false);
   });
 
+  it('expands bare tilde to the real home directory before writing config', async () => {
+    const { POST } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'POST',
+      body: JSON.stringify({ mindRoot: '~', template: 'empty' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(writtenConfig).not.toBeNull();
+    expect((writtenConfig as Record<string, unknown>).mindRoot).toBe(os.homedir());
+  });
+
   it('sets disabledSkills=["mindos-zh"] for en template', async () => {
     const { POST } = await importSetupRoute();
     const req = new NextRequest('http://localhost/api/setup', {

@@ -1,14 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { resolve, join } from 'node:path';
-
-function expandHome(p: string): string {
-  if (p === '~') return homedir();
-  if (p.startsWith('~/') || p.startsWith('~\\')) return resolve(homedir(), p.slice(2));
-  return p;
-}
+import { join } from 'node:path';
+import { expandSetupPathHome } from '../path-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!path || typeof path !== 'string') {
       return NextResponse.json({ dirs: [] });
     }
-    const abs = expandHome(path.trim());
+    const abs = expandSetupPathHome(path.trim());
     if (!existsSync(abs)) {
       return NextResponse.json({ dirs: [] });
     }
