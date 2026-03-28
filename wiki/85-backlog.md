@@ -94,6 +94,7 @@
 - [x] **I27：Agents 全页面 UI/UX Pro Max 刷新（P2.3）** — `/agents` 全部核心页新增 Workspace Pulse、MCP/Skills 筛选摘要与 Agent Detail 健康条，强化“摘要→操作→明细”层级，降低多 Agent 管理认知负担。[spec](./specs/spec-agents-ui-ux-pro-max-refresh.md)
 - [x] **I29：跨 Agent MCP/Skill 全量聚合与视觉升级（P2.4）** — 全局 MCP 页新增"全部已配置 MCP servers（跨 Agent）"chip 矩阵；Skills 页新增"全部已安装 skills（跨 Agent）"chip 矩阵；配置可见性/注册表/原生安装列表从纯文本升级为 dot indicator + chip 视觉；Agent Detail 的 native scan 从 bullet list 升级为可扫 chip 布局。
 - [x] **Ask 输入不中断（执行中可草拟）** — 修复 Agent 执行期间输入框被禁用：允许边执行边输入，提交仍串行；新增“可先输入下一步”提示与 jsdom 回归测试。测试：`app/__tests__/ask/ask-content-input-during-run.test.tsx`
+- [x] **Ask AI 自动重连** — 连接断开时自动重试（指数退避 1s/2s/4s...），可配置最大重试次数（Settings → AI → Agent Behavior → Auto Reconnect，默认 3 次）。非重试型错误（401/403/429/API Key 无效）直接显示不重试。重连中显示 WifiOff 图标 + 进度文案。21 个新测试。
 
 ### 🟡 中优先
 

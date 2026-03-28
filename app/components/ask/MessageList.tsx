@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '@/lib/types';
@@ -88,7 +88,7 @@ function StepCounter({ parts }: { parts: Message['parts'] }) {
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
-  loadingPhase: 'connecting' | 'thinking' | 'streaming';
+  loadingPhase: 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
   emptyPrompt: string;
   suggestions: readonly string[];
   onSuggestionClick: (text: string) => void;
@@ -96,6 +96,7 @@ interface MessageListProps {
     connecting: string;
     thinking: string;
     generating: string;
+    reconnecting?: string;
   };
 }
 
@@ -166,13 +167,19 @@ export default function MessageList({
                 </>
               ) : isLoading && i === messages.length - 1 ? (
                 <div className="flex items-center gap-2 py-1">
-                  <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
+                  {loadingPhase === 'reconnecting' ? (
+                    <WifiOff size={14} className="text-[var(--amber)] animate-pulse" />
+                  ) : (
+                    <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
+                  )}
                   <span className="text-xs text-muted-foreground animate-pulse">
-                    {loadingPhase === 'connecting'
-                      ? labels.connecting
-                      : loadingPhase === 'thinking'
-                        ? labels.thinking
-                        : labels.generating}
+                    {loadingPhase === 'reconnecting'
+                      ? (labels.reconnecting ?? 'Reconnecting...')
+                      : loadingPhase === 'connecting'
+                        ? labels.connecting
+                        : loadingPhase === 'thinking'
+                          ? labels.thinking
+                          : labels.generating}
                   </span>
                 </div>
               ) : null}

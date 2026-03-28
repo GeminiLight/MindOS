@@ -15,6 +15,7 @@ import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
 import FileChip from '@/components/ask/FileChip';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
+import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 import { cn } from '@/lib/utils';
 import { useComposerVerticalResize } from '@/hooks/useComposerVerticalResize';
 
@@ -171,7 +172,9 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming'>('connecting');
+  const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming' | 'reconnecting'>('connecting');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const reconnectMaxRef = useRef(3);
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -389,25 +392,35 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     setAttachedFiles(currentFile ? [currentFile] : []);
     setIsLoading(true);
     setLoadingPhase('connecting');
+    setReconnectAttempt(0);
 
     const controller = new AbortController();
     abortRef.current = controller;
 
+    let maxRetries = 3;
     try {
+      const stored = localStorage.getItem('mindos-reconnect-retries');
+      if (stored !== null) { const n = parseInt(stored, 10); if (Number.isFinite(n)) maxRetries = Math.max(0, Math.min(10, n)); }
+    } catch { /* localStorage unavailable */ }
+    reconnectMaxRef.current = maxRetries;
+
+    const requestBody = JSON.stringify({
+      messages: requestMessages,
+      currentFile,
+      attachedFiles,
+      uploadedFiles: upload.localAttachments.map(f => ({
+        name: f.name,
+        content: f.content.length > 20_000
+          ? f.content.slice(0, 20_000) + '\n\n[...truncated to first ~20000 chars]'
+          : f.content,
+      })),
+    });
+
+    const doFetch = async (): Promise<{ finalMessage: Message }> => {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: requestMessages,
-          currentFile,
-          attachedFiles,
-          uploadedFiles: upload.localAttachments.map(f => ({
-            name: f.name,
-            content: f.content.length > 20_000
-              ? f.content.slice(0, 20_000) + '\n\n[...truncated to first ~20000 chars]'
-              : f.content,
-          })),
-        }),
+        body: requestBody,
         signal: controller.signal,
       });
 
@@ -423,7 +436,9 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             errorMsg = errBody.message;
           }
         } catch {}
-        throw new Error(errorMsg);
+        const err = new Error(errorMsg);
+        (err as Error & { httpStatus?: number }).httpStatus = res.status;
+        throw err;
       }
 
       if (!res.body) throw new Error('No response body');
@@ -442,14 +457,45 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         },
         controller.signal,
       );
+      return { finalMessage };
+    };
 
-      if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
-        session.setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: `__error__${t.ask.errorNoResponse}` };
-          return updated;
-        });
+    try {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (controller.signal.aborted) break;
+
+        if (attempt > 0) {
+          setReconnectAttempt(attempt);
+          setLoadingPhase('reconnecting');
+          session.setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: '', timestamp: Date.now() };
+            return updated;
+          });
+          await sleep(retryDelay(attempt - 1), controller.signal);
+          setLoadingPhase('connecting');
+        }
+
+        try {
+          const { finalMessage } = await doFetch();
+          if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
+            session.setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: `__error__${t.ask.errorNoResponse}` };
+              return updated;
+            });
+          }
+          return;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const httpStatus = (err as Error & { httpStatus?: number }).httpStatus;
+          if (!isRetryableError(err, httpStatus) || attempt >= maxRetries) break;
+        }
       }
+
+      if (lastError) throw lastError;
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         session.setMessages(prev => {
@@ -482,6 +528,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       }
     } finally {
       setIsLoading(false);
+      setReconnectAttempt(0);
       abortRef.current = null;
     }
   }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, slash.slashQuery, selectedSkill, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
@@ -595,7 +642,12 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         emptyPrompt={t.ask.emptyPrompt}
         suggestions={t.ask.suggestions}
         onSuggestionClick={setInput}
-        labels={{ connecting: t.ask.connecting, thinking: t.ask.thinking, generating: t.ask.generating }}
+        labels={{
+          connecting: t.ask.connecting,
+          thinking: t.ask.thinking,
+          generating: t.ask.generating,
+          reconnecting: reconnectAttempt > 0 ? t.ask.reconnecting(reconnectAttempt, reconnectMaxRef.current) : undefined,
+        }}
       />
 
       {/* Popovers — rendered outside overflow containers so they can extend freely */}
