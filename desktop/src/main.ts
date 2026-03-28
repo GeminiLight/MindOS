@@ -450,14 +450,47 @@ async function startLocalMode(): Promise<string | null> {
   let mcpFailed = false;
   let startupComplete = false;  // Only show crash dialog after successful startup
 
-  processManager.on('mcp-port-blocked', (blockedPort: number) => {
+  processManager.on('mcp-port-blocked', async (blockedPort: number) => {
     const zh = navigator_lang() === 'zh';
-    dialog.showErrorBox(
-      zh ? 'MCP 端口被占用' : 'MCP Port Blocked',
-      zh
-        ? `MCP 端口 ${blockedPort} 被其他程序占用，MindOS MCP 无法启动。\n\n请关闭占用该端口的程序，或在设置中修改 MCP 端口后重启。`
-        : `MCP port ${blockedPort} is occupied by another program. MindOS MCP cannot start.\n\nClose the program using that port, or change the MCP port in Settings and restart.`,
-    );
+    // Find a suggested alternative port
+    let suggestedPort: number | null = null;
+    try {
+      const { findAvailablePort: findPort } = await import('./port-finder');
+      suggestedPort = await findPort(blockedPort + 1);
+    } catch { /* fallback to no suggestion */ }
+
+    const title = zh ? 'MCP 端口被占用' : 'MCP Port Unavailable';
+    const detail = suggestedPort
+      ? (zh
+        ? `端口 ${blockedPort} 被其他程序占用，AI 助手（Claude Code、Cursor 等）将无法连接 MCP。\n\n推荐切换到端口 ${suggestedPort}（当前可用）。\n切换后请同步更新 AI 助手中的 MCP 地址为：\nhttp://localhost:${suggestedPort}/mcp`
+        : `Port ${blockedPort} is occupied by another program. AI assistants (Claude Code, Cursor, etc.) cannot connect to MCP.\n\nSuggested alternative: port ${suggestedPort} (currently available).\nAfter switching, update the MCP URL in your AI tools to:\nhttp://localhost:${suggestedPort}/mcp`)
+      : (zh
+        ? `端口 ${blockedPort} 被其他程序占用，AI 助手将无法连接 MCP。\n\n请关闭占用该端口的程序后重启 MindOS。`
+        : `Port ${blockedPort} is occupied by another program. AI assistants cannot connect to MCP.\n\nClose the program using that port and restart MindOS.`);
+
+    const buttons = suggestedPort
+      ? [zh ? `使用端口 ${suggestedPort}` : `Use port ${suggestedPort}`, zh ? '稍后处理' : 'Dismiss']
+      : [zh ? '确定' : 'OK'];
+
+    const result = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      title,
+      message: title,
+      detail,
+      buttons,
+      defaultId: 0,
+    });
+
+    if (suggestedPort && result.response === 0) {
+      // User chose to use the suggested port — respawn MCP on new port
+      try {
+        processManager!.startMcpOnPort(suggestedPort);
+        console.info(`[MindOS] MCP restarted on port ${suggestedPort}`);
+        updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, suggestedPort);
+      } catch (err) {
+        console.error('[MindOS] Failed to start MCP on suggested port:', err);
+      }
+    }
   });
 
   processManager.on('crash', (which: string, count: number) => {
