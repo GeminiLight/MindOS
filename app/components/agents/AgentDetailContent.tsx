@@ -240,7 +240,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         <div className="flex items-center gap-3.5 px-5 py-4">
           <AgentAvatar name={agent.name} status={status} size="md" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold tracking-tight font-display text-foreground">{agent.name}</h1>
+            <h1 className="text-lg font-semibold tracking-tight font-display text-foreground truncate">{agent.name}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground/60">
               <span className={`font-medium px-1.5 py-px rounded-full ${
                 status === 'connected' ? 'bg-success/10 text-success'
@@ -261,12 +261,12 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
       {/* ═══════════ MCP MANAGEMENT ═══════════ */}
       <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
             <Server size={12} className="text-muted-foreground/50" />
             {a.detail.mcpManagement}
           </h2>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {!isMindOS && (
               <ActionButton
                 onClick={() => void handleCopySnippet()}
@@ -360,8 +360,8 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
       {/* ═══════════ SKILL ASSIGNMENTS ═══════════ */}
       <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
             <Zap size={12} className="text-muted-foreground/50" />
             {a.detail.skillAssignments}
           </h2>
@@ -541,9 +541,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-2 px-0.5">
+    <div className="flex items-baseline gap-2 px-0.5 min-w-0">
       <span className="text-2xs text-muted-foreground/50 uppercase tracking-wider shrink-0 min-w-[60px]">{label}</span>
-      <span className="text-xs text-foreground/80 font-mono truncate">{value}</span>
+      <span className="text-xs text-foreground/80 font-mono truncate min-w-0">{value}</span>
     </div>
   );
 }
