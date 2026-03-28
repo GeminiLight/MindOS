@@ -978,6 +978,45 @@ function setupIPC(): void {
   ipcMain.handle('switch-mode', () => handleChangeMode());
   ipcMain.handle('restart-services', () => handleRestartServices());
   ipcMain.handle('switch-server', () => handleSwitchServer());
+
+  // Uninstall: move the Desktop .app bundle to Trash, then quit.
+  // Server-side cleanup (stop services, remove config) is handled by /api/uninstall
+  // before this IPC is called.
+  ipcMain.handle('uninstall-app', async () => {
+    try {
+      // Stop managed child processes first
+      processManager?.stopAll();
+
+      // Determine app bundle path per platform:
+      // macOS:   /Applications/MindOS.app/Contents/MacOS/MindOS → /Applications/MindOS.app
+      // Windows: C:\Program Files\MindOS\MindOS.exe → C:\Program Files\MindOS\
+      // Linux AppImage: /tmp/.mount_xxx/mindos → use APPIMAGE env for the real .AppImage file
+      // Linux deb/rpm:  /opt/MindOS/mindos → /opt/MindOS/
+      let appPath = app.getPath('exe');
+      if (process.platform === 'darwin') {
+        const appMatch = appPath.match(/^(.*?\.app)(\/|$)/);
+        if (appMatch) appPath = appMatch[1];
+      } else if (process.platform === 'linux') {
+        // AppImage sets APPIMAGE env to the actual .AppImage file path
+        appPath = process.env.APPIMAGE || path.dirname(appPath);
+      } else {
+        // Windows: delete the installation directory
+        appPath = path.dirname(appPath);
+      }
+
+      // moveItemToTrash returns boolean (true = success)
+      const moved = shell.moveItemToTrash(appPath);
+      if (!moved) {
+        return { ok: false, error: `Failed to move ${appPath} to Trash. You may need to delete it manually.` };
+      }
+
+      // Quit after a brief delay to let the IPC response reach the renderer
+      setTimeout(() => app.quit(), 500);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 }
 
 // ── Connection Monitor ──

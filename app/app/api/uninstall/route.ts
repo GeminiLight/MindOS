@@ -6,34 +6,34 @@ import { resolve } from 'node:path';
 /**
  * POST /api/uninstall
  *
- * Spawns a non-interactive uninstall process that:
- * 1. Stops all running MindOS processes
- * 2. Removes the background daemon (launchd/systemd)
- * 3. Removes ~/.mindos/ config directory
- * 4. Runs npm uninstall -g @geminilight/mindos
+ * Accepts JSON body: { removeConfig?: boolean }
  *
- * Knowledge base is NOT touched.
- * The process runs detached — this server will be killed as part of the uninstall.
+ * Always: stops services + removes daemon + npm uninstall -g.
+ * Optionally: removes ~/.mindos/ config directory.
+ * Knowledge base is NEVER touched from the Web UI.
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const body = await req.json().catch(() => ({}));
+    const removeConfig = body.removeConfig !== false; // default true
+
     const cliPath = process.env.MINDOS_CLI_PATH || resolve(process.env.MINDOS_PROJECT_ROOT || process.cwd(), '..', 'bin', 'cli.js');
     const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
 
-    // Spawn the CLI uninstall with pre-answered stdin (Y to proceed, Y to remove config, N to remove KB).
-    // This avoids interactive prompts since we're running from the Web UI.
+    // Build stdin answers for the interactive CLI prompts:
+    // 1. "Proceed with uninstall?" → always Y
+    // 2. "Remove config directory?" → Y or N based on option
+    // 3. "Remove knowledge base?" → always N (never delete KB from Web UI)
+    const answers = `Y\n${removeConfig ? 'Y' : 'N'}\nN\n`;
+
     const child = spawn(nodeBin, [cliPath, 'uninstall'], {
       detached: true,
       stdio: ['pipe', 'ignore', 'ignore'],
       env: { ...process.env },
     });
 
-    // Pre-answer the interactive prompts:
-    // 1. "Proceed with uninstall?" → Y
-    // 2. "Remove config directory?" → Y
-    // 3. "Remove knowledge base?" → N (never delete KB from Web UI)
     if (child.stdin) {
-      child.stdin.write('Y\nY\nN\n');
+      child.stdin.write(answers);
       child.stdin.end();
     }
 
