@@ -254,8 +254,9 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      # ── Cloudflare R2 upload (optional, skipped if secrets not configured) ──
+      # ── Cloudflare R2 upload (optional, non-blocking) ──
       - name: Upload to Cloudflare R2
+        continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -286,8 +287,9 @@ jobs:
           done
           echo "✅ Uploaded to Cloudflare R2: desktop/v${VERSION}/ + desktop/latest/"
 
-      # ── Alibaba Cloud OSS upload (optional, skipped if secrets not configured) ──
+      # ── Alibaba Cloud OSS upload (optional, non-blocking) ──
       - name: Upload to Alibaba Cloud OSS
+        continue-on-error: true
         env:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
