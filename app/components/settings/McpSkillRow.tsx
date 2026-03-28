@@ -51,7 +51,7 @@ export default function SkillRow({
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="text-xs font-medium flex-1">{skill.name}</span>
         <span className={`text-2xs px-1.5 py-0.5 rounded ${
-          skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-subtle)] text-[var(--amber)]'
+          skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
         }`}>
           {skill.source === 'builtin' ? (m?.skillBuiltin ?? 'Built-in') : (m?.skillUser ?? 'Custom')}
         </span>

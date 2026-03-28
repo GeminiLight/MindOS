@@ -30,7 +30,7 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground">{renderer.name}</span>
                         {isCore && (
-                          <span className="text-2xs px-1.5 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber)] font-mono">
+                          <span className="text-2xs px-1.5 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber-text)] font-mono">
                             core
                           </span>
                         )}

@@ -181,7 +181,7 @@ export default function AgentsOverviewSection({
                       className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 select-none ${
                         risk.severity === 'error'
                           ? 'bg-destructive/10 text-destructive'
-                          : 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                          : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
                       }`}
                     >
                       {risk.severity === 'error' ? copy.riskLevelError : copy.riskLevelWarn}

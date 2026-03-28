@@ -871,3 +871,15 @@
 ### Ask AI 自动重连：localStorage 同步时机
 - **现象：** 首次打开 App 时 AskContent 从 localStorage 读取 reconnectRetries，但用户尚未打开过 Settings 页 → localStorage 中无值 → fallback 为默认 3
 - **规则：** localStorage 作为 "热缓存" 供 AskContent 即时读取，Settings 首次加载时同步写入。首次使用默认值 3 是安全的 fallback
+
+### Desktop 子进程孤儿管理：stdin pipe 模式（VS Code 标准做法）
+- **现象：** Electron 崩溃 / SIGKILL 时子进程（Next.js、MCP）成为孤儿，PID 文件方案存在 PID 复用风险且依赖下次启动时清理
+- **解决：** spawn 子进程时 `stdio[0]` 从 `'ignore'` 改为 `'pipe'`。父进程死亡 → OS 关闭管道写端 → 子进程 stdin 收到 EOF → 自动退出
+  - **MCP server**：HTTP 模式下内置 stdin 监听（`!process.stdin.isTTY` 判断），先 `httpServer.close()` 再延迟 1s 退出
+  - **Web server**：通过 `node --require ~/.mindos/stdin-watchdog.cjs` 注入，延迟 500ms 退出
+  - **PID 文件**保留为二级安全网
+- **注意事项：**
+  - 父进程侧需 `proc.stdin?.on('error', () => {})` 防止子进程退出后 EPIPE 崩溃
+  - MCP stdio 传输模式 stdin 已被 MCP 协议使用，不能加 watchdog（通过 `MCP_TRANSPORT === 'http'` 条件隔离）
+  - CLI 启动的 MCP 用 `stdio: 'inherit'`，`isTTY === true`，不受影响
+- **规则：** 管理子进程生命周期优先用 stdin pipe 而非 PID 文件——零轮询、零文件 IO、管道断开即感知

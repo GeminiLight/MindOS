@@ -159,7 +159,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             <span className="text-sm flex-1 text-left text-foreground">
               {suggestions[suggestionIdx]}
             </span>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber)]">
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
               ⌘/
             </kbd>
           </button>
@@ -180,7 +180,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
         <div className="flex flex-wrap gap-2.5 mt-4 pl-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber)]"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber-text)]"
           >
             <FolderInput size={14} />
             <span>{t.fileTree.importFile}</span>
@@ -569,7 +569,7 @@ function ExampleCleanupBanner() {
       <button
         onClick={handleCleanup}
         disabled={cleaning}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 bg-[var(--amber-dim)] text-[var(--amber)] hover:opacity-80"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80"
       >
         {cleaning ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
         {t.home.cleanupExamplesButton}

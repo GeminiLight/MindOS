@@ -226,7 +226,7 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
                 {m?.tagConnected ?? 'Connected'}
               </span>
             ) : currentAgent.present && !currentAgent.installed ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-[var(--amber-subtle)] text-[var(--amber)]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-[var(--amber-subtle)] text-[var(--amber-text)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)] inline-block" />
                 {m?.tagDetected ?? 'Detected — not configured'}
               </span>
@@ -266,7 +266,7 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
 
           {/* Auth warning */}
           {transport === 'http' && mcpStatus && !mcpStatus.authConfigured && (
-            <p className="flex items-center gap-1.5 text-xs text-[var(--amber)]">
+            <p className="flex items-center gap-1.5 text-xs text-[var(--amber-text)]">
               <AlertCircle size={12} />
               {m?.noAuthWarning ?? 'Auth not configured. Run `mindos token` to set up.'}
             </p>

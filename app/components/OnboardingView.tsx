@@ -137,7 +137,7 @@ export default function OnboardingView() {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
-          className="text-xs text-[var(--amber)] hover:underline transition-colors"
+          className="text-xs text-[var(--amber-text)] hover:underline transition-colors"
         >
           {t.fileImport.onboardingHint}
         </button>

@@ -28,7 +28,7 @@ const PANEL_COMPOSER_KEY_STEP = 24;
 /** 输入框随内容增高，超过此行数后在框内滚动（与常见 IM 一致） */
 const PANEL_TEXTAREA_MAX_VISIBLE_LINES = 8;
 
-function syncPanelTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number, availableHeight?: number): void {
+function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number, availableHeight?: number): void {
   const style = getComputedStyle(el);
   const parsedLh = parseFloat(style.lineHeight);
   const parsedFs = parseFloat(style.fontSize);
@@ -266,7 +266,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     const form = formRef.current;
     const maxLines = isPanel ? PANEL_TEXTAREA_MAX_VISIBLE_LINES : 6;
     const availableH = isPanel && form ? form.clientHeight - 40 : undefined;
-    syncPanelTextareaToContent(el, maxLines, availableH);
+    syncTextareaToContent(el, maxLines, availableH);
   }, [input, isPanel, isLoading, visible, panelComposerHeight]);
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -334,7 +334,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           e.preventDefault();
           mention.navigateMention('up');
         } else if (e.key === 'Enter' || e.key === 'Tab') {
-          if (e.key === 'Enter' && e.shiftKey) return;
+          if (e.key === 'Enter' && (e.shiftKey || e.nativeEvent.isComposing)) return;
           if (mention.mentionResults.length > 0) {
             e.preventDefault();
             selectMention(mention.mentionResults[mention.mentionIndex]);
@@ -355,7 +355,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           e.preventDefault();
           slash.navigateSlash('up');
         } else if (e.key === 'Enter' || e.key === 'Tab') {
-          if (e.key === 'Enter' && e.shiftKey) return;
+          if (e.key === 'Enter' && (e.shiftKey || e.nativeEvent.isComposing)) return;
           if (slash.slashResults.length > 0) {
             e.preventDefault();
             selectSlashCommand(slash.slashResults[slash.slashIndex]);
@@ -363,12 +363,12 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         }
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && input.trim()) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
     },
-    [mention, selectMention, slash, selectSlashCommand, variant, isLoading, input],
+    [mention, selectMention, slash, selectSlashCommand, isLoading, input],
   );
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
@@ -382,7 +382,12 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     const content = selectedSkill
       ? `Use the skill ${selectedSkill.name}: ${text}`
       : text;
-    const userMsg: Message = { role: 'user', content, timestamp: Date.now() };
+    const userMsg: Message = {
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      ...(selectedSkill && { skillName: selectedSkill.name }),
+    };
     const requestMessages = [...session.messages, userMsg];
     session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
@@ -652,29 +657,28 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         }}
       />
 
+      {/* Popovers — flex children so they stay within overflow boundary (absolute positioning would be clipped by RightAskPanel's overflow-hidden) */}
+      {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
+        <div className="shrink-0 px-2 pb-1">
+          <MentionPopover
+            results={mention.mentionResults}
+            selectedIndex={mention.mentionIndex}
+            onSelect={selectMention}
+          />
+        </div>
+      )}
+
+      {slash.slashQuery !== null && slash.slashResults.length > 0 && (
+        <div className="shrink-0 px-2 pb-1">
+          <SlashCommandPopover
+            results={slash.slashResults}
+            selectedIndex={slash.slashIndex}
+            onSelect={selectSlashCommand}
+          />
+        </div>
+      )}
+
       {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
-      <div className="relative shrink-0">
-        {/* Popovers — absolutely positioned above the composer to avoid layout shift */}
-        {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 px-2 pb-1 z-10">
-            <MentionPopover
-              results={mention.mentionResults}
-              selectedIndex={mention.mentionIndex}
-              onSelect={selectMention}
-            />
-          </div>
-        )}
-
-        {slash.slashQuery !== null && slash.slashResults.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 px-2 pb-1 z-10">
-            <SlashCommandPopover
-              results={slash.slashResults}
-              selectedIndex={slash.slashIndex}
-              onSelect={selectSlashCommand}
-            />
-          </div>
-        )}
-
       <div
         className={cn(
           'shrink-0 border-t border-border',
@@ -821,12 +825,10 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         <span suppressHydrationWarning>
           <kbd className="font-mono">↵</kbd> {t.ask.send}
         </span>
-        {isPanel ? (
-          <span suppressHydrationWarning>
-            <kbd className="font-mono">⇧</kbd>
-            <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
-          </span>
-        ) : null}
+        <span suppressHydrationWarning>
+          <kbd className="font-mono">⇧</kbd>
+          <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
+        </span>
         <span suppressHydrationWarning>
           <kbd className="font-mono">@</kbd> {t.ask.attachFile}
         </span>
@@ -844,7 +846,6 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </span>
         )}
       </div>
-      </div>{/* /relative wrapper for popovers + composer + footer */}
     </>
   );
 }

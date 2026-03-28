@@ -43,11 +43,12 @@ export interface AiOrganizeState {
 
 /**
  * Strip model chain-of-thought tags that should never be shown to users.
- * Handles both complete `<thinking>...</thinking>` blocks and unclosed trailing tags.
+ * Covers <thinking>, <reasoning>, <scratchpad> per wiki/80-known-pitfalls.md.
+ * Handles both complete blocks and unclosed trailing tags (streaming).
  */
 export function stripThinkingTags(text: string): string {
-  let cleaned = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-  cleaned = cleaned.replace(/<thinking>[\s\S]*$/gi, '');
+  let cleaned = text.replace(/<(thinking|reasoning|scratchpad)>[\s\S]*?<\/\1>/gi, '');
+  cleaned = cleaned.replace(/<(?:thinking|reasoning|scratchpad)>[\s\S]*$/gi, '');
   return cleaned.trim();
 }
 

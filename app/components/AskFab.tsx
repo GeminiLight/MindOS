@@ -1,6 +1,7 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
+import { useLocale } from '@/lib/LocaleContext';
 
 interface AskFabProps {
   /** Toggle the right-side Ask AI panel */
@@ -10,6 +11,9 @@ interface AskFabProps {
 }
 
 export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
+  const { t } = useLocale();
+  const label = `${t.ask?.fabLabel ?? 'Ask AI'} (⌘/)`;
+
   return (
     <button
       onClick={onToggle}
@@ -29,8 +33,8 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
       style={{
         background: 'linear-gradient(135deg, var(--amber), color-mix(in srgb, var(--amber) 80%, white))',
       }}
-      title="MindOS Agent (⌘/)"
-      aria-label="MindOS Agent"
+      title={label}
+      aria-label={label}
     >
       <Sparkles size={16} className="relative z-10 shrink-0" />
       <span className="
@@ -40,7 +44,7 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
         transition-all duration-200 ease-out
         whitespace-nowrap overflow-hidden
       ">
-        MindOS Agent
+        {t.ask?.fabLabel ?? 'Ask AI'}
       </span>
     </button>
   );

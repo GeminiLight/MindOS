@@ -170,6 +170,11 @@
   - Tiptap - WYSIWYG 编辑器
   - 快捷键：`E` 编辑, `⌘S` 保存, `Esc` 取消
 
+- [x] **New Notes 入口** - 已修复
+  - i18n: `newNote: 'New Notes'`
+  - 特殊草稿入口 `/view/[...path]/page.tsx`
+  - 首页快捷入口
+
 ---
 
 ## Renderer 插件系统 ✅
@@ -232,6 +237,22 @@
   - `token.js` - Token 生成
   - `setup/` - 设置向导
 - [x] **CLI更新提示** - v0.3.0+ 实现 update-check.js
+
+---
+
+## 文档与模板 ✅
+
+- [x] **README.md优化** - v0.5.7 已完成
+  - README badge 重构 - npm version + WeChat 徽章
+  - 排序调整为 Website → npm → WeChat → License
+  - 颜色协调统一
+  - Community section（二维码 + 加群引导）
+
+- [x] **模板管理** - Space目录自动脚手架
+  - `space-scaffold.ts` - 自动生成 INSTRUCTION.md + README.md
+  - 创建新目录时自动检测并生成
+  - `convertToSpace()` - 将普通目录转换为 Space
+  - 文件树右键菜单支持 "Edit Rules"
 
 ---
 

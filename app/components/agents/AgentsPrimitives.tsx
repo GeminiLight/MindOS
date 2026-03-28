@@ -13,7 +13,7 @@ export function PillButton({ active, label, onClick }: { active: boolean; label:
       aria-pressed={active}
       className={`relative px-2.5 min-h-[28px] rounded text-xs cursor-pointer transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? 'bg-[var(--amber-dim)] text-[var(--amber)] font-medium shadow-[0_1px_2px_rgba(200,135,58,0.08)]'
+          ? 'bg-[var(--amber-dim)] text-[var(--amber-text)] font-medium shadow-[0_1px_2px_rgba(200,135,58,0.08)]'
           : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
       }`}
     >
