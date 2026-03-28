@@ -41,6 +41,8 @@ export interface Message {
   timestamp?: number;
   /** Structured parts for assistant messages (tool calls + text segments) */
   parts?: MessagePart[];
+  /** Skill name used for this user message (rendered as a capsule in the UI) */
+  skillName?: string;
 }
 
 export interface LocalAttachment {

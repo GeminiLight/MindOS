@@ -105,6 +105,7 @@ export const en = {
   },
   ask: {
     title: 'MindOS Agent',
+    fabLabel: 'Ask AI',
     placeholder: 'Ask a question... @ files, / skills',
     emptyPrompt: 'Ask anything about your knowledge base',
     send: 'send',
@@ -119,7 +120,7 @@ export const en = {
     attachCurrent: 'attach current file',
     stopTitle: 'Stop',
     cancelReconnect: 'Cancel reconnect',
-    connecting: 'Thinking with your mind...',
+    connecting: 'Thinking with you...',
     thinking: 'Thinking...',
     thinkingLabel: 'Thinking',
     searching: 'Searching knowledge base...',
@@ -641,6 +642,8 @@ export const en = {
     },
     detailSubtitle: '',
     detailNotFound: 'Agent not found — it may have been removed or renamed.',
+    detailNotFoundHint: 'The agent may have disconnected or its configuration file was moved. Try restarting the agent or check the MCP configuration.',
+    detailNotFoundSuggestion: 'Connected agents you can explore:',
   },
   shortcutPanel: {
     title: 'Keyboard Shortcuts',

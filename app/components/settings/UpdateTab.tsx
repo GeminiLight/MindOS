@@ -144,7 +144,7 @@ function DesktopUpdateTab() {
         )}
 
         {state === 'idle' && available && (
-          <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
+          <div className="flex items-center gap-2 text-xs text-[var(--amber-text)]">
             <Download size={13} />
             {version ? `Update available: v${version}` : 'Update available'}
           </div>
@@ -435,7 +435,7 @@ function BrowserUpdateTab() {
         )}
 
         {state === 'idle' && info?.hasUpdate && (
-          <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
+          <div className="flex items-center gap-2 text-xs text-[var(--amber-text)]">
             <Download size={13} />
             {u?.available ? u.available(info.current, info.latest) : `Update available: v${info.current} → v${info.latest}`}
           </div>
@@ -480,7 +480,7 @@ function BrowserUpdateTab() {
 
         {state === 'timeout' && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs text-[var(--amber)]">
+            <div className="flex items-center gap-2 text-xs text-[var(--amber-text)]">
               <AlertCircle size={13} />
               {u?.timeout ?? 'Update may still be in progress.'}
             </div>

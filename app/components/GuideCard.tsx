@@ -388,7 +388,7 @@ function TaskCard({ icon, title, cta, done, active, dimmed, onClick }: {
         {title}
       </span>
       {!done && !dimmed && (
-        <span className="text-2xs text-[var(--amber)]">
+        <span className="text-2xs text-[var(--amber-text)]">
           {cta} →
         </span>
       )}

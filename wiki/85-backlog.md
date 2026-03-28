@@ -117,14 +117,14 @@
 > 来源：`wiki/reviews/ui-audit-2026-03-27.md`。[spec](./specs/spec-ui-audit-fixes-2026-03-27.md)
 
 - [ ] **P1：技能列表未分页/虚拟化** — 144+ 技能平铺渲染，页面 2400KB+。需添加分类分组、搜索/筛选、分页或虚拟滚动。影响 `/agents?tab=skills` 和 `/agents/[agentKey]`。工作量大，建议作为独立 epic
-- [ ] **P2：琥珀色文字对比度不足** — "Connected" 徽章和筛选胶囊在浅色背景上可能不满足 WCAG AA 4.5:1。需加深琥珀色文字或添加背景底色。影响所有含状态徽章的页面
-- [ ] **P2：通知横幅持续显示** — "N content changes unread" 在每个页面持续显示形成盲区。建议 10s 后自动消失或仅在首页显示
-- [ ] **P2：浮动按钮无 tooltip** — 右下角琥珀色齿轮图标新用户不知用途。添加 hover tooltip "Open MindOS Agent"
-- [ ] **P3：代理未找到页面空旷** — `/agents/claude`（或无效 key）缺少恢复操作。建议相似代理+链接到总览
+- [x] **P2：琥珀色文字对比度不足** — 新增 `--amber-text` token，28 文件小字号文字改用加深色值，满足 WCAG AA 4.5:1
+- [x] **P2：通知横幅持续显示** — 10s 后自动消失 + 新变更到达时重新显示
+- [x] **P2：浮动按钮无 tooltip** — i18n title + aria-label（EN/ZH）
+- [x] **P3：代理未找到页面空旷** — 增加排查提示 + 已连接代理建议列表
 - [ ] **P3：帮助页面缺悬浮目录** — `/help` 长内容需添加浮动 TOC 或锚点跳转
 - [ ] **P3：Echo 侧边栏利用不足** — 5 项占 ~200px，添加最近活动或快捷统计
-- [ ] **P3：用例卡片截断不一致** — `/explore` 描述截断长度不一，统一 `line-clamp-2`
-- [ ] **P3：操作类型徽章无按类型着色** — `/changes` 全部琥珀色，建议 create=绿/delete=红/update=琥珀
+- [x] **P3：用例卡片截断不一致** — 验证已有 `line-clamp-2`，截断一致，无需修改
+- [x] **P3：操作类型徽章无按类型着色** — create/import=绿, delete=红, rename/move=灰, update=默认
 
 ### 🟢 低优先（等需求驱动）
 

@@ -269,7 +269,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             )}
           </div>
           {revealedToken && (
-            <p className="text-xs text-[var(--amber)]">
+            <p className="text-xs text-[var(--amber-text)]">
               New token generated. Copy it now — it won&apos;t be shown in full again.
             </p>
           )}

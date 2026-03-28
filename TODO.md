@@ -17,7 +17,6 @@
 - [ ] **内置固定版本** - 内置build版本，未安装也能打开，检测到更高版本时切换
 
 ### 文档与模板
-- [ ] **优化README.md**
 - [ ] **优化VISION文本** - 独立product-vision.md到wiki
 
 ## ⚡ 功能增强
@@ -38,16 +37,14 @@
 
 ## 🔧 技术改进
 
-- [ ] **MindOS Agent时间感知** - 时间感知功能
+- [ ] **MindOS Agent时间感知** - 时间感知功能（当前只有 runtimeLastActivityAt）
 - [ ] **Editor功能增强** - 编辑器功能完善
-- [ ] **模板管理改进** - Space目录通过INSTRUCTION.md自动管理
 
 ## 🎨 UI/UX
 
 - [ ] **首页调整**
   - search files 和 Ask AI 调换位置和大小
   - Plugins 放在 Recently Modified 上面
-  - New note → New Notes（修复404）
 - [ ] **LANDING page** - 节日祝福例子
 - [ ] **分享功能** - 分享模板或md
 

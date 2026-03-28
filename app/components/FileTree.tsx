@@ -301,7 +301,12 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
       return;
     }
     if (prevMaxOpenDepth.current !== maxOpenDepth) {
-      setOpen(depth <= maxOpenDepth);
+      const enteringControlled = prevMaxOpenDepth.current === null || prevMaxOpenDepth.current === undefined;
+      if (enteringControlled) {
+        if (depth > maxOpenDepth) setOpen(false);
+      } else {
+        setOpen(depth <= maxOpenDepth);
+      }
       prevMaxOpenDepth.current = maxOpenDepth;
     }
   }, [maxOpenDepth, depth]);

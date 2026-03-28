@@ -130,6 +130,7 @@ export const zh = {
   },
   ask: {
     title: 'MindOS Agent',
+    fabLabel: 'AI 助手',
     placeholder: '输入问题… @ 附加文件，/ 技能',
     emptyPrompt: '可以问任何关于知识库的问题',
     send: '发送',
@@ -144,7 +145,7 @@ export const zh = {
     attachCurrent: '附加当前文件',
     stopTitle: '停止',
     cancelReconnect: '取消重连',
-    connecting: '正在与你的心智一起思考...',
+    connecting: '正在和你一起思考...',
     thinking: '思考中...',
     thinkingLabel: '思考中',
     searching: '正在搜索知识库...',
@@ -665,6 +666,8 @@ export const zh = {
     },
     detailSubtitle: '',
     detailNotFound: '未找到该 Agent，可能已移除或重命名。',
+    detailNotFoundHint: '该 Agent 可能已断开连接或配置文件已移动。请尝试重启 Agent 或检查 MCP 配置。',
+    detailNotFoundSuggestion: '已连接的 Agent：',
   },
   shortcutPanel: {
     title: '快捷键',

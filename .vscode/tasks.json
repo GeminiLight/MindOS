@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "mos_algo",
+      "type": "shell",
+      "command": "tmux new-session -A -s mos_algo",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "mos_grid"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "mos_app",
+      "type": "shell",
+      "command": "tmux new-session -A -s mos_app",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "mos_grid"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "mos_dev",
+      "type": "shell",
+      "command": "tmux new-session -A -s mos_dev",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "mos_grid"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "mos_ux",
+      "type": "shell",
+      "command": "tmux new-session -A -s mos_ux",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "mos_grid"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Open All MOS Terminals",
+      "dependsOn": ["mos_algo", "mos_app", "mos_dev", "mos_ux"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}
