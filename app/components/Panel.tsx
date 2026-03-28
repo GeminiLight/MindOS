@@ -132,6 +132,7 @@ export default function Panel({
                 const current = prev ?? treeMaxDepth;
                 return Math.max(-1, current - 1);
               })}
+              onDoubleClick={() => setMaxOpenDepth(-1)}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               aria-label={t.sidebar.collapseLevel}
               title={t.sidebar.collapseLevel}
@@ -147,6 +148,7 @@ export default function Panel({
                 }
                 return next;
               })}
+              onDoubleClick={() => setMaxOpenDepth(null)}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               aria-label={t.sidebar.expandLevel}
               title={t.sidebar.expandLevel}
