@@ -88,13 +88,13 @@ fi
 if [ "$SIGN" = true ] && [ "$NOTARIZE" = true ]; then
     echo -e "\n${YELLOW}Step 5/5: Notarizing...${NC}"
 
-    # Detect auth method
+    # Detect auth method (use array to avoid word-splitting on paths with spaces)
     API_KEY_FILE=~/private_keys/AuthKey_${APPLE_API_KEY_ID:-"NQ8ZM3WLHB"}.p8
     if [ -f "$API_KEY_FILE" ] && [ -n "${APPLE_API_KEY_ID:-}" ]; then
-        AUTH_ARGS="--key $API_KEY_FILE --key-id $APPLE_API_KEY_ID --issuer $APPLE_API_ISSUER"
+        AUTH_ARGS=(--key "$API_KEY_FILE" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
         echo "Using API Key authentication"
     elif [ -n "${APPLE_ID:-}" ]; then
-        AUTH_ARGS="--apple-id $APPLE_ID --password $APPLE_APP_SPECIFIC_PASSWORD --team-id $APPLE_TEAM_ID"
+        AUTH_ARGS=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
         echo "Using Apple ID authentication"
     else
         echo -e "${YELLOW}No notarization credentials found. Set APPLE_API_KEY_ID + APPLE_API_ISSUER, or APPLE_ID.${NC}"
@@ -103,10 +103,11 @@ if [ "$SIGN" = true ] && [ "$NOTARIZE" = true ]; then
     fi
 
     if [ "$NOTARIZE" = true ]; then
-        for file in dist/*.dmg dist/*.zip; do
+        # Only notarize DMG (Apple does not accept ZIP for notarization)
+        for file in dist/*.dmg; do
             [ -f "$file" ] || continue
             echo "Submitting: $(basename "$file")"
-            xcrun notarytool submit "$file" $AUTH_ARGS --wait --timeout 30m
+            xcrun notarytool submit "$file" "${AUTH_ARGS[@]}" --wait --timeout 2h
             echo -e "${GREEN}Notarized: $(basename "$file")${NC}"
         done
 
