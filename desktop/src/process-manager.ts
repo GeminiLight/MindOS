@@ -143,9 +143,16 @@ export class ProcessManager extends EventEmitter {
 
   /** Restart services */
   async restart(): Promise<void> {
+    const oldWebPort = this.opts.webPort;
+    const oldMcpPort = this.opts.mcpPort;
     await this.stop();
     this.crashCount = { web: 0, mcp: 0 };
     this.mcpRestartInProgress = false;
+    // After stop, old ports may be in TIME_WAIT — find fresh ones to avoid EADDRINUSE on restart
+    this.opts.webPort = await this.findFreePort(oldWebPort).catch(() => oldWebPort);
+    if (!this.externalMcp) {
+      this.opts.mcpPort = await this.findFreePort(oldMcpPort).catch(() => oldMcpPort);
+    }
     await this.start();
   }
 
