@@ -36,6 +36,10 @@ export const en: Record<I18nKeys, string> = {
   missingCliDesc: 'Install MindOS CLI with one click to use local mode (requires Node.js ≥18).',
   installBtn: 'Install MindOS CLI',
   retryLocal: 'Start Local Mode',
+  // Bundled runtime incomplete (packaged Desktop)
+  bundledIncomplete: '⚠️ Built-in Runtime Incomplete',
+  bundledIncompleteDesc: 'The built-in MindOS runtime is missing or corrupted. Please reinstall the Desktop application.',
+  retryCheck: 'Retry Check',
   // Build section
   cliInstalled: '🔨 MindOS CLI Installed',
   cliInstalledDesc: 'MindOS CLI is installed but not yet built. Click below to build automatically:',

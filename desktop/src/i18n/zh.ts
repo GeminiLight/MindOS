@@ -34,6 +34,10 @@ export const zh = {
   missingCliDesc: '一键安装 MindOS CLI 即可使用本地模式（需要 Node.js ≥18）',
   installBtn: '自动安装 MindOS CLI',
   retryLocal: '启动本地模式',
+  // Bundled runtime incomplete (packaged Desktop)
+  bundledIncomplete: '⚠️ 内置运行时不完整',
+  bundledIncompleteDesc: '内置的 MindOS 运行时缺失或损坏，请重新安装 Desktop 应用。',
+  retryCheck: '重新检测',
   // Build section
   cliInstalled: '🔨 MindOS CLI 已安装',
   cliInstalledDesc: '检测到您已安装 MindOS CLI，但尚未构建。点击下方按钮自动构建：',

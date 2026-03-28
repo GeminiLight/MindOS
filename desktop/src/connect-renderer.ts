@@ -16,9 +16,9 @@ function getIpc() {
   }
   return bridge as {
     checkNode: () => Promise<boolean>;
-    checkMindosStatus: () => Promise<{ status: 'not-installed' | 'ready' | 'installed-not-built'; path: string | null }>;
+    checkMindosStatus: () => Promise<{ status: 'not-installed' | 'ready' | 'installed-not-built' | 'bundled-incomplete'; path: string | null }>;
     buildMindos: (modulePath: string) => Promise<{ success: boolean; output?: string; error?: string; stderr?: string }>;
-    getMindosPath: () => Promise<{ path: string; source: 'user' } | null>;
+    getMindosPath: () => Promise<{ path: string; source: 'user' | 'bundled' } | null>;
     installMindos: () => Promise<{ success: boolean; output?: string; error?: string; stderr?: string }>;
     selectMode: (mode: 'local' | 'remote') => Promise<boolean>;
     showNodeDialog: () => Promise<'install' | 'remote' | 'cancel'>;
@@ -246,14 +246,15 @@ async function selectMode(mode: 'local' | 'remote'): Promise<void> {
 
       if (mindosStatus?.status === 'ready') {
         await ipc.selectMode('local');
-        // Window will close — no need to restore
         return;
       } else if (mindosStatus?.status === 'installed-not-built') {
         restoreCard();
         showBuildSection(mindosStatus.path!);
+      } else if (mindosStatus?.status === 'bundled-incomplete') {
+        restoreCard();
+        showBundledIncompleteSection();
       } else {
         restoreCard();
-        // MindOS not installed — show install section
         const setupSection = $('local-setup');
         if (setupSection) {
           setupSection.style.display = 'block';
@@ -332,6 +333,22 @@ async function buildMindOS(modulePath: string): Promise<void> {
   }
 }
 
+// ── Bundled Runtime Incomplete Section ──
+function showBundledIncompleteSection(): void {
+  const setupSection = $('local-setup');
+  if (!setupSection) return;
+
+  setupSection.style.display = 'block';
+  setupSection.innerHTML = `
+    <h4>${t('bundledIncomplete')}</h4>
+    <p>${t('bundledIncompleteDesc')}</p>
+    <button class="setup-btn" id="retry-btn">${t('retryCheck')}</button>
+  `;
+
+  $('retry-btn')?.addEventListener('click', () => void checkNodeAgain());
+  setupSection.scrollIntoView({ behavior: 'smooth' });
+}
+
 // ── Install MindOS CLI ──
 async function installMindOS(): Promise<void> {
   const ipc = getIpc();
@@ -396,6 +413,8 @@ async function checkNodeAgain(): Promise<void> {
       await ipc.selectMode('local');
     } else if (mindosStatus?.status === 'installed-not-built') {
       showBuildSection(mindosStatus.path!);
+    } else if (mindosStatus?.status === 'bundled-incomplete') {
+      showBundledIncompleteSection();
     } else {
       if (statusEl) statusEl.textContent = t('missingCliStill');
     }
