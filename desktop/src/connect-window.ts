@@ -277,7 +277,18 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     });
 
     safeHandle('connect:check-mindos-status', async () => {
-      // First find node so we can use its bin dir for npm
+      // Check bundled runtime first (Desktop ships with mindos-runtime/)
+      const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+      const { analyzeMindOsLayout } = await import('./mindos-runtime-layout');
+      const bundledDir = getDefaultBundledMindOsDirectory();
+      if (bundledDir && existsSync(bundledDir)) {
+        const analysis = analyzeMindOsLayout(bundledDir);
+        if (analysis.runnable) {
+          return { status: 'ready', path: bundledDir };
+        }
+      }
+
+      // Fallback: check npm global install
       const nodePath = await getNodePath();
       const mindosPath = await getMindosInstallPath(nodePath);
 
@@ -286,10 +297,9 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
       }
 
       // Check build status
-      const fs = require('fs');
       const p = require('path');
       const nextDir = p.join(mindosPath, 'app', '.next');
-      const isBuilt = fs.existsSync(nextDir);
+      const isBuilt = existsSync(nextDir);
 
       return {
         status: isBuilt ? 'ready' : 'installed-not-built',
