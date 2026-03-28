@@ -7,8 +7,8 @@ import type { BacklinkEntry } from './types';
  * Finds files that reference the given targetPath via wikilinks,
  * markdown links, or backtick references.
  */
-export function findBacklinks(mindRoot: string, targetPath: string): BacklinkEntry[] {
-  const allFiles = collectAllFiles(mindRoot).filter(f => f.endsWith('.md') && f !== targetPath);
+export function findBacklinks(mindRoot: string, targetPath: string, cachedFiles?: string[]): BacklinkEntry[] {
+  const allFiles = (cachedFiles ?? collectAllFiles(mindRoot)).filter(f => f.endsWith('.md') && f !== targetPath);
   const results: BacklinkEntry[] = [];
   const bname = path.basename(targetPath, '.md');
   const escapedTarget = targetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
