@@ -193,7 +193,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
   if (!agent) {
     const connectedAgents = mcp.agents
-      .filter((ag) => ag.key !== agentKey && ag.status === 'connected')
+      .filter((ag) => ag.key !== agentKey && resolveAgentStatus(ag) === 'connected')
       .slice(0, 3);
 
     return (
