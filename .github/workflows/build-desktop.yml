@@ -133,7 +133,7 @@ jobs:
 
       # macOS: decode App Store Connect API Key (.p8) for notarization
       - name: Prepare Apple API Key
-        if: matrix.platform == 'mac' && inputs.sign_mac
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
         env:
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -152,17 +152,17 @@ jobs:
           EP_GH_IGNORE_TIME: true
           EP_DRAFT: false
           # macOS code signing (skip when sign_mac is false)
-          CSC_LINK: ${{ inputs.sign_mac && secrets.APPLE_CERTIFICATE_BASE64 || '' }}
-          CSC_KEY_PASSWORD: ${{ inputs.sign_mac && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ inputs.sign_mac && 'true' || 'false' }}
+          CSC_LINK: ${{ inputs.sign_mac == true && secrets.APPLE_CERTIFICATE_BASE64 || '' }}
+          CSC_KEY_PASSWORD: ${{ inputs.sign_mac == true && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ inputs.sign_mac == true }}
           # macOS notarization via App Store Connect API Key (preferred over Apple ID)
           # electron-builder/notarize auto-discovers .p8 in ~/private_keys/
-          APPLE_API_KEY_ID: ${{ inputs.sign_mac && secrets.APPLE_API_KEY_ID || '' }}
-          APPLE_API_ISSUER: ${{ inputs.sign_mac && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY_ID: ${{ inputs.sign_mac == true && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ inputs.sign_mac == true && secrets.APPLE_API_ISSUER || '' }}
           # Legacy Apple ID notarization (fallback if API Key not configured)
-          APPLE_ID: ${{ inputs.sign_mac && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.sign_mac && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ inputs.sign_mac && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_ID: ${{ inputs.sign_mac == true && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.sign_mac == true && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ inputs.sign_mac == true && secrets.APPLE_TEAM_ID || '' }}
         run: |
           if [ "${{ inputs.publish }}" = "true" ]; then
             cd desktop && npx electron-builder --${{ matrix.platform }} --publish always
