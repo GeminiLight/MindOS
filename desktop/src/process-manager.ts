@@ -50,6 +50,16 @@ export class ProcessManager extends EventEmitter {
   get webPort(): number { return this.opts.webPort; }
   get mcpPort(): number { return this.opts.mcpPort; }
 
+  /** Spawn MCP on a new port (called from main.ts when user accepts suggested port) */
+  startMcpOnPort(port: number): void {
+    this.opts.mcpPort = port;
+    this.externalMcp = false;
+    const proc = this.spawnMcp();
+    this.mcpProcess = proc;
+    this.guardSpawnError(proc, 'mcp');
+    this.setupCrashHandler(proc, 'mcp');
+  }
+
   /** Start MCP + Next.js, then wait for health check */
   async start(): Promise<void> {
     this.stopped = false;
