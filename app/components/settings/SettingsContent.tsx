@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X } from 'lucide-react';
+import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { apiFetch } from '@/lib/api';
 import type { AiSettings, AgentSettings, SettingsData, Tab } from './types';
@@ -11,6 +11,7 @@ import { KnowledgeTab } from './KnowledgeTab';
 import { SyncTab } from './SyncTab';
 import { McpTab } from './McpTab';
 import { UpdateTab } from './UpdateTab';
+import { UninstallTab } from './UninstallTab';
 
 interface SettingsContentProps {
   visible: boolean;
@@ -156,6 +157,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
     { id: 'update', label: t.settings.tabs.update ?? 'Update', icon: <Download size={iconSize} />, badge: hasUpdate },
+    { id: 'uninstall', label: t.settings.tabs.uninstall ?? 'Uninstall', icon: <Trash2 size={iconSize} /> },
   ];
 
   const activeTabLabel = TABS.find(t2 => t2.id === tab)?.label ?? '';
@@ -169,7 +171,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           <p className={`${isPanel ? 'text-xs' : 'text-sm'} text-destructive font-medium`}>Failed to load settings</p>
           {!isPanel && <p className="text-xs text-muted-foreground">Check that the server is running and AUTH_TOKEN is configured correctly.</p>}
         </div>
-      ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' && tab !== 'update' ? (
+      ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' && tab !== 'update' && tab !== 'uninstall' ? (
         <div className="flex justify-center py-8">
           <Loader2 size={isPanel ? 16 : 18} className="animate-spin text-muted-foreground" />
         </div>
@@ -181,6 +183,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           {tab === 'sync' && <SyncTab t={t} />}
           {tab === 'mcp' && <McpTab t={t} />}
           {tab === 'update' && <UpdateTab />}
+          {tab === 'uninstall' && <UninstallTab />}
         </>
       )}
     </div>
