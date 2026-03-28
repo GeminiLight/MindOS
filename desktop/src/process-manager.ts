@@ -423,12 +423,30 @@ export class ProcessManager extends EventEmitter {
             const currentPort = which === 'mcp' ? this.opts.mcpPort : this.opts.webPort;
 
             if (wasPortConflict) {
-              // Port conflict: wait for original port to free up, only fall back as last resort
-              const resolvedPort = await this.waitForPortOrFallback(currentPort);
-              if (resolvedPort !== currentPort) {
-                console.info(`[MindOS:${which}] port ${currentPort} still occupied, switching to ${resolvedPort}`);
-                if (which === 'mcp') this.opts.mcpPort = resolvedPort;
-                else this.opts.webPort = resolvedPort;
+              if (which === 'mcp') {
+                // MCP: NEVER switch ports — external clients (Claude Code, Cursor) have static configs.
+                // Wait for original port to free up; if still occupied, check for existing MCP.
+                const portFree = await this.waitForPortOrFallback(currentPort).then(p => p === currentPort).catch(() => false);
+                if (!portFree) {
+                  // Port still occupied — check if it's a MindOS MCP we can reuse
+                  const externalOk = await this.checkMcpHealth(currentPort);
+                  if (externalOk) {
+                    console.info(`[MindOS] External MCP now available on port ${currentPort} — reusing`);
+                    this.externalMcp = true;
+                    this.mcpProcess = null;
+                    return;
+                  }
+                  // Not a MindOS MCP — port is held by something else. Give up on this attempt.
+                  console.error(`[MindOS:mcp] port ${currentPort} occupied by non-MindOS process, cannot respawn`);
+                  return;
+                }
+              } else {
+                // Web: can switch ports (Desktop controls loadURL, user doesn't hardcode web port)
+                const resolvedPort = await this.waitForPortOrFallback(currentPort);
+                if (resolvedPort !== currentPort) {
+                  console.info(`[MindOS:${which}] port ${currentPort} still occupied, switching to ${resolvedPort}`);
+                  this.opts.webPort = resolvedPort;
+                }
               }
             }
             // else: non-port crash — reuse same port (process is dead, port is free)
