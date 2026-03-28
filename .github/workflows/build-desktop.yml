@@ -152,15 +152,10 @@ jobs:
           EP_GH_IGNORE_TIME: true
           EP_DRAFT: false
         run: |
-          # macOS: conditionally set signing + notarization env vars
+          # macOS: set signing env vars (notarization is a separate step)
           if [ "${{ matrix.platform }}" = "mac" ] && [ "${{ inputs.sign_mac }}" = "true" ]; then
             export CSC_LINK="${{ secrets.APPLE_CERTIFICATE_BASE64 }}"
             export CSC_KEY_PASSWORD="${{ secrets.APPLE_CERTIFICATE_PASSWORD }}"
-            export APPLE_API_KEY_ID="${{ secrets.APPLE_API_KEY_ID }}"
-            export APPLE_API_ISSUER="${{ secrets.APPLE_API_ISSUER }}"
-            export APPLE_ID="${{ secrets.APPLE_ID }}"
-            export APPLE_APP_SPECIFIC_PASSWORD="${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
-            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
           elif [ "${{ matrix.platform }}" = "mac" ]; then
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
@@ -170,6 +165,72 @@ jobs:
           else
             cd desktop && npm run dist:${{ matrix.platform }}
           fi
+        shell: bash
+
+      # macOS: notarize all DMG and ZIP files with retry logic
+      - name: Notarize macOS builds
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Determine notarization auth method
+          if [ -f ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 ] && [ -n "$APPLE_API_KEY_ID" ]; then
+            AUTH_ARGS="--key ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 --key-id $APPLE_API_KEY_ID --issuer $APPLE_API_ISSUER"
+            echo "Using API Key authentication"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            AUTH_ARGS="--apple-id $APPLE_ID --password $APPLE_APP_SPECIFIC_PASSWORD --team-id $APPLE_TEAM_ID"
+            echo "Using Apple ID authentication"
+          else
+            echo "⚠️ No notarization credentials configured, skipping"
+            exit 0
+          fi
+
+          notarize_file() {
+            local file="$1"
+            local max_retries=3
+            local retry=0
+            echo "📦 Notarizing: $(basename "$file")"
+            while [ $retry -lt $max_retries ]; do
+              retry=$((retry + 1))
+              echo "  Attempt $retry/$max_retries..."
+              if xcrun notarytool submit "$file" $AUTH_ARGS --wait --timeout 30m 2>&1 | tee /tmp/notarize.log; then
+                if grep -q "status: Accepted" /tmp/notarize.log; then
+                  echo "  ✅ Notarized: $(basename "$file")"
+                  return 0
+                fi
+              fi
+              if [ $retry -lt $max_retries ]; then
+                echo "  ⚠️ Failed, retrying in 30s..."
+                sleep 30
+              fi
+            done
+            echo "  ❌ Failed after $max_retries attempts: $(basename "$file")"
+            cat /tmp/notarize.log
+            return 1
+          }
+
+          FAILED=0
+          for file in desktop/dist/*.dmg desktop/dist/*.zip; do
+            [ -f "$file" ] || continue
+            notarize_file "$file" || FAILED=1
+          done
+          [ $FAILED -eq 0 ] || exit 1
+        shell: bash
+
+      # macOS: staple notarization tickets to DMG files
+      - name: Staple notarization tickets
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
+        run: |
+          for file in desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            echo "📎 Stapling: $(basename "$file")"
+            xcrun stapler staple "$file"
+            echo "  ✅ Stapled: $(basename "$file")"
+          done
         shell: bash
 
       # Upload artifacts (always, even if not publishing)
