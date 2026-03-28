@@ -69,3 +69,6 @@ docker-compose.override.yml
 shared/dist/image copy 2.png
 image copy.png
 image.png
+*.png
+.tmux.conf
+TMUX_DOC.md
