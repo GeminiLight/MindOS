@@ -267,9 +267,10 @@ ViewPageClient ─────┤
 │ │ file1.md                                │  │
 │ │ file2.csv  (arrow key 导航)              │  │
 │ └─────────────────────────────────────────┘  │
-│ [📎] [@] [ input ........................] [▶]│
+│ [📎] [ textarea (multi-line, auto-resize)] [▶]│
+│  Enter 提交 · Shift+Enter 换行 · @ 附件 · / 技能  │
 ├──────────────────────────────────────────────┤
-│ Footer hints: ↵ Send  @ Attach  ESC Close    │
+│ Footer hints: ↵ Send  ⇧↵ Newline  @ / ESC   │
 └──────────────────────────────────────────────┘
 ```
 
@@ -296,13 +297,14 @@ ViewPageClient ─────┤
   └─→ ESC / 点击 backdrop → 关闭
 ```
 
-### Loading 三阶段
+### Loading 四阶段
 
 | 阶段 | 触发时机 | 视觉表现 |
 |------|---------|---------|
-| `connecting` | 请求发出 | "Connecting..." 文字 |
-| `thinking` | 收到 response headers | "Thinking..." 文字 |
+| `connecting` | 请求发出 | Spinner + "Connecting..." 文字 |
+| `thinking` | 收到 response headers | Spinner + "Thinking..." 文字 |
 | `streaming` | 收到第一个 content chunk | 消息实时更新，光标闪烁 |
+| `reconnecting` | 请求失败且允许重试 | WifiOff 图标 + "Reconnecting (1/3)..." + × 取消按钮 |
 
 ### 错误处理
 
@@ -557,7 +559,7 @@ MindOS 通过 Renderer Registry 支持可插拔的内容渲染器。
 
 | 改动 | 说明 | 预估 |
 |------|------|------|
-| 输入框 textarea 化 | AskModal 的 `<input>` 改为自适应高度 `<textarea>`，支持多行输入（Shift+Enter 换行） | 0.5d |
+| ~~输入框 textarea 化~~ | ~~AskModal 的 `<input>` 改为自适应高度 `<textarea>`，支持多行输入（Shift+Enter 换行）~~ ✅ 已完成 | — |
 | FileTree Pin 收藏 | 常用文件/文件夹置顶，⭐ 标记，localStorage 持久化 | 0.5d |
 | FileTree 折叠记忆 | 记住用户展开/折叠的目录状态，刷新后恢复 | 0.5d |
 | 色彩变量一致性 | 清理残留的 Tailwind amber-500 硬编码，统一用 CSS 变量 | 0.5d |

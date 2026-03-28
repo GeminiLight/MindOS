@@ -118,6 +118,7 @@ export const en = {
     skillsHint: 'skills',
     attachCurrent: 'attach current file',
     stopTitle: 'Stop',
+    cancelReconnect: 'Cancel reconnect',
     connecting: 'Thinking with your mind...',
     thinking: 'Thinking...',
     thinkingLabel: 'Thinking',

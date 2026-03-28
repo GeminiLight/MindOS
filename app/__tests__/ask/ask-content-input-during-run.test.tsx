@@ -22,6 +22,7 @@ vi.mock('@/lib/LocaleContext', () => ({
         panelComposerKeyboard: 'Arrow keys',
         attachFile: 'attach file',
         stopTitle: 'Stop',
+        cancelReconnect: 'Cancel reconnect',
         connecting: 'connecting',
         thinking: 'thinking',
         generating: 'generating',
@@ -129,6 +130,37 @@ describe('AskContent input behavior while running', () => {
     const stopButton = host.querySelector('button[title="Stop"]');
     expect(stopButton).toBeTruthy();
     expect(textareaAfterSubmit.disabled).toBe(false);
+    expect(textareaAfterSubmit.value).toBe('');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('clears textarea value after submit in modal variant', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="modal" initialMessage="hello world" onClose={() => {}} />);
+    });
+
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea).toBeTruthy();
+    expect(textarea.value).toBe('hello world');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const textareaAfterSubmit = host.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textareaAfterSubmit.value).toBe('');
 
     await act(async () => {
       root.unmount();
