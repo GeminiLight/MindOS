@@ -278,15 +278,17 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
 
     safeHandle('connect:check-mindos-status', async () => {
       // Check bundled runtime first (Desktop ships with mindos-runtime/)
-      const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
-      const { analyzeMindOsLayout } = await import('./mindos-runtime-layout');
-      const bundledDir = getDefaultBundledMindOsDirectory();
-      if (bundledDir && existsSync(bundledDir)) {
-        const analysis = analyzeMindOsLayout(bundledDir);
-        if (analysis.runnable) {
-          return { status: 'ready', path: bundledDir };
+      try {
+        const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+        const { analyzeMindOsLayout } = await import('./mindos-runtime-layout');
+        const bundledDir = getDefaultBundledMindOsDirectory();
+        if (bundledDir && existsSync(bundledDir)) {
+          const analysis = analyzeMindOsLayout(bundledDir);
+          if (analysis.runnable) {
+            return { status: 'ready', path: bundledDir };
+          }
         }
-      }
+      } catch { /* bundled check failed, fall through to npm check */ }
 
       // Fallback: check npm global install
       const nodePath = await getNodePath();
@@ -344,14 +346,27 @@ export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'loc
     });
 
     safeHandle('connect:get-mindos-path', async () => {
+      // Check bundled runtime first
+      try {
+        const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+        const { analyzeMindOsLayout } = await import('./mindos-runtime-layout');
+        const bundledDir = getDefaultBundledMindOsDirectory();
+        if (bundledDir && existsSync(bundledDir)) {
+          const analysis = analyzeMindOsLayout(bundledDir);
+          if (analysis.runnable) {
+            return { path: bundledDir, source: 'bundled' as const };
+          }
+        }
+      } catch { /* fall through */ }
+
+      // Fallback: npm global install
       const nodePath = await getNodePath();
       const mindosPath = await getMindosInstallPath(nodePath);
       if (mindosPath) {
-        const fs = require('fs');
         const p = require('path');
         const nextDir = p.join(mindosPath, 'app', '.next');
-        if (fs.existsSync(nextDir)) {
-          return { path: mindosPath, source: 'user' };
+        if (existsSync(nextDir)) {
+          return { path: mindosPath, source: 'user' as const };
         }
       }
       return null;
