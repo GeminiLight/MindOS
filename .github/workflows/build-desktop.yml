@@ -49,56 +49,36 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Windows: sanitize filesystem to prevent webpack EACCES/EPERM during build.
-      # webpack glob scans broadly during compilation and hits protected system dirs
-      # (WindowsApps, INetCache, etc.) that return permission errors on CI runners.
+      # Windows: redirect USERPROFILE to prevent webpack from scanning protected
+      # system directories (INetCache, WindowsApps, etc.) that cause EPERM errors.
+      # This is the only reliable fix — deleting these dirs fails because they are
+      # OS-protected, and outputFileTracingExcludes doesn't affect compile-time glob.
       - name: Fix Windows filesystem issues
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Remove protected directories under AppData that webpack glob cannot scan
-          $protectedDirs = @(
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'),
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\INetCache'),
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\INetCookies'),
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\History')
-          )
-          foreach ($dir in $protectedDirs) {
-            if (Test-Path $dir) {
-              Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-              Write-Host "Removed $dir"
-            }
+          # Create a clean home directory inside the workspace
+          $safeHome = Join-Path $env:GITHUB_WORKSPACE '.home'
+          New-Item -ItemType Directory -Path $safeHome -Force | Out-Null
+
+          # Copy essential dotfiles (npm config, etc.) but skip AppData
+          if (Test-Path (Join-Path $env:USERPROFILE '.npmrc')) {
+            Copy-Item (Join-Path $env:USERPROFILE '.npmrc') $safeHome -ErrorAction SilentlyContinue
           }
+
+          # Redirect all home-related env vars for subsequent steps
+          echo "USERPROFILE=$safeHome" >> $env:GITHUB_ENV
+          echo "HOME=$safeHome" >> $env:GITHUB_ENV
+          echo "LOCALAPPDATA=$safeHome\AppData\Local" >> $env:GITHUB_ENV
+          echo "APPDATA=$safeHome\AppData\Roaming" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Path "$safeHome\AppData\Local" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$safeHome\AppData\Roaming" -Force | Out-Null
 
           # Strip WindowsApps from PATH
           $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'WindowsApps' }) -join ';'
           echo "PATH=$cleanPath" >> $env:GITHUB_ENV
 
-          # Remove NTFS reparse points (junctions + app execution aliases)
-          $queue = [System.Collections.Generic.Queue[string]]::new()
-          $queue.Enqueue($env:USERPROFILE)
-          $removed = 0
-          while ($queue.Count -gt 0) {
-            $dir = $queue.Dequeue()
-            try {
-              foreach ($entry in [System.IO.Directory]::GetFileSystemEntries($dir)) {
-                $attrs = [System.IO.File]::GetAttributes($entry)
-                if ($attrs -band [System.IO.FileAttributes]::ReparsePoint) {
-                  try {
-                    if ($attrs -band [System.IO.FileAttributes]::Directory) {
-                      [System.IO.Directory]::Delete($entry)
-                    } else {
-                      [System.IO.File]::Delete($entry)
-                    }
-                    $removed++
-                  } catch { }
-                } elseif ($attrs -band [System.IO.FileAttributes]::Directory) {
-                  $queue.Enqueue($entry)
-                }
-              }
-            } catch { }
-          }
-          Write-Host "Removed $removed reparse point(s)"
+          Write-Host "Redirected USERPROFILE to $safeHome"
 
       # Install all dependencies (app + mcp + desktop)
       - name: Install dependencies
