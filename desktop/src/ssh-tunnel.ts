@@ -36,10 +36,20 @@ export function cleanupOrphanedSshTunnel(): void {
     // Check if process is alive
     try {
       process.kill(pid, 0); // signal 0 = existence check
-      // Process alive — kill it
+      // Verify it's actually an ssh process (avoid killing unrelated PID reuse)
+      if (process.platform !== 'win32') {
+        try {
+          const { execSync } = require('child_process');
+          const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
+          if (!comm.includes('ssh')) {
+            // PID was reused by a non-ssh process — don't kill it
+            clearTunnelPid();
+            return;
+          }
+        } catch { /* ps failed — conservative: don't kill */ clearTunnelPid(); return; }
+      }
       console.warn(`[MindOS] Killing orphaned SSH tunnel (PID ${pid})`);
       process.kill(pid, 'SIGTERM');
-      // Give it a moment, then force-kill if still alive
       setTimeout(() => {
         try { process.kill(pid, 0); process.kill(pid, 'SIGKILL'); } catch { /* already dead */ }
       }, 2000);

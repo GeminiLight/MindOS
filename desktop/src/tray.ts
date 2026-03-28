@@ -91,7 +91,7 @@ export function updateTrayMenu(
   if (!tray || !mainWindowRef) return;
 
   const zh = app.getLocale()?.startsWith('zh');
-  const statusIcon = status === 'running' ? '🟢' : status === 'starting' ? '🟡' : '🔴';
+  const statusIcon = status === 'running' ? '\u25CF' : status === 'starting' ? '\u25CB' : '\u2716';  // ● ○ ✖
   const statusLabel = status === 'running'
     ? (zh ? '运行中' : 'Running')
     : status === 'starting'

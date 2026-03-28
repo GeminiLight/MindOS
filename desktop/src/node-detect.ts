@@ -75,8 +75,7 @@ export async function getNodePath(): Promise<string | null> {
     if (existsSync(nvmVersionsDir)) {
       const versions = readdirSync(nvmVersionsDir)
         .filter((v: string) => v.startsWith('v'))
-        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }))
-        ;
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
       for (const ver of versions) {
         const nodePath = path.join(nvmVersionsDir, ver, 'bin', 'node');
         if (existsSync(nodePath)) return nodePath;
