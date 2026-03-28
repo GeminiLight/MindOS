@@ -77,6 +77,9 @@ const components: Components = {
       </div>
     );
   },
+  li({ children, ...props }) {
+    return <li {...props} suppressHydrationWarning>{children}</li>;
+  },
   a({ href, children, ...props }) {
     const isExternal = href?.startsWith('http');
     return (

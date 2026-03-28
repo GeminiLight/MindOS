@@ -65,13 +65,12 @@ function groupBySpace(recent: RecentFile[], spaces: SpaceInfo[]): { groups: Spac
   return { groups, rootFiles };
 }
 
-/* ── Section Title component (shared across all three sections) ── */
+/* ── Shared small components ── */
+
 interface SectionTitleProps {
   icon: React.ReactNode;
   children: React.ReactNode;
-  /** Item count badge — only rendered when > 0 */
   count?: number;
-  /** Right-aligned action slot (e.g. "View all" button) */
   action?: React.ReactNode;
 }
 
@@ -90,8 +89,83 @@ function SectionTitle({ icon, children, count, action }: SectionTitleProps) {
   );
 }
 
+/** Reusable "Show more / Show less" toggle */
+function ToggleButton({ expanded, onToggle, showLabel, hideLabel, className = '' }: {
+  expanded: boolean;
+  onToggle: () => void;
+  showLabel: string;
+  hideLabel: string;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className={`flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display ${className}`}
+    >
+      <ChevronDown size={12} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+      <span>{expanded ? hideLabel : showLabel}</span>
+    </button>
+  );
+}
+
+/** Reusable file row for recent-file lists */
+function FileRow({ filePath, mtime, formatTime, subPath }: {
+  filePath: string;
+  mtime: number;
+  formatTime: (t: number) => string;
+  subPath?: string;
+}) {
+  const isCSV = filePath.endsWith('.csv');
+  const name = filePath.split('/').pop() || filePath;
+  return (
+    <Link
+      href={`/view/${encodePath(filePath)}`}
+      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group"
+    >
+      {isCSV
+        ? <Table size={12} className="shrink-0 text-success" />
+        : <FileText size={12} className="shrink-0 text-muted-foreground" />
+      }
+      <div className="flex-1 min-w-0">
+        <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
+        {subPath && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{subPath}</span>}
+      </div>
+      <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-40" suppressHydrationWarning>
+        {formatTime(mtime)}
+      </span>
+    </Link>
+  );
+}
+
+/** Reusable chip for builtin features / plugins */
+function FeatureChip({ id, icon, name, entryPath, active, inactiveTitle }: {
+  id: string;
+  icon: string;
+  name: string;
+  entryPath?: string;
+  active: boolean;
+  inactiveTitle?: string;
+}) {
+  const cls = active
+    ? 'inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/60'
+    : 'inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground opacity-70';
+
+  const inner = (
+    <>
+      <span className="text-sm leading-none" suppressHydrationWarning>{icon}</span>
+      <span className={`font-medium ${active ? 'text-foreground' : ''}`}>{name}</span>
+    </>
+  );
+
+  if (active && entryPath) {
+    return <Link key={id} href={`/view/${encodePath(entryPath)}`}><span className={cls}>{inner}</span></Link>;
+  }
+  return <span key={id} className={cls} title={inactiveTitle}>{inner}</span>;
+}
+
 const FILES_PER_GROUP = 3;
-const SPACES_PER_ROW = 6;   // 3 cols × 2 rows on desktop, show 1 row initially
+const SPACES_PER_ROW = 6;
 const PLUGINS_INITIAL = 4;
 
 export default function HomeContent({ recent, existingFiles, spaces, dirPaths }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[]; dirPaths?: string[] }) {
@@ -148,12 +222,12 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
         </p>
 
         {/* AI-first command bar */}
-        <div className="w-full max-w-[620px] flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-4">
+        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-4">
           <button
             onClick={triggerAsk}
             title="⌘/"
             data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber)]/8"
+            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber-dim)]"
           >
             <Sparkles size={15} className="shrink-0 text-[var(--amber)]" />
             <span className="text-sm flex-1 text-left text-foreground">
@@ -200,7 +274,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             >
               <ArrowRight size={14} />
               <span>{t.home.continueEditing}</span>
-              <span className="text-xs opacity-50 truncate max-w-[140px]" suppressHydrationWarning>
+              <span className="text-xs opacity-50 truncate max-w-36" suppressHydrationWarning>
                 {lastFile.path.split('/').pop()}
               </span>
             </Link>
@@ -260,13 +334,13 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
               })}
             </div>
             {spaceList.length > SPACES_PER_ROW && (
-              <button
-                onClick={() => setShowAllSpaces(v => !v)}
-                className="flex items-center gap-1.5 mt-2 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-              >
-                <ChevronDown size={12} className={`transition-transform duration-200 ${showAllSpaces ? 'rotate-180' : ''}`} />
-                <span>{showAllSpaces ? t.home.showLess : t.home.showMore}</span>
-              </button>
+              <ToggleButton
+                expanded={showAllSpaces}
+                onToggle={() => setShowAllSpaces(v => !v)}
+                showLabel={t.home.showMore}
+                hideLabel={t.home.showLess}
+                className="mt-2"
+              />
             )}
           </>
         ) : (
@@ -286,25 +360,16 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
           <div className="flex flex-wrap gap-2">
             {builtinFeatures.map((r) => {
               const active = !!r.entryPath && existingSet.has(r.entryPath);
-              if (active && r.entryPath) {
-                return (
-                  <Link key={r.id} href={`/view/${encodePath(r.entryPath)}`}>
-                    <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/60">
-                      <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
-                      <span className="font-medium text-foreground">{r.name}</span>
-                    </span>
-                  </Link>
-                );
-              }
               return (
-                <span
+                <FeatureChip
                   key={r.id}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground opacity-70"
-                  title={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
-                >
-                  <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
-                  <span className="font-medium">{r.name}</span>
-                </span>
+                  id={r.id}
+                  icon={r.icon}
+                  name={r.name}
+                  entryPath={r.entryPath}
+                  active={active}
+                  inactiveTitle={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
+                />
               );
             })}
           </div>
@@ -319,13 +384,12 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             count={availablePlugins.length}
             action={
               availablePlugins.length > PLUGINS_INITIAL ? (
-                <button
-                  onClick={() => setShowAllPlugins(v => !v)}
-                  className="flex items-center gap-1 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-                >
-                  <span>{showAllPlugins ? t.home.showLess : t.home.viewAll}</span>
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAllPlugins ? 'rotate-180' : ''}`} />
-                </button>
+                <ToggleButton
+                  expanded={showAllPlugins}
+                  onToggle={() => setShowAllPlugins(v => !v)}
+                  showLabel={t.home.viewAll}
+                  hideLabel={t.home.showLess}
+                />
               ) : undefined
             }
           >
@@ -333,14 +397,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
           </SectionTitle>
           <div className="flex flex-wrap gap-2">
             {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
-              <Link
-                key={r.id}
-                href={`/view/${encodePath(r.entryPath!)}`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-xs transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/60"
-              >
-                <span className="text-sm leading-none" suppressHydrationWarning>{r.icon}</span>
-                <span className="font-medium text-foreground">{r.name}</span>
-              </Link>
+              <FeatureChip key={r.id} id={r.id} icon={r.icon} name={r.name} entryPath={r.entryPath} active />
             ))}
           </div>
         </section>
@@ -377,30 +434,15 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                       )}
                     </Link>
                     <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
-                      {visibleFiles.map(({ path: filePath, mtime }) => {
-                        const isCSV = filePath.endsWith('.csv');
-                        const name = filePath.split('/').pop() || filePath;
-                        const subPath = filePath.split('/').slice(1, -1).join('/');
-                        return (
-                          <Link
-                            key={filePath}
-                            href={`/view/${encodePath(filePath)}`}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group"
-                          >
-                            {isCSV
-                              ? <Table size={12} className="shrink-0 text-success" />
-                              : <FileText size={12} className="shrink-0 text-muted-foreground" />
-                            }
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
-                              {subPath && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{subPath}</span>}
-                            </div>
-                            <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-40" suppressHydrationWarning>
-                              {formatTime(mtime)}
-                            </span>
-                          </Link>
-                        );
-                      })}
+                      {visibleFiles.map(({ path: filePath, mtime }) => (
+                        <FileRow
+                          key={filePath}
+                          filePath={filePath}
+                          mtime={mtime}
+                          formatTime={formatTime}
+                          subPath={filePath.split('/').slice(1, -1).join('/')}
+                        />
+                      ))}
                     </div>
                   </div>
                 );
@@ -417,19 +459,7 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                   </div>
                   <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
                     {rootFiles.map(({ path: filePath, mtime }) => (
-                      <Link
-                        key={filePath}
-                        href={`/view/${encodePath(filePath)}`}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted"
-                      >
-                        <FileText size={12} className="shrink-0 text-muted-foreground" />
-                        <span className="text-sm flex-1 min-w-0 truncate text-foreground" suppressHydrationWarning>
-                          {filePath.split('/').pop() || filePath}
-                        </span>
-                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-40" suppressHydrationWarning>
-                          {formatTime(mtime)}
-                        </span>
-                      </Link>
+                      <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
                     ))}
                   </div>
                 </div>
@@ -437,14 +467,13 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
 
               {/* Show more / less */}
               {groups.some(g => g.files.length > FILES_PER_GROUP) && (
-                <button
-                  onClick={() => setShowAll(v => !v)}
-                  aria-expanded={showAll}
-                  className="flex items-center gap-1.5 mt-1 ml-1 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-                >
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`} />
-                  <span>{showAll ? t.home.showLess : t.home.showMore}</span>
-                </button>
+                <ToggleButton
+                  expanded={showAll}
+                  onToggle={() => setShowAll(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-1 ml-1"
+                />
               )}
             </div>
           ) : (
@@ -460,11 +489,11 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                     <div key={filePath} className="relative group">
                       <div
                         aria-hidden="true"
-                        className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${idx === 0 ? 'w-2 h-2' : 'w-1.5 h-1.5'}`}
-                        style={{
-                          background: idx === 0 ? 'var(--amber)' : 'var(--border)',
-                          outline: idx === 0 ? '2px solid var(--amber-dim)' : 'none',
-                        }}
+                        className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
+                          idx === 0
+                            ? 'w-2 h-2 bg-[var(--amber)] outline-2 outline-[var(--amber-dim)]'
+                            : 'w-1.5 h-1.5 bg-border'
+                        }`}
                       />
                       <Link
                         href={`/view/${encodePath(filePath)}`}
@@ -487,14 +516,13 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
                 })}
               </div>
               {recent.length > 5 && (
-                <button
-                  onClick={() => setShowAll(v => !v)}
-                  aria-expanded={showAll}
-                  className="flex items-center gap-1.5 mt-2 ml-3 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
-                >
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`} />
-                  <span>{showAll ? t.home.showLess : t.home.showMore}</span>
-                </button>
+                <ToggleButton
+                  expanded={showAll}
+                  onToggle={() => setShowAll(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-2 ml-3"
+                />
               )}
             </div>
           )}
@@ -584,4 +612,3 @@ function ExampleCleanupBanner() {
     </div>
   );
 }
-
