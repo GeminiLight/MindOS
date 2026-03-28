@@ -41,6 +41,11 @@
 
 ### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
 
+### SSH 隧道孤儿进程占端口
+- **现象：** Desktop 崩溃或被 SIGKILL 后，SSH 隧道子进程继续运行。下次启动远程模式时端口被孤儿进程占用
+- **原因：** `before-quit` cleanup 未能执行（崩溃时不触发 quit 事件），SSH 子进程是 detached 的不会随父进程退出
+- **解决：** `SshTunnel.start()` 将子进程 PID 写入 `~/.mindos/ssh-tunnel.pid`；`stop()` 和 `exit` 事件清理 PID 文件；`main.ts` 启动时调用 `cleanupOrphanedSshTunnel()` 检查并杀掉残留进程
+
 ### `.next` 目录存在但构建不完整 → Web 连续崩溃 3 次
 - **现象：** Desktop 启动报 "Could not find a production build in the '.next' directory"，Web 进程连崩 3 次后显示 "MindOS Service Crashed"
 - **原因：** `analyzeMindOsLayout()` 和 `main.ts` 的 build 检查仅用 `existsSync('.next')` 判断是否需要构建。但 `.next` 目录可能因中断的构建、空目录或 npm 包残留而存在却不含有效产物（无 `BUILD_ID`、无 `standalone/server.js`）。`next start` 会因找不到 build ID 直接退出

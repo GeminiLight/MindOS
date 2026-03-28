@@ -105,4 +105,109 @@ if (existsSync(binFrom) && statSync(binFrom).isDirectory()) {
   );
 }
 
+// ── Bundle Node.js binary ──
+// Download and extract platform-appropriate Node.js into mindos-runtime/node/
+// so Desktop can launch without any system Node.js installed.
+// Skip with MINDOS_SKIP_BUNDLE_NODE=1 (e.g. local dev builds where size matters).
+if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
+  // IMPORTANT: Keep in sync with desktop/src/node-bootstrap.ts NODE_VERSION
+  const NODE_VERSION = '22.16.0';
+  const plat = process.env.MINDOS_BUNDLE_NODE_PLATFORM || process.platform;
+  const arch = process.env.MINDOS_BUNDLE_NODE_ARCH || process.arch;
+
+  // Determine platform-specific download info
+  const nodeArch = arch === 'arm64' ? 'arm64' : 'x64';
+  let nodeUrl, nodeFormat;
+  if (plat === 'darwin') {
+    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-${nodeArch}.tar.gz`;
+    nodeFormat = 'tar.gz';
+  } else if (plat === 'win32') {
+    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-${nodeArch}.zip`;
+    nodeFormat = 'zip';
+  } else {
+    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${nodeArch}.tar.gz`;
+    nodeFormat = 'tar.gz';
+  }
+
+  const nodeDest = path.join(dest, 'node');
+  const tmpDir = path.join(desktopRoot, '.node-bundle-tmp');
+
+  // Check if already present (idempotent)
+  const expectedBin = plat === 'win32'
+    ? path.join(nodeDest, 'node.exe')
+    : path.join(nodeDest, 'bin', 'node');
+
+  if (existsSync(expectedBin)) {
+    console.log(`[prepare-mindos-runtime] Node.js already bundled at ${nodeDest}`);
+  } else {
+    console.log(`[prepare-mindos-runtime] Downloading Node.js ${NODE_VERSION} (${plat}-${nodeArch})...`);
+
+    // Clean up
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+    mkdirSync(tmpDir, { recursive: true });
+    if (existsSync(nodeDest)) rmSync(nodeDest, { recursive: true, force: true });
+    mkdirSync(nodeDest, { recursive: true });
+
+    const tmpFile = path.join(tmpDir, `node.${nodeFormat}`);
+
+    // Download using curl (available on all CI platforms and macOS/Linux)
+    const curlResult = spawnSync('curl', ['-fsSL', '-o', tmpFile, nodeUrl], {
+      stdio: 'inherit',
+      timeout: 120000,
+    });
+    if (curlResult.status !== 0) {
+      fail(`Failed to download Node.js from ${nodeUrl}`);
+    }
+
+    // Extract
+    if (nodeFormat === 'tar.gz') {
+      const tarResult = spawnSync('tar', ['xzf', tmpFile, '-C', nodeDest, '--strip-components=1'], {
+        stdio: 'inherit',
+        timeout: 60000,
+      });
+      if (tarResult.status !== 0) fail('Failed to extract Node.js tar.gz');
+    } else {
+      // Windows zip — use PowerShell
+      const extractDir = path.join(tmpDir, 'extract');
+      mkdirSync(extractDir, { recursive: true });
+      spawnSync('powershell', [
+        '-Command',
+        `Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force`,
+      ], { stdio: 'inherit', timeout: 60000 });
+      // Move contents up (strip top-level folder)
+      const entries = readdirSync(extractDir);
+      const nodeFolder = entries.find(e => e.startsWith('node-'));
+      if (nodeFolder) {
+        cpSync(path.join(extractDir, nodeFolder), nodeDest, { recursive: true });
+      } else {
+        fail('Node.js zip extraction: could not find node-* folder');
+      }
+    }
+
+    // Verify
+    if (!existsSync(expectedBin)) {
+      fail(`Node.js extraction succeeded but binary not found at ${expectedBin}`);
+    }
+
+    // Cleanup tmp
+    rmSync(tmpDir, { recursive: true, force: true });
+
+    // Strip unnecessary files to minimize bundle size (~80MB → ~40MB)
+    // Keep: bin/node, bin/npm, bin/npx, lib/node_modules/npm (for npm install)
+    // Remove: include/, share/doc/, share/man/, CHANGELOG.md, README.md, etc.
+    for (const stripDir of ['include', 'share']) {
+      const p = path.join(nodeDest, stripDir);
+      if (existsSync(p)) rmSync(p, { recursive: true, force: true });
+    }
+    for (const stripFile of ['CHANGELOG.md', 'README.md', 'LICENSE']) {
+      const p = path.join(nodeDest, stripFile);
+      if (existsSync(p)) rmSync(p, { force: true });
+    }
+
+    console.log(`[prepare-mindos-runtime] Node.js ${NODE_VERSION} bundled → ${nodeDest}`);
+  }
+} else {
+  console.log('[prepare-mindos-runtime] MINDOS_SKIP_BUNDLE_NODE=1 — skipping Node.js bundle');
+}
+
 console.log(`[prepare-mindos-runtime] OK → ${dest} (from ${source})`);

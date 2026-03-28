@@ -14,12 +14,26 @@ import { spawn } from 'child_process';
 import path from 'path';
 import https from 'https';
 
-// Node.js LTS version to download
-const NODE_VERSION = '22.16.0';
+// Node.js LTS version to download (also used by prepare-mindos-runtime to bundle Node)
+export const NODE_VERSION = '22.16.0';
 
 const MINDOS_DIR = path.join(app.getPath('home'), '.mindos');
 const NODE_DIR = path.join(MINDOS_DIR, 'node');
 const PATH_SEP = process.platform === 'win32' ? ';' : ':';
+
+/** Path to the bundled Node.js shipped inside the packaged app (resources/mindos-runtime/node/) */
+export function getBundledNodePath(): string {
+  // In dev mode, process.resourcesPath still exists (Electron provides it),
+  // but mindos-runtime/node/ won't be there — existsSync will return false.
+  const base = path.join(process.resourcesPath, 'mindos-runtime', 'node');
+  if (process.platform === 'win32') return path.join(base, 'node.exe');
+  return path.join(base, 'bin', 'node');
+}
+
+/** Check if bundled Node.js exists in the packaged app */
+export function isBundledNodeInstalled(): boolean {
+  return existsSync(getBundledNodePath());
+}
 
 /** Path to the private node binary (may not exist yet) */
 export function getPrivateNodePath(): string {
@@ -83,16 +97,13 @@ export async function downloadNode(
       '-Command',
       `Expand-Archive -Path '${tmpFile}' -DestinationPath '${path.join(tmpDir, 'node-extract')}' -Force`,
     ], 60000);
-    // Find extracted folder name and move contents up
+    // Find extracted folder name and copy contents using Node.js API (xcopy is deprecated)
     const extractDir = path.join(tmpDir, 'node-extract');
     const entries = require('fs').readdirSync(extractDir);
     const nodeFolder = entries.find((e: string) => e.startsWith('node-'));
     if (nodeFolder) {
-      await spawnAsync('xcopy', [
-        path.join(extractDir, nodeFolder),
-        NODE_DIR,
-        '/E', '/Y', '/Q',
-      ], 30000);
+      const { cpSync: cpSyncFn } = require('fs');
+      cpSyncFn(path.join(extractDir, nodeFolder), NODE_DIR, { recursive: true });
     }
   }
 
@@ -132,7 +143,12 @@ function downloadFile(
   onProgress?: (percent: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let redirects = 0;
     const follow = (reqUrl: string) => {
+      if (++redirects > 5) {
+        reject(new Error('Too many redirects'));
+        return;
+      }
       https.get(reqUrl, (res) => {
         // Follow redirects
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {

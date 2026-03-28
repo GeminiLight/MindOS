@@ -28,7 +28,10 @@ jobs:
         include:
           - os: macos-latest
             platform: mac
-            arch: universal
+            arch: arm64
+          - os: macos-latest
+            platform: mac
+            arch: x64
           - os: windows-latest
             platform: win
             arch: x64
@@ -114,8 +117,10 @@ jobs:
       - name: Build Electron
         run: cd desktop && npm run build
 
-      # Bundle MindOS runtime into desktop resources
+      # Bundle MindOS runtime + Node.js into desktop resources
       - name: Prepare bundled runtime
+        env:
+          MINDOS_BUNDLE_NODE_ARCH: ${{ matrix.arch }}
         run: cd desktop && npm run prepare-mindos-runtime
 
       # Get version (needed for tag name)
@@ -161,9 +166,9 @@ jobs:
           fi
 
           if [ "${{ inputs.publish }}" = "true" ]; then
-            cd desktop && npx electron-builder --${{ matrix.platform }} --publish always
+            cd desktop && npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish always
           else
-            cd desktop && npm run dist:${{ matrix.platform }}
+            cd desktop && npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
           fi
         shell: bash
 

@@ -58,6 +58,8 @@ desktop/node_modules/
 # Populated by prepare-mindos-runtime.mjs (keep README tracked)
 desktop/resources/mindos-runtime/*
 !desktop/resources/mindos-runtime/README.md
+!desktop/resources/mindos-runtime/.gitkeep
+desktop/.node-bundle-tmp/
 
 # Docker / Docker Compose — local overrides & secrets (keep Dockerfile / docker-compose.yml tracked)
 docker-compose.override.yml

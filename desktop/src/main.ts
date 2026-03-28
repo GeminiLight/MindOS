@@ -23,6 +23,7 @@ import { restoreWindowState, saveWindowState } from './window-state';
 import { setupUpdater } from './updater';
 import { ConnectionMonitor } from './connection-monitor';
 import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
+import { cleanupOrphanedSshTunnel } from './ssh-tunnel';
 import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
@@ -253,8 +254,11 @@ async function startLocalMode(): Promise<string | null> {
 
   splashStatus({ status: 'detecting' });
 
-  // 1. Node.js check — auto-download if missing
+  // 1. Node.js check — bundled > private ~/.mindos/node > system > auto-download
   let nodePath = await getNodePath();
+  if (nodePath) {
+    console.info(`[MindOS] Node.js: ${nodePath}`);
+  }
   if (!nodePath) {
     splashStatus({ message: zh ? '正在下载 Node.js 运行环境...' : 'Downloading Node.js runtime...' });
     try {
@@ -400,14 +404,12 @@ async function startLocalMode(): Promise<string | null> {
 
   splashStatus({ status: 'starting' });
 
-  // 5. Find ports + spawn
-  const webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
-  const mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
-  currentWebPort = webPort;
-  currentMcpPort = mcpPort;
+  // 5. Find ports + spawn (retry once if port was stolen between check and bind)
+  let webPort = await findAvailablePort(config.port || DEFAULT_WEB_PORT);
+  let mcpPort = await findAvailablePort(config.mcpPort || DEFAULT_MCP_PORT);
 
-  processManager = new ProcessManager({
-    nodePath, npxPath, projectRoot, webPort, mcpPort,
+  const createProcessManager = (wp: number, mp: number) => new ProcessManager({
+    nodePath, npxPath, projectRoot, webPort: wp, mcpPort: mp,
     mindRoot:
       getEffectiveMindRootFromConfig(config) ||
       path.join(app.getPath('home'), 'MindOS', 'mind'),
@@ -416,6 +418,28 @@ async function startLocalMode(): Promise<string | null> {
     verbose: false,
     env: getEnrichedEnv(nodePath),
   });
+
+  processManager = createProcessManager(webPort, mcpPort);
+
+  try {
+    await processManager.start();
+  } catch (startErr) {
+    const msg = startErr instanceof Error ? startErr.message : '';
+    // Port stolen between findAvailablePort and actual bind — retry once with fresh ports
+    if (msg.includes('EADDRINUSE') || msg.includes('address already in use')) {
+      console.warn('[MindOS] Port conflict detected, retrying with fresh ports...');
+      try { await processManager.stop(); } catch { /* best-effort */ }
+      webPort = await findAvailablePort(webPort + 1);
+      mcpPort = await findAvailablePort(mcpPort + 1);
+      processManager = createProcessManager(webPort, mcpPort);
+      await processManager.start(); // let this throw if it fails again
+    } else {
+      throw startErr;
+    }
+  }
+
+  currentWebPort = webPort;
+  currentMcpPort = mcpPort;
 
   let crashDialogShown = false;
   let mcpFailed = false;
@@ -721,15 +745,20 @@ function setupIPC(): void {
 
 // ── Connection Monitor ──
 
-/** Inject or remove a full-screen overlay on the main window */
+/** Inject or remove a full-screen overlay on the main window.
+ *  id must be a safe CSS identifier (alphanumeric + hyphens only). */
 async function injectOverlay(id: string, html: string): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  // Sanitize id — only allow safe CSS identifier characters
+  if (!/^[a-zA-Z][\w-]*$/.test(id)) return;
+  const safeId = JSON.stringify(id);
   try {
     await mainWindow.webContents.executeJavaScript(`
       (function() {
-        if (document.getElementById('${id}')) return;
+        var _id = ${safeId};
+        if (document.getElementById(_id)) return;
         const d = document.createElement('div');
-        d.id = '${id}';
+        d.id = _id;
         d.innerHTML = ${JSON.stringify(html)};
         document.body.appendChild(d);
       })()
@@ -739,9 +768,10 @@ async function injectOverlay(id: string, html: string): Promise<void> {
 
 async function removeOverlay(id: string): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!/^[a-zA-Z][\w-]*$/.test(id)) return;
   try {
     await mainWindow.webContents.executeJavaScript(
-      `document.getElementById('${id}')?.remove()`
+      `document.getElementById(${JSON.stringify(id)})?.remove()`
     );
   } catch { /* ignore */ }
 }
@@ -776,6 +806,7 @@ function setupConnectionMonitor(url: string): void {
 
 // ── Splash Action Handler ──
 
+let isBooting = false;
 async function handleSplashAction(actionId: string): Promise<void> {
   switch (actionId) {
     case 'install-node':
@@ -788,8 +819,10 @@ async function handleSplashAction(actionId: string): Promise<void> {
       await bootApp();
       break;
     case 'retry':
+      if (isBooting) break;
+      isBooting = true;
       splashStatus({ status: 'detecting' });
-      await bootApp();
+      try { await bootApp(); } finally { isBooting = false; }
       break;
     case 'quit':
       app.quit();
@@ -925,6 +958,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
 
   ensureMindosCliShim();
+  cleanupOrphanedSshTunnel();
 
   if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();
@@ -954,11 +988,14 @@ app.on('before-quit', (e) => {
     unregisterShortcuts();
     if (mainWindow && !mainWindow.isDestroyed()) saveWindowState(mainWindow);
     const cleanup = async () => {
-      if (processManager) await processManager.stop();
+      try {
+        if (processManager) await processManager.stop();
+      } catch { /* best-effort */ }
       if (connectionMonitor) connectionMonitor.stop();
       clearActiveTunnel();
       app.exit(0);
     };
-    cleanup();
+    // Must use .then() — event handler cannot be async, but cleanup must complete before exit
+    cleanup().catch(() => app.exit(1));
   }
 });
