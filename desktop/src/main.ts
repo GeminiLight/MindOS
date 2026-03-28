@@ -1066,6 +1066,7 @@ app.whenReady().then(async () => {
 
   ensureMindosCliShim();
   cleanupOrphanedSshTunnel();
+  ProcessManager.cleanupOrphanedChildren();
 
   if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();
