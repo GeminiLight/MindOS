@@ -66,10 +66,24 @@ export function useSlashCommand() {
       }
 
       const q = query.toLowerCase();
-      const items: SlashItem[] = allSkills
-        .filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
-        .slice(0, 20)
-        .map((s) => ({ type: 'skill', name: s.name, description: s.description }));
+      const items: SlashItem[] = (q
+        ? allSkills
+            .map((s) => {
+              const nl = s.name.toLowerCase();
+              let score = 0;
+              if (nl.startsWith(q)) score = 100;
+              else if (nl.includes(q)) score = 50;
+              else if (s.description.toLowerCase().includes(q)) score = 10;
+              return { s, score };
+            })
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 20)
+            .map((x) => ({ type: 'skill' as const, name: x.s.name, description: x.s.description }))
+        : allSkills
+            .slice(0, 20)
+            .map((s) => ({ type: 'skill' as const, name: s.name, description: s.description }))
+      );
 
       if (items.length === 0) {
         setSlashQuery(null);
