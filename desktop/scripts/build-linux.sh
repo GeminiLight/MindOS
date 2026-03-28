@@ -36,6 +36,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Install dependencies
+echo -e "\n${YELLOW}Installing dependencies...${NC}"
+cd "$REPO_ROOT"
+cd app && npm install && cd "$REPO_ROOT"
+cd mcp && npm install && cd "$REPO_ROOT"
+cd desktop && npm install && cd "$REPO_ROOT"
+
 # Build Next.js standalone
 echo -e "\n${YELLOW}Building Next.js standalone...${NC}"
 cd "$REPO_ROOT"
