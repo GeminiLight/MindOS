@@ -40,7 +40,7 @@ done
 echo -e "\n${YELLOW}Building Next.js standalone...${NC}"
 cd "$REPO_ROOT"
 node scripts/gen-renderer-index.js
-cd app && npx next build --webpack && cd "$REPO_ROOT"
+cd app && ./node_modules/.bin/next build --webpack && cd "$REPO_ROOT"
 
 # Build Electron
 echo -e "\n${YELLOW}Building Electron...${NC}"
