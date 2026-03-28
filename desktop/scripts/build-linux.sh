@@ -2,67 +2,65 @@
 
 # ============================================
 # MindOS Desktop - Linux Build Script
-# Usage: ./scripts/build-linux.sh
-# Output: dist/*.zip (arm64 and x64)
+# Usage: ./scripts/build-linux.sh [--mac-zip]
+# Output: dist/*.AppImage, dist/*.deb (default)
+#         dist/*.zip (with --mac-zip, cross-compile unsigned macOS zip)
 # ============================================
 
 set -e
 
-echo "🚀 MindOS Desktop - Linux Build Script"
-echo "========================================"
-
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(dirname "$PROJECT_DIR")"
 
 cd "$PROJECT_DIR"
 
-# Check if we're on Linux
-if [[ "$OSTYPE" != "linux-gnu"* ]]; then
-    echo -e "${YELLOW}⚠️  Warning: This script is designed for Linux${NC}"
-    echo "Current OS: $OSTYPE"
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
+MAC_ZIP=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --mac-zip)  MAC_ZIP=true; shift ;;
+        --help|-h)
+            echo "Usage: ./scripts/build-linux.sh [--mac-zip]"
+            echo ""
+            echo "Options:"
+            echo "  --mac-zip    Cross-compile unsigned macOS zip (instead of Linux packages)"
+            echo "  -h, --help   Show this help message"
+            exit 0
+            ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
 
-# Clean previous builds
-echo -e "\n📦 Cleaning previous builds..."
-rm -rf dist dist-electron
+# Build Next.js standalone
+echo -e "\n${YELLOW}Building Next.js standalone...${NC}"
+cd "$REPO_ROOT"
+node scripts/gen-renderer-index.js
+cd app && npx next build --webpack && cd "$REPO_ROOT"
 
-# Install dependencies if node_modules is missing
-if [ ! -d "node_modules" ]; then
-    echo -e "\n📥 Installing dependencies..."
-    npm install
-fi
-
-# Build the app
-echo -e "\n🔨 Building application..."
+# Build Electron
+echo -e "\n${YELLOW}Building Electron...${NC}"
+cd "$PROJECT_DIR"
 npm run build
 
-# Build for mac (from Linux - will produce unsigned zip)
-# Linux can only build mac zip, not dmg
-echo -e "\n🍎 Building macOS zip (unsigned, from Linux)..."
-electron-builder --mac zip
+# Prepare runtime
+echo -e "\n${YELLOW}Preparing bundled runtime...${NC}"
+npm run prepare-mindos-runtime
 
-echo -e "\n${GREEN}✅ Build complete!${NC}"
-echo -e "\n📁 Output files:"
-ls -lh dist/*.zip 2>/dev/null || echo "No zip files found"
-
-echo -e "\n${YELLOW}⚠️  Note: Since this was built on Linux:${NC}"
-echo "   - The app is NOT signed (identity: null)"
-echo "   - The app is NOT notarized"
-echo "   - Users will see 'App is damaged' error on macOS 10.15+"
-echo ""
-echo -e "${YELLOW}🔧 To run on macOS, users need to:${NC}"
-echo "   xattr -cr /Applications/MindOS.app"
-echo ""
-echo -e "${GREEN}✨ For a properly signed dmg, run build-mac.sh on a Mac${NC}"
+# Package
+if [ "$MAC_ZIP" = true ]; then
+    echo -e "\n${YELLOW}Building macOS zip (unsigned, cross-compile from Linux)...${NC}"
+    CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --publish never
+    echo -e "\n${GREEN}Done!${NC}"
+    ls -lh dist/*.zip 2>/dev/null
+    echo -e "\n${YELLOW}These builds are UNSIGNED. Users need: xattr -cr /Applications/MindOS.app${NC}"
+else
+    echo -e "\n${YELLOW}Building Linux packages...${NC}"
+    electron-builder --linux --publish never
+    echo -e "\n${GREEN}Done!${NC}"
+    ls -lh dist/*.AppImage dist/*.deb 2>/dev/null
+fi

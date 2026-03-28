@@ -1,109 +1,144 @@
 # MindOS Desktop
 
-Electron 桌面客户端
+Electron 桌面客户端，支持 macOS / Windows / Linux。
 
-## 内置 MindOS 运行时（可选）
+## 快速开始
 
-安装包可将已构建的 MindOS 打进 `Resources/mindos-runtime`，离线/无全局 `npm i -g` 时也能启动本地模式。详见 `wiki/specs/spec-desktop-bundled-mindos.md`。
-
-1. 在**仓库根目录**完成 `app/.next`（例如 `npm run build`），并保证 `app/`、`mcp/` 依赖已安装。
-2. `cd desktop && npm run prepare-mindos-runtime`
-3. 再执行 `npm run dist` 或 `./scripts/build-mac.sh` 等。
-
-一键：`npm run dist:with-bundled`（等同 prepare + `electron-builder`）。仅打测试包且未准备运行时，目录里可仅有 `resources/mindos-runtime/README.md`，行为与未内置时一致。
-
-## 打包脚本
-
-项目提供了两个打包脚本，分别用于不同平台：
-
-| 脚本 | 运行环境 | 输出格式 | 签名支持 |
-|------|---------|---------|---------|
-| `build-linux.sh` | Linux 服务器 | `.zip` | ❌ 不支持 |
-| `build-mac.sh` | macOS 本地 | `.dmg` | ✅ 可选 |
-
-### 1. 在 Linux 服务器打包（zip 格式）
-
-Linux 服务器只能打包 `.zip` 格式，无法创建 `.dmg`：
+### 前置条件
 
 ```bash
-cd ~/code/mindos/desktop
-./scripts/build-linux.sh
+# 仓库根目录安装依赖
+cd app && npm install && cd ..
+cd mcp && npm install && cd ..
+cd desktop && npm install
 ```
 
-输出文件：
-- `dist/MindOS-0.1.0-arm64-mac.zip` - Apple Silicon (M1/M2/M3)
-- `dist/MindOS-0.1.0-mac.zip` - Intel Mac
-
-### 2. 在 Mac 本地打包（dmg 格式）
-
-在你的 Mac 电脑上运行，默认**启用签名**：
+### 本地开发
 
 ```bash
-cd ~/code/mindos/desktop
+cd desktop && npm run dev
+```
 
-# 默认：签名构建（需要 Apple Developer ID 证书）
+### 本地打包
+
+macOS（需要在 Mac 上运行）：
+
+```bash
+# 签名 + 公证（需要 Apple Developer ID 证书 + API Key）
 ./scripts/build-mac.sh
 
-# 可选：无签名构建（无需开发者账号）
+# 仅签名，跳过公证
+./scripts/build-mac.sh --no-notarize
+
+# 无签名（无需开发者账号）
 ./scripts/build-mac.sh --no-sign
 ```
 
-输出文件：
-- `dist/MindOS-0.1.0-arm64.dmg` - Apple Silicon (M1/M2/M3)
-- `dist/MindOS-0.1.0-x64.dmg` - Intel Mac
-
-### 3. 启动 HTTP 服务供下载（Linux 服务器）
-
-打完包后，在 Linux 服务器上启动 HTTP 服务：
+其他平台：
 
 ```bash
-cd dist && python3 -m http.server 8080
+npm run dist:win     # Windows
+npm run dist:linux   # Linux
 ```
 
-### 4. 下载（Mac 电脑）
-
-在 Mac 终端执行以下命令下载：
+### 一键打包（含 runtime）
 
 ```bash
-# Apple Silicon (M1/M2/M3)
-curl -L -o ~/Downloads/MindOS-0.1.0-arm64-mac.zip 'http://<服务器IP>:8080/MindOS-0.1.0-arm64-mac.zip'
-
-# Intel Mac
-curl -L -o ~/Downloads/MindOS-0.1.0-mac.zip 'http://<服务器IP>:8080/MindOS-0.1.0-mac.zip'
+npm run dist:with-bundled
 ```
 
-## 安装
+## CI/CD（GitHub Actions）
 
-### 从 zip 安装（Linux 打包的无签名版本）
+三平台并行打包，通过 `build-desktop.yml` workflow 触发。
+
+### 触发方式
+
+GitHub Actions → Build Desktop → Run workflow，有三个选项：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `publish` | false | 是否发布到 GitHub Releases + CDN |
+| `sign_mac` | true | 是否签名 + 公证 macOS 构建 |
+| `tag` | 自动 | Release tag 名称 |
+
+### CI 流程（macOS）
+
+```
+Install deps → Build Next.js (webpack) → Build Electron → Prepare runtime
+  → Package (签名，不公证)
+  → Notarize (xcrun notarytool, 3 次重试)
+  → Staple (xcrun stapler staple)
+  → Upload artifacts
+```
+
+签名和公证分离，公证有 3 次重试 + 30s 间隔，避免 Apple 服务器网络抖动导致整个 build 失败。
+
+`sign_mac=false` 时跳过签名、公证、staple 步骤。
+
+### CI 所需 GitHub Secrets
+
+**签名（必需）：**
+
+| Secret | 说明 |
+|--------|------|
+| `APPLE_CERTIFICATE_BASE64` | .p12 证书的 base64 编码 |
+| `APPLE_CERTIFICATE_PASSWORD` | .p12 导出密码 |
+
+**公证 — API Key 方式（推荐）：**
+
+| Secret | 说明 |
+|--------|------|
+| `APPLE_API_KEY_BASE64` | .p8 API Key 文件的 base64 编码 |
+| `APPLE_API_KEY_ID` | App Store Connect Key ID |
+| `APPLE_API_ISSUER` | App Store Connect Issuer ID |
+
+**公证 — Apple ID 方式（备选）：**
+
+| Secret | 说明 |
+|--------|------|
+| `APPLE_ID` | Apple ID 邮箱 |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App 专用密码 |
+| `APPLE_TEAM_ID` | Team ID |
+
+API Key 和 Apple ID 同时配置时优先使用 API Key。
+
+### 生成 Secrets
 
 ```bash
-cd ~/Downloads
-unzip MindOS-0.1.0-arm64-mac.zip
-sudo mv MindOS.app /Applications/
+# 证书 → base64
+base64 -i cert.p12 | tr -d '\n'
 
-# 解除隔离（因为无签名）
-xattr -cr /Applications/MindOS.app
-
-# 启动
-open /Applications/MindOS.app
+# API Key → base64
+base64 -i AuthKey_XXXXXXXX.p8 | tr -d '\n'
 ```
 
-### 从 dmg 安装（Mac 打包的版本）
+## 内置 MindOS 运行时
 
-双击 `.dmg` 文件，将应用拖到 Applications 文件夹即可。
+安装包将已构建的 MindOS 打进 `Resources/mindos-runtime`，离线时也能启动本地模式。
 
-如果无签名，首次打开需要运行：
 ```bash
-xattr -cr /Applications/MindOS.app
+# 手动准备 runtime
+cd app && npx next build --webpack && cd ..
+cd desktop && npm run prepare-mindos-runtime
 ```
 
-## 签名说明
+或一键：`npm run dist:with-bundled`
 
-由于目前使用 `--sign` 需要 Apple Developer ID（$99/年），无签名打包是更经济的选择。
+## 产物
 
-| 方案 | 成本 | 用户体验 |
-|------|------|---------|
-| 无签名打包 | 免费 | 需运行 `xattr -cr` 解除隔离 |
-| 有签名打包 | $99/年 | 直接双击打开，无警告 |
+| 平台 | 文件 | 说明 |
+|------|------|------|
+| macOS ARM64 | `MindOS-{ver}-arm64.dmg` | Apple Silicon |
+| macOS Intel | `MindOS-{ver}.dmg` | Intel Mac |
+| macOS (更新用) | `MindOS-{ver}-arm64-mac.zip`, `MindOS-{ver}-mac.zip` | electron-updater 自动更新 |
+| Windows | `MindOS-Setup-{ver}.exe` | NSIS 安装程序 |
+| Linux | `MindOS-{ver}.AppImage`, `mindos-desktop_{ver}_amd64.deb` | AppImage + deb |
 
-更多签名设置参见：[Code Sign Setup](https://www.electron.build/code-signing)
+## CDN 分发
+
+CI publish 模式自动上传到：
+- **Cloudflare R2**（国际）：`desktop/latest/MindOS-arm64.dmg` 等（去版本号）
+- **阿里云 OSS**（中国）：同上
+- **GitHub Releases**：原始文件名（带版本号）
+
+Landing 页面下载链接指向 CDN `latest/` 路径，每次发版自动覆盖。
