@@ -897,8 +897,15 @@
 - **解决：** 新增 `bundled-incomplete` 状态；packaged 模式下 bundled runtime 是唯一路径，不再 fallthrough；区分"有源码可构建"（`installed-not-built`）和"结构损坏需重装"（`bundled-incomplete`）
 - **规则：** packaged 模式的运行时检测不应 fallthrough 到 npm 全局安装路径——两者是完全不同的分发模式
 
-### CI: sync-to-mindos.yml 被同步到 public repo 导致 landing subtree 失败
-- **现象：** GeminiLight/MindOS (public repo) 的 "Sync to MindOS" workflow 每次 push 都失败，报 `fatal: 'landing' does not exist; use 'git subtree add'`
-- **根因：** `sync-to-mindos.yml` 在 exclusion 规则（`case` 跳过列表）添加之前已被 rsync 到 public repo。public repo 不含 `landing/` 目录，`git subtree split --prefix landing` 必然失败
-- **解决：** 1) 在 sync workflow 中添加清理步骤，`rm -f` 删除 public repo 中残留的被排除 workflow；2) 为 `landing/` subtree split 和 gh-pages deploy 添加 `[ -d landing ]` 前置检查
-- **规则：** 排除列表只防止「新增」，不能清理「已存在」——需要 `rm -f` 主动清理历史残留
+### 🔴 CI: 私有文件泄露到公开仓库（安全事故）
+- **严重等级：** 🔴 Critical — 私有内容泄露到公开仓库
+- **现象：** GeminiLight/MindOS (public repo) 包含大量不应公开的文件：`marketing/`、`.claude/`、`.claude-internal/`、`BUGS.md`、`TODO.md`、`TASKS.md`、`experience.md`、`knowledge.md`、`note.md`、`user-feedback.md`、`HUMAN-INSIGHTS.md`、`SKILL_BAD_CASES.md`、`my-skills/`、`startup/` 等私有内容
+- **根因：** sync workflow 用 rsync 白名单同步指定目录，但只能防止「新增同步」，无法清理「白名单建立之前已被推到 public repo 的文件」。rsync `--delete` 只在被 rsync 的目录内删除多余文件，不会碰 rsync 范围之外的已有文件。同时 `sync-to-mindos.yml`、`ci.yml` 等 private-only workflow 也因同样原因残留在 public repo
+- **解决：**
+  1. **Clean slate 策略**：clone public repo 后、rsync 之前，`find /tmp/mindos -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +` 清空所有内容（保留 `.git`），确保只有显式 rsync/cp 的内容存在
+  2. 为 `landing/` subtree split 和 gh-pages deploy 添加 `[ -d landing ]` 前置检查
+  3. 显式 `rm -f` 删除 excluded workflow 文件
+- **规则：**
+  - **private → public 同步必须用 clean slate（白名单模式），禁止 blacklist（排除模式）**。排除列表只防增不防存，一旦遗漏就是安全事故
+  - 每次修改 sync workflow 时，必须检查：「如果 public repo 已有不该有的文件，这次 sync 是否会删除它们？」
+  - 定期审计 public repo 内容：`gh api repos/GeminiLight/MindOS/contents/ --jq '.[].name'`
