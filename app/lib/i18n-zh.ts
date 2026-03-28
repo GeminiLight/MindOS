@@ -150,6 +150,9 @@ export const zh = {
     generating: '正在生成回复...',
     stopped: '已停止生成。',
     errorNoResponse: 'AI 未返回响应，请检查 API Key 和服务商设置。',
+    reconnecting: (attempt: number, max: number) => `连接中断，正在重连 (${attempt}/${max})...`,
+    reconnectFailed: '多次重连失败，请检查网络后重试。',
+    retry: '重试',
     suggestions: [
       '总结这篇文档',
       '列出所有待办事项',
@@ -837,6 +840,8 @@ export const zh = {
       thinkingHint: '显示 Claude 的推理过程（消耗更多 token）',
       thinkingBudget: '思考预算',
       thinkingBudgetHint: '推理最大 token 数（1000-50000）',
+      reconnectRetries: '自动重连',
+      reconnectRetriesHint: '连接断开时自动重试次数，重试耗尽后停止（0 = 关闭）',
     },
     appearance: {
       readingFont: '正文字体',

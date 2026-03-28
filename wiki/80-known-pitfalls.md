@@ -867,3 +867,7 @@
   2. `if: secrets.X != ''` 不合法——GitHub Actions 不允许在 `if:` 条件中直接引用 `secrets` context
 - **解决：** 改为 shell 内检查 `if [ -z "$VAR" ]; then exit 0; fi` + `continue-on-error: true`。CDN 上传失败不阻塞 release
 - **规则：** GitHub Actions 中跳过可选步骤，不要用 `if: env.X` 或 `if: secrets.X`，用 shell 内判空 + `continue-on-error`
+
+### Ask AI 自动重连：localStorage 同步时机
+- **现象：** 首次打开 App 时 AskContent 从 localStorage 读取 reconnectRetries，但用户尚未打开过 Settings 页 → localStorage 中无值 → fallback 为默认 3
+- **规则：** localStorage 作为 "热缓存" 供 AskContent 即时读取，Settings 首次加载时同步写入。首次使用默认值 3 是安全的 fallback
