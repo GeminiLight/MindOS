@@ -153,7 +153,7 @@ jobs:
           fi
         shell: bash
 
-      # macOS: notarize all DMG and ZIP files with retry logic
+      # macOS: notarize DMG files with retry logic
       - name: Notarize macOS builds
         if: matrix.platform == 'mac' && inputs.sign_mac == true
         env:
