@@ -92,9 +92,9 @@ async function logOp(tool: string, params: Record<string, unknown>, result: 'ok'
   }
 }
 
-// ─── MCP Server ──────────────────────────────────────────────────────────────
+// ─── Tool Registration ───────────────────────────────────────────────────────
 
-const server = new McpServer({ name: "mindos-mcp-server", version: "1.0.0" });
+function registerTools(server: McpServer) {
 
 // ── mindos_list_files ───────────────────────────────────────────────────────
 
@@ -582,23 +582,29 @@ server.registerTool("mindos_get_file_at_version", {
   } catch (e) { return error(String(e)); }
 });
 
+} // end registerTools
+
+// ─── Server Factory ──────────────────────────────────────────────────────────
+
+function createMcpServer(): McpServer {
+  const server = new McpServer({ name: "mindos-mcp-server", version: "1.0.0" });
+  registerTools(server);
+  return server;
+}
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 async function main() {
   if (MCP_TRANSPORT === "http") {
-    // ── Streamable HTTP mode ──────────────────────────────────────────────
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-    });
+    // ── Streamable HTTP mode (per-session transport) ─────────────────────
+    const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
 
     const expressApp = createMcpExpressApp({ host: MCP_HOST });
 
-    // Health endpoint — allows check-port to detect this is a MindOS MCP instance
     expressApp.get("/api/health", (_req, res) => {
       res.json({ ok: true, service: "mindos" });
     });
 
-    // Auth middleware
     if (AUTH_TOKEN) {
       expressApp.use(MCP_ENDPOINT, (req, res, next) => {
         const bearer = req.headers.authorization?.replace("Bearer ", "");
@@ -611,11 +617,40 @@ async function main() {
     }
 
     expressApp.all(MCP_ENDPOINT, async (req, res) => {
-      // Pass pre-parsed body: express.json() already parsed it, SDK >= 1.7 expects it as 3rd arg
-      await transport.handleRequest(req, res, req.body);
-    });
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-    await server.connect(transport);
+      if (sessionId && sessions.has(sessionId)) {
+        const session = sessions.get(sessionId)!;
+        await session.transport.handleRequest(req, res, req.body);
+        return;
+      }
+
+      if (sessionId && !sessions.has(sessionId)) {
+        res.status(404).json({ jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } });
+        return;
+      }
+
+      // New session: create dedicated transport + server
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+      });
+      const server = createMcpServer();
+
+      transport.onclose = () => {
+        const sid = transport.sessionId;
+        if (sid) sessions.delete(sid);
+        console.error(`[MCP] Session ${sid?.slice(0, 8)} closed (${sessions.size} active)`);
+      };
+
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+
+      const sid = transport.sessionId;
+      if (sid) {
+        sessions.set(sid, { transport, server });
+        console.error(`[MCP] New session ${sid.slice(0, 8)} (${sessions.size} active)`);
+      }
+    });
 
     const httpServer = createServer(expressApp as Parameters<typeof createServer>[1]);
     httpServer.listen(MCP_PORT, MCP_HOST, () => {
@@ -624,9 +659,6 @@ async function main() {
       console.error(`API backend: ${BASE_URL}`);
     });
 
-    // Auto-exit when parent process dies (stdin pipe closes).
-    // Active only when launched by Desktop ProcessManager (stdin is a pipe, not a TTY).
-    // CLI-launched MCP inherits the terminal (isTTY=true) and is unaffected.
     if (!process.stdin.isTTY) {
       process.stdin.resume();
       process.stdin.on('end', () => {
@@ -637,7 +669,8 @@ async function main() {
       process.stdin.on('error', () => {});
     }
   } else {
-    // ── stdio mode (default) ──────────────────────────────────────────────
+    // ── stdio mode ───────────────────────────────────────────────────────
+    const server = createMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`MindOS MCP server started (stdio, API: ${BASE_URL})`);
