@@ -139,6 +139,37 @@ cd / && rm -rf /tmp/mindos-smoke-$$
 改代码 → tests（新功能写上，修 bug 视情况补）→ 更新 wiki
 ```
 
+## 开发服务器
+
+MindOS 开发时使用 `mindos-srv` tmux session 运行，包含两个窗口：
+
+| 窗口 | 服务 | 端口 | 说明 |
+|------|------|------|------|
+| `web` | Next.js dev server | 3456 | **热更新**——改 `.tsx`/`.css` 自动刷新，不需要重启 |
+| `mcp` | MCP stdio server | — | `node bin/cli.js mcp` |
+
+### 启动
+
+```bash
+tmux attach -t mindos-srv       # 如果已存在，直接 attach
+# 或者手动创建：
+tmux new-session -s mindos-srv -n web -c ~/code/sop_note/app
+# web 窗口：npm run dev
+# 新建 mcp 窗口：node bin/cli.js mcp
+```
+
+### 跑测试不杀 dev server
+
+pre-push hook 已配置隔离端口（19456/19781），不影响运行中的 dev server。
+
+```bash
+git push                          # 正常跑测试（隔离端口，不杀 dev server）
+SKIP_TESTS=1 git push             # 跳过测试直接 push
+MINDOS_WEB_PORT=19456 npm test    # 手动跑测试（隔离端口）
+```
+
+**禁止**：直接 `npm test` 不带端口隔离——可能杀掉运行中的 dev server。
+
 ## Git 提交流程
 
 ### Commit 前 Checklist
