@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
 import net from 'net';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -85,6 +85,9 @@ export class ProcessManager extends EventEmitter {
     this.captureStderr(this.webProcess);
     this.setupCrashHandler(this.webProcess, 'web');
 
+    // 3. Write child PIDs to disk for orphan cleanup on next launch
+    this.writeChildPids();
+
     // 3. Wait for health (exits early if web process dies)
     const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 120_000);
     if (!healthy) {
@@ -148,6 +151,7 @@ export class ProcessManager extends EventEmitter {
 
     this.webProcess = null;
     this.mcpProcess = null;
+    this.clearChildPids();
     this.emit('status-change', 'stopped');
   }
 
@@ -493,5 +497,61 @@ export class ProcessManager extends EventEmitter {
 
     proc.on('exit', handler);
     this.crashHandlers.set(proc, handler as (...args: unknown[]) => void);
+  }
+
+  // ── Child PID tracking for orphan cleanup ──
+
+  private static readonly PID_FILE = path.join(
+    process.env.HOME || process.env.USERPROFILE || '/tmp',
+    '.mindos', 'desktop-children.pid',
+  );
+
+  /** Write current child PIDs to disk so next launch can clean up orphans */
+  private writeChildPids(): void {
+    const pids: number[] = [];
+    if (this.webProcess?.pid) pids.push(this.webProcess.pid);
+    if (this.mcpProcess?.pid) pids.push(this.mcpProcess.pid);
+    if (pids.length === 0) return;
+    try {
+      const dir = path.dirname(ProcessManager.PID_FILE);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(ProcessManager.PID_FILE, pids.join('\n'), 'utf-8');
+    } catch { /* best effort */ }
+  }
+
+  /** Remove PID file on clean shutdown */
+  private clearChildPids(): void {
+    try { if (existsSync(ProcessManager.PID_FILE)) unlinkSync(ProcessManager.PID_FILE); } catch { /* best effort */ }
+  }
+
+  /**
+   * Kill orphaned child processes from a previous Desktop session that didn't shut down cleanly.
+   * Call once at app startup before creating a new ProcessManager.
+   */
+  static cleanupOrphanedChildren(): void {
+    try {
+      if (!existsSync(ProcessManager.PID_FILE)) return;
+      const raw = readFileSync(ProcessManager.PID_FILE, 'utf-8').trim();
+      if (!raw) return;
+      const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
+      for (const pid of pids) {
+        try {
+          process.kill(pid, 0); // check alive
+          // Verify it's a node process (avoid killing unrelated PID reuse)
+          if (process.platform !== 'win32') {
+            try {
+              const { execSync } = require('child_process');
+              const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
+              if (!comm.includes('node') && !comm.includes('next')) {
+                continue; // PID reused by non-node process, skip
+              }
+            } catch { continue; } // ps failed, skip to be safe
+          }
+          console.warn(`[MindOS] Killing orphaned child process (PID ${pid})`);
+          process.kill(pid, 'SIGTERM');
+        } catch { /* already dead */ }
+      }
+      unlinkSync(ProcessManager.PID_FILE);
+    } catch { /* non-critical */ }
   }
 }
