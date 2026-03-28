@@ -103,12 +103,12 @@ jobs:
           for wf in .github/workflows/*.yml; do
             wf_name=$(basename "$wf")
             case "$wf_name" in
-              sync-to-mindos.yml|ci.yml|publish-npm.yml) continue ;;
+              sync-to-mindos.yml|ci.yml) continue ;;
             esac
             cp "$wf" /tmp/mindos/.github/workflows/
           done
           # Remove excluded workflows that may have been synced before exclusions existed
-          for excluded_wf in sync-to-mindos.yml ci.yml publish-npm.yml; do
+          for excluded_wf in sync-to-mindos.yml ci.yml; do
             rm -f /tmp/mindos/.github/workflows/$excluded_wf
           done
           # wiki/0*.md、wiki/specs、wiki/discussions — dev-only; not copied to GeminiLight/mindos
