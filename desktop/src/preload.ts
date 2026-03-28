@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('mindos', {
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
 
+  // Uninstall (Desktop self-deletion)
+  uninstallApp: () => ipcRenderer.invoke('uninstall-app'),
+
   // Event listeners (return cleanup function)
   onUpdateAvailable: (cb: (info: unknown) => void): CleanupFn => onChannel('update-available', cb),
   onUpdateProgress: (cb: (progress: unknown) => void): CleanupFn => onChannel('update-progress', cb),

@@ -7,23 +7,77 @@ import { useLocale } from '@/lib/LocaleContext';
 
 type Phase = 'idle' | 'confirming' | 'running' | 'success' | 'error';
 
+interface DesktopBridge {
+  uninstallApp?: () => Promise<{ ok: boolean; error?: string }>;
+}
+
+function getDesktopBridge(): DesktopBridge | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { mindos?: DesktopBridge };
+  return w.mindos?.uninstallApp ? (w.mindos as DesktopBridge) : null;
+}
+
 export function UninstallTab() {
   const { t } = useLocale();
   const u = t.settings.uninstall;
+  const isDesktop = !!getDesktopBridge();
+
   const [phase, setPhase] = useState<Phase>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Checkboxes — "stop services" is always on (not toggleable)
+  // CLI mode: stop + config + npm uninstall (npm always runs as part of CLI uninstall)
+  // Desktop mode: stop + config + move app to Trash
+  const [removeConfig, setRemoveConfig] = useState(true);
+  const [removeApp, setRemoveApp] = useState(true); // Desktop only
 
   const handleUninstall = async () => {
     setPhase('running');
     setErrorMsg('');
     try {
-      await apiFetch('/api/uninstall', { method: 'POST' });
+      // Step 1: Server-side cleanup (stop services, daemon, config, npm)
+      await apiFetch('/api/uninstall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeConfig }),
+      });
+
+      // Step 2: Desktop self-deletion (if selected)
+      if (isDesktop && removeApp) {
+        const bridge = getDesktopBridge();
+        if (bridge?.uninstallApp) {
+          const result = await bridge.uninstallApp();
+          if (!result.ok) throw new Error(result.error || 'Failed to remove app');
+          // Desktop will quit after this — show success briefly
+          setPhase('success');
+          return;
+        }
+      }
+
       setPhase('success');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
       setPhase('error');
     }
   };
+
+  const Checkbox = ({ checked, onChange, label, desc, disabled }: {
+    checked: boolean; onChange: (v: boolean) => void; label: string; desc: string; disabled?: boolean;
+  }) => (
+    <label className={`flex items-start gap-2.5 p-2.5 rounded bg-muted/30 cursor-pointer select-none ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50'}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => !disabled && onChange(e.target.checked)}
+        disabled={disabled}
+        className="mt-0.5 accent-[var(--amber)] focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      <div>
+        <p className="text-xs font-medium text-foreground">{label}</p>
+        <p className="text-[11px] text-muted-foreground">{desc}</p>
+      </div>
+    </label>
+  );
 
   return (
     <div className="space-y-5">
@@ -33,13 +87,9 @@ export function UninstallTab() {
           <Trash2 size={14} className="text-muted-foreground" />
           {u.title}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1">{u.desc}</p>
-      </div>
-
-      {/* Warning banner */}
-      <div className="flex gap-2.5 p-3 rounded-md bg-error/5 border border-error/20">
-        <AlertTriangle size={14} className="text-error shrink-0 mt-0.5" />
-        <p className="text-xs text-foreground/80 leading-relaxed">{u.warning}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {isDesktop ? u.descDesktop : u.descCli}
+        </p>
       </div>
 
       {/* Knowledge base safety note */}
@@ -48,36 +98,25 @@ export function UninstallTab() {
         <p className="text-xs text-muted-foreground leading-relaxed">{u.kbSafe}</p>
       </div>
 
-      {/* What will be removed */}
-      <div className="space-y-2">
-        <div className="flex items-start gap-2.5 p-2.5 rounded bg-muted/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-          <div>
-            <p className="text-xs font-medium text-foreground">{u.stopServices}</p>
-            <p className="text-[11px] text-muted-foreground">{u.stopServicesDesc}</p>
-          </div>
+      {/* Checklist */}
+      {phase === 'idle' || phase === 'confirming' ? (
+        <div className="space-y-2">
+          <Checkbox checked disabled label={u.stopServices} desc={u.stopServicesDesc} onChange={() => {}} />
+          <Checkbox checked={removeConfig} onChange={setRemoveConfig} label={u.removeConfig} desc={u.removeConfigDesc} />
+          {!isDesktop && (
+            <Checkbox checked disabled label={u.removeNpm} desc={u.removeNpmDesc} onChange={() => {}} />
+          )}
+          {isDesktop && (
+            <Checkbox checked={removeApp} onChange={setRemoveApp} label={u.removeApp} desc={u.removeAppDesc} />
+          )}
         </div>
-        <div className="flex items-start gap-2.5 p-2.5 rounded bg-muted/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-          <div>
-            <p className="text-xs font-medium text-foreground">{u.removeConfig}</p>
-            <p className="text-[11px] text-muted-foreground">{u.removeConfigDesc}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-2.5 p-2.5 rounded bg-muted/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-          <div>
-            <p className="text-xs font-medium text-foreground">{u.removeNpm}</p>
-            <p className="text-[11px] text-muted-foreground">{u.removeNpmDesc}</p>
-          </div>
-        </div>
-      </div>
+      ) : null}
 
       {/* Action area */}
       {phase === 'idle' && (
         <button
           onClick={() => setPhase('confirming')}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Trash2 size={12} className="inline mr-1.5 -mt-px" />
           {u.confirmButton}
@@ -87,7 +126,6 @@ export function UninstallTab() {
       {phase === 'confirming' && (
         <div className="p-3 rounded-md border border-error/30 bg-error/5 space-y-2.5">
           <p className="text-xs font-medium text-error">{u.confirmTitle}</p>
-          <p className="text-xs text-foreground/70">{u.confirmMessage}</p>
           <div className="flex gap-2">
             <button
               onClick={handleUninstall}
@@ -115,7 +153,9 @@ export function UninstallTab() {
       {phase === 'success' && (
         <div className="flex items-center gap-2 py-2">
           <CheckCircle2 size={14} className="text-success" />
-          <span className="text-xs text-success font-medium">{u.success}</span>
+          <span className="text-xs text-success font-medium">
+            {isDesktop && removeApp ? u.successDesktop : u.success}
+          </span>
         </div>
       )}
 
