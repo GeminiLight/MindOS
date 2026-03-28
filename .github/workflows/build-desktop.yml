@@ -256,7 +256,7 @@ jobs:
 
       # ── Cloudflare R2 upload (international CDN) ──
       - name: Upload to Cloudflare R2
-        if: env.R2_ACCESS_KEY_ID != ''
+        if: ${{ secrets.R2_ACCESS_KEY_ID != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -285,7 +285,7 @@ jobs:
 
       # ── Alibaba Cloud OSS upload (China CDN) ──
       - name: Upload to Alibaba Cloud OSS
-        if: env.OSS_ACCESS_KEY_ID != ''
+        if: ${{ secrets.OSS_ACCESS_KEY_ID != '' }}
         env:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
