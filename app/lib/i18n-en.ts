@@ -78,6 +78,7 @@ export const en = {
     expandTitle: 'Expand sidebar',
     collapseLevel: 'Collapse one level',
     expandLevel: 'Expand one level',
+    importFile: 'Import file',
     sync: {
       synced: 'Synced',
       unpushed: 'awaiting push',
