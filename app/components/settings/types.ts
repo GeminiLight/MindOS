@@ -20,6 +20,7 @@ export interface AgentSettings {
   enableThinking?: boolean;
   thinkingBudget?: number;
   contextStrategy?: 'auto' | 'off';
+  reconnectRetries?: number;
 }
 
 export interface SettingsData {
