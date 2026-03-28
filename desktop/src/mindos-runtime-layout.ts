@@ -9,6 +9,21 @@ export interface MindOsLayoutAnalysis {
   runnable: boolean;
 }
 
+/**
+ * Check if a .next directory contains a valid production build.
+ * Next.js writes BUILD_ID during `next build`; standalone mode writes server.js.
+ * If neither exists, the directory is incomplete / leftover from a failed build.
+ */
+export function isNextBuildValid(appDir: string): boolean {
+  const nextDir = path.join(appDir, '.next');
+  if (!existsSync(nextDir)) return false;
+  // standalone server.js is the preferred path
+  if (existsSync(path.join(nextDir, 'standalone', 'server.js'))) return true;
+  // Regular build: BUILD_ID is written at the end of `next build`
+  if (existsSync(path.join(nextDir, 'BUILD_ID'))) return true;
+  return false;
+}
+
 export function analyzeMindOsLayout(root: string): MindOsLayoutAnalysis {
   let version: string | null = null;
   try {
@@ -19,9 +34,9 @@ export function analyzeMindOsLayout(root: string): MindOsLayoutAnalysis {
     version = null;
   }
 
-  const nextDir = path.join(root, 'app', '.next');
+  const appDir = path.join(root, 'app');
   const mcpDir = path.join(root, 'mcp');
-  const runnable = existsSync(nextDir) && existsSync(mcpDir);
+  const runnable = isNextBuildValid(appDir) && existsSync(mcpDir);
 
   return { version, runnable };
 }

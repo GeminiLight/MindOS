@@ -40,6 +40,13 @@
 - **解决：** `electron-builder` `asarUnpack` 列出 `src/connect.html`、`src/splash.html`、`dist-electron/renderer/connect-renderer.js`、`dist-electron/preload/**`；运行时 `resolvePreferUnpacked()` 优先使用 `app.asar.unpacked` 下同路径；**connect / 模式选择页**用特权 scheme `mindos-connect://bundle/...` + `protocol.handle` + `net.fetch` 提供内容（避免 `file://` 仍 `ERR_FAILED`）；对应窗口 `webPreferences.sandbox: false`
 
 ### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
+
+### `.next` 目录存在但构建不完整 → Web 连续崩溃 3 次
+- **现象：** Desktop 启动报 "Could not find a production build in the '.next' directory"，Web 进程连崩 3 次后显示 "MindOS Service Crashed"
+- **原因：** `analyzeMindOsLayout()` 和 `main.ts` 的 build 检查仅用 `existsSync('.next')` 判断是否需要构建。但 `.next` 目录可能因中断的构建、空目录或 npm 包残留而存在却不含有效产物（无 `BUILD_ID`、无 `standalone/server.js`）。`next start` 会因找不到 build ID 直接退出
+- **解决：** 新增 `isNextBuildValid()` 检查 `.next/BUILD_ID` 或 `.next/standalone/server.js` 是否存在；`analyzeMindOsLayout` 和 `main.ts` 的 build 门控均改为调用 `isNextBuildValid()` 而非裸 `existsSync('.next')`；不完整构建会触发自动重建流程
+
+### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
 - **现象：** Desktop 本地模式或 `mindos` CLI 起 MCP 时：`@esbuild/linux-x64` present but this platform needs `@esbuild/darwin-arm64`（或 win/linux 交叉）
 - **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
 - **解决：** `prepare` 在 `mcp/` 写入 `.mindos-npm-ci-platform`（如 `linux-x64`）；`ProcessManager.start()` 调用 `ensureBundledMcpNodeModules()`：与 `process.platform-arch` 不一致（或启发式发现错误 `@esbuild/*`）时删掉 `mcp/node_modules` 并在本机再跑 `npm ci --omit=dev`（用 Desktop 自带的 Node）；根本方案也可改为在目标 OS 上执行 `prepare-mindos-runtime`

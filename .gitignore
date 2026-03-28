@@ -64,4 +64,6 @@ docker-compose.override.yml
 /.env
 
 # Shared SDK build
-shared/dist/
+shared/dist/image copy 2.png
+image copy.png
+image.png
