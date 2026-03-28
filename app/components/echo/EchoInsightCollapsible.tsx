@@ -138,7 +138,7 @@ export function EchoInsightCollapsible({
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
-        <div className="overflow-hidden">
+        <div className="overflow-hidden" {...(!open && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
           <div className="border-t border-border/60 px-5 pb-5 pt-4">
             <p className="font-sans text-sm leading-relaxed text-muted-foreground">{hint}</p>
             <div className="mt-4 flex flex-wrap items-center gap-2">

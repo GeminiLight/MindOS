@@ -261,7 +261,7 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="alertdialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onCancel} aria-hidden="true" />
+      <div className="absolute inset-0 overlay-backdrop" onClick={onCancel} aria-hidden="true" />
       <div className="relative bg-card border border-border rounded-lg shadow-xl p-5 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
         <h3 className="text-sm font-medium text-foreground mb-1.5">{title}</h3>
         <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{message}</p>

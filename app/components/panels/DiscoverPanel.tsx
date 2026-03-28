@@ -154,31 +154,35 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
             </span>
             <span className="text-2xs text-muted-foreground tabular-nums">{enabledCount}/{renderers.length}</span>
           </button>
-          {showPlugins && renderers.map(r => {
-            const enabled = isRendererEnabled(r.id);
-            const fileExists = r.entryPath ? existingFiles.has(r.entryPath) : false;
-            const canOpen = enabled && r.entryPath && fileExists;
-            return (
-              <div
-                key={r.id}
-                className={`flex items-center gap-2 px-4 py-1.5 mx-1 rounded-sm transition-colors ${canOpen ? 'cursor-pointer hover:bg-muted/50' : ''} ${!enabled ? 'opacity-50' : ''}`}
-                onClick={canOpen ? () => handleOpenPlugin(r.entryPath!) : undefined}
-                role={canOpen ? 'link' : undefined}
-                tabIndex={canOpen ? 0 : undefined}
-                onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenPlugin(r.entryPath!); } } : undefined}
-              >
-                <span className="text-sm shrink-0" suppressHydrationWarning>{r.icon}</span>
-                <span className="text-xs text-foreground truncate flex-1">{r.name}</span>
-                {r.core ? (
-                  <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
-                ) : (
-                  <div onClick={e => e.stopPropagation()}>
-                    <Toggle checked={enabled} onChange={v => handleToggle(r.id, v)} size="sm" />
+          <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${showPlugins ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+            <div className="overflow-hidden" {...(!showPlugins && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
+              {renderers.map(r => {
+                const enabled = isRendererEnabled(r.id);
+                const fileExists = r.entryPath ? existingFiles.has(r.entryPath) : false;
+                const canOpen = enabled && r.entryPath && fileExists;
+                return (
+                  <div
+                    key={r.id}
+                    className={`flex items-center gap-2 px-4 py-1.5 mx-1 rounded-sm transition-colors ${canOpen ? 'cursor-pointer hover:bg-muted/50' : ''} ${!enabled ? 'opacity-50' : ''}`}
+                    onClick={canOpen ? () => handleOpenPlugin(r.entryPath!) : undefined}
+                    role={canOpen ? 'link' : undefined}
+                    tabIndex={canOpen ? 0 : undefined}
+                    onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenPlugin(r.entryPath!); } } : undefined}
+                  >
+                    <span className="text-sm shrink-0" suppressHydrationWarning>{r.icon}</span>
+                    <span className="text-xs text-foreground truncate flex-1">{r.name}</span>
+                    {r.core ? (
+                      <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
+                    ) : (
+                      <div onClick={e => e.stopPropagation()}>
+                        <Toggle checked={enabled} onChange={v => handleToggle(r.id, v)} size="sm" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="mx-4 border-t border-border" />
