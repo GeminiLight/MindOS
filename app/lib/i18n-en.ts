@@ -125,6 +125,9 @@ export const en = {
     generating: 'Generating response...',
     stopped: 'Generation stopped.',
     errorNoResponse: 'No response from AI. Please check your API key and provider settings.',
+    reconnecting: (attempt: number, max: number) => `Connection lost. Reconnecting (${attempt}/${max})...`,
+    reconnectFailed: 'Connection failed after multiple attempts.',
+    retry: 'Retry',
     suggestions: [
       'Summarize this document',
       'List all action items and TODOs',
@@ -813,6 +816,8 @@ export const en = {
       thinkingHint: "Show Claude's reasoning process (uses more tokens)",
       thinkingBudget: 'Thinking Budget',
       thinkingBudgetHint: 'Max tokens for reasoning (1000-50000)',
+      reconnectRetries: 'Auto Reconnect',
+      reconnectRetriesHint: 'When connection drops, automatically retry this many times before giving up (0 = disabled)',
     },
     appearance: {
       readingFont: 'Reading font',

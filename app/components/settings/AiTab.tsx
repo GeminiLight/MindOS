@@ -48,6 +48,12 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   // Cleanup ok timer
   useEffect(() => () => { if (okTimerRef.current) clearTimeout(okTimerRef.current); }, []);
 
+  // Sync reconnectRetries to localStorage so AskContent can read it without fetching settings
+  useEffect(() => {
+    const v = data.agent?.reconnectRetries ?? 3;
+    try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch {}
+  }, [data.agent?.reconnectRetries]);
+
   const handleTestKey = useCallback(async (providerName: 'anthropic' | 'openai') => {
     const prov = data.ai.providers?.[providerName] ?? {} as ProviderConfig;
     setTestResult(prev => ({ ...prev, [providerName]: { state: 'testing' } }));
@@ -246,6 +252,24 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
             >
               <option value="auto">{t.settings.agent.contextStrategyAuto}</option>
               <option value="off">{t.settings.agent.contextStrategyOff}</option>
+            </Select>
+          </Field>
+
+          <Field label={t.settings.agent.reconnectRetries} hint={t.settings.agent.reconnectRetriesHint}>
+            <Select
+              value={String(data.agent?.reconnectRetries ?? 3)}
+              onChange={e => {
+                const v = Number(e.target.value);
+                updateAgent({ reconnectRetries: v });
+                try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch {}
+              }}
+            >
+              <option value="0">Off</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
             </Select>
           </Field>
 
