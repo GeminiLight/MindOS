@@ -74,6 +74,13 @@ function killTree(pid) {
  *   read from the current config file.
  */
 export function stopMindos(opts = {}) {
+  // In test environment, skip all real process killing to avoid
+  // destroying dev servers or other unrelated processes.
+  if (process.env.NODE_ENV === 'test') {
+    console.log('(test mode: skipping real process stop)');
+    return;
+  }
+
   // Read ports from config for port-based cleanup
   let webPort = '3456', mcpPort = '8781';
   try {
@@ -110,8 +117,11 @@ export function stopMindos(opts = {}) {
 
   if (!pids.length && portKilled === 0) {
     // Last resort: pattern match (for envs without lsof)
-    try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
-    try { execSync('pkill -f "mcp/(src/index|dist/index)" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+    // Skip in test environment to avoid killing unrelated dev servers
+    if (process.env.NODE_ENV !== 'test') {
+      try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+      try { execSync('pkill -f "mcp/(src/index|dist/index)" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+    }
   }
 
   if (!pids.length) console.log(green('\u2714 Done'));
