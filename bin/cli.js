@@ -40,7 +40,7 @@
 
 import { execSync, spawn as nodeSpawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, cpSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 import { ROOT, CONFIG_PATH, BUILD_STAMP, LOG_PATH, MINDOS_DIR } from './lib/constants.js';
