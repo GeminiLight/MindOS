@@ -254,14 +254,17 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      # ── Cloudflare R2 upload (international CDN) ──
+      # ── Cloudflare R2 upload (optional, skipped if secrets not configured) ──
       - name: Upload to Cloudflare R2
-        if: ${{ secrets.R2_ACCESS_KEY_ID != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "R2 not configured, skipping"
+            exit 0
+          fi
           VERSION="${{ steps.version.outputs.version }}"
           # Strip version from filename for CDN latest/ path so landing page URLs stay fixed.
           # e.g. "MindOS-0.1.0-arm64.dmg" → "MindOS-arm64.dmg"
@@ -283,15 +286,18 @@ jobs:
           done
           echo "✅ Uploaded to Cloudflare R2: desktop/v${VERSION}/ + desktop/latest/"
 
-      # ── Alibaba Cloud OSS upload (China CDN) ──
+      # ── Alibaba Cloud OSS upload (optional, skipped if secrets not configured) ──
       - name: Upload to Alibaba Cloud OSS
-        if: ${{ secrets.OSS_ACCESS_KEY_ID != '' }}
         env:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
         run: |
+          if [ -z "$OSS_ACCESS_KEY_ID" ]; then
+            echo "OSS not configured, skipping"
+            exit 0
+          fi
           # Install ossutil
           curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash
           ossutil config -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
