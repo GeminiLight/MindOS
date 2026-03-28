@@ -453,7 +453,7 @@ async function startLocalMode(): Promise<string | null> {
   processManager.on('crash', (which: string, count: number) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
-      updateTrayMenu(currentMode, 'running', undefined, webPort, mcpPort);
+      updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, processManager?.mcpPort);
     }
     // During startup, crashes are handled by start()'s throw → splash error.
     // Only show crash dialog for post-startup failures.
@@ -483,12 +483,13 @@ async function startLocalMode(): Promise<string | null> {
         // Poll for server recovery
         activeRecoveryPoll = setInterval(async () => {
           try {
-            const res = await fetch(`http://127.0.0.1:${webPort}/api/health`, { signal: AbortSignal.timeout(3000) });
+            const effectiveWebPort = processManager?.webPort ?? webPort;
+            const res = await fetch(`http://127.0.0.1:${effectiveWebPort}/api/health`, { signal: AbortSignal.timeout(3000) });
             if (res.ok) {
               clearInterval(activeRecoveryPoll!);
               activeRecoveryPoll = null;
               mainWindow?.loadURL(
-                resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${webPort}`),
+                resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${effectiveWebPort}`),
               );
               refreshTray('running');
             }
