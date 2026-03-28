@@ -76,7 +76,7 @@ function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel }: {
       </div>
       <div className="space-y-1">
         {lines.map((line, i) => (
-          <p key={i} className="text-sm text-muted-foreground/80 leading-relaxed">
+          <p key={i} className="text-sm text-muted-foreground/80 leading-relaxed" suppressHydrationWarning>
             · {line}
           </p>
         ))}
