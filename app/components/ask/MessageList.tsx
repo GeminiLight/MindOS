@@ -1,14 +1,35 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '@/lib/types';
+import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
 
+const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
+
+function UserMessageContent({ content, skillName }: { content: string; skillName?: string }) {
+  const resolved = skillName ?? content.match(SKILL_PREFIX_RE)?.[1];
+  if (!resolved) return <>{content}</>;
+  const prefixMatch = content.match(SKILL_PREFIX_RE);
+  const rest = prefixMatch ? content.slice(prefixMatch[0].length) : content;
+  return (
+    <>
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber-foreground)]/15 text-[var(--amber-foreground)]/90 mr-1 align-middle">
+        <Zap size={10} className="shrink-0" />
+        {resolved}
+      </span>
+      {rest}
+    </>
+  );
+}
+
 function AssistantMessage({ content, isStreaming }: { content: string; isStreaming: boolean }) {
+  const cleaned = stripThinkingTags(content);
+  if (!cleaned && !isStreaming) return null;
   return (
     <div className="prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground
       prose-p:my-1 prose-p:leading-relaxed
@@ -22,7 +43,7 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
       prose-strong:text-foreground prose-strong:font-semibold
       prose-table:text-xs prose-th:py-1 prose-td:py-1
     ">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>
       {isStreaming && (
         <span className="inline-block w-1.5 h-3.5 bg-amber-400 ml-0.5 align-middle animate-pulse rounded-sm" />
       )}
@@ -147,7 +168,7 @@ export default function MessageList({
             <div
               className="max-w-[85%] px-3 py-2 rounded-xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)]"
             >
-              {m.content}
+              <UserMessageContent content={m.content} skillName={m.skillName} />
             </div>
           ) : m.content.startsWith('__error__') ? (
             <div className="max-w-[85%] px-3 py-2.5 rounded-xl rounded-bl-sm border border-error/20 bg-error/8 text-sm">
@@ -158,7 +179,7 @@ export default function MessageList({
             </div>
           ) : (
             <div className="max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm bg-muted text-foreground text-sm">
-              {(m.parts && m.parts.length > 0) || m.content ? (
+              {(m.parts && m.parts.length > 0) || stripThinkingTags(m.content) ? (
                 <>
                   <AssistantMessageWithParts message={m} isStreaming={isLoading && i === messages.length - 1} />
                   {isLoading && i === messages.length - 1 && (

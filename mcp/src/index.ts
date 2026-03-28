@@ -623,6 +623,19 @@ async function main() {
       console.error(`MindOS MCP server (HTTP) listening on http://${displayHost}:${MCP_PORT}${MCP_ENDPOINT}`);
       console.error(`API backend: ${BASE_URL}`);
     });
+
+    // Auto-exit when parent process dies (stdin pipe closes).
+    // Active only when launched by Desktop ProcessManager (stdin is a pipe, not a TTY).
+    // CLI-launched MCP inherits the terminal (isTTY=true) and is unaffected.
+    if (!process.stdin.isTTY) {
+      process.stdin.resume();
+      process.stdin.on('end', () => {
+        console.error('[MindOS MCP] Parent process exited (stdin closed), shutting down');
+        httpServer.close();
+        setTimeout(() => process.exit(0), 1000);
+      });
+      process.stdin.on('error', () => {});
+    }
   } else {
     // ── stdio mode (default) ──────────────────────────────────────────────
     const transport = new StdioServerTransport();

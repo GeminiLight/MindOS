@@ -483,7 +483,7 @@ function BySkillView({
                               ? 'bg-muted text-muted-foreground'
                               : skill.source === 'builtin'
                                 ? 'bg-muted text-muted-foreground'
-                                : 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                                : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
                           }`}>
                             {skill.kind === 'native' ? copy.sourceNative : skill.source === 'builtin' ? copy.sourceBuiltin : copy.sourceUser}
                           </span>
@@ -697,7 +697,7 @@ function AgentCard({
             {skillMode && (
               <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${
                 skillMode === 'universal' ? 'bg-success/10 text-success'
-                  : skillMode === 'additional' ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                  : skillMode === 'additional' ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
                     : 'bg-muted text-muted-foreground'
               }`}>
                 {skillMode}

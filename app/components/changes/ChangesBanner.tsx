@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { History, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
@@ -14,6 +14,8 @@ interface ChangeSummaryPayload {
 export default function ChangesBanner() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [dismissedAtCount, setDismissedAtCount] = useState<number | null>(null);
+  const [autoDismissed, setAutoDismissed] = useState(false);
+  const prevUnreadRef = useRef(0);
   const [isRendered, setIsRendered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const pathname = usePathname();
@@ -37,12 +39,28 @@ export default function ChangesBanner() {
     };
   }, []);
 
+  // Re-show banner when new changes arrive after auto-dismiss
+  useEffect(() => {
+    if (unreadCount > prevUnreadRef.current && autoDismissed) {
+      setAutoDismissed(false);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount, autoDismissed]);
+
   const shouldShow = useMemo(() => {
     if (unreadCount <= 0) return false;
     if (pathname?.startsWith('/changes')) return false;
     if (dismissedAtCount !== null && unreadCount <= dismissedAtCount) return false;
+    if (autoDismissed) return false;
     return true;
-  }, [dismissedAtCount, pathname, unreadCount]);
+  }, [dismissedAtCount, pathname, unreadCount, autoDismissed]);
+
+  // Auto-dismiss after 10 seconds
+  useEffect(() => {
+    if (!shouldShow) return;
+    const timer = setTimeout(() => setAutoDismissed(true), 10_000);
+    return () => clearTimeout(timer);
+  }, [shouldShow]);
 
   useEffect(() => {
     const durationMs = 160;

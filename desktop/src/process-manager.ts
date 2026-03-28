@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
 import net from 'net';
-import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync } from 'fs';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -220,7 +220,7 @@ export class ProcessManager extends EventEmitter {
     const proc = spawn(this.opts.nodePath, [mcpBundle], {
       cwd: mcpDir,
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     return proc;
   }
@@ -251,31 +251,41 @@ export class ProcessManager extends EventEmitter {
      * @see wiki/80-known-pitfalls.md — "Next 生产进程绑定机器 hostname" */
     env.HOSTNAME = '127.0.0.1';
 
+    const watchdog = ProcessManager.ensureStdinWatchdog();
+    const useWatchdog = watchdog && existsSync(watchdog);
+
     // Check for standalone server.js first (much faster startup)
     const standaloneServer = path.join(appDir, '.next', 'standalone', 'server.js');
     if (existsSync(standaloneServer)) {
-      return spawn(this.opts.nodePath, [standaloneServer], {
+      const args = useWatchdog
+        ? ['--require', watchdog, standaloneServer]
+        : [standaloneServer];
+      return spawn(this.opts.nodePath, args, {
         cwd: appDir,
         env: { ...env, PORT: String(webPort) },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
     }
 
     // Use local next from app/node_modules/.bin — don't rely on npx
     const localNext = path.join(appDir, 'node_modules', '.bin', 'next');
+    const injectNodeOpts = (base: string) => {
+      if (!useWatchdog) return base;
+      return base ? `--require ${watchdog} ${base}` : `--require ${watchdog}`;
+    };
     if (existsSync(localNext)) {
       return spawn(localNext, ['start', '-p', String(webPort)], {
         cwd: appDir,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...env, NODE_OPTIONS: injectNodeOpts(env.NODE_OPTIONS || '') },
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
     }
 
     // Last resort: npx next start
     return spawn(this.opts.npxPath, ['next', 'start', '-p', String(webPort)], {
       cwd: appDir,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...env, NODE_OPTIONS: injectNodeOpts(env.NODE_OPTIONS || '') },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
   }
 
@@ -331,6 +341,8 @@ export class ProcessManager extends EventEmitter {
         this.webProcessDied = true;
       }
     });
+    // Prevent EPIPE crash when child exits while stdin pipe is still open
+    proc.stdin?.on('error', () => {});
   }
 
   /** Capture web process stderr for diagnostic output on startup failure */
@@ -502,7 +514,40 @@ export class ProcessManager extends EventEmitter {
     this.crashHandlers.set(proc, handler as (...args: unknown[]) => void);
   }
 
-  // ── Child PID tracking for orphan cleanup ──
+  // ── Stdin pipe watchdog (primary orphan-exit mechanism) ──
+
+  private static readonly WATCHDOG_CONTENT = [
+    '// MindOS Desktop — auto-exit when parent process dies (stdin pipe closes)',
+    '// VS Code uses this same pattern for child process lifecycle management.',
+    'if (!process.env._MINDOS_WATCHDOG) {',
+    '  process.env._MINDOS_WATCHDOG = "1";',
+    '  process.stdin.resume();',
+    '  process.stdin.on("end", function () {',
+    '    setTimeout(function () { process.exit(0); }, 500);',
+    '  });',
+    '  process.stdin.on("error", function () {});',
+    '}',
+    '',
+  ].join('\n');
+
+  /**
+   * Write ~/.mindos/stdin-watchdog.cjs (idempotent).
+   * Used by spawnWeb() via `node --require <watchdog> server.js`.
+   * MCP server has built-in monitoring so it doesn't need this file.
+   */
+  static ensureStdinWatchdog(): string | null {
+    const dir = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.mindos');
+    const filePath = path.join(dir, 'stdin-watchdog.cjs');
+    try {
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(filePath, ProcessManager.WATCHDOG_CONTENT, 'utf-8');
+      return filePath;
+    } catch {
+      return null; // PID-based cleanup remains as fallback
+    }
+  }
+
+  // ── Child PID tracking (secondary safety net for orphan cleanup) ──
 
   private static readonly PID_FILE = path.join(
     process.env.HOME || process.env.USERPROFILE || '/tmp',

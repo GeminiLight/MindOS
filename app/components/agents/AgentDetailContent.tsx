@@ -192,14 +192,35 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   }, [a.detail.mcpServerHint]);
 
   if (!agent) {
+    const connectedAgents = mcp.agents
+      .filter((ag) => ag.key !== agentKey && ag.status === 'connected')
+      .slice(0, 3);
+
     return (
       <div className="content-width px-4 md:px-6 py-8 md:py-10">
         <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft size={14} />
           {a.backToOverview}
         </Link>
-        <div className="rounded-lg border border-border bg-card p-6">
-          <p className="text-sm text-foreground">{a.detailNotFound}</p>
+        <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+          <p className="text-sm text-foreground font-medium">{a.detailNotFound}</p>
+          <p className="text-xs text-muted-foreground">{a.detailNotFoundHint}</p>
+          {connectedAgents.length > 0 && (
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-2">{a.detailNotFoundSuggestion}</p>
+              <div className="flex flex-wrap gap-2">
+                {connectedAgents.map((ag) => (
+                  <Link
+                    key={ag.key}
+                    href={`/agents/${encodeURIComponent(ag.key)}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors"
+                  >
+                    {ag.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -223,7 +244,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground/60">
               <span className={`font-medium px-1.5 py-px rounded-full ${
                 status === 'connected' ? 'bg-success/10 text-success'
-                  : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber)]'
+                  : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
                     : 'bg-muted text-muted-foreground'
               }`}>{status}</span>
               <span className="font-mono">{agent.transport ?? agent.preferredTransport}</span>
@@ -395,7 +416,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
                       >
                         {skill.name}
                       </button>
-                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-dim)] text-[var(--amber)]'}`}>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${skill.source === 'builtin' ? 'bg-muted text-muted-foreground' : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'}`}>
                         {skill.source === 'builtin' ? a.detail.skillsSourceBuiltin : a.detail.skillsSourceUser}
                       </span>
 

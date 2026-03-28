@@ -30,7 +30,7 @@ export default function UseCaseCard({ icon, title, description, prompt, tryItLab
       </div>
       <button
         onClick={() => openAskModal(prompt, 'user')}
-        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:opacity-80 cursor-pointer bg-[var(--amber-dim)] text-[var(--amber)]"
+        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:opacity-80 cursor-pointer bg-[var(--amber-dim)] text-[var(--amber-text)]"
       >
         {tryItLabel} →
       </button>

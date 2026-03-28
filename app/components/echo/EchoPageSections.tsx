@@ -43,7 +43,7 @@ export function EchoFactSnapshot({
             <p className="mt-2 font-sans font-medium text-foreground">{emptyTitle}</p>
           </div>
         </div>
-        <span className="font-sans text-2xs font-medium uppercase tracking-wide text-[var(--amber)] sm:mt-0.5 sm:shrink-0 rounded-md bg-[var(--amber-dim)] px-2 py-1">
+        <span className="font-sans text-2xs font-medium uppercase tracking-wide text-[var(--amber-text)] sm:mt-0.5 sm:shrink-0 rounded-md bg-[var(--amber-dim)] px-2 py-1">
           {snapshotBadge}
         </span>
       </div>

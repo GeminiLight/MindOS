@@ -306,7 +306,7 @@ function ByAgentView({
                         {agent.name}
                       </Link>
                       <span className="text-2xs text-muted-foreground font-mono shrink-0">{agent.transport ?? agent.preferredTransport}</span>
-                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${status === 'connected' ? 'bg-success/10 text-success' : status === 'detected' ? 'bg-[var(--amber-dim)] text-[var(--amber)]' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${status === 'connected' ? 'bg-success/10 text-success' : status === 'detected' ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]' : 'bg-muted text-muted-foreground'}`}>
                         {copy.status[status]}
                       </span>
                     </div>
