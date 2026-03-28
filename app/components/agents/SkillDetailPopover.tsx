@@ -204,7 +204,7 @@ export default function SkillDetailPopover({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+        className="fixed inset-0 z-40 overlay-backdrop"
         onClick={onClose}
         aria-hidden="true"
       />

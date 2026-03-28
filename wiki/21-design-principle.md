@@ -163,6 +163,8 @@
 - **按钮：** 主按钮 `bg-primary text-primary-foreground`，次按钮 `border border-border` 透明底
 - **输入框：** `rounded-md border border-border bg-background`，focus 时 `ring-1 ring-ring`
 - **模态框：** 居中，`modal-backdrop` 毛玻璃遮罩 `blur(8px)`，max-width 600px
+- **辅助浮层：** 侧滑面板/确认弹窗等使用 `overlay-backdrop` 轻遮罩 `blur(2px)`，不切断上下文
+- **浮动菜单/Popover：** `bg-card border-border shadow-lg rounded-lg`，无遮罩
 - **Badge：** `text-[10px] px-1.5 py-0.5 rounded font-mono`，色彩按状态区分
 - **Toggle/Switch：** `w-9 h-5 rounded-full`，开启 `bg-amber-600`，关闭 `bg-muted`
 
@@ -197,8 +199,36 @@ border-radius: 4px;
 | `slideUp` | 0.3s | ease-out | 移动端底部 sheet 模态框 |
 | `transition-colors` | 0.15s | default | hover/focus 颜色过渡 |
 | `transition-all` | default | default | toggle 滑块位移 |
+| CSS Grid 展开 | 0.2s | ease-out | 内联列表/目录展开收起 |
 
 **规则：** 动画时长不超过 0.3s，优先用 CSS transition 而非 keyframe animation。
+
+### 内联展开动画
+
+统一使用 CSS Grid `grid-template-rows` 过渡实现内联展开/收起：
+
+```html
+<div class="grid transition-[grid-template-rows] duration-200 ease-out
+            ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}">
+  <div class="overflow-hidden">
+    ... expanded content ...
+  </div>
+</div>
+```
+
+- 浏览器自动计算真实高度，无需 magic number
+- 开/关速度一致（不像 `maxHeight: 9999px` 关闭时延迟）
+- **例外**：AI 对话中的 `ToolCallBlock` / `ThinkingBlock` 等流式输出组件可保留条件渲染（内容长度不可预测，动画无意义）
+- **禁止**：`maxHeight: 9999px` hack、`height: auto` transition（浏览器不支持）
+
+### 遮罩两级制
+
+| 级别 | CSS class | 效果 | 适用场景 |
+|------|-----------|------|---------|
+| 重遮罩 | `.modal-backdrop` | `rgba(10,9,6,0.72)` + `blur(8px)` | 核心模态框（Ask、Settings、Search、Import） |
+| 轻遮罩 | `.overlay-backdrop` | `rgba(10,9,6,0.35)` + `blur(2px)` | 辅助浮层（侧滑详情、确认弹窗、shadcn Dialog） |
+
+**规则**：不要在组件中硬编码 `bg-black/XX backdrop-blur-[Xpx]`，统一引用 CSS class。
 
 ## 响应式策略
 

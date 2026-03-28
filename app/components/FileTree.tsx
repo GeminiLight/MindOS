@@ -471,29 +471,31 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
       </div>
 
       <div
-        className={`overflow-hidden transition-all duration-200 ${showBorder ? 'border-l-2 ml-[18px]' : ''}`}
-        style={{
-          maxHeight: open ? '9999px' : '0px',
-          ...(showBorder ? { borderColor: 'color-mix(in srgb, var(--amber) 30%, transparent)' } : {}),
-        }}
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
       >
-        {node.children && (
-          <FileTree
-            nodes={node.children}
-            depth={showBorder ? 1 : depth + 1}
-            onNavigate={onNavigate}
-            maxOpenDepth={maxOpenDepth}
-            parentIsSpace={isSpace}
-            onImport={onImport}
-          />
-        )}
-        {showNewFile && (
-          <NewFileInline
-            dirPath={node.path}
-            depth={showBorder ? 0 : depth}
-            onDone={() => setShowNewFile(false)}
-          />
-        )}
+        <div
+          className={`overflow-hidden ${showBorder ? 'border-l-2 ml-[18px]' : ''}`}
+          style={showBorder ? { borderColor: 'color-mix(in srgb, var(--amber) 30%, transparent)' } : undefined}
+          {...(!open && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}
+        >
+          {node.children && (
+            <FileTree
+              nodes={node.children}
+              depth={showBorder ? 1 : depth + 1}
+              onNavigate={onNavigate}
+              maxOpenDepth={maxOpenDepth}
+              parentIsSpace={isSpace}
+              onImport={onImport}
+            />
+          )}
+          {showNewFile && (
+            <NewFileInline
+              dirPath={node.path}
+              depth={showBorder ? 0 : depth}
+              onDone={() => setShowNewFile(false)}
+            />
+          )}
+        </div>
       </div>
 
       {contextMenu && (isSpace ? (
