@@ -462,11 +462,11 @@ async function startLocalMode(): Promise<string | null> {
     const title = zh ? 'MCP 端口被占用' : 'MCP Port Unavailable';
     const detail = suggestedPort
       ? (zh
-        ? `端口 ${blockedPort} 被其他程序占用，AI 助手（Claude Code、Cursor 等）将无法连接 MCP。\n\n推荐切换到端口 ${suggestedPort}（当前可用）。\n切换后请同步更新 AI 助手中的 MCP 地址为：\nhttp://localhost:${suggestedPort}/mcp`
-        : `Port ${blockedPort} is occupied by another program. AI assistants (Claude Code, Cursor, etc.) cannot connect to MCP.\n\nSuggested alternative: port ${suggestedPort} (currently available).\nAfter switching, update the MCP URL in your AI tools to:\nhttp://localhost:${suggestedPort}/mcp`)
+        ? `端口 ${blockedPort} 被其他程序占用，MCP 服务无法启动。\n\n推荐切换到端口 ${suggestedPort}（当前可用）。\n已安装的 AI 助手配置将自动更新。`
+        : `Port ${blockedPort} is occupied by another program. MCP cannot start.\n\nSuggested alternative: port ${suggestedPort} (currently available).\nInstalled AI tool configurations will be updated automatically.`)
       : (zh
-        ? `端口 ${blockedPort} 被其他程序占用，AI 助手将无法连接 MCP。\n\n请关闭占用该端口的程序后重启 MindOS。`
-        : `Port ${blockedPort} is occupied by another program. AI assistants cannot connect to MCP.\n\nClose the program using that port and restart MindOS.`);
+        ? `端口 ${blockedPort} 被其他程序占用，MCP 服务无法启动。\n\n请关闭占用该端口的程序后重启 MindOS。`
+        : `Port ${blockedPort} is occupied by another program. MCP cannot start.\n\nClose the program using that port and restart MindOS.`);
 
     const buttons = suggestedPort
       ? [zh ? `使用端口 ${suggestedPort}` : `Use port ${suggestedPort}`, zh ? '稍后处理' : 'Dismiss']
@@ -482,11 +482,13 @@ async function startLocalMode(): Promise<string | null> {
     });
 
     if (suggestedPort && result.response === 0) {
-      // User chose to use the suggested port — respawn MCP on new port
+      // User chose to use the suggested port — respawn MCP and update client configs
       try {
         processManager!.startMcpOnPort(suggestedPort);
         console.info(`[MindOS] MCP restarted on port ${suggestedPort}`);
         updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, suggestedPort);
+        // Auto-update MCP client configs that use http transport with the old port
+        updateMcpClientConfigs(blockedPort, suggestedPort);
       } catch (err) {
         console.error('[MindOS] Failed to start MCP on suggested port:', err);
       }
@@ -619,6 +621,47 @@ async function startRemoteMode(): Promise<string | null> {
 function navigator_lang(): 'zh' | 'en' {
   const locale = app.getLocale();
   return locale?.startsWith('zh') ? 'zh' : 'en';
+}
+
+/**
+ * Scan known MCP client config files and replace old port URLs with new port.
+ * Only touches entries where url contains `localhost:oldPort/mcp` (the mindos MCP endpoint).
+ * Safe for stdio configs (no url field → no change).
+ */
+function updateMcpClientConfigs(oldPort: number, newPort: number): void {
+  const home = app.getPath('home');
+  const resolve = (p: string) => p.startsWith('~/') ? path.join(home, p.slice(2)) : p;
+  // All known MCP client config paths (global only — project configs are repo-specific)
+  const configPaths = [
+    '~/.claude.json',
+    '~/.cursor/mcp.json',
+    '~/.codeium/windsurf/mcp_config.json',
+    '~/.trae/mcp.json',
+    '~/.gemini/settings.json',
+    '~/.openclaw/mcp.json',
+    '~/.codebuddy/mcp.json',
+    '~/.mindos/mcp.json',
+  ];
+  const oldPattern = `localhost:${oldPort}/mcp`;
+  const newUrl = `localhost:${newPort}/mcp`;
+  let updated = 0;
+  for (const rel of configPaths) {
+    const abs = resolve(rel);
+    try {
+      if (!existsSync(abs)) continue;
+      const raw = readFileSync(abs, 'utf-8');
+      if (!raw.includes(oldPattern)) continue;
+      const replaced = raw.split(oldPattern).join(newUrl);
+      writeFileSync(abs, replaced, 'utf-8');
+      updated++;
+      console.info(`[MindOS] Updated MCP port in ${rel}: ${oldPort} → ${newPort}`);
+    } catch (err) {
+      console.warn(`[MindOS] Failed to update ${rel}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  if (updated > 0) {
+    console.info(`[MindOS] Updated ${updated} MCP client config(s)`);
+  }
 }
 
 /** Update tray with current state — always includes ports/address */
