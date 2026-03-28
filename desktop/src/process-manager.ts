@@ -436,8 +436,9 @@ export class ProcessManager extends EventEmitter {
                     this.mcpProcess = null;
                     return;
                   }
-                  // Not a MindOS MCP — port is held by something else. Give up on this attempt.
+                  // Not a MindOS MCP — port is held by something else.
                   console.error(`[MindOS:mcp] port ${currentPort} occupied by non-MindOS process, cannot respawn`);
+                  this.emit('mcp-port-blocked', currentPort);
                   return;
                 }
               } else {
