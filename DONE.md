@@ -79,6 +79,12 @@
   - `ExploreContent.tsx`, `UseCaseCard.tsx` - 使用案例展示
   - 9个使用案例（`use-cases.ts`）
   - 插件市场/技能市场占位
+- [x] **使用案例完善**
+  - 9个完整使用案例（C1-C9）
+  - 分类筛选（categories）
+  - 场景标签（scenarios）
+  - 测试覆盖（explore-use-cases.test.ts）
+  - 点击触发 Ask AI 功能
 ---
 
 ## 编辑器功能 ✅
@@ -157,6 +163,15 @@
 
 ---
 
+## Editor 编辑器 ✅
+
+- [x] **Editor功能实现** - 已实现富文本编辑器
+  - CodeMirror 6 - 代码编辑器
+  - Tiptap - WYSIWYG 编辑器
+  - 快捷键：`E` 编辑, `⌘S` 保存, `Esc` 取消
+
+---
+
 ## Renderer 插件系统 ✅
 
 - [x] **11个渲染器实现**
@@ -183,8 +198,39 @@
 
 ---
 
+## Help 帮助页面 ✅
+
+- [x] **帮助页面实现**
+  - `/help` 路由 - 帮助页面入口
+  - `HelpContent.tsx` - 帮助内容组件
+  - `HelpPage.tsx` - 帮助页面
+  - ActivityBar 底部 `?` 图标入口
+  - 6个帮助板块（前4个默认展开）
+
+---
+
+## Desktop APP ✅
+
+- [x] **首次打开模式选择** - 已实现完整功能
+  - `showModeSelectWindow()` - 模式选择窗口
+  - `selectMode(mode: 'local' | 'remote')` - 本地/远程模式选择
+  - `connect.html` + `connect-renderer.ts` - 连接配置UI
+  - `mindos-desktop-config.ts` - 配置持久化
+  - SSH 隧道支持 (`ssh-tunnel.ts`)
+
+---
+
 ## CLI功能 ✅
 
+- [x] **CLI模块化** - 13个 lib 模块已实现
+  - `onboard.js` - 首次启动引导
+  - `start.js` - 启动服务
+  - `open.js` - 打开知识库
+  - `sync.js` - Git 同步
+  - `mcp.js` - MCP 管理
+  - `gateway.js` - 网关服务
+  - `token.js` - Token 生成
+  - `setup/` - 设置向导
 - [x] **CLI更新提示** - v0.3.0+ 实现 update-check.js
 
 ---

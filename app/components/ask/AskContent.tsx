@@ -87,7 +87,7 @@ interface AskContentProps {
 export default function AskContent({ visible, currentFile, initialMessage, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch }: AskContentProps) {
   const isPanel = variant === 'panel';
 
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
@@ -223,13 +223,18 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, currentFile]);
 
-  // Persist session on message changes
+  // Persist session on message changes (skip if last msg is empty assistant placeholder during loading)
   useEffect(() => {
     if (!visible || !session.activeSessionId) return;
-    session.persistSession(session.messages, session.activeSessionId);
+    const msgs = session.messages;
+    if (isLoading && msgs.length > 0) {
+      const last = msgs[msgs.length - 1];
+      if (last.role === 'assistant' && !last.content.trim() && (!last.parts || last.parts.length === 0)) return;
+    }
+    session.persistSession(msgs, session.activeSessionId);
     return () => session.clearPersistTimer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, session.messages, session.activeSessionId]);
+  }, [visible, session.messages, session.activeSessionId, isLoading]);
 
   // Esc to close — modal only
   useEffect(() => {
@@ -255,12 +260,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const formRef = useRef<HTMLFormElement>(null);
 
   useLayoutEffect(() => {
-    if (!isPanel || !visible) return;
+    if (!visible) return;
     const el = inputRef.current;
     if (!el || !(el instanceof HTMLTextAreaElement)) return;
     const form = formRef.current;
-    const availableH = form ? form.clientHeight - 40 : undefined;
-    syncPanelTextareaToContent(el, PANEL_TEXTAREA_MAX_VISIBLE_LINES, availableH);
+    const maxLines = isPanel ? PANEL_TEXTAREA_MAX_VISIBLE_LINES : 6;
+    const availableH = isPanel && form ? form.clientHeight - 40 : undefined;
+    syncPanelTextareaToContent(el, maxLines, availableH);
   }, [input, isPanel, isLoading, visible, panelComposerHeight]);
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -283,9 +289,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
   const selectMention = useCallback((filePath: string) => {
     const el = inputRef.current;
-    const cursorPos = el
-      ? (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.selectionStart ?? input.length : input.length)
-      : input.length;
+    const cursorPos = el?.selectionStart ?? input.length;
     const before = input.slice(0, cursorPos);
     const atIdx = before.lastIndexOf('@');
     const newVal = input.slice(0, atIdx) + input.slice(cursorPos);
@@ -302,9 +306,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
   const selectSlashCommand = useCallback((item: SlashItem) => {
     const el = inputRef.current;
-    const cursorPos = el
-      ? (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.selectionStart ?? input.length : input.length)
-      : input.length;
+    const cursorPos = el?.selectionStart ?? input.length;
     const before = input.slice(0, cursorPos);
     const slashIdx = before.lastIndexOf('/');
     const newVal = input.slice(0, slashIdx) + input.slice(cursorPos);
@@ -318,7 +320,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   }, [input, slash]);
 
   const handleInputKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (mention.mentionQuery !== null) {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -361,7 +363,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         }
         return;
       }
-      if (variant === 'panel' && e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
+      if (e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
@@ -650,28 +652,29 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
         }}
       />
 
-      {/* Popovers — rendered outside overflow containers so they can extend freely */}
-      {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
-        <div className="shrink-0 px-2 pb-1">
-          <MentionPopover
-            results={mention.mentionResults}
-            selectedIndex={mention.mentionIndex}
-            onSelect={selectMention}
-          />
-        </div>
-      )}
-
-      {slash.slashQuery !== null && slash.slashResults.length > 0 && (
-        <div className="shrink-0 px-2 pb-1">
-          <SlashCommandPopover
-            results={slash.slashResults}
-            selectedIndex={slash.slashIndex}
-            onSelect={selectSlashCommand}
-          />
-        </div>
-      )}
-
       {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
+      <div className="relative shrink-0">
+        {/* Popovers — absolutely positioned above the composer to avoid layout shift */}
+        {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
+          <div className="absolute bottom-full left-0 right-0 px-2 pb-1 z-10">
+            <MentionPopover
+              results={mention.mentionResults}
+              selectedIndex={mention.mentionIndex}
+              onSelect={selectMention}
+            />
+          </div>
+        )}
+
+        {slash.slashQuery !== null && slash.slashResults.length > 0 && (
+          <div className="absolute bottom-full left-0 right-0 px-2 pb-1 z-10">
+            <SlashCommandPopover
+              results={slash.slashResults}
+              selectedIndex={slash.slashIndex}
+              onSelect={selectSlashCommand}
+            />
+          </div>
+        )}
+
       <div
         className={cn(
           'shrink-0 border-t border-border',
@@ -758,7 +761,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             onSubmit={handleSubmit}
             className={cn(
               'flex',
-              isPanel ? 'min-h-0 flex-1 items-end gap-1.5 px-2 py-2' : 'items-center gap-2 px-3 py-3',
+              isPanel ? 'min-h-0 flex-1 items-end gap-1.5 px-2 py-2' : 'items-end gap-2 px-3 py-3',
             )}
           >
           <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach local file">
@@ -778,34 +781,24 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             }}
           />
 
-          {isPanel ? (
-            <textarea
-              ref={(el) => {
-                inputRef.current = el;
-              }}
-              value={input}
-              onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
-              onKeyDown={handleInputKeyDown}
-              placeholder={t.ask.placeholder}
-              rows={1}
-              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none"
-            />
-          ) : (
-            <input
-              ref={(el) => {
-                inputRef.current = el;
-              }}
-              value={input}
-              onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
-              onKeyDown={handleInputKeyDown}
-              placeholder={t.ask.placeholder}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-            />
-          )}
+          <textarea
+            ref={(el) => {
+              inputRef.current = el;
+            }}
+            value={input}
+            onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
+            onKeyDown={handleInputKeyDown}
+            placeholder={t.ask.placeholder}
+            rows={1}
+            className={cn(
+              'min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0',
+              isPanel ? 'py-2' : 'py-1.5',
+            )}
+          />
 
           {isLoading ? (
-            <button type="button" onClick={handleStop} className="p-1.5 rounded-md transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted" title={t.ask.stopTitle}>
-              <StopCircle size={inputIconSize} />
+            <button type="button" onClick={handleStop} className="p-1.5 rounded-md transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
+              {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
             </button>
           ) : (
             <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
@@ -822,7 +815,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           'flex shrink-0 items-center',
           isPanel
             ? 'flex-wrap gap-x-2 gap-y-1 px-3 pb-1.5 text-[10px] text-muted-foreground/40'
-            : 'hidden gap-3 px-4 pb-2 text-xs text-muted-foreground/50 md:flex',
+            : 'flex-wrap gap-x-3 gap-y-1 px-4 pb-2 text-[10px] md:text-xs text-muted-foreground/50',
         )}
       >
         <span suppressHydrationWarning>
@@ -851,6 +844,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </span>
         )}
       </div>
+      </div>{/* /relative wrapper for popovers + composer + footer */}
     </>
   );
 }

@@ -143,6 +143,7 @@ export const zh = {
     skillsHint: '技能',
     attachCurrent: '附加当前文件',
     stopTitle: '停止',
+    cancelReconnect: '取消重连',
     connecting: '正在与你的心智一起思考...',
     thinking: '思考中...',
     thinkingLabel: '思考中',

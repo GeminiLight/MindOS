@@ -10,11 +10,10 @@
 ### Agent 功能
 - [ ] **Agent 对比视图** - 实现Agent版本对比功能
 - [ ] **Agents 面板增强**
-  - 允许自定义Agent
+  - 允许自定义Agent（当前有 addAgent UI，待完整自定义功能）
 - [ ] **ACP for call / Agent as Workflow** - Agent调用协议
 
 ### Desktop APP
-- [ ] **首次打开模式选择** - 默认本地模式，应让用户选择本地/remote
 - [ ] **内置固定版本** - 内置build版本，未安装也能打开，检测到更高版本时切换
 
 ### 文档与模板
@@ -24,7 +23,7 @@
 ## ⚡ 功能增强
 
 - [ ] **webpage wording skill** - 网页文案技能
-- [ ] **插件市场/技能市场** - Discover中的市场功能完善
+- [ ] **插件市场/技能市场** - Discover中的市场功能完善（当前已实现UI占位，待后端功能）
 - [ ] **审计功能增强** - Review change优化
 - [ ] **多终端管理** - 多个Terminal端口管理
 
@@ -57,7 +56,6 @@
 - [ ] **AI自主执行** - Agent自主执行零散想法
 - [ ] **自动SOP复盘** - Agent帮助复盘，通过MCP存到MindOS
 - [ ] **创造者故事**
-- [ ] **使用案例完善**
 
 ## 📝 其他
 
