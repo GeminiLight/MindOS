@@ -154,7 +154,8 @@ Landing 页面下载链接指向 CDN `latest/` 路径，每次发版自动覆盖
 ### 从 DMG 安装（命令行）
 
 ```bash
-hdiutil attach ~/Downloads/MindOS-0.1.0-arm64.dmg -nobrowse && \
+# 替换 <dmg文件> 为实际文件名，如 MindOS-0.1.0-arm64.dmg
+hdiutil attach ~/Downloads/<dmg文件> -nobrowse && \
 cp -R /Volumes/MindOS/MindOS.app /Applications/ && \
 hdiutil detach /Volumes/MindOS && \
 xattr -cr /Applications/MindOS.app
