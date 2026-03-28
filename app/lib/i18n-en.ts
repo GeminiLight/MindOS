@@ -72,6 +72,7 @@ export const en = {
     agents: 'Agents',
     echo: 'Echo',
     discover: 'Discover',
+    history: 'History',
     help: 'Help',
     syncLabel: 'Sync',
     collapseTitle: 'Collapse sidebar',
@@ -770,6 +771,12 @@ export const en = {
     organizeUndone: 'Undone',
     organizeViewFile: 'View file',
     organizeUndoSuccess: (n: number) => `Reverted ${n} file${n !== 1 ? 's' : ''}`,
+  },
+  importHistory: {
+    title: 'Import History',
+    clearAll: 'Clear history',
+    emptyTitle: 'No import history yet',
+    emptyDesc: 'AI organize results will appear here',
   },
   dirView: {
     gridView: 'Grid view',

@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio, History } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'history';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -198,6 +198,7 @@ export default function ActivityBar({
             walkthroughId="agents-panel"
           />
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => toggle('discover')} />
+          <RailButton icon={<History size={18} />} label={t.sidebar.history} active={activePanel === 'history'} expanded={expanded} onClick={() => toggle('history')} />
         </div>
 
         {/* ── Spacer ── */}

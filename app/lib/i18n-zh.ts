@@ -97,6 +97,7 @@ export const zh = {
     agents: '智能体',
     echo: '回响',
     discover: '探索',
+    history: '历史',
     help: '帮助',
     syncLabel: '同步',
     collapseTitle: '收起侧栏',
@@ -794,6 +795,12 @@ export const zh = {
     organizeUndone: '已撤销',
     organizeViewFile: '查看文件',
     organizeUndoSuccess: (n: number) => `已撤销 ${n} 个文件`,
+  },
+  importHistory: {
+    title: '导入历史',
+    clearAll: '清空历史',
+    emptyTitle: '暂无导入记录',
+    emptyDesc: 'AI 整理的结果会出现在这里',
   },
   dirView: {
     gridView: '网格视图',

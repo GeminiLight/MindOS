@@ -123,6 +123,13 @@
 - **规则：** 当同一个 UI step 同时承载 success 和 error 两种状态时，所有展示元素（标题、图标、描述）都必须根据实际状态分支渲染，不能只用一套文案
 - **文件：** `app/components/ImportModal.tsx`、`app/lib/i18n-en.ts`、`app/lib/i18n-zh.ts`
 
+### AI Organize 撤销生命周期与 Modal 耦合 ✅ 已解决
+- **现象：** 用户点 "View file" 后 Modal 关闭，撤销机会丢失；update 操作无法撤销；用户浏览文件期间 3 分钟后无法再撤销
+- **原因：** 撤销状态（`useAiOrganize` hook）声明在 `ImportModal` 组件内部，Modal 关闭即销毁状态。update 文件无快照存储
+- **解决：** 将 `useAiOrganize` 提升到 `SidebarLayout` 级别，新增独立 `OrganizeToast` 组件。update 操作在 `tool_start` SSE 事件时异步抓取文件快照（`captureSnapshot`）。Toast 独立于 Modal 存在，3 分钟自动消失但用户交互会重置计时器
+- **规则：** 跨生命周期的状态（如撤销数据）不能绑定在可能随时卸载的组件（Modal/Popover）中。应提升到持久化容器或全局 store
+- **文件：** `app/hooks/useAiOrganize.ts`、`app/components/OrganizeToast.tsx`、`app/components/SidebarLayout.tsx`
+
 ### AskPanel/SettingsPanel 与 Modal 版本代码重复 ✅ 已解决
 - **现象：** `panels/AskPanel.tsx` 与 `AskModal.tsx` 约 80% 逻辑重复
 - **解决：** 提取 `ask/AskContent.tsx` 和 `settings/SettingsContent.tsx` 共享核心组件。AskModal/AskPanel、SettingsModal/SettingsPanel 各缩减为 ~20 行 thin wrapper。`variant: 'modal' | 'panel'` 控制差异（ESC handler、close 按钮、abort-on-close、尺寸微调）

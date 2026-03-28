@@ -184,10 +184,11 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
           >
             <FolderInput size={14} />
             <span>{t.fileTree.importFile}</span>
+            <ArrowRight size={13} className="opacity-50" />
           </button>
           <Link
             href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-muted text-muted-foreground hover:text-foreground"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
