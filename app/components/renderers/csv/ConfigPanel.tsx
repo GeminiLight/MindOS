@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import CustomSelect from '@/components/CustomSelect';
 import type { CsvConfig, ViewType } from './types';
 
 export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
@@ -11,18 +12,20 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
   onChange: (cfg: CsvConfig) => void;
 }) {
   const labelStyle: React.CSSProperties = { color: 'var(--muted-foreground)', fontSize: '0.72rem' };
-  const selectStyle: React.CSSProperties = { background: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)', fontSize: '0.72rem' };
 
   function FieldSelect({ label, value, onChange: onCh }: { label: string; value: string; onChange: (v: string) => void }) {
     return (
       <div className="flex items-center justify-between gap-2">
         <span className="font-display" style={labelStyle}>{label}</span>
-        <select value={value} onChange={e => onCh(e.target.value)}
-          className="rounded px-2 py-1 outline-none border font-display" style={selectStyle}
-        >
-          <option value="">— none —</option>
-          {headers.map(h => <option key={h} value={h}>{h}</option>)}
-        </select>
+        <CustomSelect
+          value={value}
+          onChange={onCh}
+          size="sm"
+          options={[
+            { value: '', label: '— none —' },
+            ...headers.map(h => ({ value: h, label: h })),
+          ]}
+        />
       </div>
     );
   }

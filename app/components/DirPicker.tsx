@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Folder, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Folder, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { stripEmoji } from '@/lib/utils';
 
 interface DirPickerProps {
@@ -22,8 +22,30 @@ interface DirPickerProps {
 export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root' }: DirPickerProps) {
   const [expanded, setExpanded] = useState(false);
   const [browsing, setBrowsing] = useState(value);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setBrowsing(value); }, [value]);
+
+  const collapse = useCallback(() => setExpanded(false), []);
+
+  // Escape to close + click-outside to close
+  useEffect(() => {
+    if (!expanded) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); collapse(); }
+    };
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        collapse();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    document.addEventListener('mousedown', handleClick);
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('mousedown', handleClick);
+    };
+  }, [expanded, collapse]);
 
   const children = useMemo(() => {
     const prefix = browsing ? browsing + '/' : '';
@@ -57,7 +79,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground hover:border-[var(--amber)]/40 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground hover:border-[var(--amber)]/40 transition-colors text-left focus-visible:ring-1 focus-visible:ring-ring outline-none"
       >
         <Folder size={14} className="shrink-0 text-[var(--amber)]" />
         <span className="flex-1 truncate">{displayLabel}</span>
@@ -67,7 +89,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
   }
 
   return (
-    <div className="rounded-lg border border-[var(--amber)] bg-background overflow-hidden max-h-[200px] flex flex-col">
+    <div ref={containerRef} className="rounded-lg border border-[var(--amber)] bg-background overflow-hidden max-h-[200px] flex flex-col">
       {/* Breadcrumb */}
       <div className="flex items-center gap-0.5 px-3 py-1.5 bg-muted/30 border-b border-border overflow-x-auto text-xs shrink-0">
         <button
@@ -117,13 +139,13 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
       ) : (
         <div className="px-3 py-2 text-xs text-muted-foreground/50 text-center">—</div>
       )}
-      {/* Collapse */}
+      {/* Confirm & collapse */}
       <button
         type="button"
-        onClick={() => setExpanded(false)}
-        className="w-full py-1.5 text-xs font-medium text-[var(--amber)] border-t border-border hover:bg-muted/30 transition-colors shrink-0"
+        onClick={collapse}
+        className="w-full py-1.5 flex items-center justify-center gap-1 text-xs font-medium text-[var(--amber)] border-t border-border hover:bg-muted/30 transition-colors shrink-0"
       >
-        ✓
+        <Check size={12} />
       </button>
     </div>
   );

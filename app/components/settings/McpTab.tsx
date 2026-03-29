@@ -1,9 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Loader2, ChevronDown, Copy, Check, Monitor, Globe, AlertCircle, RotateCcw, RefreshCw } from 'lucide-react';
+import { Loader2, Copy, Check, Monitor, Globe, AlertCircle, RotateCcw, RefreshCw } from 'lucide-react';
 import { useMcpDataOptional } from '@/hooks/useMcpData';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
 import { apiFetch } from '@/lib/api';
+import CustomSelect from '@/components/CustomSelect';
+import type { SelectItem } from '@/components/CustomSelect';
 import type { McpTabProps, McpStatus, AgentInfo } from './types';
 import AgentInstall from './McpAgentInstall';
 import SkillsSection from './McpSkillsSection';
@@ -179,42 +181,33 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
       {/* Agent selector */}
-      <div className="relative">
-        <select
-          value={selectedAgent}
-          onChange={(e) => onSelectAgent(e.target.value)}
-          className="w-full appearance-none px-3 py-2 pr-8 text-xs rounded-lg border border-border bg-background text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          {connectedAgents.length > 0 && (
-            <optgroup label={m?.connectedGroup ?? 'Connected'}>
-              {connectedAgents.map(a => (
-                <option key={a.key} value={a.key}>
-                  ✓ {a.name} — {a.transport ?? 'stdio'} · {a.scope ?? 'global'}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {detectedAgents.length > 0 && (
-            <optgroup label={m?.detectedGroup ?? 'Detected (not configured)'}>
-              {detectedAgents.map(a => (
-                <option key={a.key} value={a.key}>
-                  ○ {a.name} — {m?.notConfigured ?? 'not configured'}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {notFoundAgents.length > 0 && (
-            <optgroup label={m?.notFoundGroup ?? 'Not Installed'}>
-              {notFoundAgents.map(a => (
-                <option key={a.key} value={a.key}>
-                  · {a.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-      </div>
+      <CustomSelect
+        value={selectedAgent}
+        onChange={onSelectAgent}
+        options={[
+          ...(connectedAgents.length > 0 ? [{
+            label: m?.connectedGroup ?? 'Connected',
+            options: connectedAgents.map(a => ({
+              value: a.key,
+              label: `${a.name} — ${a.transport ?? 'stdio'} · ${a.scope ?? 'global'}`,
+            })),
+          }] : []),
+          ...(detectedAgents.length > 0 ? [{
+            label: m?.detectedGroup ?? 'Detected (not configured)',
+            options: detectedAgents.map(a => ({
+              value: a.key,
+              label: `${a.name} — ${m?.notConfigured ?? 'not configured'}`,
+            })),
+          }] : []),
+          ...(notFoundAgents.length > 0 ? [{
+            label: m?.notFoundGroup ?? 'Not Installed',
+            options: notFoundAgents.map(a => ({
+              value: a.key,
+              label: a.name,
+            })),
+          }] : []),
+        ] as SelectItem[]}
+      />
 
       {currentAgent && (
         <>
