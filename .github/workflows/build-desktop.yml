@@ -153,6 +153,19 @@ jobs:
           fi
         shell: bash
 
+      # macOS: verify DMGs are valid before notarization
+      # electron-builder can swallow hdiutil errors and produce corrupted DMGs
+      - name: Validate DMG integrity
+        if: matrix.platform == 'mac'
+        run: |
+          for file in desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            echo "Validating: $(basename "$file")"
+            hdiutil verify "$file"
+            echo "  OK: $(basename "$file")"
+          done
+        shell: bash
+
       # macOS: notarize DMG files with retry logic
       - name: Notarize macOS builds
         if: matrix.platform == 'mac' && inputs.sign_mac == true
@@ -215,6 +228,23 @@ jobs:
             echo "📎 Stapling: $(basename "$file")"
             xcrun stapler staple "$file"
             echo "  ✅ Stapled: $(basename "$file")"
+          done
+        shell: bash
+
+      # macOS: replace pre-notarization DMGs on GitHub Release with notarized+stapled versions
+      - name: Re-upload notarized DMGs to release
+        if: matrix.platform == 'mac' && inputs.sign_mac == true && inputs.publish == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(cd desktop && node -p "require('./package.json').version")
+          RELEASE_TAG="v${VERSION}"
+          for file in desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            echo "Replacing with notarized version: ${BASENAME}"
+            gh release delete-asset "$RELEASE_TAG" "$BASENAME" --yes 2>/dev/null || true
+            gh release upload "$RELEASE_TAG" "$file"
           done
         shell: bash
 
