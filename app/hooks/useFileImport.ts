@@ -106,7 +106,7 @@ export function useFileImport() {
       const merged = [...prev];
       for (const f of newFiles) {
         const isDup = merged.some(m =>
-          m.name === f.name && m.size === f.size && m.lastModified === f.lastModified
+          m.name === f.name && m.size === f.size && m.file.lastModified === f.file.lastModified
         );
         if (!isDup && merged.length < MAX_FILES) merged.push(f);
       }
