@@ -148,7 +148,7 @@ function parseGuideState(raw: unknown): GuideState | undefined {
     askedAI: obj.askedAI === true,
     nextStepIndex: typeof obj.nextStepIndex === 'number' ? obj.nextStepIndex : 0,
     walkthroughStep: typeof obj.walkthroughStep === 'number' ? obj.walkthroughStep : undefined,
-    walkthroughDismissed: obj.walkthroughDismissed === true ? true : undefined,
+    walkthroughDismissed: typeof obj.walkthroughDismissed === 'boolean' ? obj.walkthroughDismissed : undefined,
   };
 }
 
