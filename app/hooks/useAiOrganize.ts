@@ -281,6 +281,7 @@ export function useAiOrganize() {
           messages,
           uploadedFiles: truncatedFiles,
           maxSteps: 15,
+          mode: 'organize',
         }),
         signal: controller.signal,
       });

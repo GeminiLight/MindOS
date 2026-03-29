@@ -173,6 +173,18 @@ export const WRITE_TOOLS = new Set([
   'update_section', 'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
 ]);
 
+/** Tool names sufficient for the "organize uploaded files" task. */
+const ORGANIZE_TOOL_NAMES = new Set([
+  'list_files', 'read_file', 'search',
+  'create_file', 'batch_create_files', 'write_file',
+  'append_to_file', 'insert_after_heading', 'update_section',
+]);
+
+/** Lean tool set for organize mode — skips MCP discovery, history, backlinks, etc. */
+export function getOrganizeTools(): AgentTool<any>[] {
+  return knowledgeBaseTools.filter(t => ORGANIZE_TOOL_NAMES.has(t.name));
+}
+
 export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
   try {
     const result = await listMcporterServers();
