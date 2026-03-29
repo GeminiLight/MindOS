@@ -306,6 +306,7 @@ export default function AgentsSkillsSection({
         onToggle={mcp.toggleSkill}
         onDelete={handleDeleteFromPopover}
         onRefresh={mcp.refresh}
+        allAgentNames={mcp.agents.filter(a => a.present && a.installed).map(a => a.name)}
       />
     </section>
   );

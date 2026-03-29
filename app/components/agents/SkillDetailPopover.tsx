@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   Code2,
@@ -8,6 +8,7 @@ import {
   Check,
   FileText,
   Loader2,
+  Plus,
   Zap,
   Search,
   Server,
@@ -58,6 +59,7 @@ interface SkillDetailPopoverProps {
   skillName: string | null;
   skill?: SkillInfo | null;
   agentNames?: string[];
+  allAgentNames?: string[];
   isNative?: boolean;
   nativeSourcePath?: string;
   copy: SkillDetailPopoverCopy;
@@ -65,6 +67,8 @@ interface SkillDetailPopoverProps {
   onToggle?: (name: string, enabled: boolean) => Promise<boolean>;
   onDelete?: (name: string) => Promise<void>;
   onRefresh?: () => Promise<void>;
+  onAddAgent?: (skillName: string, agentName: string) => void;
+  onRemoveAgent?: (skillName: string, agentName: string) => void;
 }
 
 /* ────────── Capability Icon ────────── */
@@ -77,6 +81,90 @@ const CAPABILITY_ICONS: Record<SkillCapability, React.ComponentType<{ size?: num
   memory: BookOpen,
 };
 
+/* ────────── Content Parser ────────── */
+
+interface ParsedContent {
+  triggerConditions: string;
+  instructions: string;
+}
+
+function parseSkillContent(raw: string, description: string): ParsedContent {
+  // Strip YAML frontmatter
+  let body = raw;
+  const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/);
+  if (fmMatch) body = raw.slice(fmMatch[0].length).trim();
+
+  // Extract trigger conditions from description
+  // The description field usually contains trigger/usage info
+  const triggerConditions = description || '';
+
+  return { triggerConditions, instructions: body };
+}
+
+/* ────────── Simple Markdown Renderer ────────── */
+
+function MarkdownContent({ text, className = '' }: { text: string; className?: string }) {
+  const html = useMemo(() => renderMarkdown(text), [text]);
+  return (
+    <div
+      className={`prose prose-sm prose-invert max-w-none
+        prose-headings:text-foreground prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
+        prose-h1:text-sm prose-h2:text-xs prose-h3:text-xs
+        prose-p:text-xs prose-p:text-foreground/80 prose-p:leading-relaxed prose-p:my-1.5
+        prose-li:text-xs prose-li:text-foreground/80 prose-li:my-0.5
+        prose-strong:text-foreground prose-strong:font-semibold
+        prose-code:text-[var(--amber)] prose-code:bg-muted/50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-2xs prose-code:font-mono
+        prose-pre:bg-muted/30 prose-pre:border prose-pre:border-border/50 prose-pre:rounded-lg prose-pre:p-3 prose-pre:text-2xs prose-pre:overflow-x-auto
+        prose-ul:my-1 prose-ol:my-1
+        prose-hr:border-border/30 prose-hr:my-3
+        ${className}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+/** Minimal markdown to HTML — no external deps */
+function renderMarkdown(md: string): string {
+  let html = md
+    // Code blocks (fenced)
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) =>
+      `<pre><code>${escHtml(code.trimEnd())}</code></pre>`)
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Headers
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // HR
+    .replace(/^---$/gm, '<hr/>')
+    // List items
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+  // Paragraphs: lines not wrapped in a block tag
+  html = html.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    if (/^<(h[1-4]|ul|ol|li|pre|hr|div|p|blockquote)/.test(trimmed)) return line;
+    return `<p>${trimmed}</p>`;
+  }).join('\n');
+
+  return html;
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /* ────────── Component ────────── */
 
 export default function SkillDetailPopover({
@@ -84,6 +172,7 @@ export default function SkillDetailPopover({
   skillName,
   skill,
   agentNames = [],
+  allAgentNames = [],
   isNative = false,
   nativeSourcePath,
   copy,
@@ -91,6 +180,8 @@ export default function SkillDetailPopover({
   onToggle,
   onDelete,
   onRefresh,
+  onAddAgent,
+  onRemoveAgent,
 }: SkillDetailPopoverProps) {
   const [content, setContent] = useState<string | null>(null);
   const [nativeDesc, setNativeDesc] = useState<string>('');
@@ -101,7 +192,8 @@ export default function SkillDetailPopover({
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy] = useState(false);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [showAddAgent, setShowAddAgent] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(false);
 
   const fetchContent = useCallback(async () => {
     if (!skillName) return;
@@ -140,6 +232,8 @@ export default function SkillDetailPopover({
       setDeleteMsg(null);
       setDeleting(false);
       setToggleBusy(false);
+      setShowAddAgent(false);
+      setContentExpanded(false);
       fetchContent();
     }
   }, [open, skillName, fetchContent]);
@@ -202,6 +296,12 @@ export default function SkillDetailPopover({
   const description = skill?.description || nativeDesc || '';
   const skillPath = skill?.path || (isNative && nativeSourcePath ? `${nativeSourcePath}/${skillName}/SKILL.md` : '');
 
+  // Parse content into structured sections
+  const parsed = content ? parseSkillContent(content, description) : null;
+
+  // Available agents to add (not already assigned)
+  const availableAgents = allAgentNames.filter(a => !agentNames.includes(a));
+
   return (
     <>
       {/* Backdrop */}
@@ -250,78 +350,103 @@ export default function SkillDetailPopover({
 
         {/* ─── Body (scrollable) ─── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-        {/* Description */}
-        {description ? (
-          <div className="space-y-2">
-            <p className={`text-sm text-foreground leading-relaxed whitespace-pre-wrap ${!descriptionExpanded ? 'line-clamp-3' : ''}`}>
-              {description}
-            </p>
-            {description.split('\n').length > 3 && (
-              <button
-                type="button"
-                onClick={() => setDescriptionExpanded(!descriptionExpanded)}
-                className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity cursor-pointer"
-              >
-                <ChevronDown size={12} className={`transition-transform duration-200 ${descriptionExpanded ? 'rotate-180' : ''}`} />
-                <span>{descriptionExpanded ? '收起' : '查看全部'}</span>
-              </button>
-            )}
-          </div>
-        ) : !isNative ? (
-          <p className="text-sm text-muted-foreground italic">{copy.noDescription}</p>
-        ) : null}
 
-          {/* Quick meta */}
-          <div className="grid grid-cols-2 gap-3">
-            {!isNative && skill && (
-              <MetaCard label={copy.enabled} value={skill.enabled ? '✓' : '—'} tone={skill.enabled ? 'ok' : 'muted'} />
-            )}
-            <MetaCard label={copy.capability} value={capability} />
-            <MetaCard label={copy.source} value={sourceLabel} />
-            <MetaCard label={copy.agents} value={String(agentNames.length)} />
-          </div>
-
-          {/* Path */}
-          {skillPath && (
-            <div className="rounded-xl border border-border/50 bg-muted/[0.03] p-3.5">
-              <span className="text-2xs text-muted-foreground/60 block mb-1.5 uppercase tracking-wider">{copy.path}</span>
-              <code className="text-xs text-foreground/80 font-mono break-all leading-relaxed">{skillPath}</code>
-            </div>
+          {/* ── Section: Trigger Conditions ── */}
+          {description && (
+            <section>
+              <SectionTitle label="Trigger Conditions" />
+              <div className="rounded-lg border border-border/40 bg-muted/[0.03] p-3.5">
+                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {description}
+                </p>
+              </div>
+            </section>
+          )}
+          {!description && !isNative && (
+            <p className="text-sm text-muted-foreground italic">{copy.noDescription}</p>
           )}
 
-          {/* Agents */}
-          {agentNames.length > 0 && (
-            <div>
-              <h3 className="text-xs font-medium text-muted-foreground mb-2">{copy.agents}</h3>
-              <div className="flex flex-wrap gap-2">
-                {agentNames.map((name) => (
-                  <AgentAvatar key={name} name={name} size="sm" />
+          {/* ── Section: Quick Meta ── */}
+          <section>
+            <div className="grid grid-cols-2 gap-3">
+              {!isNative && skill && (
+                <MetaCard label={copy.enabled} value={skill.enabled ? '✓' : '—'} tone={skill.enabled ? 'ok' : 'muted'} />
+              )}
+              <MetaCard label={copy.capability} value={capability} />
+              <MetaCard label={copy.source} value={sourceLabel} />
+              <MetaCard label={copy.agents} value={String(agentNames.length)} />
+            </div>
+          </section>
+
+          {/* ── Section: Connected Agents ── */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <SectionTitle label={copy.agents} noMargin />
+              {onAddAgent && availableAgents.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddAgent(!showAddAgent)}
+                  className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                  <Plus size={12} />
+                  <span>Add</span>
+                </button>
+              )}
+            </div>
+
+            {/* Add agent picker */}
+            {showAddAgent && availableAgents.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2 p-2 rounded-lg border border-dashed border-[var(--amber)]/30 bg-[var(--amber)]/[0.03]">
+                {availableAgents.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => { onAddAgent?.(skillName, name); setShowAddAgent(false); }}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-2xs rounded-md border border-border bg-card hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    <Plus size={10} className="text-[var(--amber)]" />
+                    <span className="text-foreground/80">{name}</span>
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
-          {agentNames.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border p-3 text-center">
-              <p className="text-xs text-muted-foreground">{copy.noAgents}</p>
-            </div>
-          )}
+            )}
 
-          {/* Content */}
+            {agentNames.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {agentNames.map((name) => (
+                  <AgentAvatar
+                    key={name}
+                    name={name}
+                    size="sm"
+                    onRemove={onRemoveAgent ? () => onRemoveAgent(skillName, name) : undefined}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-3 text-center">
+                <p className="text-xs text-muted-foreground">{copy.noAgents}</p>
+              </div>
+            )}
+          </section>
+
+          {/* ── Section: Skill Instructions (markdown) ── */}
           {(content !== null || loading || loadError) && (
-            <div>
+            <section>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-medium text-muted-foreground">{copy.content}</h3>
-                {content && (
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1.5 py-0.5"
-                    aria-label={copy.copyContent}
-                  >
-                    {copied ? <Check size={11} /> : <Copy size={11} />}
-                    {copied ? copy.copied : copy.copyContent}
-                  </button>
-                )}
+                <SectionTitle label="Instructions" noMargin />
+                <div className="flex items-center gap-2">
+                  {content && (
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1.5 py-0.5"
+                      aria-label={copy.copyContent}
+                    >
+                      {copied ? <Check size={11} /> : <Copy size={11} />}
+                      {copied ? copy.copied : copy.copyContent}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {loading && (
@@ -344,12 +469,32 @@ export default function SkillDetailPopover({
                 </div>
               )}
 
-              {content && !loading && !loadError && (
-                <pre className="rounded-lg border border-border bg-background p-3 text-xs text-foreground font-mono overflow-x-auto max-h-80 leading-relaxed whitespace-pre-wrap break-words">
-                  {content}
-                </pre>
+              {parsed && !loading && !loadError && (
+                <div className={`rounded-lg border border-border/50 bg-muted/[0.02] p-4 overflow-hidden transition-all duration-200 ${!contentExpanded ? 'max-h-60' : ''}`}>
+                  <MarkdownContent text={parsed.instructions} />
+                </div>
               )}
-            </div>
+              {parsed && !loading && !loadError && parsed.instructions.split('\n').length > 15 && (
+                <button
+                  type="button"
+                  onClick={() => setContentExpanded(!contentExpanded)}
+                  className="inline-flex items-center gap-1 mt-2 text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${contentExpanded ? 'rotate-180' : ''}`} />
+                  <span>{contentExpanded ? 'Collapse' : 'View All'}</span>
+                </button>
+              )}
+            </section>
+          )}
+
+          {/* ── Section: File Path ── */}
+          {skillPath && (
+            <section>
+              <SectionTitle label={copy.path} />
+              <div className="rounded-lg border border-border/50 bg-muted/[0.03] p-3">
+                <code className="text-2xs text-foreground/60 font-mono break-all leading-relaxed">{skillPath}</code>
+              </div>
+            </section>
           )}
 
           {/* Delete message */}
@@ -407,6 +552,16 @@ export default function SkillDetailPopover({
         variant="destructive"
       />
     </>
+  );
+}
+
+/* ────────── Section Title ────────── */
+
+function SectionTitle({ label, noMargin }: { label: string; noMargin?: boolean }) {
+  return (
+    <h3 className={`text-xs font-semibold text-muted-foreground uppercase tracking-wider ${noMargin ? '' : 'mb-2'}`}>
+      {label}
+    </h3>
   );
 }
 
