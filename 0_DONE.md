@@ -2,6 +2,8 @@
 
 记录 MindOS 项目中已解决的功能和问题。
 
+/optimize-ui-ux 有很多浏览器原生弹窗 或者 其他组件，都合理的优化下 
+
 ---
 
 ## 核心功能
@@ -32,6 +34,22 @@
 ### 文件树和Ask AI面板
 - [x] **文件树和Ask AI面板冲突** - Activity Bar + Panel布局解决
 - [x] **Ask AI Panel文字大小** - 文字大小已调整合适
+
+### File Panel 层级管理
+- [x] **一键折叠/扩展层级** - 已实现
+  - `Panel.tsx` - 折叠/展开按钮（单级 + 双击全部）
+  - `maxOpenDepth` state - 控制展开深度
+  - 单击：折叠/展开一级
+  - 双击：折叠/展开全部层级
+  - i18n: `collapseLevelHint`, `expandLevelHint`
+  - 提示文案："折叠一级（双击：全部折叠）"
+
+### 首页布局优化
+- [x] **Plugins 在 Recently Modified 上面** - 已实现
+  - Section 1: Spaces（心智空间）
+  - Section 2: Built-in capabilities（内置功能）
+  - Section 3: Extensions（插件）✅
+  - Section 4: Recently Edited（最近编辑）
 
 ### GUI更新体验
 - [x] **GUI更新体验** - 网页端更新流程优化
@@ -296,6 +314,24 @@
 
 ---
 
+## 技术改进 ✅
+
+### MindOS Agent 时间感知
+- [x] **时间感知功能** - 已实现
+  - `/api/ask/route.ts` - `timeContext` 注入
+  - 包含当前日期、时间、星期、Unix时间戳
+  - 自动注入到 Agent prompt 中
+  - 示例：
+    ```
+    ## Current Time Context
+    - Date: 2026-03-29
+    - Time: 17:00:43
+    - Weekday: Saturday
+    - Unix Timestamp: 1743243643
+    ```
+
+---
+
 ## 更新时间
 
-- 最后更新：2026-03-28
+- 最后更新：2026-03-29

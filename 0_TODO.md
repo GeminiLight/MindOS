@@ -7,7 +7,6 @@
 ### 界面和交互优化
 - [ ] **文件树刷新不及时** - 文件增删时未及时显示
 - [ ] **Agent对话框按钮问题** - 删除历史对话等功能存在bug
-- [ ] **File Panel层级管理** - 支持一键折叠/扩展层级
 
 ### Agent 功能
 - [ ] **Agent 对比视图** - 实现Agent版本对比功能
@@ -17,9 +16,6 @@
 
 ### Desktop APP
 - [ ] **内置固定版本** - 内置build版本，未安装也能打开，检测到更高版本时切换
-
-### 文档与模板
-- [ ] **优化VISION文本** - 独立product-vision.md到wiki
 
 ## ⚡ 功能增强
 
@@ -39,14 +35,13 @@
 
 ## 🔧 技术改进
 
-- [ ] **MindOS Agent时间感知** - 时间感知功能（当前只有 runtimeLastActivityAt）
 - [ ] **Editor功能增强** - 编辑器功能完善
 
 ## 🎨 UI/UX
 
 - [ ] **首页调整**
   - search files 和 Ask AI 调换位置和大小
-  - Plugins 放在 Recently Modified 上面
+  - ~~Plugins 放在 Recently Modified 上面~~ ✅ 已实现
 - [ ] **LANDING page** - 节日祝福例子
 - [ ] **分享功能** - 分享模板或md
 

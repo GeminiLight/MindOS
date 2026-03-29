@@ -44,3 +44,59 @@ MindOS Agent 断开如果能自动重连就多好
   - 准备 runtime → 检查体积 → 列出构成 → 验证关键文件存在
 
   你觉得哪几个值得做？还是有其他你更需要的工作流？
+
+---
+
+## 新项目如何避免原生浏览器组件入侵
+
+> 经验来源：MindOS 项目中发现 7 处 native confirm()、7 处 native checkbox/radio、7 处 native select，逐一替换耗时大。
+
+### 三层防线
+
+**1. 基础设施先行（Day 1）**
+
+项目初始化时就建好 UI primitives：
+
+```
+components/ui/
+  Checkbox.tsx        # 统一 checkbox 样式
+  Radio.tsx           # 统一 radio 样式
+  Select.tsx          # 替代 native <select>
+  ConfirmDialog.tsx   # 替代 window.confirm()
+  Toast.tsx           # 替代 window.alert()
+```
+
+不需要一开始就很精致，只要有一个能用的封装，开发时自然会 import 它而不是写 native。正确的事比偷懒的事更容易做。
+
+**2. ESLint 规则拦截（写了就报错）**
+
+```json
+{
+  "no-restricted-globals": ["error", "alert", "confirm", "prompt"],
+  "no-restricted-syntax": [
+    "error",
+    {
+      "selector": "JSXOpeningElement[name.name='select']",
+      "message": "Use <CustomSelect> instead of native <select>"
+    }
+  ]
+}
+```
+
+CI 和 IDE 里实时报错，native 组件根本提交不进去。
+
+**3. AGENTS.md 写进规范（AI Agent 也遵守）**
+
+在设计系统合规段加：
+
+```markdown
+- **原生控件**：禁止 window.confirm/alert/prompt，用 ConfirmDialog / Toast；
+  禁止裸 <select>，用 CustomSelect；
+  <input type="checkbox/radio"> 必须加 className="form-check" 或 "form-radio"
+```
+
+无论人写还是 AI 生成，规则一致。
+
+### 核心思路
+
+Primitives 让正确的事更容易 → ESLint 让错误的事做不了 → 文档让所有协作者知道规则。三层一起防。
