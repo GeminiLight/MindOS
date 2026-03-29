@@ -494,7 +494,7 @@ export function detectAgentRuntimeSignals(agentKey: string): AgentRuntimeSignals
 
 /* ── MindOS MCP Install Detection ──────────────────────────────────────── */
 
-export function detectInstalled(agentKey: string): { installed: boolean; scope?: string; transport?: string; configPath?: string } {
+export function detectInstalled(agentKey: string): { installed: boolean; scope?: string; transport?: string; configPath?: string; url?: string } {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { installed: false };
 
@@ -510,7 +510,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
         if (result.found && result.entry) {
           const entry = result.entry;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-          return { installed: true, scope: scopeType, transport, configPath: cfgPath };
+          return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
         }
       } else {
         // JSON format (default)
@@ -521,7 +521,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
         if (servers?.mindos) {
           const entry = servers.mindos as Record<string, unknown>;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-          return { installed: true, scope: scopeType, transport, configPath: cfgPath };
+          return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url as string | undefined };
         }
       }
     } catch { /* ignore parse errors */ }
