@@ -345,9 +345,10 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   }, [renaming, router, node.path, onNavigate]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (isSpace) return;
-    startRename(e);
-  }, [startRename, isSpace]);
+    e.stopPropagation();
+    // Double-click to toggle expand/collapse
+    toggle();
+  }, [toggle]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
