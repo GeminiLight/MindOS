@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface SelectOption {
@@ -50,7 +51,7 @@ export default function CustomSelect({
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
-  const [flipUp, setFlipUp] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number; width: number; flipUp: boolean } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -122,20 +123,33 @@ export default function CustomSelect({
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [open, highlightIdx]);
 
-  // Initialize highlight + flip direction when opening
+  const calcPosition = useCallback(() => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const maxH = size === 'sm' ? 200 : 260;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    setPanelPos({
+      top: spaceBelow < maxH + 8 && spaceAbove > spaceBelow ? rect.top : rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      flipUp: spaceBelow < maxH + 8 && spaceAbove > spaceBelow,
+    });
+  }, [size]);
+
+  // Initialize highlight + position when opening; reposition on scroll/resize
   useEffect(() => {
-    if (open) {
-      const idx = allOptions.findIndex(o => o.value === value);
-      setHighlightIdx(idx >= 0 ? idx : 0);
-      if (btnRef.current) {
-        const rect = btnRef.current.getBoundingClientRect();
-        const maxH = size === 'sm' ? 200 : 260;
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceAbove = rect.top;
-        setFlipUp(spaceBelow < maxH + 8 && spaceAbove > spaceBelow);
-      }
-    }
-  }, [open, allOptions, value, size]);
+    if (!open) { setPanelPos(null); return; }
+    const idx = allOptions.findIndex(o => o.value === value);
+    setHighlightIdx(idx >= 0 ? idx : 0);
+    calcPosition();
+    window.addEventListener('scroll', calcPosition, true);
+    window.addEventListener('resize', calcPosition);
+    return () => {
+      window.removeEventListener('scroll', calcPosition, true);
+      window.removeEventListener('resize', calcPosition);
+    };
+  }, [open, allOptions, value, calcPosition]);
 
   const isSm = size === 'sm';
 
@@ -147,9 +161,9 @@ export default function CustomSelect({
     ? 'absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none'
     : 'absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none';
 
-  const listCls = isSm
-    ? `absolute z-50 min-w-full max-h-[200px] overflow-y-auto rounded-md border border-border bg-card shadow-lg py-0.5 ${flipUp ? 'bottom-full mb-1' : 'top-full mt-1'}`
-    : `absolute z-50 min-w-full max-h-[260px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg py-1 ${flipUp ? 'bottom-full mb-1' : 'top-full mt-1'}`;
+  const listBaseCls = isSm
+    ? 'fixed z-[9999] overflow-y-auto rounded-md border border-border bg-card shadow-lg py-0.5'
+    : 'fixed z-[9999] overflow-y-auto rounded-lg border border-border bg-card shadow-lg py-1';
 
   const itemBaseCls = isSm
     ? 'w-full flex items-center gap-1.5 px-2 py-1 text-2xs text-left transition-colors cursor-pointer'
@@ -184,6 +198,38 @@ export default function CustomSelect({
     );
   }
 
+  const listPortal = open && panelPos && createPortal(
+    <div
+      ref={listRef}
+      className={listBaseCls}
+      role="listbox"
+      style={{
+        left: panelPos.left,
+        minWidth: panelPos.width,
+        maxHeight: isSm ? 200 : 260,
+        ...(panelPos.flipUp
+          ? { bottom: window.innerHeight - panelPos.top + 4 }
+          : { top: panelPos.top + 4 }),
+      }}
+    >
+      {options.map((item, idx) => {
+        if (isGroup(item)) {
+          return (
+            <div key={item.label}>
+              {idx > 0 && <div className="my-0.5 border-t border-border/50" />}
+              <div className={`py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider ${isSm ? 'px-2' : 'px-3'}`}>
+                {item.label}
+              </div>
+              {item.options.map(renderOption)}
+            </div>
+          );
+        }
+        return renderOption(item);
+      })}
+    </div>,
+    document.body,
+  );
+
   return (
     <div className="relative">
       <button
@@ -204,25 +250,7 @@ export default function CustomSelect({
           className={`${chevronCls} transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
         />
       </button>
-
-      {open && (
-        <div ref={listRef} className={listCls} role="listbox">
-          {options.map((item, idx) => {
-            if (isGroup(item)) {
-              return (
-                <div key={item.label}>
-                  {idx > 0 && <div className="my-0.5 border-t border-border/50" />}
-                  <div className={`py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider ${isSm ? 'px-2' : 'px-3'}`}>
-                    {item.label}
-                  </div>
-                  {item.options.map(renderOption)}
-                </div>
-              );
-            }
-            return renderOption(item);
-          })}
-        </div>
-      )}
+      {listPortal}
     </div>
   );
 }
