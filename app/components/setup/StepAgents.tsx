@@ -101,7 +101,7 @@ export default function StepAgents({
         type="checkbox"
         checked={selectedAgents.has(agent.key)}
         onChange={() => toggleAgent(agent.key)}
-        style={{ accentColor: 'var(--amber)' }}
+        className="form-check"
         disabled={agentStatuses[agent.key]?.state === 'installing'}
       />
       <span className="text-sm flex-1" style={{ color: 'var(--foreground)' }}>{agent.name}</span>

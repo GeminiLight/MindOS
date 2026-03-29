@@ -91,8 +91,7 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
               type="checkbox"
               checked={selected.has(agent.key)}
               onChange={() => toggle(agent.key)}
-              className="rounded border-border"
-              style={{ accentColor: 'var(--amber)' }}
+              className="form-check"
             />
             <span className="w-28 shrink-0 text-xs">{agent.name}</span>
             <span className="text-2xs px-1.5 py-0.5 rounded font-mono bg-muted">
@@ -146,33 +145,15 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
       {/* Transport selector */}
       <div className="flex items-center gap-4 text-xs pt-1">
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="radio"
-            name="transport"
-            checked={transport === 'auto'}
-            onChange={() => setTransport('auto')}
-            style={{ accentColor: 'var(--amber)' }}
-          />
+          <input type="radio" name="transport" checked={transport === 'auto'} onChange={() => setTransport('auto')} className="form-radio" />
           {m?.transportAuto ?? 'auto (recommended)'}
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="radio"
-            name="transport"
-            checked={transport === 'stdio'}
-            onChange={() => setTransport('stdio')}
-            style={{ accentColor: 'var(--amber)' }}
-          />
+          <input type="radio" name="transport" checked={transport === 'stdio'} onChange={() => setTransport('stdio')} className="form-radio" />
           {m?.transportStdio ?? 'stdio'}
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="radio"
-            name="transport"
-            checked={transport === 'http'}
-            onChange={() => setTransport('http')}
-            style={{ accentColor: 'var(--amber)' }}
-          />
+          <input type="radio" name="transport" checked={transport === 'http'} onChange={() => setTransport('http')} className="form-radio" />
           {m?.transportHttp ?? 'http'}
         </label>
       </div>

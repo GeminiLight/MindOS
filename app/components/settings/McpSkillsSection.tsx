@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useMcpDataOptional } from '@/hooks/useMcpData';
+import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { SkillInfo, McpSkillsSectionProps } from './types';
 import SkillRow from './McpSkillRow';
@@ -35,6 +36,7 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
   const [loadingContent, setLoadingContent] = useState<string | null>(null);
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [switchingLang, setSwitchingLang] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -84,9 +86,11 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
     }
   };
 
-  const handleDelete = async (name: string) => {
-    const confirmMsg = m?.skillDeleteConfirm ? m.skillDeleteConfirm(name) : `Delete skill "${name}"?`;
-    if (!confirm(confirmMsg)) return;
+  const handleDelete = (name: string) => {
+    setDeleteTarget(name);
+  };
+
+  const doDelete = async (name: string) => {
     try {
       await apiFetch('/api/skills', {
         method: 'POST',
@@ -366,6 +370,21 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
           return mindosEnabled ? 'mindos' : 'mindos-zh';
         })()}
         m={m}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete skill?"
+        message={deleteTarget ? (m?.skillDeleteConfirm?.(deleteTarget) ?? `Delete skill "${deleteTarget}"?`) : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={async () => {
+          const name = deleteTarget!;
+          setDeleteTarget(null);
+          await doDelete(name);
+        }}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

@@ -70,7 +70,7 @@ export function UninstallTab() {
         checked={checked}
         onChange={e => !disabled && onChange(e.target.checked)}
         disabled={disabled}
-        className="mt-0.5 accent-[var(--amber)] focus-visible:ring-1 focus-visible:ring-ring"
+        className="mt-0.5 form-check"
       />
       <div>
         <p className="text-xs font-medium text-foreground">{label}</p>

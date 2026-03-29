@@ -457,7 +457,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                               value={opt.value}
                               checked={im.conflict === opt.value}
                               onChange={() => im.setConflict(opt.value)}
-                              className="accent-[var(--amber)]"
+                              className="form-radio"
                             />
                             {opt.label}
                             {opt.value === 'overwrite' && (
@@ -487,7 +487,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       showSuccess
                         ? 'bg-success text-success-foreground'
-                        : 'bg-[var(--amber)] text-white hover:opacity-90'
+                        : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
                     } disabled:opacity-50`}
                   >
                     {showSuccess ? (

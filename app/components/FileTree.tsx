@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
+import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
@@ -124,12 +125,11 @@ const MENU_DIVIDER = "my-1 border-t border-border/50";
 
 // ─── SpaceContextMenu ─────────────────────────────────────────────────────────
 
-function SpaceContextMenu({ x, y, node, onClose, onRename, onImport }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onImport?: (space: string) => void;
+function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onImport?: (space: string) => void; onDelete: () => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
-  const [isPending, startTransition] = useTransition();
 
   return (
     <ContextMenuShell x={x} y={y} onClose={onClose}>
@@ -145,16 +145,9 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport }: {
         <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
       </button>
       <div className={MENU_DIVIDER} />
-      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
-        if (!confirm(t.fileTree.confirmDeleteSpace(node.name))) return;
-        startTransition(async () => {
-          const result = await deleteSpaceAction(node.path);
-          if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
-          onClose();
-        });
-      }}>
+      <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
         <Trash2 size={14} className="shrink-0" />
-        {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteSpace}
+        {t.fileTree.deleteSpace}
       </button>
     </ContextMenuShell>
   );
@@ -162,8 +155,8 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport }: {
 
 // ─── FolderContextMenu ────────────────────────────────────────────────────────
 
-function FolderContextMenu({ x, y, node, onClose, onRename }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void;
+function FolderContextMenu({ x, y, node, onClose, onRename, onDelete }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onDelete: () => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
@@ -184,16 +177,9 @@ function FolderContextMenu({ x, y, node, onClose, onRename }: {
         <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
       </button>
       <div className={MENU_DIVIDER} />
-      <button className={MENU_DANGER} disabled={isPending} onClick={() => {
-        if (!confirm(t.fileTree.confirmDeleteFolder(node.name))) return;
-        startTransition(async () => {
-          const result = await deleteFolderAction(node.path);
-          if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
-          onClose();
-        });
-      }}>
+      <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
         <Trash2 size={14} className="shrink-0" />
-        {isPending ? <Loader2 size={14} className="animate-spin" /> : t.fileTree.deleteFolder}
+        {t.fileTree.deleteFolder}
       </button>
     </ContextMenuShell>
   );
@@ -291,6 +277,8 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   const [plusPopover, setPlusPopover] = useState(false);
   const plusRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
+  const [deleteConfirm, setDeleteConfirm] = useState<null | 'space' | 'folder'>(null);
+  const [isPendingDelete, startDeleteTransition] = useTransition();
 
   const toggle = useCallback(() => setOpen(v => !v), []);
 
@@ -506,6 +494,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
           onImport={onImport}
+          onDelete={() => setDeleteConfirm('space')}
         />
       ) : (
         <FolderContextMenu
@@ -514,8 +503,29 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
+          onDelete={() => setDeleteConfirm('folder')}
         />
       ))}
+
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title={deleteConfirm === 'space' ? t.fileTree.deleteSpace : t.fileTree.deleteFolder}
+        message={deleteConfirm === 'space' ? t.fileTree.confirmDeleteSpace(node.name) : t.fileTree.confirmDeleteFolder(node.name)}
+        confirmLabel={deleteConfirm === 'space' ? t.fileTree.deleteSpace : t.fileTree.deleteFolder}
+        cancelLabel="Cancel"
+        variant="destructive"
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          const kind = deleteConfirm;
+          setDeleteConfirm(null);
+          startDeleteTransition(async () => {
+            const result = kind === 'space'
+              ? await deleteSpaceAction(node.path)
+              : await deleteFolderAction(node.path);
+            if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
+          });
+        }}
+      />
 
       {plusPopover && plusRef.current && (() => {
         const rect = plusRef.current!.getBoundingClientRect();
@@ -546,8 +556,10 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [isPending, startTransition] = useTransition();
+  const [isPendingDelete, startDeleteTransition] = useTransition();
   const renameRef = useRef<HTMLInputElement>(null);
   const { t } = useLocale();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleClick = useCallback(() => {
     if (renaming) return;
@@ -580,14 +592,8 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(t.fileTree.confirmDelete(node.name))) return;
-    startTransition(async () => {
-      await deleteFileAction(node.path);
-      if (currentPath === node.path) router.push('/');
-      router.refresh();
-      notifyFilesChanged();
-    });
-  }, [node.name, node.path, currentPath, router, t]);
+    setShowDeleteConfirm(true);
+  }, []);
 
   const handleDragStart = useCallback((e: React.DragEvent) => {
     e.dataTransfer.setData('text/mindos-path', node.path);
@@ -640,9 +646,25 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
           <Pencil size={12} />
         </button>
         <button onClick={handleDelete} className="p-0.5 rounded text-muted-foreground hover:text-error hover:bg-muted transition-colors" title={t.fileTree.delete}>
-          <Trash2 size={12} />
+          {isPendingDelete ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
         </button>
       </div>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title={t.fileTree.delete}
+        message={t.fileTree.confirmDelete(node.name)}
+        confirmLabel={t.fileTree.delete}
+        cancelLabel="Cancel"
+        variant="destructive"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          startDeleteTransition(async () => {
+            const result = await deleteFileAction(node.path);
+            if (result.success) { router.push('/'); router.refresh(); notifyFilesChanged(); }
+          });
+        }}
+      />
     </div>
   );
 }

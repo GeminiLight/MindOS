@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from '
 import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw } from 'lucide-react';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
+import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatBytes, formatUptime } from '@/lib/format';
@@ -99,12 +100,17 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [resetting, setResetting] = useState(false);
   // revealed holds the plaintext token after regenerate, until user navigates away
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
 
   const hasToken = !!(data.authToken);
   const displayToken = revealedToken ?? data.authToken ?? '';
 
-  async function handleResetToken() {
-    if (!confirm(k.authTokenResetConfirm)) return;
+  function handleResetToken() {
+    setShowResetConfirm(true);
+  }
+
+  async function doResetToken() {
     setResetting(true);
     try {
       const res = await apiFetch<{ ok: boolean; token: string }>('/api/settings/reset-token', { method: 'POST' });
@@ -165,16 +171,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             <div className="text-xs text-muted-foreground mt-0.5">{k.cleanupExamplesHint}</div>
           </div>
           <button
-            onClick={async () => {
-              if (!confirm(k.cleanupExamplesConfirm(exampleCount))) return;
-              setCleaningUp(true);
-              const r = await cleanupExamplesAction();
-              setCleaningUp(false);
-              if (r.success) {
-                setCleanupResult(r.deleted);
-                setExampleCount(0);
-              }
-            }}
+            onClick={() => setShowCleanupConfirm(true)}
             disabled={cleaningUp}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
           >
@@ -301,6 +298,35 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
 
       {/* System Monitoring — collapsible */}
       <MonitoringSection />
+
+      <ConfirmDialog
+        open={showResetConfirm}
+        title={k.authTokenReset ?? 'Regenerate Token'}
+        message={k.authTokenResetConfirm}
+        confirmLabel={k.authTokenReset ?? 'Regenerate'}
+        cancelLabel="Cancel"
+        onConfirm={() => { setShowResetConfirm(false); doResetToken(); }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
+      <ConfirmDialog
+        open={showCleanupConfirm}
+        title={k.cleanupExamples ?? 'Cleanup Examples'}
+        message={exampleCount !== null ? k.cleanupExamplesConfirm(exampleCount) : ''}
+        confirmLabel={k.cleanupExamplesButton ?? 'Clean up'}
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={async () => {
+          setShowCleanupConfirm(false);
+          setCleaningUp(true);
+          const r = await cleanupExamplesAction();
+          setCleaningUp(false);
+          if (r.success) {
+            setCleanupResult(r.deleted);
+            setExampleCount(0);
+          }
+        }}
+        onCancel={() => setShowCleanupConfirm(false)}
+      />
     </div>
   );
 }
