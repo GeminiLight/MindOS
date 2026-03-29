@@ -207,7 +207,7 @@ Be specific. Reference actual content from the files. Keep the total response un
 
       {/* error */}
       {error && (
-        <div className="font-display" style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(200,60,60,0.1)', border: '1px solid rgba(200,60,60,0.3)', color: '#c83c3c', fontSize: 12, marginBottom: '1rem' }}>
+        <div className="font-display" style={{ padding: '10px 14px', borderRadius: 8, background: 'color-mix(in srgb, var(--error) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--error) 30%, transparent)', color: 'var(--error)', fontSize: 12, marginBottom: '1rem' }}>
           {error}
         </div>
       )}

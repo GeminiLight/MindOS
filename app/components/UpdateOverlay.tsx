@@ -97,21 +97,21 @@ export default function UpdateOverlay() {
     >
       {done ? (
         <>
-          <CheckCircle2 size={32} style={{ color: '#7aad80', marginBottom: 12 }} />
-          <div style={{ color: '#e8e4dc', fontSize: 18, fontWeight: 600 }}>
+          <CheckCircle2 size={32} style={{ color: 'var(--success)', marginBottom: 12 }} />
+          <div style={{ color: 'var(--foreground)', fontSize: 18, fontWeight: 600 }}>
             {zh ? '更新成功！' : 'Update Complete!'}
           </div>
-          <div style={{ color: '#8a8275', fontSize: 13, marginTop: 6 }}>
+          <div style={{ color: 'var(--muted-foreground)', fontSize: 13, marginTop: 6 }}>
             {zh ? '正在刷新页面...' : 'Reloading...'}
           </div>
         </>
       ) : (
         <>
-          <Loader2 size={32} style={{ color: '#d4954a', marginBottom: 12, animation: 'spin 1s linear infinite' }} />
-          <div style={{ color: '#e8e4dc', fontSize: 18, fontWeight: 600 }}>
+          <Loader2 size={32} style={{ color: 'var(--amber)', marginBottom: 12, animation: 'spin 1s linear infinite' }} />
+          <div style={{ color: 'var(--foreground)', fontSize: 18, fontWeight: 600 }}>
             {zh ? 'MindOS 正在更新...' : 'MindOS is Updating...'}
           </div>
-          <div style={{ color: '#8a8275', fontSize: 13, marginTop: 6, textAlign: 'center', maxWidth: 300, lineHeight: 1.5 }}>
+          <div style={{ color: 'var(--muted-foreground)', fontSize: 13, marginTop: 6, textAlign: 'center', maxWidth: 300, lineHeight: 1.5 }}>
             {zh
               ? '服务正在重启，请勿关闭此页面。完成后将自动刷新。'
               : 'The server is restarting. Please do not close this page. It will auto-reload when ready.'}

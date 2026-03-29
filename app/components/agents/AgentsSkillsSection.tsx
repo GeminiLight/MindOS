@@ -696,7 +696,7 @@ function AgentCard({
             </Link>
             {skillMode && (
               <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${
-                skillMode === 'universal' ? 'bg-success/10 text-success'
+                skillMode === 'universal' ? 'bg-muted text-muted-foreground'
                   : skillMode === 'additional' ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
                     : 'bg-muted text-muted-foreground'
               }`}>

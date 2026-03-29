@@ -269,15 +269,15 @@ function StatCell({
         : 'text-muted-foreground';
   const iconColor =
     tone === 'ok'
-      ? 'text-emerald-500/70'
+      ? 'text-[var(--success)]/70'
       : tone === 'warn'
-        ? 'text-amber-500/70'
+        ? 'text-[var(--amber)]/70'
         : 'text-muted-foreground/40';
   const hoverBg =
     tone === 'ok'
-      ? 'hover:bg-emerald-500/[0.04]'
+      ? 'hover:bg-muted/20'
       : tone === 'warn'
-        ? 'hover:bg-amber-500/[0.04]'
+        ? 'hover:bg-[var(--amber)]/[0.04]'
         : 'hover:bg-muted/20';
 
   return (
@@ -335,8 +335,8 @@ function QuickNavCard({
           <span
             className={`text-2xs px-2 py-0.5 rounded-full font-medium select-none ${
               statTone === 'ok'
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
             }`}
           >
             {stat}
@@ -373,10 +373,10 @@ function AgentCard({
     status === 'connected' ? copy.connected : status === 'detected' ? copy.detected : copy.notFound;
   const statusColor =
     status === 'connected'
-      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+      ? 'bg-muted text-muted-foreground'
       : status === 'detected'
-        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-        : 'bg-zinc-500/10 text-zinc-500';
+        ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
+        : 'bg-error/10 text-error';
 
   return (
     <Link
@@ -410,10 +410,10 @@ function AgentCard({
         <span className="flex-1 min-w-[4px]" />
         {hasRuntime && (
           <span
-            className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+            className="flex items-center gap-1 text-[var(--success)]"
             title={copy.runtimeActive}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" aria-hidden="true" />
             <span className="text-2xs font-medium">{copy.runtimeActive}</span>
           </span>
         )}
