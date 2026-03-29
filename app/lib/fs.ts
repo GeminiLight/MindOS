@@ -73,7 +73,10 @@ function buildCache(root: string): FileTreeCache {
 }
 
 function sameFileList(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((p, i) => p === b[i]);
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((p, i) => p === sb[i]);
 }
 
 /** Monotonically increasing counter — bumped on every file mutation so the
@@ -83,8 +86,6 @@ export function getTreeVersion(): number {
     const next = buildCache(getMindRoot());
     const changed = !sameFileList(_cache.allFiles, next.allFiles);
     _cache = next;
-    // External changes can stale the app search index even when the tree shape
-    // is unchanged, so force it to rebuild lazily on the next search.
     _searchIndex = null;
     if (changed) _treeVersion++;
   }
@@ -604,3 +605,4 @@ export function findBacklinks(targetPath: string): BacklinkEntry[] {
   const { allFiles } = ensureCache();
   return coreFindBacklinks(getMindRoot(), targetPath, allFiles);
 }
+
