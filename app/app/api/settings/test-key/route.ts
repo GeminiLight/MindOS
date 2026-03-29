@@ -46,7 +46,7 @@ async function testAnthropic(apiKey: string, model: string): Promise<{ ok: boole
   }
 }
 
-async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promise<{ ok: boolean; latency?: number; code?: ErrorCode; error?: string; streamingSupported?: boolean }> {
+async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promise<{ ok: boolean; latency?: number; code?: ErrorCode; error?: string }> {
   const start = Date.now();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
@@ -58,7 +58,7 @@ async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promi
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
       signal: ctrl.signal,
     });
     const latency = Date.now() - start;
@@ -76,7 +76,6 @@ async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promi
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1,
         messages: [
           { role: 'system', content: 'You are a helpful assistant.' },
           { role: 'user', content: 'hi' },
@@ -107,50 +106,7 @@ async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promi
       };
     }
 
-    // Streaming compatibility test — `/api/ask` uses SSE streaming by default.
-    // Many proxies pass non-streaming tests but fail at streaming.
-    // If streaming fails, we still report ok: true (basic chat works via non-streaming fallback).
-    let streamingSupported = true;
-    try {
-      const streamRes = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 5,
-          stream: true,
-          messages: [{ role: 'user', content: 'Say OK' }],
-        }),
-        signal: ctrl.signal,
-      });
-      if (!streamRes.ok) {
-        streamingSupported = false;
-      } else {
-        const reader = streamRes.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let gotData = false;
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const text = decoder.decode(value, { stream: true });
-              if (text.includes('data:')) { gotData = true; break; }
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          if (!gotData) streamingSupported = false;
-        }
-      }
-    } catch {
-      streamingSupported = false;
-    }
-
-    return { ok: true, latency, streamingSupported };
+    return { ok: true, latency };
   } catch (e: unknown) {
     if (e instanceof Error && e.name === 'AbortError') return { ok: false, code: 'network_error', error: 'Request timed out' };
     return { ok: false, code: 'network_error', error: e instanceof Error ? e.message : 'Network error' };
