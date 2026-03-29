@@ -18,14 +18,6 @@
       "problemMatcher": []
     },
     {
-      "label": "mos-utils",
-      "type": "shell",
-      "command": "tmux new-session -A -s mos-utils",
-      "presentation": { "reveal": "always", "panel": "dedicated", "group": "mos" },
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
       "label": "mos-ui",
       "type": "shell",
       "command": "tmux new-session -A -s mos-ui",
@@ -34,9 +26,9 @@
       "problemMatcher": []
     },
     {
-      "label": "mos-doc",
+      "label": "mos-utils",
       "type": "shell",
-      "command": "tmux new-session -A -s mos-doc",
+      "command": "tmux new-session -A -s mos-utils",
       "presentation": { "reveal": "always", "panel": "dedicated", "group": "mos" },
       "isBackground": true,
       "problemMatcher": []
@@ -50,7 +42,7 @@
     },
     {
       "label": "MOS: Attach All Terminals",
-      "dependsOn": ["mos-dev", "mos-algo", "mos-utils", "mos-ui", "mos-doc"],
+      "dependsOn": ["mos-dev", "mos-algo", "mos-ui", "mos-utils"],
       "dependsOrder": "parallel",
       "problemMatcher": []
     }
