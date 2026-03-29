@@ -11,8 +11,7 @@ import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
-import CustomSelect from './CustomSelect';
-import type { SelectOption } from './CustomSelect';
+import DirPicker from './DirPicker';
 
 interface ImportModalProps {
   open: boolean;
@@ -21,17 +20,18 @@ interface ImportModalProps {
   initialFiles?: File[];
   /** Lifted AI organize hook from SidebarLayout (shared with OrganizeToast) */
   aiOrganize: ReturnType<typeof useAiOrganize>;
+  /** Flat list of directory paths for the DirPicker */
+  dirPaths: string[];
 }
 
 const ACCEPT = Array.from(ALLOWED_IMPORT_EXTENSIONS).join(',');
 
 
-export default function ImportModal({ open, onClose, defaultSpace, initialFiles, aiOrganize }: ImportModalProps) {
+export default function ImportModal({ open, onClose, defaultSpace, initialFiles, aiOrganize, dirPaths }: ImportModalProps) {
   const { t } = useLocale();
   const im = useFileImport();
   const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [spaces, setSpaces] = useState<Array<{ name: string; path: string }>>([]);
   const [closing, setClosing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [conflictFiles, setConflictFiles] = useState<string[]>([]);
@@ -54,10 +54,6 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
     if (initialFiles && initialFiles.length > 0) {
       im.addFiles(initialFiles);
     }
-    fetch('/api/file?op=list_spaces')
-      .then(r => r.json())
-      .then(d => { if (d.spaces) setSpaces(d.spaces); })
-      .catch(() => {});
   }, [open, defaultSpace, initialFiles, im]);
 
   const doClose = useCallback(() => {
@@ -145,8 +141,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
 
   // V1: keyword-based space recommendation when entering archive_config
   useEffect(() => {
-    if (im.step !== 'archive_config' || spaces.length === 0 || im.validFiles.length === 0) return;
-    if (defaultSpace) return; // don't override explicit default
+    if (im.step !== 'archive_config' || dirPaths.length === 0 || im.validFiles.length === 0) return;
+    if (defaultSpace) return;
 
     const fileTokens = im.validFiles
       .flatMap(f => f.name.replace(/\.[^.]+$/, '').toLowerCase().split(/[\s_\-/\\]+/))
@@ -154,22 +150,23 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
 
     let bestPath = '';
     let bestScore = 0;
-    for (const sp of spaces) {
-      const spaceTokens = sp.name.toLowerCase().split(/[\s_\-/\\]+/).filter(w => w.length >= 2);
+    for (const dp of dirPaths) {
+      const name = dp.split('/').pop() || dp;
+      const spaceTokens = name.toLowerCase().split(/[\s_\-/\\]+/).filter(w => w.length >= 2);
       let score = 0;
       for (const ft of fileTokens) {
         for (const st of spaceTokens) {
           if (ft.includes(st) || st.includes(ft)) score += Math.min(ft.length, st.length);
         }
       }
-      if (score > bestScore) { bestScore = score; bestPath = sp.path; }
+      if (score > bestScore) { bestScore = score; bestPath = dp; }
     }
     if (bestPath && bestScore >= 2) {
       im.setTargetSpace(bestPath);
       setRecommendedSpace(bestPath);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [im.step, spaces.length, im.validFiles.length]);
+  }, [im.step, dirPaths.length, im.validFiles.length]);
 
 
   useEffect(() => {
@@ -415,19 +412,11 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                 {/* Space selector */}
                 <div>
                   <label className="text-xs font-medium text-foreground mb-1 block">{t.fileImport.targetSpace}</label>
-                  <CustomSelect
+                  <DirPicker
+                    dirPaths={dirPaths}
                     value={im.targetSpace}
                     onChange={(val) => { im.setTargetSpace(val); setRecommendedSpace(''); }}
-                    options={[
-                      { value: '', label: t.fileImport.rootDir } as SelectOption,
-                      ...spaces.map(s => ({
-                        value: s.path,
-                        label: s.name,
-                        suffix: recommendedSpace === s.path
-                          ? <span className="text-2xs text-[var(--amber)] shrink-0">✦ {t.fileImport.aiRecommended}</span>
-                          : undefined,
-                      } as SelectOption)),
-                    ]}
+                    rootLabel={t.fileImport.rootDir}
                   />
                   {recommendedSpace && im.targetSpace === recommendedSpace && (
                     <p className="text-2xs text-muted-foreground/70 mt-1 flex items-center gap-1">

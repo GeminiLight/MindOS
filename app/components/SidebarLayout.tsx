@@ -535,6 +535,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         defaultSpace={importDefaultSpace}
         initialFiles={importInitialFiles}
         aiOrganize={aiOrganize}
+        dirPaths={dirPaths}
       />
 
       {organizeToastVisible && (

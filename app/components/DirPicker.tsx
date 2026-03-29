@@ -89,7 +89,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
   }
 
   return (
-    <div ref={containerRef} className="rounded-lg border border-[var(--amber)] bg-background overflow-hidden max-h-[200px] flex flex-col">
+    <div ref={containerRef} className="rounded-lg border border-[var(--amber)] bg-background overflow-hidden max-h-[280px] flex flex-col">
       {/* Breadcrumb */}
       <div className="flex items-center gap-0.5 px-3 py-1.5 bg-muted/30 border-b border-border overflow-x-auto text-xs shrink-0">
         <button
