@@ -103,8 +103,8 @@ description: >
 
 - `mindos_read_file`：读取文件内容。
 - `mindos_write_file`：仅在确需整文件替换时使用。
-- `mindos_create_file`：创建 `.md`/`.csv` 文件。
-- `mindos_create_space`：新建心智空间（目录 + README + INSTRUCTION 脚手架）。新增整块分区时优先于只建 `某空间/README.md`。
+- `mindos_create_file`：创建 `.md`/`.csv` 文件。自动创建父目录，但不会创建空间脚手架文件（INSTRUCTION.md/README.md）。需要创建空间请用 `mindos_create_space`。
+- `mindos_create_space`：新建心智空间（目录 + README + INSTRUCTION 脚手架）。**这是创建空间的唯一方式。** 通过 `create_file` 创建的普通目录不会变成空间。新增整块知识分区时使用此工具。
 - `mindos_rename_space`：重命名空间目录（文件夹）。不能用 `rename_file` 重命名目录。
 - `mindos_delete_file`：仅在用户明确意图下删除。
 - `mindos_rename_file`、`mindos_move_file`：结构变更后补做引用检查。

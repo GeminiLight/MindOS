@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { sanitizeFileName, convertToMarkdown } from '@/lib/core/file-convert';
 import { resolveSafe } from '@/lib/core/security';
-import { scaffoldIfNewSpace } from '@/lib/core/space-scaffold';
 import { organizeAfterImport } from '@/lib/core/organize';
 import { invalidateSearchIndex } from '@/lib/core/search';
 import { effectiveSopRoot } from '@/lib/settings';
@@ -157,7 +156,6 @@ export async function POST(req: NextRequest) {
 
       fs.mkdirSync(path.dirname(resolved), { recursive: true });
       fs.writeFileSync(resolved, convertResult.content, 'utf-8');
-      scaffoldIfNewSpace(mindRoot, finalRel);
 
       created.push({ original: entry.name, path: finalRel });
       createdPaths.push(finalRel);
