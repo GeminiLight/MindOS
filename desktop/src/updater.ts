@@ -10,8 +10,9 @@ export function setupUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.autoRunAppAfterInstall = true;
 
+  let isDownloaded = false;
+
   autoUpdater.on('update-available', (info) => {
-    // Only notify if version is actually newer than current
     if (info.version === app.getVersion()) return;
 
     const wins = BrowserWindow.getAllWindows();
@@ -37,6 +38,7 @@ export function setupUpdater(): void {
   });
 
   autoUpdater.on('update-downloaded', () => {
+    isDownloaded = true;
     const wins = BrowserWindow.getAllWindows();
     for (const win of wins) {
       win.webContents.send('update-ready');
@@ -60,12 +62,10 @@ export function setupUpdater(): void {
   });
 
   ipcMain.handle('install-update', async () => {
-    try {
+    if (!isDownloaded) {
       await autoUpdater.downloadUpdate();
-      autoUpdater.quitAndInstall(false, true);
-    } catch (err) {
-      dialog.showErrorBox('Update Error', `Failed to install update: ${err}`);
     }
+    autoUpdater.quitAndInstall(false, true);
   });
 
   // Silent check on startup (after 10s delay)

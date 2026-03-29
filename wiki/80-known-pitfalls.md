@@ -61,6 +61,15 @@
 - **原因：** Desktop 走 bundled standalone runtime（只读 `.app` 内），npm install 写到另一个路径；且 `process.cwd()` 在 standalone 下指向 `.next/standalone/`，CLI 路径也不对
 - **解决：** `UpdateTab` 检测 `window.mindos`（Electron preload bridge），存在时走 `electron-updater`（IPC `check-update` / `install-update`），不走 npm API；浏览器/CLI 模式保持原有 npm 更新。CI 的 `build-desktop.yml` 用 `--publish always` 让 electron-builder 自动生成 `latest-mac.yml` 等描述文件并上传 GitHub Release，electron-updater 才能正常工作
 
+### Desktop electron-updater 三个缺陷
+- **现象 1：** `install-update` IPC handler 出错后渲染端停在 'downloading' 转圈状态，无错误提示
+- **原因：** handler 内 catch 调用 `dialog.showErrorBox()` 但没有 re-throw，IPC 返回成功，渲染端 `handleInstall` 的 catch 永远不触发
+- **现象 2：** 「Restart Now」按钮点击后若失败，无任何反馈（unhandled promise rejection）
+- **原因：** `onClick={() => bridge.installUpdate()}` 没有 `.catch()`，错误被静默吞掉
+- **现象 3：** 点「Restart Now」时虽然 update 已下载完成，仍会重新调用 `downloadUpdate()` 再走一遍下载
+- **原因：** `install-update` handler 无条件调用 `downloadUpdate()` + `quitAndInstall()`，不判断是否已下载
+- **解决：** ① 移除 handler 内 try-catch 让错误自然传播到渲染端处理；② 渲染端「Restart Now」按钮加 async/catch 错误处理；③ 用 `isDownloaded` 标志跳过已完成的下载。测试见 `app/__tests__/settings/update-tab-desktop.test.tsx`
+
 ### Diff 仅做插件入口，用户看不到全局变化
 - **现象：** 只有打开 `Agent-Diff.md` 才能看到差异；普通编辑流里不知道哪里变了、何时变了
 - **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒
@@ -909,3 +918,18 @@
   - **private → public 同步必须用 clean slate（白名单模式），禁止 blacklist（排除模式）**。排除列表只防增不防存，一旦遗漏就是安全事故
   - 每次修改 sync workflow 时，必须检查：「如果 public repo 已有不该有的文件，这次 sync 是否会删除它们？」
   - 定期审计 public repo 内容：`gh api repos/GeminiLight/MindOS/contents/ --jq '.[].name'`
+
+### Desktop CI: DMG 损坏 —「此电脑不能读取你连接的磁盘」
+- **严重等级：** 🔴 Critical — 用户无法安装 Desktop
+- **现象：** 用户从 GitHub Release 下载 DMG 后，macOS 弹出「此电脑不能读取你连接的磁盘」，DMG 无法挂载
+- **根因（双重）：**
+  1. **electron-builder.yml 显式写了 `arch: [arm64, x64]`**：导致 CI 的 `--arm64`/`--x64` flag 失效，每个 job 构建两个架构的 DMG。arm64 和 x64 job 并发上传同名文件到同一 Release，后者覆盖前者
+  2. **ARM64 runner 上 `hdiutil create -fs APFS` 间歇性失败**：`macos-latest` 是 ARM64 runner，HFS+ 不可用，只能用 APFS。`hdiutil create -format UDRW -fs APFS` 偶发 exit code 1，electron-builder 重试 5 次后 swallow 错误，仍上传损坏 DMG
+  3. **附带：Release 上是未公证 DMG**：`--publish always` 在 Package 步骤上传 DMG，Notarize/Staple 修改本地文件但不重新上传
+- **解决：**
+  1. **移除 electron-builder.yml 中 mac/win target 的 `arch` 数组**：让 CI workflow 的 `--arm64`/`--x64` flag 单独控制架构，每个 job 只构建一个架构
+  2. **Staple 后重新上传公证 DMG**：新增 `Re-upload notarized DMGs to release` 步骤，用 `gh release delete-asset` + `gh release upload` 替换 Release 上的 DMG 为公证版本
+- **规则：**
+  - **electron-builder 多架构构建必须在 CI matrix 层控制（`--arch` flag），禁止在 electron-builder.yml 的 `target.arch` 中列出多个架构**。配置文件中的 `arch` 数组会覆盖 CLI flag，导致每个 job 构建所有架构
+  - **macOS `--publish always` 上传的是公证前版本**。如果使用独立公证流程（而非 electron-builder 内置公证），必须在公证+装订后重新上传
+  - `hdiutil create -fs APFS` 在 ARM64 runner 上不稳定，electron-builder 会 swallow 错误继续上传损坏文件。通过每 job 只构建一个架构来避免「损坏文件覆盖正常文件」的竞态
