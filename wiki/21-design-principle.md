@@ -42,7 +42,7 @@
 |-------|-----|---------|
 | `--amber` | `#c8873a` | 品牌主色，交互高亮，链接，focus ring |
 | `--amber-dim` | `rgba(200,135,58,0.12)` | amber 背景色（badge、hover 底色） |
-| `--amber-foreground` | `#131210` | amber 按钮上的文字前景色 |
+| `--amber-foreground` | `#ffffff` | amber 背景上的文字色（白色，确保可读性） |
 | `--background` | `#f8f6f1` | 页面背景（温暖米白） |
 | `--foreground` | `#1c1a17` | 正文前景色 |
 | `--primary` | `#1c1a17` | 主按钮填充色（深灰，非 amber） |
@@ -67,7 +67,7 @@
 |-------|-----|---------|
 | `--amber` | `#d4954a` | 品牌主色（暗色微提亮） |
 | `--amber-dim` | `rgba(212,149,74,0.12)` | amber 背景色 |
-| `--amber-foreground` | `#131210` | amber 按钮上的文字前景色 |
+| `--amber-foreground` | `#ffffff` | amber 背景上的文字色（白色，确保可读性） |
 | `--background` | `#131210` | 页面背景（近纯黑） |
 | `--foreground` | `#e8e4dc` | 正文前景色 |
 | `--primary` | `#e8e4dc` | 主按钮填充色 |
@@ -112,8 +112,29 @@
 | `--error` | `#c85050` | `#c85050` | 操作失败、删除确认、错误提示 |
 | `--warning` | `var(--amber)` | `var(--amber)` | 警告提示（复用品牌色） |
 | `--info` | `#5a8ab4` | `#8ab4d8` | 信息提示、帮助文本 |
+| `--destructive` | `oklch(0.56 0.14 24)` | `oklch(0.56 0.14 22)` | 破坏性操作按钮背景（删除、放弃等） |
+| `--destructive-foreground` | `#ffffff` | `#ffffff` | 破坏性按钮文字（白色） |
+
+#### Destructive 色彩设计原则
+
+- **克制而非恐吓**：破坏性操作用低饱和暖红（terracotta/dusty rose），不用高饱和刺眼红。与品牌 "温暖、专业、克制" 一致。
+- **`--destructive` vs `--error`**：`--destructive` 用于按钮/操作背景（低饱和、配白字），`--error` 用于文字/图标提示（中等饱和、需要足够对比度）。两者不要混用。
+- **按钮用法**：`bg-destructive text-destructive-foreground`，hover 用 `hover:bg-destructive/90`。
 
 > **迁移状态**：已完成。CSS 变量已定义，Tailwind token 已注册（`text-success` / `text-error` / `bg-success`），全部硬编码已替换（含 `text-green-500` / `bg-green-500` / `accent-amber-500`）。装饰色（`yellow-400` 文件夹图标、`emerald-400` CSV 图标、`blue-500` sync 指示、`purple-500` skill badge、`red-400`/`blue-400` TODO 标签）暂保留 Tailwind 原始色，不纳入语义色管理。
+
+### 硬编码色值禁令
+
+**规则**：组件中禁止使用 `#xxxxxx` / `rgb()` 硬编码色值，必须走 CSS 变量（`var(--amber)` / `var(--foreground)` 等）。
+
+| 分类 | 做法 | 示例 |
+|------|------|------|
+| **品牌/CTA** | `var(--amber)` + `var(--amber-foreground)` | `bg-[var(--amber)] text-[var(--amber-foreground)]` |
+| **状态色** | `var(--success)` / `var(--error)` | `text-success` / `bg-error/10` |
+| **文字** | `var(--foreground)` / `var(--muted-foreground)` | `text-foreground` / `text-muted-foreground` |
+| **背景/边框** | `var(--card)` / `var(--border)` | `bg-card border-border` |
+
+**例外**：CodeMirror 等第三方编辑器的主题对象不走 DOM CSS 变量（它们有独立的主题系统），硬编码是唯一选择，需在代码注释中标注。
 
 ## 字体栈
 
@@ -160,7 +181,7 @@
 ### 组件规范
 
 - **卡片：** `rounded-lg`、`bg-card`、`border border-border`，hover 时 amber 边框
-- **按钮：** 主按钮 `bg-primary text-primary-foreground`，次按钮 `border border-border` 透明底
+- **按钮：** 主按钮 `bg-primary text-primary-foreground`，次按钮 `border border-border` 透明底。**Amber CTA 按钮**统一 `bg-[var(--amber)] text-[var(--amber-foreground)]`，`--amber-foreground` 必须是白色（`#ffffff`）——深色底 + 深色字不可读。**禁止**在非 amber 背景上使用 `amber-foreground` 作为文字色（该变量语义仅为"amber 背景上的前景"）。**Destructive 按钮**统一 `bg-destructive text-destructive-foreground`——低饱和暖红底 + 白字，不用高饱和红（详见状态色 Destructive 设计原则）
 - **输入框：** `rounded-md border border-border bg-background`，focus 时 `ring-1 ring-ring`
 - **模态框：** 居中，`modal-backdrop` 毛玻璃遮罩 `blur(8px)`，max-width 600px
 - **辅助浮层：** 侧滑面板/确认弹窗等使用 `overlay-backdrop` 轻遮罩 `blur(2px)`，不切断上下文
