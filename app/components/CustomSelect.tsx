@@ -50,6 +50,7 @@ export default function CustomSelect({
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [flipUp, setFlipUp] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -121,13 +122,20 @@ export default function CustomSelect({
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [open, highlightIdx]);
 
-  // Initialize highlight to current value when opening
+  // Initialize highlight + flip direction when opening
   useEffect(() => {
     if (open) {
       const idx = allOptions.findIndex(o => o.value === value);
       setHighlightIdx(idx >= 0 ? idx : 0);
+      if (btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        const maxH = size === 'sm' ? 200 : 260;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        setFlipUp(spaceBelow < maxH + 8 && spaceAbove > spaceBelow);
+      }
     }
-  }, [open, allOptions, value]);
+  }, [open, allOptions, value, size]);
 
   const isSm = size === 'sm';
 
@@ -140,8 +148,8 @@ export default function CustomSelect({
     : 'absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none';
 
   const listCls = isSm
-    ? 'absolute z-50 mt-1 min-w-full max-h-[200px] overflow-y-auto rounded-md border border-border bg-card shadow-lg py-0.5'
-    : 'absolute z-50 mt-1 min-w-full max-h-[260px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg py-1';
+    ? `absolute z-50 min-w-full max-h-[200px] overflow-y-auto rounded-md border border-border bg-card shadow-lg py-0.5 ${flipUp ? 'bottom-full mb-1' : 'top-full mt-1'}`
+    : `absolute z-50 min-w-full max-h-[260px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg py-1 ${flipUp ? 'bottom-full mb-1' : 'top-full mt-1'}`;
 
   const itemBaseCls = isSm
     ? 'w-full flex items-center gap-1.5 px-2 py-1 text-2xs text-left transition-colors cursor-pointer'
