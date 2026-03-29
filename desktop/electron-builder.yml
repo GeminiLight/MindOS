@@ -20,14 +20,8 @@ mac:
   category: public.app-category.productivity
   icon: src/icons/icon.png
   target:
-    - target: dmg
-      arch:
-        - arm64
-        - x64
-    - target: zip
-      arch:
-        - arm64
-        - x64
+    - dmg
+    - zip
   hardenedRuntime: true
   gatekeeperAssess: false
   # Notarization is handled separately in CI with retry logic (not by electron-builder)
@@ -51,10 +45,7 @@ extraResources:
 win:
   icon: src/icons/icon.ico
   target:
-    - target: nsis
-      arch:
-        - x64
-        - arm64
+    - nsis
 
 nsis:
   oneClick: false
