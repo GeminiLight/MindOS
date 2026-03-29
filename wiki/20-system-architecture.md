@@ -70,7 +70,7 @@ mindos/
 
 ### 1. app/ — Next.js 16 前端
 
-**技术栈：** Next.js 16 (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui + TipTap + CodeMirror 6 + Vercel AI SDK
+**技术栈：** Next.js 16 (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui + TipTap + CodeMirror 6 + pi-agent-core 0.60.0
 
 **API Routes (30+)：**
 
@@ -173,7 +173,7 @@ mindos/
 ```
 用户消息 → POST /api/ask
     ├── 注入：Skill + Bootstrap (INSTRUCTION + README + CONFIG) + 当前文件 + 附件
-    └── streamText() → Vercel AI SDK → Anthropic/OpenAI → 8 个 knowledgeBaseTools → 流式输出
+    └── pi-agent-core 0.60.0 → Anthropic/OpenAI → 8 个 knowledgeBaseTools → 流式输出
 ```
 
 ### 外部 Agent (MCP)
