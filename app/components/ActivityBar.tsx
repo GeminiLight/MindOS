@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio, History } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'history';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -16,7 +16,9 @@ export const RAIL_WIDTH_EXPANDED = 180;
 interface ActivityBarProps {
   activePanel: PanelId | null;
   onPanelChange: (id: PanelId | null) => void;
+  onEchoClick?: () => void;
   onAgentsClick?: () => void;
+  onDiscoverClick?: () => void;
   syncStatus: SyncStatus | null;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -77,7 +79,9 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
 export default function ActivityBar({
   activePanel,
   onPanelChange,
+  onEchoClick,
   onAgentsClick,
+  onDiscoverClick,
   syncStatus,
   expanded,
   onExpandedChange,
@@ -188,7 +192,7 @@ export default function ActivityBar({
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
-          <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => toggle('echo')} walkthroughId="echo-panel" />
+          <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => onEchoClick ? debounced(onEchoClick) : toggle('echo')} walkthroughId="echo-panel" />
           <RailButton
             icon={<Bot size={18} />}
             label={t.sidebar.agents}
@@ -197,8 +201,7 @@ export default function ActivityBar({
             onClick={() => onAgentsClick ? debounced(onAgentsClick) : toggle('agents')}
             walkthroughId="agents-panel"
           />
-          <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => toggle('discover')} />
-          <RailButton icon={<History size={18} />} label={t.sidebar.history} active={activePanel === 'history'} expanded={expanded} onClick={() => toggle('history')} />
+          <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => onDiscoverClick ? debounced(onDiscoverClick) : toggle('discover')} />
         </div>
 
         {/* ── Spacer ── */}

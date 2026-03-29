@@ -27,7 +27,7 @@ export function StatusDot({ tone, label, count }: { tone: 'ok' | 'warn' | 'neutr
   const countCls = tone === 'ok' ? 'text-foreground' : tone === 'warn' ? 'text-[var(--amber)]' : 'text-muted-foreground';
   return (
     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-      <span className={`w-2 h-2 rounded-full ${dotCls} ${tone === 'ok' ? 'ring-2 ring-[var(--success)]/20' : ''}`} aria-hidden="true" />
+      <span className={`w-2 h-2 rounded-full ${dotCls}`} aria-hidden="true" />
       <span className="text-xs">{label}</span>
       <span className={`tabular-nums font-medium ${countCls}`}>{count}</span>
     </span>
@@ -131,20 +131,20 @@ export function EmptyState({ message, icon, className }: { message: string; icon
 
 /* ────────── Agent Avatar ────────── */
 
-/** Soft pastel palette: [bg, border, text] — watercolor aesthetic */
+/** Dual-mode palette: soft pastels in light, muted tones in dark — [bg, border, text] */
 const AVATAR_PALETTES: [string, string, string][] = [
-  ['bg-rose-100/70',     'border-rose-300/50',    'text-rose-600/80'],
-  ['bg-violet-100/70',   'border-violet-300/50',  'text-violet-600/80'],
-  ['bg-emerald-100/70',  'border-emerald-300/50', 'text-emerald-600/80'],
-  ['bg-sky-100/70',      'border-sky-300/50',     'text-sky-600/80'],
-  ['bg-amber-100/70',    'border-amber-300/50',   'text-amber-700/80'],
-  ['bg-teal-100/70',     'border-teal-300/50',    'text-teal-600/80'],
-  ['bg-pink-100/70',     'border-pink-300/50',    'text-pink-600/80'],
-  ['bg-indigo-100/70',   'border-indigo-300/50',  'text-indigo-600/80'],
-  ['bg-lime-100/70',     'border-lime-300/50',    'text-lime-700/80'],
-  ['bg-fuchsia-100/70',  'border-fuchsia-300/50', 'text-fuchsia-600/80'],
-  ['bg-cyan-100/70',     'border-cyan-300/50',    'text-cyan-600/80'],
-  ['bg-orange-100/70',   'border-orange-300/50',  'text-orange-600/80'],
+  ['bg-rose-100/70 dark:bg-rose-900/30',       'border-rose-300/50 dark:border-rose-700/40',      'text-rose-600/80 dark:text-rose-400/80'],
+  ['bg-violet-100/70 dark:bg-violet-900/30',   'border-violet-300/50 dark:border-violet-700/40',  'text-violet-600/80 dark:text-violet-400/80'],
+  ['bg-emerald-100/70 dark:bg-emerald-900/30', 'border-emerald-300/50 dark:border-emerald-700/40','text-emerald-600/80 dark:text-emerald-400/80'],
+  ['bg-sky-100/70 dark:bg-sky-900/30',         'border-sky-300/50 dark:border-sky-700/40',        'text-sky-600/80 dark:text-sky-400/80'],
+  ['bg-amber-100/70 dark:bg-amber-900/30',     'border-amber-300/50 dark:border-amber-700/40',    'text-amber-700/80 dark:text-amber-400/80'],
+  ['bg-teal-100/70 dark:bg-teal-900/30',       'border-teal-300/50 dark:border-teal-700/40',      'text-teal-600/80 dark:text-teal-400/80'],
+  ['bg-pink-100/70 dark:bg-pink-900/30',       'border-pink-300/50 dark:border-pink-700/40',      'text-pink-600/80 dark:text-pink-400/80'],
+  ['bg-indigo-100/70 dark:bg-indigo-900/30',   'border-indigo-300/50 dark:border-indigo-700/40',  'text-indigo-600/80 dark:text-indigo-400/80'],
+  ['bg-lime-100/70 dark:bg-lime-900/30',       'border-lime-300/50 dark:border-lime-700/40',      'text-lime-700/80 dark:text-lime-400/80'],
+  ['bg-fuchsia-100/70 dark:bg-fuchsia-900/30', 'border-fuchsia-300/50 dark:border-fuchsia-700/40','text-fuchsia-600/80 dark:text-fuchsia-400/80'],
+  ['bg-cyan-100/70 dark:bg-cyan-900/30',       'border-cyan-300/50 dark:border-cyan-700/40',      'text-cyan-600/80 dark:text-cyan-400/80'],
+  ['bg-orange-100/70 dark:bg-orange-900/30',   'border-orange-300/50 dark:border-orange-700/40',  'text-orange-600/80 dark:text-orange-400/80'],
 ];
 
 function hashName(str: string): number {

@@ -117,6 +117,7 @@ cd / && rm -rf /tmp/mindos-smoke-$$
 完整规范见 `wiki/21-design-principle.md`，预防指南见 `wiki/41-dev-pitfall-patterns.md`。
 
 - **色值**：禁止硬编码 hex。状态色用 `var(--success)` / `var(--error)` 或 `text-success` / `text-error`；品牌色用 `var(--amber)`。新增语义色必须先在 `globals.css` 定义变量 + `@theme inline` 注册 + 文档记录
+- **Amber 按钮文字**：`--amber-foreground` 固定为白色 `#ffffff`。Amber CTA 按钮统一 `bg-[var(--amber)] text-[var(--amber-foreground)]`。**禁止**在非 amber 背景上使用 `amber-foreground` 作为独立文字色
 - **Focus ring**：一律用 `focus-visible:`（不是 `focus:`），颜色走 `ring-ring`（= amber）
 - **字体**：用 `.font-display` / `font-mono` / `font-sans`，禁止 `style={{ fontFamily }}`
 - **z-index**：只用 10/20/30/40/50 五个层级，查表选最近语义层
