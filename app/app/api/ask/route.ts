@@ -28,6 +28,24 @@ import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import type { Message as FrontendMessage } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
+// Streaming blacklist — caches provider+model combos that don't support SSE.
+// Auto-populated when streaming fails; entries expire after 10 minutes
+// so transient proxy issues don't permanently lock out streaming.
+// ---------------------------------------------------------------------------
+const streamingBlacklist = new Map<string, number>();
+const STREAMING_BLACKLIST_TTL = 10 * 60 * 1000;
+
+function isStreamingBlacklisted(key: string): boolean {
+  const ts = streamingBlacklist.get(key);
+  if (ts === undefined) return false;
+  if (Date.now() - ts > STREAMING_BLACKLIST_TTL) {
+    streamingBlacklist.delete(key);
+    return false;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // MindOS SSE format — 6 event types (front-back contract)
 // ---------------------------------------------------------------------------
 
@@ -407,9 +425,25 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = promptParts.join('\n\n');
 
+  const useStreaming = agentConfig.useStreaming !== false;
+
   try {
     const { model, modelName, apiKey, provider } = getModelConfig();
 
+    // ── Non-streaming path (auto-detected or cached) ──
+    // When test-key detected streaming incompatibility, or a previous request
+    // failed and cached the result, go directly to non-streaming.
+    const cacheKey = `${provider}:${model.id}:${model.baseUrl ?? ''}`;
+    if (!useStreaming || isStreamingBlacklisted(cacheKey)) {
+      if (isStreamingBlacklisted(cacheKey)) {
+        console.log(`[ask] Using non-streaming mode (cached failure for ${cacheKey})`);
+      }
+      return await handleNonStreaming({
+        provider, apiKey, model, systemPrompt, messages, modelName,
+      });
+    }
+
+    // ── Streaming path (default) ──
     // Convert frontend messages to AgentMessage[]
     const agentMessages = toAgentMessages(messages);
 
@@ -492,12 +526,18 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        let hasContent = false;
+        let lastModelError = '';
+
         session.subscribe((event: AgentEvent) => {
           if (isTextDeltaEvent(event)) {
+            hasContent = true;
             send({ type: 'text_delta', delta: getTextDelta(event) });
           } else if (isThinkingDeltaEvent(event)) {
+            hasContent = true;
             send({ type: 'thinking_delta', delta: getThinkingDelta(event) });
           } else if (isToolExecutionStartEvent(event)) {
+            hasContent = true;
             const { toolCallId, toolName, args } = getToolExecutionStart(event);
             const safeArgs = sanitizeToolArgs(toolName, args);
             send({
@@ -555,12 +595,47 @@ export async function POST(req: NextRequest) {
             }
 
             console.log(`[ask] Step ${stepCount}/${stepLimit}`);
+          } else if (event.type === 'agent_end') {
+            // Capture model errors from the last assistant message.
+            // pi-coding-agent resolves prompt() without throwing after retries;
+            // the error is only visible in agent_end event messages.
+            const msgs = (event as any).messages;
+            if (Array.isArray(msgs)) {
+              for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m?.role === 'assistant' && m?.stopReason === 'error' && m?.errorMessage) {
+                  lastModelError = m.errorMessage;
+                  break;
+                }
+              }
+            }
           }
         });
 
-        session.prompt(lastUserContent).then(() => {
+        session.prompt(lastUserContent).then(async () => {
           metrics.recordRequest(Date.now() - requestStartTime);
-          send({ type: 'done' });
+          if (!hasContent && lastModelError) {
+            // Streaming failed — auto-retry with non-streaming fallback.
+            // Cache the failure so subsequent requests skip streaming entirely.
+            console.warn(`[ask] Streaming failed for ${modelName}, retrying non-streaming: ${lastModelError}`);
+            streamingBlacklist.set(cacheKey, Date.now());
+            // No visible hint needed — the fallback is transparent to the user
+            try {
+              const fallbackResult = await directNonStreamingCall({
+                provider, apiKey, model, systemPrompt, messages, modelName,
+              });
+              if (fallbackResult) {
+                send({ type: 'text_delta', delta: fallbackResult });
+                send({ type: 'done' });
+              } else {
+                send({ type: 'error', message: lastModelError });
+              }
+            } catch (fallbackErr) {
+              send({ type: 'error', message: lastModelError });
+            }
+          } else {
+            send({ type: 'done' });
+          }
           controller.close();
         }).catch((err) => {
           metrics.recordRequest(Date.now() - requestStartTime);
@@ -586,4 +661,147 @@ export async function POST(req: NextRequest) {
     }
     return apiError(ErrorCodes.MODEL_INIT_FAILED, err instanceof Error ? err.message : 'Failed to initialize AI model', 500);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Non-streaming — direct /chat/completions call (no SSE, no tools)
+// ---------------------------------------------------------------------------
+
+interface NonStreamingOpts {
+  provider: 'anthropic' | 'openai';
+  apiKey: string;
+  model: { id: string; baseUrl?: string; maxTokens?: number; [k: string]: unknown };
+  systemPrompt: string;
+  messages: FrontendMessage[];
+  modelName: string;
+}
+
+/**
+ * Core non-streaming API call. Returns the response text or throws.
+ * Used by both the direct non-streaming path and the auto-fallback.
+ */
+async function directNonStreamingCall(opts: NonStreamingOpts): Promise<string> {
+  const { provider, apiKey, model, systemPrompt, messages, modelName } = opts;
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 120_000);
+
+  try {
+    if (provider === 'openai') {
+      const baseUrl = (model.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+      const url = `${baseUrl}/chat/completions`;
+      const apiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+      ];
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: model.id,
+          messages: apiMessages,
+          stream: false,
+          max_tokens: model.maxTokens ?? 16_384,
+        }),
+        signal: ctrl.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`API returned ${res.status}: ${body.slice(0, 500)}`);
+      }
+
+      const json = await res.json();
+      return json?.choices?.[0]?.message?.content ?? '';
+    }
+
+    // Anthropic
+    const url = 'https://api.anthropic.com/v1/messages';
+    const apiMessages = messages.map(m => ({ role: m.role, content: m.content }));
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: model.id,
+        system: systemPrompt,
+        messages: apiMessages,
+        max_tokens: model.maxTokens ?? 8_192,
+      }),
+      signal: ctrl.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`API returned ${res.status}: ${body.slice(0, 500)}`);
+    }
+
+    const json = await res.json();
+    const blocks = json?.content;
+    if (Array.isArray(blocks)) {
+      return blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    }
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Full non-streaming response handler — wraps directNonStreamingCall
+ * and returns an SSE-formatted Response for the client.
+ */
+async function handleNonStreaming(opts: NonStreamingOpts): Promise<Response> {
+  const { modelName } = opts;
+  const requestStartTime = Date.now();
+  const encoder = new TextEncoder();
+
+  try {
+    const text = await directNonStreamingCall(opts);
+    metrics.recordRequest(Date.now() - requestStartTime);
+
+    if (!text) {
+      metrics.recordError();
+      return sseResponse(encoder, { type: 'error', message: `[non-streaming] ${modelName} returned empty response` });
+    }
+
+    console.log(`[ask] Non-streaming response from ${modelName}: ${text.length} chars`);
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data:${JSON.stringify({ type: 'text_delta', delta: text })}\n\n`));
+        controller.enqueue(encoder.encode(`data:${JSON.stringify({ type: 'done' })}\n\n`));
+        controller.close();
+      },
+    });
+    return new Response(stream, { headers: sseHeaders() });
+  } catch (err) {
+    metrics.recordRequest(Date.now() - requestStartTime);
+    metrics.recordError();
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[ask] Non-streaming request failed:`, message);
+    return sseResponse(encoder, { type: 'error', message });
+  }
+}
+
+function sseResponse(encoder: TextEncoder, event: MindOSSSEvent): Response {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: sseHeaders() });
+}
+
+function sseHeaders(): HeadersInit {
+  return {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  };
 }

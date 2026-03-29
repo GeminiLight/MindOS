@@ -81,6 +81,17 @@ describe('POST /api/settings/test-key', () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response('{}', { status: 200 }),
     );
+    // Streaming test — must return a readable stream with SSE data
+    const sseBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\n'));
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(sseBody, { status: 200 }),
+    );
 
     const res = await POST(makeReq({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-5.4' }));
     const body = await res.json();
@@ -91,7 +102,7 @@ describe('POST /api/settings/test-key', () => {
     const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('https://api.openai.com/v1/chat/completions');
     expect(opts.headers['Authorization']).toBe('Bearer sk-test');
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
   it('uses custom baseUrl for openai', async () => {
@@ -100,6 +111,15 @@ describe('POST /api/settings/test-key', () => {
     );
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response('{}', { status: 200 }),
+    );
+    const sseBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\n'));
+        controller.close();
+      },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(sseBody, { status: 200 }),
     );
 
     await POST(makeReq({
@@ -111,6 +131,34 @@ describe('POST /api/settings/test-key', () => {
 
     const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('https://custom.api.com/v1/chat/completions');
+  });
+
+  it('returns ok with streamingSupported=true when streaming works', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    const sseBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"OK"}}]}\n\n'));
+        controller.close();
+      },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response(sseBody, { status: 200 }));
+
+    const res = await POST(makeReq({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-5.4' }));
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.streamingSupported).toBe(true);
+  });
+
+  it('returns ok with streamingSupported=false when streaming fails but basic passes', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Response('{}', { status: 500 }));
+
+    const res = await POST(makeReq({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-5.4' }));
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.streamingSupported).toBe(false);
   });
 
   it('returns incompatibility error when tool-call check fails for openai', async () => {

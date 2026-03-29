@@ -24,6 +24,7 @@ export interface AgentConfig {
   thinkingBudget?: number;    // default 5000
   contextStrategy?: 'auto' | 'off'; // default 'auto'
   reconnectRetries?: number;  // default 3, range 0-10 (0 = disabled)
+  useStreaming?: boolean;     // default true; false = non-streaming fallback for proxy compat
 }
 
 export interface GuideState {
@@ -130,6 +131,7 @@ function parseAgent(raw: unknown): AgentConfig | undefined {
   if (typeof obj.thinkingBudget === 'number') result.thinkingBudget = Math.min(50000, Math.max(1000, obj.thinkingBudget));
   if (obj.contextStrategy === 'auto' || obj.contextStrategy === 'off') result.contextStrategy = obj.contextStrategy;
   if (typeof obj.reconnectRetries === 'number') result.reconnectRetries = Math.min(10, Math.max(0, obj.reconnectRetries));
+  if (typeof obj.useStreaming === 'boolean') result.useStreaming = obj.useStreaming;
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
