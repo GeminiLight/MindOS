@@ -6,7 +6,7 @@ import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
-  Trash2, Pencil, Layers, ScrollText, FolderInput,
+  Trash2, Pencil, Layers, ScrollText, FolderInput, Copy,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
@@ -14,6 +14,10 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
+}
+
+async function copyPathToClipboard(path: string) {
+  try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
 }
 
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
@@ -141,6 +145,9 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }:
           <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
         </button>
       )}
+      <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
+        <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
+      </button>
       <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
         <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
       </button>
@@ -172,6 +179,9 @@ function FolderContextMenu({ x, y, node, onClose, onRename, onDelete }: {
         });
       }}>
         <Layers size={14} className="shrink-0 text-[var(--amber)]" /> {t.fileTree.convertToSpace}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
+        <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
       </button>
       <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
         <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
@@ -643,6 +653,9 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
         <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
       </button>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/file:flex items-center gap-0.5">
+        <button onClick={() => copyPathToClipboard(node.path)} className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t.fileTree.copyPath}>
+          <Copy size={12} />
+        </button>
         <button onClick={startRename} className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t.fileTree.rename}>
           <Pencil size={12} />
         </button>
