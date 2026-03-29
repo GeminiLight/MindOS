@@ -107,11 +107,12 @@ export default function Panel({
     };
   }, [newPopover]);
 
-  // Double-click hint: show only until user has used it once
-  const [dblHintSeen, setDblHintSeen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('mindos-tree-dblclick-hint') === '1';
-  });
+  // Double-click hint: show only until user has used it once.
+  // Initialize false to match SSR; hydrate from localStorage in useEffect.
+  const [dblHintSeen, setDblHintSeen] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem('mindos-tree-dblclick-hint') === '1') setDblHintSeen(true); } catch { /* ignore */ }
+  }, []);
   const markDblHintSeen = useCallback(() => {
     if (!dblHintSeen) {
       setDblHintSeen(true);

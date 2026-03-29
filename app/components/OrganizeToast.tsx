@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Check, X, Loader2, Sparkles, AlertCircle, Undo2,
   ChevronDown, FilePlus, FileEdit, ExternalLink,
+  Maximize2, Minimize2, FileIcon,
 } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { useAiOrganize } from '@/hooks/useAiOrganize';
@@ -84,6 +85,7 @@ export default function OrganizeToast({
   const { elapsed, displayHint } = useOrganizeTimer(isOrganizing, aiOrganize.stageHint);
 
   const [expanded, setExpanded] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyIdRef = useRef<string | null>(null);
@@ -197,7 +199,211 @@ export default function OrganizeToast({
 
   if (!isActive) return null;
 
-  // Expanded panel (file list with per-file undo)
+  // ── Shared file-change row renderer ──
+  function renderChangeRow(c: typeof aiOrganize.changes[number], idx: number) {
+    const wasUndone = c.undone;
+    const undoable = aiOrganize.canUndo(c.path);
+    const fileName = c.path.split('/').pop() ?? c.path;
+    return (
+      <div
+        key={`${c.path}-${idx}`}
+        className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${wasUndone ? 'bg-muted/30 opacity-50' : 'bg-muted/50'}`}
+      >
+        {wasUndone ? (
+          <Undo2 size={14} className="text-muted-foreground shrink-0" />
+        ) : c.action === 'create' ? (
+          <FilePlus size={14} className="text-success shrink-0" />
+        ) : (
+          <FileEdit size={14} className="text-[var(--amber)] shrink-0" />
+        )}
+        <span className={`truncate flex-1 ${wasUndone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+          {fileName}
+        </span>
+        {wasUndone ? (
+          <span className="text-xs text-muted-foreground shrink-0">{fi.organizeUndone as string}</span>
+        ) : (
+          <span className={`text-xs shrink-0 ${c.ok ? 'text-muted-foreground' : 'text-error'}`}>
+            {!c.ok ? fi.organizeFailed as string
+              : c.action === 'create' ? fi.organizeCreated as string
+              : fi.organizeUpdated as string}
+          </span>
+        )}
+        {undoable && (
+          <button
+            type="button"
+            onClick={() => handleUndoOne(c.path)}
+            disabled={undoing}
+            className="text-2xs text-muted-foreground/60 hover:text-foreground transition-colors shrink-0 px-1 disabled:opacity-40"
+            title={fi.organizeUndoOne as string}
+          >
+            <Undo2 size={12} />
+          </button>
+        )}
+        {c.ok && !c.undone && (
+          <button
+            type="button"
+            onClick={() => handleViewFile(c.path)}
+            className="text-2xs text-muted-foreground/60 hover:text-[var(--amber)] transition-colors shrink-0 px-1"
+            title={fi.organizeViewFile as string}
+          >
+            <ExternalLink size={12} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // ── Shared footer actions ──
+  function renderActions() {
+    return (
+      <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-border">
+        {isDone && aiOrganize.hasAnyUndoable && (
+          <button
+            onClick={handleUndoAll}
+            disabled={undoing}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 disabled:opacity-50"
+          >
+            {undoing ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+            {fi.organizeUndoAll as string}
+          </button>
+        )}
+        <button
+          onClick={handleDismiss}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all"
+        >
+          <Check size={12} />
+          {fi.organizeDone as string}
+        </button>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Maximized Modal — full detail view with source files, summary, changes
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (maximized) {
+    return (
+      <div
+        className="fixed inset-0 z-50 overlay-backdrop flex items-center justify-center p-4"
+        onClick={(e) => { if (e.target === e.currentTarget) setMaximized(false); }}
+      >
+        <div
+          className="w-full max-w-xl max-h-[80vh] flex flex-col bg-card rounded-xl shadow-xl border border-border animate-in fade-in-0 zoom-in-95 duration-200"
+          onClick={handleUserAction}
+          role="dialog"
+          aria-modal="true"
+          aria-label={fi.organizeDetailTitle as string}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+            <div className="flex items-center gap-2">
+              {isOrganizing ? (
+                <div className="relative shrink-0">
+                  <Sparkles size={16} className="text-[var(--amber)]" />
+                  <Loader2 size={10} className="absolute -bottom-0.5 -right-0.5 text-[var(--amber)] animate-spin" />
+                </div>
+              ) : isDone ? (
+                <Check size={16} className="text-success" />
+              ) : (
+                <AlertCircle size={16} className="text-error" />
+              )}
+              <h2 className="text-base font-semibold text-foreground">
+                {fi.organizeDetailTitle as string}
+              </h2>
+              {isOrganizing && (
+                <span className="text-xs text-muted-foreground/60 tabular-nums">
+                  {(fi.organizeElapsed as (s: number) => string)(elapsed)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setMaximized(false)}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title={fi.organizeMinimizeModal as string}
+              >
+                <Minimize2 size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={handleDismiss}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-2 space-y-4">
+            {/* Live progress during organizing */}
+            {isOrganizing && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--amber-subtle)] border border-[var(--amber-dim)]">
+                <Loader2 size={14} className="text-[var(--amber)] animate-spin shrink-0" />
+                <span className="text-xs text-foreground">{stageText(t, displayHint)}</span>
+              </div>
+            )}
+
+            {/* Source files */}
+            {aiOrganize.sourceFileNames.length > 0 && (
+              <div>
+                <h3 className="text-xs font-medium text-muted-foreground mb-1.5">
+                  {fi.organizeSourceFiles as string}
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {aiOrganize.sourceFileNames.map((name, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted/60 text-xs text-foreground">
+                      <FileIcon size={11} className="text-muted-foreground shrink-0" />
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Summary */}
+            {(aiOrganize.summary || isOrganizing) && (
+              <div>
+                <h3 className="text-xs font-medium text-muted-foreground mb-1.5">
+                  {fi.organizeSummaryLabel as string}
+                </h3>
+                <div className="px-3 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {aiOrganize.summary || (fi.organizeNoSummary as string)}
+                </div>
+              </div>
+            )}
+
+            {/* File changes */}
+            {aiOrganize.changes.length > 0 && (
+              <div>
+                <h3 className="text-xs font-medium text-muted-foreground mb-1.5">
+                  {(fi.organizeChangesLabel as (n: number) => string)(aiOrganize.changes.length)}
+                </h3>
+                <div className="space-y-0.5">
+                  {aiOrganize.changes.map((c, idx) => renderChangeRow(c, idx))}
+                </div>
+              </div>
+            )}
+
+            {/* Error detail */}
+            {isError && (
+              <div className="px-3 py-2.5 rounded-lg bg-error/5 border border-error/20 text-xs text-error">
+                {aiOrganize.error}
+              </div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          {(isDone || isError) && renderActions()}
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Expanded panel (file list with per-file undo) — bottom toast size
+  // ═══════════════════════════════════════════════════════════════════════════
   if (expanded && (isDone || isError)) {
     return (
       <div
@@ -212,71 +418,29 @@ export default function OrganizeToast({
               {isDone ? fi.organizeReviewTitle as string : fi.organizeErrorTitle as string}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown size={14} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => { setExpanded(false); setMaximized(true); }}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title={fi.organizeDetailTitle as string}
+            >
+              <Maximize2 size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
         </div>
 
         {/* File list */}
         {isDone && (
           <div className="max-h-[240px] overflow-y-auto p-2 space-y-0.5">
-            {aiOrganize.changes.map((c, idx) => {
-              const wasUndone = c.undone;
-              const undoable = aiOrganize.canUndo(c.path);
-              const fileName = c.path.split('/').pop() ?? c.path;
-
-              return (
-                <div
-                  key={`${c.path}-${idx}`}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${wasUndone ? 'bg-muted/30 opacity-50' : 'bg-muted/50'}`}
-                >
-                  {wasUndone ? (
-                    <Undo2 size={14} className="text-muted-foreground shrink-0" />
-                  ) : c.action === 'create' ? (
-                    <FilePlus size={14} className="text-success shrink-0" />
-                  ) : (
-                    <FileEdit size={14} className="text-[var(--amber)] shrink-0" />
-                  )}
-                  <span className={`truncate flex-1 ${wasUndone ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                    {fileName}
-                  </span>
-                  {wasUndone ? (
-                    <span className="text-xs text-muted-foreground shrink-0">{fi.organizeUndone as string}</span>
-                  ) : (
-                    <span className={`text-xs shrink-0 ${c.ok ? 'text-muted-foreground' : 'text-error'}`}>
-                      {!c.ok ? fi.organizeFailed as string
-                        : c.action === 'create' ? fi.organizeCreated as string
-                        : fi.organizeUpdated as string}
-                    </span>
-                  )}
-                  {undoable && (
-                    <button
-                      type="button"
-                      onClick={() => handleUndoOne(c.path)}
-                      disabled={undoing}
-                      className="text-2xs text-muted-foreground/60 hover:text-foreground transition-colors shrink-0 px-1 disabled:opacity-40"
-                      title={fi.organizeUndoOne as string}
-                    >
-                      <Undo2 size={12} />
-                    </button>
-                  )}
-                  {c.ok && !c.undone && (
-                    <button
-                      type="button"
-                      onClick={() => handleViewFile(c.path)}
-                      className="text-2xs text-muted-foreground/60 hover:text-[var(--amber)] transition-colors shrink-0 px-1"
-                      title={fi.organizeViewFile as string}
-                    >
-                      <ExternalLink size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+            {aiOrganize.changes.map((c, idx) => renderChangeRow(c, idx))}
           </div>
         )}
 
@@ -286,31 +450,14 @@ export default function OrganizeToast({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-border">
-          {isDone && aiOrganize.hasAnyUndoable && (
-            <button
-              onClick={handleUndoAll}
-              disabled={undoing}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 disabled:opacity-50"
-            >
-              {undoing ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
-              {fi.organizeUndoAll as string}
-            </button>
-          )}
-          <button
-            onClick={handleDismiss}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-all"
-          >
-            <Check size={12} />
-            {fi.organizeDone as string}
-          </button>
-        </div>
+        {renderActions()}
       </div>
     );
   }
 
-  // Compact toast bar
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Compact toast bar
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div
       className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border border-border rounded-xl shadow-lg px-4 py-3 max-w-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200"
@@ -372,6 +519,14 @@ export default function OrganizeToast({
           <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">
             {(fi.organizeElapsed as (s: number) => string)(elapsed)}
           </span>
+          <button
+            type="button"
+            onClick={() => { setMaximized(true); handleUserAction(); }}
+            className="text-muted-foreground/50 hover:text-muted-foreground transition-colors shrink-0"
+            title={fi.organizeDetailTitle as string}
+          >
+            <Maximize2 size={13} />
+          </button>
           <button
             type="button"
             onClick={handleDismiss}

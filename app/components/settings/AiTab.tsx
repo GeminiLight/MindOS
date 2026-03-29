@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SectionLabel } from './Primitives';
 import { useLocale } from '@/lib/LocaleContext';
@@ -14,6 +14,7 @@ interface TestResult {
   latency?: number;
   error?: string;
   code?: ErrorCode;
+  streamingSupported?: boolean;
 }
 
 function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
@@ -72,12 +73,16 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       const json = await res.json();
 
       if (json.ok) {
-        setTestResult(prev => ({ ...prev, [providerName]: { state: 'ok', latency: json.latency } }));
-        // Auto-clear after 5s
+        const streamingSupported = json.streamingSupported !== false;
+        setTestResult(prev => ({ ...prev, [providerName]: { state: 'ok', latency: json.latency, streamingSupported } }));
+        // Auto-persist streaming capability so /api/ask uses the right path
+        if (providerName === data.ai.provider) {
+          updateAgent({ useStreaming: streamingSupported });
+        }
         if (okTimerRef.current) clearTimeout(okTimerRef.current);
         okTimerRef.current = setTimeout(() => {
           setTestResult(prev => ({ ...prev, [providerName]: { state: 'idle' } }));
-        }, 5000);
+        }, 8000);
       } else {
         setTestResult(prev => ({
           ...prev,
@@ -139,7 +144,12 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
           )}
         </button>
         {result.state === 'ok' && result.latency != null && (
-          <span className="text-xs text-success">{t.settings.ai.testKeyOk(result.latency)}</span>
+          <span className="text-xs text-success">
+            {t.settings.ai.testKeyOk(result.latency)}
+            {result.streamingSupported === false && (
+              <span className="text-muted-foreground ml-1.5">{t.settings.ai.streamingFallback}</span>
+            )}
+          </span>
         )}
         {result.state === 'error' && (
           <span className="text-xs text-error">✗ {errorMessage(t, result.code)}</span>
@@ -163,10 +173,14 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       {provider === 'anthropic' ? (
         <>
           <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
-            <Input
+            <ModelInput
               value={anthropic.model}
-              onChange={e => patchProvider('anthropic', { model: e.target.value })}
+              onChange={v => patchProvider('anthropic', { model: v })}
               placeholder={envVal.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}
+              provider="anthropic"
+              apiKey={anthropic.apiKey}
+              envKey={env.ANTHROPIC_API_KEY}
+              t={t}
             />
           </Field>
           <Field
@@ -183,10 +197,15 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       ) : (
         <>
           <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
-            <Input
+            <ModelInput
               value={openai.model}
-              onChange={e => patchProvider('openai', { model: e.target.value })}
+              onChange={v => patchProvider('openai', { model: v })}
               placeholder={envVal.OPENAI_MODEL || 'gpt-5.4'}
+              provider="openai"
+              apiKey={openai.apiKey}
+              envKey={env.OPENAI_API_KEY}
+              baseUrl={openai.baseUrl}
+              t={t}
             />
           </Field>
           <Field
@@ -305,6 +324,111 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
 
       {/* Ask AI Display Mode */}
       <AskDisplayMode />
+    </div>
+  );
+}
+
+/* ── Model Input with "List models" picker ── */
+
+function ModelInput({
+  value, onChange, placeholder, provider, apiKey, envKey, baseUrl, t,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  provider: 'anthropic' | 'openai';
+  apiKey: string;
+  envKey?: boolean;
+  baseUrl?: string;
+  t: AiTabProps['t'];
+}) {
+  const [models, setModels] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasKey = !!apiKey || !!envKey;
+
+  const fetchModels = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const body: Record<string, string> = { provider };
+      if (apiKey) body.apiKey = apiKey;
+      if (baseUrl) body.baseUrl = baseUrl;
+
+      const res = await fetch('/api/settings/list-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.models)) {
+        setModels(json.models);
+        setOpen(true);
+      } else {
+        setError(json.error || 'Failed to fetch models');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  }, [provider, apiKey, baseUrl, loading]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex gap-1.5">
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1"
+        />
+        <button
+          type="button"
+          disabled={!hasKey || loading}
+          onClick={fetchModels}
+          title={t.settings.ai.listModels}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
+          {t.settings.ai.listModels}
+        </button>
+      </div>
+      {error && <p className="text-xs text-error mt-1">{error}</p>}
+      {open && models && models.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+          {models.map(m => (
+            <button
+              key={m}
+              type="button"
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors ${m === value ? 'bg-accent/60 font-medium' : ''}`}
+              onClick={() => { onChange(m); setOpen(false); }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && models && models.length === 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg px-3 py-2 text-xs text-muted-foreground">
+          {t.settings.ai.noModelsFound}
+        </div>
+      )}
     </div>
   );
 }
