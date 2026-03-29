@@ -34,20 +34,6 @@ function extractDescription(spacePath: string): string {
   return '';
 }
 
-/** Recursively collect all directory paths from the file tree */
-function collectDirPaths(nodes: FileNode[], prefix = ''): string[] {
-  const result: string[] = [];
-  for (const n of nodes) {
-    if (n.type === 'directory' && !n.name.startsWith('.')) {
-      const path = prefix ? `${prefix}/${n.name}` : n.name;
-      result.push(path);
-      if (n.children) {
-        result.push(...collectDirPaths(n.children, path));
-      }
-    }
-  }
-  return result;
-}
 
 function getTopLevelDirs(): SpaceInfo[] {
   try {
@@ -90,9 +76,5 @@ export default function HomePage() {
 
   const spaces = getTopLevelDirs();
 
-  // Collect all directory paths for hierarchical space creation
-  let dirPaths: string[] = [];
-  try { dirPaths = collectDirPaths(getFileTree()); } catch { /* ignore */ }
-
-  return <HomeContent recent={recent} existingFiles={existingFiles} spaces={spaces} dirPaths={dirPaths} />;
+  return <HomeContent recent={recent} existingFiles={existingFiles} spaces={spaces} />;
 }

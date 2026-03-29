@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, Zap, History, SlidersHorizontal, ListTodo } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { getAllRenderers, getPluginRenderers } from '@/lib/renderers/registry';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
-import CreateSpaceModal from './CreateSpaceModal';
 import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 import type { SpaceInfo } from '@/app/page';
 
@@ -138,7 +138,7 @@ function FileRow({ filePath, mtime, formatTime, subPath }: {
   );
 }
 
-/** Reusable chip for builtin features / plugins */
+/** Compact chip for extension renderers */
 function FeatureChip({ id, icon, name, entryPath, active, inactiveTitle }: {
   id: string;
   icon: string;
@@ -164,11 +164,52 @@ function FeatureChip({ id, icon, name, entryPath, active, inactiveTitle }: {
   return <span key={id} className={cls} title={inactiveTitle}>{inner}</span>;
 }
 
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  'agent-inspector': Search,
+  'config-panel': SlidersHorizontal,
+  'todo': ListTodo,
+};
+
+/** Mini-card for built-in tools — visually distinct from plugin chips */
+function ToolCard({ id, name, description, entryPath, active, inactiveTitle }: {
+  id: string;
+  name: string;
+  description: string;
+  entryPath?: string;
+  active: boolean;
+  inactiveTitle?: string;
+}) {
+  const Icon = TOOL_ICONS[id] ?? Zap;
+  const inner = (
+    <div
+      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+        active
+          ? 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+          : 'border-dashed border-border/50 opacity-60'
+      }`}
+      title={active ? undefined : inactiveTitle}
+    >
+      <span className="shrink-0 mt-0.5 text-[var(--amber)]">
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <span className="text-sm font-medium block text-foreground">{name}</span>
+        <span className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{description}</span>
+      </div>
+    </div>
+  );
+
+  if (active && entryPath) {
+    return <Link key={id} href={`/view/${encodePath(entryPath)}`}>{inner}</Link>;
+  }
+  return <div key={id}>{inner}</div>;
+}
+
 const FILES_PER_GROUP = 3;
 const SPACES_PER_ROW = 6;
 const PLUGINS_INITIAL = 4;
 
-export default function HomeContent({ recent, existingFiles, spaces, dirPaths }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[]; dirPaths?: string[] }) {
+export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
   const { t } = useLocale();
   const [showAll, setShowAll] = useState(false);
   const [showAllSpaces, setShowAllSpaces] = useState(false);
@@ -348,24 +389,25 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
             {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
           </p>
         )}
-        <CreateSpaceModal t={t} dirPaths={dirPaths ?? []} />
       </section>
 
-      {/* ── Section 2: Built-in capabilities ── */}
+      {/* ── Section 2: Tools ── */}
       {builtinFeatures.length > 0 && (
         <section className="mb-8">
-          <SectionTitle icon={<Puzzle size={13} />} count={builtinFeatures.length}>
+          <SectionTitle icon={<Zap size={13} />} count={builtinFeatures.length}>
             {t.home.builtinFeatures}
           </SectionTitle>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {builtinFeatures.map((r) => {
               const active = !!r.entryPath && existingSet.has(r.entryPath);
+              const toolNames = t.home.toolName as Record<string, string> | undefined;
+              const toolDescs = t.home.toolDesc as Record<string, string> | undefined;
               return (
-                <FeatureChip
+                <ToolCard
                   key={r.id}
                   id={r.id}
-                  icon={r.icon}
-                  name={r.name}
+                  name={toolNames?.[r.id] ?? r.name}
+                  description={toolDescs?.[r.id] ?? r.description}
                   entryPath={r.entryPath}
                   active={active}
                   inactiveTitle={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
@@ -406,7 +448,21 @@ export default function HomeContent({ recent, existingFiles, spaces, dirPaths }:
       {/* ── Section 4: Recently Edited ── */}
       {recent.length > 0 && (
         <section className="mb-12">
-          <SectionTitle icon={<Clock size={13} />} count={recent.length}>{t.home.recentlyEdited}</SectionTitle>
+          <SectionTitle
+            icon={<Clock size={13} />}
+            count={recent.length}
+            action={
+              <Link
+                href="/changes"
+                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 font-display"
+              >
+                <History size={12} />
+                <span>{t.home.changeHistory}</span>
+              </Link>
+            }
+          >
+            {t.home.recentlyEdited}
+          </SectionTitle>
 
           {groups.length > 0 ? (
             /* Space-Grouped View */
@@ -543,7 +599,7 @@ function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
   return (
     <button
       onClick={() => window.dispatchEvent(new Event('mindos:create-space'))}
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90 cursor-pointer"
+      className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
     >
       <Plus size={12} />
       <span>{t.home.newSpace}</span>

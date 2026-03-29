@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Settings, Menu, X, FolderInput } from 'lucide-react';
@@ -13,7 +13,7 @@ import SearchPanel from './panels/SearchPanel';
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
-import ImportHistoryPanel from './panels/ImportHistoryPanel';
+
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
   RIGHT_AGENT_DETAIL_DEFAULT_WIDTH,
@@ -29,6 +29,7 @@ import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
 import SpaceInitToast from './SpaceInitToast';
 import OrganizeToast from './OrganizeToast';
+import CreateSpaceModal from './CreateSpaceModal';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import { useLocale } from '@/lib/LocaleContext';
@@ -42,6 +43,18 @@ import { useLeftPanel } from '@/hooks/useLeftPanel';
 import { useAskPanel } from '@/hooks/useAskPanel';
 import { useAiOrganize } from '@/hooks/useAiOrganize';
 import type { Tab } from './settings/types';
+
+function collectDirPaths(nodes: FileNode[], prefix = ''): string[] {
+  const result: string[] = [];
+  for (const n of nodes) {
+    if (n.type === 'directory' && !n.name.startsWith('.')) {
+      const p = prefix ? `${prefix}/${n.name}` : n.name;
+      result.push(p);
+      if (n.children) result.push(...collectDirPaths(n.children, p));
+    }
+  }
+  return result;
+}
 
 interface SidebarLayoutProps {
   fileTree: FileNode[];
@@ -131,6 +144,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   const { t } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
+  const dirPaths = useMemo(() => collectDirPaths(fileTree), [fileTree]);
   const { status: syncStatus, fetchStatus: syncStatusRefresh } = useSyncStatus();
 
   const currentFile = pathname.startsWith('/view/')
@@ -375,9 +389,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
           <DiscoverPanel active={lp.activePanel === 'discover'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
-        <div className={`flex flex-col h-full ${lp.activePanel === 'history' ? '' : 'hidden'}`}>
-          <ImportHistoryPanel active={lp.activePanel === 'history'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} refreshToken={historyRefreshToken} />
-        </div>
       </Panel>
 
       {/* ── Right-side Ask AI Panel ── */}
@@ -504,6 +515,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </div>
 
         <SpaceInitToast />
+        <CreateSpaceModal t={t} dirPaths={dirPaths} />
 
         {/* Global drag overlay */}
         {dragOverlay && !importModalOpen && (
