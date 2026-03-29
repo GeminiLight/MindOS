@@ -172,6 +172,8 @@ export async function PATCH(req: NextRequest) {
     if (typeof patch.askedAI === 'boolean') updated.askedAI = patch.askedAI;
     if (typeof patch.nextStepIndex === 'number' && patch.nextStepIndex >= 0) updated.nextStepIndex = patch.nextStepIndex;
     if (typeof patch.active === 'boolean') updated.active = patch.active;
+    if (typeof patch.walkthroughStep === 'number' && patch.walkthroughStep >= 0) updated.walkthroughStep = patch.walkthroughStep;
+    if (typeof patch.walkthroughDismissed === 'boolean') updated.walkthroughDismissed = patch.walkthroughDismissed;
 
     writeSettings({ ...current, guideState: updated });
     return NextResponse.json({ ok: true, guideState: updated });
