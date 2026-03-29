@@ -14,7 +14,6 @@ interface TestResult {
   latency?: number;
   error?: string;
   code?: ErrorCode;
-  streamingSupported?: boolean;
 }
 
 function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
@@ -73,12 +72,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       const json = await res.json();
 
       if (json.ok) {
-        const streamingSupported = json.streamingSupported !== false;
-        setTestResult(prev => ({ ...prev, [providerName]: { state: 'ok', latency: json.latency, streamingSupported } }));
-        // Auto-persist streaming capability so /api/ask uses the right path
-        if (providerName === data.ai.provider) {
-          updateAgent({ useStreaming: streamingSupported });
-        }
+        setTestResult(prev => ({ ...prev, [providerName]: { state: 'ok', latency: json.latency } }));
         if (okTimerRef.current) clearTimeout(okTimerRef.current);
         okTimerRef.current = setTimeout(() => {
           setTestResult(prev => ({ ...prev, [providerName]: { state: 'idle' } }));
@@ -146,9 +140,6 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
         {result.state === 'ok' && result.latency != null && (
           <span className="text-xs text-success">
             {t.settings.ai.testKeyOk(result.latency)}
-            {result.streamingSupported === false && (
-              <span className="text-muted-foreground ml-1.5">{t.settings.ai.streamingFallback}</span>
-            )}
           </span>
         )}
         {result.state === 'error' && (

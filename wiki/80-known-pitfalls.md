@@ -347,9 +347,16 @@
 ### pi-ai openai-completions compat 配置 — 自定义代理必须设 compat flags
 - **现象：** 配了 OpenAI 兼容代理（baseUrl），Agent 请求到达代理但因参数不兼容返回空
 - **原因：** pi-ai 的 `openai-completions` provider 默认启用 `store: false`、`developer` role、`max_completion_tokens`、`stream_options` 等，多数代理不支持
-- **解决：** `model.ts` 检测 `hasCustomBase` 时自动设保守 compat：`supportsStore: false, supportsDeveloperRole: false, supportsUsageInStreaming: false, maxTokensField: 'max_tokens'`
-- **规则：** 自定义 OpenAI 代理默认走最保守兼容配置。只有标准 `api.openai.com` 才用完整特性
+- **解决：** `model.ts` 检测 `hasCustomBase` 时设保守 compat（`supportsStore: false, supportsDeveloperRole: false, supportsUsageInStreaming: false`），但 **不覆盖 `maxTokensField`** —— 交给 pi-ai 根据 URL 自动检测（默认 `max_completion_tokens`）
+- **规则：** 自定义 OpenAI 代理默认走最保守兼容配置，但 `maxTokensField` 由 pi-ai 框架自动检测，禁止手动覆盖
 - **文件：** `app/lib/agent/model.ts`
+
+### gpt-5.4 等新模型拒绝 max_tokens 参数（禁止重复造轮子）
+- **现象：** gpt-5.4 配合中转站使用时，连接测试返回"测试失败"，聊天也无法工作
+- **原因：** gpt-5.4/o1/o3 系列模型要求使用 `max_completion_tokens` 而非 `max_tokens`。我们曾在 `model.ts` 中强制覆盖 `maxTokensField: 'max_tokens'`，但 pi-ai 框架已内置基于 URL 的自动检测逻辑（默认 `max_completion_tokens`），我们的覆盖反而破坏了它。同时还曾为此构建了非流式回退路径（~150 行），但实际上所有现代代理都支持流式
+- **解决：** (1) model.ts 删除 `maxTokensField` 覆盖，完全交给 pi-ai 自动检测 (2) test-key 的 OpenAI 测试请求不发 token 限制参数 (3) 删除整个非流式回退路径（`directNonStreamingCall`、`handleNonStreaming`、`streamingBlacklist`），完全复用 pi-ai 流式路径 (4) 删除 `useStreaming` 配置项和 UI 中的 streaming 检测逻辑
+- **规则：** 禁止在 model.ts compat 中覆盖 `maxTokensField`（pi-ai 已处理）。禁止自建非流式回退（所有代理都支持流式）。test-key 只做连通性 + 工具兼容性测试，不测流式
+- **文件：** `app/lib/agent/model.ts`, `app/app/api/settings/test-key/route.ts`, `app/app/api/ask/route.ts`
 
 ### pi-ai openai-completions vs openai-responses — 代理 API 选择
 - **现象：** 配了 OpenAI 兼容代理，Agent 请求 `/responses` 端点被 403 拒绝

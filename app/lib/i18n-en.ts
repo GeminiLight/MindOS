@@ -844,7 +844,6 @@ export const en = {
       testKeyUnknown: 'Test failed',
       listModels: 'Browse',
       noModelsFound: 'No models found',
-      streamingFallback: '(will use standard mode)',
     },
     agent: {
       title: 'Agent Behavior',
