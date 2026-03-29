@@ -105,8 +105,8 @@ Before any non-trivial write, confirm all checks:
 
 - `mindos_read_file`: Read file content.
 - `mindos_write_file`: Use only for true full replacement.
-- `mindos_create_file`: Create `.md`/`.csv` files.
-- `mindos_create_space`: Create a Mind Space (directory + README + INSTRUCTION scaffold). Prefer over `create_file` when adding a new cognitive zone.
+- `mindos_create_file`: Create `.md`/`.csv` files. Creates parent directories automatically but does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use `mindos_create_space` when you need a Space.
+- `mindos_create_space`: Create a Mind Space (directory + README + INSTRUCTION scaffold). **This is the only way to create a Space.** Regular folders created by `create_file` remain plain directories. Use this when adding a new cognitive zone.
 - `mindos_rename_space`: Rename a Space folder (directory). Do not use `rename_file` for folders.
 - `mindos_delete_file`: Delete only with explicit user intent.
 - `mindos_rename_file`, `mindos_move_file`: Structural edits with follow-up reference checks.

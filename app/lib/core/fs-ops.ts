@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveSafe, assertWithinRoot } from './security';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
-import { scaffoldIfNewSpace, cleanDirName, INSTRUCTION_TEMPLATE, README_TEMPLATE } from './space-scaffold';
+import { cleanDirName, INSTRUCTION_TEMPLATE, README_TEMPLATE } from './space-scaffold';
 
 /**
  * Reads the content of a file given a relative path from mindRoot.
@@ -33,6 +33,8 @@ export function writeFile(mindRoot: string, filePath: string, content: string): 
 /**
  * Creates a new file. Throws if the file already exists.
  * Creates parent directories as needed.
+ * NOTE: Does NOT auto-scaffold Space files (INSTRUCTION.md/README.md).
+ * Use createSpaceFilesystem() or convertToSpace() for explicit Space creation.
  */
 export function createFile(mindRoot: string, filePath: string, initialContent = ''): void {
   const resolved = resolveSafe(mindRoot, filePath);
@@ -41,7 +43,6 @@ export function createFile(mindRoot: string, filePath: string, initialContent = 
   }
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   fs.writeFileSync(resolved, initialContent, 'utf-8');
-  scaffoldIfNewSpace(mindRoot, filePath);
 }
 
 /**

@@ -532,7 +532,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'create_file',
     label: 'Create File',
-    description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically.',
+    description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically. Does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use create_space to create a Space.',
     parameters: CreateFileParams,
     execute: safeExecute(async (_id, params: Static<typeof CreateFileParams>) => {
       createFile(params.path, params.content ?? '');

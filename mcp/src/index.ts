@@ -190,7 +190,7 @@ server.registerTool("mindos_write_file", {
 
 server.registerTool("mindos_create_file", {
   title: "Create New File",
-  description: "Create a new file in the knowledge base. Only .md and .csv files allowed.",
+  description: "Create a new file in the knowledge base. Only .md and .csv files allowed. Creates parent directories but does NOT create Space scaffolding. Use mindos_create_space to create a Space.",
   inputSchema: z.object({
     path: z.string().min(1).regex(/\.(md|csv)$/),
     content: z.string().default(""),
