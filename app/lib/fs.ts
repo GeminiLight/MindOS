@@ -59,9 +59,35 @@ const CACHE_TTL_MS = 5_000; // 5 seconds
 
 let _treeVersion = 0;
 
+function buildCache(root: string): FileTreeCache {
+  const tree = buildFileTree(root);
+  const allFiles: string[] = [];
+  function collect(nodes: FileNode[]) {
+    for (const n of nodes) {
+      if (n.type === 'file') allFiles.push(n.path);
+      else if (n.children) collect(n.children);
+    }
+  }
+  collect(tree);
+  return { tree, allFiles, timestamp: Date.now() };
+}
+
+function sameFileList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((p, i) => p === b[i]);
+}
+
 /** Monotonically increasing counter — bumped on every file mutation so the
  *  client can cheaply detect changes without rebuilding the full tree. */
 export function getTreeVersion(): number {
+  if (_cache && !isCacheValid()) {
+    const next = buildCache(getMindRoot());
+    const changed = !sameFileList(_cache.allFiles, next.allFiles);
+    _cache = next;
+    // External changes can stale the app search index even when the tree shape
+    // is unchanged, so force it to rebuild lazily on the next search.
+    _searchIndex = null;
+    if (changed) _treeVersion++;
+  }
   return _treeVersion;
 }
 
@@ -80,17 +106,7 @@ export function invalidateCache(): void {
 function ensureCache(): FileTreeCache {
   if (isCacheValid()) return _cache!;
   const root = getMindRoot();
-  const tree = buildFileTree(root);
-  // Extract all file paths from the tree to avoid a second full traversal.
-  const allFiles: string[] = [];
-  function collect(nodes: FileNode[]) {
-    for (const n of nodes) {
-      if (n.type === 'file') allFiles.push(n.path);
-      else if (n.children) collect(n.children);
-    }
-  }
-  collect(tree);
-  _cache = { tree, allFiles, timestamp: Date.now() };
+  _cache = buildCache(root);
   return _cache;
 }
 
@@ -588,4 +604,3 @@ export function findBacklinks(targetPath: string): BacklinkEntry[] {
   const { allFiles } = ensureCache();
   return coreFindBacklinks(getMindRoot(), targetPath, allFiles);
 }
-
