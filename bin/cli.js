@@ -771,16 +771,19 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
       // Stage 3: Rebuild
       writeUpdateStatus('rebuilding', vOpts);
-      buildIfNeeded(updatedRoot);
+      let daemonBuildFailed = '';
+      try {
+        buildIfNeeded(updatedRoot);
+      } catch (err) {
+        daemonBuildFailed = err instanceof Error ? err.message : String(err);
+        console.error(yellow(`\n  Pre-build failed: ${daemonBuildFailed}`));
+        console.error(yellow('  Daemon will attempt to rebuild on startup...\n'));
+      }
 
-      // Stage 4: Restart
+      // Stage 4: Restart — always attempt, even if pre-build failed
+      // (daemon has auto-restart; `mindos start` retries the build)
       writeUpdateStatus('restarting', vOpts);
       await runGatewayCommand('install');
-      // install() starts the service:
-      //   - systemd: daemon-reload + enable + start
-      //   - launchd: bootstrap (RunAtLoad=true auto-starts)
-      // Do NOT call start() again — on macOS kickstart -k would kill the
-      // just-started process, causing a port-conflict race with KeepAlive.
       const updateConfig = (() => {
         try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
       })();
@@ -799,8 +802,11 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.log(`${'─'.repeat(53)}\n`);
         writeUpdateStatus('done', vOpts);
       } else {
-        writeUpdateFailed('restarting', 'Server did not come back up in time', vOpts);
-        console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
+        const failMsg = daemonBuildFailed
+          ? `Build failed (${daemonBuildFailed}), server did not come back up`
+          : 'Server did not come back up in time';
+        writeUpdateFailed('restarting', failMsg, vOpts);
+        console.error(red(`✘ ${failMsg}. Check logs: mindos logs\n`));
         process.exit(1);
       }
     } else {
@@ -828,9 +834,17 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
         // Stage 3: Rebuild
         writeUpdateStatus('rebuilding', vOpts);
-        buildIfNeeded(updatedRoot);
+        let buildFailed = '';
+        try {
+          buildIfNeeded(updatedRoot);
+        } catch (err) {
+          buildFailed = err instanceof Error ? err.message : String(err);
+          console.error(yellow(`\n  Pre-build failed: ${buildFailed}`));
+          console.error(yellow('  Starting server anyway (it will retry the build)...\n'));
+        }
 
-        // Stage 4: Restart
+        // Stage 4: Restart — always attempt, even if pre-build failed
+        // (`mindos start` has its own build-on-startup logic)
         writeUpdateStatus('restarting', vOpts);
         const newCliPath = resolve(updatedRoot, 'bin', 'cli.js');
         const childEnv = { ...process.env };
@@ -858,13 +872,22 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
           console.log(`${'─'.repeat(53)}\n`);
           writeUpdateStatus('done', vOpts);
         } else {
-          writeUpdateFailed('restarting', 'Server did not come back up in time', vOpts);
-          console.error(red('✘ MindOS did not come back up in time. Check logs: mindos logs\n'));
+          const failMsg = buildFailed
+            ? `Build failed (${buildFailed}), server did not come back up`
+            : 'Server did not come back up in time';
+          writeUpdateFailed('restarting', failMsg, vOpts);
+          console.error(red(`✘ ${failMsg}. Check logs: mindos logs\n`));
           process.exit(1);
         }
       } else {
         // No running instance — just build and tell user to start manually
-        buildIfNeeded(updatedRoot);
+        try {
+          buildIfNeeded(updatedRoot);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(yellow(`\n  Pre-build failed: ${msg}`));
+          console.error(dim('  The build will be retried when you run `mindos start`.'));
+        }
         console.log(`\n${green('✔')} ${bold(`Updated: ${currentVersion} → ${newVersion}`)}`);
         console.log(dim('  Run `mindos start` to start the updated version.'));
         console.log(`  ${dim('View changelog:')}  ${cyan('https://github.com/GeminiLight/MindOS/releases')}\n`);
