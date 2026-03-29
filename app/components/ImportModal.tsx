@@ -73,11 +73,18 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); handleClose(); }
+      if (e.key !== 'Escape') return;
+      if (showDiscard) {
+        e.stopPropagation();
+        setShowDiscard(false);
+        return;
+      }
+      e.stopPropagation();
+      handleClose();
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [open, handleClose]);
+  }, [open, handleClose, showDiscard]);
 
   const checkConflicts = useCallback(async (fileNames: string[], space: string) => {
     try {
@@ -197,15 +204,6 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
 
   return (
     <>
-      <ConfirmDialog
-        open={showDiscard}
-        title={t.fileImport.discardTitle}
-        message={t.fileImport.discardMessage(im.files.length)}
-        confirmLabel={t.fileImport.discardConfirm}
-        cancelLabel={t.fileImport.discardCancel}
-        onConfirm={doClose}
-        onCancel={() => setShowDiscard(false)}
-      />
       <div
         ref={overlayRef}
         className={`fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 transition-opacity duration-200 ${closing ? 'opacity-0' : 'opacity-100'}`}
@@ -507,6 +505,15 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={showDiscard}
+        title={t.fileImport.discardTitle}
+        message={t.fileImport.discardMessage(im.files.length)}
+        confirmLabel={t.fileImport.discardConfirm}
+        cancelLabel={t.fileImport.discardCancel}
+        onConfirm={doClose}
+        onCancel={() => setShowDiscard(false)}
+      />
     </>
   );
 }
