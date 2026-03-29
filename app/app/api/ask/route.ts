@@ -670,7 +670,7 @@ export async function POST(req: NextRequest) {
 interface NonStreamingOpts {
   provider: 'anthropic' | 'openai';
   apiKey: string;
-  model: { id: string; baseUrl?: string; maxTokens?: number; [k: string]: unknown };
+  model: { id: string; baseUrl?: string; maxTokens?: number };
   systemPrompt: string;
   messages: FrontendMessage[];
   modelName: string;
