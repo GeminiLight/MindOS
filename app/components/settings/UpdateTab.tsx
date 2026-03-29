@@ -202,7 +202,14 @@ function DesktopUpdateTab() {
 
         {state === 'ready' && (
           <button
-            onClick={() => bridge.installUpdate()}
+            onClick={async () => {
+              try {
+                await bridge.installUpdate();
+              } catch {
+                setState('error');
+                setErrorMsg(u?.error ?? 'Failed to install update. Please try again.');
+              }
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
             <RefreshCw size={12} />
