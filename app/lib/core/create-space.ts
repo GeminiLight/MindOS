@@ -1,5 +1,8 @@
+import fs from 'fs';
+import path from 'path';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
 import { createFile } from './fs-ops';
+import { INSTRUCTION_TEMPLATE, cleanDirName } from './space-scaffold';
 
 /**
  * Generate the template README.md content for a new space.
@@ -39,5 +42,14 @@ export function createSpaceFilesystem(
   const readmeContent = generateReadmeTemplate(fullPath, trimmed, description);
 
   createFile(mindRoot, `${fullPath}/README.md`, readmeContent);
+
+  // Explicitly create INSTRUCTION.md for ALL spaces (including nested ones).
+  // scaffoldIfNewSpace only handles top-level dirs; nested spaces need this.
+  const absDir = path.resolve(mindRoot, fullPath);
+  const instructionPath = path.join(absDir, 'INSTRUCTION.md');
+  if (!fs.existsSync(instructionPath)) {
+    fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(cleanDirName(trimmed)), 'utf-8');
+  }
+
   return { path: fullPath };
 }
