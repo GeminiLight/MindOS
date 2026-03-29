@@ -57,6 +57,8 @@ export function getModelConfig(): {
     // For custom proxy endpoints, set conservative compat flags.
     // Most proxies (Azure, Bedrock relays, corporate gateways) only support
     // a subset of OpenAI's features. These defaults prevent silent failures.
+    // NOTE: maxTokensField is NOT overridden — pi-ai auto-detects the correct
+    // field based on URL (defaults to max_completion_tokens for modern APIs).
     if (hasCustomBase) {
       model = {
         ...model,
@@ -68,7 +70,6 @@ export function getModelConfig(): {
           supportsReasoningEffort: false,
           supportsUsageInStreaming: false,
           supportsStrictMode: false,
-          maxTokensField: 'max_tokens' as const,
         },
       };
       if (customApiVariant) {

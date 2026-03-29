@@ -868,7 +868,6 @@ export const zh = {
       testKeyUnknown: '测试失败',
       listModels: '选择模型',
       noModelsFound: '未找到可用模型',
-      streamingFallback: '（将使用标准模式）',
     },
     agent: {
       title: 'Agent 行为',

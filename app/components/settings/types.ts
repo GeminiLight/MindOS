@@ -21,7 +21,6 @@ export interface AgentSettings {
   thinkingBudget?: number;
   contextStrategy?: 'auto' | 'off';
   reconnectRetries?: number;
-  useStreaming?: boolean;
 }
 
 export interface SettingsData {

@@ -16,8 +16,8 @@ import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { getModelConfig } from '@/lib/agent/model';
-import { getRequestScopedTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
-import { AGENT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
+import { getRequestScopedTools, getOrganizeTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
+import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
 import { logAgentOp } from '@/lib/agent/log';
 import { readSettings } from '@/lib/settings';
@@ -26,24 +26,6 @@ import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import type { Message as FrontendMessage } from '@/lib/types';
-
-// ---------------------------------------------------------------------------
-// Streaming blacklist — caches provider+model combos that don't support SSE.
-// Auto-populated when streaming fails; entries expire after 10 minutes
-// so transient proxy issues don't permanently lock out streaming.
-// ---------------------------------------------------------------------------
-const streamingBlacklist = new Map<string, number>();
-const STREAMING_BLACKLIST_TTL = 10 * 60 * 1000;
-
-function isStreamingBlacklisted(key: string): boolean {
-  const ts = streamingBlacklist.get(key);
-  if (ts === undefined) return false;
-  if (Date.now() - ts > STREAMING_BLACKLIST_TTL) {
-    streamingBlacklist.delete(key);
-    return false;
-  }
-  return true;
-}
 
 // ---------------------------------------------------------------------------
 // MindOS SSE format — 6 event types (front-back contract)
@@ -270,6 +252,8 @@ export async function POST(req: NextRequest) {
     attachedFiles?: string[];
     uploadedFiles?: Array<{ name: string; content: string }>;
     maxSteps?: number;
+    /** 'organize' = lean prompt for file import organize; default = full prompt */
+    mode?: 'organize' | 'default';
   };
   try {
     body = await req.json();
@@ -278,6 +262,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, currentFile, attachedFiles, uploadedFiles } = body;
+  const isOrganizeMode = body.mode === 'organize';
 
   // Read agent config from settings
   const serverSettings = readSettings();
@@ -289,99 +274,7 @@ export async function POST(req: NextRequest) {
   const thinkingBudget = agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
-  // Auto-load skill + bootstrap context for each request.
-  // 1. SKILL.md — complete skill with operating rules (always loaded)
-  // 2. user-skill-rules.md — user's personalized rules from KB root (if exists)
-  const isZh = serverSettings.disabledSkills?.includes('mindos') ?? false;
-  const skillDirName = isZh ? 'mindos-zh' : 'mindos';
-  const appDir = process.env.MINDOS_PROJECT_ROOT
-    ? path.join(process.env.MINDOS_PROJECT_ROOT, 'app')
-    : process.cwd();
-  const skillPath = path.join(appDir, `data/skills/${skillDirName}/SKILL.md`);
-  const skill = readAbsoluteFile(skillPath);
-
-  const mindRoot = getMindRoot();
-  const userSkillRules = readKnowledgeFile('user-skill-rules.md');
-
-  const targetDir = dirnameOf(currentFile);
-  const bootstrap = {
-    instruction: readKnowledgeFile('INSTRUCTION.md'),
-    index: readKnowledgeFile('README.md'),
-    config_json: readKnowledgeFile('CONFIG.json'),
-    config_md: readKnowledgeFile('CONFIG.md'),
-    target_readme: targetDir ? readKnowledgeFile(`${targetDir}/README.md`) : null,
-    target_instruction: targetDir ? readKnowledgeFile(`${targetDir}/INSTRUCTION.md`) : null,
-    target_config_json: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.json`) : null,
-    target_config_md: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.md`) : null,
-  };
-
-  // Only report failures + truncation warnings
-  const initFailures: string[] = [];
-  const truncationWarnings: string[] = [];
-  if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
-  if (skill.ok && skill.truncated) truncationWarnings.push('skill.mindos was truncated');
-  if (userSkillRules.ok && userSkillRules.truncated) truncationWarnings.push('user-skill-rules.md was truncated');
-  if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
-  if (bootstrap.instruction.ok && bootstrap.instruction.truncated) truncationWarnings.push('bootstrap.instruction was truncated');
-  if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
-  if (bootstrap.index.ok && bootstrap.index.truncated) truncationWarnings.push('bootstrap.index was truncated');
-  if (!bootstrap.config_json.ok) initFailures.push(`bootstrap.config_json: failed (${bootstrap.config_json.error})`);
-  if (bootstrap.config_json.ok && bootstrap.config_json.truncated) truncationWarnings.push('bootstrap.config_json was truncated');
-  if (!bootstrap.config_md.ok) initFailures.push(`bootstrap.config_md: failed (${bootstrap.config_md.error})`);
-  if (bootstrap.config_md.ok && bootstrap.config_md.truncated) truncationWarnings.push('bootstrap.config_md was truncated');
-  if (bootstrap.target_readme && !bootstrap.target_readme.ok) initFailures.push(`bootstrap.target_readme: failed (${bootstrap.target_readme.error})`);
-  if (bootstrap.target_readme?.ok && bootstrap.target_readme.truncated) truncationWarnings.push('bootstrap.target_readme was truncated');
-  if (bootstrap.target_instruction && !bootstrap.target_instruction.ok) initFailures.push(`bootstrap.target_instruction: failed (${bootstrap.target_instruction.error})`);
-  if (bootstrap.target_instruction?.ok && bootstrap.target_instruction.truncated) truncationWarnings.push('bootstrap.target_instruction was truncated');
-  if (bootstrap.target_config_json && !bootstrap.target_config_json.ok) initFailures.push(`bootstrap.target_config_json: failed (${bootstrap.target_config_json.error})`);
-  if (bootstrap.target_config_json?.ok && bootstrap.target_config_json.truncated) truncationWarnings.push('bootstrap.target_config_json was truncated');
-  if (bootstrap.target_config_md && !bootstrap.target_config_md.ok) initFailures.push(`bootstrap.target_config_md: failed (${bootstrap.target_config_md.error})`);
-  if (bootstrap.target_config_md?.ok && bootstrap.target_config_md.truncated) truncationWarnings.push('bootstrap.target_config_md was truncated');
-
-  const initStatus = initFailures.length === 0
-    ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? ` ⚠️ ${truncationWarnings.length} files truncated` : ''}`
-    : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? `\n⚠️ Warnings:\n${truncationWarnings.join('\n')}` : ''}`;
-
-  const initContextBlocks: string[] = [];
-  if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
-  // User personalization rules (from knowledge base root)
-  if (userSkillRules.ok && !userSkillRules.truncated && userSkillRules.content.trim()) {
-    initContextBlocks.push(`## user_skill_rules\n\nUser personalization rules (user-skill-rules.md):\n\n${userSkillRules.content}`);
-  }
-  if (bootstrap.instruction.ok) initContextBlocks.push(`## bootstrap_instruction\n\n${bootstrap.instruction.content}`);
-  if (bootstrap.index.ok) initContextBlocks.push(`## bootstrap_index\n\n${bootstrap.index.content}`);
-  if (bootstrap.config_json.ok) initContextBlocks.push(`## bootstrap_config_json\n\n${bootstrap.config_json.content}`);
-  if (bootstrap.config_md.ok) initContextBlocks.push(`## bootstrap_config_md\n\n${bootstrap.config_md.content}`);
-  if (bootstrap.target_readme?.ok) initContextBlocks.push(`## bootstrap_target_readme\n\n${bootstrap.target_readme.content}`);
-  if (bootstrap.target_instruction?.ok) initContextBlocks.push(`## bootstrap_target_instruction\n\n${bootstrap.target_instruction.content}`);
-  if (bootstrap.target_config_json?.ok) initContextBlocks.push(`## bootstrap_target_config_json\n\n${bootstrap.target_config_json.content}`);
-  if (bootstrap.target_config_md?.ok) initContextBlocks.push(`## bootstrap_target_config_md\n\n${bootstrap.target_config_md.content}`);
-
-  // Build initial context from attached/current files
-  const contextParts: string[] = [];
-  const seen = new Set<string>();
-  const hasAttached = Array.isArray(attachedFiles) && attachedFiles.length > 0;
-
-  if (hasAttached) {
-    for (const filePath of attachedFiles!) {
-      if (seen.has(filePath)) continue;
-      seen.add(filePath);
-      try {
-        const content = truncate(getFileContent(filePath));
-        contextParts.push(`## Attached: ${filePath}\n\n${content}`);
-      } catch { /* ignore missing files */ }
-    }
-  }
-
-  if (currentFile && !seen.has(currentFile)) {
-    seen.add(currentFile);
-    try {
-      const content = truncate(getFileContent(currentFile));
-      contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
-    } catch { /* ignore */ }
-  }
-
-  // Uploaded files
+  // Uploaded files — shared by both modes
   const uploadedParts: string[] = [];
   if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
     for (const f of uploadedFiles.slice(0, 8)) {
@@ -390,60 +283,158 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Generate current time for the agent's context
-  const now = new Date();
-  const timeContext = `## Current Time Context
+  // ---------------------------------------------------------------------------
+  // Build system prompt — lean path for organize mode, full path otherwise
+  // ---------------------------------------------------------------------------
+  let systemPrompt: string;
+
+  if (isOrganizeMode) {
+    // Organize mode: minimal prompt — only KB structure + uploaded files
+    const promptParts: string[] = [ORGANIZE_SYSTEM_PROMPT];
+
+    promptParts.push(`---\n\nmind_root=${getMindRoot()}`);
+
+    // Only load root README.md for KB structure awareness (skip SKILL.md, configs, target dir, time, etc.)
+    const bootstrapIndex = readKnowledgeFile('README.md');
+    if (bootstrapIndex.ok) {
+      promptParts.push(`---\n\n## Knowledge Base Structure\n\n${bootstrapIndex.content}`);
+    }
+
+    if (uploadedParts.length > 0) {
+      promptParts.push(
+        `---\n\n## ⚠️ USER-UPLOADED FILES\n\n` +
+        `Their FULL CONTENT is below. Use this directly — do NOT call read tools on them.\n\n` +
+        uploadedParts.join('\n\n---\n\n'),
+      );
+    }
+
+    systemPrompt = promptParts.join('\n\n');
+  } else {
+    // Full mode: original prompt assembly
+    // Auto-load skill + bootstrap context for each request.
+    const isZh = serverSettings.disabledSkills?.includes('mindos') ?? false;
+    const skillDirName = isZh ? 'mindos-zh' : 'mindos';
+    const appDir = process.env.MINDOS_PROJECT_ROOT
+      ? path.join(process.env.MINDOS_PROJECT_ROOT, 'app')
+      : process.cwd();
+    const skillPath = path.join(appDir, `data/skills/${skillDirName}/SKILL.md`);
+    const skill = readAbsoluteFile(skillPath);
+
+    const userSkillRules = readKnowledgeFile('user-skill-rules.md');
+
+    const targetDir = dirnameOf(currentFile);
+    const bootstrap = {
+      instruction: readKnowledgeFile('INSTRUCTION.md'),
+      index: readKnowledgeFile('README.md'),
+      config_json: readKnowledgeFile('CONFIG.json'),
+      config_md: readKnowledgeFile('CONFIG.md'),
+      target_readme: targetDir ? readKnowledgeFile(`${targetDir}/README.md`) : null,
+      target_instruction: targetDir ? readKnowledgeFile(`${targetDir}/INSTRUCTION.md`) : null,
+      target_config_json: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.json`) : null,
+      target_config_md: targetDir ? readKnowledgeFile(`${targetDir}/CONFIG.md`) : null,
+    };
+
+    // Only report failures + truncation warnings
+    const initFailures: string[] = [];
+    const truncationWarnings: string[] = [];
+    if (!skill.ok) initFailures.push(`skill.mindos: failed (${skill.error})`);
+    if (skill.ok && skill.truncated) truncationWarnings.push('skill.mindos was truncated');
+    if (userSkillRules.ok && userSkillRules.truncated) truncationWarnings.push('user-skill-rules.md was truncated');
+    if (!bootstrap.instruction.ok) initFailures.push(`bootstrap.instruction: failed (${bootstrap.instruction.error})`);
+    if (bootstrap.instruction.ok && bootstrap.instruction.truncated) truncationWarnings.push('bootstrap.instruction was truncated');
+    if (!bootstrap.index.ok) initFailures.push(`bootstrap.index: failed (${bootstrap.index.error})`);
+    if (bootstrap.index.ok && bootstrap.index.truncated) truncationWarnings.push('bootstrap.index was truncated');
+    if (!bootstrap.config_json.ok) initFailures.push(`bootstrap.config_json: failed (${bootstrap.config_json.error})`);
+    if (bootstrap.config_json.ok && bootstrap.config_json.truncated) truncationWarnings.push('bootstrap.config_json was truncated');
+    if (!bootstrap.config_md.ok) initFailures.push(`bootstrap.config_md: failed (${bootstrap.config_md.error})`);
+    if (bootstrap.config_md.ok && bootstrap.config_md.truncated) truncationWarnings.push('bootstrap.config_md was truncated');
+    if (bootstrap.target_readme && !bootstrap.target_readme.ok) initFailures.push(`bootstrap.target_readme: failed (${bootstrap.target_readme.error})`);
+    if (bootstrap.target_readme?.ok && bootstrap.target_readme.truncated) truncationWarnings.push('bootstrap.target_readme was truncated');
+    if (bootstrap.target_instruction && !bootstrap.target_instruction.ok) initFailures.push(`bootstrap.target_instruction: failed (${bootstrap.target_instruction.error})`);
+    if (bootstrap.target_instruction?.ok && bootstrap.target_instruction.truncated) truncationWarnings.push('bootstrap.target_instruction was truncated');
+    if (bootstrap.target_config_json && !bootstrap.target_config_json.ok) initFailures.push(`bootstrap.target_config_json: failed (${bootstrap.target_config_json.error})`);
+    if (bootstrap.target_config_json?.ok && bootstrap.target_config_json.truncated) truncationWarnings.push('bootstrap.target_config_json was truncated');
+    if (bootstrap.target_config_md && !bootstrap.target_config_md.ok) initFailures.push(`bootstrap.target_config_md: failed (${bootstrap.target_config_md.error})`);
+    if (bootstrap.target_config_md?.ok && bootstrap.target_config_md.truncated) truncationWarnings.push('bootstrap.target_config_md was truncated');
+
+    const initStatus = initFailures.length === 0
+      ? `All initialization contexts loaded successfully. mind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? ` ⚠️ ${truncationWarnings.length} files truncated` : ''}`
+      : `Initialization issues:\n${initFailures.join('\n')}\nmind_root=${getMindRoot()}${targetDir ? `, target_dir=${targetDir}` : ''}${truncationWarnings.length > 0 ? `\n⚠️ Warnings:\n${truncationWarnings.join('\n')}` : ''}`;
+
+    const initContextBlocks: string[] = [];
+    if (skill.ok) initContextBlocks.push(`## mindos_skill_md\n\n${skill.content}`);
+    if (userSkillRules.ok && !userSkillRules.truncated && userSkillRules.content.trim()) {
+      initContextBlocks.push(`## user_skill_rules\n\nUser personalization rules (user-skill-rules.md):\n\n${userSkillRules.content}`);
+    }
+    if (bootstrap.instruction.ok) initContextBlocks.push(`## bootstrap_instruction\n\n${bootstrap.instruction.content}`);
+    if (bootstrap.index.ok) initContextBlocks.push(`## bootstrap_index\n\n${bootstrap.index.content}`);
+    if (bootstrap.config_json.ok) initContextBlocks.push(`## bootstrap_config_json\n\n${bootstrap.config_json.content}`);
+    if (bootstrap.config_md.ok) initContextBlocks.push(`## bootstrap_config_md\n\n${bootstrap.config_md.content}`);
+    if (bootstrap.target_readme?.ok) initContextBlocks.push(`## bootstrap_target_readme\n\n${bootstrap.target_readme.content}`);
+    if (bootstrap.target_instruction?.ok) initContextBlocks.push(`## bootstrap_target_instruction\n\n${bootstrap.target_instruction.content}`);
+    if (bootstrap.target_config_json?.ok) initContextBlocks.push(`## bootstrap_target_config_json\n\n${bootstrap.target_config_json.content}`);
+    if (bootstrap.target_config_md?.ok) initContextBlocks.push(`## bootstrap_target_config_md\n\n${bootstrap.target_config_md.content}`);
+
+    // Build initial context from attached/current files
+    const contextParts: string[] = [];
+    const seen = new Set<string>();
+    const hasAttached = Array.isArray(attachedFiles) && attachedFiles.length > 0;
+
+    if (hasAttached) {
+      for (const filePath of attachedFiles!) {
+        if (seen.has(filePath)) continue;
+        seen.add(filePath);
+        try {
+          const content = truncate(getFileContent(filePath));
+          contextParts.push(`## Attached: ${filePath}\n\n${content}`);
+        } catch { /* ignore missing files */ }
+      }
+    }
+
+    if (currentFile && !seen.has(currentFile)) {
+      seen.add(currentFile);
+      try {
+        const content = truncate(getFileContent(currentFile));
+        contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
+      } catch { /* ignore */ }
+    }
+
+    const now = new Date();
+    const timeContext = `## Current Time Context
 - Current UTC Time: ${now.toISOString()}
 - System Local Time: ${new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'long' }).format(now)}
 - Unix Timestamp: ${Math.floor(now.getTime() / 1000)}
 
 *Note: The times listed above represent "NOW". The user may have sent messages hours or days ago in this same conversation thread. Each user message in the history contains its own specific timestamp which you should refer to when understanding historical context.*`;
 
-  const promptParts: string[] = [AGENT_SYSTEM_PROMPT];
-  
-  promptParts.push(`---\n\n${timeContext}`);
-  
-  promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${initStatus}`);
+    const promptParts: string[] = [AGENT_SYSTEM_PROMPT];
+    promptParts.push(`---\n\n${timeContext}`);
+    promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${initStatus}`);
 
-  if (initContextBlocks.length > 0) {
-    promptParts.push(`---\n\nInitialization context:\n\n${initContextBlocks.join('\n\n---\n\n')}`);
+    if (initContextBlocks.length > 0) {
+      promptParts.push(`---\n\nInitialization context:\n\n${initContextBlocks.join('\n\n---\n\n')}`);
+    }
+
+    if (contextParts.length > 0) {
+      promptParts.push(`---\n\nThe user is currently viewing these files:\n\n${contextParts.join('\n\n---\n\n')}`);
+    }
+
+    if (uploadedParts.length > 0) {
+      promptParts.push(
+        `---\n\n## ⚠️ USER-UPLOADED FILES (ACTIVE ATTACHMENTS)\n\n` +
+        `The user has uploaded the following file(s) in this conversation. ` +
+        `Their FULL CONTENT is provided below. You MUST use this content directly when the user refers to these files. ` +
+        `Do NOT use read_file or search tools to find them — they exist only here, not in the knowledge base.\n\n` +
+        uploadedParts.join('\n\n---\n\n'),
+      );
+    }
+
+    systemPrompt = promptParts.join('\n\n');
   }
-
-  if (contextParts.length > 0) {
-    promptParts.push(`---\n\nThe user is currently viewing these files:\n\n${contextParts.join('\n\n---\n\n')}`);
-  }
-
-  if (uploadedParts.length > 0) {
-    promptParts.push(
-      `---\n\n## ⚠️ USER-UPLOADED FILES (ACTIVE ATTACHMENTS)\n\n` +
-      `The user has uploaded the following file(s) in this conversation. ` +
-      `Their FULL CONTENT is provided below. You MUST use this content directly when the user refers to these files. ` +
-      `Do NOT use read_file or search tools to find them — they exist only here, not in the knowledge base.\n\n` +
-      uploadedParts.join('\n\n---\n\n'),
-    );
-  }
-
-  const systemPrompt = promptParts.join('\n\n');
-
-  const useStreaming = agentConfig.useStreaming !== false;
 
   try {
     const { model, modelName, apiKey, provider } = getModelConfig();
 
-    // ── Non-streaming path (auto-detected or cached) ──
-    // When test-key detected streaming incompatibility, or a previous request
-    // failed and cached the result, go directly to non-streaming.
-    const cacheKey = `${provider}:${model.id}:${model.baseUrl ?? ''}`;
-    if (!useStreaming || isStreamingBlacklisted(cacheKey)) {
-      if (isStreamingBlacklisted(cacheKey)) {
-        console.log(`[ask] Using non-streaming mode (cached failure for ${cacheKey})`);
-      }
-      return await handleNonStreaming({
-        provider, apiKey, model, systemPrompt, messages, modelName,
-      });
-    }
-
-    // ── Streaming path (default) ──
     // Convert frontend messages to AgentMessage[]
     const agentMessages = toAgentMessages(messages);
 
@@ -458,7 +449,7 @@ export async function POST(req: NextRequest) {
     // Capture API key for this request — safe since each POST creates a new Agent instance.
     const requestApiKey = apiKey;
     const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-    const requestTools = await getRequestScopedTools();
+    const requestTools = isOrganizeMode ? getOrganizeTools() : await getRequestScopedTools();
     const customTools = toPiCustomToolDefinitions(requestTools);
 
     const authStorage = AuthStorage.create();
@@ -612,27 +603,10 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        session.prompt(lastUserContent).then(async () => {
+        session.prompt(lastUserContent).then(() => {
           metrics.recordRequest(Date.now() - requestStartTime);
           if (!hasContent && lastModelError) {
-            // Streaming failed — auto-retry with non-streaming fallback.
-            // Cache the failure so subsequent requests skip streaming entirely.
-            console.warn(`[ask] Streaming failed for ${modelName}, retrying non-streaming: ${lastModelError}`);
-            streamingBlacklist.set(cacheKey, Date.now());
-            // No visible hint needed — the fallback is transparent to the user
-            try {
-              const fallbackResult = await directNonStreamingCall({
-                provider, apiKey, model, systemPrompt, messages, modelName,
-              });
-              if (fallbackResult) {
-                send({ type: 'text_delta', delta: fallbackResult });
-                send({ type: 'done' });
-              } else {
-                send({ type: 'error', message: lastModelError });
-              }
-            } catch (fallbackErr) {
-              send({ type: 'error', message: lastModelError });
-            }
+            send({ type: 'error', message: lastModelError });
           } else {
             send({ type: 'done' });
           }
@@ -663,145 +637,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Non-streaming — direct /chat/completions call (no SSE, no tools)
-// ---------------------------------------------------------------------------
-
-interface NonStreamingOpts {
-  provider: 'anthropic' | 'openai';
-  apiKey: string;
-  model: { id: string; baseUrl?: string; maxTokens?: number };
-  systemPrompt: string;
-  messages: FrontendMessage[];
-  modelName: string;
-}
-
-/**
- * Core non-streaming API call. Returns the response text or throws.
- * Used by both the direct non-streaming path and the auto-fallback.
- */
-async function directNonStreamingCall(opts: NonStreamingOpts): Promise<string> {
-  const { provider, apiKey, model, systemPrompt, messages, modelName } = opts;
-  const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 120_000);
-
-  try {
-    if (provider === 'openai') {
-      const baseUrl = (model.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
-      const url = `${baseUrl}/chat/completions`;
-      const apiMessages = [
-        { role: 'system', content: systemPrompt },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-      ];
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: model.id,
-          messages: apiMessages,
-          stream: false,
-          max_tokens: model.maxTokens ?? 16_384,
-        }),
-        signal: ctrl.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(`API returned ${res.status}: ${body.slice(0, 500)}`);
-      }
-
-      const json = await res.json();
-      return json?.choices?.[0]?.message?.content ?? '';
-    }
-
-    // Anthropic
-    const url = 'https://api.anthropic.com/v1/messages';
-    const apiMessages = messages.map(m => ({ role: m.role, content: m.content }));
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: model.id,
-        system: systemPrompt,
-        messages: apiMessages,
-        max_tokens: model.maxTokens ?? 8_192,
-      }),
-      signal: ctrl.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`API returned ${res.status}: ${body.slice(0, 500)}`);
-    }
-
-    const json = await res.json();
-    const blocks = json?.content;
-    if (Array.isArray(blocks)) {
-      return blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    }
-    return '';
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * Full non-streaming response handler — wraps directNonStreamingCall
- * and returns an SSE-formatted Response for the client.
- */
-async function handleNonStreaming(opts: NonStreamingOpts): Promise<Response> {
-  const { modelName } = opts;
-  const requestStartTime = Date.now();
-  const encoder = new TextEncoder();
-
-  try {
-    const text = await directNonStreamingCall(opts);
-    metrics.recordRequest(Date.now() - requestStartTime);
-
-    if (!text) {
-      metrics.recordError();
-      return sseResponse(encoder, { type: 'error', message: `[non-streaming] ${modelName} returned empty response` });
-    }
-
-    console.log(`[ask] Non-streaming response from ${modelName}: ${text.length} chars`);
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(`data:${JSON.stringify({ type: 'text_delta', delta: text })}\n\n`));
-        controller.enqueue(encoder.encode(`data:${JSON.stringify({ type: 'done' })}\n\n`));
-        controller.close();
-      },
-    });
-    return new Response(stream, { headers: sseHeaders() });
-  } catch (err) {
-    metrics.recordRequest(Date.now() - requestStartTime);
-    metrics.recordError();
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[ask] Non-streaming request failed:`, message);
-    return sseResponse(encoder, { type: 'error', message });
-  }
-}
-
-function sseResponse(encoder: TextEncoder, event: MindOSSSEvent): Response {
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
-      controller.close();
-    },
-  });
-  return new Response(stream, { headers: sseHeaders() });
-}
-
-function sseHeaders(): HeadersInit {
-  return {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  };
-}
