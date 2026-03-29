@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-22 | Current stage: 规划 -->
+<!-- Last verified: 2026-03-30 | Current stage: 初版完成 -->
 
 # Stage 14 — 桌面安装包 (Desktop Installer)
 
@@ -6,10 +6,10 @@
 
 | # | 功能 | 状态 | 备注 |
 |---|------|------|------|
-| 14A | 自包含运行包 | 📋 | 内嵌 Node.js binary + standalone 目录 |
-| 14B | 平台安装包 | 📋 | macOS .dmg / Windows .msi / Linux .AppImage |
-| 14C | 系统托盘 + 原生窗口 | 📋 | Tauri v2 shell，嵌入 Web UI |
-| 14D | 自动更新 | 📋 | Tauri updater，检查 GitHub Releases |
+| 14A | 自包含运行包 | ✅ 初版完成 | 内嵌 Node.js binary + standalone 目录，Electron 打包 ~198MB |
+| 14B | 平台安装包 | ✅ 初版完成 | macOS .dmg 可用，desktop/ 目录已实现 |
+| 14C | 系统托盘 + 原生窗口 | 📋 | Tauri v2 shell，嵌入 Web UI（Phase 2） |
+| 14D | 自动更新 | 📋 | Tauri updater，检查 GitHub Releases（Phase 2） |
 
 ---
 
