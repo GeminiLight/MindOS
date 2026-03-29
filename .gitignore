@@ -76,3 +76,4 @@ tmux-manage.sh
 tmux-sessions.conf
 .mcp.json
 collect-session-ids.py
+local-scripts/
