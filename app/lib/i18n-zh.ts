@@ -723,6 +723,8 @@ export const zh = {
     newFile: '新建文件',
     importFile: '导入文件',
     importToSpace: '导入文件到此空间',
+    copyPath: '复制路径',
+    pathCopied: '路径已复制',
   },
   fileImport: {
     title: '导入文件',

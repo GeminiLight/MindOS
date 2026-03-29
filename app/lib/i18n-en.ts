@@ -699,6 +699,8 @@ export const en = {
     newFile: 'New File',
     importFile: 'Import File',
     importToSpace: 'Import file to this space',
+    copyPath: 'Copy Path',
+    pathCopied: 'Path copied',
   },
   fileImport: {
     title: 'Import Files',
