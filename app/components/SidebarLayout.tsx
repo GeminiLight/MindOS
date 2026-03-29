@@ -345,11 +345,21 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       <ActivityBar
         activePanel={railActivePanel}
         onPanelChange={lp.setActivePanel}
+        onEchoClick={() => {
+          const wasActive = lp.activePanel === 'echo';
+          lp.setActivePanel(wasActive ? null : 'echo');
+          if (!wasActive) router.push('/echo/about-you');
+        }}
         onAgentsClick={() => {
           const wasActive = lp.activePanel === 'agents';
           lp.setActivePanel(wasActive ? null : 'agents');
           if (!wasActive) router.push('/agents');
           setAgentDetailKey(null);
+        }}
+        onDiscoverClick={() => {
+          const wasActive = lp.activePanel === 'discover';
+          lp.setActivePanel(wasActive ? null : 'discover');
+          if (!wasActive) router.push('/explore');
         }}
         syncStatus={syncStatus}
         expanded={lp.railExpanded}
