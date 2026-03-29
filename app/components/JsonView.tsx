@@ -16,11 +16,8 @@ export default function JsonView({ content }: JsonViewProps) {
   }, [content]);
 
   return (
-    <pre
-      className="rounded-xl border border-border bg-card px-4 py-3 overflow-x-auto text-sm leading-relaxed font-display"
-      suppressHydrationWarning
-    >
-      <code>{pretty}</code>
+    <pre className="rounded-xl border border-border bg-card px-4 py-3 overflow-x-auto text-sm leading-relaxed font-display">
+      <code suppressHydrationWarning>{pretty}</code>
     </pre>
   );
 }

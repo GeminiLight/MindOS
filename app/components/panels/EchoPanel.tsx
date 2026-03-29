@@ -19,12 +19,12 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string; subtitle: string }> = {
-    'about-you': { icon: <UserRound size={14} />, title: e.aboutYouTitle, subtitle: e.aboutYouDesc },
-    continued: { icon: <Bookmark size={14} />, title: e.continuedTitle, subtitle: e.continuedDesc },
-    daily: { icon: <Sun size={14} />, title: e.dailyEchoTitle, subtitle: e.dailyDesc },
-    'past-you': { icon: <History size={14} />, title: e.pastYouTitle, subtitle: e.pastYouDesc },
-    growth: { icon: <Brain size={14} />, title: e.intentGrowthTitle, subtitle: e.growthDesc },
+  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string }> = {
+    'about-you': { icon: <UserRound size={14} />, title: e.aboutYouTitle },
+    continued: { icon: <Bookmark size={14} />, title: e.continuedTitle },
+    daily: { icon: <Sun size={14} />, title: e.dailyEchoTitle },
+    'past-you': { icon: <History size={14} />, title: e.pastYouTitle },
+    growth: { icon: <Brain size={14} />, title: e.intentGrowthTitle },
   };
 
   return (
@@ -37,7 +37,7 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
             const href = ECHO_SEGMENT_HREF[segment];
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} subtitle={row.subtitle} active={isActive} />
+              <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} />
             );
           })}
         </div>
