@@ -70,6 +70,11 @@
 - **原因：** `install-update` handler 无条件调用 `downloadUpdate()` + `quitAndInstall()`，不判断是否已下载
 - **解决：** ① 移除 handler 内 try-catch 让错误自然传播到渲染端处理；② 渲染端「Restart Now」按钮加 async/catch 错误处理；③ 用 `isDownloaded` 标志跳过已完成的下载。测试见 `app/__tests__/settings/update-tab-desktop.test.tsx`
 
+### CLI/Web 更新 buildIfNeeded 失败导致服务不可恢复
+- **现象：** 用户在 Web UI 点「Update」，npm 安装成功但 `next build` 失败（OOM/磁盘满），旧服务已被杀死，新服务未启动，浏览器卡在"正在重启"5 分钟后超时，用户必须手动 `mindos start`
+- **原因：** `bin/cli.js` update 命令的 daemon 和 non-daemon 两条路径中，`buildIfNeeded()` 没有 try-catch。`stopMindos()` 已杀旧进程后若 build 抛异常，整个 update 进程崩溃，不会走到 Stage 4 (restart)
+- **解决：** 三个 `buildIfNeeded()` 调用全部加 try-catch；catch 后仍然继续启动服务（`mindos start` 有自己的 build-on-startup 逻辑，可以重试）；失败信息写入 `update-status.json`，浏览器能立即显示具体错误而非等 5 分钟超时
+
 ### Diff 仅做插件入口，用户看不到全局变化
 - **现象：** 只有打开 `Agent-Diff.md` 才能看到差异；普通编辑流里不知道哪里变了、何时变了
 - **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒
