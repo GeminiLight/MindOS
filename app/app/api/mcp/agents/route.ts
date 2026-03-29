@@ -74,6 +74,7 @@ export async function GET() {
         scope: status.scope,
         transport: status.transport,
         configPath: status.configPath,
+        url: status.url, // Store URL for verification
         hasProjectScope: !!agent.project,
         hasGlobalScope: !!agent.global,
         preferredTransport: agent.preferredTransport,
@@ -101,6 +102,29 @@ export async function GET() {
 
     const mindos = agents.find(a => a.key === 'mindos');
     if (mindos) enrichMindOsAgent(mindos as unknown as Record<string, unknown>);
+
+    // Runtime verification: for agents marked as installed with HTTP endpoint,
+    // verify endpoint is reachable (1s timeout to avoid blocking)
+    await Promise.all(agents.map(async (agent) => {
+      if (agent.installed && agent.url && agent.transport?.startsWith('http')) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 1000);
+          try {
+            const response = await fetch(agent.url, { method: 'HEAD', signal: controller.signal });
+            // Accept 200-299 or 405 (HEAD not allowed). Others = unreachable
+            if (response.status >= 300 && response.status !== 405) {
+              agent.installed = false;
+            }
+          } finally {
+            clearTimeout(timeout);
+          }
+        } catch {
+          // Timeout, network error, or abort — mark as not installed (false positive prevention)
+          agent.installed = false;
+        }
+      }
+    }));
 
     // Sort: mindos first, then installed, then detected, then not found
     agents.sort((a, b) => {
