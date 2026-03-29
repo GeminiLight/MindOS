@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ChevronsDownUp, ChevronsUpDown, FilePlus, Import } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronsDownUp, ChevronsUpDown, Plus, Import, FileText, Layers } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
 import type { FileNode } from '@/lib/types';
 import FileTree from './FileTree';
@@ -77,10 +78,47 @@ export default function Panel({
   const width = maximized ? undefined : (panelWidth ?? defaultWidth);
 
   const { t } = useLocale();
+  const router = useRouter();
 
   // File tree depth control: null = manual (no override), number = forced max open depth
   const [maxOpenDepth, setMaxOpenDepth] = useState<number | null>(null);
   const treeMaxDepth = useMemo(() => getMaxDepth(fileTree), [fileTree]);
+
+  // "New" dropdown popover
+  const [newPopover, setNewPopover] = useState(false);
+  const newBtnRef = useRef<HTMLButtonElement>(null);
+  const newPopoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!newPopover) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        newBtnRef.current && !newBtnRef.current.contains(e.target as Node) &&
+        newPopoverRef.current && !newPopoverRef.current.contains(e.target as Node)
+      ) {
+        setNewPopover(false);
+      }
+    };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setNewPopover(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+  }, [newPopover]);
+
+  // Double-click hint: show only until user has used it once
+  const [dblHintSeen, setDblHintSeen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('mindos-tree-dblclick-hint') === '1';
+  });
+  const markDblHintSeen = useCallback(() => {
+    if (!dblHintSeen) {
+      setDblHintSeen(true);
+      try { localStorage.setItem('mindos-tree-dblclick-hint', '1'); } catch { /* ignore */ }
+    }
+  }, [dblHintSeen]);
 
   const handleMouseDown = useResizeDrag({
     width: panelWidth ?? defaultWidth,
@@ -109,49 +147,77 @@ export default function Panel({
       <div className={`flex flex-col h-full ${activePanel === 'files' ? '' : 'hidden'}`}>
         <PanelHeader title={t.sidebar.files}>
           <div className="flex items-center gap-0.5">
+            {/* New (File / Space) */}
+            <div className="relative">
+              <button
+                ref={newBtnRef}
+                type="button"
+                onClick={() => setNewPopover(v => !v)}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label={t.sidebar.new}
+                title={t.sidebar.new}
+              >
+                <Plus size={13} />
+              </button>
+              {newPopover && (
+                <div
+                  ref={newPopoverRef}
+                  className="absolute top-full right-0 mt-1 min-w-[152px] bg-card border border-border rounded-lg shadow-lg py-1 z-50"
+                >
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    onClick={() => { setNewPopover(false); router.push('/view/Untitled.md'); }}
+                  >
+                    <FileText size={14} className="shrink-0" />
+                    {t.sidebar.newFile}
+                  </button>
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    onClick={() => { setNewPopover(false); window.dispatchEvent(new Event('mindos:create-space')); }}
+                  >
+                    <Layers size={14} className="shrink-0 text-[var(--amber)]" />
+                    {t.sidebar.newSpace}
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Import */}
             <button
               type="button"
               onClick={() => onImport?.()}
-              className="p-1 rounded text-[var(--amber)] hover:bg-muted hover:text-[var(--amber)] transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
               aria-label={t.sidebar.importFile}
               title={t.sidebar.importFile}
             >
               <Import size={13} />
             </button>
-            <button
-              type="button"
-              onClick={() => window.location.assign('/view/Untitled.md')}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={t.sidebar.newFile}
-              title={t.sidebar.newFile}
-            >
-              <FilePlus size={13} />
-            </button>
+            {/* Separator: create actions | view actions */}
+            <div className="w-px h-3.5 bg-border mx-0.5" />
+            {/* Collapse Level */}
             <button
               onClick={() => setMaxOpenDepth(prev => {
                 const current = prev ?? treeMaxDepth;
                 return Math.max(-1, current - 1);
               })}
-              onDoubleClick={() => setMaxOpenDepth(-1)}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              onDoubleClick={() => { setMaxOpenDepth(-1); markDblHintSeen(); }}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
               aria-label={t.sidebar.collapseLevel}
-              title={t.sidebar.collapseLevel}
+              title={dblHintSeen ? t.sidebar.collapseLevel : (t.sidebar.collapseLevelHint ?? t.sidebar.collapseLevel)}
             >
               <ChevronsDownUp size={13} />
             </button>
+            {/* Expand Level */}
             <button
               onClick={() => setMaxOpenDepth(prev => {
                 const current = prev ?? 0;
                 const next = current + 1;
-                if (next > treeMaxDepth) {
-                  return null; // fully expanded → release back to manual
-                }
+                if (next > treeMaxDepth) return null;
                 return next;
               })}
-              onDoubleClick={() => setMaxOpenDepth(null)}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              onDoubleClick={() => { setMaxOpenDepth(null); markDblHintSeen(); }}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
               aria-label={t.sidebar.expandLevel}
-              title={t.sidebar.expandLevel}
+              title={dblHintSeen ? t.sidebar.expandLevel : (t.sidebar.expandLevelHint ?? t.sidebar.expandLevel)}
             >
               <ChevronsUpDown size={13} />
             </button>
