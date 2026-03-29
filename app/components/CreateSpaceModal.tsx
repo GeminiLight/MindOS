@@ -168,7 +168,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h3 className="text-sm font-semibold font-display text-foreground">{h.newSpace}</h3>
+          <h3 className="text-base font-semibold font-display text-foreground">{h.newSpace}</h3>
           <button onClick={close} className="p-1 rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <X size={14} />
           </button>
@@ -214,7 +214,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               onChange={e => setDescription(e.target.value)}
               placeholder={h.spaceDescPlaceholder ?? 'Describe the purpose of this space'}
               maxLength={200}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
             />
           </div>
           {/* AI initialization toggle */}
@@ -268,7 +268,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
             <button
               onClick={handleCreate}
               disabled={!name.trim() || loading || !!nameHint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-white transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
               {h.createSpace}

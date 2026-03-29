@@ -25,6 +25,13 @@ describe('createSpaceFilesystem', () => {
     expect(() => createSpaceFilesystem(mindRoot, '  ', 'd', '')).toThrow('Space name is required');
   });
 
+  it('creates INSTRUCTION.md for nested space under existing parent', () => {
+    createSpaceFilesystem(mindRoot, 'Parent', 'top', '');
+    createSpaceFilesystem(mindRoot, 'Child', 'nested', 'Parent');
+    expect(fs.existsSync(path.join(mindRoot, 'Parent', 'Child', 'INSTRUCTION.md'))).toBe(true);
+    expect(readSeeded(mindRoot, 'Parent/Child/README.md')).toContain('nested');
+  });
+
   it('throws when space README path already exists', () => {
     createSpaceFilesystem(mindRoot, 'Dup', 'a', '');
     expect(() => createSpaceFilesystem(mindRoot, 'Dup', 'b', '')).toThrow('already exists');
