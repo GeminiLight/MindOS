@@ -422,7 +422,7 @@ function MetaCard({
   tone?: 'ok' | 'muted' | 'default';
 }) {
   const valueColor =
-    tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
+    tone === 'ok' ? 'text-[var(--success)]'
       : tone === 'muted' ? 'text-muted-foreground'
         : 'text-foreground';
   return (

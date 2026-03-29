@@ -18,7 +18,7 @@ function UserMessageContent({ content, skillName }: { content: string; skillName
   const rest = prefixMatch ? content.slice(prefixMatch[0].length) : content;
   return (
     <>
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber-foreground)]/15 text-[var(--amber-foreground)]/90 mr-1 align-middle">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber)]/15 text-[var(--amber)] mr-1 align-middle">
         <Zap size={10} className="shrink-0" />
         {resolved}
       </span>

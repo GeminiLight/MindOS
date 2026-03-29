@@ -243,9 +243,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             <h1 className="text-lg font-semibold tracking-tight font-display text-foreground truncate">{agent.name}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground/60">
               <span className={`font-medium px-1.5 py-px rounded-full ${
-                status === 'connected' ? 'bg-success/10 text-success'
+                status === 'connected' ? 'bg-muted text-muted-foreground'
                   : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
-                    : 'bg-muted text-muted-foreground'
+                    : 'bg-error/10 text-error'
               }`}>{status}</span>
               <span className="font-mono">{agent.transport ?? agent.preferredTransport}</span>
               <span className="text-muted-foreground/25" aria-hidden="true">·</span>

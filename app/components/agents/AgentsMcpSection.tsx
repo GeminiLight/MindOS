@@ -296,7 +296,7 @@ function ByAgentView({
             const mcpServers = agent.configuredMcpServers ?? [];
             const nativeSkillCount = (agent.installedSkillNames ?? []).length;
             return (
-              <div key={agent.key} className={`rounded-xl border bg-card group hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-150 ${status === 'connected' ? 'border-l-2 border-l-[var(--success)] border-border' : status === 'detected' ? 'border-l-2 border-l-[var(--amber)] border-border' : 'border-border'}`}>
+              <div key={agent.key} className={`rounded-xl border bg-card group hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-150 ${status === 'detected' ? 'border-l-2 border-l-[var(--amber)] border-border' : status === 'notFound' ? 'border-l-2 border-l-error border-border' : 'border-border'}`}>
                 {/* Card header with avatar */}
                 <div className="flex items-center gap-3 p-3">
                   <AgentAvatar name={agent.name} status={status} />
@@ -306,7 +306,7 @@ function ByAgentView({
                         {agent.name}
                       </Link>
                       <span className="text-2xs text-muted-foreground font-mono shrink-0">{agent.transport ?? agent.preferredTransport}</span>
-                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${status === 'connected' ? 'bg-success/10 text-success' : status === 'detected' ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${status === 'connected' ? 'bg-muted text-muted-foreground' : status === 'detected' ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]' : 'bg-error/10 text-error'}`}>
                         {copy.status[status]}
                       </span>
                     </div>
