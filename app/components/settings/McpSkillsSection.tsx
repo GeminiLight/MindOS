@@ -11,6 +11,8 @@ import { copyToClipboard } from '@/lib/clipboard';
 import type { SkillInfo, McpSkillsSectionProps } from './types';
 import SkillRow from './McpSkillRow';
 import SkillCreateForm from './McpSkillCreateForm';
+import CustomSelect from '@/components/CustomSelect';
+import type { SelectItem } from '@/components/CustomSelect';
 
 /* ── Skills Section ────────────────────────────────────────────── */
 
@@ -399,30 +401,25 @@ function SkillCliHint({ agents, skillName, m }: {
       </p>
 
       {/* Agent selector */}
-      <div className="relative">
-        <select
-          value={selectedAgent}
-          onChange={(e) => setSelectedAgent(e.target.value)}
-          className="w-full appearance-none px-2.5 py-1.5 pr-7 text-2xs rounded-md border border-border bg-background text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          {connected.length > 0 && (
-            <optgroup label={m?.connectedGroup ?? 'Connected'}>
-              {connected.map(a => <option key={a.key} value={a.key}>✓ {a.name}</option>)}
-            </optgroup>
-          )}
-          {detected.length > 0 && (
-            <optgroup label={m?.detectedGroup ?? 'Detected'}>
-              {detected.map(a => <option key={a.key} value={a.key}>○ {a.name}</option>)}
-            </optgroup>
-          )}
-          {notFound.length > 0 && (
-            <optgroup label={m?.notFoundGroup ?? 'Not Installed'}>
-              {notFound.map(a => <option key={a.key} value={a.key}>· {a.name}</option>)}
-            </optgroup>
-          )}
-        </select>
-        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-      </div>
+      <CustomSelect
+        value={selectedAgent}
+        onChange={setSelectedAgent}
+        size="sm"
+        options={[
+          ...(connected.length > 0 ? [{
+            label: m?.connectedGroup ?? 'Connected',
+            options: connected.map(a => ({ value: a.key, label: a.name })),
+          }] : []),
+          ...(detected.length > 0 ? [{
+            label: m?.detectedGroup ?? 'Detected',
+            options: detected.map(a => ({ value: a.key, label: a.name })),
+          }] : []),
+          ...(notFound.length > 0 ? [{
+            label: m?.notFoundGroup ?? 'Not Installed',
+            options: notFound.map(a => ({ value: a.key, label: a.name })),
+          }] : []),
+        ] as SelectItem[]}
+      />
 
       {/* Command */}
       <div className="flex items-center gap-1.5">

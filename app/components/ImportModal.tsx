@@ -10,6 +10,9 @@ import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/use
 import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
+import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
+import CustomSelect from './CustomSelect';
+import type { SelectOption } from './CustomSelect';
 
 interface ImportModalProps {
   open: boolean;
@@ -33,6 +36,8 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
   const [showSuccess, setShowSuccess] = useState(false);
   const [conflictFiles, setConflictFiles] = useState<string[]>([]);
   const [showConflictOptions, setShowConflictOptions] = useState(false);
+  const [showDiscard, setShowDiscard] = useState(false);
+  const [recommendedSpace, setRecommendedSpace] = useState('');
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -55,13 +60,19 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
       .catch(() => {});
   }, [open, defaultSpace, initialFiles, im]);
 
+  const doClose = useCallback(() => {
+    setShowDiscard(false);
+    setClosing(true);
+    setTimeout(() => { setClosing(false); onClose(); im.reset(); setConflictFiles([]); setShowConflictOptions(false); setRecommendedSpace(''); }, 150);
+  }, [im, onClose]);
+
   const handleClose = useCallback(() => {
     if (im.files.length > 0 && im.step !== 'done') {
-      if (!confirm(t.fileImport.discardMessage(im.files.length))) return;
+      setShowDiscard(true);
+      return;
     }
-    setClosing(true);
-    setTimeout(() => { setClosing(false); onClose(); im.reset(); setConflictFiles([]); setShowConflictOptions(false); }, 150);
-  }, [im, onClose, t]);
+    doClose();
+  }, [im, doClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,6 +143,34 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [im.targetSpace]);
 
+  // V1: keyword-based space recommendation when entering archive_config
+  useEffect(() => {
+    if (im.step !== 'archive_config' || spaces.length === 0 || im.validFiles.length === 0) return;
+    if (defaultSpace) return; // don't override explicit default
+
+    const fileTokens = im.validFiles
+      .flatMap(f => f.name.replace(/\.[^.]+$/, '').toLowerCase().split(/[\s_\-/\\]+/))
+      .filter(w => w.length >= 2);
+
+    let bestPath = '';
+    let bestScore = 0;
+    for (const sp of spaces) {
+      const spaceTokens = sp.name.toLowerCase().split(/[\s_\-/\\]+/).filter(w => w.length >= 2);
+      let score = 0;
+      for (const ft of fileTokens) {
+        for (const st of spaceTokens) {
+          if (ft.includes(st) || st.includes(ft)) score += Math.min(ft.length, st.length);
+        }
+      }
+      if (score > bestScore) { bestScore = score; bestPath = sp.path; }
+    }
+    if (bestPath && bestScore >= 2) {
+      im.setTargetSpace(bestPath);
+      setRecommendedSpace(bestPath);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [im.step, spaces.length, im.validFiles.length]);
+
 
   useEffect(() => {
     if (im.step === 'done' && im.result) {
@@ -161,6 +200,15 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
 
   return (
     <>
+      <ConfirmDialog
+        open={showDiscard}
+        title={t.fileImport.discardTitle}
+        message={t.fileImport.discardMessage(im.files.length)}
+        confirmLabel={t.fileImport.discardConfirm}
+        cancelLabel={t.fileImport.discardCancel}
+        onConfirm={doClose}
+        onCancel={() => setShowDiscard(false)}
+      />
       <div
         ref={overlayRef}
         className={`fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 transition-opacity duration-200 ${closing ? 'opacity-0' : 'opacity-100'}`}
@@ -305,29 +353,35 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                   ))}
                 </div>
 
-                {/* Archive config: target path preview */}
-                {isArchiveConfig && (
-                  <div className="flex flex-col gap-1 mt-2 max-h-[120px] overflow-y-auto">
-                    {im.validFiles.map((f, idx) => {
-                      const ext = f.name.split('.').pop()?.toLowerCase();
-                      const targetExt = (ext === 'txt' || ext === 'html' || ext === 'htm' || ext === 'yaml' || ext === 'yml' || ext === 'xml')
-                        ? 'md' : ext;
-                      const stem = f.name.replace(/\.[^.]+$/, '');
-                      const targetName = `${stem}.${targetExt}`;
-                      const targetPath = im.targetSpace ? `${im.targetSpace}/${targetName}` : targetName;
-                      const hasConflict = conflictFiles.includes(f.name);
-                      return (
+                {/* Archive config: target path preview — only shown when path differs from source */}
+                {isArchiveConfig && (() => {
+                  const previews = im.validFiles.map((f) => {
+                    const ext = f.name.split('.').pop()?.toLowerCase();
+                    const targetExt = (ext === 'txt' || ext === 'html' || ext === 'htm' || ext === 'yaml' || ext === 'yml' || ext === 'xml')
+                      ? 'md' : ext;
+                    const stem = f.name.replace(/\.[^.]+$/, '');
+                    const targetName = `${stem}.${targetExt}`;
+                    const targetPath = im.targetSpace ? `${im.targetSpace}/${targetName}` : targetName;
+                    const hasConflict = conflictFiles.includes(f.name);
+                    const changed = targetName !== f.name || !!im.targetSpace;
+                    return { f, targetPath, hasConflict, changed };
+                  });
+                  const anyChanged = previews.some(p => p.changed || p.hasConflict);
+                  if (!anyChanged) return null;
+                  return (
+                    <div className="flex flex-col gap-1 mt-2 max-h-[120px] overflow-y-auto">
+                      {previews.filter(p => p.changed || p.hasConflict).map((p, idx) => (
                         <div key={`preview-${idx}`} className="flex items-center gap-1.5 text-xs text-muted-foreground px-3">
-                          <span className="truncate">{f.name}</span>
+                          <span className="truncate">{p.f.name}</span>
                           <span className="text-muted-foreground/50 shrink-0">{t.fileImport.arrowTo}</span>
                           <FolderOpen size={12} className="text-muted-foreground/60 shrink-0" />
-                          <span className={`truncate ${hasConflict ? 'text-[var(--amber)]' : ''}`}>{targetPath}</span>
-                          {hasConflict && <AlertTriangle size={11} className="text-[var(--amber)] shrink-0" />}
+                          <span className={`truncate ${p.hasConflict ? 'text-[var(--amber)]' : ''}`}>{p.targetPath}</span>
+                          {p.hasConflict && <AlertTriangle size={11} className="text-[var(--amber)] shrink-0" />}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -361,16 +415,26 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                 {/* Space selector */}
                 <div>
                   <label className="text-xs font-medium text-foreground mb-1 block">{t.fileImport.targetSpace}</label>
-                  <select
+                  <CustomSelect
                     value={im.targetSpace}
-                    onChange={(e) => im.setTargetSpace(e.target.value)}
-                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <option value="">{t.fileImport.rootDir}</option>
-                    {spaces.map(s => (
-                      <option key={s.path} value={s.path}>{s.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => { im.setTargetSpace(val); setRecommendedSpace(''); }}
+                    options={[
+                      { value: '', label: t.fileImport.rootDir } as SelectOption,
+                      ...spaces.map(s => ({
+                        value: s.path,
+                        label: s.name,
+                        suffix: recommendedSpace === s.path
+                          ? <span className="text-2xs text-[var(--amber)] shrink-0">✦ {t.fileImport.aiRecommended}</span>
+                          : undefined,
+                      } as SelectOption)),
+                    ]}
+                  />
+                  {recommendedSpace && im.targetSpace === recommendedSpace && (
+                    <p className="text-2xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+                      <Sparkles size={10} className="text-[var(--amber)]" />
+                      {t.fileImport.aiRecommendedHint}
+                    </p>
+                  )}
                 </div>
 
                 {/* Conflict strategy — progressive disclosure */}
@@ -434,7 +498,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       showSuccess
                         ? 'bg-success text-success-foreground'
-                        : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
+                        : 'bg-[var(--amber)] text-white hover:opacity-90'
                     } disabled:opacity-50`}
                   >
                     {showSuccess ? (

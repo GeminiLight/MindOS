@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import CustomSelect from '@/components/CustomSelect';
 import { apiFetch } from '@/lib/api';
 import type { AgentInfo, McpAgentInstallProps } from './types';
 
@@ -111,14 +112,16 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
             )}
             {/* Scope selector */}
             {selected.has(agent.key) && agent.hasProjectScope && agent.hasGlobalScope && (
-              <select
+              <CustomSelect
                 value={scopes[agent.key] || 'project'}
-                onChange={e => setScopes({ ...scopes, [agent.key]: e.target.value as 'project' | 'global' })}
-                className="ml-auto text-2xs px-1.5 py-0.5 rounded border border-border bg-background text-foreground"
-              >
-                <option value="project">{m?.project ?? 'Project'}</option>
-                <option value="global">{m?.global ?? 'Global'}</option>
-              </select>
+                onChange={v => setScopes({ ...scopes, [agent.key]: v as 'project' | 'global' })}
+                size="sm"
+                className="ml-auto"
+                options={[
+                  { value: 'project', label: m?.project ?? 'Project' },
+                  { value: 'global', label: m?.global ?? 'Global' },
+                ]}
+              />
             )}
           </div>
         ))}

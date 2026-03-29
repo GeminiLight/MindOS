@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ChevronDown, ChevronRight, History, RefreshCw } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
+import CustomSelect from '@/components/CustomSelect';
 import { collapseDiffContext, buildLineDiff } from './line-diff';
 
 /** Semantic color for operation type badges */
@@ -102,6 +103,25 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     return ['all', ...ops];
   }, [events, opFilter]);
 
+  const sourceSelectOptions = useMemo(
+    () => [
+      { value: 'all', label: t.changes.filters.all },
+      { value: 'agent', label: t.changes.filters.agent },
+      { value: 'user', label: t.changes.filters.user },
+      { value: 'system', label: t.changes.filters.system },
+    ],
+    [t],
+  );
+
+  const opSelectOptions = useMemo(
+    () =>
+      opOptions.map((op) => ({
+        value: op,
+        label: op === 'all' ? t.changes.filters.operationAll : op,
+      })),
+    [opOptions, t],
+  );
+
   const sourceLabel = useCallback((source: ChangeEvent['source']) => {
     if (source === 'agent') return t.changes.filters.agent;
     if (source === 'user') return t.changes.filters.user;
@@ -161,33 +181,24 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                   className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="text-xs text-muted-foreground font-display">{t.changes.filters.source}</span>
-                <select
+                <CustomSelect
                   value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value as 'all' | 'agent' | 'user' | 'system')}
-                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="all">{t.changes.filters.all}</option>
-                  <option value="agent">{t.changes.filters.agent}</option>
-                  <option value="user">{t.changes.filters.user}</option>
-                  <option value="system">{t.changes.filters.system}</option>
-                </select>
-              </label>
-              <label className="block">
+                  onChange={(v) => setSourceFilter(v as 'all' | 'agent' | 'user' | 'system')}
+                  options={sourceSelectOptions}
+                  className="mt-1"
+                />
+              </div>
+              <div className="block">
                 <span className="text-xs text-muted-foreground font-display">{t.changes.filters.operation}</span>
-                <select
+                <CustomSelect
                   value={opFilter}
-                  onChange={(e) => setOpFilter(e.target.value)}
-                  className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {opOptions.map((op) => (
-                    <option key={op} value={op}>
-                      {op === 'all' ? t.changes.filters.operationAll : op}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setOpFilter}
+                  options={opSelectOptions}
+                  className="mt-1"
+                />
+              </div>
               <label className="block">
                 <span className="text-xs text-muted-foreground font-display">{t.changes.filters.keyword}</span>
                 <input
