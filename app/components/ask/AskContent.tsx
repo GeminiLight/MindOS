@@ -601,10 +601,10 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setShowHistory(v => !v)} aria-pressed={showHistory} className={`p-1.5 rounded transition-colors ${showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title="Session history">
+          <button type="button" onClick={() => setShowHistory(v => !v)} aria-pressed={showHistory} className={`p-1.5 rounded transition-colors ${showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
             <History size={iconSize} />
           </button>
-          <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="New session">
+          <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title={t.hints.newSession}>
             <RotateCcw size={iconSize} />
           </button>
           {isPanel && onMaximize && (
@@ -770,7 +770,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               isPanel ? 'min-h-0 flex-1 items-end gap-1.5 px-2 py-2' : 'items-end gap-2 px-3 py-3',
             )}
           >
-          <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach local file">
+          <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title={t.hints.attachFile}>
             <Paperclip size={inputIconSize} />
           </button>
 
@@ -807,7 +807,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} title={!input.trim() ? "Type a message" : mention.mentionQuery !== null || slash.slashQuery !== null ? "Mention or command in progress" : undefined} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} title={!input.trim() ? t.hints.typeMessage : mention.mentionQuery !== null || slash.slashQuery !== null ? t.hints.mentionInProgress : undefined} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
               <Send size={isPanel ? 13 : 14} />
             </button>
           )}
