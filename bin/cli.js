@@ -206,6 +206,13 @@ const commands = {
     const mcpPort = config.mcpPort || 8781;
     const localIP = getLocalIP();
     const localUrl = `http://localhost:${mcpPort}/mcp`;
+
+    if (cliFlags.json) {
+      const data = { token, mcpPort, localUrl, remoteUrl: localIP ? `http://${localIP}:${mcpPort}/mcp` : null };
+      console.log(JSON.stringify(data, null, 2));
+      return;
+    }
+
     const sep = dim('━'.repeat(40));
     const snippet = (url) => JSON.stringify({
       mcpServers: { mindos: { url, headers: { Authorization: `Bearer ${token}` } } },
@@ -524,25 +531,28 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
   // ── doctor ─────────────────────────────────────────────────────────────────
   doctor: async () => {
-    const ok  = (msg) => console.log(`  ${green('✔')} ${msg}`);
-    const err = (msg) => console.log(`  ${red('✘')} ${msg}`);
-    const warn= (msg) => console.log(`  ${yellow('!')} ${msg}`);
+    const jsonMode = cliFlags.json === true;
+    const checks = [];
+    const ok  = (msg, key) => { checks.push({ status: 'ok', key, msg }); if (!jsonMode) console.log(`  ${green('✔')} ${msg}`); };
+    const err = (msg, key) => { checks.push({ status: 'error', key, msg }); if (!jsonMode) console.log(`  ${red('✘')} ${msg}`); };
+    const warn= (msg, key) => { checks.push({ status: 'warn', key, msg }); if (!jsonMode) console.log(`  ${yellow('!')} ${msg}`); };
 
-    console.log(`\n${bold('🩺 MindOS Doctor')}\n`);
+    if (!jsonMode) console.log(`\n${bold('MindOS Doctor')}\n`);
     let hasError = false;
 
     // 1. config file
     if (!existsSync(CONFIG_PATH)) {
-      err(`Config not found at ${dim(CONFIG_PATH)}`);
-      console.log(`\n  ${dim('Run `mindos onboard` to create it.')}\n`);
+      err(`Config not found at ${dim(CONFIG_PATH)}`, 'config');
+      if (!jsonMode) { console.log(`\n  ${dim('Run `mindos onboard` to create it.')}\n`); }
+      if (jsonMode) { console.log(JSON.stringify({ ok: false, checks }, null, 2)); }
       process.exit(1);
     }
     let config;
     try {
       config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-      ok(`Config file found and valid JSON  ${dim(CONFIG_PATH)}`);
+      ok(`Config file found and valid JSON  ${dim(CONFIG_PATH)}`, 'config');
     } catch {
-      err(`Config file exists but failed to parse  ${dim(CONFIG_PATH)}`);
+      err(`Config file exists but failed to parse  ${dim(CONFIG_PATH)}`, 'config');
       hasError = true;
     }
 
@@ -681,9 +691,14 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       warn('Could not check for updates');
     }
 
-    console.log(hasError
-      ? `\n${red('Some checks failed.')} Run ${cyan('mindos onboard')} to reconfigure.\n`
-      : `\n${green('All checks passed.')}\n`);
+    if (jsonMode) {
+      const hasErr = checks.some(c => c.status === 'error');
+      console.log(JSON.stringify({ ok: !hasErr, checks }, null, 2));
+    } else {
+      console.log(hasError
+        ? `\n${red('Some checks failed.')} Run ${cyan('mindos onboard')} to reconfigure.\n`
+        : `\n${green('All checks passed.')}\n`);
+    }
     if (hasError) process.exit(1);
   },
 
@@ -1056,7 +1071,11 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         display.authToken = maskKey(display.authToken);
       if (display.webPassword)
         display.webPassword = maskKey(display.webPassword);
-      console.log(`\n${bold('📋 MindOS Config')}  ${dim(`v${(() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })()}`)}  ${dim(CONFIG_PATH)}\n`);
+      if (cliFlags.json) {
+        console.log(JSON.stringify(display, null, 2));
+        return;
+      }
+      console.log(`\n${bold('MindOS Config')}  ${dim(`v${(() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })()}`)}  ${dim(CONFIG_PATH)}\n`);
       console.log(JSON.stringify(display, null, 2));
       console.log();
       return;
@@ -1250,8 +1269,14 @@ ${bold('Examples:')}
 
     // default: sync status
     const status = getSyncStatus(mindRoot);
+
+    if (cliFlags.json) {
+      console.log(JSON.stringify(status, null, 2));
+      return;
+    }
+
     if (!status.enabled) {
-      console.log(`\n${bold('🔄 Sync Status')}`);
+      console.log(`\n${bold('Sync Status')}`);
       console.log(dim('  Not configured. Run `mindos sync init` to set up.\n'));
       return;
     }
@@ -1264,7 +1289,7 @@ ${bold('Examples:')}
         })()
       : 'never';
 
-    console.log(`\n${bold('🔄 Sync Status')}`);
+    console.log(`\n${bold('Sync Status')}`);
     console.log(`  ${dim('Provider:')}    ${cyan(`${status.provider} (${status.remote})`)}`);
     console.log(`  ${dim('Branch:')}      ${cyan(status.branch)}`);
     console.log(`  ${dim('Last sync:')}   ${ago}`);
