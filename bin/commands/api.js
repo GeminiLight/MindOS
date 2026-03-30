@@ -1,5 +1,6 @@
 import { bold, dim, cyan, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
+import { EXIT } from '../lib/command.js';
 
 export const meta = {
   name: 'api',
@@ -23,7 +24,7 @@ export async function run(args, flags) {
   const method = args[0].toUpperCase();
   if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     console.error(red('Invalid method: ' + args[0]));
-    process.exit(1);
+    process.exit(EXIT.ARGS);
   }
 
   let apiPath = args[1];
@@ -46,13 +47,14 @@ export async function run(args, flags) {
     } else {
       console.log(await res.text());
     }
-    if (!res.ok) process.exit(1);
+    if (!res.ok) process.exit(EXIT.ERROR);
   } catch (err) {
     if (err.cause && err.cause.code === 'ECONNREFUSED') {
       console.error(red('Connection refused. Start with: mindos start'));
+      process.exit(EXIT.CONNECT);
     } else {
       console.error(red('Request failed: ' + err.message));
+      process.exit(EXIT.ERROR);
     }
-    process.exit(1);
   }
 }

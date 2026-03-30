@@ -1,6 +1,6 @@
 import { bold, dim, cyan, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { output, isJsonMode } from '../lib/command.js';
+import { output, isJsonMode, EXIT } from '../lib/command.js';
 
 export const meta = {
   name: 'search', group: 'Knowledge',
@@ -46,6 +46,6 @@ export async function run(args, flags) {
   } catch (err) {
     if (err.cause && err.cause.code === 'ECONNREFUSED') { console.error(red('MindOS not running. Offline: mindos file search "' + query + '"')); }
     else { console.error(red(err.message)); }
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 }
