@@ -405,18 +405,18 @@ export class ProcessManager extends EventEmitter {
   }
 
   /**
-   * Wait up to 3s for a port to become free, then fall back to findFreePort.
+   * Wait up to 10s for a port to become free, then fall back to findFreePort.
    * Keeps ports stable across restarts (important for bookmarks, MCP client configs).
    */
   private async waitForPortOrFallback(port: number): Promise<number> {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 20; i++) {
       try {
         await this.findFreePort(port);
         return port; // port is free, reuse it
       } catch { /* still occupied */ }
       await new Promise((r) => setTimeout(r, 500)); // wait 500ms, retry
     }
-    // 3s elapsed, port still occupied — fall back to next available
+    // 10s elapsed, port still occupied — fall back to next available
     return this.findFreePort(port + 1).catch(() => port);
   }
 
@@ -468,10 +468,10 @@ export class ProcessManager extends EventEmitter {
 
       this.crashCount[which]++;
       this.logCrash(which, code, signal, this.webStderrLines.slice(-20));
-      this.emit('crash', which, this.crashCount[which], this.webStderrLines.slice(-10));
+      this.emit('crash', which, this.crashCount[which], code, this.webStderrLines.slice(-10));
 
       if (this.crashCount[which] < 3) {
-        const delay = this.crashCount[which] === 1 ? 1000 : 3000;
+        const delay = this.crashCount[which] === 1 ? 2000 : 5000;
         const timer = setTimeout(async () => {
           if (this.stopped) return;
           try {
