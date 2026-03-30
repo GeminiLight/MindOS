@@ -210,3 +210,18 @@ export interface SkillMatch {
   skillName: string;
   confidence: number;
 }
+
+/* ── Delegation History (Phase 3 UI) ─────────────────────────────────── */
+
+/** A recorded delegation attempt for the history log */
+export interface DelegationRecord {
+  id: string;
+  agentId: string;
+  agentName: string;
+  message: string;
+  status: 'pending' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt: string | null;
+  result: string | null;
+  error: string | null;
+}

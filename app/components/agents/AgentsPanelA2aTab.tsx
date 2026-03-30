@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Globe, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Clock, Globe, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
-import type { RemoteAgent } from '@/lib/a2a/types';
+import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
+import { useDelegationHistory } from '@/hooks/useDelegationHistory';
 import DiscoverAgentModal from './DiscoverAgentModal';
 
 interface AgentsPanelA2aTabProps {
@@ -24,6 +25,7 @@ export default function AgentsPanelA2aTab({
   const { t } = useLocale();
   const p = t.panels.agents;
   const [showModal, setShowModal] = useState(false);
+  const { delegations } = useDelegationHistory(true);
 
   return (
     <div className="space-y-5">
@@ -59,6 +61,9 @@ export default function AgentsPanelA2aTab({
         </div>
       )}
 
+      {/* Recent Delegations */}
+      <DelegationHistorySection delegations={delegations} />
+
       <DiscoverAgentModal
         open={showModal}
         onClose={() => setShowModal(false)}
@@ -68,6 +73,82 @@ export default function AgentsPanelA2aTab({
       />
     </div>
   );
+}
+
+/* ────────── Delegation History Section ────────── */
+
+function DelegationHistorySection({ delegations }: { delegations: DelegationRecord[] }) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        {p.a2aDelegations}
+      </h3>
+      {delegations.length === 0 ? (
+        <p className="text-xs text-muted-foreground/70 py-3">{p.a2aDelegationsEmpty}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {delegations.map((d) => (
+            <DelegationRow key={d.id} record={d} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────── Delegation Row ────────── */
+
+const STATUS_STYLES: Record<DelegationRecord['status'], string> = {
+  pending: 'bg-muted text-muted-foreground',
+  completed: 'bg-[var(--success)]/15 text-[var(--success)]',
+  failed: 'bg-[var(--error)]/15 text-[var(--error)]',
+};
+
+function DelegationRow({ record }: { record: DelegationRecord }) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+  const statusLabels: Record<DelegationRecord['status'], string> = {
+    pending: p.a2aDelegationPending,
+    completed: p.a2aDelegationCompleted,
+    failed: p.a2aDelegationFailed,
+  };
+
+  const duration = record.completedAt
+    ? formatDuration(new Date(record.startedAt), new Date(record.completedAt))
+    : null;
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2.5 flex items-center gap-2.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-foreground truncate">{record.agentName}</p>
+        <p className="text-2xs text-muted-foreground truncate" title={record.message}>
+          {record.message.length > 60 ? record.message.slice(0, 60) + '...' : record.message}
+        </p>
+      </div>
+      <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${STATUS_STYLES[record.status]}`}>
+        {statusLabels[record.status]}
+      </span>
+      {duration && (
+        <span className="text-2xs text-muted-foreground/60 shrink-0 flex items-center gap-0.5">
+          <Clock size={10} aria-hidden="true" />
+          {duration}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function formatDuration(start: Date, end: Date): string {
+  const ms = end.getTime() - start.getTime();
+  if (ms < 1000) return `${ms}ms`;
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remSecs = secs % 60;
+  return remSecs > 0 ? `${mins}m ${remSecs}s` : `${mins}m`;
 }
 
 /* ────────── Remote Agent Row ────────── */

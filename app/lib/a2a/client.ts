@@ -10,6 +10,7 @@ import type {
   JsonRpcRequest,
   JsonRpcResponse,
   SendMessageParams,
+  DelegationRecord,
 } from './types';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
@@ -21,6 +22,20 @@ const CARD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 /* ── Agent Registry (in-memory cache) ──────────────────────────────────── */
 
 const registry = new Map<string, RemoteAgent>();
+
+/* ── Delegation History ────────────────────────────────────────────────── */
+
+const delegationHistory: DelegationRecord[] = [];
+
+/** Get all delegation history records */
+export function getDelegationHistory(): DelegationRecord[] {
+  return [...delegationHistory];
+}
+
+/** Clear all delegation history records */
+export function clearDelegationHistory(): void {
+  delegationHistory.length = 0;
+}
 
 /** Derive a stable ID from a URL (includes protocol to avoid collisions) */
 function urlToId(url: string): string {
@@ -152,6 +167,19 @@ export async function delegateTask(
   if (!agent) throw new Error(`Agent not found: ${agentId}`);
   if (!agent.reachable) throw new Error(`Agent not reachable: ${agent.card.name}`);
 
+  const record: DelegationRecord = {
+    id: `del-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    agentId,
+    agentName: agent.card.name,
+    message,
+    status: 'pending',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    result: null,
+    error: null,
+  };
+  delegationHistory.push(record);
+
   const params: SendMessageParams = {
     message: {
       role: 'ROLE_USER',
@@ -160,13 +188,29 @@ export async function delegateTask(
     configuration: { blocking: true },
   };
 
-  const response = await jsonRpcCall(agent.endpoint, 'SendMessage', params, token);
+  try {
+    const response = await jsonRpcCall(agent.endpoint, 'SendMessage', params, token);
 
-  if (response.error) {
-    throw new Error(`A2A error [${response.error.code}]: ${response.error.message}`);
+    if (response.error) {
+      record.status = 'failed';
+      record.completedAt = new Date().toISOString();
+      record.error = `A2A error [${response.error.code}]: ${response.error.message}`;
+      throw new Error(record.error);
+    }
+
+    const task = response.result as A2ATask;
+    record.status = 'completed';
+    record.completedAt = new Date().toISOString();
+    record.result = task.artifacts?.[0]?.parts?.[0]?.text ?? null;
+    return task;
+  } catch (err) {
+    if (record.status === 'pending') {
+      record.status = 'failed';
+      record.completedAt = new Date().toISOString();
+      record.error = (err as Error).message;
+    }
+    throw err;
   }
-
-  return response.result as A2ATask;
 }
 
 /**
