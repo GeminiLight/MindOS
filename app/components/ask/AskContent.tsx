@@ -200,10 +200,14 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
+  const prevFileRef = useRef(currentFile);
   useEffect(() => {
     const justOpened = variant === 'panel'
       ? (visible && !prevVisibleRef.current)  // panel: edge detection
       : visible;                               // modal: level detection (reset every open)
+
+    // Detect file change while panel is already open
+    const fileChanged = visible && prevVisibleRef.current && currentFile !== prevFileRef.current;
 
     if (justOpened) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -216,11 +220,15 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       slash.resetSlash();
       setSelectedSkill(null);
       setShowHistory(false);
+    } else if (fileChanged) {
+      // Update attached file context to match new file (don't reset session/messages)
+      setAttachedFiles(currentFile ? [currentFile] : []);
     } else if (!visible && variant === 'modal') {
       // Modal: abort streaming on close
       abortRef.current?.abort();
     }
     prevVisibleRef.current = visible;
+    prevFileRef.current = currentFile;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, currentFile]);
 
