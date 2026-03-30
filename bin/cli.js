@@ -1343,7 +1343,10 @@ ${row('mindos open',                       'Open Web UI in browser')}
 ${bold('Knowledge:')}
 ${row('mindos file <sub>',                 'File operations (list/read/create/delete/search)')}
 ${row('mindos space <sub>',                'Space management (list/create/info)')}
+${row('mindos search "<query>"',           'Search knowledge base via API')}
 ${row('mindos ask "<question>"',           'Ask AI using your knowledge base')}
+${row('mindos agent <sub>',               'AI Agent management (list/info)')}
+${row('mindos api <METHOD> <path>',        'Raw API passthrough (for developers/agents)')}
 
 ${bold('MCP:')}
 ${row('mindos mcp',                        'Start MCP server only')}
