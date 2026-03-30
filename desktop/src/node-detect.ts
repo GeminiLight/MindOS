@@ -112,14 +112,18 @@ export async function getNodePath(): Promise<string | null> {
     if (result && existsSync(result)) return result;
   } catch { /* ignore */ }
 
-  // 7. Shell login detection — SLOW fallback (~2-5s per shell)
+  // 7. Shell login detection — bounded fallback (1.5s per shell, 3s total ceiling)
   const shells = ['/bin/zsh', '/bin/bash'];
+  const shellStart = Date.now();
+  const shellCeiling = 3000;
   for (const sh of shells) {
+    if (Date.now() - shellStart > shellCeiling) break;
     if (!existsSync(sh)) continue;
     try {
+      const remaining = shellCeiling - (Date.now() - shellStart);
       const result = await execWithPath(
         `${sh} -il -c "which node" 2>/dev/null`,
-        { timeout: 5000 }
+        { timeout: Math.min(1500, remaining) }
       );
       if (result && existsSync(result)) return result;
     } catch { /* ignore */ }

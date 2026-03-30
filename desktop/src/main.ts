@@ -551,7 +551,7 @@ async function startLocalMode(): Promise<string | null> {
           const status = JSON.parse(readFileSync(updateStatusPath, 'utf-8'));
           isUpdating = status.stage && status.stage !== 'done' && status.stage !== 'failed';
         }
-      } catch { /* ignore */ }
+      } catch (err) { console.warn('[MindOS] removeOverlay failed:', (err as Error)?.message); }
 
       if (isUpdating) {
         // Update in progress — inject overlay and wait for new server
@@ -1065,7 +1065,7 @@ async function injectOverlay(id: string, html: string): Promise<void> {
         document.body.appendChild(d);
       })()
     `);
-  } catch { /* page may not be ready */ }
+  } catch (err) { console.warn('[MindOS] injectOverlay failed:', (err as Error)?.message); }
 }
 
 async function removeOverlay(id: string): Promise<void> {
@@ -1075,7 +1075,7 @@ async function removeOverlay(id: string): Promise<void> {
     await mainWindow.webContents.executeJavaScript(
       `document.getElementById(${JSON.stringify(id)})?.remove()`
     );
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('[MindOS] removeOverlay failed:', (err as Error)?.message); }
 }
 
 function setupConnectionMonitor(url: string): void {

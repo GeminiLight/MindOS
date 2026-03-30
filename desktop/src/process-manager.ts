@@ -524,6 +524,28 @@ export class ProcessManager extends EventEmitter {
               this.webProcess = newProc;
             }
             this.setupCrashHandler(newProc, which);
+            // Verify respawned process becomes healthy (web only, MCP has its own check above)
+            if (which === 'web') {
+              const port = this.opts.webPort;
+              setTimeout(async () => {
+                try {
+                  const res = await new Promise<boolean>((resolve) => {
+                    const req = require('http').get(
+                      { hostname: '127.0.0.1', port, path: '/api/health', timeout: 3000 },
+                      (r: any) => { resolve(r.statusCode === 200); r.resume(); },
+                    );
+                    req.on('error', () => resolve(false));
+                    req.on('timeout', () => { req.destroy(); resolve(false); });
+                  });
+                  if (res) {
+                    console.info('[MindOS:web] respawn healthy');
+                    this.emit('status-change', 'running');
+                  } else {
+                    console.warn('[MindOS:web] respawn unhealthy after 8s');
+                  }
+                } catch { /* best effort */ }
+              }, 8000);
+            }
           } catch (err) {
             console.error(`[MindOS:${which}] respawn failed:`, err);
           }
