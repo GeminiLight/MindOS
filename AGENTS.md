@@ -200,9 +200,11 @@ npm test                          # 手动跑测试，不杀 dev server
 2. **检查改动**：`git status` + `git diff`，排除不相关的临时文件
 3. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
 4. **提交并 push**：`git add <files> && git commit && git push origin main`
-5. 如果用户要求 release → 执行 `npm run release [patch|minor|major]`（默认 patch）
+5. 如果用户要求 release → 执行 `npm run release`（**始终使用 patch，除非用户明确指定 minor 或 major**）
 
 ### 发版说明
+
+- **默认 patch**：除非用户明确说 minor 或 major，否则一律 `npm run release`（等同于 `npm run release patch`）。不要自行判断应该用 minor/major。
 
 - push 到 main 会触发 `sync-to-mindos` workflow（同步到公开仓 + 部署 landing page）
 - 只有打 `v*.*.*` tag 才会触发 `publish-npm` workflow（发布到 npm）
