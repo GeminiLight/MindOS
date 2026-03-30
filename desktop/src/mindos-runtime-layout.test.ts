@@ -103,3 +103,71 @@ describe('isNextBuildValid', () => {
     }
   });
 });
+
+describe('isNextBuildCurrent', () => {
+  const BASE = path.join(process.cwd(), 'tmp-next-current-test');
+  const STAMP = BUILD_VERSION_FILE;
+
+  function setup(opts: { buildId?: boolean; standalone?: boolean; stampVersion?: string; pkgVersion?: string }) {
+    rmSync(BASE, { recursive: true, force: true });
+    const appDir = path.join(BASE, 'app');
+    const nextDir = path.join(appDir, '.next');
+    mkdirSync(nextDir, { recursive: true });
+    if (opts.buildId) writeFileSync(path.join(nextDir, 'BUILD_ID'), 'test-id', 'utf-8');
+    if (opts.standalone) {
+      mkdirSync(path.join(nextDir, 'standalone'), { recursive: true });
+      writeFileSync(path.join(nextDir, 'standalone', 'server.js'), '// srv', 'utf-8');
+    }
+    if (opts.stampVersion !== undefined) writeFileSync(path.join(nextDir, STAMP), opts.stampVersion, 'utf-8');
+    if (opts.pkgVersion !== undefined) writeFileSync(path.join(BASE, 'package.json'), JSON.stringify({ version: opts.pkgVersion }), 'utf-8');
+    return { root: BASE, appDir };
+  }
+
+  function cleanup() { rmSync(BASE, { recursive: true, force: true }); }
+
+  it('returns false when no build exists', () => {
+    expect(isNextBuildCurrent('/tmp/nonexistent-xyz', '/tmp/nonexistent-xyz')).toBe(false);
+  });
+
+  it('returns false when build exists but no version stamp', () => {
+    try {
+      const { root, appDir } = setup({ buildId: true, pkgVersion: '1.0.0' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(false);
+    } finally { cleanup(); }
+  });
+
+  it('returns false when build version mismatches package version', () => {
+    try {
+      const { root, appDir } = setup({ buildId: true, stampVersion: '0.6.20', pkgVersion: '0.6.22' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(false);
+    } finally { cleanup(); }
+  });
+
+  it('returns true when build version matches package version', () => {
+    try {
+      const { root, appDir } = setup({ buildId: true, stampVersion: '0.6.22', pkgVersion: '0.6.22' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(true);
+    } finally { cleanup(); }
+  });
+
+  it('returns true with standalone build and matching version', () => {
+    try {
+      const { root, appDir } = setup({ standalone: true, stampVersion: '1.0.0', pkgVersion: '1.0.0' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(true);
+    } finally { cleanup(); }
+  });
+
+  it('returns false when stamp is empty string', () => {
+    try {
+      const { root, appDir } = setup({ buildId: true, stampVersion: '', pkgVersion: '1.0.0' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(false);
+    } finally { cleanup(); }
+  });
+
+  it('returns true when stamp exists but no package.json', () => {
+    try {
+      const { root, appDir } = setup({ buildId: true, stampVersion: '1.0.0' });
+      expect(isNextBuildCurrent(appDir, root)).toBe(true);
+    } finally { cleanup(); }
+  });
+});
