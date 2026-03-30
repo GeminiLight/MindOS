@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Cable,
   ChevronDown,
+  Globe,
   Server,
   Zap,
 } from 'lucide-react';
@@ -63,6 +64,7 @@ export default function AgentsOverviewSection({
   enabledSkillCount,
   allAgents,
   pulseCopy,
+  a2aCount,
 }: {
   copy: OverviewCopy;
   buckets: AgentBuckets;
@@ -73,6 +75,7 @@ export default function AgentsOverviewSection({
   enabledSkillCount: number;
   allAgents: AgentInfo[];
   pulseCopy: PulseCopy;
+  a2aCount?: number;
 }) {
   const allHealthy = riskQueue.length === 0 && mcpRunning;
   const totalAgents = allAgents.length;
@@ -128,6 +131,14 @@ export default function AgentsOverviewSection({
             value={mcpRunning ? `:${mcpPort}` : '—'}
             tone={mcpRunning ? 'ok' : 'warn'}
           />
+          {a2aCount != null && (
+            <StatCell
+              icon={<Globe size={14} aria-hidden="true" />}
+              label={copy.a2aLabel as string ?? 'A2A'}
+              value={a2aCount}
+              tone={a2aCount > 0 ? 'ok' : 'muted'}
+            />
+          )}
         </div>
       </section>
 
