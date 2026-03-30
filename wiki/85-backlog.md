@@ -49,6 +49,17 @@
 
 > 按优先级排序。评估维度：用户感知影响 × 实施成本 × 当前阶段匹配度。
 
+### CLI 架构重构
+
+> 2026-03-31 复盘发现。按 P1→P3 排序。
+
+- [ ] **P1: cli.js God File 拆分** — 1378 行的 cli.js 把 ~20 个命令全部内联。新 `commands/` 目录只有 7 个文件，老命令（start/dev/stop/build/doctor/config/sync/gateway/mcp/token 等）全在 cli.js 里。应逐步迁移到 `commands/`，cli.js 瘦身为纯路由（<200 行）
+- [ ] **P1: 统一参数解析** — 老命令用 `process.argv.includes('--flag')` 手动扫描，新命令用 `parseArgs()`。两套并存易出 bug。应统一入口做一次解析，所有命令接收 `(args, flags)`
+- [ ] **P2: token 命令从 Agent 注册表自动生成** — 当前 `token` 命令有 120+ 行手写的 Agent JSON 配置示例，每加一个 Agent 要手动加一段。应从 `mcp-agents.js` 的 `MCP_AGENTS` 注册表自动生成
+- [ ] **P2: file.js 复用 core 模块** — `bin/commands/file.js` 自己实现了 `walkFiles()` 文件遍历，而 `app/lib/core/` 已有完善的 `buildFileTree()`。两套逻辑不同步（如 `.mindos-ignore` 规则）。应复用 core 或走 API
+- [ ] **P2: 统一 exit code 规范** — 当前所有命令只用 0/1。Agent 无法从 exit code 判断失败类型。建议：0=成功，1=通用错误，2=参数错误，3=连接失败，4=未找到
+- [ ] **P3: --json 覆盖所有命令** — 目前只有新命令（file/space/agent/status）支持 `--json`，老命令（doctor/sync/config show/token）不支持。Agent 需要结构化输出时半数命令不可用
+
 ### 🔴 高优先（下一批做）
 
 - [x] **Inline AI Organize** — 上传文件选择「AI Organize」后不再弹出 ChatBot，改为在 ImportModal 内原地展示处理进度和结果，支持 review 和撤销。[spec](./specs/spec-inline-ai-organize.md)
