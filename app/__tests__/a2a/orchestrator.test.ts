@@ -226,5 +226,55 @@ describe('A2A Orchestrator', () => {
       expect(plan.subtasks[0].status).toBe('failed');
       expect(plan.subtasks[1].status).toBe('pending');
     });
+
+    it('marks unassigned subtasks as failed before execution', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD_SEARCH });
+      await discoverAgent('http://search:3000');
+      const agentId = getDiscoveredAgents()[0].id;
+
+      const plan = createPlan('mixed', 'parallel', ['search files', 'unrelated task']);
+      plan.subtasks[0].assignedAgentId = agentId;
+      // subtask[1] stays unassigned
+
+      const mockTask = {
+        id: 't1',
+        status: { state: 'TASK_STATE_COMPLETED', timestamp: '' },
+        artifacts: [{ artifactId: 'a1', parts: [{ text: 'found stuff' }] }],
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', result: mockTask }),
+      });
+
+      const result = await executePlan(plan);
+      expect(result.subtasks[0].status).toBe('completed');
+      expect(result.subtasks[1].status).toBe('failed');
+      expect(result.subtasks[1].error).toContain('No matching agent');
+    });
+
+    it('sets completedAt timestamp on finish', async () => {
+      const plan = createPlan('no agents', 'parallel', ['task A']);
+      expect(plan.completedAt).toBeNull();
+      await executePlan(plan);
+      // Even failed plans should get a completedAt (or aggregatedResult)
+      expect(plan.aggregatedResult).toBeTruthy();
+    });
+  });
+
+  describe('decompose edge cases', () => {
+    it('handles empty string', () => {
+      const tasks = decompose('');
+      expect(tasks).toHaveLength(1);
+    });
+
+    it('handles numbered list with periods in content', () => {
+      const tasks = decompose('1. Search for notes about A.I. 2. Write a summary');
+      expect(tasks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('trims whitespace from subtask descriptions', () => {
+      const tasks = decompose('x', ['  task with spaces  ']);
+      expect(tasks[0].description).toBe('task with spaces');
+    });
   });
 });

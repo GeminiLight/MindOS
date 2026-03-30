@@ -17,18 +17,18 @@ import { getDiscoveredAgents, delegateTask } from './client';
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
 const MAX_SUBTASKS = 10;
-const SUBTASK_TIMEOUT_MS = 60_000;
 
 /* ── Skill Matcher ─────────────────────────────────────────────────────── */
 
-/** Score how well a skill matches a task description (keyword overlap) */
+/** Score how well a skill matches a task description (keyword overlap, deduplicated) */
 function scoreSkillMatch(taskDesc: string, skill: AgentSkill): number {
   const taskWords = new Set(taskDesc.toLowerCase().split(/\s+/));
-  const skillWords = [
+  // Deduplicate skill words to avoid double-counting from name + description overlap
+  const skillWords = new Set([
     ...skill.name.toLowerCase().split(/\s+/),
     ...skill.description.toLowerCase().split(/\s+/),
     ...(skill.tags ?? []).map(t => t.toLowerCase()),
-  ];
+  ]);
   let matches = 0;
   for (const w of skillWords) {
     if (w.length > 2 && taskWords.has(w)) matches++;
@@ -96,11 +96,9 @@ export function decompose(request: string, subtaskDescriptions?: string[]): SubT
 
 /** Simple heuristic: split on "and then", "then", "also", numbered lists, semicolons */
 function splitIntoSubtasks(text: string): string[] {
-  // Try numbered list first (1. ... 2. ... 3. ...)
-  const numbered = text.match(/\d+\.\s+[^.]+(?:\.|$)/g);
-  if (numbered && numbered.length >= 2) {
-    return numbered.map(s => s.replace(/^\d+\.\s*/, '').trim());
-  }
+  // Try numbered list first: split on "N. " pattern at boundaries
+  const numbered = text.split(/(?:^|\s)(?=\d+\.\s)/m).map(s => s.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+  if (numbered.length >= 2) return numbered;
 
   // Try splitting on conjunctions/semicolons
   const parts = text.split(/;\s*|\.\s+(?:then|and then|also|next|finally)\s+/i).filter(Boolean);
@@ -156,26 +154,20 @@ async function executeSubtask(subtask: SubTask, token?: string): Promise<void> {
   subtask.status = 'running';
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SUBTASK_TIMEOUT_MS);
+    // delegateTask has its own 30s RPC timeout via fetchWithTimeout in client.ts
+    const task = await delegateTask(subtask.assignedAgentId, subtask.description, token);
 
-    try {
-      const task = await delegateTask(subtask.assignedAgentId, subtask.description, token);
-
-      if (task.status.state === 'TASK_STATE_COMPLETED') {
-        subtask.status = 'completed';
-        subtask.result = task.artifacts?.[0]?.parts?.[0]?.text
-          ?? task.history?.find(m => m.role === 'ROLE_AGENT')?.parts?.[0]?.text
-          ?? 'Completed (no text result)';
-      } else if (task.status.state === 'TASK_STATE_FAILED') {
-        subtask.status = 'failed';
-        subtask.error = task.status.message?.parts?.[0]?.text ?? 'Agent reported failure';
-      } else {
-        subtask.status = 'completed';
-        subtask.result = `Task in progress (state: ${task.status.state})`;
-      }
-    } finally {
-      clearTimeout(timeout);
+    if (task.status.state === 'TASK_STATE_COMPLETED') {
+      subtask.status = 'completed';
+      subtask.result = task.artifacts?.[0]?.parts?.[0]?.text
+        ?? task.history?.find(m => m.role === 'ROLE_AGENT')?.parts?.[0]?.text
+        ?? 'Completed (no text result)';
+    } else if (task.status.state === 'TASK_STATE_FAILED') {
+      subtask.status = 'failed';
+      subtask.error = task.status.message?.parts?.[0]?.text ?? 'Agent reported failure';
+    } else {
+      subtask.status = 'completed';
+      subtask.result = `Task in progress (state: ${task.status.state})`;
     }
   } catch (err) {
     subtask.status = 'failed';
@@ -196,9 +188,19 @@ export async function executePlan(plan: OrchestrationPlan, token?: string): Prom
     return plan;
   }
 
+  // Mark unassigned subtasks as failed before execution
+  for (const st of plan.subtasks) {
+    if (!st.assignedAgentId) {
+      st.status = 'failed';
+      st.error = 'No matching agent found for this subtask';
+    }
+  }
+
+  const assignedTasks = plan.subtasks.filter(st => st.assignedAgentId);
+
   if (plan.strategy === 'parallel') {
     await Promise.allSettled(
-      plan.subtasks.map(st => st.assignedAgentId ? executeSubtask(st, token) : Promise.resolve())
+      assignedTasks.map(st => executeSubtask(st, token))
     );
   } else {
     // Sequential or dependency-based
