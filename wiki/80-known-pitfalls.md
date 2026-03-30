@@ -945,3 +945,71 @@
   - **electron-builder 多架构构建必须在 CI matrix 层控制（`--arch` flag），禁止在 electron-builder.yml 的 `target.arch` 中列出多个架构**。配置文件中的 `arch` 数组会覆盖 CLI flag，导致每个 job 构建所有架构
   - **macOS `--publish always` 上传的是公证前版本**。如果使用独立公证流程（而非 electron-builder 内置公证），必须在公证+装订后重新上传
   - `hdiutil create -fs APFS` 在 ARM64 runner 上不稳定，electron-builder 会 swallow 错误继续上传损坏文件。通过每 job 只构建一个架构来避免「损坏文件覆盖正常文件」的竞态
+
+---
+
+## UI / 前端交互
+
+### 按钮/链接：可视点击区域 ≠ 实际点击目标
+
+- **现象：** 用户看到一个有背景色、圆角、padding 的按钮（视觉上是一个清晰的盒子），但只有当鼠标移到文字或图标上时才能点击，背景区域无反应
+- **根因（三种常见模式）：**
+  1. **`<Link><span className="...bg-...rounded-lg...">` 反向嵌套**：Link 是透明的点击目标，所有视觉样式（bg、border、px/py）都在内部 span 上。用户看到的是 span 的边界，但期望整个 Link 包括 span 之外的 padding 也能点击。例：
+     ```tsx
+     // ❌ 错误：Link 无样式，span 有所有视觉样式
+     <Link href="..."><span className="px-3 py-2 rounded-lg border bg-muted">{icon} {text}</span></Link>
+     
+     // ✅ 正确：样式应该在 Link 上
+     <Link href="..." className="px-3 py-2 rounded-lg border bg-muted hover:bg-muted/80 transition-colors">{icon} {text}</Link>
+     ```
+  
+  2. **文本-only 链接，无 box 反馈**：某些链接只在文字上实现 `hover:text-foreground` 或 `hover:underline`，没有 box 样式。用户可能不知道这是可点击的区域。例：
+     ```tsx
+     // ❌ 难以发现
+     <Link href="..." className="hover:text-foreground">Breadcrumb</Link>
+     
+     // ✅ 清晰的点击目标
+     <Link href="..." className="px-2 py-0.5 rounded-md hover:bg-muted/50">Breadcrumb</Link>
+     ```
+  
+  3. **按钮内部图标无明确 hover 反馈**：某些按钮（如删除/关闭）的内部 icon 只有文本颜色变化，没有背景反馈。使用户难以辨别是否是单独的可点击元素。例：
+     ```tsx
+     // ❌ 删除按钮视觉不清晰
+     <button className="text-muted-foreground hover:text-foreground">
+       <X size={10} />
+     </button>
+     
+     // ✅ 明确的按钮反馈
+     <button className="p-1 rounded hover:bg-error/10 hover:text-error">
+       <X size={10} />
+     </button>
+     ```
+
+- **设计规则：**
+  - **规则 1：可视包装元素 = 点击目标元素**
+    - 如果 `<Link>` 或 `<button>` 有 padding、border、bg-color、rounded 样式，它们应该直接应用到该元素上，NOT 内部嵌套的 span
+    - 内部 span 应该只用于排列内容（gap、alignment），不添加新的 padding/border
+  
+  - **规则 2：确保点击 feedback 覆盖整个可视区域**
+    - `hover:` 和 `focus-visible:` 样式应该作用在可点击元素上，使用户看到整个区域都是可交互的
+    - 对于 pill/badge/chip 组件，避免在容器内放置独立按钮；如必须，确保按钮有明显的 visual boundaries（如 `p-1 rounded hover:bg-X`）
+  
+  - **规则 3：检查清单**
+    ```
+    对每个看起来像按钮的 UI 元素，问以下问题：
+    1. 可视盒子（背景色/border/圆角）在哪个元素上？
+    2. onClick/href 在哪个元素上？
+    3. 两者是同一个元素吗？如果不是，为什么？
+    4. hover/focus-visible 样式是否覆盖整个可视区域？
+    ```
+
+- **已修复的案例：**
+  - `HomeContent.tsx` FeatureChip（P1）：Link 现在直接应用样式，不再嵌套 span
+  - `Breadcrumb.tsx` 导航链接（P2）：添加了 box 样式 `px-2 py-0.5 rounded-md`
+  - `FileChip.tsx` 删除按钮（P2）：增加 `p-1 rounded hover:bg-muted` 使其视觉清晰
+
+- **预防策略：**
+  - Code review：检查所有 `<Link>` 和 `<button>` 是否直接应用了 visual styles（px/py/bg/border/rounded）
+  - 设计系统文档：记录标准按钮/链接模式
+  - Visual QA：进行 "click everywhere" 测试，确保看到的区域都能点击
+
