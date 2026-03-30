@@ -4,7 +4,6 @@
  */
 
 import type { AgentCard, AgentSkill } from './types';
-import { readSettings } from '../settings';
 
 /** MindOS knowledge-base skills exposed via A2A */
 const KB_SKILLS: AgentSkill[] = [
@@ -60,15 +59,17 @@ const KB_SKILLS: AgentSkill[] = [
  * @param baseUrl  The publicly reachable base URL (e.g. http://localhost:3456)
  */
 export function buildAgentCard(baseUrl: string): AgentCard {
-  let version = '0.0.0';
-  try {
-    const settings = readSettings();
-    version = settings.version ?? version;
-  } catch { /* use default */ }
+  let version = process.env.npm_package_version || '0.0.0';
 
-  // Also try env
-  if (version === '0.0.0' && process.env.npm_package_version) {
-    version = process.env.npm_package_version;
+  // Try reading version from package.json as fallback
+  if (version === '0.0.0') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const projRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+      const pkg = JSON.parse(fs.readFileSync(path.join(projRoot, 'package.json'), 'utf-8'));
+      if (pkg.version) version = pkg.version;
+    } catch { /* use default */ }
   }
 
   return {
