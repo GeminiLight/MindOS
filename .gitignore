@@ -1,79 +1,10 @@
 **/node_modules/
 **/dist/
 app/.next
-app/.vscode
+app/.claude
 app/data
 !app/data/skills
-*.tsbuildinfo
-*.pptx
-*.pdf
-*.log
-*.tmp
-*.tgz
-*.bak
-*.swp
-.DS_Store
-*.zip
-
-.claude
-.claude-internal
-.cursor
-.codebuddy
-.pi
-
-# User config is stored in ~/.mindos/config.json (never committed)
-app/.env.local
-app/.mindos-settings.json
 
 my-mind/
-my-mind-backup/
-review/
-experience/
-activities/
-template/template-generation-skill.md
-
-landing/screenshots/
-landing/test-results/
-
-skills/mindos/evals
-skills/mindos-zh/evals
-skills/human-insight
-skills/project-wiki-workspace
 
 */skills-lock.json
-
-tests/e2e/results/
-tests/e2e/test-results/
-
-assets/capture-demo.mjs
-assets/package-lock.json
-assets/package.json
-assets/demo-flow.html
-
-# Electron desktop
-desktop/dist/
-desktop/dist-electron/
-desktop/dist-renderer/
-desktop/node_modules/
-# Populated by prepare-mindos-runtime.mjs (keep README tracked)
-desktop/resources/mindos-runtime/*
-!desktop/resources/mindos-runtime/README.md
-!desktop/resources/mindos-runtime/.gitkeep
-desktop/.node-bundle-tmp/
-
-# Docker / Docker Compose — local overrides & secrets (keep Dockerfile / docker-compose.yml tracked)
-docker-compose.override.yml
-/.env
-
-# Shared SDK build
-shared/dist/image copy 2.png
-image copy.png
-image.png
-*.png
-.tmux.conf
-TMUX_DOC.md
-tmux-manage.sh
-tmux-sessions.conf
-.mcp.json
-collect-session-ids.py
-local-scripts/
