@@ -130,12 +130,57 @@ function SpacePreviewSection({ preview, dirPath }: {
   );
 }
 
+// ─── Context Menu for DirView entries ─────────────────────────────────────────
+
+function DirContextMenu({ x, y, path, label, onClose }: {
+  x: number; y: number; path: string; label: string; onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { t } = useLocale();
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
+  }, [onClose]);
+
+  // Keep within viewport
+  const adjX = typeof window !== 'undefined' ? Math.min(x, window.innerWidth - 200) : x;
+  const adjY = typeof window !== 'undefined' ? Math.min(y, window.innerHeight - 60) : y;
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-lg py-1"
+      style={{ top: adjY, left: adjX }}
+    >
+      <button
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+        onClick={() => { copyPathToClipboard(path); onClose(); }}
+      >
+        <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
+      </button>
+    </div>
+  );
+}
+
 // ─── DirView ──────────────────────────────────────────────────────────────────
 
 export default function DirView({ dirPath, entries, spacePreview }: DirViewProps) {
   const [view, setView] = useDirViewPref();
   const { t } = useLocale();
   const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+
+  const handleCtx = useCallback((e: React.MouseEvent, path: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, path });
+  }, []);
 
   const visibleEntries = useMemo(() => {
     if (spacePreview) {
@@ -202,6 +247,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                 <Link
                   key={entry.path}
                   href={`/view/${encodePath(entry.path)}`}
+                  onContextMenu={(e) => handleCtx(e, entry.path)}
                   className={
                     entry.type === 'directory'
                       ? 'flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-100 text-center'
@@ -231,6 +277,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                 <Link
                   key={entry.path}
                   href={`/view/${encodePath(entry.path)}`}
+                  onContextMenu={(e) => handleCtx(e, entry.path)}
                   className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent transition-colors duration-100"
                 >
                   <FileIcon node={entry} />
@@ -250,6 +297,17 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
           )}
         </div>
       </div>
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <DirContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          path={ctxMenu.path}
+          label={t.fileTree.copyPath}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }
