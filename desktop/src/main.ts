@@ -593,7 +593,7 @@ async function startLocalMode(): Promise<string | null> {
         dialog.showErrorBox(
           zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
           (zh ? 'Web 服务连续崩溃 3 次。' : 'The web server crashed 3 times.')
-            + hint + (stderr ? '\n\n--- Last output ---\n' + stderr : ''),
+            + hint + '\n\n' + (zh ? '详细日志：~/.mindos/crash.log' : 'Details: ~/.mindos/crash.log') + (stderr ? '\n\n--- Last output ---\n' + stderr : ''),
         );
       }
     }
