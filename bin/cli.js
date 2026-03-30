@@ -1354,6 +1354,7 @@ ${bold('Config & Diagnostics:')}
 ${row('mindos config <sub>',               'View/update config (show/set/unset/validate)')}
 ${row('mindos doctor',                     'Health check')}
 ${row('mindos update',                     'Update to latest version')}
+${row('mindos uninstall',                  'Fully uninstall MindOS')}
 ${row('mindos logs',                       'Tail service logs')}
 
 ${bold('Global Flags:')}
