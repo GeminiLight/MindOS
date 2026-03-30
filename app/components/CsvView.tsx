@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import Papa from 'papaparse';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2, Loader2 } from 'lucide-react';
 
 interface CsvViewProps {
   content: string;
@@ -135,6 +135,7 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const parsed = useMemo(() => {
     const result = Papa.parse<string[]>(content, { skipEmptyLines: true });
@@ -163,38 +164,57 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
   // Update a single cell and persist
   const handleCellCommit = useCallback(async (rowIdx: number, colIdx: number, newVal: string) => {
     if (!saveAction) return;
-    // rowIdx here is index into sortedRows — need to map back to original rows
-    const updatedRows = rows.map((r, i) => {
-      // find which original row matches this sorted row
+    const updatedRows = rows.map((r) => {
       const sorted = sortedRows[rowIdx];
       if (r === sorted) return r.map((cell, ci) => ci === colIdx ? newVal : cell);
       return r;
     });
     const newContent = serializeRows(headers, updatedRows);
     setContent(newContent);
-    await saveAction(newContent);
+    setSaving(true);
+    try {
+      await saveAction(newContent);
+    } catch (err) {
+      console.error('[CsvView] Cell save failed:', err);
+    } finally {
+      setSaving(false);
+    }
   }, [saveAction, rows, sortedRows, headers]);
 
   // Delete a row and persist
   const handleDeleteRow = useCallback(async (rowIdx: number) => {
-    if (!saveAction) return;
+    if (!saveAction || saving) return;
     const sorted = sortedRows[rowIdx];
     const updatedRows = rows.filter(r => r !== sorted);
     const newContent = serializeRows(headers, updatedRows);
     setContent(newContent);
-    await saveAction(newContent);
-  }, [saveAction, rows, sortedRows, headers]);
+    setSaving(true);
+    try {
+      await saveAction(newContent);
+    } catch (err) {
+      console.error('[CsvView] Row delete failed:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [saveAction, rows, sortedRows, headers, saving]);
 
   // Append a new row
   const handleAddRow = useCallback(async (newRow: string[]) => {
-    setShowAdd(false);
-    if (appendAction) {
-      const result = await appendAction(newRow);
-      setContent(result.newContent);
-    } else if (saveAction) {
-      const newContent = serializeRows(headers, [...rows, newRow]);
-      setContent(newContent);
-      await saveAction(newContent);
+    setSaving(true);
+    try {
+      if (appendAction) {
+        const result = await appendAction(newRow);
+        setContent(result.newContent);
+      } else if (saveAction) {
+        const newContent = serializeRows(headers, [...rows, newRow]);
+        setContent(newContent);
+        await saveAction(newContent);
+      }
+      setShowAdd(false);
+    } catch (err) {
+      console.error('[CsvView] Add row failed:', err);
+    } finally {
+      setSaving(false);
     }
   }, [appendAction, saveAction, headers, rows]);
 
@@ -266,9 +286,10 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
                     {saveAction && (
                       <button
                         onClick={() => handleDeleteRow(rowIdx)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
+                        disabled={saving}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 disabled:opacity-30"
                         style={{ color: 'var(--muted-foreground)' }}
-                        title="Delete row"
+                        title={saving ? 'Saving...' : 'Delete row'}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -295,8 +316,9 @@ export default function CsvView({ content: initialContent, appendAction, saveAct
         className="px-4 py-2 flex items-center justify-between"
         style={{ background: 'var(--muted)', borderTop: '1px solid var(--border)' }}
       >
-        <span className="text-xs font-display" style={{ color: 'var(--muted-foreground)' }}>
+        <span className="text-xs font-display flex items-center gap-1.5" style={{ color: 'var(--muted-foreground)' }}>
           {rows.length} rows · {headers.length} cols
+          {saving && <Loader2 size={10} className="animate-spin" style={{ color: 'var(--amber)' }} />}
         </span>
 
         {canEdit && !showAdd && (
