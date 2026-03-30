@@ -29,7 +29,7 @@ import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
-import { isNextBuildValid } from './mindos-runtime-layout';
+import { isNextBuildValid, isNextBuildCurrent, BUILD_VERSION_FILE } from './mindos-runtime-layout';
 import {
   getEffectiveMindRootFromConfig,
   localBrowseNeedsSetupWizard,
@@ -380,7 +380,7 @@ async function startLocalMode(): Promise<string | null> {
   //    An incomplete .next (interrupted build, empty dir) would let Next.js crash at startup.
   const appDir = path.join(projectRoot, 'app');
   const nextDir = path.join(appDir, '.next');
-  if (!isNextBuildValid(appDir)) {
+  if (!isNextBuildCurrent(appDir, projectRoot)) {
     splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
@@ -404,8 +404,8 @@ async function startLocalMode(): Promise<string | null> {
       // Write build version stamp
       try {
         const version = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf-8')).version;
-        writeFileSync(path.join(nextDir, '.mindos-build-version'), version, 'utf-8');
-      } catch { /* non-critical */ }
+        writeFileSync(path.join(nextDir, BUILD_VERSION_FILE), version, 'utf-8');
+      } catch (stampErr) { console.warn('[MindOS] Failed to write build version stamp:', stampErr); }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       splashStatus({
@@ -535,7 +535,7 @@ async function startLocalMode(): Promise<string | null> {
     }
   });
 
-  processManager.on('crash', (which: string, count: number) => {
+  processManager.on('crash', (which: string, count: number, stderrLines?: string[]) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
       updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, processManager?.mcpPort);
@@ -585,9 +585,15 @@ async function startLocalMode(): Promise<string | null> {
       } else {
         crashDialogShown = true;
         const zh = navigator_lang() === 'zh';
+        const stderr = stderrLines?.slice(-5).join('\n') || '';
+        const hasModuleError = stderr.includes('MODULE_NOT_FOUND') || stderr.includes('Cannot find module');
+        const hint = hasModuleError
+          ? (zh ? '\n\n可能原因：构建产物过期。请在终端运行 mindos start 重新编译。' : '\n\nLikely cause: stale build. Run "mindos start" in terminal to rebuild.')
+          : (zh ? '\n\n请检查 Node.js 环境后重启。' : '\n\nPlease check your Node.js environment and restart.');
         dialog.showErrorBox(
           zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
-          zh ? 'Web 服务连续崩溃 3 次。请检查 Node.js 环境后重启。' : 'The web server crashed 3 times. Please check your Node.js environment and restart.'
+          (zh ? 'Web 服务连续崩溃 3 次。' : 'The web server crashed 3 times.')
+            + hint + (stderr ? '\n\n--- Last output ---\n' + stderr : ''),
         );
       }
     }
