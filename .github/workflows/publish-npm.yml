@@ -35,3 +35,11 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Ensure latest tag points to this version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Setting latest dist-tag to ${VERSION}..."
+          npm dist-tag add "@geminilight/mindos@${VERSION}" latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
