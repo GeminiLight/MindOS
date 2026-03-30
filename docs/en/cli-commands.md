@@ -15,6 +15,27 @@
 | `mindos stop` | Stop running MindOS processes |
 | `mindos restart` | Stop then start again |
 | `mindos build` | Manually build for production |
+| `mindos status` | Show service status overview (supports `--json`) |
+
+## Knowledge
+
+| Command | Description |
+| :--- | :--- |
+| `mindos file list` | List all files in knowledge base |
+| `mindos file read <path>` | Read file content |
+| `mindos file create <path>` | Create a new file |
+| `mindos file delete <path>` | Delete a file |
+| `mindos file search "<query>"` | Search files by name |
+| `mindos space list` | List all spaces |
+| `mindos space create <name>` | Create a new space |
+| `mindos space info <name>` | Show space details |
+| `mindos search "<query>"` | Search knowledge base via API |
+| `mindos ask "<question>"` | Ask AI a question using your knowledge base |
+| `mindos agent list` | List detected AI Agents |
+| `mindos agent info <name>` | Show Agent details and MCP config |
+| `mindos api <METHOD> <path>` | Raw API passthrough (GET/POST/PUT/DELETE) |
+
+> All knowledge commands support `--json` for AI agent consumption.
 
 ## MCP
 
