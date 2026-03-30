@@ -1,6 +1,3 @@
-import { en } from './i18n-en';
-import { zh } from './i18n-zh';
-
-export type Locale = 'en' | 'zh';
-export const messages = { en, zh } as const;
-export type Messages = typeof messages['en'];
+// Re-exports from modular i18n system.
+// All translations are now organized in ./i18n/modules/*.ts
+export { en, zh, messages, type Locale, type Messages } from './i18n/index';
