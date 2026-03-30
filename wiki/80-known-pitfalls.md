@@ -1,6 +1,22 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-03-31 | Current stage: P1 -->
 
 # 踩坑记录 (Known Pitfalls)
+
+## Git / 双仓同步
+
+### 绝对禁止手动 push/merge public repo（2026-03-31 实际事故）
+
+**症状**：mindos-dev 丢失 219 个文件（`.claude-internal/`、`startup/`、私有 wiki 等）。
+
+**根因**：手动 `git push public main` 把 dev 完整历史推到 public repo，然后 `git merge public/main` 回来。public repo 只有 sync 子集，Git 认为 public 端"删除"了 dev-only 文件，merge 时同步删除。
+
+**规则**：
+- **永远不要** `git push public main` 或 `git merge public/main`
+- 只通过 `sync-to-mindos.yml` CI 单向同步 dev → public
+- 唯一允许直接推 public 的是 tag：`git push public v0.6.27`（仅 tag，不推 branch）
+- 如果 public 有外部 PR，在 GitHub 上合并后让 CI 回流，不要手动 merge
+
+**恢复方式**：`git reset --hard <merge前的commit>` + `git push origin main --force-with-lease`
 
 ## Desktop / 打包
 
