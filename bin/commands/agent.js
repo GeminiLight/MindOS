@@ -3,7 +3,7 @@ import { MCP_AGENTS, detectAgentPresence } from '../lib/mcp-agents.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { output, isJsonMode } from '../lib/command.js';
+import { output, isJsonMode, EXIT } from '../lib/command.js';
 
 function expandHome(p) {
   return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
@@ -76,12 +76,12 @@ function agentList(flags) {
 function agentInfo(key, flags) {
   if (!key) {
     console.error(red('Usage: mindos agent info <agent-key>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const agent = MCP_AGENTS[key];
   if (!agent) {
     console.error(red('Unknown agent: ' + key));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   const installed = detectAgentPresence(key);

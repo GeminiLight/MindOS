@@ -16,6 +16,16 @@ import { ROOT } from './constants.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+// ── Exit codes ────────────────────────────────────────────────────────────────
+// Standardized exit codes for CLI commands. Use these instead of raw numbers.
+export const EXIT = {
+  OK:        0,  // Success
+  ERROR:     1,  // General error
+  ARGS:      2,  // Invalid arguments or usage
+  CONNECT:   3,  // Connection refused / service not running
+  NOT_FOUND: 4,  // Resource not found (file, agent, etc.)
+};
+
 /** @type {Map<string, { meta: object, run: function }>} */
 const registry = new Map();
 

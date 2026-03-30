@@ -9,14 +9,14 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync, mkdirS
 import { resolve, basename, dirname, relative } from 'node:path';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { output, isJsonMode } from '../lib/command.js';
+import { output, isJsonMode, EXIT } from '../lib/command.js';
 
 function getMindRoot() {
   loadConfig();
   const root = process.env.MIND_ROOT;
   if (!root || !existsSync(root)) {
     console.error(red('Mind root not configured. Run `mindos onboard` first.'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   return root;
 }
@@ -71,7 +71,7 @@ export async function run(args, flags) {
     default:
       console.error(red(`Unknown subcommand: ${sub}`));
       console.error(dim('Available: list, read, create, delete, rename, move, search'));
-      process.exit(1);
+      process.exit(EXIT.ERROR);
   }
 }
 
@@ -150,12 +150,12 @@ function fileList(root, _args, flags) {
 function fileRead(root, filePath, flags) {
   if (!filePath) {
     console.error(red('Usage: mindos file read <path>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const full = resolvePath(root, filePath);
   if (!existsSync(full)) {
     console.error(red(`File not found: ${filePath}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const content = readFileSync(full, 'utf-8');
 
@@ -169,13 +169,13 @@ function fileRead(root, filePath, flags) {
 function fileCreate(root, filePath, flags) {
   if (!filePath) {
     console.error(red('Usage: mindos file create <path> --content "..."'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const full = resolvePath(root, filePath);
   if (existsSync(full) && !flags.force) {
     console.error(red(`File already exists: ${filePath}`));
     console.error(dim('Use --force to overwrite.'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   const content = flags.content || `# ${basename(filePath, '.md')}\n`;
@@ -192,12 +192,12 @@ function fileCreate(root, filePath, flags) {
 function fileDelete(root, filePath, flags) {
   if (!filePath) {
     console.error(red('Usage: mindos file delete <path>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const full = resolvePath(root, filePath);
   if (!existsSync(full)) {
     console.error(red(`File not found: ${filePath}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   unlinkSync(full);
@@ -212,18 +212,18 @@ function fileDelete(root, filePath, flags) {
 function fileRename(root, oldPath, newPath, flags) {
   if (!oldPath || !newPath) {
     console.error(red('Usage: mindos file rename <old-path> <new-path>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const fullOld = resolvePath(root, oldPath);
   const fullNew = resolvePath(root, newPath);
 
   if (!existsSync(fullOld)) {
     console.error(red(`File not found: ${oldPath}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   if (existsSync(fullNew) && !flags.force) {
     console.error(red(`Target already exists: ${newPath}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   mkdirSync(dirname(fullNew), { recursive: true });
@@ -239,7 +239,7 @@ function fileRename(root, oldPath, newPath, flags) {
 function fileSearch(root, query, flags) {
   if (!query) {
     console.error(red('Usage: mindos file search <query>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   const files = walkFiles(root, root);
