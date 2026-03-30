@@ -1,8 +1,8 @@
 'use client';
 
-import { useSyncExternalStore, useMemo } from 'react';
+import { useSyncExternalStore, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode } from '@/lib/types';
@@ -10,6 +10,10 @@ import type { SpacePreview } from '@/lib/core/types';
 import { useLocale } from '@/lib/LocaleContext';
 
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md']);
+
+async function copyPathToClipboard(path: string) {
+  try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
+}
 
 interface DirViewProps {
   dirPath: string;
