@@ -156,3 +156,19 @@ export const A2A_ERRORS = {
   INVALID_PARAMS: { code: -32602, message: 'Invalid params' },
   INTERNAL_ERROR: { code: -32603, message: 'Internal error' },
 } as const;
+
+/* ── A2A Client Types (Phase 2) ────────────────────────────────────────── */
+
+/** A discovered remote agent with its card and endpoint */
+export interface RemoteAgent {
+  /** Unique identifier (derived from agent card URL) */
+  id: string;
+  /** The agent's card metadata */
+  card: AgentCard;
+  /** The JSON-RPC endpoint URL */
+  endpoint: string;
+  /** When this card was last fetched */
+  discoveredAt: string;
+  /** Whether the agent is currently reachable */
+  reachable: boolean;
+}

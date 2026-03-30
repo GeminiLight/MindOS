@@ -9,6 +9,7 @@ import {
 } from '@/lib/fs';
 import { readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
 import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
+import { a2aTools } from '@/lib/a2a/a2a-tools';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -186,10 +187,11 @@ export function getOrganizeTools(): AgentTool<any>[] {
 }
 
 export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
+  const baseTools = [...knowledgeBaseTools, ...a2aTools];
   try {
     const result = await listMcporterServers();
     const okServers = (result.servers ?? []).filter((server) => server.status === 'ok');
-    if (okServers.length === 0) return knowledgeBaseTools;
+    if (okServers.length === 0) return baseTools;
 
     const detailedServers = await Promise.all(okServers.map(async (server) => {
       try {
@@ -200,10 +202,10 @@ export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
     }));
 
     const dynamicMcpTools = createMcporterAgentTools(detailedServers);
-    if (dynamicMcpTools.length === 0) return knowledgeBaseTools;
-    return [...knowledgeBaseTools, ...dynamicMcpTools];
+    if (dynamicMcpTools.length === 0) return baseTools;
+    return [...baseTools, ...dynamicMcpTools];
   } catch {
-    return knowledgeBaseTools;
+    return baseTools;
   }
 }
 
