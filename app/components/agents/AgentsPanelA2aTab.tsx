@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Globe, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Clock, Globe, Loader2, Network, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
+import type { AcpRegistryEntry } from '@/lib/acp/types';
 import { useDelegationHistory } from '@/hooks/useDelegationHistory';
+import { useAcpRegistry } from '@/hooks/useAcpRegistry';
 import DiscoverAgentModal from './DiscoverAgentModal';
 
 interface AgentsPanelA2aTabProps {
@@ -26,6 +28,9 @@ export default function AgentsPanelA2aTab({
   const p = t.panels.agents;
   const [showModal, setShowModal] = useState(false);
   const { delegations } = useDelegationHistory(true);
+  const acp = useAcpRegistry();
+
+  const isEmpty = agents.length === 0 && !acp.loading && acp.agents.length === 0;
 
   return (
     <div className="space-y-5">
@@ -42,27 +47,40 @@ export default function AgentsPanelA2aTab({
         </button>
       </div>
 
-      {/* Agent list or empty state */}
-      {agents.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-12 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
-            <Globe size={22} className="text-muted-foreground/50" aria-hidden="true" />
-          </div>
-          <p className="text-sm font-medium text-muted-foreground mb-1">{p.a2aTabEmpty}</p>
-          <p className="text-xs text-muted-foreground/70 leading-relaxed max-w-xs mx-auto">
-            {p.a2aTabEmptyHint}
-          </p>
-        </div>
+      {/* Unified empty state when both A2A and ACP are empty */}
+      {isEmpty ? (
+        <NetworkEmptyState
+          onDiscover={() => setShowModal(true)}
+          onBrowseRegistry={acp.retry}
+        />
       ) : (
-        <div className="space-y-2">
-          {agents.map((agent) => (
-            <RemoteAgentRow key={agent.id} agent={agent} onRemove={onRemove} removeCopy={p.a2aRemoveAgent} skillsCopy={p.a2aSkills} />
-          ))}
-        </div>
-      )}
+        <>
+          {/* Remote A2A agent list */}
+          {agents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-8 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-3">
+                <Globe size={20} className="text-muted-foreground/50" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">{p.a2aTabEmpty}</p>
+              <p className="text-xs text-muted-foreground/70 leading-relaxed max-w-xs mx-auto">
+                {p.a2aTabEmptyHint}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {agents.map((agent) => (
+                <RemoteAgentRow key={agent.id} agent={agent} onRemove={onRemove} removeCopy={p.a2aRemoveAgent} skillsCopy={p.a2aSkills} />
+              ))}
+            </div>
+          )}
 
-      {/* Recent Delegations */}
-      <DelegationHistorySection delegations={delegations} />
+          {/* ACP Registry section */}
+          <AcpRegistrySection />
+
+          {/* Recent Delegations */}
+          <DelegationHistorySection delegations={delegations} />
+        </>
+      )}
 
       <DiscoverAgentModal
         open={showModal}
@@ -71,6 +89,158 @@ export default function AgentsPanelA2aTab({
         discovering={discovering}
         error={error}
       />
+    </div>
+  );
+}
+
+/* ────────── Network Empty State ────────── */
+
+function NetworkEmptyState({
+  onDiscover,
+  onBrowseRegistry,
+}: {
+  onDiscover: () => void;
+  onBrowseRegistry: () => void;
+}) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+
+  return (
+    <div className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-12 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
+        <Network size={22} className="text-muted-foreground/50" aria-hidden="true" />
+      </div>
+      <p className="text-sm font-medium text-foreground mb-1">{p.networkEmptyTitle}</p>
+      <p className="text-xs text-muted-foreground/70 leading-relaxed max-w-sm mx-auto mb-5">
+        {p.networkEmptyDesc}
+      </p>
+      <div className="flex items-center justify-center gap-2.5">
+        <button
+          type="button"
+          onClick={onDiscover}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Globe size={12} />
+          {p.networkDiscoverBtn}
+        </button>
+        <button
+          type="button"
+          onClick={onBrowseRegistry}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Network size={12} />
+          {p.networkBrowseBtn}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ────────── ACP Registry Section ────────── */
+
+function AcpRegistrySection() {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+  const acp = useAcpRegistry();
+
+  if (acp.loading) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {p.acpSectionTitle}
+        </h3>
+        <div className="flex items-center justify-center py-6 gap-2">
+          <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{p.acpLoading}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (acp.error) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {p.acpSectionTitle}
+        </h3>
+        <div className="rounded-lg border border-border/60 bg-card/80 p-4 text-center">
+          <p className="text-xs text-muted-foreground mb-2">{p.acpLoadFailed}</p>
+          <button
+            type="button"
+            onClick={acp.retry}
+            className="text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          >
+            {p.acpRetry}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (acp.agents.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {p.acpSectionTitle}
+        </h3>
+        <span className="text-2xs text-muted-foreground/60">
+          {p.acpSectionDesc(acp.agents.length)}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {acp.agents.map((agent) => (
+          <AcpAgentRow key={agent.id} agent={agent} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────── ACP Agent Row ────────── */
+
+const TRANSPORT_STYLES: Record<string, string> = {
+  npx: 'bg-[var(--amber)]/15 text-[var(--amber)]',
+  binary: 'bg-muted text-muted-foreground',
+  uvx: 'bg-[var(--success)]/15 text-[var(--success)]',
+  stdio: 'bg-muted text-muted-foreground',
+};
+
+function AcpAgentRow({ agent }: { agent: AcpRegistryEntry }) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+  const transportLabels: Record<string, string> = {
+    npx: p.acpTransportNpx,
+    binary: p.acpTransportBinary,
+    uvx: p.acpTransportUvx,
+    stdio: p.acpTransportStdio,
+  };
+
+  return (
+    <div className="group rounded-xl border border-border bg-card p-3 hover:border-border/80 transition-all duration-150">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+          <Network size={14} className="text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">{agent.name}</p>
+          {agent.description && (
+            <p className="text-2xs text-muted-foreground truncate">{agent.description}</p>
+          )}
+        </div>
+        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${TRANSPORT_STYLES[agent.transport] ?? TRANSPORT_STYLES.stdio}`}>
+          {transportLabels[agent.transport] ?? agent.transport}
+        </span>
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground/50 cursor-not-allowed"
+          title={p.acpComingSoon}
+        >
+          {p.acpUseAgent}
+        </button>
+      </div>
     </div>
   );
 }

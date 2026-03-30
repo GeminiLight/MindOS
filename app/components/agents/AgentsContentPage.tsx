@@ -25,7 +25,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const pageHeader = useMemo(() => {
     if (tab === 'a2a') {
       return {
-        title: a.a2aTabTitle,
+        title: a.navNetwork,
         subtitle: a.a2aTabEmptyHint,
       };
     }
