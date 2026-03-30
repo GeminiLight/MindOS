@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import http from 'http';
 import net from 'net';
-import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync, appendFileSync } from 'fs';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -420,6 +420,31 @@ export class ProcessManager extends EventEmitter {
     return this.findFreePort(port + 1).catch(() => port);
   }
 
+  /** Persist crash info to ~/.mindos/crash.log for post-mortem diagnosis */
+  private logCrash(which: string, code: number | null, signal: string | null, stderr: string[]): void {
+    try {
+      const logDir = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.mindos');
+      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+      const logPath = path.join(logDir, 'crash.log');
+      const ts = new Date().toISOString();
+      const entry = [
+        `--- [${ts}] ${which} crash #${this.crashCount[which]} ---`,
+        `exit code=${code} signal=${signal}`,
+        ...stderr.map(l => `  ${l}`),
+        '',
+      ].join('\n');
+      appendFileSync(logPath, entry + '\n', 'utf-8');
+      // Keep log file bounded (~100KB)
+      try {
+        const stat = require('fs').statSync(logPath);
+        if (stat.size > 100_000) {
+          const lines = readFileSync(logPath, 'utf-8').split('\n');
+          writeFileSync(logPath, lines.slice(-200).join('\n'), 'utf-8');
+        }
+      } catch { /* best effort */ }
+    } catch { /* non-critical */ }
+  }
+
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
     this.pipeChildOutput(proc, which);
     // Capture stderr to detect EADDRINUSE vs other crash reasons
@@ -442,6 +467,7 @@ export class ProcessManager extends EventEmitter {
       const wasPortConflict = lastStderr.includes('EADDRINUSE') || lastStderr.includes('address already in use');
 
       this.crashCount[which]++;
+      this.logCrash(which, code, signal, this.webStderrLines.slice(-20));
       this.emit('crash', which, this.crashCount[which], this.webStderrLines.slice(-10));
 
       if (this.crashCount[which] < 3) {
