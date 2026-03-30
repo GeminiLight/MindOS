@@ -54,14 +54,35 @@ import { needsBuild, writeBuildStamp, cleanNextDir, ensureAppDeps } from './lib/
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
-import { getPlatform, ensureMindosDir, waitForHttp, waitForPortFree, runGatewayCommand } from './lib/gateway.js';
 import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
-import { ensureMcpBundle } from './lib/mcp-build.js';
-import { mcpInstall } from './lib/mcp-install.js';
-import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
 import { parseArgs } from './lib/command.js';
 import { MCP_AGENTS, detectAgentPresence } from './lib/mcp-agents.js';
+
+// Heavy modules — loaded lazily inside command handlers to speed up CLI cold start
+// gateway.js (426 lines), mcp-install.js (335), sync.js (472), mcp-build.js (74)
+const lazy = {
+  gateway:    () => import('./lib/gateway.js'),
+  mcpInstall: () => import('./lib/mcp-install.js'),
+  sync:       () => import('./lib/sync.js'),
+  mcpBuild:   () => import('./lib/mcp-build.js'),
+};
+
+// Thin wrappers for lazy modules — same API as before, but loaded on first call
+async function getPlatform() { return (await lazy.gateway()).getPlatform(); }
+async function runGatewayCommand(sub) { return (await lazy.gateway()).runGatewayCommand(sub); }
+async function waitForHttp(...a) { return (await lazy.gateway()).waitForHttp(...a); }
+async function waitForPortFree(...a) { return (await lazy.gateway()).waitForPortFree(...a); }
+async function ensureMindosDir() { return (await lazy.gateway()).ensureMindosDir(); }
+async function ensureMcpBundle() { return (await lazy.mcpBuild()).ensureMcpBundle(); }
+async function mcpInstall() { return (await lazy.mcpInstall()).mcpInstall(); }
+async function initSync(...a) { return (await lazy.sync()).initSync(...a); }
+async function startSyncDaemon(...a) { return (await lazy.sync()).startSyncDaemon(...a); }
+async function stopSyncDaemon() { return (await lazy.sync()).stopSyncDaemon(); }
+async function getSyncStatus(...a) { return (await lazy.sync()).getSyncStatus(...a); }
+async function manualSync(...a) { return (await lazy.sync()).manualSync(...a); }
+async function listConflicts(...a) { return (await lazy.sync()).listConflicts(...a); }
+async function setSyncEnabled(...a) { return (await lazy.sync()).setSyncEnabled(...a); }
 
 // ── New modular commands ──────────────────────────────────────────────────────
 import * as fileCmd from './commands/file.js';
@@ -264,8 +285,7 @@ const commands = {
     ensureAppDeps();
     const mcp = spawnMcp(isVerbose);
     savePids(process.pid, mcp.pid);
-    process.on('exit', () => { stopSyncDaemon(); clearPids(); });
-    // Start sync daemon if enabled
+    process.on('exit', () => { stopSyncDaemon().catch(() => {}); clearPids(); });
     const devMindRoot = process.env.MIND_ROOT;
     if (devMindRoot) {
       startSyncDaemon(devMindRoot).catch(() => {});
@@ -286,7 +306,7 @@ const commands = {
       } catch {}
     }
     if (isDaemon) {
-      const platform = getPlatform();
+      const platform = await getPlatform();
       if (!platform) {
         console.warn(yellow('Warning: daemon mode not supported on this platform. Falling back to foreground.'));
       } else {
@@ -379,7 +399,7 @@ const commands = {
     }
     const mcp = spawnMcp(isVerbose);
     savePids(process.pid, mcp.pid);
-    process.on('exit', () => { stopSyncDaemon(); clearPids(); });
+    process.on('exit', () => { stopSyncDaemon().catch(() => {}); clearPids(); });
     // Start sync daemon if enabled
     const mindRoot = process.env.MIND_ROOT;
     if (mindRoot) {
@@ -408,7 +428,7 @@ const commands = {
     const hasInstallFlags = restArgs.some(a => ['-g', '--global', '-y', '--yes'].includes(a));
     if (sub === 'install' || hasInstallFlags) { await mcpInstall(); return; }
     loadConfig();
-    ensureMcpBundle();
+    await ensureMcpBundle();
     // `mindos mcp` is the entry point for MCP clients (Claude Code, Cursor, etc.)
     // which communicate over stdin/stdout. Default to stdio; HTTP is handled by
     // `mindos start` via spawnMcp(). Callers can still override via env.
@@ -635,7 +655,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     }
 
     // 7. Daemon status
-    const platform = getPlatform();
+    const platform = await getPlatform();
     if (platform === 'systemd') {
       try {
         execSync('systemctl --user is-active mindos', { stdio: 'pipe' });
@@ -656,7 +676,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     // 8. Sync status
     if (config?.mindRoot) {
       try {
-        const syncStatus = getSyncStatus(config.mindRoot);
+        const syncStatus = await getSyncStatus(config.mindRoot);
         if (!syncStatus.enabled) {
           warn(`Cross-device sync is not configured  ${dim('(run `mindos sync init` to set up)')}`);
         } else if (syncStatus.lastError) {
@@ -746,7 +766,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       return;
     }
 
-    const updatePlatform = getPlatform();
+    const updatePlatform = await getPlatform();
     let daemonRunning = false;
     if (updatePlatform === 'systemd') {
       try { execSync('systemctl --user is-active mindos', { stdio: 'pipe' }); daemonRunning = true; } catch {}
@@ -960,7 +980,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     try { stopMindos(); } catch { /* may not be running */ }
 
     // 2. Remove daemon (skip if platform unsupported)
-    if (getPlatform()) {
+    if (await getPlatform()) {
       try {
         await runGatewayCommand('uninstall');
       } catch {
@@ -1023,8 +1043,8 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
   },
 
   // ── logs ───────────────────────────────────────────────────────────────────
-  logs: () => {
-    ensureMindosDir();
+  logs: async () => {
+    await ensureMindosDir();
     if (!existsSync(LOG_PATH)) {
       console.log(dim(`No log file yet at ${LOG_PATH}`));
       console.log(dim('Logs are created when starting MindOS (mindos start, mindos onboard, or daemon mode).'));
@@ -1232,7 +1252,7 @@ ${bold('Examples:')}
     if (sub === 'now') {
       try {
         console.log(dim('Pulling...'));
-        manualSync(mindRoot);
+        await manualSync(mindRoot);
         console.log(green('✔ Sync complete'));
       } catch (err) {
         console.error(red(err.message));
@@ -1242,18 +1262,18 @@ ${bold('Examples:')}
     }
 
     if (sub === 'conflicts') {
-      listConflicts(mindRoot);
+      await listConflicts(mindRoot);
       return;
     }
 
     if (sub === 'on') {
-      setSyncEnabled(true);
+      await setSyncEnabled(true);
       return;
     }
 
     if (sub === 'off') {
-      setSyncEnabled(false);
-      stopSyncDaemon();
+      await setSyncEnabled(false);
+      await stopSyncDaemon();
       return;
     }
 
@@ -1268,7 +1288,7 @@ ${bold('Examples:')}
     }
 
     // default: sync status
-    const status = getSyncStatus(mindRoot);
+    const status = await getSyncStatus(mindRoot);
 
     if (cliFlags.json) {
       console.log(JSON.stringify(status, null, 2));
@@ -1319,6 +1339,13 @@ const resolvedCmd = (cliFlags.help || cliFlags.h) ? null : (cmd || (existsSync(C
 if (!resolvedCmd || !commands[resolvedCmd]) {
   const pkgVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
   const row = (c, d) => `  ${cyan(c.padEnd(36))}${dim(d)}`;
+
+  // Auto-generate Knowledge section from modular command meta
+  const modularCmds = [fileCmd, spaceCmd, searchCmd, askCmd, agentCmd, apiCmd];
+  const knowledgeRows = modularCmds
+    .map(m => row(m.meta.usage || `mindos ${m.meta.name}`, m.meta.summary))
+    .join('\n');
+
   console.log(`
 ${bold('MindOS CLI')} ${dim(`v${pkgVersion}`)}
 
@@ -1334,12 +1361,7 @@ ${row('mindos status',                     'Show service status overview')}
 ${row('mindos open',                       'Open Web UI in browser')}
 
 ${bold('Knowledge:')}
-${row('mindos file <sub>',                 'File operations (list/read/create/delete/search)')}
-${row('mindos space <sub>',                'Space management (list/create/info)')}
-${row('mindos search "<query>"',           'Search knowledge base via API')}
-${row('mindos ask "<question>"',           'Ask AI using your knowledge base')}
-${row('mindos agent <sub>',               'AI Agent management (list/info)')}
-${row('mindos api <METHOD> <path>',        'Raw API passthrough (for developers/agents)')}
+${knowledgeRows}
 
 ${bold('MCP:')}
 ${row('mindos mcp',                        'Start MCP server only')}

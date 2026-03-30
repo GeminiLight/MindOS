@@ -6,14 +6,14 @@ import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'nod
 import { resolve, relative } from 'node:path';
 import { bold, dim, cyan, green, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { output, isJsonMode } from '../lib/command.js';
+import { output, isJsonMode, EXIT } from '../lib/command.js';
 
 function getMindRoot() {
   loadConfig();
   const root = process.env.MIND_ROOT;
   if (!root || !existsSync(root)) {
     console.error(red('Mind root not configured. Run `mindos onboard` first.'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   return root;
 }
@@ -59,7 +59,7 @@ ${bold('Examples:')}
     default:
       console.error(red(`Unknown subcommand: ${sub}`));
       console.error(dim('Available: list, create, info'));
-      process.exit(1);
+      process.exit(EXIT.ERROR);
   }
 }
 
@@ -114,12 +114,12 @@ function spaceList(root, flags) {
 function spaceCreate(root, name, flags) {
   if (!name) {
     console.error(red('Usage: mindos space create <name>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const dir = resolve(root, name);
   if (existsSync(dir)) {
     console.error(red(`Space already exists: ${name}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   mkdirSync(dir, { recursive: true });
@@ -135,12 +135,12 @@ function spaceCreate(root, name, flags) {
 function spaceInfo(root, name, flags) {
   if (!name) {
     console.error(red('Usage: mindos space info <name>'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
   const dir = resolve(root, name);
   if (!existsSync(dir)) {
     console.error(red(`Space not found: ${name}`));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   const fileCount = countFiles(dir);

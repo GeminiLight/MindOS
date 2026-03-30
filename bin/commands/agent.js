@@ -29,7 +29,7 @@ export async function run(args, flags) {
   if (sub === 'list' || sub === 'ls') return agentList(flags);
   if (sub === 'info') return agentInfo(args[1], flags);
   console.error(red('Unknown subcommand: ' + sub));
-  process.exit(1);
+  process.exit(EXIT.ARGS);
 }
 
 function hasMindosConfig(agent) {
