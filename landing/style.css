@@ -1836,3 +1836,99 @@ html[lang="zh"] #quickstart .qs-path-sub { letter-spacing: 0.005em; }
 }
 .df-tagline p { font-size: 0.9rem; color: var(--muted-fg); }
 .df-tagline span { color: var(--accent); font-weight: 600; }
+
+/* ── Product Preview Carousel ── */
+.preview-carousel {
+    max-width: 900px;
+    margin: 3rem auto 0;
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+}
+.preview-carousel .carousel-track {
+    display: flex;
+    transition: transform 0.5s var(--ease-out-expo);
+}
+.preview-carousel .carousel-slide {
+    min-width: 100%;
+    position: relative;
+}
+.preview-carousel .carousel-slide img {
+    width: 100%;
+    display: block;
+}
+.preview-carousel .carousel-caption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1.5rem 1.5rem 1.25rem;
+    background: linear-gradient(transparent, rgba(0,0,0,0.75));
+}
+.preview-carousel .carousel-caption h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 0.25rem;
+}
+.preview-carousel .carousel-caption p {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.7);
+    margin: 0;
+}
+.preview-carousel .carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 0.75rem 0;
+    background: var(--card-bg);
+}
+.preview-carousel .carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: none;
+    background: var(--muted-fg);
+    opacity: 0.35;
+    cursor: pointer;
+    transition: all 0.3s;
+    padding: 0;
+}
+.preview-carousel .carousel-dot.active {
+    opacity: 1;
+    background: var(--accent);
+    transform: scale(1.25);
+}
+.preview-carousel .carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.4);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+}
+.preview-carousel .carousel-nav:hover {
+    background: rgba(0,0,0,0.6);
+    border-color: var(--accent);
+}
+.preview-carousel .carousel-nav.prev { left: 12px; }
+.preview-carousel .carousel-nav.next { right: 12px; }
+
+@media (max-width: 768px) {
+    .preview-carousel { border-radius: 12px; margin: 2rem auto 0; }
+    .preview-carousel .carousel-nav { display: none; }
+    .preview-carousel .carousel-caption { padding: 1rem; }
+    .preview-carousel .carousel-caption h4 { font-size: 0.9rem; }
+}

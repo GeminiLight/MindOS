@@ -412,6 +412,57 @@
         </div>
     </section>
 
+    <!-- Product Preview Carousel (between Flow and Compare) -->
+    <div class="container" style="padding: 0 0 4rem;">
+        <h3 style="text-align:center; margin-bottom:0.5rem;">
+            <span data-zh>产品一览</span><span data-en>See It in Action</span>
+        </h3>
+        <p style="text-align:center; color:var(--muted-fg); font-size:0.9rem; margin-bottom:1.5rem;">
+            <span data-zh>从知识库管理到 AI 对话，从 Agent 编排到认知沉淀</span>
+            <span data-en>From knowledge management to AI chat, agent orchestration to cognitive growth</span>
+        </p>
+        <div class="preview-carousel" id="previewCarousel">
+            <button class="carousel-nav prev" onclick="moveCarousel(-1)">&#8249;</button>
+            <button class="carousel-nav next" onclick="moveCarousel(1)">&#8250;</button>
+            <div class="carousel-track" id="carouselTrack">
+                <div class="carousel-slide">
+                    <img src="../assets/images/mindos-home.png" alt="MindOS Home" loading="lazy" />
+                    <div class="carousel-caption">
+                        <h4><span data-zh>首页</span><span data-en>Home</span></h4>
+                        <p><span data-zh>知识库概览：空间、最近文件、快捷操作</span><span data-en>Knowledge base overview: Spaces, recent files, quick actions</span></p>
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <img src="../assets/images/mindos-chat.png" alt="MindOS AI Chat" loading="lazy" />
+                    <div class="carousel-caption">
+                        <h4><span data-zh>AI 对话</span><span data-en>AI Chat</span></h4>
+                        <p><span data-zh>在上下文中与知识库对话，编辑无缝沉淀</span><span data-en>Converse with your knowledge base in full context</span></p>
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <img src="../assets/images/mindos-dashboard.png" alt="MindOS Agents Dashboard" loading="lazy" />
+                    <div class="carousel-caption">
+                        <h4><span data-zh>Agent 工作台</span><span data-en>Agents Dashboard</span></h4>
+                        <p><span data-zh>管理所有已连接的 AI Agent 和 MCP 状态</span><span data-en>Manage all connected AI agents and MCP status</span></p>
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <img src="../assets/images/mindos-echo.png" alt="MindOS Echo" loading="lazy" />
+                    <div class="carousel-caption">
+                        <h4><span data-zh>Echo</span><span data-en>Echo</span></h4>
+                        <p><span data-zh>复盘与认知沉淀，追踪思想成长轨迹</span><span data-en>Reflect and distill cognitive growth over time</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="carousel-dots" id="carouselDots">
+                <button class="carousel-dot active" onclick="goToSlide(0)"></button>
+                <button class="carousel-dot" onclick="goToSlide(1)"></button>
+                <button class="carousel-dot" onclick="goToSlide(2)"></button>
+                <button class="carousel-dot" onclick="goToSlide(3)"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- SECTION 3: THE DIFFERENCE -->
     <section id="compare" class="section compare-section">
         <div class="container">
@@ -1225,5 +1276,30 @@
     </footer>
 
     <script src="main.js"></script>
+    <script>
+    // Product Preview Carousel
+    (function() {
+        var current = 0, total = 4, timer;
+        var track = document.getElementById('carouselTrack');
+        var dots = document.querySelectorAll('#carouselDots .carousel-dot');
+        function go(i) {
+            current = ((i % total) + total) % total;
+            track.style.transform = 'translateX(-' + (current * 100) + '%)';
+            dots.forEach(function(d, idx) { d.classList.toggle('active', idx === current); });
+        }
+        window.moveCarousel = function(dir) { go(current + dir); resetTimer(); };
+        window.goToSlide = function(i) { go(i); resetTimer(); };
+        function resetTimer() { clearInterval(timer); timer = setInterval(function() { go(current + 1); }, 5000); }
+        resetTimer();
+        // Touch swipe support
+        var startX;
+        var carousel = document.getElementById('previewCarousel');
+        carousel.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
+        carousel.addEventListener('touchend', function(e) {
+            var diff = startX - e.changedTouches[0].clientX;
+            if (Math.abs(diff) > 50) { diff > 0 ? go(current + 1) : go(current - 1); resetTimer(); }
+        });
+    })();
+    </script>
 </body>
 </html>
