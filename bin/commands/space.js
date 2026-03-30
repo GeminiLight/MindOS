@@ -2,7 +2,7 @@
  * mindos space — Mind Space management
  */
 
-import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync, renameSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { bold, dim, cyan, green, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
@@ -21,12 +21,14 @@ function getMindRoot() {
 export const meta = {
   name: 'space',
   group: 'Knowledge',
-  summary: 'Mind Space management (list, create, info)',
+  summary: 'Mind Space management (list, create, delete, rename, info)',
   usage: 'mindos space <subcommand>',
   examples: [
     'mindos space list',
     'mindos space list --json',
     'mindos space create "Research"',
+    'mindos space delete "Old Project"',
+    'mindos space rename "Old" "New"',
     'mindos space info "Work"',
   ],
 };
@@ -42,11 +44,15 @@ ${bold('mindos space')} — Mind Space management
 ${bold('Subcommands:')}
   ${cyan('list'.padEnd(20))}${dim('List all spaces')}
   ${cyan('create <name>'.padEnd(20))}${dim('Create a new space')}
+  ${cyan('delete <name>'.padEnd(20))}${dim('Delete a space and all its files')}
+  ${cyan('rename <old> <new>'.padEnd(20))}${dim('Rename a space')}
   ${cyan('info <name>'.padEnd(20))}${dim('Show space details')}
 
 ${bold('Examples:')}
   ${dim('mindos space list')}
   ${dim('mindos space create "Research"')}
+  ${dim('mindos space delete "Old Project"')}
+  ${dim('mindos space rename "Old" "New"')}
 `);
     return;
   }
@@ -55,10 +61,12 @@ ${bold('Examples:')}
     case 'list': return spaceList(root, flags);
     case 'ls': return spaceList(root, flags);
     case 'create': return spaceCreate(root, args[1], flags);
+    case 'delete': case 'rm': return spaceDelete(root, args[1], flags);
+    case 'rename': case 'mv': return spaceRename(root, args[1], args[2], flags);
     case 'info': return spaceInfo(root, args[1], flags);
     default:
       console.error(red(`Unknown subcommand: ${sub}`));
-      console.error(dim('Available: list, create, info'));
+      console.error(dim('Available: list, create, delete, rename, info'));
       process.exit(EXIT.ERROR);
   }
 }
@@ -130,6 +138,52 @@ function spaceCreate(root, name, flags) {
     return;
   }
   console.log(`${green('✔')} Created space: ${cyan(name)}`);
+}
+
+function spaceDelete(root, name, flags) {
+  if (!name) {
+    console.error(red('Usage: mindos space delete <name>'));
+    process.exit(EXIT.ERROR);
+  }
+  const dir = resolve(root, name);
+  if (!existsSync(dir)) {
+    console.error(red(`Space not found: ${name}`));
+    process.exit(EXIT.ERROR);
+  }
+
+  const fileCount = countFiles(dir);
+  rmSync(dir, { recursive: true, force: true });
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, name, deletedFiles: fileCount }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Deleted space: ${cyan(name)} (${fileCount} files removed)`);
+}
+
+function spaceRename(root, oldName, newName, flags) {
+  if (!oldName || !newName) {
+    console.error(red('Usage: mindos space rename <old-name> <new-name>'));
+    process.exit(EXIT.ERROR);
+  }
+  const oldDir = resolve(root, oldName);
+  const newDir = resolve(root, newName);
+  if (!existsSync(oldDir)) {
+    console.error(red(`Space not found: ${oldName}`));
+    process.exit(EXIT.ERROR);
+  }
+  if (existsSync(newDir)) {
+    console.error(red(`Target already exists: ${newName}`));
+    process.exit(EXIT.ERROR);
+  }
+
+  renameSync(oldDir, newDir);
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, from: oldName, to: newName }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Renamed space: ${cyan(oldName)} → ${cyan(newName)}`);
 }
 
 function spaceInfo(root, name, flags) {
