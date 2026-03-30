@@ -4,7 +4,7 @@
 
 import { bold, dim, cyan, green, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { output, isJsonMode } from '../lib/command.js';
+import { output, isJsonMode, EXIT } from '../lib/command.js';
 
 export const meta = {
   name: 'ask',
@@ -52,7 +52,7 @@ ${bold('Note:')} MindOS must be running (mindos start).
     if (!healthRes.ok) throw new Error();
   } catch {
     console.error(red('MindOS is not running. Start it with: mindos start'));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 
   if (!isJsonMode(flags)) {
@@ -96,6 +96,6 @@ ${bold('Note:')} MindOS must be running (mindos start).
       process.stdout.write('\r' + ' '.repeat(40) + '\r');
     }
     console.error(red(err.message));
-    process.exit(1);
+    process.exit(EXIT.ERROR);
   }
 }

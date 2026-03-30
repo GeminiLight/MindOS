@@ -61,6 +61,7 @@ import { ensureMcpBundle } from './lib/mcp-build.js';
 import { mcpInstall } from './lib/mcp-install.js';
 import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
 import { parseArgs } from './lib/command.js';
+import { MCP_AGENTS, detectAgentPresence } from './lib/mcp-agents.js';
 
 // ── New modular commands ──────────────────────────────────────────────────────
 import * as fileCmd from './commands/file.js';
@@ -204,74 +205,41 @@ const commands = {
     }
     const mcpPort = config.mcpPort || 8781;
     const localIP = getLocalIP();
-
     const localUrl = `http://localhost:${mcpPort}/mcp`;
-    const sep = '━'.repeat(40);
+    const sep = dim('━'.repeat(40));
+    const snippet = (url) => JSON.stringify({
+      mcpServers: { mindos: { url, headers: { Authorization: `Bearer ${token}` } } },
+    }, null, 2);
 
-    console.log(`\n${bold('🔑 Auth token:')} ${cyan(token)}\n`);
+    console.log(`\n${bold('Auth token:')} ${cyan(token)}\n`);
 
-    // Claude Code
-    console.log(`${sep}`);
-    console.log(`${bold('Claude Code')}`);
-    console.log(`${sep}`);
-    console.log(dim('Quick install:') + ` mindos mcp install claude-code -g -y`);
-    console.log(dim('\nManual config (~/.claude.json):'));
-    console.log(JSON.stringify({
-      mcpServers: {
-        mindos: {
-          url: localUrl,
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      },
-    }, null, 2));
+    // Show installed agents, then up to 3 uninstalled popular ones
+    const installed = [];
+    const others = [];
+    for (const [key, agent] of Object.entries(MCP_AGENTS)) {
+      (detectAgentPresence(key) ? installed : others).push([key, agent]);
+    }
+    const toShow = [...installed.slice(0, 8), ...others.slice(0, Math.max(0, 3 - installed.length))];
 
-    // CodeBuddy (Claude Code Internal)
-    console.log(`\n${sep}`);
-    console.log(`${bold('CodeBuddy (Claude Code Internal)')}`);
-    console.log(`${sep}`);
-    console.log(dim('Quick install:') + ` mindos mcp install codebuddy -g -y`);
-    console.log(dim('\nManual config (~/.claude-internal/.claude.json):'));
-    console.log(JSON.stringify({
-      mcpServers: {
-        mindos: {
-          url: localUrl,
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      },
-    }, null, 2));
-
-    // Cursor
-    console.log(`\n${sep}`);
-    console.log(`${bold('Cursor')}`);
-    console.log(`${sep}`);
-    console.log(dim('Quick install:') + ` mindos mcp install cursor -g -y`);
-    console.log(dim('\nManual config (~/.cursor/mcp.json):'));
-    console.log(JSON.stringify({
-      mcpServers: {
-        mindos: {
-          url: localUrl,
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      },
-    }, null, 2));
-
-    // Remote
-    if (localIP) {
-      const remoteUrl = `http://${localIP}:${mcpPort}/mcp`;
-      console.log(`\n${sep}`);
-      console.log(`${bold('Remote (other devices)')}`);
-      console.log(`${sep}`);
-      console.log(`URL: ${cyan(remoteUrl)}`);
-      console.log(JSON.stringify({
-        mcpServers: {
-          mindos: {
-            url: remoteUrl,
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        },
-      }, null, 2));
+    for (const [key, agent] of toShow) {
+      console.log(sep);
+      console.log(bold(agent.name));
+      console.log(dim('Install:') + ` mindos mcp install ${key} -g -y`);
+      if (agent.global) console.log(dim(`Config:  ${agent.global}`));
+      console.log(snippet(localUrl));
+      console.log();
     }
 
+    if (localIP) {
+      console.log(sep);
+      console.log(bold('Remote (other devices)'));
+      console.log(`URL: ${cyan(`http://${localIP}:${mcpPort}/mcp`)}`);
+      console.log(snippet(`http://${localIP}:${mcpPort}/mcp`));
+    }
+
+    if (toShow.length < installed.length) {
+      console.log(dim(`\n  +${installed.length - toShow.length} more agents detected. Run \`mindos agent list\` to see all.`));
+    }
     console.log(dim('\nRun `mindos onboard` to regenerate.\n'));
   },
 
