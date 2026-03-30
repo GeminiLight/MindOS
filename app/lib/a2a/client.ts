@@ -22,11 +22,13 @@ const CARD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 
 const registry = new Map<string, RemoteAgent>();
 
-/** Derive a stable ID from a URL */
+/** Derive a stable ID from a URL (includes protocol to avoid collisions) */
 function urlToId(url: string): string {
   try {
     const u = new URL(url);
-    return `${u.hostname}:${u.port || (u.protocol === 'https:' ? '443' : '80')}`;
+    const proto = u.protocol.replace(':', '');
+    const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+    return `${proto}-${u.hostname}-${port}`;
   } catch {
     return url.replace(/[^a-zA-Z0-9]/g, '-');
   }
@@ -94,7 +96,11 @@ export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null
     if (!res.ok) return null;
 
     const card: AgentCard = await res.json();
-    if (!card.name || !card.supportedInterfaces?.length) return null;
+    // Validate minimum required fields
+    if (!card || typeof card.name !== 'string' || !card.name ||
+        !Array.isArray(card.supportedInterfaces) || card.supportedInterfaces.length === 0) {
+      return null;
+    }
 
     // Find JSON-RPC endpoint
     const jsonRpcInterface = card.supportedInterfaces.find(i => i.protocolBinding === 'JSONRPC');
