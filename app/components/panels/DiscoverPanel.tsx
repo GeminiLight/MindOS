@@ -32,7 +32,7 @@ function UseCaseRow({
   return (
     <div className="group flex items-center gap-2.5 px-4 py-1.5 hover:bg-muted/50 transition-colors rounded-sm mx-1">
       <span className="text-muted-foreground shrink-0">{icon}</span>
-      <span className="text-xs text-foreground truncate flex-1">{title}</span>
+      <span className="text-xs text-foreground truncate flex-1" title={title}>{title}</span>
       <button
         onClick={() => openAskModal(prompt, 'user')}
         className="opacity-0 group-hover:opacity-100 text-2xs px-2 py-0.5 rounded text-[var(--amber-text)] bg-[var(--amber-dim)] hover:opacity-80 transition-all duration-150 shrink-0"
@@ -170,7 +170,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
                     onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenPlugin(r.entryPath!); } } : undefined}
                   >
                     <span className="text-sm shrink-0" suppressHydrationWarning>{r.icon}</span>
-                    <span className="text-xs text-foreground truncate flex-1">{r.name}</span>
+                    <span className="text-xs text-foreground truncate flex-1" title={r.name}>{r.name}</span>
                     {r.core ? (
                       <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
                     ) : (
