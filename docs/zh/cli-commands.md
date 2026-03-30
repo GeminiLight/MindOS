@@ -15,6 +15,27 @@
 | `mindos stop` | 停止正在运行的 MindOS 进程 |
 | `mindos restart` | 停止后重新启动 |
 | `mindos build` | 手动构建生产版本 |
+| `mindos status` | 查看服务状态概览（支持 `--json`） |
+
+## 知识库
+
+| 命令 | 说明 |
+| :--- | :--- |
+| `mindos file list` | 列出知识库中所有文件 |
+| `mindos file read <path>` | 读取文件内容 |
+| `mindos file create <path>` | 创建新文件 |
+| `mindos file delete <path>` | 删除文件 |
+| `mindos file search "<query>"` | 按文件名搜索 |
+| `mindos space list` | 列出所有空间 |
+| `mindos space create <name>` | 创建新空间 |
+| `mindos space info <name>` | 查看空间详情 |
+| `mindos search "<query>"` | 通过 API 搜索知识库 |
+| `mindos ask "<question>"` | 基于知识库向 AI 提问 |
+| `mindos agent list` | 列出已检测到的 AI Agent |
+| `mindos agent info <name>` | 查看 Agent 详情和 MCP 配置 |
+| `mindos api <METHOD> <path>` | API 透传（GET/POST/PUT/DELETE） |
+
+> 所有知识库命令均支持 `--json` 供 AI Agent 调用。
 
 ## MCP
 

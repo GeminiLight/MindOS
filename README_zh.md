@@ -240,7 +240,7 @@ MindOS/
 ├── mcp/              # MCP Server — 将工具映射到 App API 的 HTTP 适配器
 ├── skills/           # MindOS Skills（`mindos`、`mindos-zh`）— Agent 工作流指南
 ├── templates/        # 预设模板（`en/`、`zh/`、`empty/`）— onboard 时复制到知识库目录
-├── bin/              # CLI 入口（`mindos onboard`、`mindos start`、`mindos open`、`mindos sync`、`mindos token`）
+├── bin/              # CLI（`mindos start`、`mindos file`、`mindos ask`、`mindos agent` 等 22 个命令）
 ├── scripts/          # 配置向导与辅助脚本
 └── README.md
 
@@ -256,14 +256,30 @@ MindOS/
 
 | 命令 | 说明 |
 | :--- | :--- |
+| **核心** | |
 | `mindos onboard` | 交互式初始化（生成配置、选择模板） |
 | `mindos start` | 前台启动 app + MCP 服务 |
 | `mindos start --daemon` | 以后台 OS 服务方式启动 |
+| `mindos stop` / `restart` | 停止或重启服务 |
+| `mindos dev` | 开发模式启动 |
+| `mindos build` | 构建生产版本 |
+| `mindos status` | 查看服务状态概览 |
 | `mindos open` | 在浏览器中打开 Web UI |
+| **知识库** | |
+| `mindos file <sub>` | 文件操作（list, read, create, delete, search） |
+| `mindos space <sub>` | 空间管理（list, create, info） |
+| `mindos search "<query>"` | 搜索知识库 |
+| `mindos ask "<question>"` | 基于知识库向 AI 提问 |
+| `mindos agent <sub>` | AI Agent 管理（list, info） |
+| `mindos api <METHOD> <path>` | API 透传（开发者/Agent 用） |
+| **MCP 与配置** | |
 | `mindos mcp install` | 自动将 MCP 配置写入 Agent |
-| `mindos sync init` | 配置 Git 远程同步 |
-| `mindos update` | 更新到最新版本 |
+| `mindos token` | 查看认证令牌和 MCP 配置 |
+| `mindos config <sub>` | 查看/修改配置（show, set, validate） |
+| `mindos sync` | 同步状态（init, now, conflicts, on/off） |
+| `mindos gateway <sub>` | 管理后台服务（install, start, stop） |
 | `mindos doctor` | 健康检查 |
+| `mindos update` | 更新到最新版本 |
 
 **快捷键：** `⌘K` 搜索 · `⌘/` AI 助手 · `E` 编辑 · `⌘S` 保存 · `Esc` 关闭
 

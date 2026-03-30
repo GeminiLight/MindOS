@@ -240,7 +240,7 @@ MindOS/
 ├── mcp/              # MCP Server — HTTP adapter that maps tools to App API
 ├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — Workflow guides for Agents
 ├── templates/        # Preset templates (`en/`, `zh/`, `empty/`) — copied to knowledge base on onboard
-├── bin/              # CLI entry point (`mindos onboard`, `mindos start`, `mindos open`, `mindos sync`, `mindos token`)
+├── bin/              # CLI (`mindos start`, `mindos file`, `mindos ask`, `mindos agent`, ... 22 commands)
 ├── scripts/          # Setup wizard and helper scripts
 └── README.md
 
@@ -256,14 +256,30 @@ MindOS/
 
 | Command | Description |
 | :--- | :--- |
+| **Core** | |
 | `mindos onboard` | Interactive setup (config, template, start mode) |
 | `mindos start` | Start app + MCP server (foreground) |
 | `mindos start --daemon` | Start as background OS service |
+| `mindos stop` / `restart` | Stop or restart running processes |
+| `mindos dev` | Start in dev mode |
+| `mindos build` | Build for production |
+| `mindos status` | Show service status overview |
 | `mindos open` | Open Web UI in browser |
+| **Knowledge** | |
+| `mindos file <sub>` | File operations (list, read, create, delete, search) |
+| `mindos space <sub>` | Space management (list, create, info) |
+| `mindos search "<query>"` | Search knowledge base |
+| `mindos ask "<question>"` | Ask AI using your knowledge base |
+| `mindos agent <sub>` | AI Agent management (list, info) |
+| `mindos api <METHOD> <path>` | Raw API passthrough for developers/agents |
+| **MCP & Config** | |
 | `mindos mcp install` | Auto-install MCP config into your Agent |
-| `mindos sync init` | Setup Git remote sync |
-| `mindos update` | Update to latest version |
+| `mindos token` | Show auth token and MCP config |
+| `mindos config <sub>` | View/update config (show, set, validate) |
+| `mindos sync` | Show sync status (init, now, conflicts, on/off) |
+| `mindos gateway <sub>` | Manage background service (install, start, stop) |
 | `mindos doctor` | Health check |
+| `mindos update` | Update to latest version |
 
 **Keyboard shortcuts:** `⌘K` Search · `⌘/` AI Assistant · `E` Edit · `⌘S` Save · `Esc` Close
 
