@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, ChevronRight, Loader2, RotateCw } from 'lucide-react';
+import { Check, ChevronRight, Globe, Loader2, RotateCw } from 'lucide-react';
 import type { AgentInfo } from '../settings/types';
 import { AgentAvatar } from '../agents/AgentsPrimitives';
 
@@ -23,6 +23,8 @@ export default function AgentsPanelAgentListRow({
   detailHref,
   onInstallAgent,
   copy,
+  isA2aReady = false,
+  a2aTooltip,
 }: {
   agent: AgentInfo;
   agentStatus: AgentsPanelAgentListStatus;
@@ -30,6 +32,8 @@ export default function AgentsPanelAgentListRow({
   detailHref: string;
   onInstallAgent: (key: string) => Promise<boolean>;
   copy: AgentsPanelAgentListRowCopy;
+  isA2aReady?: boolean;
+  a2aTooltip?: string;
 }) {
   return (
     <div
@@ -49,6 +53,11 @@ export default function AgentsPanelAgentListRow({
         {agentStatus === 'connected' && agent.transport && (
           <span className="text-2xs font-mono tabular-nums px-1.5 py-0.5 rounded-md bg-muted/90 text-muted-foreground shrink-0 border border-border/50">
             {agent.transport}
+          </span>
+        )}
+        {isA2aReady && (
+          <span title={a2aTooltip} className="shrink-0 text-muted-foreground/70">
+            <Globe size={12} />
           </span>
         )}
         <span className="flex-1 min-w-[4px]" />
