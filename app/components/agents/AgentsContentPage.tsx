@@ -14,6 +14,7 @@ import {
 import AgentsOverviewSection from './AgentsOverviewSection';
 import AgentsMcpSection from './AgentsMcpSection';
 import AgentsSkillsSection from './AgentsSkillsSection';
+import AgentsPanelA2aTab from './AgentsPanelA2aTab';
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
   const { t } = useLocale();
@@ -22,6 +23,12 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const a2a = useA2aRegistry();
   const [copyState, setCopyState] = useState<string | null>(null);
   const pageHeader = useMemo(() => {
+    if (tab === 'a2a') {
+      return {
+        title: a.a2aTabTitle,
+        subtitle: a.a2aTabEmptyHint,
+      };
+    }
     if (tab === 'skills') {
       return {
         title: a.navSkills,
@@ -98,6 +105,16 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
 
       {tab === 'skills' && (
         <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
+      )}
+
+      {tab === 'a2a' && (
+        <AgentsPanelA2aTab
+          agents={a2a.agents}
+          discovering={a2a.discovering}
+          error={a2a.error}
+          onDiscover={a2a.discover}
+          onRemove={a2a.remove}
+        />
       )}
     </div>
   );

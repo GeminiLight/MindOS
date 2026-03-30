@@ -257,6 +257,12 @@ export const zh = {
       navOverview: '总览',
       navMcp: 'MCP',
       navSkills: '技能',
+      navA2a: 'A2A',
+      // A2A tab
+      a2aTabTitle: '远程 Agent',
+      a2aTabEmpty: '无远程 Agent',
+      a2aTabEmptyHint: '发现远程 Agent 以启用跨 Agent 委派。',
+      a2aRemoveAgent: '移除',
       rosterLabel: '当前环境',
       notFoundDetail: '本机未检测到该智能体客户端。请安装后刷新列表。',
       skillsEmptyHint: '请在「MCP 与技能」设置中启用或编辑 Skills。',
@@ -397,6 +403,9 @@ export const zh = {
     navOverview: '总览',
     navMcp: 'MCP',
     navSkills: 'Skills',
+    navA2a: 'A2A',
+    a2aTabTitle: '远程 Agent',
+    a2aTabEmptyHint: '发现远程 Agent 以启用跨 Agent 委派。',
     backToOverview: '返回 Agents',
     na: '暂无',
     status: {

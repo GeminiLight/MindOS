@@ -1,13 +1,14 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, Server, Zap } from 'lucide-react';
+import { Globe, LayoutDashboard, Server, Zap } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
   navOverview: string;
   navMcp: string;
   navSkills: string;
+  navA2a: string;
 };
 
 export function AgentsPanelHubNav({
@@ -42,6 +43,12 @@ export function AgentsPanelHubNav({
         title={copy.navSkills}
         href="/agents?tab=skills"
         active={inAgentsRoute && tab === 'skills'}
+      />
+      <PanelNavRow
+        icon={<Globe size={14} className={inAgentsRoute && tab === 'a2a' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navA2a}
+        href="/agents?tab=a2a"
+        active={inAgentsRoute && tab === 'a2a'}
       />
     </div>
   );

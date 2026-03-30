@@ -233,6 +233,12 @@ export const en = {
       navOverview: 'Overview',
       navMcp: 'MCP',
       navSkills: 'Skills',
+      navA2a: 'A2A',
+      // A2A tab
+      a2aTabTitle: 'Remote Agents',
+      a2aTabEmpty: 'No remote agents',
+      a2aTabEmptyHint: 'Discover agents to enable cross-agent delegation.',
+      a2aRemoveAgent: 'Remove',
       rosterLabel: 'Your setup',
       notFoundDetail: 'This agent app was not detected on this machine. Install it, then refresh the list.',
       skillsEmptyHint: 'Enable and edit skills in MCP & Skills settings.',
@@ -373,6 +379,9 @@ export const en = {
     navOverview: 'Overview',
     navMcp: 'MCP',
     navSkills: 'Skills',
+    navA2a: 'A2A',
+    a2aTabTitle: 'Remote Agents',
+    a2aTabEmptyHint: 'Discover agents to enable cross-agent delegation.',
     backToOverview: 'Back to Agents',
     na: 'N/A',
     status: {

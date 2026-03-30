@@ -8,6 +8,7 @@ interface A2aRegistry {
   discovering: boolean;
   error: string | null;
   discover: (url: string) => Promise<RemoteAgent | null>;
+  remove: (id: string) => void;
   refresh: () => void;
 }
 
@@ -44,10 +45,14 @@ export function useA2aRegistry(): A2aRegistry {
     }
   }, []);
 
+  const remove = useCallback((id: string) => {
+    setAgents(prev => prev.filter(a => a.id !== id));
+  }, []);
+
   const refresh = useCallback(() => {
     setAgents([]);
     setError(null);
   }, []);
 
-  return { agents, discovering, error, discover, refresh };
+  return { agents, discovering, error, discover, remove, refresh };
 }
