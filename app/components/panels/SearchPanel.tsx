@@ -150,13 +150,13 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
               }
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-sm text-foreground font-medium truncate">{fileName}</span>
+                  <span className="text-sm text-foreground font-medium truncate" title={fileName}>{fileName}</span>
                   {dirPath && (
-                    <span className="text-xs text-muted-foreground truncate">{dirPath}</span>
+                    <span className="text-xs text-muted-foreground truncate" title={dirPath}>{dirPath}</span>
                   )}
                 </div>
                 {result.snippet && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed" title={result.snippet}>
                     {highlightSnippet(result.snippet, query)}
                   </p>
                 )}
