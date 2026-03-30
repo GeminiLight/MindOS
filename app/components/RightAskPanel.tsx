@@ -21,11 +21,14 @@ interface RightAskPanelProps {
   onWidthCommit: (w: number) => void;
   askMode?: 'panel' | 'popup';
   onModeSwitch?: () => void;
+  maximized?: boolean;
+  onMaximize?: () => void;
 }
 
 export default function RightAskPanel({
   open, onClose, currentFile, initialMessage, onFirstMessage,
   width, onWidthChange, onWidthCommit, askMode, onModeSwitch,
+  maximized = false, onMaximize,
 }: RightAskPanelProps) {
   const handleMouseDown = useResizeDrag({
     width,
@@ -42,10 +45,11 @@ export default function RightAskPanel({
       className={`
         hidden md:flex fixed top-0 right-0 h-screen z-40
         flex-col bg-card border-l border-border
-        transition-transform duration-200 ease-out
+        transition-all duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
+        ${maximized ? 'border-l-0' : ''}
       `}
-      style={{ width: `${width}px` }}
+      style={{ width: maximized ? '100vw' : `${width}px` }}
       role="complementary"
       aria-label="MindOS Agent panel"
     >
@@ -61,7 +65,6 @@ export default function RightAskPanel({
           </button>
         </div>
       }>
-        {/* Flex column + min-h-0 so MessageList flex-1 gets a bounded height (fragment children are direct flex items) */}
         <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           <AskContent
             visible={open}
@@ -72,17 +75,21 @@ export default function RightAskPanel({
             onClose={onClose}
             askMode={askMode}
             onModeSwitch={onModeSwitch}
+            maximized={maximized}
+            onMaximize={onMaximize}
           />
         </div>
       </ErrorBoundary>
 
-      {/* Drag resize handle — LEFT edge */}
-      <div
-        className="absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden md:block"
-        onMouseDown={handleMouseDown}
-      >
-        <div className="absolute left-[2px] top-0 w-[2px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/60 transition-opacity" />
-      </div>
+      {/* Drag resize handle — LEFT edge (hidden when maximized) */}
+      {!maximized && (
+        <div
+          className="absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden md:block"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="absolute left-[2px] top-0 w-[2px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/60 transition-opacity" />
+        </div>
+      )}
     </aside>
   );
 }
