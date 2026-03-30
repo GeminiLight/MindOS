@@ -1013,3 +1013,154 @@
   - 设计系统文档：记录标准按钮/链接模式
   - Visual QA：进行 "click everywhere" 测试，确保看到的区域都能点击
 
+### 静默吞掉错误 — `.catch(() => {})` 导致用户无反馈
+
+- **严重等级：** 🔴 Critical — 操作失败时用户毫不知情
+- **现象：** 用户点"复制"按钮后以为已复制，实际 clipboard API 失败了；文件扫描/API 调用悄悄失败，数据不正确但无任何提示
+- **根因：** 代码中大量使用 `.catch(() => {})` 或 `catch {}` 空处理，Promise rejection 被完全吞掉
+- **涉及组件（12 处）：**
+  - `HelpContent.tsx:62` — 复制帮助内容失败
+  - `setup/index.tsx:153` — 复制 auth token 失败（用户可能输错值）
+  - `HomeContent.tsx:232` — 扫描示例文件失败
+  - `settings/UpdateTab.tsx:108` — 获取版本信息失败
+  - `settings/KnowledgeTab.tsx:200` — 扫描示例文件失败
+  - `panels/DiscoverPanel.tsx:88` — 获取插件文件列表失败
+  - `panels/PluginsPanel.tsx:88` — 获取插件路径失败
+  - `walkthrough/WalkthroughProvider.tsx:209,233` — 引导状态读写失败
+  - `GuideCard.tsx:127,138` — 引导卡片状态读写失败
+  - `renderers/summary/SummaryRenderer.tsx:114` — 获取摘要数据失败
+- **设计规则：**
+  ```tsx
+  // ❌ 永远不要这样写
+  fetchData().catch(() => {});
+
+  // ✅ 至少要 console.error + 设置错误状态
+  fetchData().catch((err) => {
+    console.error('[组件名] 操作描述失败:', err);
+    // 视情况选择一种反馈方式：
+    // 1. 设置 error state 显示 inline 错误信息
+    setError('操作失败，请重试');
+    // 2. 或使用全局 toast
+    toast.error('操作失败');
+  });
+
+  // ✅ 对于"允许失败"的非关键操作（如预加载），至少保留日志
+  prefetchData().catch((err) => console.warn('[prefetch]', err));
+  ```
+- **判断标准：** 如果操作失败会导致用户看到错误数据、功能不可用、或误以为成功 → **必须**有用户可见的错误反馈。只有纯优化/预加载类操作允许静默失败（但仍需 console.warn）。
+
+### 异步操作缺少加载态 — 用户点击后 UI "冻住"
+
+- **严重等级：** 🔴 Critical — 用户不知道操作是否在执行
+- **现象：** 用户点击按钮后什么都没发生（没有 spinner、没有文字变化、没有禁用状态），几秒后突然数据变了。用户可能会重复点击。
+- **根因：** `onClick` 调用 async 函数，但没有设置中间 loading 状态
+- **涉及组件（8 处）：**
+  - `CsvView.tsx:164-199` — 单元格编辑、删除行、添加行 → 保存时无反馈
+  - `ImportModal.tsx:340-380` — AI organize + 文件导入 → 无进度提示
+  - `settings/SyncTab.tsx:180+` — 连接远程/同步 → 无 "连接中..."
+  - `echo/EchoInsightCollapsible.tsx:450+` — 生成 insight → 按钮禁用但无 spinner
+  - `panels/DiscoverPanel.tsx:82-87` — 加载插件列表 → 无骨架屏
+- **设计规则：**
+  ```tsx
+  // ❌ 裸调 async — 用户无感知
+  const handleSave = async () => {
+    await saveAction(data);
+  };
+
+  // ✅ 标准异步操作模板
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveAction(data);
+    } catch (err) {
+      console.error('Save failed:', err);
+      // 用户反馈
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // JSX:
+  <button disabled={saving}>
+    {saving ? <><Loader2 className="animate-spin" size={12} /> 保存中...</> : '保存'}
+  </button>
+  ```
+- **时间阈值：**
+  - `< 200ms`：无需特殊处理（用户感知为即时）
+  - `200ms ~ 1s`：按钮 disabled + 文字变化（"保存中..."）
+  - `> 1s`：需要 spinner 或进度条
+  - `> 3s`：考虑 toast 提示 + 允许取消
+
+### 截断文本无 tooltip — 用户看不到完整内容
+
+- **严重等级：** 🟡 Medium — 信息丢失但功能未坏
+- **现象：** 长文件名、插件描述、路径被截断（`...`），鼠标移上去没有任何提示
+- **根因：** 使用了 `truncate` / `line-clamp-*` CSS 但未添加 `title` 属性
+- **涉及组件（18 处）：**
+  - `panels/PanelNavRow.tsx:23` — 导航行标题
+  - `panels/DiscoverPanel.tsx:35,173` — 插件名/用例名
+  - `panels/AgentsPanelAgentDetail.tsx:145,159` — Agent 名称
+  - `explore/UseCaseCard.tsx:34,43` — 用例标题和描述
+  - `panels/SearchPanel.tsx:156,159` — 搜索结果文件路径和片段
+  - `SearchModal.tsx:290,293` — 搜索弹窗结果
+  - `ask/SlashCommandPopover.tsx:115` — 斜杠命令描述
+  - `ask/MentionPopover.tsx:96,100` — @提及文件路径
+  - `Backlinks.tsx:79` — 反向链接预览
+  - `Breadcrumb.tsx:34` — 面包屑路径
+  - `DirView.tsx:113,167` — 目录/文件名
+- **设计规则：**
+  ```tsx
+  // ❌ 截断但无提示
+  <span className="truncate">{fileName}</span>
+  <p className="line-clamp-2">{description}</p>
+
+  // ✅ 截断 + title 属性（浏览器原生 tooltip）
+  <span className="truncate" title={fileName}>{fileName}</span>
+  <p className="line-clamp-2" title={description}>{description}</p>
+  ```
+- **Code review 规则：** 每次看到 `truncate` 或 `line-clamp-*`，立即检查同元素或父元素是否有 `title` 属性。没有就加。
+
+### 禁用按钮无说明 — 用户不知道为什么点不了
+
+- **严重等级：** 🟡 Medium — 用户困惑但非阻塞
+- **现象：** 按钮灰色不可点击，鼠标移上去无任何提示告诉用户"为什么"或"怎么才能用"
+- **涉及组件（10 处）：**
+  - `ImportModal.tsx:178,185` — 归档/摘要按钮（原因：无选中文件 / 整理中）
+  - `OnboardingView.tsx:213` — 模板选择按钮
+  - `CreateSpaceModal.tsx:142` — AI 切换（原因：AI 未配置）
+  - `settings/SyncTab.tsx:295` — 连接按钮（原因：URL 未填）
+  - `ask/AskContent.tsx:567` — 发送按钮（原因：@提及/命令输入中）
+  - `settings/KnowledgeTab.tsx:303` — 重置 token 按钮（原因：正在重置）
+  - `echo/EchoInsightCollapsible.tsx:319,328` — 生成按钮（原因：AI 未就绪）
+  - `setup/StepDots.tsx:85` — 步骤点（原因：未完成前序步骤）
+  - `settings/AiTab.tsx:286` — 获取模型按钮（原因：需要 API key）
+  - `renderers/workflow/WorkflowRenderer.tsx:445` — 运行按钮（原因：依赖未满足）
+- **设计规则：**
+  ```tsx
+  // ❌ 禁用但不解释
+  <button disabled={!apiKey}>获取模型</button>
+
+  // ✅ 始终用 title 解释 disabled 原因
+  <button
+    disabled={!apiKey}
+    title={!apiKey ? '请先填写 API Key' : undefined}
+  >
+    获取模型
+  </button>
+  ```
+- **文案模板：**
+  - 缺少前置条件：`"请先{完成前置操作}"`
+  - 正在执行中：`"{操作}中..."`
+  - 功能不可用：`"{功能}需要{条件}"`
+
+### onClick 非按钮元素缺少 cursor-pointer
+
+- **严重等级：** 🟢 Low — 可发现性降低但功能正常
+- **现象：** 鼠标移到可点击的 `<div>` 或 `<span>` 上，光标仍是默认箭头，用户不知道可以点击
+- **涉及组件（2 处需修）：**
+  - `DirView.tsx:210` — 文件行 `<div>` 有 onClick 但无 cursor-pointer
+  - `ask/ToolCallBlock.tsx:150+` — 可展开的工具调用区块
+- **设计规则：** 任何非 `<button>` / `<a>` / `<Link>` 元素如果有 `onClick`，必须加 `cursor-pointer`。更好的做法是直接用语义正确的 `<button>` 元素。
+
+
