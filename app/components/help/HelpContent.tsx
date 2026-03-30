@@ -5,7 +5,8 @@ import { BookOpen, Rocket, Brain, Keyboard, HelpCircle, Bot, ChevronDown, Copy, 
 import { useLocale } from '@/lib/LocaleContext';
 
 /* ── Collapsible Section ── */
-function Section({ icon, title, defaultOpen = false, children }: {
+function Section({ id, icon, title, defaultOpen = false, children }: {
+  id?: string;
   icon: React.ReactNode;
   title: string;
   defaultOpen?: boolean;
@@ -14,7 +15,7 @@ function Section({ icon, title, defaultOpen = false, children }: {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
+    <div id={id} className="bg-card border border-border rounded-lg overflow-hidden scroll-mt-4">
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/50 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
@@ -144,8 +145,63 @@ export default function HelpContent() {
     { keys: '@', label: h.shortcuts.attachFile },
   ], [mod, h.shortcuts]);
 
+  const tocItems = useMemo(() => [
+    { id: 'what-is', label: h.whatIs.title },
+    { id: 'concepts', label: h.concepts.title },
+    { id: 'quick-start', label: h.quickStart.title },
+    { id: 'agent-usage', label: h.agentUsage.title },
+    { id: 'shortcuts', label: h.shortcutsTitle },
+    { id: 'faq', label: h.faq.title },
+  ], [h]);
+
+  const [activeSection, setActiveSection] = useState('');
+  useEffect(() => {
+    const ids = tocItems.map(i => i.id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+            break;
+          }
+        }
+      },
+      { rootMargin: '-10% 0px -80% 0px', threshold: 0 },
+    );
+    const timer = setTimeout(() => {
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el);
+      }
+    }, 100);
+    return () => { clearTimeout(timer); observer.disconnect(); };
+  }, [tocItems]);
+
   return (
-    <div className="content-width px-4 md:px-6 py-8 md:py-12">
+    <div className="content-width px-4 md:px-6 py-8 md:py-12 relative">
+      {/* ── Floating TOC (wide screens only) ── */}
+      <nav className="hidden xl:block fixed top-24 w-44" style={{ left: 'calc(50% + 340px)' }} aria-label="Table of contents">
+        <ul className="space-y-1 border-l border-border pl-3">
+          {tocItems.map(item => (
+            <li key={item.id}>
+              <a
+                href={`#${item.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className={`block text-xs py-1 transition-colors ${
+                  activeSection === item.id
+                    ? 'text-[var(--amber)] font-medium border-l-2 border-[var(--amber)] -ml-[13px] pl-[11px]'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
       {/* ── Header ── */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
@@ -158,12 +214,12 @@ export default function HelpContent() {
       {/* ── Sections ── */}
       <div className="space-y-3">
         {/* 1. What is MindOS */}
-        <Section icon={<BookOpen size={18} />} title={h.whatIs.title} defaultOpen>
+        <Section id="what-is" icon={<BookOpen size={18} />} title={h.whatIs.title} defaultOpen>
           <p className="text-sm text-muted-foreground leading-relaxed">{h.whatIs.body}</p>
         </Section>
 
         {/* 2. Core Concepts */}
-        <Section icon={<Brain size={18} />} title={h.concepts.title} defaultOpen>
+        <Section id="concepts" icon={<Brain size={18} />} title={h.concepts.title} defaultOpen>
           <div className="space-y-4">
             <div>
               <p className="text-sm font-medium text-foreground">{h.concepts.spaceTitle}</p>
@@ -181,7 +237,7 @@ export default function HelpContent() {
         </Section>
 
         {/* 3. Quick Start */}
-        <Section icon={<Rocket size={18} />} title={h.quickStart.title} defaultOpen>
+        <Section id="quick-start" icon={<Rocket size={18} />} title={h.quickStart.title} defaultOpen>
           <div className="space-y-4">
             <StepCard step={1} title={h.quickStart.step1Title} desc={h.quickStart.step1Desc} />
             <StepCard step={2} title={h.quickStart.step2Title} desc={h.quickStart.step2Desc} />
@@ -190,7 +246,7 @@ export default function HelpContent() {
         </Section>
 
         {/* 4. Using MindOS with AI Agents */}
-        <Section icon={<Bot size={18} />} title={h.agentUsage.title} defaultOpen>
+        <Section id="agent-usage" icon={<Bot size={18} />} title={h.agentUsage.title} defaultOpen>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">{h.agentUsage.intro}</p>
 
           <div className="space-y-3">
@@ -215,7 +271,7 @@ export default function HelpContent() {
         </Section>
 
         {/* 5. Keyboard Shortcuts */}
-        <Section icon={<Keyboard size={18} />} title={h.shortcutsTitle}>
+        <Section id="shortcuts" icon={<Keyboard size={18} />} title={h.shortcutsTitle}>
           <div className="space-y-0">
             {shortcuts.map((s) => (
               <ShortcutRow key={s.keys} keys={s.keys} label={s.label} />
@@ -224,7 +280,7 @@ export default function HelpContent() {
         </Section>
 
         {/* 6. FAQ */}
-        <Section icon={<HelpCircle size={18} />} title={h.faq.title}>
+        <Section id="faq" icon={<HelpCircle size={18} />} title={h.faq.title}>
           <div>
             {h.faq.items.map((item, i) => (
               <FaqItem key={i} q={item.q} a={item.a} />
