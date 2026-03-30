@@ -15,7 +15,7 @@ import {
 import { createPlan, executePlan } from './orchestrator';
 
 function textResult(text: string) {
-  return { content: [{ type: 'text' as const, text }] };
+  return { content: [{ type: 'text' as const, text }], details: {} };
 }
 
 /* ── Parameter Schemas ─────────────────────────────────────────────────── */
@@ -56,7 +56,7 @@ export const a2aTools: AgentTool<any>[] = [
     label: 'List Remote Agents',
     description: 'List all discovered remote A2A agents and their capabilities. Shows agent ID, name, skills, and reachability status. Call discover_agent first to add agents.',
     parameters: Type.Object({}),
-    execute: async () => {
+    execute: async (_id: string) => {
       const agents = getDiscoveredAgents();
       if (agents.length === 0) {
         return textResult('No remote agents discovered yet. Use discover_agent with a URL to find agents.');
