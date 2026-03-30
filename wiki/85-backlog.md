@@ -176,4 +176,4 @@
 
 ### 🟢 Nice-to-Have
 
-- [ ] **onClick div 无 cursor-pointer × 2** — DirView / ToolCallBlock
+- [x] **onClick div 无 cursor-pointer × 2** — DirView / ToolCallBlock — ✅ 经复查为误报：DirView 用 `<Link>`，ToolCallBlock 用 `<button>`，均自带 cursor:pointer
