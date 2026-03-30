@@ -601,24 +601,24 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setShowHistory(v => !v)} aria-pressed={showHistory} className={`p-1 rounded transition-colors ${showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title="Session history">
+          <button type="button" onClick={() => setShowHistory(v => !v)} aria-pressed={showHistory} className={`p-1.5 rounded transition-colors ${showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title="Session history">
             <History size={iconSize} />
           </button>
-          <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="New session">
+          <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="New session">
             <RotateCcw size={iconSize} />
           </button>
           {isPanel && onMaximize && (
-            <button type="button" onClick={onMaximize} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={maximized ? 'Restore panel' : 'Maximize panel'}>
+            <button type="button" onClick={onMaximize} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={maximized ? 'Restore panel' : 'Maximize panel'}>
               {maximized ? <Minimize2 size={iconSize} /> : <Maximize2 size={iconSize} />}
             </button>
           )}
           {onModeSwitch && (
-            <button type="button" onClick={onModeSwitch} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={askMode === 'popup' ? 'Dock to side panel' : 'Open as popup'}>
+            <button type="button" onClick={onModeSwitch} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={askMode === 'popup' ? 'Dock to side panel' : 'Open as popup'}>
               {askMode === 'popup' ? <PanelRight size={iconSize} /> : <AppWindow size={iconSize} />}
             </button>
           )}
           {onClose && (
-            <button type="button" onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
               <X size={isPanel ? iconSize : 15} />
             </button>
           )}

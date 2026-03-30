@@ -137,7 +137,7 @@ export default function MessageList({
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4 min-h-0">
       {messages.length === 0 && (
         <div className="mt-6 space-y-3">
           <p className="text-center text-sm text-muted-foreground/60">{emptyPrompt}</p>
