@@ -1340,52 +1340,46 @@ if (!resolvedCmd || !commands[resolvedCmd]) {
   const pkgVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
   const row = (c, d) => `  ${cyan(c.padEnd(36))}${dim(d)}`;
 
-  // Auto-generate Knowledge section from modular command meta
-  const modularCmds = [fileCmd, spaceCmd, searchCmd, askCmd, agentCmd, apiCmd];
-  const knowledgeRows = modularCmds
-    .map(m => row(m.meta.usage || `mindos ${m.meta.name}`, m.meta.summary))
-    .join('\n');
+  // Command registry — help is generated entirely from this array.
+  // Modular commands provide meta via their exports; inline commands define meta here.
+  const helpRegistry = [
+    { group: 'Core', usage: 'mindos onboard',        summary: 'Interactive setup (aliases: init, setup)' },
+    { group: 'Core', usage: 'mindos start',           summary: 'Start app + MCP server (production)' },
+    { group: 'Core', usage: 'mindos start --daemon',  summary: 'Start as background OS service' },
+    { group: 'Core', usage: 'mindos dev',             summary: 'Start in dev mode' },
+    { group: 'Core', usage: 'mindos stop',            summary: 'Stop running processes' },
+    { group: 'Core', usage: 'mindos restart',         summary: 'Stop then start again' },
+    { group: 'Core', usage: 'mindos build',           summary: 'Build for production' },
+    statusCmd.meta,
+    { group: 'Core', usage: 'mindos open',            summary: 'Open Web UI in browser' },
+    fileCmd.meta, spaceCmd.meta, searchCmd.meta, askCmd.meta, agentCmd.meta, apiCmd.meta,
+    { group: 'MCP', usage: 'mindos mcp',              summary: 'Start MCP server only' },
+    { group: 'MCP', usage: 'mindos mcp install [agent]', summary: 'Install MCP config into Agent' },
+    { group: 'MCP', usage: 'mindos token',            summary: 'Show auth token and MCP config' },
+    { group: 'Sync', usage: 'mindos sync',            summary: 'Show sync status (init/now/conflicts/on/off)' },
+    { group: 'Gateway', usage: 'mindos gateway <sub>', summary: 'Manage service (install/start/stop/status/logs)' },
+    { group: 'Config', usage: 'mindos config <sub>',  summary: 'View/update config (show/set/unset/validate)' },
+    { group: 'Config', usage: 'mindos doctor',         summary: 'Health check' },
+    { group: 'Config', usage: 'mindos update',         summary: 'Update to latest version' },
+    { group: 'Config', usage: 'mindos uninstall',      summary: 'Fully uninstall MindOS' },
+    { group: 'Config', usage: 'mindos logs',           summary: 'Tail service logs' },
+  ];
 
-  console.log(`
-${bold('MindOS CLI')} ${dim(`v${pkgVersion}`)}
+  const groupLabels = [
+    ['Core', 'Core'], ['Knowledge', 'Knowledge'], ['MCP', 'MCP'],
+    ['Sync', 'Sync'], ['Gateway', 'Gateway (Background Service)'], ['Config', 'Config & Diagnostics'],
+  ];
+  const groups = {};
+  for (const e of helpRegistry) {
+    const g = e.group || 'Other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(row(e.usage || `mindos ${e.name}`, e.summary));
+  }
+  const sections = groupLabels
+    .filter(([k]) => groups[k])
+    .map(([k, label]) => `${bold(`${label}:`)}\n${groups[k].join('\n')}`);
 
-${bold('Core:')}
-${row('mindos onboard',                    'Interactive setup (aliases: init, setup)')}
-${row('mindos start',                      'Start app + MCP server (production)')}
-${row('mindos start --daemon',             'Start as background OS service')}
-${row('mindos dev',                        'Start in dev mode')}
-${row('mindos stop',                       'Stop running processes')}
-${row('mindos restart',                    'Stop then start again')}
-${row('mindos build',                      'Build for production')}
-${row('mindos status',                     'Show service status overview')}
-${row('mindos open',                       'Open Web UI in browser')}
-
-${bold('Knowledge:')}
-${knowledgeRows}
-
-${bold('MCP:')}
-${row('mindos mcp',                        'Start MCP server only')}
-${row('mindos mcp install [agent]',        'Install MCP config into Agent')}
-${row('mindos token',                      'Show auth token and MCP config')}
-
-${bold('Sync:')}
-${row('mindos sync',                       'Show sync status (init/now/conflicts/on/off)')}
-
-${bold('Gateway (Background Service):')}
-${row('mindos gateway <sub>',              'Manage service (install/start/stop/status/logs)')}
-
-${bold('Config & Diagnostics:')}
-${row('mindos config <sub>',               'View/update config (show/set/unset/validate)')}
-${row('mindos doctor',                     'Health check')}
-${row('mindos update',                     'Update to latest version')}
-${row('mindos uninstall',                  'Fully uninstall MindOS')}
-${row('mindos logs',                       'Tail service logs')}
-
-${bold('Global Flags:')}
-${row('--json',                            'Output in JSON (for AI agents)')}
-${row('--help, -h',                        'Show help')}
-${row('--version, -v',                     'Show version')}
-`);
+  console.log(`\n${bold('MindOS CLI')} ${dim(`v${pkgVersion}`)}\n\n${sections.join('\n\n')}\n\n${bold('Global Flags:')}\n${row('--json', 'Output in JSON (for AI agents)')}\n${row('--help, -h', 'Show help')}\n${row('--version, -v', 'Show version')}\n`);
   const isHelp = cliFlags.help || cliFlags.h;
   process.exit((cmd && !isHelp) ? 1 : 0);
 }
