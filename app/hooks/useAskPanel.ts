@@ -7,6 +7,7 @@ import { useAskModal } from './useAskModal';
 export interface AskPanelState {
   askPanelOpen: boolean;
   askPanelWidth: number;
+  askMaximized: boolean;
   askMode: 'panel' | 'popup';
   desktopAskPopupOpen: boolean;
   askInitialMessage: string;
@@ -17,6 +18,7 @@ export interface AskPanelState {
   handleAskWidthChange: (w: number) => void;
   handleAskWidthCommit: (w: number) => void;
   handleAskModeSwitch: () => void;
+  toggleAskMaximized: () => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export function useAskPanel(): AskPanelState {
   const [askMode, setAskMode] = useState<'panel' | 'popup'>('panel');
   const [desktopAskPopupOpen, setDesktopAskPopupOpen] = useState(false);
   const [askInitialMessage, setAskInitialMessage] = useState('');
+  const [askMaximized, setAskMaximized] = useState(false);
   const [askOpenSource, setAskOpenSource] = useState<'user' | 'guide' | 'guide-next'>('user');
 
   const askModal = useAskModal();
@@ -82,7 +85,8 @@ export function useAskPanel(): AskPanelState {
     }
   }, [askMode]);
 
-  const closeAskPanel = useCallback(() => setAskPanelOpen(false), []);
+  const closeAskPanel = useCallback(() => { setAskPanelOpen(false); setAskMaximized(false); }, []);
+  const toggleAskMaximized = useCallback(() => setAskMaximized(v => !v), []);
   const closeDesktopAskPopup = useCallback(() => setDesktopAskPopupOpen(false), []);
 
   const handleAskWidthChange = useCallback((w: number) => setAskPanelWidth(w), []);
@@ -109,9 +113,9 @@ export function useAskPanel(): AskPanelState {
   }, []);
 
   return {
-    askPanelOpen, askPanelWidth, askMode, desktopAskPopupOpen,
+    askPanelOpen, askPanelWidth, askMaximized, askMode, desktopAskPopupOpen,
     askInitialMessage, askOpenSource,
     toggleAskPanel, closeAskPanel, closeDesktopAskPopup,
-    handleAskWidthChange, handleAskWidthCommit, handleAskModeSwitch,
+    handleAskWidthChange, handleAskWidthCommit, handleAskModeSwitch, toggleAskMaximized,
   };
 }

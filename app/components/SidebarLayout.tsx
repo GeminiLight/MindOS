@@ -413,6 +413,8 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onWidthCommit={ap.handleAskWidthCommit}
         askMode={ap.askMode}
         onModeSwitch={ap.handleAskModeSwitch}
+        maximized={ap.askMaximized}
+        onMaximize={ap.toggleAskMaximized}
       />
 
       <RightAgentDetailPanel
@@ -493,7 +495,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
       <main
         id="main-content"
-        className="min-h-screen transition-all duration-200 pt-[52px] md:pt-0"
+        className={`min-h-screen transition-all duration-200 pt-[52px] md:pt-0 ${ap.askMaximized ? 'hidden' : ''}`}
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();
@@ -560,7 +562,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       <style>{`
         @media (min-width: 768px) {
           :root {
-            --right-panel-width: ${ap.askPanelOpen ? ap.askPanelWidth : 0}px;
+            --right-panel-width: ${ap.askMaximized ? '100vw' : `${ap.askPanelOpen ? ap.askPanelWidth : 0}px`};
             --right-agent-detail-width: ${agentDockOpen ? agentDetailWidth : 0}px;
           }
           #main-content {
