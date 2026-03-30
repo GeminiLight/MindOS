@@ -240,7 +240,6 @@ export default function SetupWizard() {
         // Show error toast instead of success
       });
   }, [state.authToken]);
-  }, [state.authToken]);
 
   const checkPort = useCallback(async (port: number, which: 'web' | 'mcp') => {
     if (port < 1024 || port > 65535) return;
