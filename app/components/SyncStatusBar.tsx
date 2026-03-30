@@ -168,7 +168,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
   const prevLevelRef = useRef<StatusLevel>('off');
   const [hintDismissed, setHintDismissed] = useState(() => {
     if (typeof window !== 'undefined') {
-      try { return !!localStorage.getItem('sync-hint-dismissed'); } catch {}
+      try { return !!localStorage.getItem('sync-hint-dismissed'); } catch (err) { console.warn("[SyncStatusBar] localStorage read failed:", err); }
     }
     return false;
   });
@@ -219,7 +219,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
         <button
           onClick={(e) => {
             e.stopPropagation();
-            try { localStorage.setItem('sync-hint-dismissed', '1'); } catch {}
+            try { localStorage.setItem('sync-hint-dismissed', '1'); } catch (err) { console.warn("[SyncStatusBar] localStorage write dismissed:", err); }
             setHintDismissed(true);
           }}
           className="p-1 rounded hover:bg-muted hover:text-foreground transition-colors shrink-0 ml-2 text-muted-foreground/50 hover:text-muted-foreground"

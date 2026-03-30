@@ -618,7 +618,7 @@ function ExampleCleanupBanner() {
   useEffect(() => {
     scanExampleFilesAction().then(r => {
       if (r.files.length > 0) setCount(r.files.length);
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[HomeContent] scanExampleFilesAction failed:", err); });
   }, []);
 
   const handleCleanup = useCallback(async () => {

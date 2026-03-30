@@ -80,7 +80,7 @@ function DesktopUpdateTab() {
   useEffect(() => {
     bridge.getAppInfo?.().then((info) => {
       if (info?.version) setAppVersion(info.version);
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[UpdateTab] getAppInfo failed:", err); });
     handleCheck();
     const cleanups: Array<() => void> = [];
     if (bridge.onUpdateProgress) {

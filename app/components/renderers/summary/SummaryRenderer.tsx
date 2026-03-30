@@ -55,7 +55,7 @@ export function SummaryRenderer({ filePath }: RendererContext) {
   useEffect(() => {
     apiFetch<RecentFile[]>(`/api/recent-files?limit=${LIMIT}`)
       .then((data) => setRecentFiles(data.filter(f => f.path.endsWith('.md'))))
-      .catch(() => {});
+      .catch((err) => { console.warn("[SummaryRenderer] fetch recent-files failed:", err); });
   }, [filePath]);
 
   async function generate() {

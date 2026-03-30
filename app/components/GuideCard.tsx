@@ -29,7 +29,9 @@ export default function GuideCard() {
           setGuideState(null);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('[GuideCard] Fetch guide state failed:', err);
+      });
   }, []);
 
   useEffect(() => {
@@ -54,7 +56,9 @@ export default function GuideCard() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ guideState: patch }),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('[GuideCard] PATCH guide state failed:', err);
+    });
   }, []);
 
   const handleDismiss = useCallback(() => {

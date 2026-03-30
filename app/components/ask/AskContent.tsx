@@ -442,7 +442,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           } else if (typeof errBody?.message === 'string' && errBody.message.trim()) {
             errorMsg = errBody.message;
           }
-        } catch {}
+        } catch (err) { console.warn("[AskContent] error body parse failed:", err); }
         const err = new Error(errorMsg);
         (err as Error & { httpStatus?: number }).httpStatus = res.status;
         throw err;

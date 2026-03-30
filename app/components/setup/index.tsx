@@ -230,9 +230,16 @@ export default function SetupWizard() {
   }, []);
 
   const copyToken = useCallback(() => {
-    copyToClipboard(state.authToken).catch(() => {});
-    setTokenCopied(true);
-    setTimeout(() => setTokenCopied(false), 2000);
+    copyToClipboard(state.authToken)
+      .then(() => {
+        setTokenCopied(true);
+        setTimeout(() => setTokenCopied(false), 2000);
+      })
+      .catch((err) => {
+        console.error('[Setup] Token copy failed:', err);
+        // Show error toast instead of success
+      });
+  }, [state.authToken]);
   }, [state.authToken]);
 
   const checkPort = useCallback(async (port: number, which: 'web' | 'mcp') => {

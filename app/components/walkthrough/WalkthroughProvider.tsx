@@ -42,7 +42,7 @@ export default function WalkthroughProvider({ children }: WalkthroughProviderPro
           walkthroughDismissed: dismissed,
         },
       }),
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[WalkthroughProvider] localStorage setItem failed:", err); });
   }, []);
 
   // Check for auto-start via ?welcome=1 or guideState
@@ -81,7 +81,7 @@ export default function WalkthroughProvider({ children }: WalkthroughProviderPro
           setCurrentStep(gs.walkthroughStep);
         }
       })
-      .catch(() => {});
+      .catch((err) => { console.warn("[WalkthroughProvider] guideState read failed:", err); });
   }, [totalSteps]);
 
   const start = useCallback(() => {

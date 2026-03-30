@@ -26,7 +26,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [cleanupResult, setCleanupResult] = useState<number | null>(null);
 
   useEffect(() => {
-    scanExampleFilesAction().then(r => setExampleCount(r.files.length)).catch(() => {});
+    scanExampleFilesAction().then(r => setExampleCount(r.files.length)).catch((err) => { console.warn("[KnowledgeTab] scanExampleFilesAction failed:", err); });
   }, []);
 
   // Guide state toggle

@@ -59,7 +59,12 @@ function PromptBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
     navigator.clipboard.writeText(clean).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('[HelpContent] Clipboard copy failed:', err);
+      // Show error feedback in UI
+      setCopied(true); // Reuse copied state to show error
+      setTimeout(() => setCopied(false), 2000);
+    });
   }, [text]);
 
   return (

@@ -52,15 +52,33 @@ export function McpTab({ t }: McpTabProps) {
         restarting={restarting}
         onRestart={async () => {
           setRestarting(true);
-          try { await apiFetch('/api/mcp/restart', { method: 'POST' }); } catch {}
+          try {
+            await apiFetch('/api/mcp/restart', { method: 'POST' });
+          } catch (err) {
+            console.error('[McpTab] Restart request failed:', err);
+            setRestarting(false);
+            return; // Exit early, don't start polling if restart request fails
+          }
           const deadline = Date.now() + 60_000;
           clearInterval(restartPollRef.current);
           restartPollRef.current = setInterval(async () => {
-            if (Date.now() > deadline) { clearInterval(restartPollRef.current); setRestarting(false); return; }
+            if (Date.now() > deadline) {
+              clearInterval(restartPollRef.current);
+              setRestarting(false);
+              console.warn('[McpTab] MCP restart timed out after 60s');
+              return;
+            }
             try {
               const s = await apiFetch<McpStatus>('/api/mcp/status', { timeout: 3000 });
-              if (s.running) { clearInterval(restartPollRef.current); setRestarting(false); mcp.refresh(); }
-            } catch {}
+              if (s.running) {
+                clearInterval(restartPollRef.current);
+                setRestarting(false);
+                mcp.refresh();
+              }
+            } catch (err) {
+              console.warn('[McpTab] Status poll attempt failed:', err);
+              // Continue polling on individual failures
+            }
           }, 3000);
         }}
         onRefresh={mcp.refresh}

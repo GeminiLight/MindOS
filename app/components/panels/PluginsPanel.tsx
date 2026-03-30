@@ -44,7 +44,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
         const pathSet = new Set(allPaths);
         setExistingFiles(new Set(entryPaths.filter(p => pathSet.has(p))));
       })
-      .catch(() => {});
+      .catch((err) => { console.warn("[PluginsPanel] fetch /api/files failed:", err); });
   }, [mounted]);
 
   const renderers = mounted ? getPluginRenderers() : [];

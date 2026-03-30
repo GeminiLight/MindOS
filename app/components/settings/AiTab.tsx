@@ -51,7 +51,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   // Sync reconnectRetries to localStorage so AskContent can read it without fetching settings
   useEffect(() => {
     const v = data.agent?.reconnectRetries ?? 3;
-    try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch {}
+    try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch (err) { console.warn("[AiTab] localStorage setItem reconnectRetries failed:", err); }
   }, [data.agent?.reconnectRetries]);
 
   const handleTestKey = useCallback(async (providerName: 'anthropic' | 'openai') => {
@@ -271,7 +271,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
               onChange={e => {
                 const v = Number(e.target.value);
                 updateAgent({ reconnectRetries: v });
-                try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch {}
+                try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch (err) { console.warn("[AiTab] localStorage setItem reconnectRetries failed:", err); }
               }}
             >
               <option value="0">Off</option>
@@ -434,13 +434,13 @@ function AskDisplayMode() {
     try {
       const stored = localStorage.getItem('ask-mode');
       if (stored === 'popup') setMode('popup');
-    } catch {}
+    } catch (err) { console.warn("[AiTab] localStorage getItem ask-mode failed:", err); }
   }, []);
 
   const handleChange = (value: string) => {
     const next = value as 'panel' | 'popup';
     setMode(next);
-    try { localStorage.setItem('ask-mode', next); } catch {}
+    try { localStorage.setItem('ask-mode', next); } catch (err) { console.warn("[AiTab] localStorage setItem ask-mode failed:", err); }
     // Notify SidebarLayout to pick up the change
     window.dispatchEvent(new StorageEvent('storage', { key: 'ask-mode', newValue: next }));
   };

@@ -85,7 +85,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
         const pathSet = new Set(allPaths);
         setExistingFiles(new Set(entryPaths.filter(ep => pathSet.has(ep))));
       })
-      .catch(() => {});
+      .catch((err) => { console.warn("[DiscoverPanel] fetch /api/files failed:", err); });
   }, [pluginsMounted]);
 
   const handleToggle = useCallback((id: string, enabled: boolean) => {
