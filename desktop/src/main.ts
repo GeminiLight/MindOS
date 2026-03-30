@@ -535,7 +535,7 @@ async function startLocalMode(): Promise<string | null> {
     }
   });
 
-  processManager.on('crash', (which: string, count: number, stderrLines?: string[]) => {
+  processManager.on('crash', (which: string, count: number, exitCode?: number | null, stderrLines?: string[]) => {
     if (which === 'mcp' && count >= 3) {
       mcpFailed = true;
       updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, processManager?.mcpPort);
@@ -586,10 +586,30 @@ async function startLocalMode(): Promise<string | null> {
         crashDialogShown = true;
         const zh = navigator_lang() === 'zh';
         const stderr = stderrLines?.slice(-5).join('\n') || '';
-        const hasModuleError = stderr.includes('MODULE_NOT_FOUND') || stderr.includes('Cannot find module');
-        const hint = hasModuleError
-          ? (zh ? '\n\n可能原因：构建产物过期。请在终端运行 mindos start 重新编译。' : '\n\nLikely cause: stale build. Run "mindos start" in terminal to rebuild.')
-          : (zh ? '\n\n请检查 Node.js 环境后重启。' : '\n\nPlease check your Node.js environment and restart.');
+        const lastExitCode = exitCode ?? null;
+        // Diagnose crash cause from exit code and stderr
+        let hint: string;
+        if (lastExitCode === 137 || lastExitCode === 9) {
+          hint = zh
+            ? '\n\n可能原因：内存不足 (OOM)。尝试关闭其他应用后重启。'
+            : '\n\nLikely cause: out of memory (OOM). Close other apps and restart.';
+        } else if (stderr.includes('ENOSPC') || stderr.includes('no space left')) {
+          hint = zh
+            ? '\n\n可能原因：磁盘空间不足。请清理磁盘后重启。'
+            : '\n\nLikely cause: disk full. Free up disk space and restart.';
+        } else if (stderr.includes('EADDRINUSE') || stderr.includes('address already in use')) {
+          hint = zh
+            ? '\n\n可能原因：端口被占用。请关闭占用端口的程序后重启。'
+            : '\n\nLikely cause: port in use. Close the program using the port and restart.';
+        } else if (stderr.includes('MODULE_NOT_FOUND') || stderr.includes('Cannot find module')) {
+          hint = zh
+            ? '\n\n可能原因：构建产物过期。请在终端运行 mindos start 重新编译。'
+            : '\n\nLikely cause: stale build. Run "mindos start" in terminal to rebuild.';
+        } else {
+          hint = zh
+            ? '\n\n请检查 Node.js 环境后重启。'
+            : '\n\nPlease check your Node.js environment and restart.';
+        }
         dialog.showErrorBox(
           zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
           (zh ? 'Web 服务连续崩溃 3 次。' : 'The web server crashed 3 times.')
