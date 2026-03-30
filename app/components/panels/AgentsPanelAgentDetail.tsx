@@ -85,7 +85,7 @@ export default function AgentsPanelAgentDetail({
         <header className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3 bg-card">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-            <h2 className="text-sm font-semibold text-foreground truncate font-display">{agent.name}</h2>
+            <h2 className="text-sm font-semibold text-foreground truncate font-display" title={agent.name}>{agent.name}</h2>
           </div>
           <button
             type="button"
@@ -107,7 +107,7 @@ export default function AgentsPanelAgentDetail({
             {copy.backToList}
           </button>
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-          <span className="text-sm font-medium text-foreground truncate">{agent.name}</span>
+          <span className="text-sm font-medium text-foreground truncate" title={agent.name}>{agent.name}</span>
         </div>
       )}
 
