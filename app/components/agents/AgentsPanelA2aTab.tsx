@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Globe, Loader2, Network, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Clock, Globe, Loader2, Network, RefreshCw, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
 import { useDelegationHistory } from '@/hooks/useDelegationHistory';
 import { useAcpRegistry } from '@/hooks/useAcpRegistry';
+import { useAcpDetection } from '@/hooks/useAcpDetection';
+import { openAskModal } from '@/hooks/useAskModal';
 import DiscoverAgentModal from './DiscoverAgentModal';
 
 interface AgentsPanelA2aTabProps {
@@ -142,6 +144,7 @@ function AcpRegistrySection() {
   const { t } = useLocale();
   const p = t.panels.agents;
   const acp = useAcpRegistry();
+  const detection = useAcpDetection();
 
   if (acp.loading) {
     return (
@@ -185,14 +188,35 @@ function AcpRegistrySection() {
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {p.acpSectionTitle}
         </h3>
-        <span className="text-2xs text-muted-foreground/60">
-          {p.acpSectionDesc(acp.agents.length)}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => detection.refresh()}
+            disabled={detection.loading}
+            className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <RefreshCw size={10} className={detection.loading ? 'animate-spin' : ''} />
+            {p.acpScan}
+          </button>
+          <span className="text-2xs text-muted-foreground/60">
+            {p.acpSectionDesc(acp.agents.length)}
+          </span>
+        </div>
       </div>
       <div className="space-y-1.5">
-        {acp.agents.map((agent) => (
-          <AcpAgentRow key={agent.id} agent={agent} />
-        ))}
+        {acp.agents.map((agent) => {
+          const installed = detection.installedAgents.find((d) => d.id === agent.id);
+          const notInstalled = detection.notInstalledAgents.find((d) => d.id === agent.id);
+          return (
+            <AcpAgentRow
+              key={agent.id}
+              agent={agent}
+              installed={installed ?? null}
+              installCmd={notInstalled?.installCmd ?? null}
+              detectionDone={!detection.loading}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -207,7 +231,12 @@ const TRANSPORT_STYLES: Record<string, string> = {
   stdio: 'bg-muted text-muted-foreground',
 };
 
-function AcpAgentRow({ agent }: { agent: AcpRegistryEntry }) {
+function AcpAgentRow({ agent, installed, installCmd, detectionDone }: {
+  agent: AcpRegistryEntry;
+  installed: { id: string; name: string; binaryPath: string } | null;
+  installCmd: string | null;
+  detectionDone: boolean;
+}) {
   const { t } = useLocale();
   const p = t.panels.agents;
   const transportLabels: Record<string, string> = {
@@ -215,6 +244,17 @@ function AcpAgentRow({ agent }: { agent: AcpRegistryEntry }) {
     binary: p.acpTransportBinary,
     uvx: p.acpTransportUvx,
     stdio: p.acpTransportStdio,
+  };
+
+  const isReady = !!installed;
+
+  const handleUse = () => {
+    openAskModal(`Use ${agent.name} to help me with `);
+    window.dispatchEvent(
+      new CustomEvent('mindos:ask-with-agent', {
+        detail: { agentId: agent.id, agentName: agent.name },
+      }),
+    );
   };
 
   return (
@@ -232,11 +272,31 @@ function AcpAgentRow({ agent }: { agent: AcpRegistryEntry }) {
         <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${TRANSPORT_STYLES[agent.transport] ?? TRANSPORT_STYLES.stdio}`}>
           {transportLabels[agent.transport] ?? agent.transport}
         </span>
+        {detectionDone && (
+          <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
+            isReady
+              ? 'bg-[var(--success)]/15 text-[var(--success)]'
+              : 'bg-muted text-muted-foreground/60'
+          }`}>
+            {isReady ? p.acpReady : p.acpNotInstalled}
+          </span>
+        )}
         <button
           type="button"
-          disabled
-          className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground/50 cursor-not-allowed"
-          title={p.acpComingSoon}
+          disabled={!isReady}
+          onClick={handleUse}
+          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            isReady
+              ? 'border-[var(--amber)] text-[var(--amber)] hover:bg-[var(--amber)]/10 cursor-pointer'
+              : 'border-border text-muted-foreground/50 cursor-not-allowed'
+          }`}
+          title={
+            isReady
+              ? undefined
+              : installCmd
+                ? p.acpInstallHint(installCmd)
+                : p.acpComingSoon
+          }
         >
           {p.acpUseAgent}
         </button>
