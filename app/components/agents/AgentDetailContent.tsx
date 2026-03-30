@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, Globe, Server, Search, Trash2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
+import { toast } from '@/lib/toast';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { apiFetch } from '@/lib/api';
@@ -35,7 +36,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [editContent, setEditContent] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
-  const [snippetCopied, setSnippetCopied] = useState(false);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -162,9 +162,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
   const handleCopySnippet = useCallback(async () => {
     const ok = await copyToClipboard(snippet.snippet);
-    if (!ok) return;
-    setSnippetCopied(true);
-    setTimeout(() => setSnippetCopied(false), 1200);
+    if (ok) toast.copy();
   }, [snippet.snippet]);
 
   const handleApplyMcpConfig = useCallback(async (scope: 'project' | 'global', transport: 'stdio' | 'http') => {
@@ -277,7 +275,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
                 onClick={() => void handleCopySnippet()}
                 disabled={false}
                 busy={false}
-                label={snippetCopied ? a.detail.mcpCopied : a.detail.mcpCopySnippet}
+                label={a.detail.mcpCopySnippet}
               />
             )}
             <ActionButton

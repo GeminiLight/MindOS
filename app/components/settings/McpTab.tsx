@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Loader2, Copy, Check, Monitor, Globe, AlertCircle, RotateCcw, RefreshCw } from 'lucide-react';
+import { Loader2, Copy, Monitor, Globe, AlertCircle, RotateCcw, RefreshCw } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { useMcpDataOptional } from '@/hooks/useMcpData';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -22,7 +23,6 @@ export function McpTab({ t }: McpTabProps) {
   const [restarting, setRestarting] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
   const [transport, setTransport] = useState<'stdio' | 'http'>('stdio');
-  const [copied, setCopied] = useState(false);
   const restartPollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Cleanup restart poll on unmount
@@ -99,10 +99,9 @@ export function McpTab({ t }: McpTabProps) {
             onSelectAgent={(key) => setSelectedAgent(key)}
             transport={transport}
             onTransportChange={setTransport}
-            copied={copied}
             onCopy={async (snippet) => {
               const ok = await copyToClipboard(snippet);
-              if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+              if (ok) toast.copy();
             }}
             m={m}
           />
@@ -177,7 +176,7 @@ function McpStatusCard({ status, restarting, onRestart, onRefresh, m }: {
 
 /* ── Agent Config Viewer (dropdown + snippet) ── */
 
-function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, currentAgent, mcpStatus, selectedAgent, onSelectAgent, transport, onTransportChange, copied, onCopy, m }: {
+function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, currentAgent, mcpStatus, selectedAgent, onSelectAgent, transport, onTransportChange, onCopy, m }: {
   connectedAgents: AgentInfo[];
   detectedAgents: AgentInfo[];
   notFoundAgents: AgentInfo[];
@@ -187,7 +186,6 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
   onSelectAgent: (key: string) => void;
   transport: 'stdio' | 'http';
   onTransportChange: (t: 'stdio' | 'http') => void;
-  copied: boolean;
   onCopy: (snippet: string) => void;
   m: Record<string, any> | undefined;
 }) {
@@ -292,8 +290,8 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
               <div className="flex items-center gap-3 text-xs">
                 <button onClick={() => onCopy(snippet.snippet)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
-                  {copied ? <Check size={12} /> : <Copy size={12} />}
-                  {copied ? (m?.copied ?? 'Copied!') : (m?.copyConfig ?? 'Copy config')}
+                  <Copy size={12} />
+                  {m?.copyConfig ?? 'Copy config'}
                 </button>
                 <span className="text-muted-foreground">→</span>
                 <span className="font-mono text-muted-foreground truncate text-2xs">{snippet.path}</span>

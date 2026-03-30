@@ -3,6 +3,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { BookOpen, Rocket, Brain, Keyboard, HelpCircle, Bot, ChevronDown, Copy, Check } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
+import { copyToClipboard } from '@/lib/clipboard';
+import { toast } from '@/lib/toast';
 
 /* ── Collapsible Section ── */
 function Section({ id, icon, title, defaultOpen = false, children }: {
@@ -56,15 +58,13 @@ function PromptBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
-    const clean = text.replace(/^[""]|[""]$/g, '');
-    navigator.clipboard.writeText(clean).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch((err) => {
-      console.error('[HelpContent] Clipboard copy failed:', err);
-      // Show error feedback in UI
-      setCopied(true); // Reuse copied state to show error
-      setTimeout(() => setCopied(false), 2000);
+    const clean = text.replace(/^["“]|["”]$/g, '');
+    copyToClipboard(clean).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+        toast.copy();
+      }
     });
   }, [text]);
 

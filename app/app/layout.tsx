@@ -6,6 +6,7 @@ import ShellLayout from '@/components/ShellLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LocaleProvider } from '@/lib/LocaleContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import Toaster from '@/components/ui/Toaster';
 import RegisterSW from './register-sw';
 import UpdateOverlay from '@/components/UpdateOverlay';
 import { cookies } from 'next/headers';
@@ -113,6 +114,7 @@ export default async function RootLayout({
               </ShellLayout>
             </ErrorBoundary>
           </TooltipProvider>
+          <Toaster />
           <RegisterSW />
           <UpdateOverlay />
         </LocaleProvider>

@@ -8,6 +8,7 @@ import rehypeSlug from 'rehype-slug';
 import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { toast } from '@/lib/toast';
 import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
@@ -21,6 +22,7 @@ function CopyButton({ code }: { code: string }) {
       if (ok) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+        toast.copy();
       }
     });
   }, [code]);

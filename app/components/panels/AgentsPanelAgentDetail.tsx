@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronLeft, X, Loader2, CheckCircle2, AlertCircle, Copy, Check, Monitor, Globe } from 'lucide-react';
+import { ChevronLeft, X, Loader2, CheckCircle2, AlertCircle, Copy, Monitor, Globe } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { AgentInfo, McpStatus } from '../settings/types';
@@ -48,7 +49,6 @@ export default function AgentsPanelAgentDetail({
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [transport, setTransport] = useState<'stdio' | 'http'>(() => agent.preferredTransport);
-  const [copied, setCopied] = useState(false);
 
   const snippet = useMemo(() => {
     if (agentStatus === 'notFound') return null;
@@ -70,10 +70,7 @@ export default function AgentsPanelAgentDetail({
   const handleCopy = async () => {
     if (!snippet) return;
     const ok = await copyToClipboard(snippet.snippet);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    if (ok) toast.copy();
   };
 
   const dot =
@@ -183,8 +180,8 @@ export default function AgentsPanelAgentDetail({
               onClick={handleCopy}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              {copied ? copy.copied : copy.copyConfig}
+              <Copy size={14} />
+              {copy.copyConfig}
             </button>
           </>
         )}

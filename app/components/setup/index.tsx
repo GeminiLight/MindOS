@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { copyToClipboard } from '@/lib/clipboard';
+import { toast } from '@/lib/toast';
 import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus } from './types';
 import { TOTAL_STEPS, STEP_KB, STEP_PORTS, STEP_AGENTS } from './constants';
 import StepKB from './StepKB';
@@ -127,7 +128,6 @@ export default function SetupWizard() {
     webPassword: '',
   });
   const [homeDir, setHomeDir] = useState('~');
-  const [tokenCopied, setTokenCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState('');
@@ -230,15 +230,9 @@ export default function SetupWizard() {
   }, []);
 
   const copyToken = useCallback(() => {
-    copyToClipboard(state.authToken)
-      .then(() => {
-        setTokenCopied(true);
-        setTimeout(() => setTokenCopied(false), 2000);
-      })
-      .catch((err) => {
-        console.error('[Setup] Token copy failed:', err);
-        // Show error toast instead of success
-      });
+    copyToClipboard(state.authToken).then((ok) => {
+      if (ok) toast.copy();
+    });
   }, [state.authToken]);
 
   const checkPort = useCallback(async (port: number, which: 'web' | 'mcp') => {
@@ -384,7 +378,7 @@ export default function SetupWizard() {
         )}
         {step === 3 && (
           <StepSecurity
-            authToken={state.authToken} tokenCopied={tokenCopied}
+            authToken={state.authToken}
             onCopy={copyToken} onGenerate={generateToken}
             webPassword={state.webPassword} onPasswordChange={v => update('webPassword', v)}
             s={s}
