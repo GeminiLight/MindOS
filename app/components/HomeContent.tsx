@@ -159,7 +159,7 @@ function FeatureChip({ id, icon, name, entryPath, active, inactiveTitle }: {
   );
 
   if (active && entryPath) {
-    return <Link key={id} href={`/view/${encodePath(entryPath)}`}><span className={cls}>{inner}</span></Link>;
+    return <Link key={id} href={`/view/${encodePath(entryPath)}`} className={cls}>{inner}</Link>;
   }
   return <span key={id} className={cls} title={inactiveTitle}>{inner}</span>;
 }
