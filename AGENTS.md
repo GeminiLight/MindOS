@@ -193,13 +193,14 @@ npm test                          # 手动跑测试，不杀 dev server
 
 ### 提交步骤
 
-1. **公开仓同步检查**（修改前执行）：确认 mindos (public) 没有未回流的外部 PR commit
-   - `git fetch public main && git log public/main --oneline -5`
-   - 有未同步的 → 先 `git merge public/main --no-edit`，再开始改代码
-   - 无 public remote 则跳过（`git remote | grep public`）
+1. **公开仓同步检查**：跳过。**绝对禁止** `git merge public/main` 或 `git push public main`。
+   - public repo 只有 dev 的子集文件，merge 会删除 dev-only 文件（实际事故：219 文件丢失）
+   - dev → public 只通过 `sync-to-mindos.yml` CI 单向同步
+   - 唯一允许直接推 public 的是 tag：`git push public v0.6.27`（仅 tag，不推 branch）
+   - 如果 public 有外部 PR → 在 GitHub 上合并，CI 自动同步，不要手动 merge
 2. **检查改动**：`git status` + `git diff`，排除不相关的临时文件
 3. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
-4. **提交并 push**：`git add <files> && git commit && git push origin main`
+4. **提交并 push**：`git add <files> && git commit && git push origin main`（只 push origin，不 push public）
 5. 如果用户要求 release → 执行 `npm run release`（**始终使用 patch，除非用户明确指定 minor 或 major**）
 
 ### 发版说明
