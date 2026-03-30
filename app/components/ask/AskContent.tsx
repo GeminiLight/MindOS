@@ -13,6 +13,7 @@ import MessageList from '@/components/ask/MessageList';
 import MentionPopover from '@/components/ask/MentionPopover';
 import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
+import SessionTabBar from '@/components/ask/SessionTabBar';
 import FileChip from '@/components/ask/FileChip';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
@@ -624,6 +625,17 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
           )}
         </div>
       </div>
+
+      {/* Session tabs — panel variant only */}
+      {isPanel && session.sessions.length > 0 && (
+        <SessionTabBar
+          sessions={session.sessions}
+          activeSessionId={session.activeSessionId}
+          onLoad={handleLoadSession}
+          onDelete={session.deleteSession}
+          onNew={handleResetSession}
+        />
+      )}
 
       {showHistory && (
         <SessionHistory
