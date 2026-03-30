@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/LocaleContext';
 import { useMcpData } from '@/hooks/useMcpData';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
@@ -21,7 +22,6 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const a = t.agentsContent;
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
-  const [copyState, setCopyState] = useState<string | null>(null);
   const pageHeader = useMemo(() => {
     if (tab === 'a2a') {
       return {
@@ -69,9 +69,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
     if (!agent) return;
     const snippet = generateSnippet(agent, mcp.status, agent.preferredTransport);
     const ok = await copyToClipboard(snippet.snippet);
-    if (!ok) return;
-    setCopyState(agentKey);
-    setTimeout(() => setCopyState(null), 1500);
+    if (ok) toast.copy();
   };
 
   return (
@@ -100,7 +98,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       )}
 
       {tab === 'mcp' && (
-        <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={copyState} onCopySnippet={copySnippet} />
+        <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
       )}
 
       {tab === 'skills' && (

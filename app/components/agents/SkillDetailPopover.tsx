@@ -5,7 +5,6 @@ import {
   BookOpen,
   Code2,
   Copy,
-  Check,
   FileText,
   Loader2,
   Plus,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { toast } from '@/lib/toast';
 import type { SkillInfo } from '@/components/settings/types';
 import { Toggle } from '@/components/settings/Primitives';
 import { AgentAvatar, ConfirmDialog } from './AgentsPrimitives';
@@ -187,7 +187,6 @@ export default function SkillDetailPopover({
   const [nativeDesc, setNativeDesc] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
@@ -228,7 +227,6 @@ export default function SkillDetailPopover({
       setContent(null);
       setNativeDesc('');
       setLoadError(false);
-      setCopied(false);
       setDeleteMsg(null);
       setDeleting(false);
       setToggleBusy(false);
@@ -250,10 +248,7 @@ export default function SkillDetailPopover({
   const handleCopy = useCallback(async () => {
     if (!content) return;
     const ok = await copyToClipboard(content);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }
+    if (ok) toast.copy();
   }, [content]);
 
   const handleToggle = useCallback(async (enabled: boolean) => {
@@ -442,8 +437,8 @@ export default function SkillDetailPopover({
                       className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1.5 py-0.5"
                       aria-label={copy.copyContent}
                     >
-                      {copied ? <Check size={11} /> : <Copy size={11} />}
-                      {copied ? copy.copied : copy.copyContent}
+                      <Copy size={11} />
+                      {copy.copyContent}
                     </button>
                   )}
                 </div>

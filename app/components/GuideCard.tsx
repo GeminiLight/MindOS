@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Sparkles, Upload, MessageCircle, ExternalLink, Check, ChevronRight, Copy } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
+import { toast } from '@/lib/toast';
 import Link from 'next/link';
 import { useLocale } from '@/lib/LocaleContext';
 import { openAskModal } from '@/hooks/useAskModal';
@@ -14,7 +16,6 @@ export default function GuideCard() {
   const [guideState, setGuideState] = useState<GuideState | null>(null);
   const [expanded, setExpanded] = useState<'import' | 'ai' | 'agent' | null>(null);
   const [isFirstVisit, setIsFirstVisit] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [step3Done, setStep3Done] = useState(false);
 
   // Fetch guide state from backend
@@ -97,13 +98,8 @@ export default function GuideCard() {
   // ── Step 3: Cross-agent copy ──
 
   const handleCopyPrompt = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(g.agent.copyPrompt);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback: no clipboard API
-    }
+    const ok = await copyToClipboard(g.agent.copyPrompt);
+    if (ok) toast.copy();
   }, [g]);
 
   const handleStep3Done = useCallback(() => {
@@ -337,16 +333,10 @@ export default function GuideCard() {
               </p>
               <button
                 onClick={handleCopyPrompt}
-                className={`
-                  absolute top-2 right-2 flex items-center gap-1 text-2xs font-medium
-                  px-2.5 py-1.5 rounded-md border transition-all
-                  ${copied
-                    ? 'border-success/30 bg-success/10 text-success'
-                    : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30'}
-                `}
+                className="absolute top-2 right-2 flex items-center gap-1 text-2xs font-medium px-2.5 py-1.5 rounded-md border transition-all border-border bg-card text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30"
               >
-                {copied ? <Check size={11} /> : <Copy size={11} />}
-                {copied ? g.agent.copied : g.agent.copy}
+                <Copy size={11} />
+                {g.agent.copy}
               </button>
             </div>
             <div className="flex items-center justify-end mt-3 pt-3 border-t border-border">

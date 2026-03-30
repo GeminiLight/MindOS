@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, RefreshCw } from 'lucide-react';
+import { Copy, RefreshCw } from 'lucide-react';
 import { Field, Input } from '@/components/settings/Primitives';
 import type { SetupMessages } from './types';
 
 export interface StepSecurityProps {
   authToken: string;
-  tokenCopied: boolean;
   onCopy: () => void;
   onGenerate: (seed?: string) => void;
   webPassword: string;
@@ -16,7 +15,7 @@ export interface StepSecurityProps {
 }
 
 export default function StepSecurity({
-  authToken, tokenCopied, onCopy, onGenerate, webPassword, onPasswordChange, s,
+  authToken, onCopy, onGenerate, webPassword, onPasswordChange, s,
 }: StepSecurityProps) {
   const [seed, setSeed] = useState('');
   const [showSeed, setShowSeed] = useState(false);
@@ -29,8 +28,8 @@ export default function StepSecurity({
           <button onClick={onCopy}
             className="flex items-center gap-1 px-3 py-2 text-xs rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
             style={{ color: 'var(--foreground)' }}>
-            {tokenCopied ? <Check size={14} /> : <Copy size={14} />}
-            {tokenCopied ? s.copiedToken : s.copyToken}
+            <Copy size={14} />
+            {s.copyToken}
           </button>
           <button onClick={() => onGenerate()}
             aria-label={s.generateToken}

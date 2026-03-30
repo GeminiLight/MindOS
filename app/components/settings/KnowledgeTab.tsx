@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
 import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
@@ -96,7 +97,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordMasked = data.webPassword === '***set***';
 
-  const [copied, setCopied] = useState(false);
   const [resetting, setResetting] = useState(false);
   // revealed holds the plaintext token after regenerate, until user navigates away
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
@@ -130,10 +130,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
     const text = revealedToken ?? data.authToken ?? '';
     if (!text) return;
     copyToClipboard(text).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }
+      if (ok) toast.copy();
     });
   }
 
@@ -229,7 +226,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
                 className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
                 title={k.authTokenCopy}
               >
-                {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+                <Copy size={13} />
               </button>
             )}
           </div>

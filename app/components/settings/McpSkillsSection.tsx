@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2, ChevronDown, ChevronRight,
-  Plus, X, Search, Copy, Check,
+  Plus, X, Search, Copy,
 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { apiFetch } from '@/lib/api';
 import { useMcpDataOptional } from '@/hooks/useMcpData';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
@@ -398,14 +399,12 @@ function SkillCliHint({ agents, skillName, m }: {
   m: Record<string, any> | undefined;
 }) {
   const [selectedAgent, setSelectedAgent] = useState('claude-code');
-  const [copied, setCopied] = useState(false);
-
   const cmd = `npx skills add GeminiLight/MindOS --skill ${skillName} -a ${selectedAgent} -g -y`;
   const skillPath = `~/.agents/skills/${skillName}/SKILL.md`;
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(cmd);
-    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    if (ok) toast.copy();
   };
 
   // Group agents: connected first, then detected, then not found
@@ -447,7 +446,7 @@ function SkillCliHint({ agents, skillName, m }: {
         </code>
         <button onClick={handleCopy}
           className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
-          {copied ? <Check size={11} /> : <Copy size={11} />}
+          <Copy size={11} />
         </button>
       </div>
 
