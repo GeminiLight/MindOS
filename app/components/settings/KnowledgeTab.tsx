@@ -173,7 +173,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           <button
             onClick={() => setShowCleanupConfirm(true)}
             disabled={cleaningUp}
-            title={cleaningUp ? "Cleanup already in progress" : undefined}
+            title={cleaningUp ? t.hints.cleanupInProgress : undefined}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
           >
             {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
@@ -250,7 +250,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
               type="button"
               onClick={handleResetToken}
               disabled={resetting}
-              title={resetting ? "Token reset in progress" : undefined}
+              title={resetting ? t.hints.tokenResetInProgress : undefined}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <RefreshCw size={12} className={resetting ? 'animate-spin' : ''} />

@@ -387,7 +387,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                   onClick={() => handleIntentSelect('archive')}
                   className="flex flex-col items-center gap-2 p-4 border rounded-lg cursor-pointer transition-all duration-150 border-[var(--amber)]/30 bg-card hover:border-[var(--amber)]/60 hover:shadow-sm active:scale-[0.98] text-left"
                   disabled={im.validFiles.length === 0}
-                  title={im.validFiles.length === 0 ? "No valid files selected" : undefined}
+                  title={im.validFiles.length === 0 ? t.hints.noValidFiles : undefined}
                 >
                   <FolderInput size={24} className="text-[var(--amber)]" />
                   <span className="text-sm font-medium text-foreground">{t.fileImport.archiveTitle}</span>
@@ -397,7 +397,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                   onClick={() => handleIntentSelect('digest')}
                   className="flex flex-col items-center gap-2 p-4 border border-border rounded-lg cursor-pointer transition-all duration-150 bg-card hover:border-[var(--amber)]/50 hover:shadow-sm active:scale-[0.98] text-left"
                   disabled={im.validFiles.length === 0 || aiOrganize.phase === 'organizing'}
-                  title={im.validFiles.length === 0 ? "No valid files selected" : aiOrganize.phase === 'organizing' ? "AI is organizing" : undefined}
+                  title={im.validFiles.length === 0 ? t.hints.noValidFiles : aiOrganize.phase === 'organizing' ? t.hints.aiOrganizing : undefined}
                 >
                   <Sparkles size={24} className="text-[var(--amber)]" />
                   <span className="text-sm font-medium text-foreground">{t.fileImport.digestTitle}</span>
@@ -484,7 +484,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                   <button
                     onClick={handleArchiveSubmit}
                     disabled={isImporting || im.validFiles.length === 0}
-                    title={isImporting ? "Import in progress" : im.validFiles.length === 0 ? "No valid files selected" : undefined}
+                    title={isImporting ? t.hints.importInProgress : im.validFiles.length === 0 ? t.hints.noValidFiles : undefined}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       showSuccess
                         ? 'bg-success text-success-foreground'

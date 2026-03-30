@@ -32,6 +32,13 @@ vi.mock('@/lib/LocaleContext', () => ({
         suggestions: [],
       },
       search: { close: 'close' },
+      hints: {
+        typeMessage: 'Type a message',
+        mentionInProgress: 'Mention or command in progress',
+        sessionHistory: 'Session history',
+        newSession: 'New session',
+        attachFile: 'Attach local file',
+      },
     },
   }),
 }));

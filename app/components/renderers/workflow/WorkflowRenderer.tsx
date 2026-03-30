@@ -3,6 +3,7 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
+import { useLocale } from '@/lib/LocaleContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,7 @@ function StepCard({
   onSkip: () => void;
   canRun: boolean;
 }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const hasBody = step.body.trim().length > 0;
   const hasOutput = step.output.length > 0;
@@ -201,7 +203,7 @@ function StepCard({
               <button
                 onClick={onRun}
                 disabled={!canRun}
-                title={!canRun ? "Workflow step already running" : undefined}
+                title={!canRun ? t.hints.workflowStepRunning : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
@@ -269,6 +271,7 @@ function StepCard({
 // ─── Main renderer ────────────────────────────────────────────────────────────
 
 export function WorkflowRenderer({ filePath, content }: RendererContext) {
+  const { t } = useLocale();
   const parsed = useMemo(() => parseWorkflow(content), [content]);
   const [steps, setSteps] = useState<WorkflowStep[]>(() => parsed.steps);
   const [running, setRunning] = useState(false);
@@ -358,7 +361,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
             <button
               onClick={() => runStep(nextPendingIdx)}
               disabled={running}
-              title={running ? "Workflow step is running" : undefined}
+              title={running ? t.hints.workflowRunning : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '4px 12px', borderRadius: 7, fontSize: '0.75rem',

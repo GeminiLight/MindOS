@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from '@/lib/LocaleContext';
+
 export interface StepDotsProps {
   step: number;
   setStep: (s: number) => void;
@@ -8,6 +10,7 @@ export interface StepDotsProps {
 }
 
 export default function StepDots({ step, setStep, stepTitles, disabled }: StepDotsProps) {
+  const { t } = useLocale();
   return (
     <div className="flex items-center gap-2 mb-8" role="navigation" aria-label="Setup steps">
       {stepTitles.map((title: string, i: number) => (
@@ -18,7 +21,7 @@ export default function StepDots({ step, setStep, stepTitles, disabled }: StepDo
             aria-label={title}
             className="flex flex-col items-center gap-1 p-1 -m-1 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={disabled || i >= step}
-            title={(disabled || i >= step) ? "Cannot jump forward in setup" : undefined}>
+            title={(disabled || i >= step) ? t.hints.cannotJumpForward : undefined}>
             <div
               className="w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-colors"
               style={{
