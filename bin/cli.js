@@ -67,6 +67,9 @@ import * as fileCmd from './commands/file.js';
 import * as spaceCmd from './commands/space.js';
 import * as askCmd from './commands/ask.js';
 import * as statusCmd from './commands/status.js';
+import * as apiCmd from './commands/api.js';
+import * as agentCmd from './commands/agent.js';
+import * as searchCmd from './commands/search.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

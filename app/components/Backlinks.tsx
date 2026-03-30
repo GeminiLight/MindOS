@@ -58,10 +58,10 @@ export default function Backlinks({ filePath }: { filePath: string }) {
                   <FileText size={14} className="text-muted-foreground group-hover:text-[var(--amber)]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm text-foreground group-hover:text-[var(--amber)] transition-colors truncate mb-1">
+                  <div className="font-medium text-sm text-foreground group-hover:text-[var(--amber)] transition-colors truncate mb-1" title={link.filePath}>
                     {link.filePath}
                   </div>
-                  <div className="text-xs text-muted-foreground line-clamp-2 leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity">
+                  <div className="text-xs text-muted-foreground line-clamp-2 leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity" title={link.snippets[0] || ''}>
                     {link.snippets[0] || ''}
                   </div>
                 </div>

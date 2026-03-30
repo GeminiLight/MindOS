@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import path from 'path';
-import { analyzeMindOsLayout, isNextBuildValid } from './mindos-runtime-layout';
+import { analyzeMindOsLayout, isNextBuildValid, isNextBuildCurrent, BUILD_VERSION_FILE } from './mindos-runtime-layout';
 
 describe('analyzeMindOsLayout', () => {
   it('returns version and runnable when app/.next has BUILD_ID and mcp exist', () => {
