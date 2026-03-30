@@ -172,3 +172,41 @@ export interface RemoteAgent {
   /** Whether the agent is currently reachable */
   reachable: boolean;
 }
+
+/* ── Orchestration Types (Phase 3) ─────────────────────────────────────── */
+
+/** A sub-task decomposed from a user request */
+export interface SubTask {
+  id: string;
+  description: string;
+  assignedAgentId: string | null;
+  matchedSkillId: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result: string | null;
+  error: string | null;
+  dependsOn: string[];
+}
+
+/** Execution strategy for sub-tasks */
+export type ExecutionStrategy = 'parallel' | 'sequential' | 'dependency';
+
+/** An orchestration plan produced by the decomposer */
+export interface OrchestrationPlan {
+  id: string;
+  originalRequest: string;
+  strategy: ExecutionStrategy;
+  subtasks: SubTask[];
+  createdAt: string;
+  completedAt: string | null;
+  status: 'planning' | 'executing' | 'completed' | 'failed';
+  aggregatedResult: string | null;
+}
+
+/** Result of matching a sub-task to an agent skill */
+export interface SkillMatch {
+  agentId: string;
+  agentName: string;
+  skillId: string;
+  skillName: string;
+  confidence: number;
+}
