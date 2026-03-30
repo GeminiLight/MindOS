@@ -49,7 +49,7 @@ export default function SlashCommandPopover({ results, selectedIndex, query, onS
             <Zap size={13} className="text-[var(--amber)] shrink-0" />
             <span className="text-sm font-medium shrink-0">/<HighlightMatch text={item.name} query={query} /></span>
             {item.description && (
-              <span className="text-2xs text-muted-foreground/50 truncate min-w-0 flex-1">{item.description}</span>
+              <span className="text-2xs text-muted-foreground/50 truncate min-w-0 flex-1" title={item.description}>{item.description}</span>
             )}
           </button>
         ))}
