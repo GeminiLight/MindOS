@@ -224,6 +224,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
               role="switch"
               aria-checked={useAi}
               disabled={!aiAvailable}
+              title={!aiAvailable ? "Configure API key in Settings → AI" : undefined}
               onClick={() => setUseAi(v => !v)}
               className={`relative mt-0.5 inline-flex shrink-0 h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
                 useAi ? 'bg-[var(--amber)]' : 'bg-muted'

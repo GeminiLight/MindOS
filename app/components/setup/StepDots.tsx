@@ -17,7 +17,8 @@ export default function StepDots({ step, setStep, stepTitles, disabled }: StepDo
             aria-current={i === step ? 'step' : undefined}
             aria-label={title}
             className="flex flex-col items-center gap-1 p-1 -m-1 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={disabled || i >= step}>
+            disabled={disabled || i >= step}
+            title={(disabled || i >= step) ? "Cannot jump forward in setup" : undefined}>
             <div
               className="w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center transition-colors"
               style={{

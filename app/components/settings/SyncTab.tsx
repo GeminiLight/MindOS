@@ -302,6 +302,7 @@ export function SyncTab({ t }: SyncTabProps) {
           type="button"
           onClick={handleSyncNow}
           disabled={syncing}
+          title={syncing ? "Sync already in progress" : undefined}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
@@ -311,6 +312,7 @@ export function SyncTab({ t }: SyncTabProps) {
           type="button"
           onClick={handleToggle}
           disabled={toggling}
+          title={toggling ? "Toggle operation in progress" : undefined}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             status.enabled
               ? 'border-border text-muted-foreground hover:text-destructive hover:border-destructive/50'

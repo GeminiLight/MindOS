@@ -99,6 +99,7 @@ export default function OnboardingView() {
             <button
               key={tpl.id}
               disabled={isDisabled}
+              title={isDisabled ? "Another template is being initialized" : undefined}
               onClick={() => handleSelect(tpl.id)}
               className="group relative flex flex-col items-start gap-3 p-5 rounded-xl border border-border bg-card text-left transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber)]/5 disabled:opacity-60 disabled:cursor-not-allowed"
             >
