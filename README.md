@@ -15,7 +15,6 @@
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/dw/@geminilight/mindos.svg?style=for-the-badge&color=10b981" alt="npm downloads"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-Group-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
@@ -31,6 +30,25 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
     <img src="assets/images/demo-flow-light.png" alt="MindOS: From Idea to Execution to Review" width="960" />
   </picture>
 </p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/images/mindos-home.png" alt="MindOS Home" /></td>
+    <td width="50%"><img src="assets/images/mindos-chat.png" alt="MindOS AI Chat" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Home — Knowledge base overview</em></td>
+    <td align="center"><em>AI Chat — Converse with your knowledge in context</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/images/mindos-dashboard.png" alt="MindOS Agents Dashboard" /></td>
+    <td width="50%"><img src="assets/images/mindos-echo.png" alt="MindOS Echo" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Agents — Manage all connected AI agents</em></td>
+    <td align="center"><em>Echo — Reflect and distill cognitive growth</em></td>
+  </tr>
+</table>
 
 > [!IMPORTANT]
 > **⭐ One-click install:** Send this to your Agent (Claude Code, Cursor, etc.) to set up everything automatically:
@@ -66,37 +84,6 @@ Agent memory locked in black boxes makes reasoning unauditable, erasing trust as
 You express preferences but the next chat starts from zero, leaving your thinking useless for AI. **MindOS auto-distills every thought into your knowledge base. Clarify your standards through interaction and sharpen your cognition with each iteration—AI will never repeat the same mistake.**
 
 > **Foundation:** Local-first by default — all data stays in local plain text for privacy, ownership, and speed.
-
-## ✨ Features
-
-**For Humans**
-
-- **GUI Workbench**: browse, edit, search notes with unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
-- **Built-in Agent Assistant**: converse with the knowledge base in context; edits seamlessly capture human-curated knowledge.
-- **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Agent Inspector, and more.
-
-**For Agents**
-
-- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access.
-- **Structured Templates**: pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
-- **Agent-Ready Docs**: everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch.
-
-**Infrastructure**
-
-- **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
-- **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
-- **Backlinks View**: displays all files that reference the current file, helping you understand how a note fits into the knowledge network.
-- **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
-- **Desktop App**: native macOS/Windows/Linux app with system tray, auto-start, and local process management.
-
-<details>
-<summary><strong>Coming Soon</strong></summary>
-
-- [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
-- [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
-- [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
-
-</details>
 
 ---
 
@@ -150,9 +137,6 @@ mindos open
 2. Upload your resume or any personal/project material.
 3. Send this prompt: `Help me sync this information into my MindOS knowledge base.`
 
-<p align="center">
-  <img src="assets/images/gui-sync-cv.png" alt="Sync CV Example" width="800" />
-</p>
 
 ### 4. Make Any Agent Ready (MCP + Skills)
 
@@ -171,6 +155,37 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 ```
 
 > For remote access, manual JSON config, and common pitfalls, see **[docs/en/supported-agents.md](docs/en/supported-agents.md)**.
+
+## ✨ Features
+
+**For Humans**
+
+- **GUI Workbench**: browse, edit, search notes with unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
+- **Built-in Agent Assistant**: converse with the knowledge base in context; edits seamlessly capture human-curated knowledge.
+- **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Agent Inspector, and more.
+
+**For Agents**
+
+- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access.
+- **Structured Templates**: pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
+- **Agent-Ready Docs**: everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch.
+
+**Infrastructure**
+
+- **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
+- **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
+- **Backlinks View**: displays all files that reference the current file, helping you understand how a note fits into the knowledge network.
+- **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
+- **Desktop App**: native macOS/Windows/Linux app with system tray, auto-start, and local process management.
+
+<details>
+<summary><strong>Coming Soon</strong></summary>
+
+- [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
+- [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
+- [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
+
+</details>
 
 ## ⚙️ How It Works
 
@@ -203,22 +218,21 @@ graph LR
 
 | Agent | MCP | Skills |
 |:------|:---:|:------:|
-| MindOS Agent | ✅ | ✅ |
 | OpenClaw | ✅ | ✅ |
-| Claude Desktop / Code | ✅ | ✅ |
-| CodeBuddy | ✅ | ✅ |
+| Claude Code | ✅ | ✅ |
 | Cursor | ✅ | ✅ |
-| Windsurf | ✅ | ✅ |
-| Cline | ✅ | ✅ |
-| Trae | ✅ | ✅ |
+| Codex | ✅ | ✅ |
 | Gemini CLI | ✅ | ✅ |
 | GitHub Copilot | ✅ | ✅ |
-| iFlow | ✅ | ✅ |
+| Trae | ✅ | ✅ |
+| CodeBuddy | ✅ | ✅ |
+| Qoder | ✅ | ✅ |
+| Cline | ✅ | ✅ |
+| Windsurf | ✅ | ✅ |
 
 ---
 
-<details>
-<summary><strong>📁 Project Structure</strong></summary>
+## 📁 Project Structure
 
 ```bash
 MindOS/
@@ -235,8 +249,6 @@ MindOS/
 ├── sync-state.json   # Sync state (last sync time, conflicts)
 └── mind/             # Your private knowledge base (default: ~/MindOS/mind, customizable on onboard)
 ```
-
-</details>
 
 ## ⌨️ CLI Commands
 
