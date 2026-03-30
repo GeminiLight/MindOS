@@ -60,6 +60,13 @@ import { spawnMcp } from './lib/mcp-spawn.js';
 import { ensureMcpBundle } from './lib/mcp-build.js';
 import { mcpInstall } from './lib/mcp-install.js';
 import { initSync, startSyncDaemon, stopSyncDaemon, getSyncStatus, manualSync, listConflicts, setSyncEnabled } from './lib/sync.js';
+import { parseArgs } from './lib/command.js';
+
+// ── New modular commands ──────────────────────────────────────────────────────
+import * as fileCmd from './commands/file.js';
+import * as spaceCmd from './commands/space.js';
+import * as askCmd from './commands/ask.js';
+import * as statusCmd from './commands/status.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1298,6 +1305,12 @@ ${bold('Examples:')}
     }
     console.log();
   },
+
+  // ── New modular commands (knowledge operations) ──────────────────────────
+  file:   async () => { const p = parseArgs(process.argv.slice(3)); await fileCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  space:  async () => { const p = parseArgs(process.argv.slice(3)); await spaceCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  ask:    async () => { const p = parseArgs(process.argv.slice(3)); await askCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  status: async () => { const p = parseArgs(process.argv.slice(3)); await statusCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
 };
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
@@ -1308,40 +1321,45 @@ if (!resolvedCmd || !commands[resolvedCmd]) {
   const pkgVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
   const row = (c, d) => `  ${cyan(c.padEnd(36))}${dim(d)}`;
   console.log(`
-${bold('🧠 MindOS CLI')} ${dim(`v${pkgVersion}`)}
+${bold('MindOS CLI')} ${dim(`v${pkgVersion}`)}
 
 ${bold('Core:')}
 ${row('mindos onboard',                    'Interactive setup (aliases: init, setup)')}
-${row('mindos onboard --install-daemon',   'Setup + install & start as background OS service')}
-${row('mindos start',                      'Start app + MCP server (production, auto-rebuilds if needed)')}
-${row('mindos start --daemon',             'Install + start as background OS service (survives terminal close)')}
-${row('mindos start --verbose',            'Start with verbose MCP logging')}
-${row('mindos dev',                        'Start app + MCP server (dev mode)')}
-${row('mindos dev --turbopack',            'Start with Turbopack (faster HMR)')}
-${row('mindos stop',                       'Stop running MindOS processes')}
+${row('mindos start',                      'Start app + MCP server (production)')}
+${row('mindos start --daemon',             'Start as background OS service')}
+${row('mindos dev',                        'Start in dev mode')}
+${row('mindos stop',                       'Stop running processes')}
 ${row('mindos restart',                    'Stop then start again')}
-${row('mindos build',                      'Build the app for production')}
-${row('mindos open',                       'Open Web UI in the default browser')}
+${row('mindos build',                      'Build for production')}
+${row('mindos status',                     'Show service status overview')}
+${row('mindos open',                       'Open Web UI in browser')}
+
+${bold('Knowledge:')}
+${row('mindos file <sub>',                 'File operations (list/read/create/delete/search)')}
+${row('mindos space <sub>',                'Space management (list/create/info)')}
+${row('mindos ask "<question>"',           'Ask AI using your knowledge base')}
 
 ${bold('MCP:')}
 ${row('mindos mcp',                        'Start MCP server only')}
-${row('mindos mcp install [agent]',        'Install MindOS MCP config into Agent (claude-code/cursor/windsurf/…) [-g]')}
-${row('mindos token',                      'Show current auth token and MCP config snippet')}
+${row('mindos mcp install [agent]',        'Install MCP config into Agent')}
+${row('mindos token',                      'Show auth token and MCP config')}
 
 ${bold('Sync:')}
 ${row('mindos sync',                       'Show sync status (init/now/conflicts/on/off)')}
 
 ${bold('Gateway (Background Service):')}
-${row('mindos gateway <subcommand>',       'Manage background service (install/uninstall/start/stop/status/logs)')}
+${row('mindos gateway <sub>',              'Manage service (install/start/stop/status/logs)')}
 
 ${bold('Config & Diagnostics:')}
-${row('mindos config <subcommand>',        'View/update config (show/validate/set/unset)')}
-${row('mindos doctor',                     'Health check (config, ports, build, daemon)')}
-${row('mindos init-skills',                 'Create user-skill-rules.md for personalization')}
-${row('mindos update',                     'Update MindOS to the latest version')}
-${row('mindos uninstall',                  'Fully uninstall MindOS (stop, remove daemon, npm uninstall)')}
-${row('mindos logs',                       'Tail service logs (~/.mindos/mindos.log)')}
-${row('mindos',                            'Start using mode saved in ~/.mindos/config.json')}
+${row('mindos config <sub>',               'View/update config (show/set/unset/validate)')}
+${row('mindos doctor',                     'Health check')}
+${row('mindos update',                     'Update to latest version')}
+${row('mindos logs',                       'Tail service logs')}
+
+${bold('Global Flags:')}
+${row('--json',                            'Output in JSON (for AI agents)')}
+${row('--help, -h',                        'Show help')}
+${row('--version, -v',                     'Show version')}
 `);
   const isHelp = (cmd === '--help' || cmd === '-h');
   process.exit((cmd && !isHelp) ? 1 : 0);
