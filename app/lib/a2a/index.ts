@@ -1,6 +1,7 @@
 export { buildAgentCard } from './agent-card';
 export { handleSendMessage, handleGetTask, handleCancelTask } from './task-handler';
 export { discoverAgent, discoverAgents, delegateTask, checkRemoteTaskStatus, getDiscoveredAgents, getAgent, clearRegistry } from './client';
+export { matchSkill, decompose, createPlan, executePlan } from './orchestrator';
 export { a2aTools } from './a2a-tools';
 export { A2A_ERRORS } from './types';
 export type {
@@ -23,4 +24,8 @@ export type {
   GetTaskParams,
   CancelTaskParams,
   RemoteAgent,
+  SubTask,
+  ExecutionStrategy,
+  OrchestrationPlan,
+  SkillMatch,
 } from './types';

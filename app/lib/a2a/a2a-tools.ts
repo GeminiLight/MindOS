@@ -12,6 +12,7 @@ import {
   checkRemoteTaskStatus,
   getDiscoveredAgents,
 } from './client';
+import { createPlan, executePlan } from './orchestrator';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }] };
@@ -35,6 +36,15 @@ const DelegateParams = Type.Object({
 const CheckStatusParams = Type.Object({
   agent_id: Type.String({ description: 'ID of the agent that owns the task' }),
   task_id: Type.String({ description: 'Task ID returned by delegate_to_agent' }),
+});
+
+const OrchestrateParams = Type.Object({
+  request: Type.String({ description: 'The complex request to decompose and execute across multiple agents' }),
+  subtasks: Type.Optional(Type.Array(Type.String(), { description: 'Pre-decomposed subtask descriptions. If omitted, auto-decomposition is used.' })),
+  strategy: Type.Optional(Type.Union([
+    Type.Literal('parallel'),
+    Type.Literal('sequential'),
+  ], { description: 'Execution strategy: parallel (default) or sequential', default: 'parallel' })),
 });
 
 /* ── Tool Implementations ──────────────────────────────────────────────── */
@@ -160,6 +170,42 @@ export const a2aTools: AgentTool<any>[] = [
         return textResult(`Task ${params.task_id} state: ${state}`);
       } catch (err) {
         return textResult(`Status check failed: ${(err as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'orchestrate',
+    label: 'Orchestrate Multi-Agent Task',
+    description: 'Decompose a complex request into subtasks and execute them across multiple remote agents. Auto-matches subtasks to the best available agent based on skills. Use discover_agent first to register agents.',
+    parameters: OrchestrateParams,
+    execute: async (_id: string, params: Static<typeof OrchestrateParams>) => {
+      try {
+        const strategy = params.strategy ?? 'parallel';
+        const plan = createPlan(params.request, strategy, params.subtasks);
+
+        const assigned = plan.subtasks.filter(st => st.assignedAgentId);
+        if (assigned.length === 0) {
+          return textResult(
+            `Created plan with ${plan.subtasks.length} subtasks but no agents matched any skill.\n` +
+            `Subtasks: ${plan.subtasks.map(st => st.description).join(', ')}\n\n` +
+            'Discover agents first using discover_agent, then retry.'
+          );
+        }
+
+        const result = await executePlan(plan);
+
+        const summary = plan.subtasks.map(st => {
+          const icon = st.status === 'completed' ? '[OK]' : st.status === 'failed' ? '[FAIL]' : '[?]';
+          return `${icon} ${st.description}`;
+        }).join('\n');
+
+        return textResult(
+          `Orchestration ${result.status} (${strategy}, ${plan.subtasks.length} subtasks):\n\n` +
+          `${summary}\n\n---\n\n${result.aggregatedResult ?? '(no result)'}`
+        );
+      } catch (err) {
+        return textResult(`Orchestration failed: ${(err as Error).message}`);
       }
     },
   },
