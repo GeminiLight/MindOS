@@ -1487,4 +1487,28 @@ prompt: '这是我的简历，读一下，把我的信息整理到 MindOS 里。
       ],
     },
   },
+
+  /** 禁用态和上下文提示文案 */
+  hints: {
+    noValidFiles: '未选择有效文件',
+    aiOrganizing: 'AI 正在整理中',
+    importInProgress: '正在导入',
+    templateInitializing: '正在初始化另一个模板',
+    configureAiKey: '请在 设置 → AI 中配置 API 密钥',
+    syncInProgress: '正在同步中',
+    toggleInProgress: '正在切换中',
+    typeMessage: '请输入消息',
+    mentionInProgress: '正在输入提及或命令',
+    cleanupInProgress: '正在清理中',
+    tokenResetInProgress: '正在重置令牌',
+    aiNotConfigured: 'AI 未配置或正在生成',
+    generationInProgress: '正在生成或 AI 未配置',
+    cannotJumpForward: '无法跳过前序步骤',
+    testInProgressOrNoKey: '正在测试或未配置 API 密钥',
+    workflowStepRunning: '工作流步骤正在运行',
+    workflowRunning: '工作流步骤正在运行',
+    sessionHistory: '会话历史',
+    newSession: '新会话',
+    attachFile: '附加本地文件',
+  },
 } as const satisfies Widen<typeof en>;
