@@ -78,11 +78,17 @@ export function useAskSession(currentFile?: string) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Load sessions from server, pick the matching one or create fresh. */
+  /** Load sessions from server, pick the matching one or create fresh. Prunes stale empty sessions. */
   const initSessions = useCallback(async () => {
-    const sorted = (await fetchSessions())
+    const all = (await fetchSessions())
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_SESSIONS);
+
+    // Prune empty sessions except the most recent one (user might be about to type)
+    const emptyIds = all.filter((s) => s.messages.length === 0).slice(1).map((s) => s.id);
+    const sorted = emptyIds.length > 0 ? all.filter((s) => !emptyIds.includes(s.id)) : all;
+    if (emptyIds.length > 0) void removeSessions(emptyIds);
+
     setSessions(sorted);
 
     const matched = currentFile
@@ -135,29 +141,41 @@ export function useAskSession(currentFile?: string) {
     }
   }, []);
 
-  /** Create a brand-new session. */
+  /** Create a brand-new session. If the current session is already empty, reuse it. */
   const resetSession = useCallback(() => {
-    const fresh = createSession(currentFile);
-    setActiveSessionId(fresh.id);
-    setMessages([]);
     setSessions((prev) => {
+      const active = prev.find((s) => s.id === activeSessionId);
+      // Already on an empty session — just clear input, don't create another
+      if (active && active.messages.length === 0) return prev;
+
+      const fresh = createSession(currentFile);
+      setActiveSessionId(fresh.id);
+      setMessages([]);
       const next = [fresh, ...prev]
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, MAX_SESSIONS);
       void upsertSession(fresh);
       return next;
     });
-  }, [currentFile]);
+  }, [currentFile, activeSessionId]);
 
-  /** Switch to an existing session. */
+  /** Switch to an existing session. Auto-cleans abandoned empty sessions. */
   const loadSession = useCallback(
     (id: string) => {
       const target = sessions.find((s) => s.id === id);
       if (!target) return;
+
+      // Clean up the session we're leaving if it's empty
+      const leaving = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : null;
+      if (leaving && leaving.messages.length === 0 && leaving.id !== id) {
+        void removeSession(leaving.id);
+        setSessions((prev) => prev.filter((s) => s.id !== leaving.id));
+      }
+
       setActiveSessionId(target.id);
       setMessages(target.messages);
     },
-    [sessions],
+    [sessions, activeSessionId],
   );
 
   /** Delete a session. If it's the active one, create fresh. */
