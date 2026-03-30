@@ -125,6 +125,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
         <button
           type="button"
           disabled={disabled}
+          title={disabled ? "Test in progress or no API key" : undefined}
           onClick={() => handleTestKey(providerName)}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >

@@ -807,7 +807,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
               {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} title={!input.trim() ? "Type a message" : mention.mentionQuery !== null || slash.slashQuery !== null ? "Mention or command in progress" : undefined} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
               <Send size={isPanel ? 13 : 14} />
             </button>
           )}

@@ -145,6 +145,7 @@ export function EchoInsightCollapsible({
               <button
                 type="button"
                 disabled={generateDisabled}
+                title={generateDisabled ? "AI not configured or generation in progress" : undefined}
                 onClick={runGenerate}
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--amber)] px-3 py-2 font-sans text-sm font-medium text-[var(--amber-foreground)] transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -160,6 +161,7 @@ export function EchoInsightCollapsible({
                   type="button"
                   onClick={runGenerate}
                   disabled={streaming || !aiReady}
+                  title={streaming || !aiReady ? "Generation in progress or AI not configured" : undefined}
                   className="font-sans text-sm text-[var(--amber)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                 >
                   {retryLabel}

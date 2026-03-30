@@ -201,6 +201,7 @@ function StepCard({
               <button
                 onClick={onRun}
                 disabled={!canRun}
+                title={!canRun ? "Workflow step already running" : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
@@ -357,6 +358,7 @@ export function WorkflowRenderer({ filePath, content }: RendererContext) {
             <button
               onClick={() => runStep(nextPendingIdx)}
               disabled={running}
+              title={running ? "Workflow step is running" : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '4px 12px', borderRadius: 7, fontSize: '0.75rem',
