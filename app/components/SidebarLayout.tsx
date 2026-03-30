@@ -150,6 +150,14 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   const currentFile = pathname.startsWith('/view/')
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
     : undefined;
+
+  // Auto-exit Ask panel maximize when navigating to a different page
+  useEffect(() => {
+    if (ap.askMaximized) ap.toggleAskMaximized();
+  // Only react to pathname changes, not askMaximized changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   const agentsContentActive = pathname?.startsWith('/agents');
   const railActivePanel = lp.activePanel ?? (agentsContentActive ? 'agents' : null);
 
