@@ -169,8 +169,8 @@
 
 ### 🟡 High-Priority（下个迭代）
 
-- [ ] **截断文本无 tooltip × 18** — 所有 `truncate` / `line-clamp-*` 添加 `title` 属性
-  - PanelNavRow / DiscoverPanel / AgentsPanelAgentDetail / UseCaseCard / SearchPanel / SearchModal / SlashCommandPopover / MentionPopover / Backlinks / Breadcrumb / DirView
+- [x] **截断文本无 tooltip × 22** — 所有 `truncate` / `line-clamp-*` 添加 `title` 属性 — ✅ DONE
+  - PanelNavRow(2) / DiscoverPanel(2) / AgentsPanelAgentDetail(2) / UseCaseCard(2) / SearchPanel(3) / SearchModal(3) / SlashCommandPopover(1) / MentionPopover(2) / Backlinks(2) / Breadcrumb(1) / DirView(2)
 - [ ] **禁用按钮无说明 × 10** — 所有 `disabled` 按钮添加 `title` 解释原因
   - ImportModal / OnboardingView / CreateSpaceModal / SyncTab / AskContent / KnowledgeTab / EchoInsightCollapsible / StepDots / AiTab / WorkflowRenderer
 
