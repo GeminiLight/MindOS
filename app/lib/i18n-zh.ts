@@ -1510,5 +1510,10 @@ prompt: '这是我的简历，读一下，把我的信息整理到 MindOS 里。
     sessionHistory: '会话历史',
     newSession: '新会话',
     attachFile: '附加本地文件',
+    maximizePanel: '最大化面板',
+    restorePanel: '还原面板',
+    dockToSide: '停靠到侧边栏',
+    openAsPopup: '弹窗模式',
+    closePanel: '关闭',
   },
 } as const satisfies Widen<typeof en>;

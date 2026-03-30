@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, Send, Paperclip, StopCircle, RotateCcw, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
+import { Sparkles, Send, Paperclip, StopCircle, SquarePen, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { Message } from '@/lib/types';
 import { useAskSession } from '@/hooks/useAskSession';
@@ -605,20 +605,20 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
             <History size={iconSize} />
           </button>
           <button type="button" onClick={handleResetSession} disabled={isLoading} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title={t.hints.newSession}>
-            <RotateCcw size={iconSize} />
+            <SquarePen size={iconSize} />
           </button>
           {isPanel && onMaximize && (
-            <button type="button" onClick={onMaximize} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={maximized ? 'Restore panel' : 'Maximize panel'}>
+            <button type="button" onClick={onMaximize} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
               {maximized ? <Minimize2 size={iconSize} /> : <Maximize2 size={iconSize} />}
             </button>
           )}
           {onModeSwitch && (
-            <button type="button" onClick={onModeSwitch} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={askMode === 'popup' ? 'Dock to side panel' : 'Open as popup'}>
+            <button type="button" onClick={onModeSwitch} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
               {askMode === 'popup' ? <PanelRight size={iconSize} /> : <AppWindow size={iconSize} />}
             </button>
           )}
           {onClose && (
-            <button type="button" onClick={onClose} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title={t.hints.closePanel} aria-label="Close">
               <X size={isPanel ? iconSize : 15} />
             </button>
           )}
