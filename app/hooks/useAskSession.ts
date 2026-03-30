@@ -84,13 +84,13 @@ export function useAskSession(currentFile?: string) {
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_SESSIONS);
 
-    // Prune empty sessions except the most recent one (user might be about to type)
-    const emptyIds = all.filter((s) => s.messages.length === 0).slice(1).map((s) => s.id);
+    // Prune any empty sessions that leaked to server (from older versions)
+    const emptyIds = all.filter((s) => s.messages.length === 0).map((s) => s.id);
     const sorted = emptyIds.length > 0 ? all.filter((s) => !emptyIds.includes(s.id)) : all;
     if (emptyIds.length > 0) void removeSessions(emptyIds);
 
-    setSessions(sorted);
-
+    // Always prepend a fresh empty session in memory (never persisted until first message)
+    const fresh = createSession(currentFile);
     const matched = currentFile
       ? sorted.find((sess) => sess.currentFile === currentFile)
       : sorted[0];
@@ -98,20 +98,19 @@ export function useAskSession(currentFile?: string) {
     if (matched) {
       setActiveSessionId(matched.id);
       setMessages(matched.messages);
+      setSessions([...sorted]);
     } else {
-      const fresh = createSession(currentFile);
       setActiveSessionId(fresh.id);
       setMessages([]);
-      const next = [fresh, ...sorted].slice(0, MAX_SESSIONS);
-      setSessions(next);
-      await upsertSession(fresh);
+      // Empty session lives only in memory — no upsertSession call
+      setSessions([fresh, ...sorted].slice(0, MAX_SESSIONS));
     }
   }, [currentFile]);
 
-  /** Persist current session (debounced). */
+  /** Persist current session (debounced). Only persists if session has messages. */
   const persistSession = useCallback(
     (msgs: Message[], sessionId: string | null) => {
-      if (!sessionId) return;
+      if (!sessionId || msgs.length === 0) return;
       let sessionToPersist: ChatSession | null = null;
       setSessions((prev) => {
         const now = Date.now();
@@ -141,7 +140,7 @@ export function useAskSession(currentFile?: string) {
     }
   }, []);
 
-  /** Create a brand-new session. If the current session is already empty, reuse it. */
+  /** Create a brand-new session (memory only). If current session is already empty, reuse it. */
   const resetSession = useCallback(() => {
     setSessions((prev) => {
       const active = prev.find((s) => s.id === activeSessionId);
@@ -151,24 +150,22 @@ export function useAskSession(currentFile?: string) {
       const fresh = createSession(currentFile);
       setActiveSessionId(fresh.id);
       setMessages([]);
-      const next = [fresh, ...prev]
+      // Memory only — no upsertSession call. Will be persisted on first message.
+      return [fresh, ...prev]
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, MAX_SESSIONS);
-      void upsertSession(fresh);
-      return next;
     });
   }, [currentFile, activeSessionId]);
 
-  /** Switch to an existing session. Auto-cleans abandoned empty sessions. */
+  /** Switch to an existing session. Auto-drops abandoned empty sessions from memory. */
   const loadSession = useCallback(
     (id: string) => {
       const target = sessions.find((s) => s.id === id);
       if (!target) return;
 
-      // Clean up the session we're leaving if it's empty
+      // Drop the session we're leaving if it's empty (it was never persisted, just remove from memory)
       const leaving = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : null;
       if (leaving && leaving.messages.length === 0 && leaving.id !== id) {
-        void removeSession(leaving.id);
         setSessions((prev) => prev.filter((s) => s.id !== leaving.id));
       }
 
@@ -178,10 +175,13 @@ export function useAskSession(currentFile?: string) {
     [sessions, activeSessionId],
   );
 
-  /** Delete a session. If it's the active one, create fresh. */
+  /** Delete a session. If it's the active one, create fresh (memory only). */
   const deleteSession = useCallback(
     (id: string) => {
-      void removeSession(id);
+      const target = sessions.find((s) => s.id === id);
+      // Only call removeSession if the session has messages (i.e. was persisted)
+      if (target && target.messages.length > 0) void removeSession(id);
+
       const remaining = sessions.filter((s) => s.id !== id);
       setSessions(remaining);
 
@@ -190,21 +190,22 @@ export function useAskSession(currentFile?: string) {
         setActiveSessionId(fresh.id);
         setMessages([]);
         setSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
-        void upsertSession(fresh);
+        // No upsertSession — memory only
       }
     },
     [activeSessionId, currentFile, sessions],
   );
 
   const clearAllSessions = useCallback(() => {
-    const allIds = sessions.map(s => s.id);
-    void removeSessions(allIds);
+    // Only delete sessions that have messages (were persisted)
+    const persistedIds = sessions.filter(s => s.messages.length > 0).map(s => s.id);
+    if (persistedIds.length > 0) void removeSessions(persistedIds);
 
     const fresh = createSession(currentFile);
     setActiveSessionId(fresh.id);
     setMessages([]);
     setSessions([fresh]);
-    void upsertSession(fresh);
+    // No upsertSession — memory only
   }, [currentFile, sessions]);
 
   return {

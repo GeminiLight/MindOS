@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Loader2, RefreshCw, Settings } from 'lucide-react';
+import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/hooks/useMcpData';
+import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { useLocale } from '@/lib/LocaleContext';
 import PanelHeader from './PanelHeader';
 import { AgentsPanelHubNav } from './AgentsPanelHubNav';
 import { AgentsPanelAgentGroups } from './AgentsPanelAgentGroups';
+import DiscoverAgentModal from '../agents/DiscoverAgentModal';
 
 interface AgentsPanelProps {
   active: boolean;
@@ -28,6 +30,8 @@ export default function AgentsPanel({
   const pathname = usePathname();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
+  const [showDiscoverModal, setShowDiscoverModal] = useState(false);
+  const a2a = useA2aRegistry();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -82,6 +86,9 @@ export default function AgentsPanel({
           {!mcp.loading && (
             <span className="text-2xs text-muted-foreground">
               {connected.length} {p.connected}
+              {a2a.agents.length > 0 && (
+                <> &middot; {p.a2aLabel} {a2a.agents.length}</>
+              )}
             </span>
           )}
           <button
@@ -146,7 +153,15 @@ export default function AgentsPanel({
         )}
       </div>
 
-      <div className="px-3 py-2 border-t border-border shrink-0">
+      <div className="px-3 py-2 border-t border-border shrink-0 space-y-1">
+        <button
+          type="button"
+          onClick={() => setShowDiscoverModal(true)}
+          className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+        >
+          <Globe size={11} />
+          {p.a2aDiscover}
+        </button>
         <button
           type="button"
           onClick={openAdvancedConfig}
@@ -156,6 +171,14 @@ export default function AgentsPanel({
           {p.advancedConfig}
         </button>
       </div>
+
+      <DiscoverAgentModal
+        open={showDiscoverModal}
+        onClose={() => setShowDiscoverModal(false)}
+        onDiscover={a2a.discover}
+        discovering={a2a.discovering}
+        error={a2a.error}
+      />
     </div>
   );
 }
