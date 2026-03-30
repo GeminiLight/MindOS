@@ -62,8 +62,8 @@ export class ProcessManager extends EventEmitter {
 
   /** Start MCP + Next.js, then wait for health check */
   async start(): Promise<void> {
-    // Diagnostic: trace who called start() to debug double-start issue
-    console.info('[MindOS:ProcessManager] start() called', new Error('start() call stack').stack?.split('\n').slice(1, 4).join(' <- '));
+    const t0 = Date.now();
+    console.info('[MindOS:ProcessManager] start() called');
     this.stopped = false;
     this.webProcessDied = false;
     this.webStderrLines = [];
@@ -104,6 +104,8 @@ export class ProcessManager extends EventEmitter {
       );
     }
 
+    const elapsed = Date.now() - t0;
+    console.info(`[MindOS:ProcessManager] ready in ${elapsed}ms (web port ${this.opts.webPort}, mcp port ${this.opts.mcpPort})`);
     this.emit('status-change', 'running');
     this.emit('ready');
   }
@@ -378,7 +380,7 @@ export class ProcessManager extends EventEmitter {
         hostname: '127.0.0.1',
         port,
         path: '/api/health',
-        timeout: 1500,
+        timeout: 800,  // Socket connect + response timeout (tightened from 1500ms)
       }, (res) => {
         resolve(res.statusCode === 200);
         res.resume();

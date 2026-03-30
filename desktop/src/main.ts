@@ -1061,7 +1061,7 @@ async function injectOverlay(id: string, html: string): Promise<void> {
         if (document.getElementById(_id)) return;
         const d = document.createElement('div');
         d.id = _id;
-        d.innerHTML = ${JSON.stringify(html)};
+        d.insertAdjacentHTML("beforeend", ${JSON.stringify(html)});
         document.body.appendChild(d);
       })()
     `);

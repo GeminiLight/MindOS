@@ -41,22 +41,22 @@
 
 ## P2：代码质量
 
-### [ ] ProcessManager 没有启动耗时统计
+### [x] ProcessManager 没有启动耗时统计
 - **文件**: `desktop/src/process-manager.ts`
 - **问题**: 启动慢时日志看不出时间花在哪里
 - **修复**: 各阶段记录 elapsed 时间（detect / build / spawn / health）
 
-### [ ] Node 检测顺序未优化
+### [x] Node 检测顺序未优化 (已在P0中优化，顺序已正确)
 - **文件**: `desktop/src/node-detect.ts`
 - **问题**: 7 个检测步骤没有按命中率排序，低概率的 shell login 检测放在最后但超时最长
 - **修复**: 按 bundled → system → nvm → which → shell 排序，加总超时上限
 
-### [ ] MCP health check socket 超时太宽
+### [x] MCP health check socket 超时太宽
 - **文件**: `desktop/src/process-manager.ts` (checkMcpHealth)
 - **问题**: 1500ms HTTP 超时包含 socket 创建时间，MCP 启动卡住时等太久
 - **修复**: 分离 socket timeout 和 response timeout
 
-### [ ] Overlay 注入未考虑 CSP
+### [x] Overlay 注入未考虑 CSP
 - **文件**: `desktop/src/main.ts`
 - **问题**: 用 innerHTML 注入可能被 CSP 拦截，无降级方案
 - **修复**: 用 insertAdjacentHTML 或添加 CSP 预检
