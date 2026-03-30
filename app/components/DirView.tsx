@@ -207,7 +207,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                   {entry.type === 'directory'
                     ? <FolderOpen size={22} className="text-yellow-400" />
                     : <FileIconLarge node={entry} />}
-                  <span className="text-xs text-foreground leading-snug line-clamp-2 w-full" suppressHydrationWarning>
+                  <span className="text-xs text-foreground leading-snug line-clamp-2 w-full" title={entry.name} suppressHydrationWarning>
                     {entry.name}
                   </span>
                   {entry.type === 'directory' && (
@@ -230,7 +230,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                   className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent transition-colors duration-100"
                 >
                   <FileIcon node={entry} />
-                  <span className="flex-1 text-sm text-foreground truncate" suppressHydrationWarning>
+                  <span className="flex-1 text-sm text-foreground truncate" title={entry.name} suppressHydrationWarning>
                     {entry.name}
                   </span>
                   {entry.type === 'directory' ? (
