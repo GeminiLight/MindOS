@@ -28,9 +28,9 @@ export function PanelNavRow({
     <>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">{icon}</span>
       <span className="flex-1 min-w-0">
-        <span className="block text-left text-sm font-medium text-foreground truncate">{title}</span>
+        <span className="block text-left text-sm font-medium text-foreground truncate" title={title}>{title}</span>
         {subtitle ? (
-          <span className="block text-left text-2xs text-muted-foreground truncate">{subtitle}</span>
+          <span className="block text-left text-2xs text-muted-foreground truncate" title={subtitle}>{subtitle}</span>
         ) : null}
       </span>
       {badge}
