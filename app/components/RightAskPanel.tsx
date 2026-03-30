@@ -23,12 +23,14 @@ interface RightAskPanelProps {
   onModeSwitch?: () => void;
   maximized?: boolean;
   onMaximize?: () => void;
+  /** Left offset (px) to avoid covering Rail + Sidebar when maximized */
+  sidebarOffset?: number;
 }
 
 export default function RightAskPanel({
   open, onClose, currentFile, initialMessage, onFirstMessage,
   width, onWidthChange, onWidthCommit, askMode, onModeSwitch,
-  maximized = false, onMaximize,
+  maximized = false, onMaximize, sidebarOffset = 0,
 }: RightAskPanelProps) {
   const handleMouseDown = useResizeDrag({
     width,
@@ -43,13 +45,13 @@ export default function RightAskPanel({
   return (
     <aside
       className={`
-        hidden md:flex fixed top-0 right-0 h-screen ${maximized ? 'z-50 left-0' : 'z-40'}
+        hidden md:flex fixed top-0 right-0 h-screen z-40
         flex-col bg-card border-l border-border
         transition-all duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
         ${maximized ? 'border-l-0' : ''}
       `}
-      style={maximized ? undefined : { width: `${width}px` }}
+      style={maximized ? { left: `${sidebarOffset}px` } : { width: `${width}px` }}
       role="complementary"
       aria-label="MindOS Agent panel"
     >
