@@ -57,6 +57,18 @@
 - **解决：** 新增 `isNextBuildCurrent(appDir, projectRoot)` 严格检查：build 存在 + `.mindos-build-version` 版本标记匹配 `package.json` version。main.ts 启动前门控改用此函数。版本不匹配或无标记 → 自动触发重建。crash 对话框改为附带 stderr 最后 5 行帮助诊断
 - **文件：** `desktop/src/mindos-runtime-layout.ts`, `desktop/src/main.ts`, `desktop/src/process-manager.ts`
 
+### Web 连崩 3 次的运行时防御体系
+- **背景：** 即使启动前检查通过，运行时仍可能因 OOM、端口冲突、磁盘满等原因连续 crash。原有的 crash 对话框只说"请检查 Node.js 环境"，用户无法自助定位
+- **防御 1 — Crash 日志持久化：** `ProcessManager.logCrash()` 每次 crash 写入 `~/.mindos/crash.log`（时间戳 + exit code + signal + 最后 20 行 stderr），日志自动截断到 ~100KB
+- **防御 2 — 多因诊断对话框：** crash 对话框根据 exit code 和 stderr 自动判断原因并给出针对性提示：
+  - exit code 137/9 → "内存不足 (OOM)，尝试关闭其他应用"
+  - stderr 含 ENOSPC → "磁盘空间不足，请清理磁盘"
+  - stderr 含 EADDRINUSE → "端口被占用，请关闭占用端口的程序"
+  - stderr 含 MODULE_NOT_FOUND → "构建产物过期，请运行 mindos start 重新编译"
+  - 其他 → 通用提示 + 指向 `~/.mindos/crash.log`
+- **防御 3 — 加长 respawn 间隔：** 从 1s/3s 改为 2s/5s，给 Web 进程更多恢复时间；`waitForPortOrFallback` 从 3s 改为 10s，减少 TCP TIME_WAIT 导致的连续 EADDRINUSE
+- **文件：** `desktop/src/process-manager.ts`（logCrash + 延迟调整）, `desktop/src/main.ts`（诊断逻辑）
+
 ### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
 - **现象：** Desktop 本地模式或 `mindos` CLI 起 MCP 时：`@esbuild/linux-x64` present but this platform needs `@esbuild/darwin-arm64`（或 win/linux 交叉）
 - **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
