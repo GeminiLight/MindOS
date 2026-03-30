@@ -54,9 +54,9 @@ export default function MentionPopover({ results, selectedIndex, query, onSelect
             ) : (
               <FileText size={13} className="text-muted-foreground shrink-0" />
             )}
-            <span className="truncate font-medium flex-1"><HighlightMatch text={name} query={query} /></span>
+            <span className="truncate font-medium flex-1" title={name}><HighlightMatch text={name} query={query} /></span>
             {dir && (
-              <span className="text-2xs text-muted-foreground/40 truncate max-w-[140px] shrink-0">
+              <span className="text-2xs text-muted-foreground/40 truncate max-w-[140px] shrink-0" title={dir}>
                 <HighlightMatch text={dir} query={query} />
               </span>
             )}

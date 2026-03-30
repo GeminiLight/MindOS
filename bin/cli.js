@@ -1314,6 +1314,9 @@ ${bold('Examples:')}
   space:  async () => { const p = parseArgs(process.argv.slice(3)); await spaceCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
   ask:    async () => { const p = parseArgs(process.argv.slice(3)); await askCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
   status: async () => { const p = parseArgs(process.argv.slice(3)); await statusCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  api:    async () => { const p = parseArgs(process.argv.slice(3)); await apiCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  agent:  async () => { const p = parseArgs(process.argv.slice(3)); await agentCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  search: async () => { const p = parseArgs(process.argv.slice(3)); await searchCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
 };
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
