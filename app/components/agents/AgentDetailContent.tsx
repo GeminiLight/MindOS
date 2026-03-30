@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { ArrowLeft, Server, Search, Trash2, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Globe, Server, Search, Trash2, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
 import { useMcpData } from '@/hooks/useMcpData';
+import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
@@ -21,7 +23,9 @@ import SkillDetailPopover from './SkillDetailPopover';
 export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const { t } = useLocale();
   const a = t.agentsContent;
+  const p = t.panels.agents;
   const mcp = useMcpData();
+  const a2a = useA2aRegistry();
 
   const agent = useMemo(() => mcp.agents.find((item) => item.key === agentKey), [mcp.agents, agentKey]);
   const [skillQuery, setSkillQuery] = useState('');
@@ -39,6 +43,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
   const [mcpHint, setMcpHint] = useState<string | null>(null);
   const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
+  const [a2aOpen, setA2aOpen] = useState(false);
 
   const filteredSkills = useMemo(
     () =>
@@ -355,6 +360,48 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
               })}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ═══════════ A2A CAPABILITIES ═══════════ */}
+      <section className="rounded-xl border border-border bg-card overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setA2aOpen(!a2aOpen)}
+          className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-muted/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={a2aOpen}
+        >
+          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
+            <Globe size={12} className="text-muted-foreground/50" />
+            {p.a2aCapabilities}
+          </h2>
+          <ChevronDown
+            size={13}
+            className={cn('shrink-0 text-muted-foreground/50 transition-transform duration-200', a2aOpen && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-250 ease-out',
+            a2aOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+          )}
+        >
+          <div className="overflow-hidden" {...(!a2aOpen && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
+            <div className="px-4 pb-3 pt-1 space-y-2 border-t border-border/40">
+              <div className="flex items-baseline gap-2 px-0.5 min-w-0">
+                <span className="text-2xs text-muted-foreground/50 uppercase tracking-wider shrink-0 min-w-[60px]">{p.a2aStatus}</span>
+                <span className={`text-xs font-medium ${
+                  status === 'connected' ? 'text-[var(--success)]' : 'text-muted-foreground'
+                }`}>
+                  {status === 'connected' ? p.a2aConnected : p.a2aUnavailable}
+                </span>
+              </div>
+              {a2a.agents.length === 0 && (
+                <p className="text-2xs text-muted-foreground/50">{p.a2aNoRemoteHint}</p>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 

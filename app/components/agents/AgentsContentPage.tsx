@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { useMcpData } from '@/hooks/useMcpData';
+import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import {
@@ -18,6 +19,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const { t } = useLocale();
   const a = t.agentsContent;
   const mcp = useMcpData();
+  const a2a = useA2aRegistry();
   const [copyState, setCopyState] = useState<string | null>(null);
   const pageHeader = useMemo(() => {
     if (tab === 'skills') {
@@ -86,6 +88,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           enabledSkillCount={enabledSkillCount}
           allAgents={mcp.agents}
           pulseCopy={a.workspacePulse}
+          a2aCount={a2a.agents.length}
         />
       )}
 
