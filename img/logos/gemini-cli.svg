@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#1a1a2e"/>
+  <defs>
+    <linearGradient id="gc" x1="14" y1="8" x2="34" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="30%" stop-color="#EA4335"/>
+      <stop offset="55%" stop-color="#FBBC05"/>
+      <stop offset="80%" stop-color="#34A853"/>
+      <stop offset="100%" stop-color="#4285F4"/>
+    </linearGradient>
+  </defs>
+  <!-- Gemini 4-pointed rounded star -->
+  <path d="M24 8 C24 19 29 24 40 24 C29 24 24 29 24 40 C24 29 19 24 8 24 C19 24 24 19 24 8Z" fill="url(#gc)"/>
+</svg>
