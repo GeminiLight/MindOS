@@ -442,7 +442,7 @@ export class ProcessManager extends EventEmitter {
       const wasPortConflict = lastStderr.includes('EADDRINUSE') || lastStderr.includes('address already in use');
 
       this.crashCount[which]++;
-      this.emit('crash', which, this.crashCount[which]);
+      this.emit('crash', which, this.crashCount[which], this.webStderrLines.slice(-10));
 
       if (this.crashCount[which] < 3) {
         const delay = this.crashCount[which] === 1 ? 1000 : 3000;

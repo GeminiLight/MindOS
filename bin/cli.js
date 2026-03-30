@@ -139,24 +139,24 @@ function buildIfNeeded(newRoot) {
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-const cmd       = process.argv[2];
+// ── Unified arg parsing ────────────────────────────────────────────────────
+const { command: cmd, args: cliArgs, flags: cliFlags } = parseArgs(process.argv.slice(2));
 
-// ── --version / -v ──────────────────────────────────────────────────────────
-// --help / -h is handled at entry section (resolvedCmd = null → help block)
-if (cmd === '--version' || cmd === '-v') {
+if (cliFlags.version || cliFlags.v) {
   const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version;
   console.log(`mindos/${version} node/${process.version} ${process.platform}-${process.arch}`);
   process.exit(0);
 }
 
-const isDaemon  = process.argv.includes('--daemon') || (!cmd && isDaemonMode());
-const isVerbose = process.argv.includes('--verbose');
-const extra     = process.argv.slice(3).filter(a => a !== '--daemon' && a !== '--verbose' && a !== '--turbo').join(' ');
+// Backward compat: derive legacy variables from unified flags
+const isDaemon  = cliFlags.daemon === true || (!cmd && isDaemonMode());
+const isVerbose = cliFlags.verbose === true;
+const extra     = cliArgs.filter(a => !a.startsWith('-')).join(' ');
 
 const commands = {
   // ── onboard ────────────────────────────────────────────────────────────────
   onboard: async () => {
-    const daemonFlag = process.argv.includes('--install-daemon') ? ' --install-daemon' : '';
+    const daemonFlag = cliFlags['install-daemon'] ? ' --install-daemon' : '';
     run(`node ${resolve(ROOT, 'scripts/setup.js')}${daemonFlag}`);
   },
   init:  async () => commands.onboard(),
@@ -428,8 +428,8 @@ const commands = {
   },
 
   mcp: async () => {
-    const sub = process.argv[3];
-    const restArgs = process.argv.slice(3);
+    const sub = cliArgs[0];
+    const restArgs = cliArgs;
     const hasInstallFlags = restArgs.some(a => ['-g', '--global', '-y', '--yes'].includes(a));
     if (sub === 'install' || hasInstallFlags) { await mcpInstall(); return; }
     loadConfig();
@@ -493,7 +493,7 @@ const commands = {
 
   // ── gateway ────────────────────────────────────────────────────────────────
   gateway: async () => {
-    const sub = process.argv[3];
+    const sub = cliArgs[0];
     if (!sub) {
       const row = (c, d) => `  ${cyan(c.padEnd(32))}${dim(d)}`;
       console.log(`
@@ -1047,7 +1047,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       console.log(dim('Logs are created when starting MindOS (mindos start, mindos onboard, or daemon mode).'));
       process.exit(0);
     }
-    const noFollow = process.argv.includes('--no-follow');
+    const noFollow = cliFlags['no-follow'] === true;
     if (noFollow) {
       execSync(`tail -n 100 ${LOG_PATH}`, { stdio: 'inherit' });
     } else {
@@ -1057,7 +1057,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
   // ── config ─────────────────────────────────────────────────────────────────
   config: () => {
-    const sub = process.argv[3];
+    const sub = cliArgs[0];
 
     function maskKey(val) {
       if (!val) return val;
@@ -1128,8 +1128,8 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     }
 
     if (sub === 'set') {
-      const key = process.argv[4];
-      const val = process.argv[5];
+      const key = cliArgs[1];
+      const val = cliArgs[2];
       if (!key || val === undefined) {
         console.error(red('Usage: mindos config set <key> <value>'));
         console.error(dim('  Examples:'));
@@ -1170,7 +1170,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     }
 
     if (sub === 'unset') {
-      const key = process.argv[4];
+      const key = cliArgs[1];
       if (!key) {
         console.error(red('Usage: mindos config unset <key>'));
         process.exit(1);
@@ -1218,13 +1218,13 @@ ${bold('Examples:')}
 
   // ── sync ──────────────────────────────────────────────────────────────────
   sync: async () => {
-    const sub = process.argv[3];
+    const sub = cliArgs[0];
     loadConfig();
     const mindRoot = process.env.MIND_ROOT;
 
     if (sub === 'init') {
       // Parse --non-interactive --remote <url> --branch <branch> --token <token>
-      const args = process.argv.slice(4);
+      const args = cliArgs.slice(1);
       const flagIdx = (flag) => args.indexOf(flag);
       const flagVal = (flag) => { const i = flagIdx(flag); return i >= 0 && i + 1 < args.length ? args[i + 1] : ''; };
       const nonInteractive = args.includes('--non-interactive');
@@ -1310,18 +1310,18 @@ ${bold('Examples:')}
   },
 
   // ── New modular commands (knowledge operations) ──────────────────────────
-  file:   async () => { const p = parseArgs(process.argv.slice(3)); await fileCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  space:  async () => { const p = parseArgs(process.argv.slice(3)); await spaceCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  ask:    async () => { const p = parseArgs(process.argv.slice(3)); await askCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  status: async () => { const p = parseArgs(process.argv.slice(3)); await statusCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  api:    async () => { const p = parseArgs(process.argv.slice(3)); await apiCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  agent:  async () => { const p = parseArgs(process.argv.slice(3)); await agentCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
-  search: async () => { const p = parseArgs(process.argv.slice(3)); await searchCmd.run([p.command, ...p.args].filter(Boolean), p.flags); },
+  file:   async () => fileCmd.run(cliArgs, cliFlags),
+  space:  async () => spaceCmd.run(cliArgs, cliFlags),
+  ask:    async () => askCmd.run(cliArgs, cliFlags),
+  status: async () => statusCmd.run(cliArgs, cliFlags),
+  api:    async () => apiCmd.run(cliArgs, cliFlags),
+  agent:  async () => agentCmd.run(cliArgs, cliFlags),
+  search: async () => searchCmd.run(cliArgs, cliFlags),
 };
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
-const resolvedCmd = (cmd === '--help' || cmd === '-h') ? null : (cmd || (existsSync(CONFIG_PATH) ? getStartMode() : null));
+const resolvedCmd = (cliFlags.help || cliFlags.h) ? null : (cmd || (existsSync(CONFIG_PATH) ? getStartMode() : null));
 
 if (!resolvedCmd || !commands[resolvedCmd]) {
   const pkgVersion = (() => { try { return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version; } catch { return '?'; } })();
@@ -1371,7 +1371,7 @@ ${row('--json',                            'Output in JSON (for AI agents)')}
 ${row('--help, -h',                        'Show help')}
 ${row('--version, -v',                     'Show version')}
 `);
-  const isHelp = (cmd === '--help' || cmd === '-h');
+  const isHelp = cliFlags.help || cliFlags.h;
   process.exit((cmd && !isHelp) ? 1 : 0);
 }
 

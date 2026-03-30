@@ -51,6 +51,12 @@
 - **原因：** `analyzeMindOsLayout()` 和 `main.ts` 的 build 检查仅用 `existsSync('.next')` 判断是否需要构建。但 `.next` 目录可能因中断的构建、空目录或 npm 包残留而存在却不含有效产物（无 `BUILD_ID`、无 `standalone/server.js`）。`next start` 会因找不到 build ID 直接退出
 - **解决：** 新增 `isNextBuildValid()` 检查 `.next/BUILD_ID` 或 `.next/standalone/server.js` 是否存在；`analyzeMindOsLayout` 和 `main.ts` 的 build 门控均改为调用 `isNextBuildValid()` 而非裸 `existsSync('.next')`；不完整构建会触发自动重建流程
 
+### 重装/升级后旧 `.next` 导致 Web 连崩 3 次
+- **现象：** 重装 MindOS Desktop 或 npm 升级后，Desktop 启动弹 "MindOS Service Crashed — Web 服务连续崩溃 3 次"
+- **原因：** `isNextBuildValid()` 只检查 BUILD_ID/standalone 文件是否存在，不检查版本。重装后旧 `.next` 产物仍在，BUILD_ID 存在 → 跳过构建 → 新版源码 + 旧版 .next → 不兼容 → crash 3 次
+- **解决：** 新增 `isNextBuildCurrent(appDir, projectRoot)` 严格检查：build 存在 + `.mindos-build-version` 版本标记匹配 `package.json` version。main.ts 启动前门控改用此函数。版本不匹配或无标记 → 自动触发重建。crash 对话框改为附带 stderr 最后 5 行帮助诊断
+- **文件：** `desktop/src/mindos-runtime-layout.ts`, `desktop/src/main.ts`, `desktop/src/process-manager.ts`
+
 ### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
 - **现象：** Desktop 本地模式或 `mindos` CLI 起 MCP 时：`@esbuild/linux-x64` present but this platform needs `@esbuild/darwin-arm64`（或 win/linux 交叉）
 - **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配

@@ -9,6 +9,9 @@ export interface MindOsLayoutAnalysis {
   runnable: boolean;
 }
 
+/** Sentinel file written after a successful next build in Desktop/CLI */
+export const BUILD_VERSION_FILE = '.mindos-build-version';
+
 /**
  * Check if a .next directory contains a valid production build.
  * Next.js writes BUILD_ID during `next build`; standalone mode writes server.js.
@@ -22,6 +25,44 @@ export function isNextBuildValid(appDir: string): boolean {
   // Regular build: BUILD_ID is written at the end of `next build`
   if (existsSync(path.join(nextDir, 'BUILD_ID'))) return true;
   return false;
+}
+
+/**
+ * Strict build check for pre-launch gate: build exists AND matches current package version.
+ *
+ * Returns false (= trigger rebuild) when:
+ *   - No build at all (.next missing or incomplete)
+ *   - Build version stamp missing (old build or interrupted build)
+ *   - Build version doesn't match package.json version (upgrade/reinstall)
+ *
+ * @see wiki/80-known-pitfalls.md
+ */
+export function isNextBuildCurrent(appDir: string, projectRoot: string): boolean {
+  if (!isNextBuildValid(appDir)) return false;
+
+  const nextDir = path.join(appDir, '.next');
+  const stampPath = path.join(nextDir, BUILD_VERSION_FILE);
+
+  // No version stamp = old or interrupted build, don't trust it
+  let buildVersion: string;
+  try {
+    buildVersion = readFileSync(stampPath, 'utf-8').trim();
+    if (!buildVersion) return false;
+  } catch {
+    return false;
+  }
+
+  // Compare against package.json version
+  let pkgVersion: string;
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+    pkgVersion = typeof pkg.version === 'string' ? pkg.version.trim() : '';
+    if (!pkgVersion) return true; // can't determine pkg version, trust the stamp
+  } catch {
+    return true; // can't read package.json, trust the stamp
+  }
+
+  return buildVersion === pkgVersion;
 }
 
 export function analyzeMindOsLayout(root: string): MindOsLayoutAnalysis {
