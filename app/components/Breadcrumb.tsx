@@ -29,7 +29,7 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
                 <span suppressHydrationWarning>{part}</span>
               </span>
             ) : (
-              <Link href={href} className="hover:text-foreground transition-colors truncate max-w-[200px]">
+              <Link href={href} className="px-2 py-0.5 rounded-md hover:bg-muted/50 transition-colors truncate max-w-[200px]">
                 <span suppressHydrationWarning>{part}</span>
               </Link>
             )}
