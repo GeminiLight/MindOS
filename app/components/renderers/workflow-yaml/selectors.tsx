@@ -349,54 +349,141 @@ async function fetchDirs(dirPath: string): Promise<string[]> {
   } catch { return []; }
 }
 
-export function DirPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [dirs, setDirs] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [browsePath, setBrowsePath] = useState(value || '~');
+/** Get parent directory from a path (supports / and \) */
+function getParentDir(p: string): string {
+  const trimmed = p.trim();
+  if (!trimmed) return '';
+  if (trimmed.endsWith('/') || trimmed.endsWith('\\')) return trimmed;
+  const lastSlash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSlash >= 0 ? trimmed.slice(0, lastSlash + 1) : '';
+}
 
-  const loadDirs = useCallback(async (dirPath: string) => {
-    setLoading(true);
+export function DirPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  // ── Autocomplete state ──
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const justSelectedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Browse dialog state ──
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [browsePath, setBrowsePath] = useState(value || '~');
+  const [browseDirs, setBrowseDirs] = useState<string[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+
+  // Debounced autocomplete on typing
+  useEffect(() => {
+    if (justSelectedRef.current) { justSelectedRef.current = false; return; }
+    if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    const timer = setTimeout(async () => {
+      const parent = getParentDir(value) || '~';
+      const dirs = await fetchDirs(parent);
+      if (!dirs.length) { setSuggestions([]); setShowSuggestions(false); return; }
+      const sep = parent.includes('\\') ? '\\' : '/';
+      const parentNorm = (parent.endsWith('/') || parent.endsWith('\\')) ? parent : parent + sep;
+      const full = dirs.map(d => parentNorm + d);
+      const endsWithSep = value.endsWith('/') || value.endsWith('\\');
+      const filtered = endsWithSep ? full : full.filter(f => f.startsWith(value.trim()));
+      setSuggestions(filtered.slice(0, 15));
+      setShowSuggestions(filtered.length > 0);
+      setActiveIdx(-1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [value]);
+
+  const hideSuggestions = () => { setSuggestions([]); setShowSuggestions(false); setActiveIdx(-1); };
+
+  const selectSuggestion = (val: string) => {
+    justSelectedRef.current = true;
+    onChange(val);
+    hideSuggestions();
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx(i => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeIdx]);
+    } else if (e.key === 'Escape') {
+      hideSuggestions();
+    } else if (e.key === 'Tab' && activeIdx >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeIdx]);
+    }
+  };
+
+  // Browse dialog
+  const loadBrowse = useCallback(async (dirPath: string) => {
+    setBrowseLoading(true);
     const result = await fetchDirs(dirPath);
-    setDirs(result);
-    setLoading(false);
+    setBrowseDirs(result);
+    setBrowseLoading(false);
   }, []);
 
   useEffect(() => {
-    if (open) loadDirs(browsePath);
-  }, [open, browsePath, loadDirs]);
+    if (browseOpen) loadBrowse(browsePath);
+  }, [browseOpen, browsePath, loadBrowse]);
 
   const navigateInto = (subDir: string) => {
-    const next = browsePath === '~'
-      ? `~/${subDir}`
-      : `${browsePath.replace(/\/+$/, '')}/${subDir}`;
+    const next = browsePath === '~' ? `~/${subDir}` : `${browsePath.replace(/\/+$/, '')}/${subDir}`;
     setBrowsePath(next);
   };
 
-  const selectCurrent = () => {
-    onChange(browsePath);
-    setOpen(false);
-  };
+  const selectBrowsed = () => { onChange(browsePath); setBrowseOpen(false); };
 
   const goUp = () => {
     const parts = browsePath.split('/');
     if (parts.length <= 1) return;
     parts.pop();
-    const parent = parts.join('/') || '~';
-    setBrowsePath(parent);
+    setBrowsePath(parts.join('/') || '~');
   };
 
   return (
-    <div className="flex gap-1.5">
-      <input type="text" value={value} onChange={e => onChange(e.target.value)}
-        placeholder="~/projects/my-app"
-        className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
+    <div className="relative flex gap-1.5">
+      {/* Input with autocomplete */}
+      <div className="relative flex-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={e => { onChange(e.target.value); setShowSuggestions(true); }}
+          onKeyDown={handleKeyDown}
+          onBlur={() => setTimeout(hideSuggestions, 150)}
+          onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+          placeholder="~/projects/my-app"
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <div role="listbox"
+            className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-auto max-h-[200px]">
+            {suggestions.map((s, i) => (
+              <button key={s} type="button" role="option" aria-selected={i === activeIdx}
+                onMouseDown={() => selectSuggestion(s)}
+                className={`w-full text-left px-3 py-1.5 text-xs font-mono transition-colors flex items-center gap-1.5 ${
+                  i === activeIdx ? 'bg-muted text-foreground' : 'text-foreground hover:bg-muted/50'
+                }`}>
+                <Folder size={11} className="text-[var(--amber)] shrink-0" />
+                <span className="truncate">{s}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Browse button */}
       <Dropdown
-        open={open}
-        onClose={() => setOpen(false)}
+        open={browseOpen}
+        onClose={() => setBrowseOpen(false)}
         trigger={
-          <button type="button" onClick={() => { setBrowsePath(value || '~'); setOpen(v => !v); }}
+          <button type="button" onClick={() => { setBrowsePath(value || '~'); setBrowseOpen(v => !v); }}
             className="px-2 py-1.5 rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             title="Browse directories"
           >
@@ -404,30 +491,24 @@ export function DirPicker({ value, onChange }: { value: string; onChange: (v: st
           </button>
         }
       >
-        {/* Current path + select */}
         <div className="sticky top-0 bg-card border-b border-border px-2.5 py-2 flex items-center gap-1.5">
           <span className="text-2xs font-mono text-muted-foreground truncate flex-1" title={browsePath}>{browsePath}</span>
-          <button onClick={selectCurrent}
+          <button onClick={selectBrowsed}
             className="px-2 py-0.5 text-2xs rounded font-medium bg-[var(--amber)] text-[var(--amber-foreground)] shrink-0">
             Select
           </button>
         </div>
-
-        {/* Go up */}
         {browsePath !== '~' && (
           <button onClick={goUp}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors text-muted-foreground flex items-center gap-1.5">
-            <Folder size={12} className="shrink-0" />
-            ..
+            <Folder size={12} className="shrink-0" /> ..
           </button>
         )}
-
-        {/* Subdirectories */}
-        {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
-        {!loading && dirs.length === 0 && (
+        {browseLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
+        {!browseLoading && browseDirs.length === 0 && (
           <div className="px-3 py-2 text-xs text-muted-foreground">No subdirectories</div>
         )}
-        {dirs.map(d => (
+        {browseDirs.map(d => (
           <button key={d} onClick={() => navigateInto(d)}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors text-foreground flex items-center gap-1.5">
             <Folder size={12} className="text-[var(--amber)] shrink-0" />
