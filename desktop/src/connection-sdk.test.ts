@@ -2,7 +2,7 @@
  * Tests for shared/connection.ts — normalizeAddress and testConnection
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeAddress, testConnection } from 'shared/connection';
+import { normalizeAddress, testConnection } from './connection-sdk';
 
 describe('normalizeAddress', () => {
   // ── Normal paths ──
