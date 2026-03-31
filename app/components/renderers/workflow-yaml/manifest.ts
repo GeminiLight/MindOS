@@ -2,12 +2,14 @@ import type { RendererDefinition } from '@/lib/renderers/registry';
 
 export const manifest: RendererDefinition = {
   id: 'workflow-yaml',
-  name: 'Workflow Runner (YAML)',
+  name: 'Workflow Runner',
   description: 'Execute step-by-step YAML workflows with Skills & Agent support.',
   author: 'MindOS',
   icon: '⚡',
   tags: ['workflow', 'automation', 'steps', 'ai', 'yaml'],
   builtin: true,
+  core: true,
+  appBuiltinFeature: true,
   entryPath: 'Workflows/',
   match: ({ extension, filePath }) => {
     if (extension !== 'yaml' && extension !== 'yml') return false;
