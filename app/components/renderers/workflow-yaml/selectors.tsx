@@ -32,42 +32,94 @@ function Dropdown({ trigger, children, open, onClose }: {
 
 // ─── Agent Selector ───────────────────────────────────────────────────────
 
-const KNOWN_AGENTS = ['cursor', 'claude-code', 'mindos', 'gemini'];
+interface AcpAgentInfo { id: string; name: string }
+
+/** Cache ACP agents globally */
+let _agentsCache: AcpAgentInfo[] | null = null;
+let _agentsFetching = false;
+const _agentsListeners: Array<(agents: AcpAgentInfo[]) => void> = [];
+
+function fetchAgentsOnce(cb: (agents: AcpAgentInfo[]) => void) {
+  if (_agentsCache) { cb(_agentsCache); return; }
+  _agentsListeners.push(cb);
+  if (_agentsFetching) return;
+  _agentsFetching = true;
+  fetch('/api/acp/registry').then(r => r.json()).then(data => {
+    const agents: AcpAgentInfo[] = (data.registry?.agents ?? []).map((a: { id: string; name?: string }) => ({
+      id: a.id, name: a.name || a.id,
+    }));
+    _agentsCache = agents;
+    _agentsListeners.forEach(fn => fn(agents));
+    _agentsListeners.length = 0;
+  }).catch(() => {
+    _agentsCache = [];
+    _agentsListeners.forEach(fn => fn([]));
+    _agentsListeners.length = 0;
+  });
+}
 
 export function AgentSelector({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
+  const [agents, setAgents] = useState<AcpAgentInfo[]>(_agentsCache ?? []);
+  const [query, setQuery] = useState('');
 
-  const select = (v: string | undefined) => { onChange(v); setOpen(false); };
+  useEffect(() => {
+    fetchAgentsOnce(setAgents);
+  }, []);
+
+  const filtered = query
+    ? agents.filter(a => a.id.toLowerCase().includes(query.toLowerCase()) || a.name.toLowerCase().includes(query.toLowerCase()))
+    : agents;
+
+  const select = (v: string | undefined) => { onChange(v); setOpen(false); setQuery(''); };
+
+  // Find display name for current value
+  const displayName = value ? (agents.find(a => a.id === value)?.name || value) : undefined;
 
   return (
     <Dropdown
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={() => { setOpen(false); setQuery(''); }}
       trigger={
         <button type="button" onClick={() => setOpen(v => !v)}
           className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors">
-          <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
-            {value || 'Select agent'}
+          <span className={value ? 'text-foreground truncate' : 'text-muted-foreground'}>
+            {displayName || 'Select agent'}
           </span>
-          <ChevronDown size={12} className="text-muted-foreground" />
+          <ChevronDown size={12} className="text-muted-foreground shrink-0" />
         </button>
       }
     >
+      {/* Search */}
+      <div className="sticky top-0 bg-card border-b border-border px-2.5 py-1.5">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background">
+          <Search size={11} className="text-muted-foreground shrink-0" />
+          <input type="text" value={query} onChange={e => setQuery(e.target.value)} autoFocus
+            placeholder="Search agents..."
+            className="flex-1 text-xs bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+          />
+        </div>
+      </div>
+
       <button onClick={() => select(undefined)}
         className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${!value ? 'text-[var(--amber)] font-medium' : 'text-muted-foreground'}`}>
-        (none)
+        (none — use default)
       </button>
-      {KNOWN_AGENTS.map(a => (
-        <button key={a} onClick={() => select(a)}
-          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${value === a ? 'text-[var(--amber)] font-medium' : 'text-foreground'}`}>
-          {a}
+      {filtered.slice(0, 30).map(a => (
+        <button key={a.id} onClick={() => select(a.id)}
+          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${value === a.id ? 'text-[var(--amber)] font-medium' : 'text-foreground'}`}>
+          {a.name} {a.name !== a.id && <span className="text-muted-foreground/50 ml-1">({a.id})</span>}
         </button>
       ))}
+      {agents.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
+      {agents.length > 0 && filtered.length === 0 && !query && (
+        <div className="px-3 py-2 text-xs text-muted-foreground">No ACP agents found</div>
+      )}
       <div className="border-t border-border px-2.5 py-1.5">
         <input type="text" value={custom} onChange={e => setCustom(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) { select(custom.trim()); setCustom(''); } }}
-          placeholder="Custom agent..."
+          placeholder="Custom agent ID..."
           className="w-full px-2 py-1 text-xs rounded border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>

@@ -1,4 +1,4 @@
-// Workflow step execution logic — fetches skills, constructs prompts, streams AI responses
+// Workflow step execution logic — fetches skills, resolves agents, constructs prompts, streams AI responses
 
 import type { WorkflowYaml, WorkflowStepRuntime } from './types';
 
@@ -41,15 +41,43 @@ async function fetchSkillContent(name: string, signal: AbortSignal): Promise<str
 
 /**
  * Collect all unique skill names referenced by a step (step-level + workflow-level).
- * Step-level skill takes priority; workflow-level skills provide additional context.
+ * Handles both legacy `skill` (singular) and new `skills` (array) fields.
  */
 function collectSkillNames(step: WorkflowStepRuntime, workflow: WorkflowYaml): string[] {
   const names: string[] = [];
-  if (step.skill) names.push(step.skill);
+  // Step-level skills (new array format takes priority)
+  if (step.skills?.length) {
+    for (const s of step.skills) {
+      if (!names.includes(s)) names.push(s);
+    }
+  } else if (step.skill) {
+    names.push(step.skill);
+  }
+  // Workflow-level skills
   for (const s of workflow.skills ?? []) {
     if (!names.includes(s)) names.push(s);
   }
   return names;
+}
+
+// ─── ACP Agent Resolution ────────────────────────────────────────────────
+
+/** Resolve an agent name/id to an ACP agent selection { id, name } */
+async function resolveAcpAgent(
+  agentId: string,
+  signal: AbortSignal,
+): Promise<{ id: string; name: string } | null> {
+  try {
+    const res = await fetch(`/api/acp/registry?agent=${encodeURIComponent(agentId)}`, { signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.agent?.id) {
+      return { id: data.agent.id, name: data.agent.name || agentId };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Prompt Construction ──────────────────────────────────────────────────
@@ -61,12 +89,15 @@ function buildPrompt(
 ): string {
   const allStepsSummary = workflow.steps.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
 
+  // Determine primary skill name for labeling
+  const primarySkill = step.skills?.length ? step.skills[0] : step.skill;
+
   // Build skill context block
   let skillBlock = '';
   if (skillContents.size > 0) {
     const sections: string[] = [];
     for (const [name, content] of skillContents) {
-      const isPrimary = name === step.skill;
+      const isPrimary = name === primarySkill;
       sections.push(
         `### ${isPrimary ? '[Primary] ' : ''}Skill: ${name}\n\n${content}`
       );
@@ -95,8 +126,9 @@ Be specific and actionable. Format in Markdown.`;
 /**
  * Execute a workflow step with AI:
  * 1. Fetch referenced skill(s) content
- * 2. Build prompt with injected skill context
- * 3. Stream response from /api/ask
+ * 2. Resolve ACP agent (if step.agent is set)
+ * 3. Build prompt with injected skill context
+ * 4. Stream response from /api/ask (routed to ACP agent if resolved)
  */
 export async function runStepWithAI(
   step: WorkflowStepRuntime,
@@ -121,17 +153,30 @@ export async function runStepWithAI(
     }
   }
 
-  // 2. Build prompt
+  // 2. Resolve ACP agent
+  let selectedAcpAgent: { id: string; name: string } | null = null;
+  if (step.agent) {
+    selectedAcpAgent = await resolveAcpAgent(step.agent, signal);
+    // If agent name doesn't resolve in ACP registry, skip silently
+    // (the step will run with the default MindOS agent)
+  }
+
+  // 3. Build prompt
   const prompt = buildPrompt(step, workflow, skillContents);
 
-  // 3. Stream from /api/ask
+  // 4. Stream from /api/ask
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: prompt }],
+    currentFile: filePath,
+  };
+  if (selectedAcpAgent) {
+    body.selectedAcpAgent = selectedAcpAgent;
+  }
+
   const res = await fetch('/api/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: prompt }],
-      currentFile: filePath,
-    }),
+    body: JSON.stringify(body),
     signal,
   });
 
