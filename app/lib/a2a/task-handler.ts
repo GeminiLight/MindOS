@@ -200,18 +200,18 @@ export function handleGetTask(params: GetTaskParams): A2ATask | null {
   return tasks.get(params.id) ?? null;
 }
 
-export function handleCancelTask(params: CancelTaskParams): A2ATask | null {
+export function handleCancelTask(params: CancelTaskParams): { task: A2ATask | null; reason: 'not_found' | 'not_cancelable' | 'ok' } {
   const task = tasks.get(params.id);
-  if (!task) return null;
+  if (!task) return { task: null, reason: 'not_found' };
 
   const terminalStates: TaskState[] = ['TASK_STATE_COMPLETED', 'TASK_STATE_FAILED', 'TASK_STATE_CANCELED', 'TASK_STATE_REJECTED'];
-  if (terminalStates.includes(task.status.state)) return null; // not cancelable
+  if (terminalStates.includes(task.status.state)) return { task: null, reason: 'not_cancelable' };
 
   task.status = {
     state: 'TASK_STATE_CANCELED',
     timestamp: new Date().toISOString(),
   };
-  return task;
+  return { task, reason: 'ok' };
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */

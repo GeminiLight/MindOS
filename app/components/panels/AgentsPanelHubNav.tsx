@@ -8,7 +8,7 @@ type HubCopy = {
   navOverview: string;
   navMcp: string;
   navSkills: string;
-  navA2a: string;
+  navNetwork: string;
 };
 
 export function AgentsPanelHubNav({
@@ -46,7 +46,7 @@ export function AgentsPanelHubNav({
       />
       <PanelNavRow
         icon={<Globe size={14} className={inAgentsRoute && tab === 'a2a' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navA2a}
+        title={copy.navNetwork}
         href="/agents?tab=a2a"
         active={inAgentsRoute && tab === 'a2a'}
       />

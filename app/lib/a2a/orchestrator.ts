@@ -5,7 +5,6 @@
 
 import { randomUUID } from 'crypto';
 import type {
-  RemoteAgent,
   SubTask,
   OrchestrationPlan,
   ExecutionStrategy,

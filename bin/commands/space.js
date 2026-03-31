@@ -1,10 +1,14 @@
 /**
- * mindos space — Mind Space management
+ * mindos space — Knowledge base structure management
+ *
+ * Manages the directory tree of the knowledge base.
+ * "Space" = directory + INSTRUCTION.md (AI context).
+ * All directory operations go here; file content ops go to `mindos file`.
  */
 
 import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync, renameSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
-import { bold, dim, cyan, green, red } from '../lib/colors.js';
+import { resolve, basename } from 'node:path';
+import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
 
@@ -21,15 +25,18 @@ function getMindRoot() {
 export const meta = {
   name: 'space',
   group: 'Knowledge',
-  summary: 'Mind Space management (list, create, delete, rename, info)',
+  summary: 'Knowledge base structure (ls, mkdir, rmdir, init, info, tree)',
   usage: 'mindos space <subcommand>',
   examples: [
-    'mindos space list',
-    'mindos space list --json',
+    'mindos space ls',
+    'mindos space ls "📝 笔记"',
+    'mindos space tree',
+    'mindos space mkdir "📝 笔记/新分类"',
+    'mindos space rmdir "📝 笔记/旧分类"',
+    'mindos space init "exploration"',
+    'mindos space info "📝 笔记"',
     'mindos space create "Research"',
-    'mindos space delete "Old Project"',
     'mindos space rename "Old" "New"',
-    'mindos space info "Work"',
   ],
 };
 
@@ -39,48 +46,56 @@ export async function run(args, flags) {
 
   if (!sub || flags.help || flags.h) {
     console.log(`
-${bold('mindos space')} — Mind Space management
+${bold('mindos space')} — Knowledge base structure management
 
-${bold('Subcommands:')}
-  ${cyan('list'.padEnd(20))}${dim('List all spaces')}
-  ${cyan('create <name>'.padEnd(20))}${dim('Create a new space')}
-  ${cyan('delete <name>'.padEnd(20))}${dim('Delete a space and all its files')}
-  ${cyan('rename <old> <new>'.padEnd(20))}${dim('Rename a space')}
-  ${cyan('info <name>'.padEnd(20))}${dim('Show space details')}
+${bold('Browse:')}
+  ${cyan('ls [path]'.padEnd(24))}${dim('List contents of a directory (default: root)')}
+  ${cyan('tree [path]'.padEnd(24))}${dim('Show directory tree recursively')}
+  ${cyan('info <path>'.padEnd(24))}${dim('Show directory details (type, files, modified)')}
+
+${bold('Structure:')}
+  ${cyan('create <name>'.padEnd(24))}${dim('Create a new Space (directory + INSTRUCTION.md)')}
+  ${cyan('mkdir <path>'.padEnd(24))}${dim('Create a directory (no INSTRUCTION.md)')}
+  ${cyan('rmdir <path>'.padEnd(24))}${dim('Delete a directory and all its contents')}
+  ${cyan('rename <old> <new>'.padEnd(24))}${dim('Rename or move a directory')}
+  ${cyan('init <path>'.padEnd(24))}${dim('Upgrade a directory to a Space (add INSTRUCTION.md)')}
 
 ${bold('Examples:')}
-  ${dim('mindos space list')}
-  ${dim('mindos space create "Research"')}
-  ${dim('mindos space delete "Old Project"')}
-  ${dim('mindos space rename "Old" "New"')}
+  ${dim('mindos space ls')}
+  ${dim('mindos space ls "📝 笔记" --json')}
+  ${dim('mindos space tree "⚙️ 配置"')}
+  ${dim('mindos space mkdir "📝 笔记/新分类/子分类"')}
+  ${dim('mindos space init "exploration"')}
 `);
     return;
   }
 
   switch (sub) {
-    case 'list': return spaceList(root, flags);
-    case 'ls': return spaceList(root, flags);
-    case 'create': return spaceCreate(root, args[1], flags);
-    case 'delete': case 'rm': return spaceDelete(root, args[1], flags);
-    case 'rename': case 'mv': return spaceRename(root, args[1], args[2], flags);
+    case 'ls': case 'list': return spaceLs(root, args[1], flags);
+    case 'tree': return spaceTree(root, args[1], flags);
     case 'info': return spaceInfo(root, args[1], flags);
+    case 'create': return spaceCreate(root, args[1], flags);
+    case 'mkdir': return spaceMkdir(root, args[1], flags);
+    case 'rmdir': case 'rm': case 'delete': return spaceRmdir(root, args[1], flags);
+    case 'rename': case 'mv': return spaceRename(root, args[1], args[2], flags);
+    case 'init': case 'convert': return spaceInit(root, args[1], flags);
     default:
       console.error(red(`Unknown subcommand: ${sub}`));
-      console.error(dim('Available: list, create, delete, rename, info'));
-      process.exit(EXIT.ERROR);
+      console.error(dim('Available: ls, tree, info, create, mkdir, rmdir, rename, init'));
+      process.exit(EXIT.ARGS);
   }
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function isSpace(dir) {
-  // A space is a top-level directory that contains an INSTRUCTION.md
   return existsSync(resolve(dir, 'INSTRUCTION.md'));
 }
 
 function countFiles(dir) {
   let count = 0;
   try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const e of entries) {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (e.name.startsWith('.')) continue;
       if (e.isFile()) count++;
       else if (e.isDirectory()) count += countFiles(resolve(dir, e.name));
@@ -89,133 +104,276 @@ function countFiles(dir) {
   return count;
 }
 
-function spaceList(root, flags) {
-  const entries = readdirSync(root, { withFileTypes: true });
+function resolvePath(root, relPath) {
+  const full = relPath ? resolve(root, relPath) : root;
+  if (!existsSync(full)) {
+    console.error(red(`Not found: ${relPath || '(root)'}`));
+    process.exit(EXIT.NOT_FOUND);
+  }
+  return full;
+}
+
+// ── ls: list contents of a directory ──────────────────────────────────────────
+
+function spaceLs(root, relPath, flags) {
+  const dir = resolvePath(root, relPath);
+  const entries = readdirSync(dir, { withFileTypes: true });
   const spaces = [];
+  const dirs = [];
+  const files = [];
 
   for (const e of entries) {
-    if (!e.isDirectory() || e.name.startsWith('.')) continue;
-    const full = resolve(root, e.name);
-    if (isSpace(full)) {
-      const fileCount = countFiles(full);
-      spaces.push({ name: e.name, path: e.name, fileCount });
+    if (e.name.startsWith('.')) continue;
+    const full = resolve(dir, e.name);
+    if (e.isDirectory()) {
+      const entry = { name: e.name, type: isSpace(full) ? 'space' : 'dir', fileCount: countFiles(full) };
+      (entry.type === 'space' ? spaces : dirs).push(entry);
+    } else if (e.isFile()) {
+      files.push({ name: e.name, type: 'file' });
     }
   }
 
   if (isJsonMode(flags)) {
-    output({ count: spaces.length, spaces }, flags);
+    output({ path: relPath || '.', entries: [...spaces, ...dirs, ...files] }, flags);
     return;
   }
 
-  if (spaces.length === 0) {
-    console.log(dim('No spaces found. Create one with: mindos space create "Name"'));
+  const label = relPath ? `${relPath}/` : 'Knowledge Base';
+  const total = spaces.length + dirs.length + files.length;
+  if (total === 0) {
+    console.log(dim(`\n${label} is empty.\n`));
     return;
   }
 
-  console.log(`\n${bold(`Spaces (${spaces.length}):`)}\n`);
+  console.log(`\n${bold(label)}\n`);
   for (const s of spaces) {
-    console.log(`  ${cyan(s.name.padEnd(30))}${dim(`${s.fileCount} files`)}`);
+    console.log(`  ${cyan(s.name + '/')}  ${dim(`[Space] ${s.fileCount} files`)}`);
+  }
+  for (const d of dirs) {
+    console.log(`  ${d.name}/  ${dim(`${d.fileCount} files`)}`);
+  }
+  for (const f of files) {
+    console.log(`  ${dim(f.name)}`);
+  }
+  if (dirs.length > 0 && !relPath) {
+    console.log(dim(`\n  Tip: \`mindos space init <name>\` to upgrade a directory to a Space`));
   }
   console.log();
 }
 
-function spaceCreate(root, name, flags) {
-  if (!name) {
-    console.error(red('Usage: mindos space create <name>'));
-    process.exit(EXIT.ERROR);
-  }
-  const dir = resolve(root, name);
-  if (existsSync(dir)) {
-    console.error(red(`Space already exists: ${name}`));
-    process.exit(EXIT.ERROR);
-  }
+// ── tree: recursive directory tree ────────────────────────────────────────────
 
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(resolve(dir, 'INSTRUCTION.md'), `# ${name}\n\nSpace instructions go here.\n`, 'utf-8');
+function spaceTree(root, relPath, flags) {
+  const dir = resolvePath(root, relPath);
 
   if (isJsonMode(flags)) {
-    output({ ok: true, name, path: name }, flags);
+    output({ path: relPath || '.', tree: buildTree(dir) }, flags);
     return;
   }
-  console.log(`${green('✔')} Created space: ${cyan(name)}`);
+
+  const label = relPath || 'Knowledge Base';
+  console.log(`\n${bold(label)}`);
+  printTree(dir, '');
+  console.log();
 }
 
-function spaceDelete(root, name, flags) {
-  if (!name) {
-    console.error(red('Usage: mindos space delete <name>'));
-    process.exit(EXIT.ERROR);
-  }
-  const dir = resolve(root, name);
-  if (!existsSync(dir)) {
-    console.error(red(`Space not found: ${name}`));
-    process.exit(EXIT.ERROR);
-  }
-
-  const fileCount = countFiles(dir);
-  rmSync(dir, { recursive: true, force: true });
-
-  if (isJsonMode(flags)) {
-    output({ ok: true, name, deletedFiles: fileCount }, flags);
-    return;
-  }
-  console.log(`${green('✔')} Deleted space: ${cyan(name)} (${fileCount} files removed)`);
+function buildTree(dir) {
+  const result = [];
+  try {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue;
+      const full = resolve(dir, e.name);
+      if (e.isDirectory()) {
+        result.push({ name: e.name, type: isSpace(full) ? 'space' : 'dir', children: buildTree(full) });
+      } else {
+        result.push({ name: e.name, type: 'file' });
+      }
+    }
+  } catch { /* skip */ }
+  return result;
 }
 
-function spaceRename(root, oldName, newName, flags) {
-  if (!oldName || !newName) {
-    console.error(red('Usage: mindos space rename <old-name> <new-name>'));
-    process.exit(EXIT.ERROR);
-  }
-  const oldDir = resolve(root, oldName);
-  const newDir = resolve(root, newName);
-  if (!existsSync(oldDir)) {
-    console.error(red(`Space not found: ${oldName}`));
-    process.exit(EXIT.ERROR);
-  }
-  if (existsSync(newDir)) {
-    console.error(red(`Target already exists: ${newName}`));
-    process.exit(EXIT.ERROR);
-  }
+function printTree(dir, prefix) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }).filter(e => !e.name.startsWith('.')); }
+  catch { return; }
 
-  renameSync(oldDir, newDir);
-
-  if (isJsonMode(flags)) {
-    output({ ok: true, from: oldName, to: newName }, flags);
-    return;
-  }
-  console.log(`${green('✔')} Renamed space: ${cyan(oldName)} → ${cyan(newName)}`);
+  entries.forEach((e, i) => {
+    const isLast = i === entries.length - 1;
+    const connector = isLast ? '└── ' : '├── ';
+    const full = resolve(dir, e.name);
+    if (e.isDirectory()) {
+      const tag = isSpace(full) ? cyan(' [Space]') : '';
+      console.log(`${prefix}${connector}${e.name}/${tag}`);
+      printTree(full, prefix + (isLast ? '    ' : '│   '));
+    } else {
+      console.log(`${prefix}${connector}${dim(e.name)}`);
+    }
+  });
 }
 
-function spaceInfo(root, name, flags) {
-  if (!name) {
-    console.error(red('Usage: mindos space info <name>'));
-    process.exit(EXIT.ERROR);
-  }
-  const dir = resolve(root, name);
-  if (!existsSync(dir)) {
-    console.error(red(`Space not found: ${name}`));
-    process.exit(EXIT.ERROR);
-  }
+// ── info ──────────────────────────────────────────────────────────────────────
 
-  const fileCount = countFiles(dir);
+function spaceInfo(root, relPath, flags) {
+  if (!relPath) {
+    console.error(red('Usage: mindos space info <path>'));
+    process.exit(EXIT.ARGS);
+  }
+  const dir = resolvePath(root, relPath);
   const stat = statSync(dir);
+  if (!stat.isDirectory()) {
+    console.error(red(`Not a directory: ${relPath}. Use \`mindos file read\` for files.`));
+    process.exit(EXIT.ARGS);
+  }
 
-  const info = {
-    name,
-    path: name,
-    fileCount,
-    isSpace: isSpace(dir),
-    modified: stat.mtime.toISOString(),
-  };
+  const fileCount = countFiles(dir);
+  const subdirs = readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')).length;
+  const space = isSpace(dir);
+
+  const info = { name: basename(relPath), path: relPath, type: space ? 'space' : 'dir', fileCount, subdirs, modified: stat.mtime.toISOString() };
 
   if (isJsonMode(flags)) {
     output(info, flags);
     return;
   }
 
-  console.log(`\n${bold(`Space: ${name}`)}\n`);
+  console.log(`\n${bold(relPath)}\n`);
+  console.log(`  ${dim('Type:'.padEnd(15))}${space ? cyan('Space') : 'Directory'}`);
   console.log(`  ${dim('Files:'.padEnd(15))}${fileCount}`);
-  console.log(`  ${dim('Is Space:'.padEnd(15))}${info.isSpace ? green('yes') : 'no (folder)'}`);
+  console.log(`  ${dim('Subdirs:'.padEnd(15))}${subdirs}`);
   console.log(`  ${dim('Modified:'.padEnd(15))}${info.modified}`);
+  if (!space) {
+    console.log(`\n  ${dim('Tip: `mindos space init "' + relPath + '"` to upgrade to a Space')}`);
+  }
   console.log();
+}
+
+// ── create: new Space (dir + INSTRUCTION.md) ──────────────────────────────────
+
+function spaceCreate(root, name, flags) {
+  if (!name) {
+    console.error(red('Usage: mindos space create <name>'));
+    process.exit(EXIT.ARGS);
+  }
+  const dir = resolve(root, name);
+  if (existsSync(dir)) {
+    console.error(red(`Already exists: ${name}`));
+    process.exit(EXIT.ERROR);
+  }
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolve(dir, 'INSTRUCTION.md'), `# ${basename(name)}\n\nSpace instructions go here.\n`, 'utf-8');
+  writeFileSync(resolve(dir, 'README.md'), `# ${basename(name)}\n`, 'utf-8');
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, name, type: 'space' }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Created Space: ${cyan(name)}`);
+}
+
+// ── mkdir: plain directory ────────────────────────────────────────────────────
+
+function spaceMkdir(root, relPath, flags) {
+  if (!relPath) {
+    console.error(red('Usage: mindos space mkdir <path>'));
+    process.exit(EXIT.ARGS);
+  }
+  const full = resolve(root, relPath);
+  if (existsSync(full)) {
+    if (isJsonMode(flags)) {
+      output({ ok: true, path: relPath, created: false }, flags);
+      return;
+    }
+    console.log(dim(`Already exists: ${relPath}`));
+    return;
+  }
+
+  mkdirSync(full, { recursive: true });
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, path: relPath, created: true }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Created directory: ${cyan(relPath)}`);
+}
+
+// ── rmdir: delete directory ───────────────────────────────────────────────────
+
+function spaceRmdir(root, relPath, flags) {
+  if (!relPath) {
+    console.error(red('Usage: mindos space rmdir <path>'));
+    process.exit(EXIT.ARGS);
+  }
+  const dir = resolvePath(root, relPath);
+  const fileCount = countFiles(dir);
+  rmSync(dir, { recursive: true, force: true });
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, path: relPath, deletedFiles: fileCount }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Deleted: ${cyan(relPath)} (${fileCount} files removed)`);
+}
+
+// ── rename ────────────────────────────────────────────────────────────────────
+
+function spaceRename(root, oldPath, newPath, flags) {
+  if (!oldPath || !newPath) {
+    console.error(red('Usage: mindos space rename <old-path> <new-path>'));
+    process.exit(EXIT.ARGS);
+  }
+  const oldDir = resolvePath(root, oldPath);
+  const newDir = resolve(root, newPath);
+  if (existsSync(newDir)) {
+    console.error(red(`Target already exists: ${newPath}`));
+    process.exit(EXIT.ERROR);
+  }
+
+  // Ensure parent of target exists
+  const parentDir = resolve(newDir, '..');
+  if (!existsSync(parentDir)) mkdirSync(parentDir, { recursive: true });
+
+  renameSync(oldDir, newDir);
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, from: oldPath, to: newPath }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Renamed: ${cyan(oldPath)} → ${cyan(newPath)}`);
+}
+
+// ── init: upgrade directory to Space ──────────────────────────────────────────
+
+function spaceInit(root, relPath, flags) {
+  if (!relPath) {
+    console.error(red('Usage: mindos space init <path>'));
+    process.exit(EXIT.ARGS);
+  }
+  const dir = resolve(root, relPath);
+
+  // If doesn't exist, create it + init as Space
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  if (isSpace(dir)) {
+    if (isJsonMode(flags)) {
+      output({ ok: true, path: relPath, initialized: false, message: 'already a Space' }, flags);
+      return;
+    }
+    console.log(dim(`Already a Space: ${relPath}`));
+    return;
+  }
+
+  writeFileSync(resolve(dir, 'INSTRUCTION.md'), `# ${basename(relPath)}\n\nSpace instructions go here.\n`, 'utf-8');
+  if (!existsSync(resolve(dir, 'README.md'))) {
+    writeFileSync(resolve(dir, 'README.md'), `# ${basename(relPath)}\n`, 'utf-8');
+  }
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, path: relPath, initialized: true }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Initialized Space: ${cyan(relPath)}`);
 }

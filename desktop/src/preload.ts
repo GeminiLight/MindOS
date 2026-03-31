@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Preload script — exposes safe IPC bridge to renderer.
  * Uses contextBridge for security (contextIsolation: true).

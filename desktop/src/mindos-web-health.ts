@@ -9,8 +9,7 @@ export async function verifyMindOsWebHealth(port: number, timeoutMs = 2500): Pro
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
       signal: ac.signal,
-      cache: 'no-store',
-    });
+    } as RequestInit);
     return res.ok;
   } catch {
     return false;

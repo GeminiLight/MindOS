@@ -10,6 +10,7 @@ import {
 import { readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
 import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
+import { acpTools } from '@/lib/acp/acp-tools';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -187,7 +188,7 @@ export function getOrganizeTools(): AgentTool<any>[] {
 }
 
 export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
-  const baseTools = [...knowledgeBaseTools, ...a2aTools];
+  const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
   try {
     const result = await listMcporterServers();
     const okServers = (result.servers ?? []).filter((server) => server.status === 'ok');

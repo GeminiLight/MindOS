@@ -571,6 +571,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   const renameRef = useRef<HTMLInputElement>(null);
   const { t } = useLocale();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleClick = useCallback(() => {
     if (renaming) return;
@@ -611,6 +612,12 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
     e.dataTransfer.effectAllowed = 'copy';
   }, [node.path]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   if (renaming) {
     return (
       <div className="relative px-2 py-0.5" style={{ paddingLeft: `${depth * 12 + 8}px` }}>
@@ -636,6 +643,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       <button
         onClick={handleClick}
         onDoubleClick={startRename}
+        onContextMenu={handleContextMenu}
         draggable
         onDragStart={handleDragStart}
         data-filepath={node.path}
@@ -663,6 +671,17 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
           {isPendingDelete ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
         </button>
       </div>
+      {contextMenu && (
+        <ContextMenuShell
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        >
+          <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); setContextMenu(null); }}>
+            <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
+          </button>
+        </ContextMenuShell>
+      )}
       <ConfirmDialog
         open={showDeleteConfirm}
         title={t.fileTree.delete}

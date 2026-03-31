@@ -1,0 +1,10 @@
+**/node_modules/
+**/dist/
+app/.next
+app/.claude
+app/data
+!app/data/skills
+
+my-mind/
+
+*/skills-lock.json

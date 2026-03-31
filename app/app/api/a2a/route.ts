@@ -74,12 +74,12 @@ export async function POST(req: NextRequest) {
         if (!params?.id) {
           return respond(jsonRpcError(rpc.id, A2A_ERRORS.INVALID_PARAMS));
         }
-        const task = handleCancelTask(params);
-        if (!task) {
-          return respond(jsonRpcError(rpc.id, {
-            ...A2A_ERRORS.TASK_NOT_FOUND,
-            message: 'Task not found or not cancelable',
-          }));
+        const { task, reason } = handleCancelTask(params);
+        if (reason === 'not_found') {
+          return respond(jsonRpcError(rpc.id, A2A_ERRORS.TASK_NOT_FOUND));
+        }
+        if (reason === 'not_cancelable') {
+          return respond(jsonRpcError(rpc.id, A2A_ERRORS.TASK_NOT_CANCELABLE));
         }
         return respond(jsonRpcOk(rpc.id, task));
       }

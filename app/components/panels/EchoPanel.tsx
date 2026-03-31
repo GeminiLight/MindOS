@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { UserRound, Bookmark, Sun, History, Brain } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow } from './PanelNavRow';
+import EchoSidebarStats from './EchoSidebarStats';
 import { useLocale } from '@/lib/LocaleContext';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
 
@@ -30,7 +31,7 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={e.title} maximized={maximized} onMaximize={onMaximize} />
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
         <div className="flex flex-col gap-0.5 py-1.5">
           {ECHO_SEGMENT_ORDER.map((segment) => {
             const row = rowBySegment[segment];
@@ -40,6 +41,9 @@ export default function EchoPanel({ active, maximized, onMaximize }: EchoPanelPr
               <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} />
             );
           })}
+        </div>
+        <div className="mt-auto">
+          <EchoSidebarStats />
         </div>
       </div>
     </div>

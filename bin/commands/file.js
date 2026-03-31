@@ -30,7 +30,7 @@ function resolvePath(root, filePath) {
 export const meta = {
   name: 'file',
   group: 'Knowledge',
-  summary: 'Knowledge base file operations (list, read, create, delete, search)',
+  summary: 'File content operations (list, read, create, delete, rename, search)',
   usage: 'mindos file <subcommand>',
   flags: {
     '--space <name>': 'Filter by space name',
@@ -68,9 +68,12 @@ export async function run(args, flags) {
     case 'mv': return fileRename(root, args[1], args[2], flags);
     case 'move': return fileRename(root, args[1], args[2], flags);
     case 'search': return fileSearch(root, args.slice(1).join(' '), flags);
+    case 'mkdir':
+      console.log(dim('Moved to: mindos space mkdir <path>'));
+      process.exit(EXIT.ARGS);
     default:
       console.error(red(`Unknown subcommand: ${sub}`));
-      console.error(dim('Available: list, read, create, delete, rename, move, search'));
+      console.error(dim('Available: list, read, create, delete, rename, move, mkdir, search'));
       process.exit(EXIT.ERROR);
   }
 }
@@ -283,4 +286,28 @@ function fileSearch(root, query, flags) {
     }
   }
   console.log();
+}
+
+function fileMkdir(root, dirPath, flags) {
+  if (!dirPath) {
+    console.error(red('Usage: mindos file mkdir <path>'));
+    process.exit(EXIT.ERROR);
+  }
+  const full = resolve(root, dirPath);
+  if (existsSync(full)) {
+    if (isJsonMode(flags)) {
+      output({ ok: true, path: dirPath, created: false, message: 'already exists' }, flags);
+      return;
+    }
+    console.log(dim(`Directory already exists: ${dirPath}`));
+    return;
+  }
+
+  mkdirSync(full, { recursive: true });
+
+  if (isJsonMode(flags)) {
+    output({ ok: true, path: dirPath, created: true }, flags);
+    return;
+  }
+  console.log(`${green('✔')} Created directory: ${cyan(dirPath)}`);
 }

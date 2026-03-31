@@ -65,6 +65,25 @@ export function isNextBuildCurrent(appDir: string, projectRoot: string): boolean
   return buildVersion === pkgVersion;
 }
 
+/**
+ * Check that a bundled runtime has all critical directories intact.
+ * Catches partial DMG extraction where server.js exists but static assets are missing.
+ */
+export function isBundledRuntimeIntact(root: string): boolean {
+  const required = [
+    path.join(root, 'app', '.next'),
+    path.join(root, 'mcp', 'dist', 'index.cjs'),
+  ];
+  // Static assets are critical for the web UI to render properly
+  const appDir = path.join(root, 'app');
+  const hasStandalone = existsSync(path.join(appDir, '.next', 'standalone', 'server.js'));
+  if (hasStandalone) {
+    // standalone mode needs static dir copied alongside
+    required.push(path.join(appDir, '.next', 'static'));
+  }
+  return required.every(p => existsSync(p));
+}
+
 export function analyzeMindOsLayout(root: string): MindOsLayoutAnalysis {
   let version: string | null = null;
   try {

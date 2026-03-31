@@ -56,7 +56,7 @@ import { savePids, clearPids } from './lib/pid.js';
 import { stopMindos } from './lib/stop.js';
 import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
-import { parseArgs } from './lib/command.js';
+import { parseArgs, EXIT } from './lib/command.js';
 import { MCP_AGENTS, detectAgentPresence } from './lib/mcp-agents.js';
 
 // Heavy modules — loaded lazily inside command handlers to speed up CLI cold start
@@ -215,7 +215,7 @@ const commands = {
   token: () => {
     if (!existsSync(CONFIG_PATH)) {
       console.error(red('No config found. Run `mindos onboard` first.'));
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
     let config = {};
     try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
@@ -325,7 +325,7 @@ const commands = {
         if (!ready) {
           console.error(red('\n✘ Service started but Web UI did not become ready in time.'));
           console.error(dim('  Check logs with: mindos logs\n'));
-          process.exit(1);
+          process.exit(EXIT.ERROR);
         }
         await printStartupInfo(webPort, mcpPort);
         // System notification
@@ -381,7 +381,7 @@ const commands = {
       const mcpOk = await waitForPortFree(Number(mcpPort), { retries: 60, intervalMs: 500 });
       if (!webOk || !mcpOk) {
         console.error('Ports still in use after 30s, exiting.');
-        process.exit(1);  // KeepAlive will retry after ThrottleInterval
+        process.exit(EXIT.ERROR);  // KeepAlive will retry after ThrottleInterval
       }
     } else {
       await assertPortFree(Number(webPort), 'web');
@@ -515,19 +515,19 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
 
     if (!existsSync(CONFIG_PATH)) {
       console.log(`  ${red('✘')} Config not found. Run ${cyan('mindos onboard')} first.\n`);
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
     let config;
     try {
       config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
     } catch {
       console.log(`  ${red('✘')} Failed to parse config at ${dim(CONFIG_PATH)}\n`);
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
     const mindRoot = config.mindRoot;
     if (!mindRoot || !existsSync(mindRoot)) {
       console.log(`  ${red('✘')} Knowledge base not found: ${dim(mindRoot || '(not set)')}\n`);
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
 
     // Skill operating rules are now built into SKILL.md (shipped with the app).
@@ -565,7 +565,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       err(`Config not found at ${dim(CONFIG_PATH)}`, 'config');
       if (!jsonMode) { console.log(`\n  ${dim('Run `mindos onboard` to create it.')}\n`); }
       if (jsonMode) { console.log(JSON.stringify({ ok: false, checks }, null, 2)); }
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
     let config;
     try {
@@ -719,7 +719,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         ? `\n${red('Some checks failed.')} Run ${cyan('mindos onboard')} to reconfigure.\n`
         : `\n${green('All checks passed.')}\n`);
     }
-    if (hasError) process.exit(1);
+    if (hasError) process.exit(EXIT.ERROR);
   },
 
   // ── update ─────────────────────────────────────────────────────────────────
@@ -737,7 +737,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     } catch {
       writeUpdateFailed('downloading', 'npm install failed', { fromVersion: currentVersion });
       console.error(red('Update failed. Try: npm install -g @geminilight/mindos@latest'));
-      process.exit(1);
+      process.exit(EXIT.ERROR);
     }
     if (existsSync(BUILD_STAMP)) rmSync(BUILD_STAMP);
 
@@ -820,7 +820,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
           : 'Server did not come back up in time';
         writeUpdateFailed('restarting', failMsg, vOpts);
         console.error(red(`✘ ${failMsg}. Check logs: mindos logs\n`));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
     } else {
       // Non-daemon mode: check if a MindOS instance is currently running
@@ -890,7 +890,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
             : 'Server did not come back up in time';
           writeUpdateFailed('restarting', failMsg, vOpts);
           console.error(red(`✘ ${failMsg}. Check logs: mindos logs\n`));
-          process.exit(1);
+          process.exit(EXIT.ERROR);
         }
       } else {
         // No running instance — just build and tell user to start manually
@@ -1071,12 +1071,12 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     if (sub === 'show') {
       if (!existsSync(CONFIG_PATH)) {
         console.error(red('No config found. Run `mindos onboard` first.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       let config;
       try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {
         console.error(red('Failed to parse config file.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       const display = JSON.parse(JSON.stringify(config));
       if (display.ai?.providers?.anthropic?.apiKey)
@@ -1104,14 +1104,14 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
     if (sub === 'validate') {
       if (!existsSync(CONFIG_PATH)) {
         console.error(red('No config found. Run `mindos onboard` first.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       let config;
       try {
         config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
       } catch (e) {
         console.error(red(`✘ Invalid JSON: ${e.message}`));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       const issues = [];
       if (!config.mindRoot) issues.push('missing required field: mindRoot');
@@ -1128,7 +1128,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.error(`\n${red('✘ Config has issues:')}`);
         issues.forEach(i => console.error(`  ${red('•')} ${i}`));
         console.error(`\n  ${dim('Run `mindos onboard` to fix.\n')}`);
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       console.log(`\n${green('✔ Config is valid')}\n`);
       return;
@@ -1143,16 +1143,16 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
         console.error(dim('    mindos config set port 3002'));
         console.error(dim('    mindos config set mcpPort 8788'));
         console.error(dim('    mindos config set ai.provider openai'));
-        process.exit(1);
+        process.exit(EXIT.ARGS);
       }
       if (!existsSync(CONFIG_PATH)) {
         console.error(red('No config found. Run `mindos onboard` first.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       let config;
       try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {
         console.error(red('Failed to parse config file.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       const parts = key.split('.');
       let obj = config;
@@ -1180,16 +1180,16 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       const key = cliArgs[1];
       if (!key) {
         console.error(red('Usage: mindos config unset <key>'));
-        process.exit(1);
+        process.exit(EXIT.ARGS);
       }
       if (!existsSync(CONFIG_PATH)) {
         console.error(red('No config found. Run `mindos onboard` first.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       let config;
       try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {
         console.error(red('Failed to parse config file.'));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       const parts = key.split('.');
       let obj = config;
@@ -1256,7 +1256,7 @@ ${bold('Examples:')}
         console.log(green('✔ Sync complete'));
       } catch (err) {
         console.error(red(err.message));
-        process.exit(1);
+        process.exit(EXIT.ERROR);
       }
       return;
     }
@@ -1283,7 +1283,7 @@ ${bold('Examples:')}
       if (!validSubs.includes(sub)) {
         console.error(red(`Unknown sync subcommand: ${sub}`));
         console.error(dim(`Available: ${validSubs.join(' | ')}`));
-        process.exit(1);
+        process.exit(EXIT.ARGS);
       }
     }
 

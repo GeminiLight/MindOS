@@ -46,16 +46,18 @@ describe('A2A Task Handler', () => {
   });
 
   describe('handleCancelTask', () => {
-    it('returns null for non-existent task', () => {
-      const result = handleCancelTask({ id: 'non-existent-id' });
-      expect(result).toBeNull();
+    it('returns not_found for non-existent task', () => {
+      const { task, reason } = handleCancelTask({ id: 'non-existent-id' });
+      expect(task).toBeNull();
+      expect(reason).toBe('not_found');
     });
 
-    it('returns null for already completed task', async () => {
+    it('returns not_cancelable for already completed task', async () => {
       const task = await handleSendMessage(makeMessage('search for anything'));
       // Task completes synchronously in Phase 1, so it should be completed or failed
-      const result = handleCancelTask({ id: task.id });
-      expect(result).toBeNull(); // completed tasks can't be canceled
+      const { task: canceledTask, reason } = handleCancelTask({ id: task.id });
+      expect(canceledTask).toBeNull();
+      expect(reason).toBe('not_cancelable'); // completed tasks can't be canceled
     });
   });
 
