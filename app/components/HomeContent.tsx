@@ -168,6 +168,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   'agent-inspector': Search,
   'config-panel': SlidersHorizontal,
   'todo': ListTodo,
+  'workflow-yaml': Zap,
 };
 
 /** Mini-card for built-in tools — visually distinct from plugin chips */
