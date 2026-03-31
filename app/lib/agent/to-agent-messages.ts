@@ -25,15 +25,14 @@ function buildUserContent(text: string, images?: ImagePart[]): string | any[] {
   if (!images || images.length === 0) return text;
 
   // Multimodal content: images first, then text
+  // Use pi-ai ImageContent format: { type: 'image', data: base64, mimeType }
+  // The SDK converts this to the provider-specific format (Anthropic/OpenAI) internally
   const parts: any[] = [];
   for (const img of images) {
     parts.push({
       type: 'image',
-      source: {
-        type: 'base64',
-        media_type: img.mimeType,
-        data: img.data,
-      },
+      data: img.data,
+      mimeType: img.mimeType,
     });
   }
   if (text) {
