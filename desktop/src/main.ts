@@ -22,6 +22,7 @@ import { createTray, updateTrayMenu, type TrayCallbacks } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { restoreWindowState, saveWindowState } from './window-state';
 import { setupUpdater } from './updater';
+import { setupAppMenu } from './app-menu';
 import { ConnectionMonitor } from './connection-monitor';
 import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
 import { cleanupOrphanedSshTunnel, SshTunnel } from './ssh-tunnel';
@@ -1321,6 +1322,16 @@ async function bootApp(): Promise<void> {
 
 app.whenReady().then(async () => {
   registerMindosConnectProtocol();
+
+  // Set up bilingual application menu (replaces default English-only menu on Windows/Linux)
+  setupAppMenu({
+    onOpenMindRoot: () => {
+      const configured = getEffectiveMindRootFromConfig(loadConfig());
+      shell.openPath(configured || path.join(app.getPath('home'), 'MindOS', 'mind'));
+    },
+    onChangeMode: handleChangeMode,
+    onRestartServices: handleRestartServices,
+  });
 
   ipcMain.handle('splash:action', (_e, actionId: string) => handleSplashAction(actionId));
 
