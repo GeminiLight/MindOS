@@ -65,10 +65,10 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
     setSaveSuccess(false);
     try {
       const yaml = serializeWorkflowYaml(workflow);
-      const res = await fetch('/api/files', {
+      const res = await fetch('/api/file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', path: filePath, content: yaml }),
+        body: JSON.stringify({ path: filePath, op: 'save_file', params: { content: yaml } }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
