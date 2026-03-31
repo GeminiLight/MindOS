@@ -445,9 +445,9 @@ export async function POST(req: NextRequest) {
     // Extract the last user message for agent.prompt()
     const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
     const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content : '';
-    // Extract images for prompt options (pi-ai ImageContent format)
+    // Extract images for prompt options (pi-ai ImageContent format, skip stripped)
     const lastUserImages = lastMsg?.role === 'user' && lastMsg.images?.length
-      ? lastMsg.images.map(img => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))
+      ? lastMsg.images.filter((img: any) => img.data).map((img: any) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))
       : undefined;
 
     // History = all messages except the last user message (agent.prompt adds it)

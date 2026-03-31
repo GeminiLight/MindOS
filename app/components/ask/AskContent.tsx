@@ -67,6 +67,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const isPanel = variant === 'panel';
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
@@ -486,9 +487,17 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [attachedFiles, imageUpload]);
 
   /** Handle paste — intercept images before normal text paste */
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const hasImage = await imageUpload.handlePaste(e);
-    if (hasImage) e.preventDefault();
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    // Check synchronously for image items — must preventDefault before awaiting
+    const hasImageItem = Array.from(items).some(
+      item => item.kind === 'file' && item.type.startsWith('image/')
+    );
+    if (hasImageItem) {
+      e.preventDefault();
+      void imageUpload.handlePaste(e);
+    }
   }, [imageUpload]);
 
   const handleLoadSession = useCallback((id: string) => {
@@ -726,7 +735,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title={t.hints.attachFile}>
             <Paperclip size={inputIconSize} />
           </button>
-          <button type="button" onClick={() => document.getElementById('image-upload-input')?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach image (or paste with ⌘V)">
+          <button type="button" onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach image (or paste with ⌘V)">
             <ImagePlus size={inputIconSize} />
           </button>
 
@@ -745,9 +754,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
           {/* Hidden image file input */}
           <input
+            ref={imageInputRef}
             type="file"
             className="hidden"
-            id="image-upload-input"
             multiple
             accept="image/png,image/jpeg,image/gif,image/webp"
             onChange={async (e) => {

@@ -22,13 +22,15 @@ export type { AgentMessage } from '@mariozechner/pi-agent-core';
 
 /** Build multimodal content array for user messages with images */
 function buildUserContent(text: string, images?: ImagePart[]): string | any[] {
-  if (!images || images.length === 0) return text;
+  // Filter out stripped images (empty data from persisted sessions)
+  const validImages = images?.filter(img => img.data);
+  if (!validImages || validImages.length === 0) return text;
 
   // Multimodal content: images first, then text
   // Use pi-ai ImageContent format: { type: 'image', data: base64, mimeType }
   // The SDK converts this to the provider-specific format (Anthropic/OpenAI) internally
   const parts: any[] = [];
-  for (const img of images) {
+  for (const img of validImages) {
     parts.push({
       type: 'image',
       data: img.data,
