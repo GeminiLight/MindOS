@@ -10,6 +10,7 @@ export function serializeWorkflowYaml(workflow: WorkflowYaml): string {
     title: workflow.title,
   };
   if (workflow.description) clean.description = workflow.description;
+  if (workflow.workDir) clean.workDir = workflow.workDir;
   if (workflow.skills?.length) clean.skills = workflow.skills;
   if (workflow.tools?.length) clean.tools = workflow.tools;
 
@@ -20,8 +21,11 @@ export function serializeWorkflowYaml(workflow: WorkflowYaml): string {
     };
     if (step.description) s.description = step.description;
     if (step.agent) s.agent = step.agent;
+    if (step.model) s.model = step.model;
     if (step.skill) s.skill = step.skill;
+    if (step.skills?.length) s.skills = step.skills;
     if (step.tools?.length) s.tools = step.tools;
+    if (step.context?.length) s.context = step.context;
     s.prompt = step.prompt;
     if (step.timeout) s.timeout = step.timeout;
     return s;

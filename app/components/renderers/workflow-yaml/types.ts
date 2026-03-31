@@ -7,8 +7,11 @@ export interface WorkflowStep {
   name: string;
   description?: string;
   agent?: string;
+  model?: string;
   skill?: string;
+  skills?: string[];
   tools?: string[];
+  context?: string[];
   prompt: string;
   timeout?: number;
 }
@@ -16,6 +19,7 @@ export interface WorkflowStep {
 export interface WorkflowYaml {
   title: string;
   description?: string;
+  workDir?: string;
   skills?: string[];
   tools?: string[];
   steps: WorkflowStep[];

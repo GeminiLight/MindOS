@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Trash2, GripVertical } from 'lucide-react';
-import { AgentSelector, SkillSelector } from './selectors';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { AgentSelector, ModelSelector, SkillsSelector, ContextSelector } from './selectors';
 import type { WorkflowStep } from './types';
 
 interface StepEditorProps {
@@ -19,6 +19,9 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
 
   const update = (patch: Partial<WorkflowStep>) => onChange({ ...step, ...patch });
 
+  // Merge legacy single skill into skills array for display
+  const allSkills = step.skills?.length ? step.skills : (step.skill ? [step.skill] : []);
+
   // Collapsed view: summary line
   if (!expanded) {
     return (
@@ -26,8 +29,17 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
         onClick={() => setExpanded(true)}>
         <span className="text-2xs text-muted-foreground/60 font-mono w-5 text-center shrink-0">{index + 1}</span>
         <span className="text-sm font-medium text-foreground truncate flex-1">{step.name || 'Untitled step'}</span>
-        {step.skill && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">🎓 {step.skill}</span>}
-        {step.agent && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">🤖 {step.agent}</span>}
+        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+          {allSkills.slice(0, 2).map(s => (
+            <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-[var(--amber)]/10 text-[var(--amber)] border border-[var(--amber)]/20">{s}</span>
+          ))}
+          {allSkills.length > 2 && (
+            <span className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground">+{allSkills.length - 2}</span>
+          )}
+          {step.model && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">🧠 {step.model}</span>}
+          {step.agent && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">🤖 {step.agent}</span>}
+          {step.context?.length ? <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">📎 {step.context.length}</span> : null}
+        </div>
         <ChevronDown size={12} className="text-muted-foreground/50 shrink-0" />
       </div>
     );
@@ -77,19 +89,37 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
           />
         </div>
 
-        {/* Agent + Skill row */}
+        {/* Agent + Model row */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-2xs font-medium text-muted-foreground mb-1">Agent <span className="text-muted-foreground/50">(optional)</span></label>
+            <label className="block text-2xs font-medium text-muted-foreground mb-1">Agent</label>
             <AgentSelector value={step.agent} onChange={agent => update({ agent })} />
           </div>
           <div>
-            <label className="block text-2xs font-medium text-muted-foreground mb-1">Skill <span className="text-muted-foreground/50">(optional)</span></label>
-            <SkillSelector value={step.skill} onChange={skill => update({ skill })} />
+            <label className="block text-2xs font-medium text-muted-foreground mb-1">Model</label>
+            <ModelSelector value={step.model} onChange={model => update({ model })} />
           </div>
         </div>
 
-        {/* Description (optional, collapsible) */}
+        {/* Skills (multi-select) */}
+        <div>
+          <label className="block text-2xs font-medium text-muted-foreground mb-1">Skills</label>
+          <SkillsSelector
+            value={allSkills}
+            onChange={skills => update({ skills, skill: undefined })}
+          />
+        </div>
+
+        {/* Context files */}
+        <div>
+          <label className="block text-2xs font-medium text-muted-foreground mb-1">Context files</label>
+          <ContextSelector
+            value={step.context ?? []}
+            onChange={context => update({ context: context.length ? context : undefined })}
+          />
+        </div>
+
+        {/* Description */}
         <div>
           <label className="block text-2xs font-medium text-muted-foreground mb-1">Description <span className="text-muted-foreground/50">(optional)</span></label>
           <input type="text" value={step.description || ''} onChange={e => update({ description: e.target.value || undefined })}
@@ -100,7 +130,7 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
 
         {/* Timeout */}
         <div>
-          <label className="block text-2xs font-medium text-muted-foreground mb-1">Timeout <span className="text-muted-foreground/50">(seconds, optional)</span></label>
+          <label className="block text-2xs font-medium text-muted-foreground mb-1">Timeout <span className="text-muted-foreground/50">(seconds)</span></label>
           <input type="number" min={0} value={step.timeout || ''} onChange={e => update({ timeout: e.target.value ? Number(e.target.value) : undefined })}
             placeholder="120"
             className="w-24 px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"

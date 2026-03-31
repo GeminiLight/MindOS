@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Plus, Save, Loader2 } from 'lucide-react';
+import { Plus, Save, Loader2, FolderOpen } from 'lucide-react';
 import StepEditor from './StepEditor';
 import { serializeWorkflowYaml, generateStepId } from './serializer';
 import type { WorkflowYaml, WorkflowStep } from './types';
+import { ContextSelector } from './selectors';
 
 interface WorkflowEditorProps {
   workflow: WorkflowYaml;
@@ -85,6 +86,17 @@ export default function WorkflowEditor({ workflow, filePath, onChange }: Workflo
             placeholder="What does this workflow do?"
             className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
+        </div>
+        <div>
+          <label className="block text-2xs font-medium text-muted-foreground mb-1">
+            <FolderOpen size={11} className="inline mr-1 -mt-0.5" />
+            Working directory <span className="text-muted-foreground/50">(optional)</span>
+          </label>
+          <input type="text" value={workflow.workDir || ''} onChange={e => updateMeta({ workDir: e.target.value || undefined })}
+            placeholder="e.g. ~/projects/my-app"
+            className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <p className="text-2xs text-muted-foreground/50 mt-1">All steps run relative to this directory</p>
         </div>
       </div>
 
