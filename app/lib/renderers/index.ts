@@ -10,12 +10,11 @@ import { manifest as csv } from '@/components/renderers/csv/manifest';
 import { manifest as summary } from '@/components/renderers/summary/manifest';
 import { manifest as timeline } from '@/components/renderers/timeline/manifest';
 import { manifest as todo } from '@/components/renderers/todo/manifest';
-import { manifest as workflow } from '@/components/renderers/workflow/manifest';
 import { manifest as workflowYaml } from '@/components/renderers/workflow-yaml/manifest';
 import { manifest as graph } from '@/components/renderers/graph/manifest';
 
 const manifests = [
-  agentInspector, backlinks, config, csv, summary, timeline, todo, workflow, workflowYaml, graph,
+  agentInspector, backlinks, config, csv, summary, timeline, todo, workflowYaml, graph,
 ];
 
 for (const m of manifests) {
