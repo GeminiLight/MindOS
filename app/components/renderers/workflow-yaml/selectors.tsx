@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronDown, X, Search, FileText, FolderOpen } from 'lucide-react';
+import { ChevronDown, X, Search, FileText, FolderOpen, Folder, ChevronRight } from 'lucide-react';
 
 // ─── Dropdown Shell ───────────────────────────────────────────────────────
 
@@ -330,6 +330,112 @@ export function ContextSelector({ value, onChange }: { value: string[]; onChange
           className="w-full px-2.5 py-1 text-2xs rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
+    </div>
+  );
+}
+
+// ─── Directory Picker ────────────────────────────────────────────────────
+
+async function fetchDirs(dirPath: string): Promise<string[]> {
+  try {
+    const res = await fetch('/api/setup/ls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dirPath || '~' }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.dirs ?? [];
+  } catch { return []; }
+}
+
+export function DirPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [dirs, setDirs] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [browsePath, setBrowsePath] = useState(value || '~');
+
+  const loadDirs = useCallback(async (dirPath: string) => {
+    setLoading(true);
+    const result = await fetchDirs(dirPath);
+    setDirs(result);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (open) loadDirs(browsePath);
+  }, [open, browsePath, loadDirs]);
+
+  const navigateInto = (subDir: string) => {
+    const next = browsePath === '~'
+      ? `~/${subDir}`
+      : `${browsePath.replace(/\/+$/, '')}/${subDir}`;
+    setBrowsePath(next);
+  };
+
+  const selectCurrent = () => {
+    onChange(browsePath);
+    setOpen(false);
+  };
+
+  const goUp = () => {
+    const parts = browsePath.split('/');
+    if (parts.length <= 1) return;
+    parts.pop();
+    const parent = parts.join('/') || '~';
+    setBrowsePath(parent);
+  };
+
+  return (
+    <div className="flex gap-1.5">
+      <input type="text" value={value} onChange={e => onChange(e.target.value)}
+        placeholder="~/projects/my-app"
+        className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      <Dropdown
+        open={open}
+        onClose={() => setOpen(false)}
+        trigger={
+          <button type="button" onClick={() => { setBrowsePath(value || '~'); setOpen(v => !v); }}
+            className="px-2 py-1.5 rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Browse directories"
+          >
+            <FolderOpen size={13} />
+          </button>
+        }
+      >
+        {/* Current path + select */}
+        <div className="sticky top-0 bg-card border-b border-border px-2.5 py-2 flex items-center gap-1.5">
+          <span className="text-2xs font-mono text-muted-foreground truncate flex-1" title={browsePath}>{browsePath}</span>
+          <button onClick={selectCurrent}
+            className="px-2 py-0.5 text-2xs rounded font-medium bg-[var(--amber)] text-[var(--amber-foreground)] shrink-0">
+            Select
+          </button>
+        </div>
+
+        {/* Go up */}
+        {browsePath !== '~' && (
+          <button onClick={goUp}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors text-muted-foreground flex items-center gap-1.5">
+            <Folder size={12} className="shrink-0" />
+            ..
+          </button>
+        )}
+
+        {/* Subdirectories */}
+        {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
+        {!loading && dirs.length === 0 && (
+          <div className="px-3 py-2 text-xs text-muted-foreground">No subdirectories</div>
+        )}
+        {dirs.map(d => (
+          <button key={d} onClick={() => navigateInto(d)}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors text-foreground flex items-center gap-1.5">
+            <Folder size={12} className="text-[var(--amber)] shrink-0" />
+            <span className="truncate flex-1">{d}</span>
+            <ChevronRight size={10} className="text-muted-foreground/40 shrink-0" />
+          </button>
+        ))}
+      </Dropdown>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Plus, Save, Loader2, FolderOpen, Zap, CheckCircle2 } from 'lucide-react
 import StepEditor from './StepEditor';
 import { serializeWorkflowYaml, generateStepId } from './serializer';
 import type { WorkflowYaml, WorkflowStep } from './types';
+import { DirPicker } from './selectors';
 
 interface WorkflowEditorProps {
   workflow: WorkflowYaml;
@@ -122,10 +123,7 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
               <FolderOpen size={10} className="inline mr-0.5 -mt-0.5" />
               Working dir
             </label>
-            <input type="text" value={workflow.workDir || ''} onChange={e => updateMeta({ workDir: e.target.value || undefined })}
-              placeholder="~/projects/my-app"
-              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
+            <DirPicker value={workflow.workDir || ''} onChange={v => updateMeta({ workDir: v || undefined })} />
           </div>
         </div>
       </div>
