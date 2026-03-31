@@ -1,12 +1,82 @@
 'use client';
 
-import { useMemo, useState, useRef, useCallback } from 'react';
-import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles, Zap } from 'lucide-react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles, XCircle } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
-import { useLocale } from '@/lib/LocaleContext';
 import { parseWorkflowYaml } from './parser';
-import { getStepDescription } from './parser';
-import type { WorkflowYaml, WorkflowStepRuntime, StepStatus } from './types';
+import type { WorkflowYaml, WorkflowStepRuntime, StepStatus, WorkflowStep } from './types';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+function initSteps(workflow: WorkflowYaml): WorkflowStepRuntime[] {
+  return workflow.steps.map((s, idx) => ({
+    ...s,
+    index: idx,
+    status: 'pending' as const,
+    output: '',
+    error: undefined,
+  }));
+}
+
+// ─── AI Execution ─────────────────────────────────────────────────────────
+
+async function runStepWithAI(
+  step: WorkflowStepRuntime,
+  workflow: WorkflowYaml,
+  filePath: string,
+  onChunk: (accumulated: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const allStepsSummary = workflow.steps.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
+  const skillContext = step.skill
+    ? `\n\nYou should apply the "${step.skill}" skill/standard throughout this step.`
+    : '';
+
+  const prompt = `You are executing step ${step.index + 1} of a workflow: "${step.name}".
+
+Context of the full workflow "${workflow.title}":
+${allStepsSummary}
+
+Current step instructions:
+${step.prompt || '(No specific instructions — use common sense.)'}${skillContext}
+
+Execute concisely. Provide:
+1. What you did / what the output is
+2. Any decisions made
+3. What the next step should watch out for
+
+Be specific and actionable. Format in Markdown.`;
+
+  const res = await fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: prompt }],
+      currentFile: filePath,
+    }),
+    signal,
+  });
+
+  if (!res.ok) throw new Error(`Request failed (HTTP ${res.status})`);
+  if (!res.body) throw new Error('No response body');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let acc = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const raw = decoder.decode(value, { stream: true });
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
+      if (m) {
+        acc += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        onChunk(acc);
+      }
+    }
+  }
+}
 
 // ─── Status Icon ──────────────────────────────────────────────────────────
 
@@ -26,7 +96,7 @@ const STATUS_BORDER: Record<StepStatus, string> = {
   error: 'rgba(200,80,80,0.4)',
 };
 
-// ─── Badge Component ──────────────────────────────────────────────────────
+// ─── Badge ────────────────────────────────────────────────────────────────
 
 function Badge({ emoji, label }: { emoji: string; label: string }) {
   return (
@@ -53,15 +123,16 @@ function StepCard({
   canRun,
   onRun,
   onSkip,
+  onCancel,
 }: {
   step: WorkflowStepRuntime;
   canRun: boolean;
   onRun: () => void;
   onSkip: () => void;
+  onCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDescription = step.description || step.prompt;
-  const hasOutput = step.output.length > 0;
+  const hasContent = !!(step.description || step.output || step.error);
 
   return (
     <div style={{
@@ -82,18 +153,18 @@ function StepCard({
                 fontWeight: 600,
                 fontSize: '.88rem',
                 color: 'var(--foreground)',
-                cursor: hasDescription || hasOutput ? 'pointer' : 'default',
+                cursor: hasContent ? 'pointer' : 'default',
               }}
-              onClick={() => (hasDescription || hasOutput) && setExpanded(v => !v)}
+              onClick={() => hasContent && setExpanded(v => !v)}
             >
               {step.name}
             </div>
-            {step.agent || step.skill ? (
+            {(step.agent || step.skill) && (
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                 {step.skill && <Badge emoji="🎓" label={step.skill} />}
                 {step.agent && <Badge emoji="🤖" label={step.agent} />}
               </div>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -104,14 +175,10 @@ function StepCard({
               <button
                 onClick={onRun}
                 disabled={!canRun}
-                title={!canRun ? 'Step is running' : undefined}
+                title={!canRun ? 'Another step is running' : undefined}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '3px 10px',
-                  borderRadius: 6,
-                  fontSize: '0.72rem',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
                   cursor: canRun ? 'pointer' : 'not-allowed',
                   border: 'none',
                   background: canRun ? 'var(--amber)' : 'var(--muted)',
@@ -124,12 +191,9 @@ function StepCard({
               <button
                 onClick={onSkip}
                 style={{
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontSize: '0.72rem',
+                  padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem',
                   cursor: 'pointer',
-                  border: '1px solid var(--border)',
-                  background: 'transparent',
+                  border: '1px solid var(--border)', background: 'transparent',
                   color: 'var(--muted-foreground)',
                 }}
               >
@@ -138,18 +202,26 @@ function StepCard({
             </>
           )}
           {step.status === 'running' && (
-            <span style={{ fontSize: '0.7rem', color: 'var(--amber)' }}>executing…</span>
+            <button
+              onClick={onCancel}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem',
+                cursor: 'pointer',
+                border: '1px solid var(--error)', background: 'transparent',
+                color: 'var(--error)',
+              }}
+            >
+              <XCircle size={10} /> Cancel
+            </button>
           )}
           {(step.status === 'done' || step.status === 'error') && (
             <button
               onClick={() => setExpanded(v => !v)}
               style={{
-                padding: '3px 8px',
-                borderRadius: 6,
-                fontSize: '0.72rem',
+                padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem',
                 cursor: 'pointer',
-                border: '1px solid var(--border)',
-                background: 'transparent',
+                border: '1px solid var(--border)', background: 'transparent',
                 color: 'var(--muted-foreground)',
               }}
             >
@@ -160,17 +232,17 @@ function StepCard({
       </div>
 
       {/* Body / Output */}
-      {(expanded || step.status === 'running') && (hasDescription || hasOutput) && (
+      {(expanded || step.status === 'running') && hasContent && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
           {step.description && (
-            <div style={{ padding: '10px 14px', borderBottom: hasOutput ? '1px solid var(--border)' : 'none' }}>
+            <div style={{ padding: '10px 14px', borderBottom: (step.output || step.error) ? '1px solid var(--border)' : 'none' }}>
               <p style={{ fontSize: '0.82rem', lineHeight: 1.6, color: 'var(--muted-foreground)', margin: 0 }}>
                 {step.description}
               </p>
             </div>
           )}
           {step.error && (
-            <div style={{ padding: '10px 14px', background: 'rgba(200,80,80,0.1)', borderBottom: hasOutput ? '1px solid var(--border)' : 'none' }}>
+            <div style={{ padding: '10px 14px', background: 'rgba(200,80,80,0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
                 <AlertCircle size={11} style={{ color: 'var(--error)' }} />
                 <span style={{ fontSize: '0.68rem', color: 'var(--error)', textTransform: 'uppercase' }}>Error</span>
@@ -180,7 +252,7 @@ function StepCard({
               </div>
             </div>
           )}
-          {hasOutput && (
+          {step.output && (
             <div style={{ padding: '10px 14px', background: 'var(--background)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
                 <Sparkles size={11} style={{ color: 'var(--amber)' }} />
@@ -202,55 +274,51 @@ function StepCard({
 
 export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
   const parsed = useMemo(() => parseWorkflowYaml(content), [content]);
-  const [steps, setSteps] = useState<WorkflowStepRuntime[]>(() => {
-    if (!parsed.workflow) return [];
-    return parsed.workflow.steps.map((s, idx) => ({
-      ...s,
-      index: idx,
-      status: 'pending' as const,
-      output: '',
-      error: undefined,
-    }));
-  });
+  const [steps, setSteps] = useState<WorkflowStepRuntime[]>(() =>
+    parsed.workflow ? initSteps(parsed.workflow) : []
+  );
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Reset when content changes
-  useMemo(() => {
+  // Reset when content changes externally
+  useEffect(() => {
     if (parsed.workflow) {
-      setSteps(
-        parsed.workflow.steps.map((s, idx) => ({
-          ...s,
-          index: idx,
-          status: 'pending' as const,
-          output: '',
-          error: undefined,
-        }))
-      );
+      setSteps(initSteps(parsed.workflow));
+      setRunning(false);
     }
   }, [parsed.workflow]);
 
+  const cancelExecution = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setRunning(false);
+    setSteps(prev => prev.map(s =>
+      s.status === 'running' ? { ...s, status: 'error', error: 'Cancelled by user' } : s
+    ));
+  }, []);
+
   const runStep = useCallback(async (idx: number) => {
     if (running || !parsed.workflow) return;
-    
+
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setRunning(true);
 
-    const step = steps[idx];
     setSteps(prev => prev.map((s, i) => i === idx ? { ...s, status: 'running', output: '', error: undefined } : s));
 
     try {
-      // TODO: Implement execution logic
-      // This will call /api/ask or /api/acp/session based on step.agent
-      
-      // Placeholder: simulate 2-second execution
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setSteps(prev => prev.map((s, i) =>
-        i === idx ? { ...s, status: 'done', output: 'Step completed successfully.' } : s
-      ));
+      const step = parsed.workflow.steps[idx];
+      const runtimeStep: WorkflowStepRuntime = { ...step, index: idx, status: 'running', output: '' };
+
+      await runStepWithAI(
+        runtimeStep,
+        parsed.workflow,
+        filePath,
+        (accumulated) => setSteps(prev => prev.map((s, i) => i === idx ? { ...s, output: accumulated } : s)),
+        ctrl.signal,
+      );
+      setSteps(prev => prev.map((s, i) => i === idx ? { ...s, status: 'done' } : s));
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setSteps(prev => prev.map((s, i) =>
@@ -259,7 +327,7 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
     } finally {
       setRunning(false);
     }
-  }, [running, parsed.workflow, steps]);
+  }, [running, parsed.workflow, filePath]);
 
   const skipStep = useCallback((idx: number) => {
     setSteps(prev => prev.map((s, i) => i === idx ? { ...s, status: 'skipped' } : s));
@@ -267,28 +335,19 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
+    abortRef.current = null;
     setRunning(false);
-    if (parsed.workflow) {
-      setSteps(
-        parsed.workflow.steps.map((s, idx) => ({
-          ...s,
-          index: idx,
-          status: 'pending' as const,
-          output: '',
-          error: undefined,
-        }))
-      );
-    }
+    if (parsed.workflow) setSteps(initSteps(parsed.workflow));
   }, [parsed.workflow]);
 
-  // Show parse errors
+  // Parse errors
   if (parsed.errors.length > 0) {
     return (
       <div style={{ padding: '2rem', maxWidth: 600, margin: '0 auto' }}>
         <div style={{ background: 'rgba(200,80,80,0.1)', border: '1px solid var(--error)', borderRadius: 8, padding: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <AlertCircle size={18} style={{ color: 'var(--error)' }} />
-            <span style={{ fontWeight: 600, color: 'var(--error)' }}>Failed to parse workflow</span>
+            <span style={{ fontWeight: 600, color: 'var(--error)' }}>Invalid workflow file</span>
           </div>
           <ul style={{ margin: 0, paddingLeft: '1.5rem', fontSize: '0.85rem', color: 'var(--foreground)' }}>
             {parsed.errors.map((err, i) => (
@@ -302,8 +361,11 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
 
   if (!parsed.workflow || steps.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--muted-foreground)' }}>
-        No workflow steps defined.
+      <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '0.82rem' }}>
+        <p style={{ marginBottom: 8 }}>No workflow steps defined.</p>
+        <p style={{ fontSize: '0.75rem' }}>
+          Add <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>steps:</code> with at least one step containing <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>id</code>, <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>name</code>, and <code style={{ background: 'var(--muted)', padding: '1px 5px', borderRadius: 4 }}>prompt</code>.
+        </p>
       </div>
     );
   }
@@ -316,18 +378,14 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem 0' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.2rem' }}>
-        <h1 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
-          {parsed.workflow.title}
-        </h1>
         {parsed.workflow.description && (
-          <p style={{ fontSize: '0.82rem', color: 'var(--muted-foreground)', lineHeight: 1.6, margin: '8px 0 0 0' }}>
+          <p style={{ fontSize: '0.82rem', color: 'var(--muted-foreground)', lineHeight: 1.6, margin: '0 0 12px 0' }}>
             {parsed.workflow.description}
           </p>
         )}
 
         {/* Progress + Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-          {/* Progress bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 120, height: 4, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progress}%`, background: 'var(--amber)', borderRadius: 999, transition: 'width .3s' }} />
           </div>
@@ -335,18 +393,13 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
             {doneCount}/{steps.length} done
           </span>
 
-          {/* Run next */}
           {nextPendingIdx >= 0 && (
             <button
               onClick={() => runStep(nextPendingIdx)}
               disabled={running}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 12px',
-                borderRadius: 7,
-                fontSize: '0.75rem',
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 12px', borderRadius: 7, fontSize: '0.75rem',
                 cursor: running ? 'not-allowed' : 'pointer',
                 border: 'none',
                 background: running ? 'var(--muted)' : 'var(--amber)',
@@ -359,20 +412,14 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
             </button>
           )}
 
-          {/* Reset */}
           <button
             onClick={reset}
             style={{
-              padding: '4px 10px',
-              borderRadius: 7,
-              fontSize: '0.75rem',
+              padding: '4px 10px', borderRadius: 7, fontSize: '0.75rem',
               cursor: 'pointer',
-              border: '1px solid var(--border)',
-              background: 'transparent',
+              border: '1px solid var(--border)', background: 'transparent',
               color: 'var(--muted-foreground)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
+              display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
             <RotateCcw size={11} /> Reset
@@ -389,6 +436,7 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
             canRun={!running}
             onRun={() => runStep(i)}
             onSkip={() => skipStep(i)}
+            onCancel={cancelExecution}
           />
         ))}
       </div>

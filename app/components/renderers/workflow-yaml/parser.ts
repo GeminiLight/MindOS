@@ -3,7 +3,7 @@ import type { WorkflowYaml, ParseResult, ValidationResult, WorkflowStep } from '
 
 export function parseWorkflowYaml(content: string): ParseResult {
   try {
-    const parsed = YAML.load(content) as unknown;
+    const parsed = YAML.load(content, { schema: YAML.JSON_SCHEMA }) as unknown;
     
     if (!parsed) {
       return {
@@ -84,9 +84,18 @@ export function validateWorkflowSchema(obj: unknown): ValidationResult {
   } else if (w.steps.length === 0) {
     errors.push("'steps' must have at least 1 step");
   } else {
+    const seenIds = new Set<string>();
     w.steps.forEach((step: any, idx: number) => {
       const stepErrors = validateStep(step, idx);
       errors.push(...stepErrors);
+      // Check for duplicate IDs
+      const id = step?.id;
+      if (typeof id === 'string' && id.trim()) {
+        if (seenIds.has(id)) {
+          errors.push(`steps[${idx}].id: duplicate id '${id}' (each step must have a unique id)`);
+        }
+        seenIds.add(id);
+      }
     });
   }
 
@@ -111,7 +120,7 @@ function validateStep(step: unknown, index: number): string[] {
   if (!s.id || typeof s.id !== 'string' || !s.id.trim()) {
     errors.push(`${prefix}: missing required field 'id' (non-empty string)`);
   } else if (!/^[a-z0-9_-]+$/.test(s.id)) {
-    errors.push(`${prefix}.id: must be lowercase alphanumeric, underscores, hyphens`);
+    errors.push(`${prefix}.id: '${s.id}' is invalid — use only lowercase letters, numbers, hyphens, underscores (e.g., 'run-tests')`);
   }
 
   // Validate name

@@ -40,11 +40,3 @@ export interface ValidationResult {
   valid: boolean;
   errors: string[];
 }
-
-export interface WorkflowExecutionContext {
-  workflow: WorkflowYaml;
-  steps: WorkflowStepRuntime[];
-  currentStepIndex: number;
-  isRunning: boolean;
-  globalError?: string;
-}

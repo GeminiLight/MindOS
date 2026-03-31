@@ -123,7 +123,7 @@ steps:
 `;
     const result = parseWorkflowYaml(yaml);
     expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors[0]).toContain('lowercase alphanumeric');
+    expect(result.errors[0]).toContain('invalid');
   });
 
   it('should handle YAML parse errors', () => {
@@ -155,5 +155,27 @@ steps:
     expect(result.workflow?.description).toBeUndefined();
     expect(result.workflow?.steps[0].agent).toBeUndefined();
     expect(result.workflow?.steps[0].skill).toBeUndefined();
+  });
+
+  it('should detect duplicate step IDs', () => {
+    const yaml = `
+title: Duplicate IDs
+steps:
+  - id: same
+    name: Step A
+    prompt: Do A
+  - id: same
+    name: Step B
+    prompt: Do B
+`;
+    const result = parseWorkflowYaml(yaml);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.some(e => e.includes('duplicate'))).toBe(true);
+  });
+
+  it('should handle empty file', () => {
+    const result = parseWorkflowYaml('');
+    expect(result.workflow).toBeNull();
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 });
