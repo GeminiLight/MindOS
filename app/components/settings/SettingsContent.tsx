@@ -253,7 +253,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             <button
               key={tabItem.id}
               onClick={() => setTab(tabItem.id)}
-              className={`flex items-center gap-1 px-2 py-2 text-[11px] font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-1 px-2 py-2 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
                   ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -304,7 +304,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             <button
               key={tabItem.id}
               onClick={() => setTab(tabItem.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
                   ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -333,7 +333,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
               <button
                 key={tabItem.id}
                 onClick={() => setTab(tabItem.id)}
-                className={`flex items-center gap-2 w-full px-4 py-2 text-xs font-medium transition-colors relative ${
+                className={`flex items-center gap-2 w-full px-4 py-2 text-sm font-medium transition-colors relative ${
                   tab === tabItem.id
                     ? 'text-foreground bg-muted'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
