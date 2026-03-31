@@ -47,6 +47,11 @@ export function setupUpdater(): void {
 
   autoUpdater.on('error', (err) => {
     console.error('Auto-updater error:', err.message);
+    // Notify renderer so UI can show error instead of stuck progress
+    const wins = BrowserWindow.getAllWindows();
+    for (const win of wins) {
+      win.webContents.send('update-error', { message: err.message });
+    }
   });
 
   // IPC handlers
