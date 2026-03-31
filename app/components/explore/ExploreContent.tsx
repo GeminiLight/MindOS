@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
-import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from './use-cases';
+import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from './use-cases.generated';
 import UseCaseCard from './UseCaseCard';
 
 export default function ExploreContent() {
@@ -17,13 +17,9 @@ export default function ExploreContent() {
     return true;
   });
 
-  /** Type-safe lookup for use case i18n data by id */
+  /** Dynamic lookup for use case i18n data by id (works for any number of cases) */
   const getUseCaseText = (id: string): { title: string; desc: string; prompt: string } | undefined => {
-    const map: Record<string, { title: string; desc: string; prompt: string }> = {
-      c1: e.c1, c2: e.c2, c3: e.c3, c4: e.c4, c5: e.c5,
-      c6: e.c6, c7: e.c7, c8: e.c8, c9: e.c9,
-    };
-    return map[id];
+    return (e as Record<string, any>)[id] as { title: string; desc: string; prompt: string } | undefined;
   };
 
   return (
@@ -90,6 +86,7 @@ export default function ExploreContent() {
             <UseCaseCard
               key={uc.id}
               icon={uc.icon}
+              image={uc.image ?? `/explore/${uc.id}.png`}
               title={data.title}
               description={data.desc}
               prompt={data.prompt}

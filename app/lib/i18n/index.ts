@@ -7,6 +7,7 @@ import { panelsEn, panelsZh } from './modules/panels';
 import { settingsEn, settingsZh } from './modules/settings';
 import { onboardingEn, onboardingZh } from './modules/onboarding';
 import { featuresEn, featuresZh } from './modules/features';
+import { exploreEn, exploreZh } from './generated/explore-i18n.generated';
 
 export const en = {
   ...commonEn,
@@ -17,6 +18,7 @@ export const en = {
   ...settingsEn,
   ...onboardingEn,
   ...featuresEn,
+  explore: exploreEn,
 } as const;
 
 export const zh: Widen<typeof en> = {
@@ -28,6 +30,7 @@ export const zh: Widen<typeof en> = {
   ...settingsZh,
   ...onboardingZh,
   ...featuresZh,
+  explore: exploreZh,
 };
 
 export type Locale = 'en' | 'zh';
