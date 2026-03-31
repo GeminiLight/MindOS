@@ -25,9 +25,15 @@ import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
-import { bridgeA2aToAcp } from '@/lib/acp/bridge';
-import type { A2AMessage } from '@/lib/a2a/types';
+import { createSession, promptStream, closeSession } from '@/lib/acp/session';
+import type { AcpSessionUpdate } from '@/lib/acp/types';
 import type { Message as FrontendMessage } from '@/lib/types';
+
+/** Safe JSON parse — returns {} on invalid input */
+function safeParseJson(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
 
 // ---------------------------------------------------------------------------
 // MindOS SSE format — 6 event types (front-back contract)
@@ -613,27 +619,86 @@ export async function POST(req: NextRequest) {
         // ── Route to ACP agent if selected, otherwise use MindOS agent ──
         const runAgent = async () => {
           if (selectedAcpAgent) {
-            // Route to ACP agent
+            // Route to ACP agent with real-time streaming
+            let acpSessionId: string | undefined;
             try {
-              // Convert string message to A2AMessage format
-              const acpMessage: A2AMessage = {
-                role: 'ROLE_USER',
-                parts: [{ text: lastUserContent }],
-              };
-              const acpResult = await bridgeA2aToAcp(acpMessage, selectedAcpAgent.id);
-              hasContent = true;
-              // Extract text from A2A task result
-              if (acpResult.status?.message?.parts) {
-                for (const part of acpResult.status.message.parts) {
-                  if (part.text) {
-                    send({ type: 'text_delta', delta: part.text });
-                  }
+              const acpSession = await createSession(selectedAcpAgent.id, {
+                cwd: getMindRoot(),
+              });
+              acpSessionId = acpSession.id;
+
+              await promptStream(acpSessionId, lastUserContent, (update: AcpSessionUpdate) => {
+                switch (update.type) {
+                  // Text chunks → standard text_delta
+                  case 'agent_message_chunk':
+                  case 'text':
+                    if (update.text) {
+                      hasContent = true;
+                      send({ type: 'text_delta', delta: update.text });
+                    }
+                    break;
+
+                  // Agent thinking → thinking_delta (reuses existing Anthropic thinking UI)
+                  case 'agent_thought_chunk':
+                    if (update.text) {
+                      hasContent = true;
+                      send({ type: 'thinking_delta', delta: update.text });
+                    }
+                    break;
+
+                  // Tool calls → tool_start (reuses existing tool call UI)
+                  case 'tool_call':
+                    if (update.toolCall) {
+                      hasContent = true;
+                      send({
+                        type: 'tool_start',
+                        toolCallId: update.toolCall.toolCallId,
+                        toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+                        args: safeParseJson(update.toolCall.rawInput),
+                      });
+                    }
+                    break;
+
+                  // Tool call updates → tool_end when completed/failed
+                  case 'tool_call_update':
+                    if (update.toolCall && (update.toolCall.status === 'completed' || update.toolCall.status === 'failed')) {
+                      send({
+                        type: 'tool_end',
+                        toolCallId: update.toolCall.toolCallId,
+                        output: update.toolCall.rawOutput ?? '',
+                        isError: update.toolCall.status === 'failed',
+                      });
+                    }
+                    break;
+
+                  // Plan → emit as text with structured format
+                  case 'plan':
+                    if (update.plan?.entries) {
+                      const planText = update.plan.entries
+                        .map(e => {
+                          const icon = e.status === 'completed' ? '\u2705' : e.status === 'in_progress' ? '\u26a1' : '\u23f3';
+                          return `${icon} ${e.content}`;
+                        })
+                        .join('\n');
+                      send({ type: 'text_delta', delta: `\n\n${planText}\n\n` });
+                    }
+                    break;
+
+                  // Error → stream error
+                  case 'error':
+                    send({ type: 'error', message: update.error ?? 'ACP agent error' });
+                    break;
                 }
-              }
+              });
+
               send({ type: 'done' });
             } catch (acpErr) {
               const errMsg = acpErr instanceof Error ? acpErr.message : String(acpErr);
               send({ type: 'error', message: `ACP Agent Error: ${errMsg}` });
+            } finally {
+              if (acpSessionId) {
+                await closeSession(acpSessionId).catch(() => {});
+              }
             }
             controller.close();
           } else {
