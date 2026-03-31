@@ -193,6 +193,7 @@ export default function ActivityBar({
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
+          <RailButton icon={<Zap size={18} />} label={t.sidebar.workflows ?? 'Workflows'} active={activePanel === 'workflows'} expanded={expanded} onClick={() => onWorkflowsClick ? debounced(onWorkflowsClick) : toggle('workflows')} />
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
           <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => onEchoClick ? debounced(onEchoClick) : toggle('echo')} walkthroughId="echo-panel" />
           <RailButton
@@ -208,11 +209,10 @@ export default function ActivityBar({
         {/* ── Spacer ── */}
         <div className="flex-1" />
 
-        {/* ── Secondary: Explore panels ── */}
+        {/* ── Secondary: Explore ── */}
         <div className={`${expanded ? 'mx-3' : 'mx-auto w-6'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => onDiscoverClick ? debounced(onDiscoverClick) : toggle('discover')} />
-          <RailButton icon={<Zap size={18} />} label={t.sidebar.workflows ?? 'Workflows'} active={activePanel === 'workflows'} expanded={expanded} onClick={() => onWorkflowsClick ? debounced(onWorkflowsClick) : toggle('workflows')} />
         </div>
 
         {/* ── Bottom: Action buttons (not panel toggles) ── */}
