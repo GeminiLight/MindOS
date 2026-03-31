@@ -171,7 +171,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             onClick={() => setShowCleanupConfirm(true)}
             disabled={cleaningUp}
             title={cleaningUp ? t.hints.cleanupInProgress : undefined}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
           >
             {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
             {k.cleanupExamplesButton}
@@ -202,7 +202,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           <button
             type="button"
             onClick={() => setShowPassword(v => !v)}
-            className="px-3 py-2 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            className="px-3 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
           >
             {showPassword ? 'Hide' : 'Show'}
           </button>
@@ -248,18 +248,18 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
               onClick={handleResetToken}
               disabled={resetting}
               title={resetting ? t.hints.tokenResetInProgress : undefined}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <RefreshCw size={12} className={resetting ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={resetting ? 'animate-spin' : ''} />
               {k.authTokenReset}
             </button>
             {hasToken && (
               <button
                 type="button"
                 onClick={handleClearToken}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
-              >
-                <Trash2 size={12} />
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+            >
+              <Trash2 size={14} />
                 {k.authTokenClear}
               </button>
             )}
@@ -287,9 +287,9 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </div>
           <button
             onClick={handleRestartWalkthrough}
-            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 mt-2 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={14} />
             {k.restartWalkthrough ?? 'Restart walkthrough'}
           </button>
         </div>
@@ -380,7 +380,7 @@ function MonitoringSection() {
     <div className="border-t border-border pt-5">
       <button
         onClick={() => setExpanded(v => !v)}
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
+        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <Cpu size={12} />

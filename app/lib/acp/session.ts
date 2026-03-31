@@ -125,8 +125,15 @@ export async function createSessionFromEntry(
     }, 15_000);
 
     if (newResponse.error) {
-      // Non-fatal: some agents may not support explicit session/new
-      console.warn(`ACP session/new warning for ${entry.id}: ${newResponse.error.message}`);
+      const errMsg = newResponse.error.message ?? 'session/new failed';
+      // Authentication errors are fatal — agent cannot proceed without auth
+      if (/auth/i.test(errMsg)) {
+        unsubApproval();
+        killAgent(proc);
+        throw new Error(`${entry.id}: ${errMsg}`);
+      }
+      // Other errors are non-fatal: some agents may not support explicit session/new
+      console.warn(`ACP session/new warning for ${entry.id}: ${errMsg}`);
     } else {
       const newResult = newResponse.result as Record<string, unknown> | undefined;
       if (newResult) {

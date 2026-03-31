@@ -44,10 +44,10 @@ export const CONTENT_WIDTHS = [
 ];
 
 export const FONT_SIZES = [
-  { value: '14px', label: '14px' },
-  { value: '15px', label: '15px (default)' },
-  { value: '16px', label: '16px' },
-  { value: '17px', label: '17px' },
+  { value: '14px', label: '14' },
+  { value: '15px', label: '15', isDefault: true },
+  { value: '16px', label: '16' },
+  { value: '17px', label: '17' },
 ];
 
 export const FONTS = [

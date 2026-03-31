@@ -18,9 +18,9 @@ function SegmentedControl<T extends string>({ options, value, onChange }: {
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
             value === opt.value
-              ? 'bg-card text-foreground shadow-sm'
+              ? 'bg-[var(--amber-subtle)] text-foreground shadow-sm border border-[var(--amber)]/30'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -38,7 +38,7 @@ function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label:
     <div className="space-y-2.5">
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground">{icon}</span>
-        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
       </div>
       {children}
     </div>
@@ -65,7 +65,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
               key={f.value}
               type="button"
               onClick={() => setFont(f.value)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
                 font === f.value
                   ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
                   : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -92,13 +92,13 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
               key={s.value}
               type="button"
               onClick={() => setFontSize(s.value)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
                 fontSize === s.value
                   ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
                   : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
-              {s.label}
+              {s.label}{s.isDefault ? <span className="ml-1 text-muted-foreground/60 text-xs font-normal">px</span> : <span className="ml-0.5 text-muted-foreground/60 text-xs font-normal">px</span>}
             </button>
           ))}
         </div>
@@ -115,7 +115,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
               key={w.value}
               type="button"
               onClick={() => setContentWidth(w.value)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
                 contentWidth === w.value
                   ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
                   : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -170,14 +170,14 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         />
       </SettingGroup>
 
-      <p className="text-xs text-muted-foreground/60 px-0.5">{a.browserNote}</p>
+      <p className="text-xs text-muted-foreground/50 px-0.5">{a.browserNote}</p>
 
       {/* Keyboard Shortcuts */}
       <div className="border-t border-border pt-4">
         <button
           type="button"
           onClick={() => setShowShortcuts(!showShortcuts)}
-          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           {showShortcuts ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           {t.settings.tabs.shortcuts}
@@ -186,7 +186,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
           <div className="mt-3 space-y-0.5">
             {t.shortcuts.map((s: { readonly description: string; readonly keys: readonly string[] }, i: number) => (
               <div key={i} className="flex items-center justify-between py-1.5 px-1">
-                <span className="text-xs text-foreground">{s.description}</span>
+                <span className="text-sm text-foreground">{s.description}</span>
                 <div className="flex items-center gap-1">
                   {s.keys.map((k: string, j: number) => (
                     <kbd key={j} className="px-1.5 py-0.5 text-2xs font-mono bg-muted border border-border rounded text-muted-foreground">{k}</kbd>

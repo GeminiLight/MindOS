@@ -11,6 +11,7 @@ import { readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skil
 import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
+import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -37,6 +38,30 @@ function formatToolError(error: unknown): string {
 
 function textResult(text: string): AgentToolResult<Record<string, never>> {
   return { content: [{ type: 'text', text }], details: {} as Record<string, never> };
+}
+
+/** Build a compact diff summary for tool output. Max 30 diff lines to avoid bloating agent context. */
+function buildDiffSummary(before: string, after: string): string {
+  if (before === after) return '';
+  const raw = buildLineDiff(before, after);
+  const inserts = raw.filter(r => r.type === 'insert').length;
+  const deletes = raw.filter(r => r.type === 'delete').length;
+  const stats = `+${inserts} −${deletes}`;
+  const collapsed = collapseDiffContext(raw, 2);
+  const MAX_DIFF_LINES = 30;
+  const lines: string[] = [];
+  for (const row of collapsed) {
+    if (lines.length >= MAX_DIFF_LINES) { lines.push('... (diff truncated)'); break; }
+    if (row.type === 'gap') { lines.push(`  ... ${row.count} lines unchanged ...`); continue; }
+    const prefix = row.type === 'insert' ? '+' : row.type === 'delete' ? '-' : ' ';
+    lines.push(`${prefix} ${row.text}`);
+  }
+  return `(${stats})\n\n--- changes ---\n${lines.join('\n')}`;
+}
+
+/** Safe read — returns empty string if file doesn't exist */
+function safeReadContent(filePath: string): string {
+  try { return getFileContent(filePath); } catch { return ''; }
 }
 
 /** Safe execute wrapper — catches all errors, returns error text (never throws) */
@@ -527,8 +552,10 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     description: 'Overwrite the entire content of an existing file. Use read_file first to see current content. Prefer update_section or insert_after_heading for partial edits.',
     parameters: WriteFileParams,
     execute: safeExecute(async (_id, params: Static<typeof WriteFileParams>) => {
+      const before = safeReadContent(params.path);
       saveFileContent(params.path, params.content);
-      return textResult(`File written: ${params.path}`);
+      const diff = buildDiffSummary(before, params.content);
+      return textResult(`File written: ${params.path}${diff ? ' ' + diff : ''}`);
     }),
   },
 
@@ -538,8 +565,10 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically. Does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use create_space to create a Space.',
     parameters: CreateFileParams,
     execute: safeExecute(async (_id, params: Static<typeof CreateFileParams>) => {
-      createFile(params.path, params.content ?? '');
-      return textResult(`File created: ${params.path}`);
+      const content = params.content ?? '';
+      createFile(params.path, content);
+      const lineCount = content.split('\n').length;
+      return textResult(`File created: ${params.path} (+${lineCount})\n\n--- changes ---\n${content.split('\n').slice(0, 30).map(l => '+ ' + l).join('\n')}${lineCount > 30 ? '\n... (truncated)' : ''}`);
     }),
   },
 

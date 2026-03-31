@@ -127,7 +127,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
           disabled={disabled}
           title={disabled ? t.hints.testInProgressOrNoKey : undefined}
           onClick={() => handleTestKey(providerName)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {result.state === 'testing' ? (
             <>
@@ -239,7 +239,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
 
       {/* Agent Behavior */}
       <div className="pt-3 border-t border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t.settings.agent.title}</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">{t.settings.agent.title}</h3>
 
         <div className="space-y-4">
           <Field label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
@@ -395,7 +395,7 @@ function ModelInput({
           disabled={!hasKey || loading}
           onClick={fetchModels}
           title={t.settings.ai.listModels}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
           {loading ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
           {t.settings.ai.listModels}
@@ -408,7 +408,7 @@ function ModelInput({
             <button
               key={m}
               type="button"
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors ${m === value ? 'bg-accent/60 font-medium' : ''}`}
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${m === value ? 'bg-accent/60 font-medium' : ''}`}
               onClick={() => { onChange(m); setOpen(false); }}
             >
               {m}

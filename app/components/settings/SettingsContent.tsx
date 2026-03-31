@@ -204,18 +204,18 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             <button
               onClick={restoreFromEnv}
               disabled={saving || !data}
-              className={`flex items-center gap-1.5 ${isPanel ? 'px-2.5 py-1 text-[11px] rounded-md' : 'px-3 py-1 text-xs rounded-lg'} border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
+              className={`flex items-center gap-1.5 ${isPanel ? 'px-2.5 py-1 text-xs rounded-md' : 'px-3 py-1.5 text-sm rounded-lg'} border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
             >
-              <RotateCcw size={isPanel ? 11 : 12} />
+              <RotateCcw size={isPanel ? 12 : 13} />
               {t.settings.ai.restoreFromEnv}
             </button>
           )}
           {tab === 'knowledge' && (
             <a
               href="/setup?force=1"
-              className={`flex items-center gap-1.5 ${isPanel ? 'px-2.5 py-1 text-[11px] rounded-md' : 'px-3 py-1 text-xs rounded-lg'} border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors`}
+              className={`flex items-center gap-1.5 ${isPanel ? 'px-2.5 py-1 text-xs rounded-md' : 'px-3 py-1.5 text-sm rounded-lg'} border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors`}
             >
-              <RotateCcw size={isPanel ? 11 : 12} />
+              <RotateCcw size={isPanel ? 12 : 13} />
               {t.settings.reconfigure}
             </a>
           )}
@@ -253,7 +253,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             <button
               key={tabItem.id}
               onClick={() => setTab(tabItem.id)}
-              className={`flex items-center gap-1 px-2 py-2 text-[11px] font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-1 px-2 py-2 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
                   ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -304,7 +304,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
             <button
               key={tabItem.id}
               onClick={() => setTab(tabItem.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 tab === tabItem.id
                   ? 'border-[var(--amber)] text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -333,7 +333,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
               <button
                 key={tabItem.id}
                 onClick={() => setTab(tabItem.id)}
-                className={`flex items-center gap-2 w-full px-4 py-2 text-xs font-medium transition-colors relative ${
+                className={`flex items-center gap-2 w-full px-4 py-2 text-sm font-medium transition-colors relative ${
                   tab === tabItem.id
                     ? 'text-foreground bg-muted'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'

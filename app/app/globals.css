@@ -166,10 +166,10 @@ body {
   font-family: var(--prose-font-override, 'Lora', Georgia, serif);
   color: var(--prose-body);
   line-height: 1.85;
-  font-size: 0.95rem;
+  font-size: var(--prose-font-size-override, 0.95rem);
 }
 @media (min-width: 640px) {
-  .prose { font-size: 1rem; }
+  .prose { font-size: var(--prose-font-size-override, 1rem); }
 }
 .prose h1, .prose h2, .prose h3, .prose h4 {
   font-family: 'IBM Plex Sans', sans-serif;
