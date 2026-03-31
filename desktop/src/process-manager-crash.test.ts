@@ -50,6 +50,8 @@ describe('ProcessManager crash handler race condition', () => {
 
     // Skip the health check by stubbing waitForReady to resolve immediately
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    // Mock checkMcpHealth so it resolves immediately (no real HTTP)
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     await pm.start();
   });
@@ -72,8 +74,6 @@ describe('ProcessManager crash handler race condition', () => {
   });
 
   it('crash handler respawns MCP on genuine crash (after delay)', async () => {
-    vi.useFakeTimers();
-
     const spawnCallsBefore = spawnMock.mock.calls.length;
 
     mcpProc.emit('exit', 1, null);
@@ -81,11 +81,11 @@ describe('ProcessManager crash handler race condition', () => {
     // Before delay: no respawn yet
     expect(spawnMock.mock.calls.length).toBe(spawnCallsBefore);
 
-    // After 1s delay: should respawn
-    await vi.advanceTimersByTimeAsync(1500);
+    // Crash handler delay is 2000ms for first crash, then async checkMcpHealth
+    // Use real timers and wait enough for the full async chain
+    await new Promise(r => setTimeout(r, 2500));
 
     expect(spawnMock.mock.calls.length).toBe(spawnCallsBefore + 1);
-    vi.useRealTimers();
   });
 
   it('suppressMcpCrashRestart resets crash count', () => {
