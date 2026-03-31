@@ -73,8 +73,8 @@ export function UninstallTab() {
         className="mt-0.5 form-check"
       />
       <div>
-        <p className="text-xs font-medium text-foreground">{label}</p>
-        <p className="text-[11px] text-muted-foreground">{desc}</p>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{desc}</p>
       </div>
     </label>
   );
@@ -116,7 +116,7 @@ export function UninstallTab() {
       {phase === 'idle' && (
         <button
           onClick={() => setPhase('confirming')}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-3.5 py-2 text-sm font-medium rounded-lg bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Trash2 size={12} className="inline mr-1.5 -mt-px" />
           {u.confirmButton}
@@ -129,13 +129,13 @@ export function UninstallTab() {
           <div className="flex gap-2">
             <button
               onClick={handleUninstall}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-error text-white hover:bg-error/90 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+              className="px-3.5 py-2 text-sm font-medium rounded-lg bg-error text-white hover:bg-error/90 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
             >
               {u.confirmButton}
             </button>
             <button
               onClick={() => setPhase('idle')}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-foreground hover:bg-muted/80 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+              className="px-3.5 py-2 text-sm font-medium rounded-lg bg-muted text-foreground hover:bg-muted/80 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
             >
               {u.cancelButton}
             </button>

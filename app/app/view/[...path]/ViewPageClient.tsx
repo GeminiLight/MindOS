@@ -276,10 +276,14 @@ export default function ViewPageClient({
   const [fileUpdated, setFileUpdated] = useState(false);
   const [changedLines, setChangedLines] = useState<number[]>([]);
   const prevContentRef = useRef(content);
+  const aiTriggeredRef = useRef(false);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // When content prop changes (after router.refresh), compute diff highlights
+  // When content prop changes after an AI-triggered refresh, compute diff highlights
   useEffect(() => {
-    if (!editing && content !== prevContentRef.current && prevContentRef.current !== '') {
+    if (!editing && aiTriggeredRef.current && content !== prevContentRef.current && prevContentRef.current !== '') {
+      aiTriggeredRef.current = false;
       const diff = buildLineDiff(prevContentRef.current, content);
       const lines: number[] = [];
       let lineNum = 1;
@@ -290,13 +294,13 @@ export default function ViewPageClient({
         } else if (row.type === 'equal') {
           lineNum++;
         }
-        // deleted lines don't increment new line number
       }
       if (lines.length > 0) {
         setChangedLines(lines);
-        // Fade out highlights after 6 seconds
-        setTimeout(() => setChangedLines([]), 6000);
-        // Auto-scroll to first changed line
+        // Clear previous timer if any
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => setChangedLines([]), 6000);
+        // Auto-scroll to change banner
         setTimeout(() => {
           const el = document.querySelector('[data-highlight-line]');
           if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -307,14 +311,24 @@ export default function ViewPageClient({
   }, [content, editing]);
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const handler = () => {
       if (editing) return;
-      router.refresh();
-      setFileUpdated(true);
-      setTimeout(() => setFileUpdated(false), 3000);
+      // Debounce rapid file changes (AI may write multiple files in sequence)
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        aiTriggeredRef.current = true;
+        router.refresh();
+        setFileUpdated(true);
+        if (updatedTimerRef.current) clearTimeout(updatedTimerRef.current);
+        updatedTimerRef.current = setTimeout(() => setFileUpdated(false), 3000);
+      }, 300);
     };
     window.addEventListener('mindos:files-changed', handler);
-    return () => window.removeEventListener('mindos:files-changed', handler);
+    return () => {
+      window.removeEventListener('mindos:files-changed', handler);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [editing, router]);
 
   return (

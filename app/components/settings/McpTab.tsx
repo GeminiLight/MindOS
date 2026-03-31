@@ -135,7 +135,7 @@ function McpStatusCard({ status, restarting, onRestart, onRefresh, m }: {
   if (!status) return null;
   return (
     <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
-      <div className="flex items-center gap-2.5 text-xs">
+      <div className="flex items-center gap-2.5 text-sm">
         {restarting ? (
           <>
             <Loader2 size={12} className="animate-spin text-[var(--amber)]" />
@@ -161,13 +161,13 @@ function McpStatusCard({ status, restarting, onRestart, onRefresh, m }: {
       <div className="flex items-center gap-2">
         {!status.running && !restarting && (
           <button onClick={onRestart}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors">
-            <RotateCcw size={12} /> {m?.restart ?? 'Restart'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors">
+            <RotateCcw size={14} /> {m?.restart ?? 'Restart'}
           </button>
         )}
         <button onClick={onRefresh}
           className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-          <RefreshCw size={12} />
+          <RefreshCw size={14} />
         </button>
       </div>
     </div>
@@ -257,19 +257,19 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
           <div className="flex items-center rounded-lg border border-border overflow-hidden w-fit">
             <button
               onClick={() => onTransportChange('stdio')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors ${
                 transport === 'stdio' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Monitor size={12} /> {m?.transportLocal ?? 'Local (stdio)'}
+              <Monitor size={14} /> {m?.transportLocal ?? 'Local (stdio)'}
             </button>
             <button
               onClick={() => onTransportChange('http')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors ${
                 transport === 'http' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Globe size={12} /> {m?.transportRemote ?? 'Remote (HTTP)'}
+              <Globe size={14} /> {m?.transportRemote ?? 'Remote (HTTP)'}
             </button>
           </div>
 
@@ -287,10 +287,10 @@ function AgentConfigViewer({ connectedAgents, detectedAgents, notFoundAgents, cu
               <pre className="text-[11px] font-mono bg-muted/50 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre select-all max-h-[240px] overflow-y-auto">
                 {snippet.displaySnippet}
               </pre>
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-sm">
                 <button onClick={() => onCopy(snippet.snippet)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
-                  <Copy size={12} />
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
+                  <Copy size={14} />
                   {m?.copyConfig ?? 'Copy config'}
                 </button>
                 <span className="text-muted-foreground">→</span>

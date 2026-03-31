@@ -124,8 +124,8 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
       </button>
       {expanded && (
         <div className="border-t border-border/30">
-          {/* Diff view for file-mutating tools */}
-          {hasDiff && parsed.diffLines.length > 0 ? (
+          {/* Diff view for file-mutating tools — only when done and has diff */}
+          {hasDiff && isDone && parsed.diffLines.length > 0 ? (
             <div className="max-h-64 overflow-y-auto">
               {parsed.diffLines.map((line, idx) => (
                 <div
@@ -156,13 +156,18 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
               ))}
             </div>
           ) : (
-            /* Fallback: raw input/output for non-diff tools */
-            <div className="px-2 pb-2 pt-0.5 space-y-1">
+            /* Fallback: show input (always), output when available */
+            <div className="px-2 pb-2 pt-1 space-y-1">
+              {part.state === 'running' && (
+                <div className="text-muted-foreground/60 text-2xs flex items-center gap-1">
+                  <Loader2 size={10} className="animate-spin" /> Running...
+                </div>
+              )}
               <div className="text-muted-foreground">
                 <span className="font-semibold">Input: </span>
                 <span className="break-all whitespace-pre-wrap">{JSON.stringify(part.input, null, 2)}</span>
               </div>
-              {part.output !== undefined && (
+              {part.output !== undefined && part.output !== '' && (
                 <div className="text-muted-foreground">
                   <span className="font-semibold">Output: </span>
                   <span className="break-all whitespace-pre-wrap">{part.output.length > 500 ? part.output.slice(0, 500) + '…' : part.output}</span>
