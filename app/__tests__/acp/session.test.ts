@@ -60,7 +60,7 @@ describe('ACP Session', () => {
   });
 
   describe('createSessionFromEntry', () => {
-    it('creates a session after successful session/new', async () => {
+    it('creates a session after successful initialize', async () => {
       const mockResponse: AcpJsonRpcResponse = { jsonrpc: '2.0', id: 'rpc-1', result: { ok: true } };
       vi.mocked(sendAndWait).mockResolvedValueOnce(mockResponse);
 
@@ -72,7 +72,7 @@ describe('ACP Session', () => {
       expect(session.id).toContain('ses-test-agent-');
     });
 
-    it('throws and cleans up on session/new failure', async () => {
+    it('throws and cleans up on initialize failure', async () => {
       const mockResponse: AcpJsonRpcResponse = {
         jsonrpc: '2.0',
         id: 'rpc-1',
@@ -80,7 +80,7 @@ describe('ACP Session', () => {
       };
       vi.mocked(sendAndWait).mockResolvedValueOnce(mockResponse);
 
-      await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('session/new failed');
+      await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('initialize failed');
     });
 
     it('throws on spawn timeout', async () => {

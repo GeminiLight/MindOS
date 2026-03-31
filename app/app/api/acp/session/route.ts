@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { createSession, closeSession, getSession, getActiveSessions } from '@/lib/acp/session';
+import { createSession, closeSession, prompt, getSession, getActiveSessions } from '@/lib/acp/session';
 
 export async function GET() {
   try {
@@ -15,20 +15,50 @@ export async function GET() {
   }
 }
 
+/**
+ * POST /api/acp/session
+ * Body: { agentId: string, env?: Record<string,string>, prompt?: string }
+ *
+ * If `prompt` is provided, creates a session, sends the prompt, returns
+ * the response, and closes the session (one-shot mode).
+ * Otherwise just creates and returns the session.
+ */
 export async function POST(req: Request) {
   try {
-    const { agentId, env } = await req.json();
+    const body = await req.json();
+    const { agentId, env, prompt: promptText } = body as {
+      agentId?: string;
+      env?: Record<string, string>;
+      prompt?: string;
+    };
+
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400 });
     }
 
     const session = await createSession(agentId, { env });
+
+    // One-shot mode: send prompt, get response, close session
+    if (promptText && typeof promptText === 'string') {
+      try {
+        const response = await prompt(session.id, promptText);
+        // Clean up the session after getting the response
+        await closeSession(session.id).catch(() => {});
+        return NextResponse.json({ session, response });
+      } catch (promptErr) {
+        await closeSession(session.id).catch(() => {});
+        return NextResponse.json(
+          { error: `Prompt failed: ${(promptErr as Error).message}`, session },
+          { status: 500 },
+        );
+      }
+    }
+
     return NextResponse.json({ session });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message },
-      { status: 500 },
-    );
+    const msg = (err as Error).message;
+    const status = msg.includes('not found') ? 404 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
 

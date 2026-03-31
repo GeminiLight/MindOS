@@ -12,6 +12,7 @@ export interface NotInstalledAgent {
   id: string;
   name: string;
   installCmd: string;
+  packageName?: string;
 }
 
 interface AcpDetectionState {

@@ -114,18 +114,78 @@ function normalizeEntry(raw: unknown): AcpRegistryEntry | null {
   const name = String(entry.name ?? entry.id ?? '');
   if (!id && !name) return null;
 
+  // Extract transport/command/args from the `distribution` field (ACP registry v1 format)
+  const { transport, command, packageName, args: distArgs } = extractDistribution(entry);
+
   return {
     id: id || name,
     name: name || id,
     description: String(entry.description ?? ''),
     version: entry.version ? String(entry.version) : undefined,
-    transport: normalizeTransport(entry.transport),
-    command: String(entry.command ?? entry.cmd ?? ''),
-    args: Array.isArray(entry.args) ? entry.args.map(String) : undefined,
+    transport,
+    command,
+    packageName,
+    args: distArgs ?? (Array.isArray(entry.args) ? entry.args.map(String) : undefined),
     env: entry.env && typeof entry.env === 'object' ? entry.env as Record<string, string> : undefined,
     tags: Array.isArray(entry.tags) ? entry.tags.map(String) : undefined,
-    homepage: entry.homepage ? String(entry.homepage) : undefined,
+    homepage: entry.homepage ?? entry.website ? String(entry.homepage ?? entry.website) : undefined,
   };
+}
+
+/**
+ * Extract transport type, command, packageName, and args from
+ * the registry's `distribution` field. Falls back to legacy
+ * `transport`/`command` fields if `distribution` is absent.
+ */
+function extractDistribution(entry: Record<string, unknown>): {
+  transport: AcpRegistryEntry['transport'];
+  command: string;
+  packageName?: string;
+  args?: string[];
+} {
+  const dist = entry.distribution as Record<string, unknown> | undefined;
+
+  if (dist && typeof dist === 'object') {
+    // npx transport: { npx: { package: "@scope/name@version", args?: [...] } }
+    if (dist.npx && typeof dist.npx === 'object') {
+      const npx = dist.npx as Record<string, unknown>;
+      const fullPkg = String(npx.package ?? '');
+      // Strip version suffix: "@scope/name@1.2.3" -> "@scope/name"
+      const packageName = stripVersion(fullPkg);
+      const args = Array.isArray(npx.args) ? npx.args.map(String) : undefined;
+      // Also extract env if present at npx level
+      return { transport: 'npx', command: packageName, packageName, args };
+    }
+
+    // uvx transport: { uvx: { package: "name@version", args?: [...] } }
+    if (dist.uvx && typeof dist.uvx === 'object') {
+      const uvx = dist.uvx as Record<string, unknown>;
+      const fullPkg = String(uvx.package ?? '');
+      const packageName = stripVersion(fullPkg);
+      const args = Array.isArray(uvx.args) ? uvx.args.map(String) : undefined;
+      return { transport: 'uvx', command: packageName, packageName, args };
+    }
+
+    // binary transport: { binary: { "linux-x86_64": { cmd, args } } }
+    if (dist.binary && typeof dist.binary === 'object') {
+      return { transport: 'binary', command: '' };
+    }
+  }
+
+  // Legacy fallback: read flat `transport`/`command` fields
+  return {
+    transport: normalizeTransport(entry.transport),
+    command: String(entry.command ?? entry.cmd ?? ''),
+  };
+}
+
+/** Strip trailing @version from a package name. "@scope/pkg@1.0" -> "@scope/pkg" */
+function stripVersion(pkg: string): string {
+  if (!pkg) return '';
+  // Scoped: @scope/name@version — find the last @ that isn't position 0
+  const lastAt = pkg.lastIndexOf('@');
+  if (lastAt > 0) return pkg.slice(0, lastAt);
+  return pkg;
 }
 
 function normalizeTransport(raw: unknown): AcpRegistryEntry['transport'] {

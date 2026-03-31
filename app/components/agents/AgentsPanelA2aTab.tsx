@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Globe, Loader2, Network, RefreshCw, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Clock, Download, Globe, Loader2, Network, RefreshCw, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
@@ -213,7 +213,9 @@ function AcpRegistrySection() {
               agent={agent}
               installed={installed ?? null}
               installCmd={notInstalled?.installCmd ?? null}
+              packageName={notInstalled?.packageName ?? agent.packageName ?? null}
               detectionDone={!detection.loading}
+              onInstalled={detection.refresh}
             />
           );
         })}
@@ -231,14 +233,17 @@ const TRANSPORT_STYLES: Record<string, string> = {
   stdio: 'bg-muted text-muted-foreground',
 };
 
-function AcpAgentRow({ agent, installed, installCmd, detectionDone }: {
+function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone, onInstalled }: {
   agent: AcpRegistryEntry;
   installed: { id: string; name: string; binaryPath: string } | null;
   installCmd: string | null;
+  packageName: string | null;
   detectionDone: boolean;
+  onInstalled: () => void;
 }) {
   const { t } = useLocale();
   const p = t.panels.agents;
+  const [installState, setInstallState] = useState<'idle' | 'installing' | 'done' | 'error'>('idle');
   const transportLabels: Record<string, string> = {
     npx: p.acpTransportNpx,
     binary: p.acpTransportBinary,
@@ -255,6 +260,28 @@ function AcpAgentRow({ agent, installed, installCmd, detectionDone }: {
         detail: { agentId: agent.id, agentName: agent.name },
       }),
     );
+  };
+
+  const handleInstall = async () => {
+    if (!packageName || installState === 'installing') return;
+    setInstallState('installing');
+    try {
+      const res = await fetch('/api/acp/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: agent.id, packageName }),
+      });
+      if (!res.ok) {
+        setInstallState('error');
+        return;
+      }
+      // Wait a bit for npm install to complete, then re-detect
+      await new Promise((r) => setTimeout(r, 8000));
+      onInstalled();
+      setInstallState('done');
+    } catch {
+      setInstallState('error');
+    }
   };
 
   return (
@@ -280,6 +307,21 @@ function AcpAgentRow({ agent, installed, installCmd, detectionDone }: {
           }`}>
             {isReady ? p.acpReady : p.acpNotInstalled}
           </span>
+        )}
+        {detectionDone && !isReady && packageName && (
+          <button
+            type="button"
+            disabled={installState === 'installing'}
+            onClick={handleInstall}
+            className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            title={installCmd ? p.acpInstallHint(installCmd) : undefined}
+          >
+            {installState === 'installing' ? (
+              <><Loader2 size={10} className="animate-spin" /> {p.acpInstalling}</>
+            ) : (
+              <><Download size={10} /> {p.acpInstall}</>
+            )}
+          </button>
         )}
         <button
           type="button"

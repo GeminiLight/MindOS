@@ -51,13 +51,19 @@ export async function createSessionFromEntry(
 ): Promise<AcpSession> {
   const proc = spawnAcpAgent(entry, options);
 
-  // Send session/new and wait for ack
+  // Send ACP initialize and wait for ack.
+  // protocolVersion must be a number (ACP spec), not a semver string.
+  // Timeout is 30s because agents (especially npx-based) need time to start.
   try {
-    const response = await sendAndWait(proc, 'session/new', {}, 15_000);
+    const response = await sendAndWait(proc, 'initialize', {
+      protocolVersion: 1,
+      capabilities: {},
+      clientInfo: { name: 'mindos', version: '0.6.29' },
+    }, 30_000);
 
     if (response.error) {
       killAgent(proc);
-      throw new Error(`session/new failed: ${response.error.message}`);
+      throw new Error(`initialize failed: ${response.error.message}`);
     }
   } catch (err) {
     killAgent(proc);

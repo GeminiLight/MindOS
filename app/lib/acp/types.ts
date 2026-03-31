@@ -107,6 +107,8 @@ export interface AcpRegistryEntry {
   version?: string;
   transport: AcpTransportType;
   command: string;
+  /** npm package name for npx-based agents (e.g. "@google/gemini-cli") */
+  packageName?: string;
   args?: string[];
   env?: Record<string, string>;
   tags?: string[];
