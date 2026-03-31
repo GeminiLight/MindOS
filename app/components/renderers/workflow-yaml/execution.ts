@@ -147,9 +147,29 @@ export async function runStepWithAI(
     if (done) break;
     const raw = decoder.decode(value, { stream: true });
     for (const line of raw.split('\n')) {
-      const m = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
-      if (m) {
-        acc += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      // SSE format: data:{"type":"text_delta","delta":"..."}
+      const sseMatch = line.match(/^data:(.+)$/);
+      if (sseMatch) {
+        try {
+          const event = JSON.parse(sseMatch[1]);
+          if (event.type === 'text_delta' && typeof event.delta === 'string') {
+            acc += event.delta;
+            onChunk(acc);
+          }
+        } catch {
+          // Not valid JSON — try legacy Vercel AI SDK format: 0:"..."
+          const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
+          if (legacyMatch) {
+            acc += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            onChunk(acc);
+          }
+        }
+        continue;
+      }
+      // Legacy Vercel AI SDK format (without SSE prefix)
+      const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
+      if (legacyMatch) {
+        acc += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
         onChunk(acc);
       }
     }
