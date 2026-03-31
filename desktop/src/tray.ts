@@ -17,6 +17,7 @@ export interface TrayCallbacks {
   onOpenMindRoot: () => void;
   onRestartServices: () => Promise<void>;
   onSwitchServer: () => Promise<void>;
+  onReconnect?: () => Promise<void>;
   /** Re-install ~/.mindos/bin/mindos and show PATH hints */
   onRefreshCliShim?: () => void;
 }
@@ -146,6 +147,11 @@ export function updateTrayMenu(
         { type: 'separator' },
       );
     }
+    template.push({
+      label: zh ? '重新连接' : 'Reconnect Now',
+      enabled: status === 'error',
+      click: () => { callbacks?.onReconnect?.(); },
+    });
     template.push({
       label: zh ? '更换服务器...' : 'Switch Server...',
       click: () => { callbacks?.onSwitchServer(); },

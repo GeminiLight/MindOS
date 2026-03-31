@@ -974,10 +974,12 @@ async function handleRestartServices(): Promise<void> {
   }
 
   try {
+    refreshTray('starting');
     if (processManager) {
       // Desktop owns the processes — restart them
       await processManager.restart();
       refreshTray('running');
+      await removeOverlay('mindos-switch-overlay');
       if (mainWindow && currentWebPort !== undefined) {
         mainWindow.loadURL(
           resolveLocalMindOsBrowseUrl(`http://127.0.0.1:${currentWebPort}`),
@@ -992,10 +994,12 @@ async function handleRestartServices(): Promise<void> {
         mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
         refreshTray('running');
       }
+      await removeOverlay('mindos-switch-overlay');
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await removeOverlay('mindos-switch-overlay');
+    refreshTray('error');
     dialog.showErrorBox(zh ? '重启失败' : 'Restart Failed', msg);
   } finally {
     isRestarting = false;
@@ -1012,6 +1016,22 @@ const trayCallbacks: TrayCallbacks = {
   },
   onRestartServices: handleRestartServices,
   onSwitchServer: handleSwitchServer,
+  onReconnect: async () => {
+    if (!currentRemoteAddress || !mainWindow || mainWindow.isDestroyed()) return;
+    refreshTray('starting');
+    try {
+      const result = await testConnection(currentRemoteAddress);
+      if (result.status === 'online') {
+        removeOverlay('mindos-disconnect-overlay');
+        mainWindow.reload();
+        refreshTray('running');
+      } else {
+        refreshTray('error');
+      }
+    } catch {
+      refreshTray('error');
+    }
+  },
   onRefreshCliShim: () => { refreshMindosCliAndNotify(mainWindow); },
 };
 

@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('mindos', {
   onUpdateAvailable: (cb: (info: unknown) => void): CleanupFn => onChannel('update-available', cb),
   onUpdateProgress: (cb: (progress: unknown) => void): CleanupFn => onChannel('update-progress', cb),
   onUpdateReady: (cb: () => void): CleanupFn => onChannel('update-ready', cb),
+  onUpdateError: (cb: (info: unknown) => void): CleanupFn => onChannel('update-error', cb),
   onServerStatus: (cb: (status: string) => void): CleanupFn => onChannel('server-status', cb as (...args: unknown[]) => void),
   onConnectionLost: (cb: () => void): CleanupFn => onChannel('connection-lost', cb),
   onConnectionRestored: (cb: () => void): CleanupFn => onChannel('connection-restored', cb),
