@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
+import fs from 'fs';
+import path from 'path';
 import { readSettings } from '@/lib/settings';
-import { getRecentlyModified, getFileContent, getFileTree } from '@/lib/fs';
+import { getRecentlyModified, getFileContent, getFileTree, getMindRoot } from '@/lib/fs';
 import { getAllRenderers } from '@/lib/renderers/registry';
 import HomeContent from '@/components/HomeContent';
 import type { FileNode } from '@/lib/core/types';
@@ -52,8 +54,11 @@ function getTopLevelDirs(): SpaceInfo[] {
 }
 
 function getExistingFiles(paths: string[]): string[] {
+  const root = getMindRoot();
   return paths.filter(p => {
-    try { getFileContent(p); return true; } catch { return false; }
+    try {
+      return fs.existsSync(path.join(root, p));
+    } catch { return false; }
   });
 }
 
