@@ -238,3 +238,63 @@ export function PrimaryButton({ children, disabled, onClick, type = 'button', cl
     </button>
   );
 }
+
+/**
+ * SettingCard — groups related settings into a visually distinct card.
+ * Provides the "breathing room" and grouping that raw Field stacks lack.
+ *
+ * Usage:
+ *   <SettingCard icon={<Sparkles size={15} />} title="AI Provider" description="Choose your model">
+ *     <Field label="Model"> ... </Field>
+ *   </SettingCard>
+ */
+export function SettingCard({ icon, title, description, badge, children, className = '' }: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-xl border border-border/50 bg-card/50 p-5 ${className}`}>
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0 mt-0.5">
+          <span className="text-muted-foreground">{icon}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            {badge}
+          </div>
+          {description && (
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
+          )}
+        </div>
+      </div>
+      <div className="space-y-4 pl-11">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SettingRow — inline label + control on one line.
+ * Replaces verbose Field + vertical stacking for simple toggle/select rows.
+ */
+export function SettingRow({ label, hint, children }: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-foreground">{label}</div>
+        {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}

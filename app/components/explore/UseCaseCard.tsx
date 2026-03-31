@@ -1,20 +1,37 @@
 'use client';
 
+import { useState } from 'react';
 import { openAskModal } from '@/hooks/useAskModal';
 
 interface UseCaseCardProps {
   icon: string;
+  image?: string;
   title: string;
   description: string;
   prompt: string;
   tryItLabel: string;
 }
 
-export default function UseCaseCard({ icon, title, description, prompt, tryItLabel }: UseCaseCardProps) {
+export default function UseCaseCard({ icon, image, title, description, prompt, tryItLabel }: UseCaseCardProps) {
+  const [imgError, setImgError] = useState(false);
+
   return (
     <div
       className="group flex flex-col gap-3 p-4 rounded-xl border border-border bg-card transition-all duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/50"
     >
+      {/* Image or emoji fallback */}
+      {image && !imgError ? (
+        <div className="w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted">
+          <img
+            src={image}
+            alt={title}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        </div>
+      ) : null}
+
       <div className="flex items-start gap-3">
         <span className="text-xl leading-none shrink-0 mt-0.5" suppressHydrationWarning>
           {icon}

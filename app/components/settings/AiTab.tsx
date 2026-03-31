@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, Loader2, Sparkles, Bot, Monitor } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
-import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SectionLabel } from './Primitives';
+import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SettingCard, SettingRow } from './Primitives';
 import { useLocale } from '@/lib/LocaleContext';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
@@ -151,170 +151,188 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <Field label={<>{t.settings.ai.provider} <EnvBadge overridden={env.AI_PROVIDER} /></>}>
-        <Select
-          value={provider}
-          onChange={e => updateAi({ provider: e.target.value as 'anthropic' | 'openai' })}
-        >
-          <option value="anthropic">Anthropic (Claude)</option>
-          <option value="openai">OpenAI / compatible</option>
-        </Select>
-      </Field>
-
-      {provider === 'anthropic' ? (
-        <>
-          <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
-            <ModelInput
-              value={anthropic.model}
-              onChange={v => patchProvider('anthropic', { model: v })}
-              placeholder={envVal.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}
-              provider="anthropic"
-              apiKey={anthropic.apiKey}
-              envKey={env.ANTHROPIC_API_KEY}
-              t={t}
-            />
-          </Field>
-          <Field
-            label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} /></>}
-            hint={env.ANTHROPIC_API_KEY ? t.settings.ai.envFieldNote('ANTHROPIC_API_KEY') : t.settings.ai.keyHint}
-          >
-            <ApiKeyInput
-              value={anthropic.apiKey}
-              onChange={v => patchProvider('anthropic', { apiKey: v })}
-            />
-            {renderTestButton('anthropic', !!anthropic.apiKey, !!env.ANTHROPIC_API_KEY)}
-          </Field>
-        </>
-      ) : (
-        <>
-          <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
-            <ModelInput
-              value={openai.model}
-              onChange={v => patchProvider('openai', { model: v })}
-              placeholder={envVal.OPENAI_MODEL || 'gpt-5.4'}
-              provider="openai"
-              apiKey={openai.apiKey}
-              envKey={env.OPENAI_API_KEY}
-              baseUrl={openai.baseUrl}
-              t={t}
-            />
-          </Field>
-          <Field
-            label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} /></>}
-            hint={env.OPENAI_API_KEY ? t.settings.ai.envFieldNote('OPENAI_API_KEY') : t.settings.ai.keyHint}
-          >
-            <ApiKeyInput
-              value={openai.apiKey}
-              onChange={v => patchProvider('openai', { apiKey: v })}
-            />
-            {renderTestButton('openai', !!openai.apiKey, !!env.OPENAI_API_KEY)}
-          </Field>
-          <Field
-            label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}
-            hint={t.settings.ai.baseUrlHint}
-          >
-            <Input
-              value={openai.baseUrl ?? ''}
-              onChange={e => patchProvider('openai', { baseUrl: e.target.value })}
-              placeholder={envVal.OPENAI_BASE_URL || 'https://api.openai.com/v1'}
-            />
-          </Field>
-        </>
-      )}
-
-      {missingApiKey && (
-        <div className="flex items-start gap-2 text-xs text-destructive/80 bg-destructive/8 border border-destructive/20 rounded-lg px-3 py-2.5">
-          <AlertCircle size={13} className="shrink-0 mt-0.5" />
-          <span>{t.settings.ai.noApiKey}</span>
-        </div>
-      )}
-
-      {Object.values(env).some(Boolean) && (
-        <div className="flex items-start gap-2 text-xs text-[var(--amber)] bg-[var(--amber-subtle)] border border-[var(--amber)]/20 rounded-lg px-3 py-2.5">
-          <AlertCircle size={13} className="shrink-0 mt-0.5" />
-          <span>{t.settings.ai.envHint}</span>
-        </div>
-      )}
-
-      {/* Agent Behavior */}
-      <div className="pt-3 border-t border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">{t.settings.agent.title}</h3>
-
-        <div className="space-y-4">
-          <Field label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
-            <Select
-              value={String(data.agent?.maxSteps ?? 20)}
-              onChange={e => updateAgent({ maxSteps: Number(e.target.value) })}
+    <div className="space-y-4">
+      {/* ── Card 1: AI Provider ── */}
+      <SettingCard
+        icon={<Sparkles size={15} />}
+        title={t.settings.ai.provider}
+        description={provider === 'anthropic' ? 'Anthropic Claude' : 'OpenAI / compatible'}
+      >
+        {/* Provider toggle — two clickable mini-cards */}
+        <div className="flex gap-2">
+          {(['anthropic', 'openai'] as const).map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => updateAi({ provider: p })}
+              className={`flex-1 flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border transition-all ${
+                provider === p
+                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] shadow-sm'
+                  : 'border-border/50 hover:border-border hover:bg-muted/30'
+              }`}
             >
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="20">20</option>
-              <option value="25">25</option>
-              <option value="30">30</option>
-            </Select>
-          </Field>
-
-          <Field label={t.settings.agent.contextStrategy} hint={t.settings.agent.contextStrategyHint}>
-            <Select
-              value={data.agent?.contextStrategy ?? 'auto'}
-              onChange={e => updateAgent({ contextStrategy: e.target.value as 'auto' | 'off' })}
-            >
-              <option value="auto">{t.settings.agent.contextStrategyAuto}</option>
-              <option value="off">{t.settings.agent.contextStrategyOff}</option>
-            </Select>
-          </Field>
-
-          <Field label={t.settings.agent.reconnectRetries} hint={t.settings.agent.reconnectRetriesHint}>
-            <Select
-              value={String(data.agent?.reconnectRetries ?? 3)}
-              onChange={e => {
-                const v = Number(e.target.value);
-                updateAgent({ reconnectRetries: v });
-                try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch (err) { console.warn("[AiTab] localStorage setItem reconnectRetries failed:", err); }
-              }}
-            >
-              <option value="0">Off</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="5">5</option>
-              <option value="10">10</option>
-            </Select>
-          </Field>
-
-          {provider === 'anthropic' && (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-foreground">{t.settings.agent.thinking}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{t.settings.agent.thinkingHint}</div>
-                </div>
-                <Toggle checked={data.agent?.enableThinking ?? false} onChange={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })} />
-              </div>
-
-              {data.agent?.enableThinking && (
-                <Field label={t.settings.agent.thinkingBudget} hint={t.settings.agent.thinkingBudgetHint}>
-                  <Input
-                    type="number"
-                    value={String(data.agent?.thinkingBudget ?? 5000)}
-                    onChange={e => {
-                      const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) updateAgent({ thinkingBudget: Math.max(1000, Math.min(50000, v)) });
-                    }}
-                    min={1000}
-                    max={50000}
-                    step={1000}
-                  />
-                </Field>
-              )}
-            </>
-          )}
+              <span className={`text-sm font-medium ${provider === p ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {p === 'anthropic' ? 'Anthropic' : 'OpenAI'}
+              </span>
+              <EnvBadge overridden={env.AI_PROVIDER} />
+            </button>
+          ))}
         </div>
-      </div>
 
-      {/* Ask AI Display Mode */}
+        {/* Model + API Key */}
+        {provider === 'anthropic' ? (
+          <>
+            <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
+              <ModelInput
+                value={anthropic.model}
+                onChange={v => patchProvider('anthropic', { model: v })}
+                placeholder={envVal.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}
+                provider="anthropic"
+                apiKey={anthropic.apiKey}
+                envKey={env.ANTHROPIC_API_KEY}
+                t={t}
+              />
+            </Field>
+            <Field
+              label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} /></>}
+              hint={env.ANTHROPIC_API_KEY ? t.settings.ai.envFieldNote('ANTHROPIC_API_KEY') : t.settings.ai.keyHint}
+            >
+              <ApiKeyInput
+                value={anthropic.apiKey}
+                onChange={v => patchProvider('anthropic', { apiKey: v })}
+              />
+              {renderTestButton('anthropic', !!anthropic.apiKey, !!env.ANTHROPIC_API_KEY)}
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
+              <ModelInput
+                value={openai.model}
+                onChange={v => patchProvider('openai', { model: v })}
+                placeholder={envVal.OPENAI_MODEL || 'gpt-5.4'}
+                provider="openai"
+                apiKey={openai.apiKey}
+                envKey={env.OPENAI_API_KEY}
+                baseUrl={openai.baseUrl}
+                t={t}
+              />
+            </Field>
+            <Field
+              label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} /></>}
+              hint={env.OPENAI_API_KEY ? t.settings.ai.envFieldNote('OPENAI_API_KEY') : t.settings.ai.keyHint}
+            >
+              <ApiKeyInput
+                value={openai.apiKey}
+                onChange={v => patchProvider('openai', { apiKey: v })}
+              />
+              {renderTestButton('openai', !!openai.apiKey, !!env.OPENAI_API_KEY)}
+            </Field>
+            <Field
+              label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}
+              hint={t.settings.ai.baseUrlHint}
+            >
+              <Input
+                value={openai.baseUrl ?? ''}
+                onChange={e => patchProvider('openai', { baseUrl: e.target.value })}
+                placeholder={envVal.OPENAI_BASE_URL || 'https://api.openai.com/v1'}
+              />
+            </Field>
+          </>
+        )}
+
+        {/* Inline warnings */}
+        {missingApiKey && (
+          <div className="flex items-start gap-2 text-xs text-destructive/80 bg-destructive/8 border border-destructive/20 rounded-lg px-3 py-2.5">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <span>{t.settings.ai.noApiKey}</span>
+          </div>
+        )}
+        {Object.values(env).some(Boolean) && (
+          <div className="flex items-start gap-2 text-xs text-[var(--amber)] bg-[var(--amber-subtle)] border border-[var(--amber)]/20 rounded-lg px-3 py-2.5">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <span>{t.settings.ai.envHint}</span>
+          </div>
+        )}
+      </SettingCard>
+
+      {/* ── Card 2: Agent Behavior ── */}
+      <SettingCard
+        icon={<Bot size={15} />}
+        title={t.settings.agent.title}
+        description={t.settings.agent.subtitle ?? 'Configure how the AI agent operates'}
+      >
+        <SettingRow label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
+          <Select
+            value={String(data.agent?.maxSteps ?? 20)}
+            onChange={e => updateAgent({ maxSteps: Number(e.target.value) })}
+            className="w-20"
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+            <option value="25">25</option>
+            <option value="30">30</option>
+          </Select>
+        </SettingRow>
+
+        <SettingRow label={t.settings.agent.contextStrategy} hint={t.settings.agent.contextStrategyHint}>
+          <Select
+            value={data.agent?.contextStrategy ?? 'auto'}
+            onChange={e => updateAgent({ contextStrategy: e.target.value as 'auto' | 'off' })}
+            className="w-24"
+          >
+            <option value="auto">{t.settings.agent.contextStrategyAuto}</option>
+            <option value="off">{t.settings.agent.contextStrategyOff}</option>
+          </Select>
+        </SettingRow>
+
+        <SettingRow label={t.settings.agent.reconnectRetries} hint={t.settings.agent.reconnectRetriesHint}>
+          <Select
+            value={String(data.agent?.reconnectRetries ?? 3)}
+            onChange={e => {
+              const v = Number(e.target.value);
+              updateAgent({ reconnectRetries: v });
+              try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch (err) { console.warn("[AiTab] localStorage setItem reconnectRetries failed:", err); }
+            }}
+            className="w-20"
+          >
+            <option value="0">Off</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </Select>
+        </SettingRow>
+
+        {provider === 'anthropic' && (
+          <>
+            <SettingRow label={t.settings.agent.thinking} hint={t.settings.agent.thinkingHint}>
+              <Toggle checked={data.agent?.enableThinking ?? false} onChange={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })} />
+            </SettingRow>
+
+            {data.agent?.enableThinking && (
+              <Field label={t.settings.agent.thinkingBudget} hint={t.settings.agent.thinkingBudgetHint}>
+                <Input
+                  type="number"
+                  value={String(data.agent?.thinkingBudget ?? 5000)}
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) updateAgent({ thinkingBudget: Math.max(1000, Math.min(50000, v)) });
+                  }}
+                  min={1000}
+                  max={50000}
+                  step={1000}
+                />
+              </Field>
+            )}
+          </>
+        )}
+      </SettingCard>
+
+      {/* ── Card 3: Display Mode ── */}
       <AskDisplayMode />
     </div>
   );
@@ -447,16 +465,15 @@ function AskDisplayMode() {
   };
 
   return (
-    <div className="pt-3 border-t border-border">
-      <SectionLabel>MindOS Agent</SectionLabel>
-      <div className="space-y-4">
-        <Field label={t.settings.askDisplayMode?.label ?? 'Display Mode'} hint={t.settings.askDisplayMode?.hint ?? 'Side panel stays docked on the right. Popup opens a floating dialog.'}>
-          <Select value={mode} onChange={e => handleChange(e.target.value)}>
-            <option value="panel">{t.settings.askDisplayMode?.panel ?? 'Side Panel'}</option>
-            <option value="popup">{t.settings.askDisplayMode?.popup ?? 'Popup'}</option>
-          </Select>
-        </Field>
-      </div>
-    </div>
+    <SettingCard
+      icon={<Monitor size={15} />}
+      title={t.settings.askDisplayMode?.label ?? 'Display Mode'}
+      description={t.settings.askDisplayMode?.hint ?? 'Side panel stays docked on the right. Popup opens a floating dialog.'}
+    >
+      <Select value={mode} onChange={e => handleChange(e.target.value)}>
+        <option value="panel">{t.settings.askDisplayMode?.panel ?? 'Side Panel'}</option>
+        <option value="popup">{t.settings.askDisplayMode?.popup ?? 'Popup'}</option>
+      </Select>
+    </SettingCard>
   );
 }
