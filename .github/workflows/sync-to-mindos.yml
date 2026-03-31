@@ -166,17 +166,23 @@ jobs:
           # === SAFETY GUARD: fail if private files leaked into public repo ===
           PRIVATE_PATTERNS="startup/ wiki/0[0-9] wiki/specs/ wiki/discussions/ wiki/85-backlog .claude-internal/ .claude/ 0_TASKS 0_BUGS TASKS.md .npmrc .dockerignore .gitignore.prod .github/workflows/sync-to-mindos.yml .github/workflows/ci.yml activities/ collect-session-ids"
           LEAKED=""
+          # Check staged additions only (not deletions — removing private files is fine)
           for pat in $PRIVATE_PATTERNS; do
-            matches=$(git diff --cached --name-only | grep -F "$pat" || true)
+            matches=$(git diff --cached --name-only --diff-filter=ACM | grep -F "$pat" || true)
             if [ -n "$matches" ]; then
               LEAKED="${LEAKED}${matches}"$'\n'
             fi
           done
-          # Also scan the full tree (not just staged changes)
+          # Also scan the working tree for files that would be committed
           for pat in $PRIVATE_PATTERNS; do
             matches=$(git ls-files | grep -F "$pat" || true)
             if [ -n "$matches" ]; then
-              LEAKED="${LEAKED}${matches}"$'\n'
+              # Only flag if the file actually exists on disk (not staged for deletion)
+              for f in $matches; do
+                if [ -f "$f" ]; then
+                  LEAKED="${LEAKED}${f}"$'\n'
+                fi
+              done
             fi
           done
           if [ -n "$LEAKED" ]; then
