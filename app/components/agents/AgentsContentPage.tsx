@@ -16,6 +16,7 @@ import AgentsOverviewSection from './AgentsOverviewSection';
 import AgentsMcpSection from './AgentsMcpSection';
 import AgentsSkillsSection from './AgentsSkillsSection';
 import AgentsPanelA2aTab from './AgentsPanelA2aTab';
+import AgentsPanelSessionsTab from './AgentsPanelSessionsTab';
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
   const { t } = useLocale();
@@ -23,6 +24,12 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
   const pageHeader = useMemo(() => {
+    if (tab === 'sessions') {
+      return {
+        title: 'Sessions',
+        subtitle: 'Active ACP agent sessions.',
+      };
+    }
     if (tab === 'a2a') {
       return {
         title: a.navNetwork,
@@ -113,6 +120,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           onDiscover={a2a.discover}
           onRemove={a2a.remove}
         />
+      )}
+
+      {tab === 'sessions' && (
+        <AgentsPanelSessionsTab />
       )}
     </div>
   );

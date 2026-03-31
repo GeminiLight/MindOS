@@ -71,6 +71,7 @@ export default function AgentsPanel({
     navMcp: p.navMcp,
     navSkills: p.navSkills,
     navNetwork: p.navNetwork,
+    navSessions: p.navSessions,
   };
 
   const hub = (

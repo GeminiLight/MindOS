@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Globe, LayoutDashboard, Server, Zap } from 'lucide-react';
+import { Globe, History, LayoutDashboard, Server, Zap } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
@@ -9,6 +9,7 @@ type HubCopy = {
   navMcp: string;
   navSkills: string;
   navNetwork: string;
+  navSessions: string;
 };
 
 export function AgentsPanelHubNav({
@@ -49,6 +50,12 @@ export function AgentsPanelHubNav({
         title={copy.navNetwork}
         href="/agents?tab=a2a"
         active={inAgentsRoute && tab === 'a2a'}
+      />
+      <PanelNavRow
+        icon={<History size={14} className={inAgentsRoute && tab === 'sessions' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navSessions}
+        href="/agents?tab=sessions"
+        active={inAgentsRoute && tab === 'sessions'}
       />
     </div>
   );
