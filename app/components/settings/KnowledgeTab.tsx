@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from '
 import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
-import { Field, Input, EnvBadge, SectionLabel, Toggle } from './Primitives';
+import { Field, Input, EnvBadge, SectionLabel, Toggle, SettingCard, SettingRow } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -135,156 +135,151 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <SectionLabel>Knowledge Base</SectionLabel>
-
-      <Field
-        label={<>{k.sopRoot} <EnvBadge overridden={env.MIND_ROOT} /></>}
-        hint={env.MIND_ROOT ? k.envNote : k.sopRootHint}
+    <div className="space-y-4">
+      {/* ── Card 1: Knowledge Base ── */}
+      <SettingCard
+        icon={<DatabaseIcon size={15} />}
+        title="Knowledge Base"
+        description={k.sopRootHint}
       >
-        <Input
-          value={data.mindRoot}
-          onChange={e => setData(d => d ? { ...d, mindRoot: e.target.value } : d)}
-          placeholder="/path/to/your/notes"
-        />
-      </Field>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm text-foreground">{k.showHiddenFiles}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{k.showHiddenFilesHint}</div>
-        </div>
-        <Toggle checked={showHidden} onChange={() => {
-          const next = !showHidden;
-          setShowHidden(next);
-          setShowHiddenFiles(next);
-        }} />
-      </div>
-
-      {exampleCount !== null && exampleCount > 0 && cleanupResult === null && (
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-foreground">{k.cleanupExamples}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{k.cleanupExamplesHint}</div>
-          </div>
-          <button
-            onClick={() => setShowCleanupConfirm(true)}
-            disabled={cleaningUp}
-            title={cleaningUp ? t.hints.cleanupInProgress : undefined}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
-          >
-            {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-            {k.cleanupExamplesButton}
-            <span className="ml-1 tabular-nums text-2xs opacity-70">{exampleCount}</span>
-          </button>
-        </div>
-      )}
-      {cleanupResult !== null && (
-        <div className="flex items-center gap-2 text-xs text-success">
-          <Check size={14} />
-          {k.cleanupExamplesDone(cleanupResult)}
-        </div>
-      )}
-
-      <div className="border-t border-border pt-5">
-        <SectionLabel>Security</SectionLabel>
-      </div>
-
-      <Field label={k.webPassword} hint={k.webPasswordHint}>
-        <div className="flex gap-2">
+        <Field
+          label={<>{k.sopRoot} <EnvBadge overridden={env.MIND_ROOT} /></>}
+          hint={env.MIND_ROOT ? k.envNote : k.sopRootHint}
+        >
           <Input
-            type={showPassword ? 'text' : 'password'}
-            value={isPasswordMasked ? '••••••••' : (data.webPassword ?? '')}
-            onChange={e => setData(d => d ? { ...d, webPassword: e.target.value } : d)}
-            onFocus={() => { if (isPasswordMasked) setData(d => d ? { ...d, webPassword: '' } : d); }}
-            placeholder="Leave empty to disable"
+            value={data.mindRoot}
+            onChange={e => setData(d => d ? { ...d, mindRoot: e.target.value } : d)}
+            placeholder="/path/to/your/notes"
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(v => !v)}
-            className="px-3 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-          >
-            {showPassword ? 'Hide' : 'Show'}
-          </button>
-        </div>
-      </Field>
+        </Field>
 
-      <Field
-        label={k.authToken}
-        hint={hasToken ? k.authTokenHint : k.authTokenNone}
-      >
-        <div className="space-y-2">
-          {/* Token display */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg min-h-[38px]">
-            <code className="flex-1 text-xs font-mono text-foreground break-all select-all">
-              {displayToken || <span className="text-muted-foreground italic">— not set —</span>}
-            </code>
-            {displayToken && (
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                title={k.authTokenCopy}
-              >
-                <Copy size={13} />
-              </button>
-            )}
+        <SettingRow label={k.showHiddenFiles} hint={k.showHiddenFilesHint}>
+          <Toggle checked={showHidden} onChange={() => {
+            const next = !showHidden;
+            setShowHidden(next);
+            setShowHiddenFiles(next);
+          }} />
+        </SettingRow>
+
+        {exampleCount !== null && exampleCount > 0 && cleanupResult === null && (
+          <SettingRow label={k.cleanupExamples} hint={k.cleanupExamplesHint}>
+            <button
+              onClick={() => setShowCleanupConfirm(true)}
+              disabled={cleaningUp}
+              title={cleaningUp ? t.hints.cleanupInProgress : undefined}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50"
+            >
+              {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              {k.cleanupExamplesButton}
+              <span className="ml-1 tabular-nums text-2xs opacity-70">{exampleCount}</span>
+            </button>
+          </SettingRow>
+        )}
+        {cleanupResult !== null && (
+          <div className="flex items-center gap-2 text-xs text-success">
+            <Check size={14} />
+            {k.cleanupExamplesDone(cleanupResult)}
           </div>
-          {/* MCP port info */}
-          {data.mcpPort && (
-            <p className="text-xs text-muted-foreground">
-              {k.authTokenMcpPort}: <code className="font-mono">{data.mcpPort}</code>
-              {displayToken && (
-                <> &nbsp;·&nbsp; MCP URL: <code className="font-mono select-all">
-                  {`${origin}:${data.mcpPort}/mcp`}
-                </code></>
-              )}
-            </p>
-          )}
-          {/* Action buttons */}
+        )}
+      </SettingCard>
+
+      {/* ── Card 2: Security ── */}
+      <SettingCard
+        icon={<HardDrive size={15} />}
+        title="Security"
+      >
+        <Field label={k.webPassword} hint={k.webPasswordHint}>
           <div className="flex gap-2">
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              value={isPasswordMasked ? '••••••••' : (data.webPassword ?? '')}
+              onChange={e => setData(d => d ? { ...d, webPassword: e.target.value } : d)}
+              onFocus={() => { if (isPasswordMasked) setData(d => d ? { ...d, webPassword: '' } : d); }}
+              placeholder="Leave empty to disable"
+            />
             <button
               type="button"
-              onClick={handleResetToken}
-              disabled={resetting}
-              title={resetting ? t.hints.tokenResetInProgress : undefined}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              onClick={() => setShowPassword(v => !v)}
+              className="px-3 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
             >
-              <RefreshCw size={14} className={resetting ? 'animate-spin' : ''} />
-              {k.authTokenReset}
+              {showPassword ? 'Hide' : 'Show'}
             </button>
-            {hasToken && (
+          </div>
+        </Field>
+
+        <Field
+          label={k.authToken}
+          hint={hasToken ? k.authTokenHint : k.authTokenNone}
+        >
+          <div className="space-y-2">
+            {/* Token display */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg min-h-[38px]">
+              <code className="flex-1 text-xs font-mono text-foreground break-all select-all">
+                {displayToken || <span className="text-muted-foreground italic">— not set —</span>}
+              </code>
+              {displayToken && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                  title={k.authTokenCopy}
+                >
+                  <Copy size={13} />
+                </button>
+              )}
+            </div>
+            {/* MCP port info */}
+            {data.mcpPort && (
+              <p className="text-xs text-muted-foreground">
+                {k.authTokenMcpPort}: <code className="font-mono">{data.mcpPort}</code>
+                {displayToken && (
+                  <> &nbsp;·&nbsp; MCP URL: <code className="font-mono select-all">
+                    {`${origin}:${data.mcpPort}/mcp`}
+                  </code></>
+                )}
+              </p>
+            )}
+            {/* Action buttons */}
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleClearToken}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
-            >
-              <Trash2 size={14} />
-                {k.authTokenClear}
+                onClick={handleResetToken}
+                disabled={resetting}
+                title={resetting ? t.hints.tokenResetInProgress : undefined}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <RefreshCw size={14} className={resetting ? 'animate-spin' : ''} />
+                {k.authTokenReset}
               </button>
+              {hasToken && (
+                <button
+                  type="button"
+                  onClick={handleClearToken}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  {k.authTokenClear}
+                </button>
+              )}
+            </div>
+            {revealedToken && (
+              <p className="text-xs text-[var(--amber-text)]">
+                New token generated. Copy it now — it won&apos;t be shown in full again.
+              </p>
             )}
           </div>
-          {revealedToken && (
-            <p className="text-xs text-[var(--amber-text)]">
-              New token generated. Copy it now — it won&apos;t be shown in full again.
-            </p>
-          )}
-        </div>
-      </Field>
+        </Field>
+      </SettingCard>
 
-      {/* Getting Started Guide toggle */}
+      {/* ── Card 3: Getting Started ── */}
       {guideActive !== null && (
-        <div className="border-t border-border pt-5">
-          <SectionLabel>{t.guide?.title ?? 'Getting Started'}</SectionLabel>
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-[var(--amber)]" />
-              <div>
-                <div className="text-sm text-foreground">{t.guide?.showGuide ?? 'Show getting started guide'}</div>
-              </div>
-            </div>
+        <SettingCard
+          icon={<Sparkles size={15} />}
+          title={t.guide?.title ?? 'Getting Started'}
+        >
+          <SettingRow label={t.guide?.showGuide ?? 'Show getting started guide'}>
             <Toggle checked={!guideDismissed} onChange={() => handleGuideToggle()} />
-          </div>
+          </SettingRow>
           <button
             onClick={handleRestartWalkthrough}
             className="flex items-center gap-1.5 mt-2 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -292,7 +287,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             <RotateCcw size={14} />
             {k.restartWalkthrough ?? 'Restart walkthrough'}
           </button>
-        </div>
+        </SettingCard>
       )}
 
       {/* System Monitoring — collapsible */}
