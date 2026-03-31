@@ -567,7 +567,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [isPending, startTransition] = useTransition();
-  const [isPendingDelete, startDeleteTransition] = useTransition();
+  const [, startDeleteTransition] = useTransition();
   const renameRef = useRef<HTMLInputElement>(null);
   const { t } = useLocale();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -669,7 +669,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
             setContextMenu({ x: rect.left, y: rect.bottom + 4 });
           }}
           className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title={t.fileTree.more ?? 'More'}
+          title="More"
         >
           <MoreHorizontal size={14} />
         </button>
