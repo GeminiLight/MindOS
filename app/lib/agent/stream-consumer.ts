@@ -16,6 +16,20 @@
  */
 import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart } from '@/lib/types';
 
+/** Tools that modify files — trigger files-changed notification on completion */
+const FILE_MUTATING_TOOLS = new Set([
+  'write_file', 'create_file', 'batch_create_files',
+  'update_section', 'insert_after_heading', 'delete_file',
+  'rename_file', 'create_space',
+]);
+
+/** Notify the app that files were changed by the AI agent */
+function notifyFilesChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('mindos:files-changed'));
+  }
+}
+
 export async function consumeUIMessageStream(
   body: ReadableStream<Uint8Array>,
   onUpdate: (message: Message) => void,
@@ -158,6 +172,10 @@ export async function consumeUIMessageStream(
               tc.output = output ?? '';
               tc.state = (event.isError ? 'error' : 'done');
               changed = true;
+              // Notify when a file-modifying tool completes successfully
+              if (!event.isError && FILE_MUTATING_TOOLS.has(tc.toolName)) {
+                notifyFilesChanged();
+              }
             }
             break;
           }

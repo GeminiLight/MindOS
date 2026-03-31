@@ -55,6 +55,13 @@ export default function ViewPageClient({
   const [editing, setEditing] = useState(initialEditing || content === '');
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
+
+  // Sync savedContent when server re-renders with new content (e.g. after router.refresh)
+  useEffect(() => {
+    if (!editing) {
+      setSavedContent(content);
+    }
+  }, [content, editing]);
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -202,6 +209,20 @@ export default function ViewPageClient({
     return () => window.removeEventListener('keydown', handler);
   }, [editing, handleSave, handleEdit, handleCancel]);
 
+  // Auto-refresh when AI agent modifies files
+  const [fileUpdated, setFileUpdated] = useState(false);
+  useEffect(() => {
+    const handler = () => {
+      // Don't auto-refresh while user is editing — would lose their changes
+      if (editing) return;
+      router.refresh();
+      setFileUpdated(true);
+      setTimeout(() => setFileUpdated(false), 3000);
+    };
+    window.addEventListener('mindos:files-changed', handler);
+    return () => window.removeEventListener('mindos:files-changed', handler);
+  }, [editing, router]);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Top bar */}
@@ -219,6 +240,12 @@ export default function ViewPageClient({
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+            {fileUpdated && !editing && (
+              <span className="text-xs flex items-center gap-1.5 text-[var(--amber)] animate-in fade-in-0 duration-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)]" />
+                <span className="hidden sm:inline">updated</span>
+              </span>
+            )}
             {saveSuccess && (
               <span className="text-xs flex items-center gap-1.5 font-display" style={{ color: 'var(--success)' }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
