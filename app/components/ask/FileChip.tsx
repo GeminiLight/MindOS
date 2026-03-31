@@ -32,8 +32,11 @@ const VARIANT_STYLE = {
 
 export default function FileChip({ path, onRemove, variant = 'kb', imageData, imageMime }: FileChipProps) {
   const [showPreview, setShowPreview] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const chipRef = useRef<HTMLSpanElement>(null);
   const [previewPos, setPreviewPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => setMounted(true), []);
 
   const name = path.split('/').pop() ?? path;
   const isCsv = variant === 'kb' && name.endsWith('.csv');
@@ -87,7 +90,7 @@ export default function FileChip({ path, onRemove, variant = 'kb', imageData, im
           <X size={10} />
         </button>
       </span>
-      {typeof document !== 'undefined' && preview && createPortal(preview, document.body)}
+      {mounted && preview && createPortal(preview, document.body)}
     </>
   );
 }

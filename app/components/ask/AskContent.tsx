@@ -71,6 +71,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -689,8 +691,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </div>
         )}
 
-        {/* Agent selector — only when no agent selected but agents available */}
-        {!selectedAcpAgent && acpDetection.installedAgents.length > 0 && (
+        {/* Agent selector — only when no agent selected but agents available (mounted guard for hydration) */}
+        {mounted && !selectedAcpAgent && acpDetection.installedAgents.length > 0 && (
           <div className="px-3 pt-1 pb-0.5">
             <AgentSelectorCapsule
               selectedAgent={null}
