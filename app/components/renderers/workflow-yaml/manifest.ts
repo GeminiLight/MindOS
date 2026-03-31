@@ -10,7 +10,7 @@ export const manifest: RendererDefinition = {
   builtin: true,
   core: true,
   appBuiltinFeature: true,
-  entryPath: 'Workflows/',
+  entryPath: '.mindos/workflows/',
   match: ({ extension, filePath }) => {
     if (extension !== 'yaml' && extension !== 'yml') return false;
     return /\.workflow\.(yaml|yml)$/i.test(filePath);
