@@ -104,6 +104,24 @@ export function setActiveRemoteConnection(address: string | null): void {
   store.set('remoteActiveConnection', address);
 }
 
+/**
+ * Find the most recent SSH connection for auto-reconnect on startup.
+ * Returns { host, remotePort } if the last connection was SSH-based, null otherwise.
+ */
+export function getLastSshConnection(): { host: string; remotePort: number } | null {
+  const connections = getConnections();
+  if (connections.length === 0) return null;
+  // Find the most recent SSH connection
+  const sshConn = connections.find(c => c.address.startsWith('ssh://'));
+  if (!sshConn) return null;
+  // Parse ssh://host:port
+  try {
+    const match = sshConn.address.match(/^ssh:\/\/(.+):(\d+)$/);
+    if (!match) return null;
+    return { host: match[1], remotePort: parseInt(match[2], 10) };
+  } catch { return null; }
+}
+
 // ── IPC handlers registration helpers ──
 
 function safeHandle(channel: string, handler: (...args: any[]) => any): void {

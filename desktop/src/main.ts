@@ -23,8 +23,8 @@ import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { restoreWindowState, saveWindowState } from './window-state';
 import { setupUpdater } from './updater';
 import { ConnectionMonitor } from './connection-monitor';
-import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
-import { cleanupOrphanedSshTunnel } from './ssh-tunnel';
+import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
+import { cleanupOrphanedSshTunnel, SshTunnel } from './ssh-tunnel';
 import { testConnection } from '../../shared/connection';
 import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
@@ -677,6 +677,33 @@ async function startRemoteMode(): Promise<string | null> {
       }
     } catch { /* fall through */ }
   }
+
+  // Auto-reconnect last SSH tunnel if saved address was ephemeral (localhost tunnel)
+  const lastSsh = getLastSshConnection();
+  if (lastSsh) {
+    const zh = navigator_lang() === 'zh';
+    splashStatus({ status: 'connecting', message: zh ? `正在重连 SSH ${lastSsh.host}...` : `Reconnecting SSH to ${lastSsh.host}...` });
+    try {
+      const localPort = await findAvailablePort(lastSsh.remotePort);
+      const tunnel = new SshTunnel(lastSsh.host, localPort, lastSsh.remotePort);
+      await tunnel.start();
+      clearActiveTunnel(); // clean any stale reference before storing new tunnel
+
+      const url = `http://localhost:${localPort}`;
+      const result = await testConnection(url);
+      if (result.status === 'online') {
+        setActiveRemoteConnection(url);
+        currentRemoteAddress = url;
+        closeSplash();
+        return url;
+      }
+      // Tunnel up but MindOS not responding - fall through
+      tunnel.stop().catch(() => {});
+    } catch (err) {
+      console.warn('[MindOS] SSH auto-reconnect failed:', (err as Error)?.message);
+    }
+  }
+
   // Need user input — close splash, show connect window
   closeSplash();
   return showConnectWindow();
