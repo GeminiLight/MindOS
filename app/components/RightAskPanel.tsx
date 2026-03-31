@@ -10,11 +10,14 @@ const MIN_WIDTH = 300;
 const MAX_WIDTH_ABS = 700;
 const MAX_WIDTH_RATIO = 0.45;
 
+import type { AcpAgentSelection } from '@/hooks/useAskModal';
+
 interface RightAskPanelProps {
   open: boolean;
   onClose: () => void;
   currentFile?: string;
   initialMessage?: string;
+  initialAcpAgent?: AcpAgentSelection | null;
   onFirstMessage?: () => void;
   width: number;
   onWidthChange: (w: number) => void;
@@ -28,7 +31,7 @@ interface RightAskPanelProps {
 }
 
 export default function RightAskPanel({
-  open, onClose, currentFile, initialMessage, onFirstMessage,
+  open, onClose, currentFile, initialMessage, initialAcpAgent, onFirstMessage,
   width, onWidthChange, onWidthCommit, askMode, onModeSwitch,
   maximized = false, onMaximize, sidebarOffset = 0,
 }: RightAskPanelProps) {
@@ -73,6 +76,7 @@ export default function RightAskPanel({
             variant="panel"
             currentFile={open ? currentFile : undefined}
             initialMessage={initialMessage}
+            initialAcpAgent={initialAcpAgent}
             onFirstMessage={onFirstMessage}
             onClose={onClose}
             askMode={askMode}

@@ -415,6 +415,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onClose={ap.closeAskPanel}
         currentFile={currentFile}
         initialMessage={ap.askInitialMessage}
+        initialAcpAgent={ap.askAcpAgent}
         onFirstMessage={handleFirstMessage}
         width={ap.askPanelWidth}
         onWidthChange={ap.handleAskWidthChange}
@@ -441,6 +442,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         onClose={ap.closeDesktopAskPopup}
         currentFile={currentFile}
         initialMessage={ap.askInitialMessage}
+        initialAcpAgent={ap.askAcpAgent}
         onFirstMessage={handleFirstMessage}
         askMode={ap.askMode}
         onModeSwitch={ap.handleAskModeSwitch}

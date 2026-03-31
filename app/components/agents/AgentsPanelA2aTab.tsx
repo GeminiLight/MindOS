@@ -301,11 +301,11 @@ function AcpAgentCard({ agent, installed, detectionDone }: {
   const isReady = !!installed;
 
   const handleUse = () => {
-    openAskModal(p.acpUseWith(agent.name));
+    openAskModal('', 'user', { id: agent.id, name: agent.name });
   };
 
   const handleQuickAction = (action: QuickAction) => {
-    openAskModal(`${p.acpUseWith(agent.name)}${action.promptSuffix}`);
+    openAskModal(action.promptSuffix, 'user', { id: agent.id, name: agent.name });
   };
 
   return (

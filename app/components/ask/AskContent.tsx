@@ -15,10 +15,13 @@ import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
 import SessionTabBar from '@/components/ask/SessionTabBar';
 import FileChip from '@/components/ask/FileChip';
+import AgentSelectorCapsule from '@/components/ask/AgentSelectorCapsule';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 import { cn } from '@/lib/utils';
 import { useComposerVerticalResize } from '@/hooks/useComposerVerticalResize';
+import { useAcpDetection } from '@/hooks/useAcpDetection';
+import type { AcpAgentSelection } from '@/hooks/useAskModal';
 
 const PANEL_COMPOSER_STORAGE = 'mindos-agent-panel-composer-height';
 const PANEL_COMPOSER_DEFAULT = 104;
@@ -72,6 +75,8 @@ interface AskContentProps {
   visible: boolean;
   currentFile?: string;
   initialMessage?: string;
+  /** ACP agent pre-selected via "Use" button from A2A tab */
+  initialAcpAgent?: AcpAgentSelection | null;
   onFirstMessage?: () => void;
   /** 'modal' renders close button + ESC handler; 'panel' renders compact header */
   variant: 'modal' | 'panel';
@@ -85,7 +90,7 @@ interface AskContentProps {
   onModeSwitch?: () => void;
 }
 
-export default function AskContent({ visible, currentFile, initialMessage, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch }: AskContentProps) {
+export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch }: AskContentProps) {
   const isPanel = variant === 'panel';
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -181,11 +186,13 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
   const [isDragOver, setIsDragOver] = useState(false);
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
+  const [selectedAcpAgent, setSelectedAcpAgent] = useState<AcpAgentSelection | null>(null);
 
   const session = useAskSession(currentFile);
   const upload = useFileUpload();
   const mention = useMention();
   const slash = useSlashCommand();
+  const acpDetection = useAcpDetection();
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -219,6 +226,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       mention.resetMention();
       slash.resetSlash();
       setSelectedSkill(null);
+      setSelectedAcpAgent(initialAcpAgent ?? null);
       setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
@@ -388,9 +396,10 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     const text = input.trim();
     if (!text || isLoading) return;
 
+    const acpPrefix = selectedAcpAgent ? `[ACP:${selectedAcpAgent.id}] ` : '';
     const content = selectedSkill
-      ? `Use the skill ${selectedSkill.name}: ${text}`
-      : text;
+      ? `Use the skill ${selectedSkill.name}: ${acpPrefix}${text}`
+      : `${acpPrefix}${text}`;
     const userMsg: Message = {
       role: 'user',
       content,
@@ -401,6 +410,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
     setSelectedSkill(null);
+    setSelectedAcpAgent(null);
     if (onFirstMessage && !firstMessageFired.current) {
       firstMessageFired.current = true;
       onFirstMessage();
@@ -547,7 +557,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
       setReconnectAttempt(0);
       abortRef.current = null;
     }
-  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, slash.slashQuery, selectedSkill, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
+  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, slash.slashQuery, selectedSkill, selectedAcpAgent, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
 
   const handleResetSession = useCallback(() => {
     if (isLoading) return;
@@ -558,6 +568,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     mention.resetMention();
     slash.resetSlash();
     setSelectedSkill(null);
+    setSelectedAcpAgent(null);
     setShowHistory(false);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [isLoading, currentFile, session, upload, mention, slash]);
@@ -590,6 +601,7 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
     mention.resetMention();
     slash.resetSlash();
     setSelectedSkill(null);
+    setSelectedAcpAgent(null);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [session, currentFile, upload, mention, slash]);
 
@@ -780,6 +792,18 @@ export default function AskContent({ visible, currentFile, initialMessage, onFir
 
           {upload.uploadError && (
             <div className={cn('shrink-0 pb-1 text-xs text-error', isPanel ? 'px-3' : 'px-4')}>{upload.uploadError}</div>
+          )}
+
+          {/* Agent selector capsule — shows when ACP agents are available */}
+          {(selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
+            <div className={cn('shrink-0', isPanel ? 'px-3 pt-1.5 pb-0.5' : 'px-4 pt-2 pb-0.5')}>
+              <AgentSelectorCapsule
+                selectedAgent={selectedAcpAgent}
+                onSelect={setSelectedAcpAgent}
+                installedAgents={acpDetection.installedAgents}
+                loading={acpDetection.loading}
+              />
+            </div>
           )}
 
           <form

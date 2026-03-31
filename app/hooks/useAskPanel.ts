@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { RIGHT_ASK_DEFAULT_WIDTH, RIGHT_ASK_MIN_WIDTH, RIGHT_ASK_MAX_WIDTH } from '@/components/RightAskPanel';
-import { useAskModal } from './useAskModal';
+import { useAskModal, type AcpAgentSelection } from './useAskModal';
 
 export interface AskPanelState {
   askPanelOpen: boolean;
@@ -12,6 +12,7 @@ export interface AskPanelState {
   desktopAskPopupOpen: boolean;
   askInitialMessage: string;
   askOpenSource: 'user' | 'guide' | 'guide-next';
+  askAcpAgent: AcpAgentSelection | null;
   toggleAskPanel: () => void;
   closeAskPanel: () => void;
   closeDesktopAskPopup: () => void;
@@ -33,6 +34,7 @@ export function useAskPanel(): AskPanelState {
   const [askInitialMessage, setAskInitialMessage] = useState('');
   const [askMaximized, setAskMaximized] = useState(false);
   const [askOpenSource, setAskOpenSource] = useState<'user' | 'guide' | 'guide-next'>('user');
+  const [askAcpAgent, setAskAcpAgent] = useState<AcpAgentSelection | null>(null);
 
   const askModal = useAskModal();
 
@@ -62,6 +64,7 @@ export function useAskPanel(): AskPanelState {
     if (askModal.open) {
       setAskInitialMessage(askModal.initialMessage);
       setAskOpenSource(askModal.source);
+      setAskAcpAgent(askModal.acpAgent);
       if (askMode === 'popup') {
         setDesktopAskPopupOpen(true);
       } else {
@@ -69,17 +72,17 @@ export function useAskPanel(): AskPanelState {
       }
       askModal.close();
     }
-  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.close, askMode]);
+  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.close, askMode]);
 
   const toggleAskPanel = useCallback(() => {
     if (askMode === 'popup') {
       setDesktopAskPopupOpen(v => {
-        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); }
+        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); setAskAcpAgent(null); }
         return !v;
       });
     } else {
       setAskPanelOpen(v => {
-        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); }
+        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); setAskAcpAgent(null); }
         return !v;
       });
     }
@@ -114,7 +117,7 @@ export function useAskPanel(): AskPanelState {
 
   return {
     askPanelOpen, askPanelWidth, askMaximized, askMode, desktopAskPopupOpen,
-    askInitialMessage, askOpenSource,
+    askInitialMessage, askOpenSource, askAcpAgent,
     toggleAskPanel, closeAskPanel, closeDesktopAskPopup,
     handleAskWidthChange, handleAskWidthCommit, handleAskModeSwitch, toggleAskMaximized,
   };
