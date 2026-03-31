@@ -35,6 +35,9 @@ vi.mock('../../lib/acp/subprocess', () => {
     sendAndWait: vi.fn(),
     sendMessage: vi.fn(),
     onMessage: vi.fn(() => () => {}),
+    onRequest: vi.fn(() => () => {}),
+    sendResponse: vi.fn(),
+    installAutoApproval: vi.fn(() => () => {}),
     killAgent: vi.fn((p: { alive: boolean }) => { p.alive = false; }),
   };
 });
