@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { registerRenderer, getPluginRenderers } from '@/lib/renderers/registry';
 import { manifest as todoManifest } from '@/components/renderers/todo/manifest';
+import { manifest as workflowYamlManifest } from '@/components/renderers/workflow-yaml/manifest';
 import type { RendererDefinition } from '@/lib/renderers/registry';
 
 function makeTestRenderer(id: string, appBuiltinFeature?: boolean): RendererDefinition {
@@ -22,6 +23,12 @@ describe('plugin renderer filtering', () => {
     registerRenderer(todoManifest);
     const pluginIds = getPluginRenderers().map((r) => r.id);
     expect(pluginIds).not.toContain('todo');
+  });
+
+  it('excludes workflow-yaml builtin renderer from plugin surface', () => {
+    registerRenderer(workflowYamlManifest);
+    const pluginIds = getPluginRenderers().map((r) => r.id);
+    expect(pluginIds).not.toContain('workflow-yaml');
   });
 
   it('includes non-app-builtin renderers in plugin surface (boundary: appBuiltinFeature undefined)', () => {
