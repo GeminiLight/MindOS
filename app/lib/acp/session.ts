@@ -141,7 +141,9 @@ export async function createSessionFromEntry(
         configOptions = parseConfigOptions(newResult.configOptions);
       }
     }
-  } catch {
+  } catch (sessionErr) {
+    // Re-throw auth errors — they are fatal
+    if (sessionErr instanceof Error && /auth/i.test(sessionErr.message)) throw sessionErr;
     // Non-fatal: agent may not support explicit session/new (backwards compat)
   }
 
