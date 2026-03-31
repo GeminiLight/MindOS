@@ -43,6 +43,14 @@ function textResult(text: string): AgentToolResult<Record<string, never>> {
 /** Build a compact diff summary for tool output. Max 30 diff lines to avoid bloating agent context. */
 function buildDiffSummary(before: string, after: string): string {
   if (before === after) return '';
+  // Skip diff for very large files — LCS is O(n*m), would block agent
+  const beforeLines = before.split('\n').length;
+  const afterLines = after.split('\n').length;
+  if (beforeLines > 2000 || afterLines > 2000) {
+    const added = Math.max(0, afterLines - beforeLines);
+    const removed = Math.max(0, beforeLines - afterLines);
+    return `(~+${added} ~−${removed}, ${afterLines} lines total)\n\n--- changes ---\n  (diff skipped — file too large)`;
+  }
   const raw = buildLineDiff(before, after);
   const inserts = raw.filter(r => r.type === 'insert').length;
   const deletes = raw.filter(r => r.type === 'delete').length;

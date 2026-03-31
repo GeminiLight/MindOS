@@ -184,18 +184,18 @@ function DesktopUpdateTab() {
         <button
           onClick={handleCheck}
           disabled={state === 'checking' || state === 'downloading'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw size={12} className={state === 'checking' ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
           {u?.checkButton ?? 'Check for Updates'}
         </button>
 
         {state === 'idle' && available && (
           <button
             onClick={handleInstall}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
-            <Download size={12} />
+            <Download size={14} />
             {version ? `Update to v${version}` : 'Update'}
           </button>
         )}
@@ -210,9 +210,9 @@ function DesktopUpdateTab() {
                 setErrorMsg(u?.error ?? 'Failed to install update. Please try again.');
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={14} />
             {u?.desktopRestart ?? 'Restart Now'}
           </button>
         )}
@@ -223,7 +223,7 @@ function DesktopUpdateTab() {
           href={CHANGELOG_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ExternalLink size={12} />
           {u?.releaseNotes ?? 'View release notes'}
@@ -534,18 +534,18 @@ function BrowserUpdateTab() {
         <button
           onClick={checkUpdate}
           disabled={state === 'checking' || state === 'updating'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw size={12} className={state === 'checking' ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
           {u?.checkButton ?? 'Check for Updates'}
         </button>
 
         {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
           <button
             onClick={handleUpdate}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
           >
-            <Download size={12} />
+            <Download size={14} />
             {u?.updateButton ? u.updateButton(info.latest) : `Update to v${info.latest}`}
           </button>
         )}
@@ -557,7 +557,7 @@ function BrowserUpdateTab() {
           href={CHANGELOG_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ExternalLink size={12} />
           {u?.releaseNotes ?? 'View release notes'}

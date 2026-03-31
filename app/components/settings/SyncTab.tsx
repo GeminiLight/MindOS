@@ -82,7 +82,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
 
       {/* Git Remote URL */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-foreground block">
+        <label className="text-sm font-medium text-foreground block">
           {syncT?.remoteUrl ?? 'Git Remote URL'}
         </label>
         <Input
@@ -108,7 +108,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
       {/* Access Token (HTTPS only) */}
       {showTokenField && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground block">
+          <label className="text-sm font-medium text-foreground block">
             {syncT?.accessToken ?? 'Access Token'}{' '}
             <span className="text-muted-foreground font-normal">{syncT?.optional ?? '(optional, for private repos)'}</span>
           </label>
@@ -136,7 +136,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
 
       {/* Branch */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-foreground block">
+        <label className="text-sm font-medium text-foreground block">
           {syncT?.branchLabel ?? 'Branch'}
         </label>
         <Input
@@ -267,30 +267,30 @@ export function SyncTab({ t }: SyncTabProps) {
       <SectionLabel>Sync</SectionLabel>
 
       {/* Status overview */}
-      <div className="space-y-2 text-sm">
+      <div className="space-y-2.5 text-sm">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Provider</span>
-          <span className="font-mono text-xs">{status.provider}</span>
+          <span className="font-mono text-sm">{status.provider}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Remote</span>
-          <span className="font-mono text-xs truncate" title={status.remote}>{status.remote}</span>
+          <span className="font-mono text-sm truncate" title={status.remote}>{status.remote}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Branch</span>
-          <span className="font-mono text-xs">{status.branch}</span>
+          <span className="font-mono text-sm">{status.branch}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Last sync</span>
-          <span className="text-xs">{timeAgo(status.lastSync)}</span>
+          <span className="text-sm">{timeAgo(status.lastSync)}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Unpushed</span>
-          <span className="text-xs">{status.unpushed} commits</span>
+          <span className="text-sm">{status.unpushed} commits</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground w-24 shrink-0">Auto-sync</span>
-          <span className="text-xs">
+          <span className="text-sm">
             commit: {status.autoCommitInterval}s, pull: {Math.floor((status.autoPullInterval || 300) / 60)}min
           </span>
         </div>
@@ -303,7 +303,7 @@ export function SyncTab({ t }: SyncTabProps) {
           onClick={handleSyncNow}
           disabled={syncing}
           title={syncing ? t.hints.syncInProgress : undefined}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
           Sync Now
@@ -313,7 +313,7 @@ export function SyncTab({ t }: SyncTabProps) {
           onClick={handleToggle}
           disabled={toggling}
           title={toggling ? t.hints.toggleInProgress : undefined}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             status.enabled
               ? 'border-border text-muted-foreground hover:text-destructive hover:border-destructive/50'
               : 'border-success/30 text-success hover:bg-success/10'

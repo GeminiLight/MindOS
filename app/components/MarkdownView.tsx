@@ -6,15 +6,17 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import { useState, useCallback } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, X } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
   content: string;
-  /** Lines to highlight (1-indexed). Shown with amber left border. Fades after timeout. */
+  /** Lines changed by AI (1-indexed). Shows banner + fades after timeout. */
   highlightLines?: number[];
+  /** Callback to dismiss the highlight banner */
+  onDismissHighlight?: () => void;
 }
 
 function CopyButton({ code }: { code: string }) {
@@ -113,7 +115,7 @@ function extractText(node: React.ReactNode): string {
   return '';
 }
 
-export default function MarkdownView({ content, highlightLines }: MarkdownViewProps) {
+export default function MarkdownView({ content, highlightLines, onDismissHighlight }: MarkdownViewProps) {
   const hasHighlights = highlightLines && highlightLines.length > 0;
 
   return (
@@ -129,10 +131,20 @@ export default function MarkdownView({ content, highlightLines }: MarkdownViewPr
           }}
           data-highlight-line
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)] animate-pulse" />
-          <span className="font-display font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)] animate-pulse shrink-0" />
+          <span className="font-display font-medium flex-1">
             {highlightLines.length} line{highlightLines.length !== 1 ? 's' : ''} updated by AI
           </span>
+          {onDismissHighlight && (
+            <button
+              type="button"
+              onClick={onDismissHighlight}
+              className="p-0.5 rounded hover:bg-[var(--amber)]/15 transition-colors shrink-0"
+              aria-label="Dismiss"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
       )}
       <div className="prose max-w-none">
