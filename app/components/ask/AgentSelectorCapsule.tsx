@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot, ChevronDown, X, Check } from 'lucide-react';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 import type { DetectedAgent } from '@/hooks/useAcpDetection';
@@ -13,6 +14,12 @@ interface AgentSelectorCapsuleProps {
   loading?: boolean;
 }
 
+interface DropdownPos {
+  top: number;
+  left: number;
+  direction: 'up' | 'down';
+}
+
 export default function AgentSelectorCapsule({
   selectedAgent,
   onSelect,
@@ -22,13 +29,35 @@ export default function AgentSelectorCapsule({
   const { t } = useLocale();
   const p = t.panels.agents;
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<DropdownPos | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Position the dropdown relative to the trigger, rendered via portal
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const estimatedH = 200; // approximate dropdown height
+    const direction: 'up' | 'down' = spaceAbove > spaceBelow && spaceAbove > estimatedH ? 'up' : 'down';
+
+    setPos({
+      left: rect.left,
+      top: direction === 'up' ? rect.top - 6 : rect.bottom + 6,
+      direction,
+    });
+  }, [open]);
 
   // Close dropdown on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
@@ -44,6 +73,30 @@ export default function AgentSelectorCapsule({
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+  }, [open]);
+
+  // Reposition on scroll/resize while open
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const reposition = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const estimatedH = 200;
+      const direction: 'up' | 'down' = spaceAbove > spaceBelow && spaceAbove > estimatedH ? 'up' : 'down';
+      setPos({
+        left: rect.left,
+        top: direction === 'up' ? rect.top - 6 : rect.bottom + 6,
+        direction,
+      });
+    };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
   }, [open]);
 
   const handleSelectDefault = useCallback(() => {
@@ -67,9 +120,62 @@ export default function AgentSelectorCapsule({
   // Only show if there are installed agents to choose from
   if (!loading && installedAgents.length === 0 && !selectedAgent) return null;
 
-  return (
-    <div ref={containerRef} className="relative inline-flex">
+  const dropdown = open && pos ? (
+    <div
+      ref={dropdownRef}
+      role="listbox"
+      aria-label={p.acpSelectAgent}
+      className="fixed z-50 min-w-[180px] max-w-[240px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+      style={{
+        left: pos.left,
+        ...(pos.direction === 'up'
+          ? { bottom: window.innerHeight - pos.top }
+          : { top: pos.top }),
+      }}
+    >
+      {/* Default MindOS Agent option */}
       <button
+        type="button"
+        role="option"
+        aria-selected={isDefault}
+        onClick={handleSelectDefault}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-muted"
+      >
+        <Bot size={12} className="shrink-0 text-muted-foreground" />
+        <span className="flex-1 truncate font-medium">{p.acpDefaultAgent}</span>
+        {isDefault && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
+      </button>
+
+      {/* Divider */}
+      {installedAgents.length > 0 && (
+        <div className="mx-2 my-1 border-t border-border/60" />
+      )}
+
+      {/* Installed ACP agents */}
+      {installedAgents.map((agent) => {
+        const isSelected = selectedAgent?.id === agent.id;
+        return (
+          <button
+            key={agent.id}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => handleSelectAgent(agent)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-muted"
+          >
+            <span className="w-2 h-2 rounded-full bg-[var(--success)] shrink-0" />
+            <span className="flex-1 truncate">{agent.name}</span>
+            {isSelected && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(v => !v)}
         className={`
@@ -106,52 +212,7 @@ export default function AgentSelectorCapsule({
           <ChevronDown size={10} className="shrink-0 text-muted-foreground" />
         )}
       </button>
-
-      {/* Dropdown menu */}
-      {open && (
-        <div
-          role="listbox"
-          aria-label={p.acpSelectAgent}
-          className="absolute left-0 bottom-full mb-1.5 z-50 min-w-[180px] max-w-[240px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
-        >
-          {/* Default MindOS Agent option */}
-          <button
-            type="button"
-            role="option"
-            aria-selected={isDefault}
-            onClick={handleSelectDefault}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-muted"
-          >
-            <Bot size={12} className="shrink-0 text-muted-foreground" />
-            <span className="flex-1 truncate font-medium">{p.acpDefaultAgent}</span>
-            {isDefault && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
-          </button>
-
-          {/* Divider */}
-          {installedAgents.length > 0 && (
-            <div className="mx-2 my-1 border-t border-border/60" />
-          )}
-
-          {/* Installed ACP agents */}
-          {installedAgents.map((agent) => {
-            const isSelected = selectedAgent?.id === agent.id;
-            return (
-              <button
-                key={agent.id}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => handleSelectAgent(agent)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-muted"
-              >
-                <span className="w-2 h-2 rounded-full bg-[var(--success)] shrink-0" />
-                <span className="flex-1 truncate">{agent.name}</span>
-                {isSelected && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+      {typeof document !== 'undefined' && dropdown && createPortal(dropdown, document.body)}
+    </>
   );
 }
