@@ -23,15 +23,30 @@ export function parseSkillMd(content: string): { name: string; description: stri
   if (!match) return { name: '', description: '' };
   const yaml = match[1];
   const nameMatch = yaml.match(/^name:\s*(.+)/m);
-  const descMatch = yaml.match(/^description:\s*>?\s*\n?([\s\S]*?)(?=\n\w|\n---)/m);
-  const name = nameMatch ? nameMatch[1].trim() : '';
+  
+  // Try to match block scalar (description: >) first
+  // Captures all indented lines until next non-indented line or EOF
   let description = '';
-  if (descMatch) {
-    description = descMatch[1].trim().split('\n').map((l) => l.trim()).join(' ').slice(0, 200);
+  const blockMatch = yaml.match(/^description:\s*>?\s*\n((?:\s+.+\n?)*)/m);
+  if (blockMatch && blockMatch[1].trim()) {
+    // Block scalar: join indented lines, dedent, preserve structure
+    description = blockMatch[1]
+      .split('\n')
+      .map(line => line.replace(/^\s+/, '')) // Remove leading spaces
+      .filter(line => line.trim()) // Remove empty lines
+      .join(' ')
+      .slice(0, 200);
   } else {
-    const simpleDesc = yaml.match(/^description:\s*(.+)/m);
-    if (simpleDesc) description = simpleDesc[1].trim().slice(0, 200);
+    // Fallback to single-line description
+    const simpleMatch = yaml.match(/^description:\s*(.+)/m);
+    if (simpleMatch) {
+      const val = simpleMatch[1].trim();
+      // Skip the ">" character if it's there (fallback from block scalar)
+      description = val === '>' ? '' : val.slice(0, 200);
+    }
   }
+  
+  const name = nameMatch ? nameMatch[1].trim() : '';
   return { name, description };
 }
 
