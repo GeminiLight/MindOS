@@ -39,8 +39,8 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
           {allSkills.length > 2 && (
             <span className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground">+{allSkills.length - 2}</span>
           )}
-          {step.model && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">🧠 {step.model}</span>}
           {step.agent && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">🤖 {step.agent}</span>}
+          {step.agent && step.model && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">🧠 {step.model}</span>}
           {step.context?.length ? <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">📎 {step.context.length}</span> : null}
         </div>
         <ChevronDown size={12} className="text-muted-foreground/50 shrink-0" />
@@ -99,16 +99,18 @@ export default function StepEditor({ step, index, onChange, onDelete, onMoveUp, 
           />
         </div>
 
-        {/* Agent + Model row */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Agent + Model */}
+        <div className={`grid ${step.agent ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
           <div>
             <label className="block text-2xs font-medium text-muted-foreground mb-1">Agent</label>
-            <AgentSelector value={step.agent} onChange={agent => update({ agent })} />
+            <AgentSelector value={step.agent} onChange={agent => update({ agent, model: agent ? step.model : undefined })} />
           </div>
-          <div>
-            <label className="block text-2xs font-medium text-muted-foreground mb-1">Model</label>
-            <ModelSelector value={step.model} onChange={model => update({ model })} />
-          </div>
+          {step.agent && (
+            <div>
+              <label className="block text-2xs font-medium text-muted-foreground mb-1">Model</label>
+              <ModelSelector value={step.model} onChange={model => update({ model })} />
+            </div>
+          )}
         </div>
 
         {/* Skills (multi-select) */}
