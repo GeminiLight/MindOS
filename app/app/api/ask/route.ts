@@ -443,9 +443,12 @@ export async function POST(req: NextRequest) {
     const agentMessages = toAgentMessages(messages);
 
     // Extract the last user message for agent.prompt()
-    const lastUserContent = messages.length > 0 && messages[messages.length - 1].role === 'user'
-      ? messages[messages.length - 1].content
-      : '';
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+    const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content : '';
+    // Extract images for prompt options (pi-ai ImageContent format)
+    const lastUserImages = lastMsg?.role === 'user' && lastMsg.images?.length
+      ? lastMsg.images.map(img => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))
+      : undefined;
 
     // History = all messages except the last user message (agent.prompt adds it)
     const historyMessages = agentMessages.slice(0, -1);
@@ -635,7 +638,7 @@ export async function POST(req: NextRequest) {
             controller.close();
           } else {
             // Route to MindOS agent (existing logic)
-            await session.prompt(lastUserContent);
+            await session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined);
             metrics.recordRequest(Date.now() - requestStartTime);
             if (!hasContent && lastModelError) {
               send({ type: 'error', message: lastModelError });
