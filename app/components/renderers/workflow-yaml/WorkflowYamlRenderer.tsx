@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { Pencil, Play, AlertCircle } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
 import { parseWorkflowYaml } from './parser';
@@ -13,6 +13,7 @@ type Mode = 'edit' | 'run';
 export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
   const parsed = useMemo(() => parseWorkflowYaml(content), [content]);
   const [mode, setMode] = useState<Mode>('edit');
+  const [dirty, setDirty] = useState(false);
 
   // Editor state: start from parsed workflow or a blank template
   const [editWorkflow, setEditWorkflow] = useState<WorkflowYaml>(() => {
@@ -20,22 +21,41 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
     return { title: '', description: '', steps: [] };
   });
 
-  // When content changes externally (e.g. file reload), re-parse
-  const latestParsed = useMemo(() => {
-    if (parsed.workflow) return parsed.workflow;
-    return null;
-  }, [parsed.workflow]);
+  // Track original content for dirty detection
+  const savedContentRef = useRef(content);
+
+  const latestParsed = useMemo(() => parsed.workflow ?? null, [parsed.workflow]);
 
   const handleEditorChange = useCallback((wf: WorkflowYaml) => {
     setEditWorkflow(wf);
+    setDirty(true);
   }, []);
 
-  // The runner uses the latest parsed workflow (from file), not editor state
+  const handleSaved = useCallback(() => {
+    setDirty(false);
+  }, []);
+
+  // Runner uses latest parsed workflow (from file), not editor state
   const runWorkflow = latestParsed ?? editWorkflow;
   const canRun = runWorkflow.steps.length > 0 && !!runWorkflow.title;
-
-  // Parse errors: show inline warning but still allow editing
   const hasParseErrors = parsed.errors.length > 0;
+
+  // Explain why Run is disabled
+  const runDisabledReason = !runWorkflow.title
+    ? 'Add a title first'
+    : runWorkflow.steps.length === 0
+      ? 'Add at least one step'
+      : dirty
+        ? 'Save changes first'
+        : undefined;
+
+  const handleModeSwitch = (target: Mode) => {
+    if (target === 'run' && dirty) {
+      // Don't block, but show the tooltip
+    }
+    if (target === 'run' && !canRun) return;
+    setMode(target);
+  };
 
   return (
     <div className="max-w-[720px] mx-auto py-6 px-1">
@@ -43,8 +63,8 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
       <div className="flex items-center gap-3 mb-5">
         <div className="flex rounded-lg border border-border overflow-hidden text-xs">
           <button
-            onClick={() => setMode('edit')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+            onClick={() => handleModeSwitch('edit')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 transition-colors ${
               mode === 'edit'
                 ? 'bg-[var(--amber)] text-[var(--amber-foreground)] font-medium'
                 : 'bg-card text-muted-foreground hover:bg-muted'
@@ -54,9 +74,10 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
             Edit
           </button>
           <button
-            onClick={() => canRun && setMode('run')}
+            onClick={() => handleModeSwitch('run')}
             disabled={!canRun}
-            className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors disabled:opacity-40 ${
+            title={runDisabledReason}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               mode === 'run'
                 ? 'bg-[var(--amber)] text-[var(--amber-foreground)] font-medium'
                 : 'bg-card text-muted-foreground hover:bg-muted'
@@ -69,10 +90,11 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
 
         <h1 className="text-base font-semibold text-foreground truncate flex-1">
           {editWorkflow.title || 'New Workflow'}
+          {dirty && <span className="text-[var(--amber)] ml-1" title="Unsaved changes">*</span>}
         </h1>
       </div>
 
-      {/* Parse error banner (non-blocking) */}
+      {/* Parse error banner */}
       {hasParseErrors && mode === 'edit' && (
         <div className="mb-4 px-3 py-2.5 rounded-lg bg-[var(--error)]/10 border border-[var(--error)]/30">
           <div className="flex items-center gap-2 mb-1">
@@ -91,6 +113,7 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
           workflow={editWorkflow}
           filePath={filePath}
           onChange={handleEditorChange}
+          onSaved={handleSaved}
         />
       ) : (
         <WorkflowRunner
