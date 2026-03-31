@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, Send, Paperclip, StopCircle, SquarePen, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow, ImagePlus } from 'lucide-react';
+import { Sparkles, Send, StopCircle, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, Plus } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { Message, ImagePart } from '@/lib/types';
 import { useAskSession } from '@/hooks/useAskSession';
@@ -80,6 +80,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
   const [selectedAcpAgent, setSelectedAcpAgent] = useState<AcpAgentSelection | null>(null);
@@ -164,6 +165,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [variant, visible, onClose, mention, slash]);
+
+  // Close attach menu on any outside click
+  useEffect(() => {
+    if (!showAttachMenu) return;
+    const handler = () => setShowAttachMenu(false);
+    // Delay to avoid closing immediately from the click that opened it
+    const id = setTimeout(() => document.addEventListener('click', handler), 0);
+    return () => { clearTimeout(id); document.removeEventListener('click', handler); };
+  }, [showAttachMenu]);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -632,112 +642,100 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         onDrop={handleDrop}
       >
 
-        {/* Scrollable metadata area (files, skills, agents, images) */}
-        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || upload.uploadError || imageUpload.imageError || selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
-          <div className={cn('shrink-0', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-32 overflow-y-auto')}>
-            {attachedFiles.length > 0 && (
-              <div className="px-3 pt-2 pb-1">
-                <div className="text-muted-foreground/70 mb-1 text-[10px]">
-                  {t.ask.attachFile}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {attachedFiles.map(f => (
-                    <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {upload.localAttachments.length > 0 && (
-              <div className="px-3 pb-1">
-                <div className="text-muted-foreground/70 mb-1 text-[10px]">
-                  {t.ask.uploadedFiles}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {upload.localAttachments.map((f, idx) => (
-                    <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectedSkill && (
-              <div className="px-3 pt-1.5 pb-1">
-                <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md text-xs bg-[var(--amber)]/10 border border-[var(--amber)]/25 text-foreground">
-                  <Zap size={11} className="text-[var(--amber)] shrink-0" />
-                  <span className="font-medium">{selectedSkill.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
-                    className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                    aria-label={`Remove skill ${selectedSkill.name}`}
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              </div>
-            )}
-
-            {upload.uploadError && (
-              <div className="px-3 pb-1 text-xs text-error">{upload.uploadError}</div>
-            )}
-
-            {imageUpload.imageError && (
-              <div className="px-3 pb-1 text-xs text-error">{imageUpload.imageError}</div>
-            )}
-
-            {/* Image previews */}
-            {imageUpload.images.length > 0 && (
-              <div className="px-3 pt-1.5 pb-1">
-                <div className="text-muted-foreground/70 mb-1 text-[10px]">Images</div>
-                <div className="flex flex-wrap gap-2">
-                  {imageUpload.images.map((img, idx) => (
-                    <div key={idx} className="relative group">
-                      <img
-                        src={`data:${img.mimeType};base64,${img.data}`}
-                        alt={`Attached image ${idx + 1}`}
-                        className="h-16 w-16 object-cover rounded-md border border-border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => imageUpload.removeImage(idx)}
-                        className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-background border border-border text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label={`Remove image ${idx + 1}`}
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Agent selector capsule — shows when ACP agents are available */}
-            {(selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
-              <div className="px-3 pt-1.5 pb-0.5">
-                <AgentSelectorCapsule
-                  selectedAgent={selectedAcpAgent}
-                  onSelect={setSelectedAcpAgent}
-                  installedAgents={acpDetection.installedAgents}
-                  loading={acpDetection.loading}
+        {/* Unified context chip flow */}
+        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || selectedAcpAgent || upload.uploadError || imageUpload.imageError) && (
+          <div className={cn('shrink-0 px-3 pt-2 pb-1', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
+            <div className="flex flex-wrap gap-1.5">
+              {/* KB files (@ attached) */}
+              {attachedFiles.map(f => (
+                <FileChip key={f} path={f} variant="kb" onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
+              ))}
+              {/* Uploaded files */}
+              {upload.localAttachments.map((f, idx) => (
+                <FileChip key={`up-${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
+              ))}
+              {/* Images (name chip + hover preview) */}
+              {imageUpload.images.map((img, idx) => (
+                <FileChip
+                  key={`img-${idx}`}
+                  path={`Image ${idx + 1}`}
+                  variant="image"
+                  imageData={img.data}
+                  imageMime={img.mimeType}
+                  onRemove={() => imageUpload.removeImage(idx)}
                 />
-              </div>
+              ))}
+              {/* Skill */}
+              {selectedSkill && (
+                <FileChip
+                  path={selectedSkill.name}
+                  variant="skill"
+                  onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
+                />
+              )}
+              {/* Agent */}
+              {selectedAcpAgent && (
+                <FileChip
+                  path={selectedAcpAgent.name}
+                  variant="agent"
+                  onRemove={() => { setSelectedAcpAgent(null); inputRef.current?.focus(); }}
+                />
+              )}
+            </div>
+            {/* Errors (merged) */}
+            {(upload.uploadError || imageUpload.imageError) && (
+              <div className="mt-1 text-xs text-error">{upload.uploadError || imageUpload.imageError}</div>
             )}
           </div>
         )}
 
-        {/* Input form — consistent padding across panel/modal */}
+        {/* Agent selector — only when no agent selected but agents available */}
+        {!selectedAcpAgent && acpDetection.installedAgents.length > 0 && (
+          <div className="px-3 pt-1 pb-0.5">
+            <AgentSelectorCapsule
+              selectedAgent={null}
+              onSelect={setSelectedAcpAgent}
+              installedAgents={acpDetection.installedAgents}
+              loading={acpDetection.loading}
+            />
+          </div>
+        )}
+
+        {/* Input form */}
         <form
           ref={formRef}
           onSubmit={handleSubmit}
-          className="flex items-end gap-2 px-3 py-2"
+          className="flex items-end gap-1.5 px-3 py-2"
         >
-          <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title={t.hints.attachFile}>
-            <Paperclip size={inputIconSize} />
-          </button>
-          <button type="button" onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach image (or paste with ⌘V)">
-            <ImagePlus size={inputIconSize} />
-          </button>
+          {/* + attach button with mini menu */}
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAttachMenu(v => !v)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={t.hints.attachFile}
+            >
+              <Plus size={inputIconSize} />
+            </button>
+            {showAttachMenu && (
+              <div className="absolute bottom-full left-0 mb-1 py-1 rounded-lg border border-border bg-card shadow-lg z-50 min-w-[140px]">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                  onClick={() => { setShowAttachMenu(false); upload.uploadInputRef.current?.click(); }}
+                >
+                  File
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                  onClick={() => { setShowAttachMenu(false); imageInputRef.current?.click(); }}
+                >
+                  Image
+                </button>
+              </div>
+            )}
+          </div>
 
           <input
             ref={upload.uploadInputRef}
@@ -751,8 +749,6 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               inputEl.value = '';
             }}
           />
-
-          {/* Hidden image file input */}
           <input
             ref={imageInputRef}
             type="file"
