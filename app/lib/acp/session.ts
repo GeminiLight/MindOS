@@ -16,6 +16,7 @@ import {
   sendMessage,
   onMessage,
   killAgent,
+  installAutoApproval,
   type AcpProcess,
 } from './subprocess';
 import { findAcpAgent } from './registry';
@@ -24,6 +25,7 @@ import { findAcpAgent } from './registry';
 
 const sessions = new Map<string, AcpSession>();
 const sessionProcesses = new Map<string, AcpProcess>();
+const autoApprovalCleanups = new Map<string, () => void>();
 
 /* ── Public API ────────────────────────────────────────────────────────── */
 
@@ -51,21 +53,31 @@ export async function createSessionFromEntry(
 ): Promise<AcpSession> {
   const proc = spawnAcpAgent(entry, options);
 
+  // Install auto-approval BEFORE initialize so any early permission requests
+  // from the agent don't cause a hang waiting for TTY input.
+  const unsubApproval = installAutoApproval(proc);
+
   // Send ACP initialize and wait for ack.
   // protocolVersion must be a number (ACP spec), not a semver string.
+  // Declare client capabilities so agent knows we support filesystem & terminal.
   // Timeout is 30s because agents (especially npx-based) need time to start.
   try {
     const response = await sendAndWait(proc, 'initialize', {
       protocolVersion: 1,
-      capabilities: {},
+      capabilities: {
+        filesystem: { read: true, write: true },
+        terminal: { execute: true },
+      },
       clientInfo: { name: 'mindos', version: '0.6.29' },
     }, 30_000);
 
     if (response.error) {
+      unsubApproval();
       killAgent(proc);
       throw new Error(`initialize failed: ${response.error.message}`);
     }
   } catch (err) {
+    unsubApproval();
     killAgent(proc);
     throw err;
   }
@@ -81,6 +93,7 @@ export async function createSessionFromEntry(
 
   sessions.set(sessionId, session);
   sessionProcesses.set(sessionId, proc);
+  autoApprovalCleanups.set(sessionId, unsubApproval);
   return session;
 }
 
@@ -225,6 +238,11 @@ export async function closeSession(sessionId: string): Promise<void> {
 
   sessions.delete(sessionId);
   sessionProcesses.delete(sessionId);
+  const cleanup = autoApprovalCleanups.get(sessionId);
+  if (cleanup) {
+    cleanup();
+    autoApprovalCleanups.delete(sessionId);
+  }
 }
 
 /**
