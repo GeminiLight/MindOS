@@ -200,6 +200,13 @@ export async function runStepWithAI(
           if (event.type === 'text_delta' && typeof event.delta === 'string') {
             acc += event.delta;
             onChunk(acc);
+          } else if (event.type === 'thinking_delta' && typeof event.delta === 'string') {
+            // Show agent thinking as dimmed text
+            acc += event.delta;
+            onChunk(acc);
+          } else if (event.type === 'error' && event.message) {
+            // ACP agent error — throw so WorkflowRunner shows it in step error state
+            throw new Error(event.message);
           }
         } catch {
           // Not valid JSON — try legacy Vercel AI SDK format: 0:"..."
