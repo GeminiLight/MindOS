@@ -201,31 +201,44 @@ function registerSshHandlers(
     try {
       if (activeTunnel) { await activeTunnel.stop(); activeTunnel = null; }
 
-      const localPort = await findAvailablePort(remotePort);
-      const tunnel = new SshTunnel(host, localPort, remotePort);
-      await tunnel.start();
-      activeTunnel = tunnel;
+      // Retry up to 3 times to handle transient failures and port collisions
+      let lastError = '';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const localPort = await findAvailablePort(remotePort + attempt);
+          const tunnel = new SshTunnel(host, localPort, remotePort);
+          await tunnel.start();
+          activeTunnel = tunnel;
 
-      const result = await testConnection(`http://localhost:${localPort}`);
-      if (result.status !== 'online') {
-        await tunnel.stop();
-        activeTunnel = null;
-        return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
+          const result = await testConnection(`http://localhost:${localPort}`);
+          if (result.status === 'online') {
+            // Success path continues below the retry loop
+            const url = `http://localhost:${localPort}`;
+            saveConnection({
+              address: `ssh://${host}:${remotePort}`,
+              label: `${host} (SSH)`,
+              lastConnected: new Date().toISOString(),
+              authMethod: 'token',
+            });
+            setActiveRemoteConnection(url);
+            resolvedRef.value = true;
+            resolve(url);
+            win.close();
+            return { ok: true, url, authRequired: result.authRequired };
+          }
+
+          // MindOS not running on remote
+          await tunnel.stop();
+          activeTunnel = null;
+          return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
+        } catch (retryErr: any) {
+          lastError = retryErr.message || 'SSH tunnel failed';
+          if (activeTunnel) { await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
       }
+      return { ok: false, error: lastError };
 
-      const url = `http://localhost:${localPort}`;
-      saveConnection({
-        address: `ssh://${host}:${remotePort}`,
-        label: `${host} (SSH)`,
-        lastConnected: new Date().toISOString(),
-        authMethod: 'token',
-      });
-      setActiveRemoteConnection(url);
-
-      resolvedRef.value = true;
-      resolve(url);
-      win.close();
-      return { ok: true, url, authRequired: result.authRequired };
     } catch (err: any) {
       return { ok: false, error: err.message || 'SSH tunnel failed' };
     }
