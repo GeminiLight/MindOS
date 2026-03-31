@@ -162,11 +162,15 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 
 - **GUI Workbench**: browse, edit, search notes with unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
 - **Built-in Agent Assistant**: converse with the knowledge base in context; edits seamlessly capture human-curated knowledge.
-- **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Agent Inspector, and more.
+- **One-Click Import**: drag-and-drop files with Inline AI Organize — auto-analyzes, categorizes, and writes into the knowledge base with progress tracking and undo support.
+- **Guided Onboarding**: step-by-step first-run experience that helps new users set up their knowledge base and connect their first Agent.
+- **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Workflow Editor, Agent Inspector, and more.
 
 **For Agents**
 
-- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (OpenClaw, Claude Code, Cursor, etc.). Zero-config access.
+- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (Claude Code, Cursor, Gemini CLI, etc.). Zero-config access.
+- **ACP / A2A Protocols**: Agent Communication Protocol for inter-agent discovery, delegation, and orchestration. Phase 1 live with Agent Card discovery + JSON-RPC messaging.
+- **Workflow Orchestration**: YAML-based workflow editor with step execution engine — define, edit, and run multi-step agent workflows visually.
 - **Structured Templates**: pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
 - **Agent-Ready Docs**: everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch.
 
@@ -175,15 +179,17 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 - **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
 - **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
 - **Backlinks View**: displays all files that reference the current file, helping you understand how a note fits into the knowledge network.
+- **Agent Inspector**: renders Agent operation logs as a filterable timeline to audit every tool call in detail.
 - **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
 - **Desktop App**: native macOS/Windows/Linux app with system tray, auto-start, and local process management.
 
 <details>
 <summary><strong>Coming Soon</strong></summary>
 
-- [ ] ACP (Agent Communication Protocol): connect external Agents (e.g., Claude Code, Cursor) and turn the knowledge base into a multi-Agent collaboration hub
 - [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
-- [ ] Agent Inspector: render Agent operation logs as a filterable timeline to audit every tool call in detail
+- [ ] ACP / A2A Phase 2: deep multi-agent collaboration with task delegation, shared context, and workflow chaining
+- [ ] Experience Compiler: auto-extract corrections and preferences from agent interactions into reusable Skills/SOPs
+- [ ] Knowledge Health Dashboard: visualize cognitive compound metrics — rules accumulated, agent reuse count, knowledge freshness
 
 </details>
 
