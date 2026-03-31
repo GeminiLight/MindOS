@@ -41,6 +41,8 @@ function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number)
   el.style.height = '0px';
   const next = Math.min(el.scrollHeight, maxH);
   el.style.height = `${Number.isFinite(next) ? next : maxH}px`;
+  // Only show scrollbar when content exceeds max height
+  el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
 }
 
 interface AskContentProps {
@@ -774,7 +776,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             onPaste={handlePaste}
             placeholder={t.ask.placeholder}
             rows={1}
-            className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
+            className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
           />
 
           {isLoading ? (
