@@ -272,7 +272,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
     },
-    [mention, selectMention, slash, selectSlashCommand, isLoading, input],
+    [mention, selectMention, slash, selectSlashCommand, isLoading, input, imageUpload.images],
   );
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
@@ -444,7 +444,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       setReconnectAttempt(0);
       abortRef.current = null;
     }
-  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, mention.mentionQuery, slash.slashQuery, selectedSkill, selectedAcpAgent, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
+  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, imageUpload.images, imageUpload.clearImages, mention.mentionQuery, slash.slashQuery, selectedSkill, selectedAcpAgent, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
 
   const handleResetSession = useCallback(() => {
     if (isLoading) return;

@@ -19,8 +19,8 @@ function isImageMimeType(type: string): type is ImageMimeType {
 async function compressImage(file: File): Promise<{ data: string; mimeType: ImageMimeType }> {
   const mimeType = file.type as ImageMimeType;
 
-  // If small enough and right format, use as-is
-  if (file.size <= MAX_IMAGE_SIZE && (mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp')) {
+  // If small enough, use as-is (skip canvas compression to preserve GIF animation)
+  if (file.size <= MAX_IMAGE_SIZE) {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     let binary = '';

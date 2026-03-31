@@ -19,14 +19,20 @@ function UserMessageContent({ content, skillName, images }: { content: string; s
     <>
       {/* Images */}
       {images && images.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
+        <div className={`flex flex-wrap gap-1.5${content ? ' mb-2' : ''}`}>
           {images.map((img, idx) => (
-            <img
-              key={idx}
-              src={`data:${img.mimeType};base64,${img.data}`}
-              alt={`Image ${idx + 1}`}
-              className="max-h-48 max-w-full rounded-md object-contain"
-            />
+            img.data ? (
+              <img
+                key={idx}
+                src={`data:${img.mimeType};base64,${img.data}`}
+                alt={`Image ${idx + 1}`}
+                className="max-h-48 max-w-full rounded-md object-contain"
+              />
+            ) : (
+              <div key={idx} className="h-12 px-3 rounded-md bg-muted flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>[Image {idx + 1}]</span>
+              </div>
+            )
           ))}
         </div>
       )}

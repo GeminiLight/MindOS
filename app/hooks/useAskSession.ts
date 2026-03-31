@@ -21,7 +21,10 @@ export function sessionTitle(s: ChatSession): string {
   const firstUser = s.messages.find((m) => m.role === 'user');
   if (!firstUser) return '(empty session)';
   const line = firstUser.content.replace(/\s+/g, ' ').trim();
-  return line.length > 42 ? `${line.slice(0, 42)}...` : line;
+  if (!line && firstUser.images && firstUser.images.length > 0) {
+    return `[${firstUser.images.length} image${firstUser.images.length > 1 ? 's' : ''}]`;
+  }
+  return line.length > 42 ? `${line.slice(0, 42)}...` : line || '(empty session)';
 }
 
 async function fetchSessions(): Promise<ChatSession[]> {
@@ -38,10 +41,24 @@ async function fetchSessions(): Promise<ChatSession[]> {
 
 async function upsertSession(session: ChatSession): Promise<void> {
   try {
+    // Strip base64 image data before persisting (images are session-only, not stored)
+    const stripped: ChatSession = {
+      ...session,
+      messages: session.messages.map(m => {
+        if (!m.images || m.images.length === 0) return m;
+        return {
+          ...m,
+          images: m.images.map(img => ({
+            ...img,
+            data: '', // Strip base64 data — images are ephemeral
+          })),
+        };
+      }),
+    };
     await fetch('/api/ask-sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session }),
+      body: JSON.stringify({ session: stripped }),
     });
   } catch {
     // ignore persistence errors

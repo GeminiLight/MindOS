@@ -6,13 +6,6 @@ export function hasImages(messages: Array<{ images?: unknown[] }>): boolean {
   return messages.some(m => m.images && m.images.length > 0);
 }
 
-/** Models known to support vision (non-exhaustive, covers common defaults) */
-const VISION_MODELS: Record<string, string> = {
-  // Anthropic: all claude-3+ models support vision
-  // OpenAI: gpt-4o, gpt-4-turbo, gpt-4-vision support vision
-  // If user's model isn't in this list but is modern, it likely works
-};
-
 /** Ensure model input includes 'image' when images are present */
 function ensureVisionCapable(model: Model<any>): Model<any> {
   const inputs = model.input as readonly string[];
