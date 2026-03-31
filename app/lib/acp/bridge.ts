@@ -88,7 +88,12 @@ export function bridgeAcpUpdatesToA2a(
   for (const update of updates) {
     switch (update.type) {
       case 'text':
+      case 'agent_message_chunk':
         aggregatedText += update.text ?? '';
+        break;
+      case 'agent_thought_chunk':
+        // Include thought in output with label
+        if (update.text) aggregatedText += update.text;
         break;
       case 'done':
         finalState = 'TASK_STATE_COMPLETED';
@@ -97,6 +102,7 @@ export function bridgeAcpUpdatesToA2a(
         finalState = 'TASK_STATE_FAILED';
         errorMessage = update.error ?? 'Unknown error';
         break;
+      // tool_call, tool_call_update, plan, etc. — pass through for now
     }
   }
 

@@ -26,7 +26,7 @@ export function AgentsPanelHubNav({
   return (
     <div className="py-2">
       <PanelNavRow
-        icon={<LayoutDashboard size={14} className="text-[var(--amber)]" />}
+        icon={<LayoutDashboard size={14} className={inAgentsRoute && (tab === null || tab === 'overview') ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navOverview}
         badge={<span className="text-2xs tabular-nums text-muted-foreground/60 px-1.5 py-0.5 rounded bg-muted/40 font-medium">{connectedCount}</span>}
         href="/agents"

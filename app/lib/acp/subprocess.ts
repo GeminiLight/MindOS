@@ -210,6 +210,14 @@ export function killAgent(acpProc: AcpProcess): void {
   processes.delete(acpProc.id);
   messageListeners.delete(acpProc.id);
   requestListeners.delete(acpProc.id);
+  // Clean up any terminals spawned by this process
+  const terms = terminalMaps.get(acpProc.id);
+  if (terms) {
+    for (const entry of terms.values()) {
+      if (entry.child.exitCode === null) entry.child.kill('SIGTERM');
+    }
+    terminalMaps.delete(acpProc.id);
+  }
 }
 
 /**
@@ -277,11 +285,211 @@ export function sendResponse(
  */
 export function installAutoApproval(acpProc: AcpProcess): () => void {
   return onRequest(acpProc, (req) => {
-    // Auto-approve everything — we trust agents spawned by MindOS.
-    // Log for debugging.
-    console.log(`[ACP] Auto-approving agent request: ${req.method} (id=${req.id})`);
-    sendResponse(acpProc, req.id, {});
+    const method = req.method;
+    const params = (req.params ?? {}) as Record<string, unknown>;
+
+    switch (method) {
+      // ── File system: read ──
+      case 'fs/read_text_file': {
+        const filePath = String(params.path ?? '');
+        if (!filePath) {
+          sendResponse(acpProc, req.id, { error: { code: -32602, message: 'path is required' } });
+          return;
+        }
+        try {
+          const fs = require('fs');
+          const line = typeof params.line === 'number' ? params.line : undefined;
+          const limit = typeof params.limit === 'number' ? params.limit : undefined;
+          let content = fs.readFileSync(filePath, 'utf-8') as string;
+          if (line !== undefined || limit !== undefined) {
+            const lines = content.split('\n');
+            const start = (line ?? 1) - 1; // 1-based to 0-based
+            const end = limit !== undefined ? start + limit : lines.length;
+            content = lines.slice(Math.max(0, start), end).join('\n');
+          }
+          sendResponse(acpProc, req.id, { content });
+        } catch (err) {
+          sendResponse(acpProc, req.id, { error: { code: -32002, message: (err as Error).message } });
+        }
+        return;
+      }
+
+      // ── File system: write ──
+      case 'fs/write_text_file': {
+        const filePath = String(params.path ?? '');
+        const content = String(params.content ?? '');
+        if (!filePath) {
+          sendResponse(acpProc, req.id, { error: { code: -32602, message: 'path is required' } });
+          return;
+        }
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(filePath, content, 'utf-8');
+          sendResponse(acpProc, req.id, {});
+        } catch (err) {
+          sendResponse(acpProc, req.id, { error: { code: -32603, message: (err as Error).message } });
+        }
+        return;
+      }
+
+      // ── Terminal: create ──
+      case 'terminal/create': {
+        const command = String(params.command ?? '');
+        const args = Array.isArray(params.args) ? params.args.map(String) : [];
+        const cwd = typeof params.cwd === 'string' ? params.cwd : undefined;
+        const env = (params.env && typeof params.env === 'object') ? params.env as Record<string, string> : undefined;
+        const outputByteLimit = typeof params.outputByteLimit === 'number' ? params.outputByteLimit : 1_000_000;
+
+        if (!command) {
+          sendResponse(acpProc, req.id, { error: { code: -32602, message: 'command is required' } });
+          return;
+        }
+
+        const terminalId = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        try {
+          const { spawn: spawnChild } = require('child_process');
+          const child = spawnChild(command, args, {
+            cwd,
+            env: { ...process.env, ...(env ?? {}) },
+            shell: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+
+          let output = '';
+          let truncated = false;
+
+          child.stdout?.on('data', (chunk: Buffer) => {
+            if (output.length < outputByteLimit) {
+              output += chunk.toString();
+              if (output.length > outputByteLimit) {
+                output = output.slice(0, outputByteLimit);
+                truncated = true;
+              }
+            }
+          });
+          child.stderr?.on('data', (chunk: Buffer) => {
+            if (output.length < outputByteLimit) {
+              output += chunk.toString();
+              if (output.length > outputByteLimit) {
+                output = output.slice(0, outputByteLimit);
+                truncated = true;
+              }
+            }
+          });
+
+          // Store terminal in process-scoped map
+          const terminalMap = getOrCreateTerminalMap(acpProc.id);
+          terminalMap.set(terminalId, { child, output: () => output, truncated: () => truncated });
+
+          sendResponse(acpProc, req.id, { terminalId });
+        } catch (err) {
+          sendResponse(acpProc, req.id, { error: { code: -32603, message: (err as Error).message } });
+        }
+        return;
+      }
+
+      // ── Terminal: output ──
+      case 'terminal/output': {
+        const terminalId = String(params.terminalId ?? '');
+        const terminal = getTerminal(acpProc.id, terminalId);
+        if (!terminal) {
+          sendResponse(acpProc, req.id, { error: { code: -32002, message: `Terminal not found: ${terminalId}` } });
+          return;
+        }
+        const exitStatus = terminal.child.exitCode !== null ? { exitCode: terminal.child.exitCode } : undefined;
+        sendResponse(acpProc, req.id, { output: terminal.output(), truncated: terminal.truncated(), exitStatus });
+        return;
+      }
+
+      // ── Terminal: kill ──
+      case 'terminal/kill': {
+        const terminalId = String(params.terminalId ?? '');
+        const terminal = getTerminal(acpProc.id, terminalId);
+        if (!terminal) {
+          sendResponse(acpProc, req.id, { error: { code: -32002, message: `Terminal not found: ${terminalId}` } });
+          return;
+        }
+        terminal.child.kill('SIGTERM');
+        sendResponse(acpProc, req.id, {});
+        return;
+      }
+
+      // ── Terminal: wait_for_exit ──
+      case 'terminal/wait_for_exit': {
+        const terminalId = String(params.terminalId ?? '');
+        const terminal = getTerminal(acpProc.id, terminalId);
+        if (!terminal) {
+          sendResponse(acpProc, req.id, { error: { code: -32002, message: `Terminal not found: ${terminalId}` } });
+          return;
+        }
+        if (terminal.child.exitCode !== null) {
+          sendResponse(acpProc, req.id, { exitCode: terminal.child.exitCode, signal: terminal.child.signalCode });
+          return;
+        }
+        terminal.child.on('exit', (code: number | null, signal: string | null) => {
+          sendResponse(acpProc, req.id, { exitCode: code, signal });
+        });
+        return;
+      }
+
+      // ── Terminal: release ──
+      case 'terminal/release': {
+        const terminalId = String(params.terminalId ?? '');
+        const terminal = getTerminal(acpProc.id, terminalId);
+        if (!terminal) {
+          sendResponse(acpProc, req.id, { error: { code: -32002, message: `Terminal not found: ${terminalId}` } });
+          return;
+        }
+        if (terminal.child.exitCode === null) terminal.child.kill('SIGTERM');
+        removeTerminal(acpProc.id, terminalId);
+        sendResponse(acpProc, req.id, {});
+        return;
+      }
+
+      // ── Permission requests (auto-approve all) ──
+      case 'session/request_permission': {
+        console.log(`[ACP] Auto-approving permission: ${JSON.stringify(params.toolCall ?? {}).slice(0, 200)}`);
+        sendResponse(acpProc, req.id, { outcome: { selected: { optionId: 'allow_once' } } });
+        return;
+      }
+
+      // ── Unknown methods: auto-approve for backwards compat ──
+      default: {
+        console.log(`[ACP] Auto-approving unknown agent request: ${method} (id=${req.id})`);
+        sendResponse(acpProc, req.id, {});
+      }
+    }
   });
+}
+
+/* ── Terminal management (per ACP process) ─────────────────────────────── */
+
+interface TerminalEntry {
+  child: import('child_process').ChildProcess;
+  output: () => string;
+  truncated: () => boolean;
+}
+
+const terminalMaps = new Map<string, Map<string, TerminalEntry>>();
+
+function getOrCreateTerminalMap(procId: string): Map<string, TerminalEntry> {
+  let map = terminalMaps.get(procId);
+  if (!map) {
+    map = new Map();
+    terminalMaps.set(procId, map);
+  }
+  return map;
+}
+
+function getTerminal(procId: string, terminalId: string): TerminalEntry | undefined {
+  return terminalMaps.get(procId)?.get(terminalId);
+}
+
+function removeTerminal(procId: string, terminalId: string): void {
+  terminalMaps.get(procId)?.delete(terminalId);
 }
 
 /* ── Internal — agent command resolution moved to agent-descriptors.ts ─ */
