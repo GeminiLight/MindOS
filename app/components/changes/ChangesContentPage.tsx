@@ -221,7 +221,10 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
 
           {!loading && !error && events.map((event) => {
             const open = !!expanded[event.id];
-            const rows = collapseDiffContext(buildLineDiff(event.before ?? '', event.after ?? ''));
+            const rawDiff = buildLineDiff(event.before ?? '', event.after ?? '');
+            const rows = collapseDiffContext(rawDiff);
+            const inserts = rawDiff.filter(r => r.type === 'insert').length;
+            const deletes = rawDiff.filter(r => r.type === 'delete').length;
             return (
               <div key={event.id} className="rounded-xl border border-border bg-card overflow-hidden">
                 <button
@@ -232,7 +235,16 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                   <div className="flex items-start gap-2">
                     <span className="pt-0.5 text-muted-foreground">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-foreground font-display">{event.summary}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground font-display">{event.summary}</span>
+                        {(inserts > 0 || deletes > 0) && (
+                          <span className="text-xs font-mono text-muted-foreground">
+                            {inserts > 0 && <span className="text-success">+{inserts}</span>}
+                            {inserts > 0 && deletes > 0 && ' '}
+                            {deletes > 0 && <span className="text-error">-{deletes}</span>}
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         <span
                           className="rounded-md px-2 py-0.5 font-medium"
@@ -261,27 +273,59 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                   </div>
                 </button>
 
-                {open && (
-                  <div className="border-t border-border bg-background/70">
+                {open && (() => {
+                  let oln = 1;
+                  let nln = 1;
+                  return (
+                  <div className="border-t border-border bg-background/70 max-h-80 overflow-y-auto">
                     {rows.map((row, idx) => {
                       if (row.type === 'gap') {
-                        return <div key={`${event.id}-gap-${idx}`} className="px-3 py-1 text-2xs text-muted-foreground">{t.changes.unchangedLines(row.count)}</div>;
+                        oln += row.count;
+                        nln += row.count;
+                        return (
+                          <div key={`${event.id}-gap-${idx}`} className="px-3 py-1 text-2xs text-muted-foreground/60 border-y border-border/30 bg-muted/20 text-center">
+                            {t.changes.unchangedLines(row.count)}
+                          </div>
+                        );
                       }
                       const prefix = row.type === 'insert' ? '+' : row.type === 'delete' ? '-' : ' ';
-                      const color = row.type === 'insert'
-                        ? 'var(--success)'
-                        : row.type === 'delete'
-                          ? 'var(--error)'
-                          : 'var(--muted-foreground)';
+                      const showOld = row.type !== 'insert' ? oln : '';
+                      const showNew = row.type !== 'delete' ? nln : '';
+                      if (row.type !== 'insert') oln++;
+                      if (row.type !== 'delete') nln++;
                       return (
-                        <div key={`${event.id}-${idx}`} className="px-3 py-0.5 text-xs font-mono flex items-start gap-2">
-                          <span style={{ color }} className="select-none w-3">{prefix}</span>
-                          <span style={{ color }} className="whitespace-pre-wrap break-all flex-1">{row.text || ' '}</span>
+                        <div
+                          key={`${event.id}-${idx}`}
+                          className={`flex items-start text-xs font-mono ${
+                            row.type === 'insert'
+                              ? 'bg-success/8'
+                              : row.type === 'delete'
+                                ? 'bg-error/8'
+                                : ''
+                          }`}
+                        >
+                          <span className="w-8 shrink-0 text-right pr-1 select-none text-muted-foreground/40 text-2xs leading-5">{showOld}</span>
+                          <span className="w-8 shrink-0 text-right pr-1 select-none text-muted-foreground/40 text-2xs leading-5">{showNew}</span>
+                          <span
+                            className={`w-3 shrink-0 text-center select-none leading-5 ${
+                              row.type === 'insert' ? 'text-success' : row.type === 'delete' ? 'text-error' : 'text-muted-foreground/30'
+                            }`}
+                          >
+                            {prefix}
+                          </span>
+                          <span
+                            className={`px-1 py-0.5 whitespace-pre-wrap break-all flex-1 ${
+                              row.type === 'insert' ? 'text-success' : row.type === 'delete' ? 'text-error' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {row.text || '\u00A0'}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}

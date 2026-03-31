@@ -37,24 +37,24 @@ export interface SettingsData {
 export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'sync' | 'update' | 'uninstall';
 
 export const CONTENT_WIDTHS = [
-  { value: '680px', label: 'Narrow (680px)' },
-  { value: '780px', label: 'Default (780px)' },
-  { value: '960px', label: 'Wide (960px)' },
-  { value: '100%', label: 'Full width' },
+  { value: '680px', label: 'Narrow', width: 42 },
+  { value: '780px', label: 'Default', width: 56 },
+  { value: '960px', label: 'Wide', width: 75 },
+  { value: '100%', label: 'Full', width: 100 },
 ];
 
 export const FONT_SIZES = [
-  { value: '14px', label: '14' },
-  { value: '15px', label: '15', isDefault: true },
-  { value: '16px', label: '16' },
-  { value: '17px', label: '17' },
+  { value: '14px', label: '14', numericValue: 14 },
+  { value: '15px', label: '15', numericValue: 15, isDefault: true },
+  { value: '16px', label: '16', numericValue: 16 },
+  { value: '17px', label: '17', numericValue: 17 },
 ];
 
 export const FONTS = [
-  { value: 'lora', label: 'Lora (serif)', style: { fontFamily: 'Lora, Georgia, serif' } },
-  { value: 'ibm-plex-sans', label: 'IBM Plex Sans', style: { fontFamily: "'IBM Plex Sans', sans-serif" } },
-  { value: 'geist', label: 'Geist', style: { fontFamily: 'var(--font-geist-sans), sans-serif' } },
-  { value: 'ibm-plex-mono', label: 'IBM Plex Mono (mono)', style: { fontFamily: "'IBM Plex Mono', monospace" } },
+  { value: 'lora', label: 'Lora', category: 'Serif', style: { fontFamily: 'Lora, Georgia, serif' } },
+  { value: 'ibm-plex-sans', label: 'IBM Plex Sans', category: 'Sans', style: { fontFamily: "'IBM Plex Sans', sans-serif" } },
+  { value: 'geist', label: 'Geist', category: 'Sans', style: { fontFamily: 'var(--font-geist-sans), sans-serif' } },
+  { value: 'ibm-plex-mono', label: 'IBM Plex Mono', category: 'Mono', style: { fontFamily: "'IBM Plex Mono', monospace" } },
 ];
 
 /* ── MCP Types ────────────────────────────────────────────────── */

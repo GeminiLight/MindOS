@@ -13,6 +13,8 @@ import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
   content: string;
+  /** Lines to highlight (1-indexed). Shown with amber left border. Fades after timeout. */
+  highlightLines?: number[];
 }
 
 function CopyButton({ code }: { code: string }) {
@@ -111,16 +113,37 @@ function extractText(node: React.ReactNode): string {
   return '';
 }
 
-export default function MarkdownView({ content }: MarkdownViewProps) {
+export default function MarkdownView({ content, highlightLines }: MarkdownViewProps) {
+  const hasHighlights = highlightLines && highlightLines.length > 0;
+
   return (
-    <div className="prose max-w-none">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
+    <div>
+      {/* Change indicator banner */}
+      {hasHighlights && (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-md border px-3 py-2 text-xs animate-in fade-in-0 duration-300"
+          style={{
+            borderColor: 'color-mix(in srgb, var(--amber) 40%, var(--border))',
+            background: 'color-mix(in srgb, var(--amber) 8%, var(--card))',
+            color: 'var(--amber)',
+          }}
+          data-highlight-line
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber)] animate-pulse" />
+          <span className="font-display font-medium">
+            {highlightLines.length} line{highlightLines.length !== 1 ? 's' : ''} updated by AI
+          </span>
+        </div>
+      )}
+      <div className="prose max-w-none">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
+          components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
     </div>
   );
 }

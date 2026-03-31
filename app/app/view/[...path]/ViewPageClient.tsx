@@ -19,6 +19,7 @@ import { useLocale } from '@/lib/LocaleContext';
 import DirPicker from '@/components/DirPicker';
 import { renameFileAction, deleteFileAction } from '@/lib/actions';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
+import { buildLineDiff } from '@/components/changes/line-diff';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -271,11 +272,42 @@ export default function ViewPageClient({
     return () => window.removeEventListener('keydown', handler);
   }, [editing, handleSave, handleEdit, handleCancel]);
 
-  // Auto-refresh when AI agent modifies files
+  // Auto-refresh when AI agent modifies files + compute changed lines for highlight
   const [fileUpdated, setFileUpdated] = useState(false);
+  const [changedLines, setChangedLines] = useState<number[]>([]);
+  const prevContentRef = useRef(content);
+
+  // When content prop changes (after router.refresh), compute diff highlights
+  useEffect(() => {
+    if (!editing && content !== prevContentRef.current && prevContentRef.current !== '') {
+      const diff = buildLineDiff(prevContentRef.current, content);
+      const lines: number[] = [];
+      let lineNum = 1;
+      for (const row of diff) {
+        if (row.type === 'insert') {
+          lines.push(lineNum);
+          lineNum++;
+        } else if (row.type === 'equal') {
+          lineNum++;
+        }
+        // deleted lines don't increment new line number
+      }
+      if (lines.length > 0) {
+        setChangedLines(lines);
+        // Fade out highlights after 6 seconds
+        setTimeout(() => setChangedLines([]), 6000);
+        // Auto-scroll to first changed line
+        setTimeout(() => {
+          const el = document.querySelector('[data-highlight-line]');
+          if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 100);
+      }
+    }
+    prevContentRef.current = content;
+  }, [content, editing]);
+
   useEffect(() => {
     const handler = () => {
-      // Don't auto-refresh while user is editing — would lose their changes
       if (editing) return;
       router.refresh();
       setFileUpdated(true);
@@ -496,7 +528,7 @@ export default function ViewPageClient({
               <JsonView content={savedContent} />
             ) : (
               <>
-                <MarkdownView content={savedContent} />
+                <MarkdownView content={savedContent} highlightLines={changedLines} />
                 <TableOfContents content={savedContent} />
               </>
             )}

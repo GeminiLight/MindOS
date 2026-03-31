@@ -1,46 +1,46 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, Columns3, Globe, TextCursorInput } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
 import { CONTENT_WIDTHS, FONTS, FONT_SIZES, AppearanceTabProps } from './types';
 
-/* ── Segmented Control ── */
-function SegmentedControl<T extends string>({ options, value, onChange }: {
+/* ── Setting Group ── */
+function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">{icon}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/* ── Pill Selector — compact horizontal pills ── */
+function PillSelector<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string; icon?: React.ReactNode }[];
   value: T;
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-lg border border-border bg-muted/30 p-0.5 gap-0.5">
+    <div className="flex gap-2">
       {options.map(opt => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl transition-all ${
             value === opt.value
-              ? 'bg-[var(--amber-subtle)] text-foreground shadow-sm border border-[var(--amber)]/30'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           {opt.icon}
           {opt.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-/* ── Setting Group ── */
-function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2.5">
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{icon}</span>
-        <span className="text-sm font-medium text-foreground">{label}</span>
-      </div>
-      {children}
     </div>
   );
 }
@@ -56,84 +56,142 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
   const a = t.settings.appearance;
 
   return (
-    <div className="space-y-6">
-      {/* Font */}
+    <div className="space-y-7">
+
+      {/* ── Font — each font previews itself ── */}
       <SettingGroup icon={<Type size={14} />} label={a.readingFont}>
-        <div className="flex flex-wrap gap-1.5">
-          {FONTS.map(f => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFont(f.value)}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                font === f.value
-                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-              style={{ fontFamily: f.style.fontFamily }}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="space-y-0.5">
+          {FONTS.map(f => {
+            const selected = font === f.value;
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFont(f.value)}
+                className={`flex items-center gap-4 w-full px-3 py-2.5 rounded-lg transition-all text-left relative ${
+                  selected
+                    ? 'bg-[var(--amber-subtle)]'
+                    : 'hover:bg-muted/50'
+                }`}
+              >
+                {/* Active indicator — left bar */}
+                {selected && (
+                  <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-[var(--amber)]" />
+                )}
+                {/* Large Aa preview */}
+                <span
+                  className={`text-xl font-medium w-10 text-center shrink-0 ${selected ? 'text-foreground' : 'text-muted-foreground/60'}`}
+                  style={{ fontFamily: f.style.fontFamily }}
+                >
+                  Aa
+                </span>
+                {/* Font name + sample */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span
+                      className={`text-sm font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}
+                      style={{ fontFamily: f.style.fontFamily }}
+                    >
+                      {f.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground/50">{f.category}</span>
+                  </div>
+                  <p
+                    className={`text-sm truncate mt-0.5 ${selected ? 'text-muted-foreground' : 'text-muted-foreground/40'}`}
+                    style={{ fontFamily: f.style.fontFamily }}
+                  >
+                    {a.fontPreview}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
-        <p
-          className="text-sm text-muted-foreground leading-relaxed px-0.5 mt-1"
-          style={{ fontFamily: FONTS.find(f => f.value === font)?.style.fontFamily }}
-        >
-          {a.fontPreview}
-        </p>
       </SettingGroup>
 
-      {/* Font Size */}
-      <SettingGroup icon={<TextCursorInput size={14} />} label={a.fontSize}>
-        <div className="flex flex-wrap gap-1.5">
-          {FONT_SIZES.map(s => (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => setFontSize(s.value)}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                fontSize === s.value
-                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              {s.label}{s.isDefault ? <span className="ml-1 text-muted-foreground/60 text-xs font-normal">px</span> : <span className="ml-0.5 text-muted-foreground/60 text-xs font-normal">px</span>}
-            </button>
-          ))}
+      {/* ── Font Size — elegant range slider ── */}
+      <SettingGroup icon={<ALargeSmall size={14} />} label={a.fontSize}>
+        <div className="px-1">
+          {/* Slider */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground/60 shrink-0" style={{ fontSize: '11px' }}>A</span>
+            <input
+              type="range"
+              min={14}
+              max={17}
+              step={1}
+              value={parseInt(fontSize)}
+              onChange={e => setFontSize(`${e.target.value}px`)}
+              className="flex-1 h-1.5 rounded-full appearance-none bg-muted cursor-pointer accent-[var(--amber)]
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--amber)]
+                [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:cursor-pointer
+                [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110
+                [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full
+                [&::-moz-range-thumb]:bg-[var(--amber)] [&::-moz-range-thumb]:border-0
+                [&::-moz-range-thumb]:shadow-sm [&::-moz-range-thumb]:cursor-pointer"
+            />
+            <span className="text-base text-muted-foreground/60 shrink-0">A</span>
+          </div>
+          {/* Current value */}
+          <div className="text-center mt-1.5">
+            <span className="text-xs tabular-nums text-muted-foreground">{parseInt(fontSize)}px</span>
+          </div>
+          {/* Live preview */}
+          <p
+            className="text-muted-foreground leading-relaxed mt-2 px-1"
+            style={{
+              fontSize,
+              fontFamily: FONTS.find(f => f.value === font)?.style.fontFamily,
+            }}
+          >
+            {a.fontSizePreview}
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground leading-relaxed px-0.5 mt-1" style={{ fontSize }}>
-          {a.fontSizePreview}
-        </p>
       </SettingGroup>
 
-      {/* Content Width */}
+      {/* ── Content Width — visual width bars ── */}
       <SettingGroup icon={<Columns3 size={14} />} label={a.contentWidth}>
-        <div className="flex flex-wrap gap-1.5">
-          {CONTENT_WIDTHS.map(w => (
-            <button
-              key={w.value}
-              type="button"
-              onClick={() => setContentWidth(w.value)}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                contentWidth === w.value
-                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
+        <div className="space-y-1">
+          {CONTENT_WIDTHS.map(w => {
+            const selected = contentWidth === w.value;
+            return (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => setContentWidth(w.value)}
+                className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg transition-all ${
+                  selected ? 'bg-[var(--amber-subtle)]' : 'hover:bg-muted/50'
+                }`}
+              >
+                {/* Width indicator bar */}
+                <div className="flex-1 h-2 rounded-full bg-muted/40 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      selected ? 'bg-[var(--amber)]' : 'bg-muted-foreground/20'
+                    }`}
+                    style={{ width: `${w.width}%` }}
+                  />
+                </div>
+                {/* Label */}
+                <span className={`text-sm shrink-0 w-14 text-right ${
+                  selected ? 'text-foreground font-medium' : 'text-muted-foreground'
+                }`}>
+                  {w.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </SettingGroup>
 
-      {/* Theme */}
+      {/* ── Theme — amber pills ── */}
       <SettingGroup icon={<Sun size={14} />} label={a.colorTheme}>
-        <SegmentedControl
+        <PillSelector
           options={[
-            { value: 'system', label: a.system, icon: <Monitor size={12} /> },
-            { value: 'dark', label: a.dark, icon: <Moon size={12} /> },
-            { value: 'light', label: a.light, icon: <Sun size={12} /> },
+            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
+            { value: 'dark', label: a.dark, icon: <Moon size={14} /> },
+            { value: 'light', label: a.light, icon: <Sun size={14} /> },
           ]}
           value={themePref}
           onChange={v => {
@@ -148,12 +206,12 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         />
       </SettingGroup>
 
-      {/* Language */}
+      {/* ── Language — amber pills ── */}
       <SettingGroup icon={<Globe size={14} />} label={a.language}>
-        <SegmentedControl
+        <PillSelector
           options={[
-            { value: 'system', label: a.system, icon: <Monitor size={12} /> },
-            { value: 'en', label: 'English' },
+            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
+            { value: 'en', label: 'EN' },
             { value: 'zh', label: '中文' },
           ]}
           value={localePref}
@@ -164,22 +222,21 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
               ? (navigator.language.startsWith('zh') ? 'zh' : 'en')
               : v as Locale;
             setLocale(resolved);
-            // Sync cookie for SSR (write resolved value, not 'system')
             document.cookie = `locale=${resolved};path=/;max-age=31536000;SameSite=Lax`;
           }}
         />
       </SettingGroup>
 
-      <p className="text-xs text-muted-foreground/50 px-0.5">{a.browserNote}</p>
+      <p className="text-xs text-muted-foreground/40 px-0.5">{a.browserNote}</p>
 
-      {/* Keyboard Shortcuts */}
+      {/* ── Keyboard Shortcuts ── */}
       <div className="border-t border-border pt-4">
         <button
           type="button"
           onClick={() => setShowShortcuts(!showShortcuts)}
           className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
-          {showShortcuts ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          {showShortcuts ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           {t.settings.tabs.shortcuts}
         </button>
         {showShortcuts && (

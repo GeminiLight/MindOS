@@ -600,8 +600,11 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     description: 'Append text to the end of an existing file. A blank line separator is added automatically.',
     parameters: AppendParams,
     execute: safeExecute(async (_id, params: Static<typeof AppendParams>) => {
+      const before = safeReadContent(params.path);
       appendToFile(params.path, params.content);
-      return textResult(`Content appended to: ${params.path}`);
+      const after = safeReadContent(params.path);
+      const diff = buildDiffSummary(before, after);
+      return textResult(`Content appended to: ${params.path}${diff ? ' ' + diff : ''}`);
     }),
   },
 
@@ -611,8 +614,11 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     description: 'Insert content right after a Markdown heading. Useful for adding items under a specific section. If heading matches fail, use edit_lines instead.',
     parameters: InsertHeadingParams,
     execute: safeExecute(async (_id, params: Static<typeof InsertHeadingParams>) => {
+      const before = safeReadContent(params.path);
       insertAfterHeading(params.path, params.heading, params.content);
-      return textResult(`Content inserted after heading "${params.heading}" in ${params.path}`);
+      const after = safeReadContent(params.path);
+      const diff = buildDiffSummary(before, after);
+      return textResult(`Content inserted after heading "${params.heading}" in ${params.path}${diff ? ' ' + diff : ''}`);
     }),
   },
 
@@ -622,8 +628,11 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     description: 'Replace the content of a Markdown section identified by its heading. The section spans from the heading to the next heading of equal or higher level. If heading matches fail, use edit_lines instead.',
     parameters: UpdateSectionParams,
     execute: safeExecute(async (_id, params: Static<typeof UpdateSectionParams>) => {
+      const before = safeReadContent(params.path);
       updateSection(params.path, params.heading, params.content);
-      return textResult(`Section "${params.heading}" updated in ${params.path}`);
+      const after = safeReadContent(params.path);
+      const diff = buildDiffSummary(before, after);
+      return textResult(`Section "${params.heading}" updated in ${params.path}${diff ? ' ' + diff : ''}`);
     }),
   },
 
@@ -636,12 +645,13 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
       const { path: fp, start_line, end_line, content } = params;
       const start = Math.max(0, start_line - 1);
       const end = Math.max(0, end_line - 1);
-      
+      const before = safeReadContent(fp);
       const mindRoot = getMindRoot();
-      // Import the core function dynamically or it should be added to lib/fs.ts
       const { updateLines } = await import('@/lib/core');
       updateLines(mindRoot, fp, start, end, content.split('\n'));
-      return textResult(`Lines ${start_line}-${end_line} replaced in ${fp}`);
+      const after = safeReadContent(fp);
+      const diff = buildDiffSummary(before, after);
+      return textResult(`Lines ${start_line}-${end_line} replaced in ${fp}${diff ? ' ' + diff : ''}`);
     }),
   },
 
