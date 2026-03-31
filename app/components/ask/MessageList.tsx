@@ -4,25 +4,40 @@ import { useRef, useEffect } from 'react';
 import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Message } from '@/lib/types';
+import type { Message, ImagePart } from '@/lib/types';
 import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
 
-function UserMessageContent({ content, skillName }: { content: string; skillName?: string }) {
+function UserMessageContent({ content, skillName, images }: { content: string; skillName?: string; images?: ImagePart[] }) {
   const resolved = skillName ?? content.match(SKILL_PREFIX_RE)?.[1];
-  if (!resolved) return <>{content}</>;
   const prefixMatch = content.match(SKILL_PREFIX_RE);
   const rest = prefixMatch ? content.slice(prefixMatch[0].length) : content;
   return (
     <>
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber)]/15 text-[var(--amber)] mr-1 align-middle">
-        <Zap size={10} className="shrink-0" />
-        {resolved}
-      </span>
-      {rest}
+      {/* Images */}
+      {images && images.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {images.map((img, idx) => (
+            <img
+              key={idx}
+              src={`data:${img.mimeType};base64,${img.data}`}
+              alt={`Image ${idx + 1}`}
+              className="max-h-48 max-w-full rounded-md object-contain"
+            />
+          ))}
+        </div>
+      )}
+      {/* Skill capsule + text */}
+      {resolved && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber)]/15 text-[var(--amber)] mr-1 align-middle">
+          <Zap size={10} className="shrink-0" />
+          {resolved}
+        </span>
+      )}
+      {resolved ? rest : content}
     </>
   );
 }
@@ -168,7 +183,7 @@ export default function MessageList({
             <div
               className="max-w-[85%] px-3 py-2 rounded-xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)]"
             >
-              <UserMessageContent content={m.content} skillName={m.skillName} />
+              <UserMessageContent content={m.content} skillName={m.skillName} images={m.images} />
             </div>
           ) : m.content.startsWith('__error__') ? (
             <div className="max-w-[85%] px-3 py-2.5 rounded-xl rounded-bl-sm border border-error/20 bg-error/8 text-sm">

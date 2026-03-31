@@ -32,7 +32,16 @@ export interface ReasoningPart {
   text: string;
 }
 
-export type MessagePart = TextPart | ToolCallPart | ReasoningPart;
+export type ImageMimeType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+
+export interface ImagePart {
+  type: 'image';
+  /** Base64-encoded image data (no data: prefix) */
+  data: string;
+  mimeType: ImageMimeType;
+}
+
+export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart;
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -41,6 +50,8 @@ export interface Message {
   timestamp?: number;
   /** Structured parts for assistant messages (tool calls + text segments) */
   parts?: MessagePart[];
+  /** Images attached to this message (user messages only) */
+  images?: ImagePart[];
   /** Skill name used for this user message (rendered as a capsule in the UI) */
   skillName?: string;
 }

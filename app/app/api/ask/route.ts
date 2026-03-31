@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
-import { getModelConfig } from '@/lib/agent/model';
+import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { getRequestScopedTools, getOrganizeTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
 import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
@@ -437,7 +437,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { model, modelName, apiKey, provider } = getModelConfig();
+    const { model, modelName, apiKey, provider } = getModelConfig({ hasImages: hasImages(messages) });
 
     // Convert frontend messages to AgentMessage[]
     const agentMessages = toAgentMessages(messages);

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, Send, Paperclip, StopCircle, SquarePen, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
+import { Sparkles, Send, Paperclip, StopCircle, SquarePen, History, X, Zap, Maximize2, Minimize2, PanelRight, AppWindow, ImagePlus } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
-import type { Message } from '@/lib/types';
+import type { Message, ImagePart } from '@/lib/types';
 import { useAskSession } from '@/hooks/useAskSession';
 import { useFileUpload } from '@/hooks/useFileUpload';
+import { useImageUpload } from '@/hooks/useImageUpload';
 import { useMention } from '@/hooks/useMention';
 import { useSlashCommand } from '@/hooks/useSlashCommand';
 import type { SlashItem } from '@/hooks/useSlashCommand';
@@ -84,6 +85,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const session = useAskSession(currentFile);
   const upload = useFileUpload();
+  const imageUpload = useImageUpload();
   const mention = useMention();
   const slash = useSlashCommand();
   const acpDetection = useAcpDetection();
@@ -116,12 +118,13 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       setInput(initialMessage || '');
       firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
-      upload.clearAttachments();
-      mention.resetMention();
-      slash.resetSlash();
-      setSelectedSkill(null);
-      setSelectedAcpAgent(initialAcpAgent ?? null);
-      setShowHistory(false);
+    upload.clearAttachments();
+    imageUpload.clearImages();
+    mention.resetMention();
+    slash.resetSlash();
+    setSelectedSkill(null);
+    setSelectedAcpAgent(initialAcpAgent ?? null);
+    setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
       setAttachedFiles(currentFile ? [currentFile] : []);
@@ -264,7 +267,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         }
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && input.trim()) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && (input.trim() || imageUpload.images.length > 0)) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
@@ -278,14 +281,17 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     e.preventDefault();
     if (mention.mentionQuery !== null || slash.slashQuery !== null) return;
     const text = input.trim();
-    if (!text || isLoading) return;
+    if ((!text && imageUpload.images.length === 0) || isLoading) return;
 
+    const pendingImages = imageUpload.images.length > 0 ? [...imageUpload.images] : undefined;
     const userMsg: Message = {
       role: 'user',
       content: text,  // No [ACP:] prefix — pass clean text
       timestamp: Date.now(),
       ...(selectedSkill && { skillName: selectedSkill.name }),
+      ...(pendingImages && { images: pendingImages }),
     };
+    imageUpload.clearImages();
     const requestMessages = [...session.messages, userMsg];
     session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
@@ -446,16 +452,18 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     setInput('');
     setAttachedFiles(currentFile ? [currentFile] : []);
     upload.clearAttachments();
+    imageUpload.clearImages();
     mention.resetMention();
     slash.resetSlash();
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
     setShowHistory(false);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [isLoading, currentFile, session, upload, mention, slash]);
+  }, [isLoading, currentFile, session, upload, imageUpload, mention, slash]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('text/mindos-path')) {
+    // Accept mindos file paths and image drops
+    if (e.dataTransfer.types.includes('text/mindos-path') || e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       setIsDragOver(true);
@@ -464,14 +472,24 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    // Try mindos file path first
     const filePath = e.dataTransfer.getData('text/mindos-path');
     if (filePath && !attachedFiles.includes(filePath)) {
       setAttachedFiles(prev => [...prev, filePath]);
+      return;
     }
-  }, [attachedFiles]);
+    // Try image drop
+    await imageUpload.handleDrop(e);
+  }, [attachedFiles, imageUpload]);
+
+  /** Handle paste — intercept images before normal text paste */
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const hasImage = await imageUpload.handlePaste(e);
+    if (hasImage) e.preventDefault();
+  }, [imageUpload]);
 
   const handleLoadSession = useCallback((id: string) => {
     session.loadSession(id);
@@ -479,12 +497,13 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     setInput('');
     setAttachedFiles(currentFile ? [currentFile] : []);
     upload.clearAttachments();
+    imageUpload.clearImages();
     mention.resetMention();
     slash.resetSlash();
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [session, currentFile, upload, mention, slash]);
+  }, [session, currentFile, upload, imageUpload, mention, slash]);
 
   const iconSize = isPanel ? 13 : 14;
   const inputIconSize = 15;
@@ -604,8 +623,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         onDrop={handleDrop}
       >
 
-        {/* Scrollable metadata area (files, skills, agents) */}
-        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || selectedSkill || upload.uploadError || selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
+        {/* Scrollable metadata area (files, skills, agents, images) */}
+        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || upload.uploadError || imageUpload.imageError || selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
           <div className={cn('shrink-0', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-32 overflow-y-auto')}>
             {attachedFiles.length > 0 && (
               <div className="px-3 pt-2 pb-1">
@@ -654,6 +673,36 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               <div className="px-3 pb-1 text-xs text-error">{upload.uploadError}</div>
             )}
 
+            {imageUpload.imageError && (
+              <div className="px-3 pb-1 text-xs text-error">{imageUpload.imageError}</div>
+            )}
+
+            {/* Image previews */}
+            {imageUpload.images.length > 0 && (
+              <div className="px-3 pt-1.5 pb-1">
+                <div className="text-muted-foreground/70 mb-1 text-[10px]">Images</div>
+                <div className="flex flex-wrap gap-2">
+                  {imageUpload.images.map((img, idx) => (
+                    <div key={idx} className="relative group">
+                      <img
+                        src={`data:${img.mimeType};base64,${img.data}`}
+                        alt={`Attached image ${idx + 1}`}
+                        className="h-16 w-16 object-cover rounded-md border border-border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => imageUpload.removeImage(idx)}
+                        className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-background border border-border text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Remove image ${idx + 1}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Agent selector capsule — shows when ACP agents are available */}
             {(selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
               <div className="px-3 pt-1.5 pb-0.5">
@@ -677,6 +726,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title={t.hints.attachFile}>
             <Paperclip size={inputIconSize} />
           </button>
+          <button type="button" onClick={() => document.getElementById('image-upload-input')?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title="Attach image (or paste with ⌘V)">
+            <ImagePlus size={inputIconSize} />
+          </button>
 
           <input
             ref={upload.uploadInputRef}
@@ -691,6 +743,20 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             }}
           />
 
+          {/* Hidden image file input */}
+          <input
+            type="file"
+            className="hidden"
+            id="image-upload-input"
+            multiple
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            onChange={async (e) => {
+              const inputEl = e.currentTarget;
+              await imageUpload.handleFileSelect(inputEl.files);
+              inputEl.value = '';
+            }}
+          />
+
           <textarea
             ref={(el) => {
               inputRef.current = el;
@@ -698,6 +764,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             value={input}
             onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
             onKeyDown={handleInputKeyDown}
+            onPaste={handlePaste}
             placeholder={t.ask.placeholder}
             rows={1}
             className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
@@ -708,7 +775,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim()} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+            <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
               <Send size={14} />
             </button>
           )}
