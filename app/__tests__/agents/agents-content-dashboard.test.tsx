@@ -35,8 +35,8 @@ const baseMcpState = {
       runtimeLastActivityAt: '2026-03-24T00:00:00.000Z',
       configuredMcpServers: ['mindos', 'github'],
       configuredMcpServerCount: 2,
-      installedSkillNames: ['mindos', 'custom-routing'],
-      installedSkillCount: 2,
+      installedSkillNames: ['mindos', 'custom-routing', 'cursor-native-helper'],
+      installedSkillCount: 3,
       installedSkillSourcePath: '/home/test/.cursor/skills',
     },
     {

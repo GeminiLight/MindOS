@@ -86,7 +86,11 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     () => agent ? generateSnippet(agent, mcp.status, currentTransport) : { snippet: '', path: '' },
     [agent, mcp.status, currentTransport],
   );
-  const nativeInstalledSkills = agent?.installedSkillNames ?? [];
+  const mindosSkillNames = useMemo(() => new Set(mcp.skills.map((s) => s.name)), [mcp.skills]);
+  const nativeInstalledSkills = useMemo(
+    () => (agent?.installedSkillNames ?? []).filter((n) => !mindosSkillNames.has(n)),
+    [agent?.installedSkillNames, mindosSkillNames],
+  );
   const configuredMcpServers = agent?.configuredMcpServers ?? [];
 
 
