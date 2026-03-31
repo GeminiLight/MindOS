@@ -410,6 +410,25 @@ export async function promptStream(
       }
     });
 
+    // Guard against agent process dying unexpectedly (OOM, SIGKILL, etc.)
+    // Without this, the Promise would hang forever if the process exits
+    // without sending a done/error notification.
+    const onExit = () => {
+      unsub();
+      updateSessionState(session, 'error');
+      reject(new Error(`ACP agent process exited unexpectedly during prompt`));
+    };
+    proc.proc.once('exit', onExit);
+
+    // Clean up exit listener when Promise resolves/rejects normally
+    const cleanup = () => { proc.proc.removeListener('exit', onExit); };
+    // Wrap resolve/reject to include cleanup — but we already unsub in the message handler.
+    // The exit listener is a safety net; if done/error fires first, remove the exit listener.
+    const origResolve = resolve;
+    const origReject = reject;
+    resolve = ((val: AcpPromptResponse) => { cleanup(); origResolve(val); }) as typeof resolve;
+    reject = ((err: unknown) => { cleanup(); origReject(err); }) as typeof reject;
+
     // Send the prompt with ContentBlock format
     try {
       sendMessage(proc, 'session/prompt', {
