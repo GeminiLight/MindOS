@@ -13,7 +13,7 @@ export const manifest: RendererDefinition = {
   entryPath: '.mindos/workflows/',
   match: ({ extension, filePath }) => {
     if (extension !== 'yaml' && extension !== 'yml') return false;
-    return /\.workflow\.(yaml|yml)$/i.test(filePath);
+    return /\.flow\.(yaml|yml)$/i.test(filePath);
   },
   load: () => import('./WorkflowYamlRenderer').then(m => ({ 
     default: m.WorkflowYamlRenderer 

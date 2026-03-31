@@ -17,6 +17,10 @@ export interface AcpAgentDescriptor {
   args: string[];
   /** Install command shown in UI / used by auto-install */
   installCmd?: string;
+  /** Curated display name (overrides registry name) */
+  displayName?: string;
+  /** Curated description (overrides registry description) */
+  description?: string;
 }
 
 /** User override for a specific agent, persisted in settings. */
@@ -53,33 +57,77 @@ export interface ResolvedAgentCommand {
  * Both detection (`which binary?`) and launch (`spawn cmd args`) read from here.
  */
 export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
-  // Gemini CLI — requires --experimental-acp flag
-  'gemini':          { binary: 'gemini',          cmd: 'gemini',    args: ['--experimental-acp'], installCmd: 'npm install -g @google/gemini-cli' },
-  'gemini-cli':      { binary: 'gemini',          cmd: 'gemini',    args: ['--experimental-acp'], installCmd: 'npm install -g @google/gemini-cli' },
-  // Claude Code — uses separate ACP wrapper package
-  'claude':          { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code' },
-  'claude-code':     { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code' },
-  'claude-acp':      { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code' },
-  // CodeBuddy Code — local binary with --acp flag
-  'codebuddy-code':  { binary: 'codebuddy',       cmd: 'codebuddy', args: ['--acp'], installCmd: 'npm install -g @anthropic-ai/claude-code' },
-  'codebuddy':       { binary: 'codebuddy',       cmd: 'codebuddy', args: ['--acp'], installCmd: 'npm install -g @anthropic-ai/claude-code' },
-  // Codex
-  'codex-acp':       { binary: 'codex',           cmd: 'codex',     args: [],        installCmd: 'npm install -g @openai/codex' },
-  'codex':           { binary: 'codex',           cmd: 'codex',     args: [],        installCmd: 'npm install -g @openai/codex' },
-  // Others
-  'cursor':          { binary: 'cursor',          cmd: 'cursor',    args: [] },
-  'cline':           { binary: 'cline',           cmd: 'cline',     args: [],        installCmd: 'npm install -g cline' },
-  'github-copilot-cli': { binary: 'github-copilot', cmd: 'github-copilot', args: [], installCmd: 'npm install -g @github/copilot' },
-  'goose':           { binary: 'goose',           cmd: 'goose',     args: [],        installCmd: 'pip install goose-ai' },
-  'opencode':        { binary: 'opencode',        cmd: 'opencode',  args: [],        installCmd: 'go install github.com/opencode-ai/opencode@latest' },
-  'kilo':            { binary: 'kilo',            cmd: 'kilo',      args: [],        installCmd: 'npm install -g @kilocode/cli' },
-  'openclaw':        { binary: 'openclaw',        cmd: 'openclaw',  args: [] },
-  'pi':              { binary: 'pi',              cmd: 'pi',        args: [] },
-  'pi-acp':          { binary: 'pi',              cmd: 'pi',        args: [] },
-  'auggie':          { binary: 'auggie',          cmd: 'auggie',    args: [] },
-  'iflow':           { binary: 'iflow',           cmd: 'iflow',     args: [] },
-  'kimi':            { binary: 'kimi',            cmd: 'kimi',      args: [] },
-  'qwen-code':       { binary: 'qwen-code',       cmd: 'qwen-code', args: [], installCmd: 'npm install -g @qwen-code/qwen-code' },
+  // Gemini CLI — Google's AI coding agent
+  'gemini':          { binary: 'gemini',          cmd: 'gemini',    args: ['--experimental-acp'], installCmd: 'npm install -g @google/gemini-cli',
+    displayName: 'Gemini CLI',
+    description: 'Google Gemini 驱动的编程智能体。支持多文件编辑、代码审查、调试和项目级重构，原生集成 Google 搜索实时查询技术文档。' },
+  'gemini-cli':      { binary: 'gemini',          cmd: 'gemini',    args: ['--experimental-acp'], installCmd: 'npm install -g @google/gemini-cli',
+    displayName: 'Gemini CLI',
+    description: 'Google Gemini 驱动的编程智能体。支持多文件编辑、代码审查、调试和项目级重构，原生集成 Google 搜索实时查询技术文档。' },
+  // Claude Code — Anthropic's AI coding agent
+  'claude':          { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code',
+    displayName: 'Claude Code',
+    description: 'Anthropic Claude 驱动的编程智能体。擅长复杂推理、长上下文理解和安全代码生成，支持多文件编辑与 agentic 工作流。' },
+  'claude-code':     { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code',
+    displayName: 'Claude Code',
+    description: 'Anthropic Claude 驱动的编程智能体。擅长复杂推理、长上下文理解和安全代码生成，支持多文件编辑与 agentic 工作流。' },
+  'claude-acp':      { binary: 'claude',          cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code',
+    displayName: 'Claude Code',
+    description: 'Anthropic Claude 驱动的编程智能体。擅长复杂推理、长上下文理解和安全代码生成，支持多文件编辑与 agentic 工作流。' },
+  // CodeBuddy Code — Tencent Cloud's AI coding agent
+  'codebuddy-code':  { binary: 'codebuddy',       cmd: 'codebuddy', args: ['--acp'], installCmd: 'npm install -g @tencent-ai/codebuddy-code',
+    displayName: 'CodeBuddy Code',
+    description: '腾讯云智能编程助手。基于混元大模型，支持代码补全、生成、审查和多文件重构，深度理解中文语境，适配国内开发生态。' },
+  'codebuddy':       { binary: 'codebuddy',       cmd: 'codebuddy', args: ['--acp'], installCmd: 'npm install -g @tencent-ai/codebuddy-code',
+    displayName: 'CodeBuddy Code',
+    description: '腾讯云智能编程助手。基于混元大模型，支持代码补全、生成、审查和多文件重构，深度理解中文语境，适配国内开发生态。' },
+  // Codex — OpenAI's coding agent
+  'codex-acp':       { binary: 'codex',           cmd: 'codex',     args: [],        installCmd: 'npm install -g @openai/codex',
+    displayName: 'Codex',
+    description: 'OpenAI Codex 编程智能体。基于 GPT 系列模型，擅长代码生成、自动化任务和多语言编程支持。' },
+  'codex':           { binary: 'codex',           cmd: 'codex',     args: [],        installCmd: 'npm install -g @openai/codex',
+    displayName: 'Codex',
+    description: 'OpenAI Codex 编程智能体。基于 GPT 系列模型，擅长代码生成、自动化任务和多语言编程支持。' },
+  // Cursor — AI-first code editor agent
+  'cursor':          { binary: 'cursor',          cmd: 'cursor',    args: [],
+    displayName: 'Cursor',
+    description: 'Cursor AI 编程智能体。AI-first 代码编辑器的 CLI 模式，支持上下文感知的代码编辑、Tab 补全和多文件协同修改。' },
+  'cline':           { binary: 'cline',           cmd: 'cline',     args: [],        installCmd: 'npm install -g cline',
+    displayName: 'Cline',
+    description: '开源自主编程智能体。支持多模型后端，内置文件编辑、终端执行和浏览器自动化能力。' },
+  'github-copilot-cli': { binary: 'github-copilot', cmd: 'github-copilot', args: [], installCmd: 'npm install -g @github/copilot',
+    displayName: 'GitHub Copilot',
+    description: 'GitHub Copilot 编程智能体。基于海量开源代码训练，擅长代码补全、测试生成和跨语言编程支持。' },
+  'goose':           { binary: 'goose',           cmd: 'goose',     args: [],        installCmd: 'pip install goose-ai',
+    displayName: 'Goose',
+    description: 'Block 开源自主编程智能体。支持多模型后端，可扩展插件架构，擅长复杂任务自动化。' },
+  'opencode':        { binary: 'opencode',        cmd: 'opencode',  args: [],        installCmd: 'go install github.com/opencode-ai/opencode@latest',
+    displayName: 'OpenCode',
+    description: '开源终端编程智能体。Go 实现，轻量快速，支持多模型后端和丰富的代码编辑工具。' },
+  'kilo':            { binary: 'kilo',            cmd: 'kilo',      args: [],        installCmd: 'npm install -g @kilocode/cli',
+    displayName: 'Kilo Code',
+    description: 'Kilo Code 编程智能体。开源 VS Code 扩展的 CLI 模式，支持多模型、自动审批和代码差异预览。' },
+  'openclaw':        { binary: 'openclaw',        cmd: 'openclaw',  args: [],
+    displayName: 'OpenClaw',
+    description: 'OpenClaw 编程智能体。开源 Claude Code 替代方案，支持多模型后端和完整的 agentic 工作流。' },
+  'pi':              { binary: 'pi',              cmd: 'pi',        args: [],
+    displayName: 'Pi Agent',
+    description: 'Pi Agent 编程智能体。轻量级终端编程助手。' },
+  'pi-acp':          { binary: 'pi',              cmd: 'pi',        args: [],
+    displayName: 'Pi Agent',
+    description: 'Pi Agent 编程智能体。轻量级终端编程助手。' },
+  'auggie':          { binary: 'auggie',          cmd: 'auggie',    args: [],
+    displayName: 'Auggie',
+    description: 'Augment Code 编程智能体。支持代码理解、生成和全仓库上下文感知。' },
+  'iflow':           { binary: 'iflow',           cmd: 'iflow',     args: [],
+    displayName: 'iFlow',
+    description: 'iFlow 编程智能体。AI 驱动的工作流自动化工具。' },
+  'kimi':            { binary: 'kimi',            cmd: 'kimi',      args: [],
+    displayName: 'Kimi',
+    description: 'Moonshot AI Kimi 编程智能体。擅长超长上下文理解，支持中文语境下的代码生成与分析。' },
+  'qwen-code':       { binary: 'qwen-code',       cmd: 'qwen-code', args: [], installCmd: 'npm install -g @qwen-code/qwen-code',
+    displayName: 'Qwen Code',
+    description: '阿里通义千问 Qwen 编程智能体。基于 Qwen 大模型，支持代码生成、审查和多语言编程，深度适配中文开发场景。' },
 };
 
 /* ── Resolution ────────────────────────────────────────────────────────── */
@@ -175,6 +223,16 @@ export function getDescriptorBinary(agentId: string): string | undefined {
 /** Get the install command for UI display. */
 export function getDescriptorInstallCmd(agentId: string): string | undefined {
   return AGENT_DESCRIPTORS[agentId]?.installCmd;
+}
+
+/** Get curated display name (overrides registry name if available). */
+export function getDescriptorDisplayName(agentId: string): string | undefined {
+  return AGENT_DESCRIPTORS[agentId]?.displayName;
+}
+
+/** Get curated description (overrides registry description if available). */
+export function getDescriptorDescription(agentId: string): string | undefined {
+  return AGENT_DESCRIPTORS[agentId]?.description;
 }
 
 /** Parse and validate acpAgents config from raw settings JSON. */

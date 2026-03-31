@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, Globe, Server, Search, Trash2, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  ArrowLeft, Activity, Globe, Key, Loader2, Server, Search,
+  Shield, ShieldCheck, Trash2, Wifi, WifiOff, Zap,
+} from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { toast } from '@/lib/toast';
 import { useMcpData } from '@/hooks/useMcpData';
@@ -11,6 +13,7 @@ import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
+import type { AgentInfo, McpStatus } from '../settings/types';
 import {
   aggregateCrossAgentMcpServers,
   aggregateCrossAgentSkills,
@@ -43,7 +46,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
   const [mcpHint, setMcpHint] = useState<string | null>(null);
   const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
-  const [a2aOpen, setA2aOpen] = useState(false);
 
   const filteredSkills = useMemo(
     () =>
@@ -365,48 +367,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         </div>
       </section>
 
-      {/* ═══════════ A2A CAPABILITIES ═══════════ */}
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setA2aOpen(!a2aOpen)}
-          className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-muted/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-expanded={a2aOpen}
-        >
-          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
-            <Globe size={12} className="text-muted-foreground/50" />
-            {p.a2aCapabilities}
-          </h2>
-          <ChevronDown
-            size={13}
-            className={cn('shrink-0 text-muted-foreground/50 transition-transform duration-200', a2aOpen && 'rotate-180')}
-            aria-hidden="true"
-          />
-        </button>
-        <div
-          className={cn(
-            'grid transition-[grid-template-rows] duration-250 ease-out',
-            a2aOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-          )}
-        >
-          <div className="overflow-hidden" {...(!a2aOpen && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
-            <div className="px-4 pb-3 pt-1 space-y-2 border-t border-border/40">
-              <div className="flex items-baseline gap-2 px-0.5 min-w-0">
-                <span className="text-2xs text-muted-foreground/50 uppercase tracking-wider shrink-0 min-w-[60px]">{p.a2aStatus}</span>
-                <span className={`text-xs font-medium ${
-                  status === 'connected' ? 'text-[var(--success)]' : 'text-muted-foreground'
-                }`}>
-                  {status === 'connected' ? p.a2aConnected : p.a2aUnavailable}
-                </span>
-              </div>
-              {a2a.agents.length === 0 && (
-                <p className="text-2xs text-muted-foreground/50">{p.a2aNoRemoteHint}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ═══════════ SKILL ASSIGNMENTS ═══════════ */}
       <section className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -522,7 +482,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           <p className="text-sm text-muted-foreground">{a.detail.noSkills}</p>
         )}
 
-        {/* Native installed skills — same row style */}
+        {/* Native installed skills */}
         {nativeInstalledSkills.length > 0 && (
           <div>
             <p className="text-2xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -546,6 +506,59 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
         {editError && <p className="text-xs text-error">{editError}</p>}
       </section>
+
+      {/* ═══════════ A2A CAPABILITIES ═══════════ */}
+      <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
+            <Globe size={12} className="text-muted-foreground/50" />
+            {p.a2aCapabilities}
+          </h2>
+          <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
+            status === 'connected' ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-muted text-muted-foreground/60'
+          }`}>
+            {status === 'connected' ? p.a2aConnected : p.a2aUnavailable}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-x-6 gap-y-1 py-2 border-y border-border/30">
+          <DetailLine label={p.a2aStatus} value={status === 'connected' ? p.a2aConnected : p.a2aUnavailable} />
+          <DetailLine label={a.detail.transport} value={agent.transport ?? agent.preferredTransport} />
+          {a2a.agents.length > 0 && (
+            <DetailLine label="Remote agents" value={String(a2a.agents.length)} />
+          )}
+        </div>
+
+        {a2a.agents.length > 0 ? (
+          <div className="space-y-1">
+            {a2a.agents.map((remote) => (
+              <div key={remote.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors duration-100">
+                <div className="w-6 h-6 rounded-md bg-muted/40 flex items-center justify-center shrink-0">
+                  <Globe size={11} className="text-muted-foreground/60" />
+                </div>
+                <span className="text-xs text-foreground flex-1 min-w-0 truncate">{remote.card.name}</span>
+                {remote.reachable ? (
+                  <Wifi size={11} className="text-[var(--success)] shrink-0" />
+                ) : (
+                  <WifiOff size={11} className="text-muted-foreground/50 shrink-0" />
+                )}
+                <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0">{remote.card.skills.length} skills</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-2xs text-muted-foreground/50">{p.a2aNoRemoteHint}</p>
+        )}
+      </section>
+
+      {/* ═══════════ RUNTIME & DIAGNOSTICS ═══════════ */}
+      <RuntimeDiagSection agent={agent} status={status} isMindOS={isMindOS} mcpStatus={mcp.status} />
+
+      {/* ═══════════ ENVIRONMENT & PERMISSIONS ═══════════ */}
+      <EnvPermSection agent={agent} isMindOS={isMindOS} />
+
+      {/* ═══════════ ACTIVITY & USAGE ═══════════ */}
+      <ActivitySection agent={agent} />
 
       {/* ═══════════ Confirm Dialogs ═══════════ */}
       <ConfirmDialog
@@ -612,4 +625,203 @@ function formatRelativeTime(iso: string | undefined | null): string {
   } catch {
     return iso;
   }
+}
+
+/* ═══════════ Runtime & Diagnostics ═══════════ */
+
+function RuntimeDiagSection({
+  agent,
+  status,
+  isMindOS,
+  mcpStatus,
+}: {
+  agent: AgentInfo;
+  status: string;
+  isMindOS: boolean;
+  mcpStatus: McpStatus | null;
+}) {
+  const { t } = useLocale();
+  const d = t.agentsContent.detail;
+  const [pingState, setPingState] = useState<'idle' | 'pinging' | 'ok' | 'fail'>('idle');
+  const [pingMs, setPingMs] = useState(0);
+
+  const handlePing = useCallback(async () => {
+    setPingState('pinging');
+    const start = performance.now();
+    try {
+      const res = await fetch('/api/mcp/status', { method: 'GET', signal: AbortSignal.timeout(5000) });
+      const elapsed = Math.round(performance.now() - start);
+      setPingMs(elapsed);
+      setPingState(res.ok ? 'ok' : 'fail');
+    } catch {
+      setPingState('fail');
+    }
+  }, []);
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
+          <Activity size={12} className="text-muted-foreground/50" />
+          {d.runtimeDiagTitle}
+        </h2>
+        <button
+          type="button"
+          onClick={() => void handlePing()}
+          disabled={pingState === 'pinging'}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {pingState === 'pinging' ? (
+            <><Loader2 size={10} className="animate-spin" /> {d.runtimePinging}</>
+          ) : (
+            <><Wifi size={10} /> {d.runtimePing}</>
+          )}
+        </button>
+      </div>
+
+      {pingState === 'ok' && (
+        <div role="status" className="rounded-md bg-[var(--success)]/10 border border-[var(--success)]/20 px-3 py-1.5 text-2xs text-[var(--success)] font-medium animate-in fade-in duration-200">
+          {d.runtimePingOk(pingMs)}
+        </div>
+      )}
+      {pingState === 'fail' && (
+        <div role="status" className="rounded-md bg-error/10 border border-error/20 px-3 py-1.5 text-2xs text-error font-medium animate-in fade-in duration-200">
+          {d.runtimePingFail}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-x-6 gap-y-1 py-2 border-y border-border/30">
+        <DetailLine label={d.status} value={status} />
+        <DetailLine label={d.transport} value={agent.transport ?? agent.preferredTransport} />
+        {isMindOS && mcpStatus && (
+          <>
+            <DetailLine label={d.runtimeVersion} value={mcpStatus.endpoint} />
+            <DetailLine label={d.port} value={String(mcpStatus.port)} />
+          </>
+        )}
+        <DetailLine label={d.lastActivityAt} value={formatRelativeTime(agent.runtimeLastActivityAt)} />
+        {agent.runtimeConversationSignal !== undefined && (
+          <DetailLine label={d.conversationSignal} value={agent.runtimeConversationSignal ? 'Active' : 'Inactive'} />
+        )}
+        {agent.runtimeUsageSignal !== undefined && (
+          <DetailLine label={d.usageSignal} value={agent.runtimeUsageSignal ? 'Active' : 'Inactive'} />
+        )}
+      </div>
+
+      {!agent.runtimeLastActivityAt && pingState === 'idle' && (
+        <p className="text-2xs text-muted-foreground/50">{d.runtimeNoData}</p>
+      )}
+    </section>
+  );
+}
+
+/* ═══════════ Environment & Permissions ═══════════ */
+
+function EnvPermSection({
+  agent,
+  isMindOS,
+}: {
+  agent: AgentInfo;
+  isMindOS: boolean;
+}) {
+  const { t } = useLocale();
+  const d = t.agentsContent.detail;
+
+  const scope = agent.scope ?? (agent.hasProjectScope ? 'project' : agent.hasGlobalScope ? 'global' : '—');
+  const hasHiddenRoot = agent.hiddenRootPresent ?? false;
+
+  const permissions = [
+    { label: d.envFileAccess, allowed: true },
+    { label: d.envNetworkAccess, allowed: agent.transport === 'http' || isMindOS },
+    { label: d.envWriteAccess, allowed: true },
+    { label: d.envReadOnly, allowed: false },
+  ];
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
+        <Key size={12} className="text-muted-foreground/50" />
+        {d.envPermTitle}
+      </h2>
+
+      <div className="flex flex-wrap gap-x-6 gap-y-1 py-2 border-y border-border/30">
+        <DetailLine label={d.envScope} value={scope} />
+        <DetailLine label={d.format} value={agent.format} />
+        {agent.hiddenRootPath && (
+          <DetailLine label={d.hiddenRoot} value={agent.hiddenRootPath} />
+        )}
+        <DetailLine label={d.skillMode} value={agent.skillMode ?? '—'} />
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-2xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5">
+          {d.envVars}
+        </p>
+        {agent.configuredMcpServers && agent.configuredMcpServers.length > 0 ? (
+          <p className="text-2xs text-muted-foreground">{d.envVarsCount(agent.configuredMcpServers.length)}</p>
+        ) : (
+          <p className="text-2xs text-muted-foreground/50">{d.envVarsEmpty}</p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-2xs font-medium text-muted-foreground/60 uppercase tracking-wider">Permissions</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {permissions.map(({ label, allowed }) => (
+            <div key={label} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-muted/20">
+              {allowed ? (
+                <ShieldCheck size={12} className="text-[var(--success)] shrink-0" />
+              ) : (
+                <Shield size={12} className="text-muted-foreground/40 shrink-0" />
+              )}
+              <span className="text-2xs text-foreground/80">{label}</span>
+              <span className={`ml-auto text-2xs font-medium ${allowed ? 'text-[var(--success)]' : 'text-muted-foreground/50'}`}>
+                {allowed ? d.envAllowed : d.envRestricted}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════ Activity & Usage ═══════════ */
+
+function ActivitySection({ agent }: { agent: AgentInfo }) {
+  const { t } = useLocale();
+  const d = t.agentsContent.detail;
+
+  const hasActivity = !!agent.runtimeLastActivityAt;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
+        <Activity size={12} className="text-muted-foreground/50" />
+        {d.activityTitle}
+      </h2>
+
+      {hasActivity ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <StatCard label={d.activityLastInvocation} value={formatRelativeTime(agent.runtimeLastActivityAt)} />
+          <StatCard label={d.activityTotal} value={agent.runtimeConversationSignal ? 'Active' : '—'} />
+          <StatCard label={d.activityLast7d} value={agent.runtimeUsageSignal ? 'Active' : '—'} />
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 px-4 py-6 text-center">
+          <Activity size={20} className="text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-2xs text-muted-foreground/50">{d.activityNoData}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5">
+      <p className="text-2xs text-muted-foreground/50 uppercase tracking-wider mb-0.5">{label}</p>
+      <p className="text-sm font-medium text-foreground font-mono tabular-nums">{value}</p>
+    </div>
+  );
 }

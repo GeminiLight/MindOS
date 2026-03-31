@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface DetectedAgent {
   id: string;
   name: string;
   binaryPath: string;
-  /** Resolved launch command from the unified resolver */
   resolvedCommand?: {
     cmd: string;
     args: string[];
@@ -29,44 +28,93 @@ interface AcpDetectionState {
   refresh: () => void;
 }
 
+const STORAGE_KEY = 'mindos:acp-detection';
+const STALE_TTL_MS = 30 * 60 * 1000;
+const REVALIDATE_TTL_MS = 5 * 60 * 1000;
+
+interface DetectionCache {
+  installed: DetectedAgent[];
+  notInstalled: NotInstalledAgent[];
+  ts: number;
+}
+
+function readStorage(): DetectionCache | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.ts !== 'number' || Date.now() - parsed.ts > STALE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(installed: DetectedAgent[], notInstalled: NotInstalledAgent[]) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ installed, notInstalled, ts: Date.now() }));
+  } catch { /* quota exceeded */ }
+}
+
 export function useAcpDetection(): AcpDetectionState {
-  const [installedAgents, setInstalledAgents] = useState<DetectedAgent[]>([]);
-  const [notInstalledAgents, setNotInstalledAgents] = useState<NotInstalledAgent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = useRef(readStorage());
+  const [installedAgents, setInstalledAgents] = useState<DetectedAgent[]>(cached.current?.installed ?? []);
+  const [notInstalledAgents, setNotInstalledAgents] = useState<NotInstalledAgent[]>(cached.current?.notInstalled ?? []);
+  const [loading, setLoading] = useState(!cached.current);
   const [error, setError] = useState<string | null>(null);
   const [trigger, setTrigger] = useState(0);
+  const inflight = useRef(false);
+
+  const forceRef = useRef(false);
 
   const refresh = useCallback(() => {
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    cached.current = null;
+    forceRef.current = true;
     setTrigger((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    const isForce = forceRef.current;
+    forceRef.current = false;
+
+    const fresh = cached.current && Date.now() - cached.current.ts < REVALIDATE_TTL_MS;
+    if (fresh && trigger === 0) return;
+
+    if (inflight.current) return;
+    inflight.current = true;
+
+    const hasCachedData = installedAgents.length > 0 || notInstalledAgents.length > 0;
+    if (!hasCachedData) setLoading(true);
     setError(null);
 
-    fetch('/api/acp/detect')
+    let cancelled = false;
+
+    fetch(`/api/acp/detect${isForce ? '?force=1' : ''}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
         if (cancelled) return;
-        setInstalledAgents(data.installed ?? []);
-        setNotInstalledAgents(data.notInstalled ?? []);
+        const inst: DetectedAgent[] = data.installed ?? [];
+        const notInst: NotInstalledAgent[] = data.notInstalled ?? [];
+        writeStorage(inst, notInst);
+        cached.current = { installed: inst, notInstalled: notInst, ts: Date.now() };
+        setInstalledAgents(inst);
+        setNotInstalledAgents(notInst);
       })
       .catch((err) => {
         if (cancelled) return;
-        setError((err as Error).message);
+        if (!hasCachedData) setError((err as Error).message);
       })
       .finally(() => {
+        inflight.current = false;
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [trigger]);
+    return () => { cancelled = true; };
+  }, [trigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { installedAgents, notInstalledAgents, loading, error, refresh };
 }
