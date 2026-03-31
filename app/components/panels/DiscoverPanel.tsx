@@ -6,7 +6,7 @@ import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repe
 import PanelHeader from './PanelHeader';
 import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/LocaleContext';
-import { useCases } from '@/components/explore/use-cases';
+import { useCases } from '@/components/explore/use-cases.generated';
 import { openAskModal } from '@/hooks/useAskModal';
 import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';

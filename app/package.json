@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p ${MINDOS_WEB_PORT:-3456}",
-    "prebuild": "node ../scripts/gen-renderer-index.js",
+    "generate": "npx tsx scripts/generate-explore.ts",
+    "dev": "npx tsx scripts/generate-explore.ts && next dev -p ${MINDOS_WEB_PORT:-3456}",
+    "prebuild": "npx tsx scripts/generate-explore.ts && node ../scripts/gen-renderer-index.js",
     "build": "next build --webpack",
     "start": "next start -p ${MINDOS_WEB_PORT:-3456}",
     "lint": "eslint",

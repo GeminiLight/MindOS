@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from '@/components/explore/use-cases';
+import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from '@/components/explore/use-cases.generated';
 
 describe('explore/use-cases', () => {
   it('defines 9 use cases (C1-C9)', () => {
