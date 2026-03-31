@@ -4,7 +4,7 @@ import path from 'path';
 import YAML from 'js-yaml';
 import { getMindRoot } from '@/lib/fs';
 
-const WORKFLOWS_DIR = '⚡ Workflows';
+const WORKFLOWS_DIR = '.mindos/workflows';
 
 function getWorkflowsDir(): string {
   return path.join(getMindRoot(), WORKFLOWS_DIR);
