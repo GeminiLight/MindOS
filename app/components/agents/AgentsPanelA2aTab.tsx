@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Download, Globe, Loader2, Network, RefreshCw, Trash2, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Clock, Code2, Download, Globe, Loader2, MessageSquare, Network, RefreshCw, Trash2, Wifi, WifiOff, Wrench, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
@@ -138,6 +138,20 @@ function NetworkEmptyState({
   );
 }
 
+/* ────────── Quick Actions ────────── */
+
+interface QuickAction {
+  labelKey: 'acpQuickReview' | 'acpQuickFix' | 'acpQuickExplain';
+  icon: typeof Code2;
+  promptSuffix: string;
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { labelKey: 'acpQuickReview', icon: Code2, promptSuffix: 'review the code in this project' },
+  { labelKey: 'acpQuickFix', icon: Wrench, promptSuffix: 'find and fix bugs in this project' },
+  { labelKey: 'acpQuickExplain', icon: MessageSquare, promptSuffix: 'explain the structure of this project' },
+];
+
 /* ────────── ACP Registry Section ────────── */
 
 function AcpRegistrySection() {
@@ -182,8 +196,26 @@ function AcpRegistrySection() {
 
   if (acp.agents.length === 0) return null;
 
+  // Separate installed and not-installed agents
+  const installedAgents: { agent: AcpRegistryEntry; info: { id: string; name: string; binaryPath: string } }[] = [];
+  const notInstalledAgents: { agent: AcpRegistryEntry; installCmd: string | null; packageName: string | null }[] = [];
+
+  for (const agent of acp.agents) {
+    const installed = detection.installedAgents.find((d) => d.id === agent.id);
+    if (installed) {
+      installedAgents.push({ agent, info: installed });
+    } else {
+      const notInstalled = detection.notInstalledAgents.find((d) => d.id === agent.id);
+      notInstalledAgents.push({
+        agent,
+        installCmd: notInstalled?.installCmd ?? null,
+        packageName: notInstalled?.packageName ?? agent.packageName ?? null,
+      });
+    }
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {p.acpSectionTitle}
@@ -203,28 +235,44 @@ function AcpRegistrySection() {
           </span>
         </div>
       </div>
-      <div className="space-y-1.5">
-        {acp.agents.map((agent) => {
-          const installed = detection.installedAgents.find((d) => d.id === agent.id);
-          const notInstalled = detection.notInstalledAgents.find((d) => d.id === agent.id);
-          return (
-            <AcpAgentRow
+
+      {/* Installed agents — prominent cards */}
+      {installedAgents.length > 0 && (
+        <div className="space-y-2">
+          {installedAgents.map(({ agent, info }) => (
+            <AcpAgentCard
               key={agent.id}
               agent={agent}
-              installed={installed ?? null}
-              installCmd={notInstalled?.installCmd ?? null}
-              packageName={notInstalled?.packageName ?? agent.packageName ?? null}
+              installed={info}
+              installCmd={null}
+              packageName={null}
               detectionDone={!detection.loading}
               onInstalled={detection.refresh}
             />
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Not-installed agents — compact rows grouped at bottom */}
+      {notInstalledAgents.length > 0 && (
+        <div className="space-y-1">
+          {notInstalledAgents.map(({ agent, installCmd, packageName }) => (
+            <AcpAgentCompactRow
+              key={agent.id}
+              agent={agent}
+              installCmd={installCmd}
+              packageName={packageName}
+              detectionDone={!detection.loading}
+              onInstalled={detection.refresh}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/* ────────── ACP Agent Row ────────── */
+/* ────────── ACP Agent Card (Installed — prominent) ────────── */
 
 const TRANSPORT_STYLES: Record<string, string> = {
   npx: 'bg-[var(--amber)]/15 text-[var(--amber)]',
@@ -233,7 +281,7 @@ const TRANSPORT_STYLES: Record<string, string> = {
   stdio: 'bg-muted text-muted-foreground',
 };
 
-function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone, onInstalled }: {
+function AcpAgentCard({ agent, installed, detectionDone }: {
   agent: AcpRegistryEntry;
   installed: { id: string; name: string; binaryPath: string } | null;
   installCmd: string | null;
@@ -243,7 +291,6 @@ function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone,
 }) {
   const { t } = useLocale();
   const p = t.panels.agents;
-  const [installState, setInstallState] = useState<'idle' | 'installing' | 'done' | 'error'>('idle');
   const transportLabels: Record<string, string> = {
     npx: p.acpTransportNpx,
     binary: p.acpTransportBinary,
@@ -254,13 +301,84 @@ function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone,
   const isReady = !!installed;
 
   const handleUse = () => {
-    openAskModal(`Use ${agent.name} to help me with `);
-    window.dispatchEvent(
-      new CustomEvent('mindos:ask-with-agent', {
-        detail: { agentId: agent.id, agentName: agent.name },
-      }),
-    );
+    openAskModal(p.acpUseWith(agent.name));
   };
+
+  const handleQuickAction = (action: QuickAction) => {
+    openAskModal(`${p.acpUseWith(agent.name)}${action.promptSuffix}`);
+  };
+
+  return (
+    <div className="rounded-xl border border-[var(--amber)]/20 bg-card p-3 hover:border-[var(--amber)]/40 transition-all duration-150">
+      {/* Header row */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
+          <Network size={14} className="text-[var(--amber)]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-foreground truncate">{agent.name}</p>
+            {agent.version && (
+              <span className="text-2xs text-muted-foreground/60 shrink-0">v{agent.version}</span>
+            )}
+          </div>
+          {agent.description && (
+            <p className="text-2xs text-muted-foreground truncate">{agent.description}</p>
+          )}
+        </div>
+        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${TRANSPORT_STYLES[agent.transport] ?? TRANSPORT_STYLES.stdio}`}>
+          {transportLabels[agent.transport] ?? agent.transport}
+        </span>
+        {detectionDone && (
+          <span className="text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 bg-[var(--success)]/15 text-[var(--success)]">
+            {p.acpReady}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleUse}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-md border border-[var(--amber)] text-[var(--amber)] hover:bg-[var(--amber)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+        >
+          <Zap size={10} />
+          {p.acpUseAgent}
+        </button>
+      </div>
+
+      {/* Quick action chips */}
+      {isReady && (
+        <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center gap-1.5 flex-wrap">
+          {QUICK_ACTIONS.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.labelKey}
+                type="button"
+                onClick={() => handleQuickAction(action)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-2xs font-medium rounded-md bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon size={10} />
+                {p[action.labelKey]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────── ACP Agent Compact Row (Not Installed — subtle) ────────── */
+
+function AcpAgentCompactRow({ agent, installCmd, packageName, detectionDone, onInstalled }: {
+  agent: AcpRegistryEntry;
+  installCmd: string | null;
+  packageName: string | null;
+  detectionDone: boolean;
+  onInstalled: () => void;
+}) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+  const [installState, setInstallState] = useState<'idle' | 'installing' | 'done' | 'error'>('idle');
 
   const handleInstall = async () => {
     if (!packageName || installState === 'installing') return;
@@ -285,35 +403,25 @@ function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone,
   };
 
   return (
-    <div className="group rounded-xl border border-border bg-card p-3 hover:border-border/80 transition-all duration-150">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-          <Network size={14} className="text-muted-foreground" />
+    <div className="group rounded-lg border border-border/60 bg-card/60 px-3 py-2 hover:border-border transition-all duration-150">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-md bg-muted/40 flex items-center justify-center shrink-0">
+          <Network size={11} className="text-muted-foreground/60" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{agent.name}</p>
-          {agent.description && (
-            <p className="text-2xs text-muted-foreground truncate">{agent.description}</p>
-          )}
+          <p className="text-xs text-muted-foreground truncate">{agent.name}</p>
         </div>
-        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${TRANSPORT_STYLES[agent.transport] ?? TRANSPORT_STYLES.stdio}`}>
-          {transportLabels[agent.transport] ?? agent.transport}
-        </span>
         {detectionDone && (
-          <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
-            isReady
-              ? 'bg-[var(--success)]/15 text-[var(--success)]'
-              : 'bg-muted text-muted-foreground/60'
-          }`}>
-            {isReady ? p.acpReady : p.acpNotInstalled}
+          <span className="text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 bg-muted text-muted-foreground/60">
+            {p.acpNotInstalled}
           </span>
         )}
-        {detectionDone && !isReady && packageName && (
+        {detectionDone && packageName && (
           <button
             type="button"
             disabled={installState === 'installing'}
             onClick={handleInstall}
-            className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2 py-0.5 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             title={installCmd ? p.acpInstallHint(installCmd) : undefined}
           >
             {installState === 'installing' ? (
@@ -323,25 +431,6 @@ function AcpAgentRow({ agent, installed, installCmd, packageName, detectionDone,
             )}
           </button>
         )}
-        <button
-          type="button"
-          disabled={!isReady}
-          onClick={handleUse}
-          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            isReady
-              ? 'border-[var(--amber)] text-[var(--amber)] hover:bg-[var(--amber)]/10 cursor-pointer'
-              : 'border-border text-muted-foreground/50 cursor-not-allowed'
-          }`}
-          title={
-            isReady
-              ? undefined
-              : installCmd
-                ? p.acpInstallHint(installCmd)
-                : p.acpComingSoon
-          }
-        >
-          {p.acpUseAgent}
-        </button>
       </div>
     </div>
   );
