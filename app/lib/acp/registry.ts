@@ -5,6 +5,7 @@
  */
 
 import type { AcpRegistry, AcpRegistryEntry } from './types';
+import { getDescriptorDisplayName, getDescriptorDescription } from './agent-descriptors';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -117,10 +118,16 @@ function normalizeEntry(raw: unknown): AcpRegistryEntry | null {
   // Extract transport/command/args from the `distribution` field (ACP registry v1 format)
   const { transport, command, packageName, args: distArgs } = extractDistribution(entry);
 
+  const agentId = id || name;
+
+  // Apply curated display name and description from local descriptors (if available)
+  const curatedName = getDescriptorDisplayName(agentId);
+  const curatedDesc = getDescriptorDescription(agentId);
+
   return {
-    id: id || name,
-    name: name || id,
-    description: String(entry.description ?? ''),
+    id: agentId,
+    name: curatedName ?? name ?? id,
+    description: curatedDesc ?? String(entry.description ?? ''),
     version: entry.version ? String(entry.version) : undefined,
     transport,
     command,

@@ -29,7 +29,7 @@ function listWorkflows(): WorkflowListItem[] {
 
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    if (!/\.workflow\.(yaml|yml)$/i.test(entry.name)) continue;
+    if (!/\.flow\.(yaml|yml)$/i.test(entry.name)) continue;
 
     const fullPath = path.join(dir, entry.name);
     const relativePath = path.join(WORKFLOWS_DIR, entry.name);
@@ -43,7 +43,7 @@ function listWorkflows(): WorkflowListItem[] {
         items.push({
           path: relativePath,
           fileName: entry.name,
-          title: entry.name.replace(/\.workflow\.(yaml|yml)$/i, ''),
+          title: entry.name.replace(/\.flow\.(yaml|yml)$/i, ''),
           stepCount: 0,
           mtime: stat.mtimeMs,
           error: 'Invalid YAML',
@@ -55,7 +55,7 @@ function listWorkflows(): WorkflowListItem[] {
       items.push({
         path: relativePath,
         fileName: entry.name,
-        title: typeof parsed.title === 'string' ? parsed.title : entry.name.replace(/\.workflow\.(yaml|yml)$/i, ''),
+        title: typeof parsed.title === 'string' ? parsed.title : entry.name.replace(/\.flow\.(yaml|yml)$/i, ''),
         description: typeof parsed.description === 'string' ? parsed.description : undefined,
         stepCount: steps.length,
         mtime: stat.mtimeMs,
@@ -64,7 +64,7 @@ function listWorkflows(): WorkflowListItem[] {
       items.push({
         path: relativePath,
         fileName: entry.name,
-        title: entry.name.replace(/\.workflow\.(yaml|yml)$/i, ''),
+        title: entry.name.replace(/\.flow\.(yaml|yml)$/i, ''),
         stepCount: 0,
         mtime: stat.mtimeMs,
         error: err instanceof Error ? err.message : 'Parse error',
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
 
     // Sanitize filename
     const safeName = name.replace(/[/\\:*?"<>|]/g, '-');
-    const fileName = `${safeName}.workflow.yaml`;
+    const fileName = `${safeName}.flow.yaml`;
     const dir = getWorkflowsDir();
 
     // Create Workflows dir if needed

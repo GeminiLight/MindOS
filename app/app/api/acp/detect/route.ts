@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 import { getAcpAgents } from '@/lib/acp/registry';
 import { getDescriptorBinary, getDescriptorInstallCmd, resolveAgentCommand } from '@/lib/acp/agent-descriptors';
 import { readSettings } from '@/lib/settings';
@@ -12,7 +12,6 @@ interface InstalledAgent {
   id: string;
   name: string;
   binaryPath: string;
-  /** Resolved launch command — lets the UI show what will actually run */
   resolvedCommand: {
     cmd: string;
     args: string[];
@@ -27,78 +26,68 @@ interface NotInstalledAgent {
   packageName?: string;
 }
 
-/* ── Detection helpers ─────────────────────────────────────────────────── */
+/* ── Server-side detection cache (5 min TTL) ──────────────────────────── */
 
-function whichBinary(binary: string): string | null {
-  try {
-    return execSync(`which ${binary}`, { encoding: 'utf-8', timeout: 3000 }).trim() || null;
-  } catch {
-    return null;
-  }
-}
+const DETECT_CACHE_TTL_MS = 5 * 60 * 1000;
+let detectCache: { data: { installed: InstalledAgent[]; notInstalled: NotInstalledAgent[] }; ts: number } | null = null;
 
-/** Check if an npm package is globally installed */
-function isNpmGlobalInstalled(packageName: string): boolean {
-  try {
-    const out = execSync(`npm list -g ${packageName} --depth=0 2>/dev/null`, {
-      encoding: 'utf-8',
-      timeout: 5000,
+/* ── Async detection helpers ──────────────────────────────────────────── */
+
+function whichAsync(binary: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = exec(`which ${binary}`, { encoding: 'utf-8', timeout: 2000 }, (err, stdout) => {
+      resolve(err ? null : (stdout.trim() || null));
     });
-    return out.includes(packageName);
-  } catch {
-    return false;
-  }
+    child.on('error', () => resolve(null));
+  });
 }
 
 /**
- * Multi-strategy detection for a single agent.
- * Uses unified AGENT_DESCRIPTORS for binary name lookup.
+ * Batch `which` for multiple unique binaries in a single call.
+ * Returns a Map<binary, path | null>.
  */
-function detectAgent(
-  agentId: string,
-  packageName?: string,
-): string | null {
-  // Strategy 1: Check known binary name via `which` (from unified descriptors)
-  const binary = getDescriptorBinary(agentId);
-  if (binary) {
-    const binPath = whichBinary(binary);
-    if (binPath) return binPath;
-  }
+async function whichBatch(binaries: string[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(binaries)];
+  if (unique.length === 0) return new Map();
 
-  // Strategy 2: For npx-based agents, check if the npm package is globally installed
-  if (packageName) {
-    if (isNpmGlobalInstalled(packageName)) {
-      return `npm:global:${packageName}`;
-    }
-  }
+  const results = await Promise.all(unique.map(async (bin) => {
+    const path = await whichAsync(bin);
+    return [bin, path] as const;
+  }));
 
-  return null;
+  return new Map(results);
 }
 
 /* ── Route handler ─────────────────────────────────────────────────────── */
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const force = new URL(req.url).searchParams.get('force') === '1';
+    if (!force && detectCache && Date.now() - detectCache.ts < DETECT_CACHE_TTL_MS) {
+      return NextResponse.json(detectCache.data);
+    }
+
     const agents = await getAcpAgents();
     const settings = readSettings();
+
+    const binaryNames = agents.map((a) => getDescriptorBinary(a.id)).filter(Boolean) as string[];
+    const whichMap = await whichBatch(binaryNames);
+
     const installed: InstalledAgent[] = [];
     const notInstalled: NotInstalledAgent[] = [];
 
     for (const agent of agents) {
-      const userOverride = settings.acpAgents?.[agent.id];
-      const binaryPath = detectAgent(agent.id, agent.packageName);
+      const binary = getDescriptorBinary(agent.id);
+      const binaryPath = binary ? (whichMap.get(binary) ?? null) : null;
 
       if (binaryPath) {
+        const userOverride = settings.acpAgents?.[agent.id];
         const resolved = resolveAgentCommand(agent.id, agent, userOverride);
         installed.push({
           id: agent.id,
           name: agent.name,
           binaryPath,
-          resolvedCommand: {
-            cmd: resolved.cmd,
-            args: resolved.args,
-            source: resolved.source,
-          },
+          resolvedCommand: { cmd: resolved.cmd, args: resolved.args, source: resolved.source },
         });
       } else {
         const installCmd =
@@ -113,7 +102,9 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ installed, notInstalled });
+    const data = { installed, notInstalled };
+    detectCache = { data, ts: Date.now() };
+    return NextResponse.json(data);
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message, installed: [], notInstalled: [] },

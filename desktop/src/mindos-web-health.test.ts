@@ -13,7 +13,7 @@ describe('verifyMindOsWebHealth', () => {
     await expect(verifyMindOsWebHealth(3456)).resolves.toBe(true);
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:3456/api/health',
-      expect.objectContaining({ cache: 'no-store' }),
+      expect.objectContaining({ signal: expect.anything() }),
     );
   });
 
