@@ -34,7 +34,7 @@ const autoApprovalCleanups = new Map<string, () => void>();
  */
 export async function createSession(
   agentId: string,
-  options?: { env?: Record<string, string> },
+  options?: { env?: Record<string, string>; cwd?: string },
 ): Promise<AcpSession> {
   const entry = await findAcpAgent(agentId);
   if (!entry) {
@@ -49,7 +49,7 @@ export async function createSession(
  */
 export async function createSessionFromEntry(
   entry: AcpRegistryEntry,
-  options?: { env?: Record<string, string> },
+  options?: { env?: Record<string, string>; cwd?: string },
 ): Promise<AcpSession> {
   const proc = spawnAcpAgent(entry, options);
 
@@ -87,6 +87,7 @@ export async function createSessionFromEntry(
     id: sessionId,
     agentId: entry.id,
     state: 'idle',
+    cwd: options?.cwd,
     createdAt: new Date().toISOString(),
     lastActivityAt: new Date().toISOString(),
   };
@@ -114,7 +115,10 @@ export async function prompt(
   updateSessionState(session, 'active');
 
   try {
-    const response = await sendAndWait(proc, 'session/prompt', { text }, 60_000);
+    const response = await sendAndWait(proc, 'session/prompt', {
+      text,
+      ...(session.cwd ? { context: { cwd: session.cwd } } : {}),
+    }, 60_000);
 
     if (response.error) {
       updateSessionState(session, 'error');
@@ -195,7 +199,11 @@ export async function promptStream(
 
     // Send the prompt
     try {
-      sendMessage(proc, 'session/prompt', { text, stream: true });
+      sendMessage(proc, 'session/prompt', {
+        text,
+        stream: true,
+        ...(session.cwd ? { context: { cwd: session.cwd } } : {}),
+      });
     } catch (err) {
       unsub();
       updateSessionState(session, 'error');

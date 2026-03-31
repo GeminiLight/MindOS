@@ -7,6 +7,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { getAcpAgents, findAcpAgent } from './registry';
 import { createSessionFromEntry, prompt, closeSession } from './session';
+import { getMindRoot } from '../fs';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
@@ -75,7 +76,8 @@ export const acpTools: AgentTool<any>[] = [
           return textResult(`ACP agent not found: ${params.agent_id}. Use list_acp_agents to see available agents.`);
         }
 
-        const session = await createSessionFromEntry(entry);
+        const cwd = getMindRoot();
+        const session = await createSessionFromEntry(entry, { cwd });
 
         try {
           const response = await prompt(session.id, params.message);

@@ -28,6 +28,7 @@ export interface AcpSession {
   id: string;
   agentId: string;
   state: AcpSessionState;
+  cwd?: string;
   createdAt: string;
   lastActivityAt: string;
 }
@@ -59,6 +60,7 @@ export interface AcpJsonRpcError {
 export interface AcpPromptRequest {
   sessionId: string;
   text: string;
+  cwd?: string;
   metadata?: Record<string, unknown>;
 }
 

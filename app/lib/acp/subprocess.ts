@@ -45,7 +45,7 @@ let rpcIdCounter = 1;
  */
 export function spawnAcpAgent(
   entry: AcpRegistryEntry,
-  options?: { env?: Record<string, string> },
+  options?: { env?: Record<string, string>; cwd?: string },
 ): AcpProcess {
   const { cmd, args } = buildCommand(entry);
 
@@ -59,6 +59,7 @@ export function spawnAcpAgent(
     stdio: ['pipe', 'pipe', 'pipe'],
     env: mergedEnv,
     shell: false,
+    ...(options?.cwd ? { cwd: options.cwd } : {}),
   });
 
   const id = `acp-${entry.id}-${Date.now()}`;
