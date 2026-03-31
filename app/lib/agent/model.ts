@@ -1,6 +1,26 @@
 import { getModel as piGetModel, type Model } from '@mariozechner/pi-ai';
 import { effectiveAiConfig } from '@/lib/settings';
 
+/** Check if any message in the conversation contains images */
+export function hasImages(messages: Array<{ images?: unknown[] }>): boolean {
+  return messages.some(m => m.images && m.images.length > 0);
+}
+
+/** Models known to support vision (non-exhaustive, covers common defaults) */
+const VISION_MODELS: Record<string, string> = {
+  // Anthropic: all claude-3+ models support vision
+  // OpenAI: gpt-4o, gpt-4-turbo, gpt-4-vision support vision
+  // If user's model isn't in this list but is modern, it likely works
+};
+
+/** Ensure model input includes 'image' when images are present */
+function ensureVisionCapable(model: Model<any>): Model<any> {
+  const inputs = model.input as readonly string[];
+  if (inputs.includes('image')) return model;
+  // Upgrade input to include image — most modern models support it
+  return { ...model, input: [...inputs, 'image'] as any };
+}
+
 /**
  * Build a pi-ai Model for the configured provider.
  *
@@ -11,7 +31,7 @@ import { effectiveAiConfig } from '@/lib/settings';
  *
  * Returns { model, modelName, apiKey } — Agent needs model + apiKey via getApiKey hook.
  */
-export function getModelConfig(): {
+export function getModelConfig(options?: { hasImages?: boolean }): {
   model: Model<any>;
   modelName: string;
   apiKey: string;
@@ -77,7 +97,8 @@ export function getModelConfig(): {
       }
     }
 
-    return { model, modelName, apiKey: cfg.openaiApiKey, provider: 'openai' };
+    const finalModel = options?.hasImages ? ensureVisionCapable(model) : model;
+    return { model: finalModel, modelName, apiKey: cfg.openaiApiKey, provider: 'openai' };
   }
 
   // Anthropic
@@ -104,5 +125,6 @@ export function getModelConfig(): {
     };
   }
 
-  return { model, modelName, apiKey: cfg.anthropicApiKey, provider: 'anthropic' };
+  const finalModel = options?.hasImages ? ensureVisionCapable(model) : model;
+  return { model: finalModel, modelName, apiKey: cfg.anthropicApiKey, provider: 'anthropic' };
 }

@@ -13,12 +13,34 @@
  * - Orphaned tool calls (running/pending from interrupted streams): supply empty result
  * - Reasoning parts: filtered out (display-only, not sent back to LLM)
  */
-import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart } from '@/lib/types';
+import type { Message as FrontendMessage, ToolCallPart as FrontendToolCallPart, ImagePart } from '@/lib/types';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { UserMessage, AssistantMessage, ToolResultMessage } from '@mariozechner/pi-ai';
 
 // Re-export for convenience
 export type { AgentMessage } from '@mariozechner/pi-agent-core';
+
+/** Build multimodal content array for user messages with images */
+function buildUserContent(text: string, images?: ImagePart[]): string | any[] {
+  if (!images || images.length === 0) return text;
+
+  // Multimodal content: images first, then text
+  const parts: any[] = [];
+  for (const img of images) {
+    parts.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: img.mimeType,
+        data: img.data,
+      },
+    });
+  }
+  if (text) {
+    parts.push({ type: 'text', text });
+  }
+  return parts;
+}
 
 export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
   const result: AgentMessage[] = [];
@@ -29,7 +51,7 @@ export function toAgentMessages(messages: FrontendMessage[]): AgentMessage[] {
     if (msg.role === 'user') {
       result.push({
         role: 'user',
-        content: msg.content,
+        content: buildUserContent(msg.content, msg.images),
         timestamp,
       } satisfies UserMessage as AgentMessage);
       continue;
