@@ -6,6 +6,12 @@ export interface DetectedAgent {
   id: string;
   name: string;
   binaryPath: string;
+  /** Resolved launch command from the unified resolver */
+  resolvedCommand?: {
+    cmd: string;
+    args: string[];
+    source: 'user-override' | 'descriptor' | 'registry';
+  };
 }
 
 export interface NotInstalledAgent {

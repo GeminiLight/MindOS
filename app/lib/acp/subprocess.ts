@@ -8,8 +8,9 @@ import type {
   AcpJsonRpcRequest,
   AcpJsonRpcResponse,
   AcpRegistryEntry,
-  AcpTransportType,
 } from './types';
+import { resolveAgentCommand } from './agent-descriptors';
+import { readSettings } from '../settings';
 
 /** Incoming JSON-RPC request from agent (bidirectional — agent asks US for permission). */
 export interface AcpIncomingRequest {
@@ -47,11 +48,15 @@ export function spawnAcpAgent(
   entry: AcpRegistryEntry,
   options?: { env?: Record<string, string>; cwd?: string },
 ): AcpProcess {
-  const { cmd, args } = buildCommand(entry);
+  const settings = readSettings();
+  const userOverride = settings.acpAgents?.[entry.id];
+  const resolved = resolveAgentCommand(entry.id, entry, userOverride);
+  const { cmd, args } = { cmd: resolved.cmd, args: resolved.args };
 
   const mergedEnv = {
     ...process.env,
     ...(entry.env ?? {}),
+    ...(resolved.env ?? {}),
     ...(options?.env ?? {}),
   };
 
@@ -279,41 +284,4 @@ export function installAutoApproval(acpProc: AcpProcess): () => void {
   });
 }
 
-/* ── Internal ──────────────────────────────────────────────────────────── */
-
-/**
- * Agent-specific launch overrides.
- * Maps agentId to the actual command + args needed to enter ACP mode.
- * This is necessary because the ACP registry doesn't capture all
- * agent-specific CLI flags (e.g. gemini's --experimental-acp).
- */
-const AGENT_OVERRIDES: Record<string, { cmd: string; args: string[] }> = {
-  // Gemini CLI requires --experimental-acp to speak JSON-RPC over stdio
-  'gemini': { cmd: 'gemini', args: ['--experimental-acp'] },
-  'gemini-cli': { cmd: 'gemini', args: ['--experimental-acp'] },
-  // Claude Code uses a separate npx wrapper package for ACP mode
-  'claude': { cmd: 'npx', args: ['--yes', '@agentclientprotocol/claude-agent-acp'] },
-  'claude-code': { cmd: 'npx', args: ['--yes', '@agentclientprotocol/claude-agent-acp'] },
-  'claude-acp': { cmd: 'npx', args: ['--yes', '@agentclientprotocol/claude-agent-acp'] },
-};
-
-function buildCommand(entry: AcpRegistryEntry): { cmd: string; args: string[] } {
-  // Check for agent-specific overrides first
-  const override = AGENT_OVERRIDES[entry.id];
-  if (override) {
-    return { cmd: override.cmd, args: [...override.args, ...(entry.args ?? [])] };
-  }
-
-  const transport: AcpTransportType = entry.transport;
-
-  switch (transport) {
-    case 'npx':
-      return { cmd: 'npx', args: ['--yes', entry.command, ...(entry.args ?? [])] };
-    case 'uvx':
-      return { cmd: 'uvx', args: [entry.command, ...(entry.args ?? [])] };
-    case 'binary':
-    case 'stdio':
-    default:
-      return { cmd: entry.command, args: entry.args ?? [] };
-  }
-}
+/* ── Internal — agent command resolution moved to agent-descriptors.ts ─ */

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Clock, Code2, Download, Globe, Loader2, MessageSquare, Network, RefreshCw, Trash2, Wifi, WifiOff, Wrench, Zap } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Check, ChevronDown, ChevronUp, Clock, Code2, Download, Globe, Loader2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Trash2, Wifi, WifiOff, Wrench, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
+import { useAcpConfig } from '@/hooks/useAcpConfig';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
 import { useDelegationHistory } from '@/hooks/useDelegationHistory';
@@ -159,6 +160,7 @@ function AcpRegistrySection() {
   const p = t.panels.agents;
   const acp = useAcpRegistry();
   const detection = useAcpDetection();
+  const acpConfig = useAcpConfig();
 
   if (acp.loading) {
     return (
@@ -248,6 +250,7 @@ function AcpRegistrySection() {
               packageName={null}
               detectionDone={!detection.loading}
               onInstalled={detection.refresh}
+              acpConfig={acpConfig}
             />
           ))}
         </div>
@@ -281,16 +284,21 @@ const TRANSPORT_STYLES: Record<string, string> = {
   stdio: 'bg-muted text-muted-foreground',
 };
 
-function AcpAgentCard({ agent, installed, detectionDone }: {
+function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
   agent: AcpRegistryEntry;
-  installed: { id: string; name: string; binaryPath: string } | null;
+  installed: { id: string; name: string; binaryPath: string; resolvedCommand?: { cmd: string; args: string[]; source: string } } | null;
   installCmd: string | null;
   packageName: string | null;
   detectionDone: boolean;
   onInstalled: () => void;
+  acpConfig: ReturnType<typeof useAcpConfig>;
 }) {
   const { t } = useLocale();
   const p = t.panels.agents;
+  const [configOpen, setConfigOpen] = useState(false);
+  const [editCmd, setEditCmd] = useState('');
+  const [editArgs, setEditArgs] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saved'>('idle');
   const transportLabels: Record<string, string> = {
     npx: p.acpTransportNpx,
     binary: p.acpTransportBinary,
@@ -299,6 +307,38 @@ function AcpAgentCard({ agent, installed, detectionDone }: {
   };
 
   const isReady = !!installed;
+  const resolved = installed?.resolvedCommand;
+  const sourceLabel = resolved?.source === 'user-override' ? p.acpConfigSourceUser
+    : resolved?.source === 'descriptor' ? p.acpConfigSourceBuiltin
+    : p.acpConfigSourceRegistry;
+
+  const handleToggleConfig = useCallback(() => {
+    if (!configOpen && resolved) {
+      // Pre-fill with current resolved values
+      setEditCmd(resolved.cmd);
+      setEditArgs(resolved.args.join(' '));
+    }
+    setConfigOpen(v => !v);
+    setSaveState('idle');
+  }, [configOpen, resolved]);
+
+  const handleSave = useCallback(async () => {
+    const args = editArgs.trim() ? editArgs.trim().split(/\s+/) : [];
+    const ok = await acpConfig.save(agent.id, {
+      command: editCmd.trim() || undefined,
+      args: args.length > 0 ? args : undefined,
+    });
+    if (ok) {
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2000);
+    }
+  }, [acpConfig, agent.id, editCmd, editArgs]);
+
+  const handleReset = useCallback(async () => {
+    await acpConfig.reset(agent.id);
+    setSaveState('idle');
+    setConfigOpen(false);
+  }, [acpConfig, agent.id]);
 
   const handleUse = () => {
     openAskModal('', 'user', { id: agent.id, name: agent.name });
@@ -336,6 +376,15 @@ function AcpAgentCard({ agent, installed, detectionDone }: {
         )}
         <button
           type="button"
+          onClick={handleToggleConfig}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={p.acpConfigToggle}
+          aria-expanded={configOpen}
+        >
+          <Settings2 size={13} />
+        </button>
+        <button
+          type="button"
           onClick={handleUse}
           className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-md border border-[var(--amber)] text-[var(--amber)] hover:bg-[var(--amber)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
         >
@@ -344,8 +393,67 @@ function AcpAgentCard({ agent, installed, detectionDone }: {
         </button>
       </div>
 
+      {/* Collapsible config section */}
+      {configOpen && resolved && (
+        <div className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2">
+          {/* Command */}
+          <div className="flex items-center gap-2">
+            <label className="text-2xs text-muted-foreground w-12 shrink-0">{p.acpConfigCommand}</label>
+            <input
+              type="text"
+              value={editCmd}
+              onChange={e => { setEditCmd(e.target.value); setSaveState('idle'); }}
+              className="flex-1 rounded-md border border-border bg-background text-foreground text-xs font-mono px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder={resolved.cmd}
+            />
+          </div>
+          {/* Args */}
+          <div className="flex items-center gap-2">
+            <label className="text-2xs text-muted-foreground w-12 shrink-0">{p.acpConfigArgs}</label>
+            <input
+              type="text"
+              value={editArgs}
+              onChange={e => { setEditArgs(e.target.value); setSaveState('idle'); }}
+              className="flex-1 rounded-md border border-border bg-background text-foreground text-xs font-mono px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder={resolved.args.join(' ')}
+            />
+          </div>
+          {/* Status row */}
+          <div className="flex items-center gap-2 text-2xs text-muted-foreground">
+            <span>{p.acpConfigSource}:</span>
+            <span className={`px-1.5 py-0.5 rounded font-medium ${
+              resolved.source === 'user-override' ? 'bg-[var(--amber)]/15 text-[var(--amber)]'
+              : 'bg-muted text-muted-foreground'
+            }`}>{sourceLabel}</span>
+            <span className="text-muted-foreground/50">|</span>
+            <span>{p.acpConfigPath}: <span className="font-mono">{installed?.binaryPath}</span></span>
+          </div>
+          {/* Action buttons */}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            {acpConfig.configs[agent.id] && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <RotateCcw size={10} />
+                {p.acpConfigReset}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={acpConfig.saving}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] hover:bg-[var(--amber)]/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              {saveState === 'saved' ? <><Check size={10} /> {p.acpConfigSaved}</> : <><Save size={10} /> {p.acpConfigSave}</>}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick action chips */}
-      {isReady && (
+      {isReady && !configOpen && (
         <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center gap-1.5 flex-wrap">
           {QUICK_ACTIONS.map((action) => {
             const Icon = action.icon;

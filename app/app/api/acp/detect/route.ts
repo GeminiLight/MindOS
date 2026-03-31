@@ -3,53 +3,21 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import { getAcpAgents } from '@/lib/acp/registry';
+import { getDescriptorBinary, getDescriptorInstallCmd, resolveAgentCommand } from '@/lib/acp/agent-descriptors';
+import { readSettings } from '@/lib/settings';
 
-/* ── Agent ID → known binary name mapping ─────────────────────────────── */
-
-const AGENT_BINARY_MAP: Record<string, string> = {
-  'claude-acp': 'claude',
-  claude: 'claude',
-  'claude-code': 'claude',
-  gemini: 'gemini',
-  'gemini-cli': 'gemini',
-  'codex-acp': 'codex',
-  codex: 'codex',
-  cursor: 'cursor',
-  cline: 'cline',
-  'github-copilot-cli': 'github-copilot',
-  goose: 'goose',
-  opencode: 'opencode',
-  kilo: 'kilo',
-  'codebuddy-code': 'codebuddy',
-  codebuddy: 'codebuddy',
-  openclaw: 'openclaw',
-  pi: 'pi',
-  'pi-acp': 'pi',
-  auggie: 'auggie',
-  iflow: 'iflow',
-  kimi: 'kimi',
-  'qwen-code': 'qwen-code',
-};
-
-/* ── Install commands (shown in tooltip / used by install endpoint) ──── */
-
-const INSTALL_COMMANDS: Record<string, string> = {
-  'claude-acp': 'npm install -g @anthropic-ai/claude-code',
-  gemini: 'npm install -g @google/gemini-cli',
-  'codex-acp': 'npm install -g @openai/codex',
-  cline: 'npm install -g cline',
-  'github-copilot-cli': 'npm install -g @github/copilot',
-  kilo: 'npm install -g @kilocode/cli',
-  'qwen-code': 'npm install -g @qwen-code/qwen-code',
-  'codebuddy-code': 'npm install -g @anthropic-ai/claude-code',
-  goose: 'pip install goose-ai',
-  opencode: 'go install github.com/opencode-ai/opencode@latest',
-};
+/* ── Types ─────────────────────────────────────────────────────────────── */
 
 interface InstalledAgent {
   id: string;
   name: string;
   binaryPath: string;
+  /** Resolved launch command — lets the UI show what will actually run */
+  resolvedCommand: {
+    cmd: string;
+    args: string[];
+    source: 'user-override' | 'descriptor' | 'registry';
+  };
 }
 
 interface NotInstalledAgent {
@@ -84,19 +52,17 @@ function isNpmGlobalInstalled(packageName: string): boolean {
 
 /**
  * Multi-strategy detection for a single agent.
- * 1. `which <binaryName>` — check if globally in PATH
- * 2. For npx agents: `npm list -g <packageName>` — check if npm package exists globally
- * Returns the binary path string if found, or null.
+ * Uses unified AGENT_DESCRIPTORS for binary name lookup.
  */
 function detectAgent(
   agentId: string,
   packageName?: string,
 ): string | null {
-  // Strategy 1: Check known binary name via `which`
-  const binary = AGENT_BINARY_MAP[agentId];
+  // Strategy 1: Check known binary name via `which` (from unified descriptors)
+  const binary = getDescriptorBinary(agentId);
   if (binary) {
-    const path = whichBinary(binary);
-    if (path) return path;
+    const binPath = whichBinary(binary);
+    if (binPath) return binPath;
   }
 
   // Strategy 2: For npx-based agents, check if the npm package is globally installed
@@ -114,17 +80,29 @@ function detectAgent(
 export async function GET() {
   try {
     const agents = await getAcpAgents();
+    const settings = readSettings();
     const installed: InstalledAgent[] = [];
     const notInstalled: NotInstalledAgent[] = [];
 
     for (const agent of agents) {
+      const userOverride = settings.acpAgents?.[agent.id];
       const binaryPath = detectAgent(agent.id, agent.packageName);
 
       if (binaryPath) {
-        installed.push({ id: agent.id, name: agent.name, binaryPath });
+        const resolved = resolveAgentCommand(agent.id, agent, userOverride);
+        installed.push({
+          id: agent.id,
+          name: agent.name,
+          binaryPath,
+          resolvedCommand: {
+            cmd: resolved.cmd,
+            args: resolved.args,
+            source: resolved.source,
+          },
+        });
       } else {
         const installCmd =
-          INSTALL_COMMANDS[agent.id] ??
+          getDescriptorInstallCmd(agent.id) ??
           (agent.packageName ? `npm install -g ${agent.packageName}` : '');
         notInstalled.push({
           id: agent.id,

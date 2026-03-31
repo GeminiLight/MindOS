@@ -4,7 +4,8 @@ import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles, XCircle } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
 import { parseWorkflowYaml } from './parser';
-import type { WorkflowYaml, WorkflowStepRuntime, StepStatus, WorkflowStep } from './types';
+import { runStepWithAI, clearSkillCache } from './execution';
+import type { WorkflowYaml, WorkflowStepRuntime, StepStatus } from './types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -16,66 +17,6 @@ function initSteps(workflow: WorkflowYaml): WorkflowStepRuntime[] {
     output: '',
     error: undefined,
   }));
-}
-
-// ─── AI Execution ─────────────────────────────────────────────────────────
-
-async function runStepWithAI(
-  step: WorkflowStepRuntime,
-  workflow: WorkflowYaml,
-  filePath: string,
-  onChunk: (accumulated: string) => void,
-  signal: AbortSignal,
-): Promise<void> {
-  const allStepsSummary = workflow.steps.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
-  const skillContext = step.skill
-    ? `\n\nYou should apply the "${step.skill}" skill/standard throughout this step.`
-    : '';
-
-  const prompt = `You are executing step ${step.index + 1} of a workflow: "${step.name}".
-
-Context of the full workflow "${workflow.title}":
-${allStepsSummary}
-
-Current step instructions:
-${step.prompt || '(No specific instructions — use common sense.)'}${skillContext}
-
-Execute concisely. Provide:
-1. What you did / what the output is
-2. Any decisions made
-3. What the next step should watch out for
-
-Be specific and actionable. Format in Markdown.`;
-
-  const res = await fetch('/api/ask', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: prompt }],
-      currentFile: filePath,
-    }),
-    signal,
-  });
-
-  if (!res.ok) throw new Error(`Request failed (HTTP ${res.status})`);
-  if (!res.body) throw new Error('No response body');
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let acc = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const raw = decoder.decode(value, { stream: true });
-    for (const line of raw.split('\n')) {
-      const m = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
-      if (m) {
-        acc += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-        onChunk(acc);
-      }
-    }
-  }
 }
 
 // ─── Status Icon ──────────────────────────────────────────────────────────
@@ -337,6 +278,7 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
     abortRef.current?.abort();
     abortRef.current = null;
     setRunning(false);
+    clearSkillCache();
     if (parsed.workflow) setSteps(initSteps(parsed.workflow));
   }, [parsed.workflow]);
 

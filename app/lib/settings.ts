@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { parseAcpAgentOverrides } from './acp/agent-descriptors';
 
 const SETTINGS_PATH = path.join(os.homedir(), '.mindos', 'config.json');
 
@@ -49,6 +50,8 @@ export interface ServerSettings {
   setupPending?: boolean;  // true → / redirects to /setup
   disabledSkills?: string[];
   guideState?: GuideState;
+  /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
+  acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
 }
 
 const DEFAULTS: ServerSettings = {
@@ -133,6 +136,11 @@ function parseAgent(raw: unknown): AgentConfig | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** Parse acpAgents config field, delegates to agent-descriptors.ts */
+function parseAcpAgentsField(raw: unknown): Record<string, import('./acp/agent-descriptors').AcpAgentOverride> | undefined {
+  return parseAcpAgentOverrides(raw);
+}
+
 /** Parse guideState from unknown input */
 function parseGuideState(raw: unknown): GuideState | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
@@ -159,6 +167,7 @@ export function readSettings(): ServerSettings {
     return {
       ai: migrateAi(parsed),
       agent: parseAgent(parsed.agent),
+      acpAgents: parseAcpAgentsField(parsed.acpAgents),
       mindRoot: (parsed.mindRoot ?? parsed.sopRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
       authToken:   typeof parsed.authToken   === 'string' ? parsed.authToken   : undefined,
@@ -189,6 +198,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.startMode   !== undefined) merged.startMode   = settings.startMode;
   if (settings.disabledSkills !== undefined) merged.disabledSkills = settings.disabledSkills;
   if (settings.guideState !== undefined) merged.guideState = settings.guideState;
+  if (settings.acpAgents !== undefined) merged.acpAgents = settings.acpAgents;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;
