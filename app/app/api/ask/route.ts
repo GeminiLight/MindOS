@@ -520,14 +520,19 @@ export async function POST(req: NextRequest) {
     const requestStartTime = Date.now();
     const stream = new ReadableStream({
       start(controller) {
+        let closed = false;
         function send(event: MindOSSSEvent) {
+          if (closed) return;
           try {
             controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
-          } catch (err) {
-            if (err instanceof TypeError) {
-              console.error('[ask] SSE send failed (serialization):', (err as Error).message, 'event type:', (event as { type?: string }).type);
-            }
+          } catch {
+            closed = true;
           }
+        }
+        function closeStream() {
+          if (closed) return;
+          closed = true;
+          try { controller.close(); } catch { /* already closed */ }
         }
 
         let hasContent = false;
@@ -700,8 +705,7 @@ export async function POST(req: NextRequest) {
                 await closeSession(acpSessionId).catch(() => {});
               }
             }
-            controller.close();
-          } else {
+            closeStream();
             // Route to MindOS agent (existing logic)
             await session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined);
             metrics.recordRequest(Date.now() - requestStartTime);
@@ -710,15 +714,14 @@ export async function POST(req: NextRequest) {
             } else {
               send({ type: 'done' });
             }
-            controller.close();
-          }
+            closeStream();
         };
 
         runAgent().catch((err) => {
           metrics.recordRequest(Date.now() - requestStartTime);
           metrics.recordError();
           send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
-          controller.close();
+          closeStream();
         });
       },
     });
