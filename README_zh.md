@@ -162,11 +162,15 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 
 - **GUI 工作台**：浏览、编辑、搜索笔记，统一搜索 + AI 入口（`⌘K` / `⌘/`），专为人机共创设计。
 - **内置 Agent 助手**：在上下文中与知识库对话，编辑无缝沉淀为可管理知识。
-- **插件扩展**：多种内置渲染器插件——TODO Board、CSV Views、Wiki Graph、Timeline、Agent Inspector 等。
+- **一键导入**：拖拽文件即可导入，Inline AI Organize 自动分析、分类、写入知识库，支持进度追踪和撤销。
+- **新手引导**：首次使用的分步引导体验，帮助新用户快速搭建知识库并连接第一个 Agent。
+- **插件扩展**：多种内置渲染器插件——TODO Board、CSV Views、Wiki Graph、Timeline、Workflow Editor、Agent Inspector 等。
 
 **Agent 侧**
 
-- **MCP Server + Skills**：stdio + HTTP 双传输，全阵容 Agent 兼容（OpenClaw, Claude Code, Cursor 等），零配置接入。
+- **MCP Server + Skills**：stdio + HTTP 双传输，全阵容 Agent 兼容（Claude Code, Cursor, Gemini CLI 等），零配置接入。
+- **ACP / A2A 协议**：Agent 间通信协议，支持 Agent 发现、任务委派与编排。Phase 1 已上线：Agent Card 发现 + JSON-RPC 消息通信。
+- **Workflow 编排**：基于 YAML 的可视化工作流编辑器 + 步骤执行引擎，定义、编辑、运行多步 Agent 工作流。
 - **结构化模板**：预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。
 - **笔记即指令**：日常笔记天然就是 Agent 可直接执行的高质量指令——无需额外格式转换，写下即可调度。
 
@@ -175,15 +179,17 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 - **安全防线**：Bearer Token 认证、路径沙箱、INSTRUCTION.md 写保护、原子写入。
 - **知识图谱**：动态解析并可视化文件间的引用与依赖关系。
 - **反向链接视图**：展示所有引用当前文件的反向链接，理解笔记在知识网络中的位置。
+- **Agent 审计面板**：将 Agent 操作日志渲染为可筛选的时间线，审查每次工具调用的详情。
 - **Git 时光机**：Git 自动同步（commit/push/pull），记录人类与 Agent 的每次编辑历史，一键回滚，跨设备同步。
 - **桌面客户端**：原生 macOS/Windows/Linux 应用，系统托盘、开机自启、本地进程管理。
 
 <details>
 <summary><strong>即将到来</strong></summary>
 
-- [ ] ACP（Agent Communication Protocol）：连接外部 Agent（如 Claude Code、Cursor），让知识库成为多 Agent 协作的中枢
 - [ ] RAG 深度集成：基于知识库内容的检索增强生成，让 AI 回答更精准、更有上下文
-- [ ] Agent 审计面板（Agent Inspector）：将 Agent 操作日志渲染为可筛选的时间线，审查每次工具调用的详情
+- [ ] ACP / A2A Phase 2：深度多 Agent 协作，支持任务委派、共享上下文、工作流链式执行
+- [ ] 经验编译器：从 Agent 交互中自动提取纠正和偏好，沉淀为可复用的 Skills/SOP
+- [ ] 知识库健康度仪表盘：可视化认知复利指标——已积累规则数、Agent 复用次数、知识新鲜度
 
 </details>
 

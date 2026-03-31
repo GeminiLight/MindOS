@@ -43,6 +43,13 @@ export const CONTENT_WIDTHS = [
   { value: '100%', label: 'Full width' },
 ];
 
+export const FONT_SIZES = [
+  { value: '14px', label: '14px' },
+  { value: '15px', label: '15px (default)' },
+  { value: '16px', label: '16px' },
+  { value: '17px', label: '17px' },
+];
+
 export const FONTS = [
   { value: 'lora', label: 'Lora (serif)', style: { fontFamily: 'Lora, Georgia, serif' } },
   { value: 'ibm-plex-sans', label: 'IBM Plex Sans', style: { fontFamily: "'IBM Plex Sans', sans-serif" } },
@@ -127,6 +134,8 @@ export interface McpTabProps {
 export interface AppearanceTabProps {
   font: string;
   setFont: (v: string) => void;
+  fontSize: string;
+  setFontSize: (v: string) => void;
   contentWidth: string;
   setContentWidth: (v: string) => void;
   dark: boolean;

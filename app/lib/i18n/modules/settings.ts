@@ -45,6 +45,8 @@ export const settingsEn = {
     },
     appearance: {
       readingFont: 'Reading font',
+      fontSize: 'Font size',
+      fontSizePreview: 'The quick brown fox.',
       contentWidth: 'Content width',
       colorTheme: 'Color theme',
       system: 'System',
@@ -337,6 +339,8 @@ export const settingsZh = {
     },
     appearance: {
       readingFont: '正文字体',
+      fontSize: '字体大小',
+      fontSizePreview: '人之初性本善。',
       contentWidth: '内容宽度',
       colorTheme: '颜色主题',
       system: '系统',

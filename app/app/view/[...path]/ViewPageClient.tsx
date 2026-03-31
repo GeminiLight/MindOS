@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2 } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -17,6 +17,8 @@ import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
 import DirPicker from '@/components/DirPicker';
+import { renameFileAction, deleteFileAction } from '@/lib/actions';
+import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -68,11 +70,71 @@ export default function ViewPageClient({
   const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [, startRenameTransition] = useTransition();
 
   const inferredName = filePath.split('/').pop() || 'Untitled.md';
   const [showSaveAs, setShowSaveAs] = useState(isDraft);
   const [saveDir, setSaveDir] = useState('');
   const [saveName, setSaveName] = useState(inferredName);
+
+  // Close more menu on outside click
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        moreRef.current && !moreRef.current.contains(e.target as Node) &&
+        moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)
+      ) setMoreOpen(false);
+    };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
+  }, [moreOpen]);
+
+  const handleCopyPath = useCallback(() => {
+    navigator.clipboard.writeText(filePath).catch(() => {});
+    setMoreOpen(false);
+  }, [filePath]);
+
+  const handleStartRename = useCallback(() => {
+    setMoreOpen(false);
+    const name = filePath.split('/').pop() ?? '';
+    setRenameValue(name);
+    setRenaming(true);
+  }, [filePath]);
+
+  const handleCommitRename = useCallback(() => {
+    const newName = renameValue.trim();
+    if (!newName || newName === filePath.split('/').pop()) { setRenaming(false); return; }
+    startRenameTransition(async () => {
+      const result = await renameFileAction(filePath, newName);
+      setRenaming(false);
+      if (result.success && result.newPath) {
+        router.push(`/view/${encodePath(result.newPath)}`);
+        router.refresh();
+        window.dispatchEvent(new Event('mindos:files-changed'));
+      }
+    });
+  }, [renameValue, filePath, router]);
+
+  const handleConfirmDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    startTransition(async () => {
+      const result = await deleteFileAction(filePath);
+      if (result.success) {
+        router.push('/');
+        router.refresh();
+        window.dispatchEvent(new Event('mindos:files-changed'));
+      }
+    });
+  }, [filePath, router]);
 
   // Keep first paint deterministic between server and client to avoid hydration mismatch.
   const effectiveUseRaw = hydrated ? useRaw : false;
@@ -324,6 +386,38 @@ export default function ViewPageClient({
                 </button>
               </>
             )}
+
+            {/* More menu (rename, copy path, delete) */}
+            {!isDraft && (
+              <div className="relative">
+                <button
+                  ref={moreRef}
+                  type="button"
+                  onClick={() => setMoreOpen(v => !v)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="More"
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+                {moreOpen && (
+                  <div
+                    ref={moreMenuRef}
+                    className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-border bg-card shadow-lg py-1"
+                  >
+                    <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left" onClick={handleCopyPath}>
+                      <Copy size={14} className="shrink-0" /> Copy Path
+                    </button>
+                    <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left" onClick={handleStartRename}>
+                      <Pencil size={14} className="shrink-0" /> Rename
+                    </button>
+                    <div className="my-1 border-t border-border/50" />
+                    <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left" onClick={() => { setMoreOpen(false); setShowDeleteConfirm(true); }}>
+                      <Trash2 size={14} className="shrink-0" /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -410,6 +504,41 @@ export default function ViewPageClient({
           </div>
         )}
       </div>
+
+      {/* Inline rename dialog */}
+      {renaming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-lg shadow-lg p-4 w-80">
+            <h3 className="text-sm font-medium mb-2">Rename</h3>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCommitRename();
+                if (e.key === 'Escape') setRenaming(false);
+              }}
+              className="w-full bg-muted border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setRenaming(false)} className="px-3 py-1.5 rounded-md text-xs bg-muted text-muted-foreground hover:bg-accent transition-colors">Cancel</button>
+              <button onClick={handleCommitRename} className="px-3 py-1.5 rounded-md text-xs bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors">Rename</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete"
+        message={`Delete "${filePath.split('/').pop()}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

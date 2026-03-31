@@ -30,6 +30,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const dataLoaded = useRef(false);
 
   const [font, setFont] = useState('lora');
+  const [fontSize, setFontSize] = useState('15px');
   const [contentWidth, setContentWidth] = useState('780px');
   const [dark, setDark] = useState(true);
 
@@ -63,6 +64,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     if (justOpened) {
       apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
       setFont(localStorage.getItem('prose-font') ?? 'lora');
+      setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
       setContentWidth(localStorage.getItem('content-width') ?? '780px');
       const stored = localStorage.getItem('theme');
       setDark(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -86,6 +88,11 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     document.documentElement.style.setProperty('--prose-font-override', fontMap[font] ?? '');
     localStorage.setItem('prose-font', font);
   }, [font]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--prose-font-size-override', fontSize);
+    localStorage.setItem('prose-font-size', fontSize);
+  }, [fontSize]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--content-width-override', contentWidth);
@@ -178,7 +185,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
       ) : (
         <>
           {tab === 'ai' && data?.ai && <AiTab data={data} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
-          {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
+          {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
           {tab === 'sync' && <SyncTab t={t} />}
           {tab === 'mcp' && <McpTab t={t} />}

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, Columns3, Globe } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, Columns3, Globe, TextCursorInput } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
-import { CONTENT_WIDTHS, FONTS, AppearanceTabProps } from './types';
+import { CONTENT_WIDTHS, FONTS, FONT_SIZES, AppearanceTabProps } from './types';
 
 /* ── Segmented Control ── */
 function SegmentedControl<T extends string>({ options, value, onChange }: {
@@ -45,7 +45,7 @@ function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label:
   );
 }
 
-export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, dark, setDark, locale, setLocale, t }: AppearanceTabProps) {
+export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWidth, setContentWidth, dark, setDark, locale, setLocale, t }: AppearanceTabProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [themePref, setThemePref] = useState<string>(() =>
     typeof window !== 'undefined' ? (localStorage.getItem('theme') ?? 'system') : 'system'
@@ -81,6 +81,29 @@ export function AppearanceTab({ font, setFont, contentWidth, setContentWidth, da
           style={{ fontFamily: FONTS.find(f => f.value === font)?.style.fontFamily }}
         >
           {a.fontPreview}
+        </p>
+      </SettingGroup>
+
+      {/* Font Size */}
+      <SettingGroup icon={<TextCursorInput size={14} />} label={a.fontSize}>
+        <div className="flex flex-wrap gap-1.5">
+          {FONT_SIZES.map(s => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => setFontSize(s.value)}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                fontSize === s.value
+                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-foreground font-medium shadow-sm'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed px-0.5 mt-1" style={{ fontSize }}>
+          {a.fontSizePreview}
         </p>
       </SettingGroup>
 
