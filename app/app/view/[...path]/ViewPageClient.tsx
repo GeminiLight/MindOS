@@ -542,7 +542,7 @@ export default function ViewPageClient({
               <JsonView content={savedContent} />
             ) : (
               <>
-                <MarkdownView content={savedContent} highlightLines={changedLines} />
+                <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} />
                 <TableOfContents content={savedContent} />
               </>
             )}
