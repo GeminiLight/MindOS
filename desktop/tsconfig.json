@@ -11,11 +11,8 @@
     "resolveJsonModule": true,
     "declaration": false,
     "baseUrl": ".",
-    "paths": {
-      "shared/*": ["../shared/*"]
-    },
     "lib": ["ES2022"]
   },
-  "include": ["src/**/*.ts", "../shared/**/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "dist-electron", "src/*-renderer.ts", "**/*.test.ts"]
 }
