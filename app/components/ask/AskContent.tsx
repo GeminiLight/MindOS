@@ -19,20 +19,14 @@ import AgentSelectorCapsule from '@/components/ask/AgentSelectorCapsule';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 import { cn } from '@/lib/utils';
-import { useComposerVerticalResize } from '@/hooks/useComposerVerticalResize';
 import { useAcpDetection } from '@/hooks/useAcpDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 
-const PANEL_COMPOSER_STORAGE = 'mindos-agent-panel-composer-height';
-const PANEL_COMPOSER_DEFAULT = 104;
-const PANEL_COMPOSER_MIN = 84;
-const PANEL_COMPOSER_MAX_ABS = 440;
-const PANEL_COMPOSER_MAX_VIEW = 0.48;
-const PANEL_COMPOSER_KEY_STEP = 24;
-/** 输入框随内容增高，超过此行数后在框内滚动（与常见 IM 一致） */
-const PANEL_TEXTAREA_MAX_VISIBLE_LINES = 8;
+/** Textarea auto-grows with content up to this many visible lines, then scrolls */
+const TEXTAREA_MAX_VISIBLE_LINES = 8;
 
-function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number, availableHeight?: number): void {
+/** Auto-size textarea height to fit content, capped at maxVisibleLines */
+function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number): void {
   const style = getComputedStyle(el);
   const parsedLh = parseFloat(style.lineHeight);
   const parsedFs = parseFloat(style.fontSize);
@@ -41,33 +35,11 @@ function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number,
   const pad =
     (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
     (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
-  let maxH = lineHeight * maxVisibleLines + pad;
-  if (availableHeight && Number.isFinite(availableHeight) && availableHeight > 0) {
-    maxH = Math.min(maxH, availableHeight);
-  }
+  const maxH = lineHeight * maxVisibleLines + pad;
   if (!Number.isFinite(maxH) || maxH <= 0) return;
   el.style.height = '0px';
   const next = Math.min(el.scrollHeight, maxH);
   el.style.height = `${Number.isFinite(next) ? next : maxH}px`;
-}
-
-function panelComposerMaxForViewport(): number {
-  if (typeof window === 'undefined') return PANEL_COMPOSER_MAX_ABS;
-  return Math.min(PANEL_COMPOSER_MAX_ABS, Math.floor(window.innerHeight * PANEL_COMPOSER_MAX_VIEW));
-}
-
-function readStoredPanelComposerHeight(): number {
-  if (typeof window === 'undefined') return PANEL_COMPOSER_DEFAULT;
-  try {
-    const s = localStorage.getItem(PANEL_COMPOSER_STORAGE);
-    if (s) {
-      const n = parseInt(s, 10);
-      if (Number.isFinite(n) && n >= PANEL_COMPOSER_MIN && n <= PANEL_COMPOSER_MAX_ABS) return n;
-    }
-  } catch {
-    /* ignore */
-  }
-  return PANEL_COMPOSER_DEFAULT;
 }
 
 interface AskContentProps {
@@ -97,84 +69,6 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
   const { t } = useLocale();
-
-  const [panelComposerHeight, setPanelComposerHeight] = useState(PANEL_COMPOSER_DEFAULT);
-  const panelComposerHRef = useRef(panelComposerHeight);
-  panelComposerHRef.current = panelComposerHeight;
-
-  useEffect(() => {
-    const stored = readStoredPanelComposerHeight();
-    if (stored !== PANEL_COMPOSER_DEFAULT) {
-      setPanelComposerHeight(stored);
-      panelComposerHRef.current = stored;
-    }
-  }, []);
-
-  const getPanelComposerHeight = useCallback(() => panelComposerHRef.current, []);
-  const persistPanelComposerHeight = useCallback((h: number) => {
-    try {
-      localStorage.setItem(PANEL_COMPOSER_STORAGE, String(h));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const onPanelComposerResizePointerDown = useComposerVerticalResize({
-    minHeight: PANEL_COMPOSER_MIN,
-    maxHeightAbs: PANEL_COMPOSER_MAX_ABS,
-    maxHeightViewportRatio: PANEL_COMPOSER_MAX_VIEW,
-    getHeight: getPanelComposerHeight,
-    setHeight: setPanelComposerHeight,
-    persist: persistPanelComposerHeight,
-  });
-
-  const [panelComposerViewportMax, setPanelComposerViewportMax] = useState(PANEL_COMPOSER_MAX_ABS);
-
-  useEffect(() => {
-    setPanelComposerViewportMax(panelComposerMaxForViewport());
-  }, []);
-
-  const applyPanelComposerClampAndPersist = useCallback(() => {
-    const maxH = panelComposerMaxForViewport();
-    setPanelComposerViewportMax(maxH);
-    const h = panelComposerHRef.current;
-    if (h > maxH) {
-      setPanelComposerHeight(maxH);
-      panelComposerHRef.current = maxH;
-      persistPanelComposerHeight(maxH);
-    }
-  }, [persistPanelComposerHeight]);
-
-  const handlePanelComposerSeparatorKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLElement>) => {
-      if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
-      e.preventDefault();
-      const maxH = panelComposerMaxForViewport();
-      setPanelComposerViewportMax(maxH);
-      const h = panelComposerHRef.current;
-      let next = h;
-      if (e.key === 'ArrowUp') next = h + PANEL_COMPOSER_KEY_STEP;
-      else if (e.key === 'ArrowDown') next = h - PANEL_COMPOSER_KEY_STEP;
-      else if (e.key === 'Home') next = PANEL_COMPOSER_MIN;
-      else if (e.key === 'End') next = maxH;
-      const clamped = Math.round(Math.max(PANEL_COMPOSER_MIN, Math.min(maxH, next)));
-      setPanelComposerHeight(clamped);
-      panelComposerHRef.current = clamped;
-      persistPanelComposerHeight(clamped);
-    },
-    [persistPanelComposerHeight],
-  );
-
-  const resetPanelComposerHeight = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setPanelComposerHeight(PANEL_COMPOSER_DEFAULT);
-      panelComposerHRef.current = PANEL_COMPOSER_DEFAULT;
-      persistPanelComposerHeight(PANEL_COMPOSER_DEFAULT);
-    },
-    [persistPanelComposerHeight],
-  );
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -267,24 +161,14 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     return () => window.removeEventListener('keydown', handler);
   }, [variant, visible, onClose, mention, slash]);
 
-  useEffect(() => {
-    if (!isPanel) return;
-    applyPanelComposerClampAndPersist();
-    window.addEventListener('resize', applyPanelComposerClampAndPersist);
-    return () => window.removeEventListener('resize', applyPanelComposerClampAndPersist);
-  }, [isPanel, applyPanelComposerClampAndPersist]);
-
   const formRef = useRef<HTMLFormElement>(null);
 
   useLayoutEffect(() => {
     if (!visible) return;
     const el = inputRef.current;
     if (!el || !(el instanceof HTMLTextAreaElement)) return;
-    const form = formRef.current;
-    const maxLines = isPanel ? PANEL_TEXTAREA_MAX_VISIBLE_LINES : 6;
-    const availableH = isPanel && form ? form.clientHeight - 40 : undefined;
-    syncTextareaToContent(el, maxLines, availableH);
-  }, [input, isPanel, isLoading, visible, panelComposerHeight]);
+    syncTextareaToContent(el, TEXTAREA_MAX_VISIBLE_LINES);
+  }, [input, isLoading, visible]);
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -396,13 +280,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     const text = input.trim();
     if (!text || isLoading) return;
 
-    const acpPrefix = selectedAcpAgent ? `[ACP:${selectedAcpAgent.id}] ` : '';
-    const content = selectedSkill
-      ? `Use the skill ${selectedSkill.name}: ${acpPrefix}${text}`
-      : `${acpPrefix}${text}`;
     const userMsg: Message = {
       role: 'user',
-      content,
+      content: text,  // No [ACP:] prefix — pass clean text
       timestamp: Date.now(),
       ...(selectedSkill && { skillName: selectedSkill.name }),
     };
@@ -440,6 +320,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           ? f.content.slice(0, 20_000) + '\n\n[...truncated to first ~20000 chars]'
           : f.content,
       })),
+      selectedAcpAgent,  // Send structured field instead of text prefix
     });
 
     const doFetch = async (): Promise<{ finalMessage: Message }> => {
@@ -606,7 +487,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [session, currentFile, upload, mention, slash]);
 
   const iconSize = isPanel ? 13 : 14;
-  const inputIconSize = isPanel ? 14 : 15;
+  const inputIconSize = 15;
 
   return (
     <>
@@ -691,7 +572,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
       {/* Popovers — flex children so they stay within overflow boundary (absolute positioning would be clipped by RightAskPanel's overflow-hidden) */}
       {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
-        <div className="shrink-0 px-2 pb-1">
+        <div className="shrink-0 px-3 pb-1">
           <MentionPopover
             results={mention.mentionResults}
             selectedIndex={mention.mentionIndex}
@@ -702,7 +583,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       )}
 
       {slash.slashQuery !== null && slash.slashResults.length > 0 && (
-        <div className="shrink-0 px-2 pb-1">
+        <div className="shrink-0 px-3 pb-1">
           <SlashCommandPopover
             results={slash.slashResults}
             selectedIndex={slash.slashIndex}
@@ -712,108 +593,87 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         </div>
       )}
 
-      {/* Input area — panel: fixed-height shell + top drag handle (persisted); modal: simple block */}
+      {/* Input area — auto-height composer, no manual resize */}
       <div
         className={cn(
           'shrink-0 border-t border-border',
-          isPanel && 'flex flex-col overflow-hidden bg-card',
           isDragOver && 'ring-2 ring-[var(--amber)] ring-inset bg-[var(--amber-dim)]',
         )}
-        style={isPanel ? { height: panelComposerHeight } : undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {isPanel ? (
-          <div
-            role="separator"
-            tabIndex={0}
-            aria-orientation="horizontal"
-            aria-label={`${t.ask.panelComposerResize}. ${t.ask.panelComposerResetHint}. ${t.ask.panelComposerKeyboard}`}
-            aria-valuemin={PANEL_COMPOSER_MIN}
-            aria-valuemax={panelComposerViewportMax}
-            aria-valuenow={panelComposerHeight}
-            title={`${t.ask.panelComposerResize} · ${t.ask.panelComposerResetHint} · ${t.ask.panelComposerKeyboard}`}
-            onPointerDown={onPanelComposerResizePointerDown}
-            onKeyDown={handlePanelComposerSeparatorKeyDown}
-            onDoubleClick={resetPanelComposerHeight}
-            className="group flex h-3 shrink-0 cursor-ns-resize items-center justify-center border-b border-border/50 bg-muted/[0.06] transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          >
-            <span
-              className="pointer-events-none h-1 w-10 rounded-full bg-border transition-colors group-hover:bg-[var(--amber)]/45 group-active:bg-[var(--amber)]/60"
-              aria-hidden
-            />
-          </div>
-        ) : null}
 
-        <div className={cn(isPanel && 'flex min-h-0 flex-1 flex-col overflow-y-auto')}>
-          {attachedFiles.length > 0 && (
-            <div className={cn('shrink-0', isPanel ? 'px-3 pt-2 pb-1' : 'px-4 pt-2.5 pb-1')}>
-              <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-                {t.ask.attachFile}
+        {/* Scrollable metadata area (files, skills, agents) */}
+        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || selectedSkill || upload.uploadError || selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
+          <div className={cn('shrink-0', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-32 overflow-y-auto')}>
+            {attachedFiles.length > 0 && (
+              <div className="px-3 pt-2 pb-1">
+                <div className="text-muted-foreground/70 mb-1 text-[10px]">
+                  {t.ask.attachFile}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {attachedFiles.map(f => (
+                    <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
+                  ))}
+                </div>
               </div>
-              <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
-                {attachedFiles.map(f => (
-                  <FileChip key={f} path={f} onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {upload.localAttachments.length > 0 && (
-            <div className={cn('shrink-0', isPanel ? 'px-3 pb-1' : 'px-4 pb-1')}>
-              <div className={`text-muted-foreground/70 mb-1 ${isPanel ? 'text-[10px]' : 'text-xs'}`}>
-                {t.ask.uploadedFiles}
-              </div>
-              <div className={`flex flex-wrap ${isPanel ? 'gap-1' : 'gap-1.5'}`}>
-                {upload.localAttachments.map((f, idx) => (
-                  <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedSkill && (
-            <div className={cn('shrink-0', isPanel ? 'px-3 pt-1.5 pb-1' : 'px-4 pt-2 pb-1')}>
-              <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md text-xs bg-[var(--amber)]/10 border border-[var(--amber)]/25 text-foreground">
-                <Zap size={11} className="text-[var(--amber)] shrink-0" />
-                <span className="font-medium">{selectedSkill.name}</span>
-                <button
-                  type="button"
-                  onClick={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
-                  className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  aria-label={`Remove skill ${selectedSkill.name}`}
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            </div>
-          )}
-
-          {upload.uploadError && (
-            <div className={cn('shrink-0 pb-1 text-xs text-error', isPanel ? 'px-3' : 'px-4')}>{upload.uploadError}</div>
-          )}
-
-          {/* Agent selector capsule — shows when ACP agents are available */}
-          {(selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
-            <div className={cn('shrink-0', isPanel ? 'px-3 pt-1.5 pb-0.5' : 'px-4 pt-2 pb-0.5')}>
-              <AgentSelectorCapsule
-                selectedAgent={selectedAcpAgent}
-                onSelect={setSelectedAcpAgent}
-                installedAgents={acpDetection.installedAgents}
-                loading={acpDetection.loading}
-              />
-            </div>
-          )}
-
-          <form
-            ref={formRef}
-            onSubmit={handleSubmit}
-            className={cn(
-              'flex',
-              isPanel ? 'min-h-0 flex-1 items-end gap-1.5 px-2 py-2' : 'items-end gap-2 px-3 py-3',
             )}
-          >
+
+            {upload.localAttachments.length > 0 && (
+              <div className="px-3 pb-1">
+                <div className="text-muted-foreground/70 mb-1 text-[10px]">
+                  {t.ask.uploadedFiles}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {upload.localAttachments.map((f, idx) => (
+                    <FileChip key={`${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedSkill && (
+              <div className="px-3 pt-1.5 pb-1">
+                <span className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md text-xs bg-[var(--amber)]/10 border border-[var(--amber)]/25 text-foreground">
+                  <Zap size={11} className="text-[var(--amber)] shrink-0" />
+                  <span className="font-medium">{selectedSkill.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
+                    className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    aria-label={`Remove skill ${selectedSkill.name}`}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              </div>
+            )}
+
+            {upload.uploadError && (
+              <div className="px-3 pb-1 text-xs text-error">{upload.uploadError}</div>
+            )}
+
+            {/* Agent selector capsule — shows when ACP agents are available */}
+            {(selectedAcpAgent || acpDetection.installedAgents.length > 0) && (
+              <div className="px-3 pt-1.5 pb-0.5">
+                <AgentSelectorCapsule
+                  selectedAgent={selectedAcpAgent}
+                  onSelect={setSelectedAcpAgent}
+                  installedAgents={acpDetection.installedAgents}
+                  loading={acpDetection.loading}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Input form — consistent padding across panel/modal */}
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="flex items-end gap-2 px-3 py-2"
+        >
           <button type="button" onClick={() => upload.uploadInputRef.current?.click()} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0" title={t.hints.attachFile}>
             <Paperclip size={inputIconSize} />
           </button>
@@ -840,10 +700,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             onKeyDown={handleInputKeyDown}
             placeholder={t.ask.placeholder}
             rows={1}
-            className={cn(
-              'min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0',
-              isPanel ? 'py-2' : 'py-1.5',
-            )}
+            className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
           />
 
           {isLoading ? (
@@ -851,30 +708,31 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
             </button>
           ) : (
-            <button type="submit" disabled={!input.trim() || mention.mentionQuery !== null || slash.slashQuery !== null} title={!input.trim() ? t.hints.typeMessage : mention.mentionQuery !== null || slash.slashQuery !== null ? t.hints.mentionInProgress : undefined} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
-              <Send size={isPanel ? 13 : 14} />
+            <button type="submit" disabled={!input.trim()} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+              <Send size={14} />
             </button>
           )}
-          </form>
-        </div>
+        </form>
       </div>
 
-      {/* Footer hints — use full class strings so Tailwind JIT includes utilities */}
+      {/* Footer hints — panel: compact 3 items; modal: full set */}
       <div
         className={cn(
-          'flex shrink-0 items-center',
+          'flex shrink-0 items-center flex-wrap px-3 pb-1.5',
           isPanel
-            ? 'flex-wrap gap-x-2 gap-y-1 px-3 pb-1.5 text-[10px] text-muted-foreground/40'
-            : 'flex-wrap gap-x-3 gap-y-1 px-4 pb-2 text-[10px] md:text-xs text-muted-foreground/50',
+            ? 'gap-x-3 gap-y-1 text-[10px] text-muted-foreground/40'
+            : 'gap-x-3 gap-y-1 text-[10px] md:text-xs text-muted-foreground/50',
         )}
       >
         <span suppressHydrationWarning>
           <kbd className="font-mono">↵</kbd> {t.ask.send}
         </span>
-        <span suppressHydrationWarning>
-          <kbd className="font-mono">⇧</kbd>
-          <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
-        </span>
+        {!isPanel && (
+          <span suppressHydrationWarning>
+            <kbd className="font-mono">⇧</kbd>
+            <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
+          </span>
+        )}
         <span suppressHydrationWarning>
           <kbd className="font-mono">@</kbd> {t.ask.attachFile}
         </span>
@@ -887,7 +745,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </span>
         )}
         {isLoading && input.trim() && (
-          <span className={isPanel ? 'text-[10px] text-[var(--amber)]/80' : 'text-xs text-[var(--amber)]/80'}>
+          <span className="text-[10px] text-[var(--amber)]/80">
             {t.ask.draftingHint}
           </span>
         )}

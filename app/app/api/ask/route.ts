@@ -25,6 +25,8 @@ import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
+import { bridgeA2aToAcp } from '@/lib/acp/bridge';
+import type { A2AMessage } from '@/lib/a2a/types';
 import type { Message as FrontendMessage } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -254,6 +256,8 @@ export async function POST(req: NextRequest) {
     maxSteps?: number;
     /** 'organize' = lean prompt for file import organize; default = full prompt */
     mode?: 'organize' | 'default';
+    /** ACP agent selection: if present, route to ACP instead of MindOS */
+    selectedAcpAgent?: { id: string; name: string } | null;
   };
   try {
     body = await req.json();
@@ -261,7 +265,7 @@ export async function POST(req: NextRequest) {
     return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body', 400);
   }
 
-  const { messages, currentFile, attachedFiles, uploadedFiles } = body;
+  const { messages, currentFile, attachedFiles, uploadedFiles, selectedAcpAgent } = body;
   const isOrganizeMode = body.mode === 'organize';
 
   // Read agent config from settings
@@ -603,15 +607,46 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        session.prompt(lastUserContent).then(() => {
-          metrics.recordRequest(Date.now() - requestStartTime);
-          if (!hasContent && lastModelError) {
-            send({ type: 'error', message: lastModelError });
+        // ── Route to ACP agent if selected, otherwise use MindOS agent ──
+        const runAgent = async () => {
+          if (selectedAcpAgent) {
+            // Route to ACP agent
+            try {
+              // Convert string message to A2AMessage format
+              const acpMessage: A2AMessage = {
+                role: 'ROLE_USER',
+                parts: [{ text: lastUserContent }],
+              };
+              const acpResult = await bridgeA2aToAcp(acpMessage, selectedAcpAgent.id);
+              hasContent = true;
+              // Extract text from A2A task result
+              if (acpResult.status?.message?.parts) {
+                for (const part of acpResult.status.message.parts) {
+                  if (part.text) {
+                    send({ type: 'text_delta', delta: part.text });
+                  }
+                }
+              }
+              send({ type: 'done' });
+            } catch (acpErr) {
+              const errMsg = acpErr instanceof Error ? acpErr.message : String(acpErr);
+              send({ type: 'error', message: `ACP Agent Error: ${errMsg}` });
+            }
+            controller.close();
           } else {
-            send({ type: 'done' });
+            // Route to MindOS agent (existing logic)
+            await session.prompt(lastUserContent);
+            metrics.recordRequest(Date.now() - requestStartTime);
+            if (!hasContent && lastModelError) {
+              send({ type: 'error', message: lastModelError });
+            } else {
+              send({ type: 'done' });
+            }
+            controller.close();
           }
-          controller.close();
-        }).catch((err) => {
+        };
+
+        runAgent().catch((err) => {
           metrics.recordRequest(Date.now() - requestStartTime);
           metrics.recordError();
           send({ type: 'error', message: err instanceof Error ? err.message : String(err) });

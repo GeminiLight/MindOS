@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Zap } from 'lucide-react';
 import type { SlashItem } from '@/hooks/useSlashCommand';
 import HighlightMatch from './HighlightMatch';
@@ -12,8 +12,26 @@ interface SlashCommandPopoverProps {
   onSelect: (item: SlashItem) => void;
 }
 
+/**
+ * Popover for slash commands. Renders as a flex child within the AskContent
+ * column (not absolutely positioned) to avoid clipping by the panel's
+ * overflow-hidden. Uses a dynamic max-height that caps at 50% of the
+ * viewport so the popover never overflows the visible area.
+ */
 export default function SlashCommandPopover({ results, selectedIndex, query, onSelect }: SlashCommandPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [maxListH, setMaxListH] = useState(280);
+
+  // Dynamically compute max list height based on available space
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    // Reserve ~80px for header + footer chrome, and cap at 50vh
+    const available = Math.min(rect.top - 8, window.innerHeight * 0.5) - 80;
+    setMaxListH(Math.max(120, Math.min(320, available)));
+  }, [results.length]);
 
   useEffect(() => {
     const container = listRef.current;
@@ -25,13 +43,13 @@ export default function SlashCommandPopover({ results, selectedIndex, query, onS
   if (results.length === 0) return null;
 
   return (
-    <div className="border border-border rounded-lg bg-card shadow-lg overflow-hidden">
+    <div ref={containerRef} className="border border-border rounded-lg bg-card shadow-lg overflow-hidden">
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5">
         <Zap size={11} className="text-[var(--amber)]/50" />
         <span className="text-2xs font-medium text-muted-foreground/70 uppercase tracking-wider">Skills</span>
         <span className="text-2xs text-muted-foreground/40 ml-auto">{results.length}</span>
       </div>
-      <div ref={listRef} className="max-h-[360px] overflow-y-auto">
+      <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: maxListH }}>
         {results.map((item, idx) => (
           <button
             key={item.name}
