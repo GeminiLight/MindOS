@@ -30,6 +30,7 @@ const DEFAULT_PANEL_WIDTH: Record<PanelId, number> = {
   echo: 280,
   agents: 280,
   discover: 280,
+  workflows: 280,
 };
 
 const MIN_PANEL_WIDTH = 240;

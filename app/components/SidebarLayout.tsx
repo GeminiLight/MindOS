@@ -13,6 +13,7 @@ import SearchPanel from './panels/SearchPanel';
 import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
+import WorkflowsPanel from './panels/WorkflowsPanel';
 
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
@@ -406,6 +407,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'discover' ? '' : 'hidden'}`}>
           <DiscoverPanel active={lp.activePanel === 'discover'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
+        </div>
+        <div className={`flex flex-col h-full ${lp.activePanel === 'workflows' ? '' : 'hidden'}`}>
+          <WorkflowsPanel active={lp.activePanel === 'workflows'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
       </Panel>
 

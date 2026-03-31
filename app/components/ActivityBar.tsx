@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, HelpCircle, ChevronLeft, ChevronRight, Radio, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/SyncTab';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -19,6 +19,7 @@ interface ActivityBarProps {
   onEchoClick?: () => void;
   onAgentsClick?: () => void;
   onDiscoverClick?: () => void;
+  onWorkflowsClick?: () => void;
   syncStatus: SyncStatus | null;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -82,6 +83,7 @@ export default function ActivityBar({
   onEchoClick,
   onAgentsClick,
   onDiscoverClick,
+  onWorkflowsClick,
   syncStatus,
   expanded,
   onExpandedChange,
@@ -202,6 +204,7 @@ export default function ActivityBar({
             walkthroughId="agents-panel"
           />
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => onDiscoverClick ? debounced(onDiscoverClick) : toggle('discover')} />
+          <RailButton icon={<Zap size={18} />} label={t.sidebar.workflows ?? 'Workflows'} active={activePanel === 'workflows'} expanded={expanded} onClick={() => onWorkflowsClick ? debounced(onWorkflowsClick) : toggle('workflows')} />
         </div>
 
         {/* ── Spacer ── */}
