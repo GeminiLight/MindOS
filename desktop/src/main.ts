@@ -663,7 +663,7 @@ async function startRemoteMode(): Promise<string | null> {
               });
               if (res.ok) {
                 currentRemoteAddress = savedAddress;
-                splashStatus({ status: 'ready', done: true });
+                closeSplash();
                 return savedAddress;
               }
             } catch { /* saved password failed, fall through */ }
@@ -671,7 +671,7 @@ async function startRemoteMode(): Promise<string | null> {
           // No password or auth failed → show connect window
         } else {
           currentRemoteAddress = savedAddress;
-          splashStatus({ status: 'ready', done: true });
+          closeSplash();
           return savedAddress;
         }
       }
@@ -866,6 +866,7 @@ async function handleChangeMode(): Promise<void> {
 // ── Tray Action: Switch Server (remote mode — show connect window) ──
 
 async function handleSwitchServer(): Promise<void> {
+  clearActiveTunnel(); // Close existing SSH tunnel before switching
   const url = await showConnectWindow();
   if (!url) return; // user cancelled
 
@@ -1092,6 +1093,7 @@ function setupConnectionMonitor(url: string): void {
           <div style="color:#e8e4dc;font-size:18px;margin-bottom:8px">${zh ? '⚠ 与服务器的连接已断开' : '⚠ Connection Lost'}</div>
           <div style="color:#8a8275;font-size:13px;margin-bottom:20px">${zh ? '正在尝试重新连接...' : 'Attempting to reconnect...'}</div>
           <div style="display:flex;gap:8px">
+            <button onclick="location.reload()" style="padding:8px 18px;border-radius:8px;border:none;background:#c8873a;color:#fff;font-size:13px;cursor:pointer;font-weight:500">${zh ? '立即重试' : 'Retry Now'}</button>
             <button onclick="window.mindos?.switchMode()" style="padding:8px 18px;border-radius:8px;border:1px solid rgba(232,228,220,0.15);background:rgba(255,255,255,0.08);color:#e8e4dc;font-size:13px;cursor:pointer">${zh ? '切换到本地模式' : 'Switch to Local'}</button>
           </div>
         </div>
