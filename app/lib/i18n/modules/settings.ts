@@ -30,6 +30,7 @@ export const settingsEn = {
     },
     agent: {
       title: 'Agent Behavior',
+      subtitle: 'Configure how the AI agent operates',
       maxSteps: 'Max Steps',
       maxStepsHint: 'Maximum tool call steps per request (1-30)',
       contextStrategy: 'Context Strategy',
@@ -327,6 +328,7 @@ export const settingsZh = {
     },
     agent: {
       title: 'Agent 行为',
+      subtitle: '配置 AI 代理的运行方式',
       maxSteps: '最大步数',
       maxStepsHint: '每次请求的最大工具调用步数（1-30）',
       contextStrategy: '上下文策略',
