@@ -53,7 +53,7 @@ import { loadConfig, getStartMode, isDaemonMode } from './lib/config.js';
 import { needsBuild, writeBuildStamp, cleanNextDir, ensureAppDeps, hasPrebuiltStandalone } from './lib/build.js';
 import { isPortInUse, assertPortFree } from './lib/port.js';
 import { savePids, clearPids } from './lib/pid.js';
-import { stopMindos } from './lib/stop.js';
+import { stopMindos, killByPort } from './lib/stop.js';
 import { printStartupInfo, getLocalIP } from './lib/startup.js';
 import { spawnMcp } from './lib/mcp-spawn.js';
 import { parseArgs, EXIT } from './lib/command.js';
@@ -360,12 +360,22 @@ const commands = {
     const webPort = process.env.MINDOS_WEB_PORT;
     const mcpPort = process.env.MINDOS_MCP_PORT;
 
+    // Clean up zombie processes from an abandoned GUI setup session.
+    // setup.js records a temporary port (setupPort) in config; if the user
+    // closed the browser without completing setup, that process is still
+    // running.  Kill it before we proceed.
+    // Also read config for auto-migration below (avoids double readFileSync).
+    let startupCfg = {};
+    try { startupCfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+    if (startupCfg.setupPort && Number(startupCfg.setupPort) !== Number(webPort)) {
+      killByPort(Number(startupCfg.setupPort));
+    }
+
     // ── Auto-migrate user-rules.md to root user-skill-rules.md ─────────────
     try {
-      const cfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-      const mr = cfg.mindRoot;
+      const mr = startupCfg.mindRoot;
       if (mr && existsSync(mr)) {
-        const isZh = cfg.disabledSkills?.includes('mindos');
+        const isZh = startupCfg.disabledSkills?.includes('mindos');
         const sName = isZh ? 'mindos-zh' : 'mindos';
         const sDir = resolve(mr, '.agents', 'skills', sName);
         const rootUserRules = resolve(mr, 'user-skill-rules.md');

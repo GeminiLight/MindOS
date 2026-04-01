@@ -48,6 +48,7 @@ export interface ServerSettings {
   webPassword?: string;
   startMode?: 'dev' | 'start' | 'daemon';
   setupPending?: boolean;  // true → / redirects to /setup
+  setupPort?: number;      // temporary port used by GUI setup; cleared on completion
   disabledSkills?: string[];
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
@@ -203,6 +204,11 @@ export function writeSettings(settings: ServerSettings): void {
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;
     else delete merged.setupPending;
+  }
+  // setupPort: clear when explicitly set to undefined/0 (setup completed)
+  if ('setupPort' in settings) {
+    if (settings.setupPort) merged.setupPort = settings.setupPort;
+    else delete merged.setupPort;
   }
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
 }
