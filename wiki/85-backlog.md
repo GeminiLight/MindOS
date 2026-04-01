@@ -70,7 +70,7 @@
 
 - [x] **Desktop：MindOS 运行时择优（代码层）** — `pickMindOsRuntime` + `resolveLocalMindOsProjectRoot` 接入 `startLocalMode`；`config`/`MINDOS_RUNTIME_ROOT`/`MINDOS_DEV_BUNDLED_ROOT`；Desktop `npm test` 覆盖 pick+layout。内置 `extraResources` 产物与三平台冒烟仍待办。[spec](./specs/spec-desktop-bundled-mindos.md)
 - [x] **Desktop：内置运行时 Next standalone + 精简 prepare** — `app/next.config` `output: 'standalone'`；`prepare-mindos-bundle.mjs` 合并 static/public、拷贝 app 时去掉 `node_modules` / `.next/cache` / `.next/dev`。[spec](./specs/spec-desktop-standalone-runtime.md)
-- [ ] **Electron Desktop App（Phase 1）** — 本地+远程双模式桌面端，含共享连接 SDK、服务端 CORS 增强、系统托盘/快捷键/自动更新。[spec](./specs/spec-electron-desktop-app.md)
+- [x] **Electron Desktop App（Phase 1）** — 本地+远程双模式桌面端，含系统托盘（模式感知）、自动更新（electron-updater）、IPC 安全桥接、窗口状态持久化、Node.js 自动检测/下载。CI 多平台构建（macOS arm64+x64/Windows/Linux）。30+ 源文件 + 198MB 内置运行时。[spec](./specs/spec-electron-desktop-app.md)
 - [ ] **Capacitor 移动端（Phase 2）** — iOS/Android 原生壳，复用 Phase 1 连接 SDK。[spec](./specs/spec-capacitor-mobile-app.md)
 - [x] **Help 页面** — `/help` 路由 + ActivityBar 底部 `?` 图标入口。6 个 section，前 4 个默认展开：
   - 什么是 MindOS（非技术版定位：你和 AI 共享同一个大脑）
