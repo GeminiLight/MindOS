@@ -66,14 +66,29 @@ User request
   ├─ Only asks to look up / summarize / quote?
   │   └─ YES → [Read-only path]: search + read + cite sources. No writes. Skip hooks.
   │
-  └─ Any write / organize / SOP / structural intent?
-      └─ YES → Read references/write-supplement.md FIRST, then proceed.
-               (covers: startup protocol, write tools, all write execution patterns)
+  ├─ Asks to save / record / update / organize specific content?
+  │   ├─ Single file target? → [Single-file edit]
+  │   └─ Multiple files or unclear target? → [Multi-file routing]
+  │
+  ├─ Structural change (rename / move / delete / reorganize)?
+  │   └─ [Structural path]
+  │
+  ├─ Procedural / repeatable task?
+  │   └─ [SOP path]
+  │
+  ├─ Retrospective / distill / handoff?
+  │   └─ [Retrospective path]
+  │
+  └─ Ambiguous or too broad?
+      └─ ASK for clarification. Propose 2-3 specific options based on KB state. Do NOT start editing.
 ```
+
+**For any write/SOP/structural path above → read [references/write-supplement.md](./references/write-supplement.md) first.**
+It covers: startup protocol, write tool selection, and step-by-step execution details for each path.
 
 ---
 
-## Tool selection — discovery & read
+## Tool selection
 
 | Intent | Best tool | Avoid |
 |--------|-----------|-------|
@@ -81,17 +96,41 @@ User request
 | List top-level Mind Spaces | `mindos_list_spaces` | Full `mindos_list_files` when you only need zone names and README blurbs |
 | Find files | `mindos_search_notes` (2-4 parallel keyword variants) | Single-keyword search |
 | Read content | `mindos_read_file` or `mindos_read_lines` (for large files) | Reading entire large file when you need 10 lines |
+| Small text edit | `mindos_update_section` / `mindos_update_lines` / `mindos_insert_after_heading` | `mindos_write_file` for small changes |
+| Append to end | `mindos_append_to_file` | Rewriting entire file to add a line |
+| Full file replacement | `mindos_write_file` | Using this when a section edit suffices |
+| New file | `mindos_create_file` | Creates parent dirs but does NOT scaffold Space files |
+| New Mind Space (zone + README + INSTRUCTION) | `mindos_create_space` | The only way to create a Space. `create_file` creates plain folders |
+| Rename a Space directory | `mindos_rename_space` | `rename_file` (files only; does not rename folders) |
+| Add CSV row | `mindos_append_csv` (validates header) | Manual string append without header check |
+| Check impact before rename | `mindos_get_backlinks` | Renaming without checking references |
+| Inspect recent changes | `mindos_get_recent` | Guessing what changed recently |
+| Recover old version | `mindos_get_file_at_version` | Asking user to recall what was there |
 
 ### Fallbacks
 
 - `mindos_bootstrap` unavailable → manual reads of root `INSTRUCTION.md` + `README.md`.
+- Line/section tools unavailable → read + constrained `mindos_write_file` (simulate minimal edit).
 - Search returns empty → don't give up: (1) scan tree in context, (2) read candidate files directly, (3) `mindos_list_files` on specific subdirectories, (4) try synonym/alternate-language keywords.
 
 ---
 
-## Execution pattern — read-only Q&A
+## Execution patterns
 
-Tree reasoning → search → read → answer with file citations → state gaps explicitly.
+| Pattern | When | Key steps |
+|---------|------|-----------|
+| **Read-only Q&A** | Lookup / summarize / quote | Tree reasoning → search → read → answer with citations → state gaps |
+| **Single-file edit** | One clear target file | Startup → read target + local conventions → minimal edit → verify → summarize |
+| **Multi-file routing** | Unstructured input, multiple destinations | Parse into semantic units → routing table → confirm → edit → summarize |
+| **Conversation retrospective** | Distill / capture session | Confirm scope → extract decisions/pitfalls/actions → route → trace changes |
+| **SOP execution** | Repeatable procedure | Read SOP fully → execute stepwise → update stale sections → propose SOP update if diverged |
+| **Structural change** | Rename / move / delete | `get_backlinks` → impact report → confirm → execute → update refs → sync READMEs |
+| **CSV append** | Add row to a table | Read header → validate fields → `mindos_append_csv` |
+| **Cross-agent handoff** | Continue another agent's work | Read task state + decisions → continue without re-discovery → write back progress |
+| **Periodic review** | Summarize recent changes | `get_recent`/`get_history` → read changed files → structured summary |
+| **Handoff doc** | Create a briefing | Read sources → synthesize (background, decisions, status, open items) → place in project dir |
+
+For detailed execution steps on write patterns → [references/write-supplement.md](./references/write-supplement.md).
 
 ---
 
@@ -105,9 +144,19 @@ Tree reasoning → search → read → answer with file citations → state gaps
 
 ## Post-task hooks
 
-After **write tasks**, read [references/post-task-hooks.md](./references/post-task-hooks.md) for one-line follow-up proposals (experience capture, consistency sync, SOP drift, etc.).
-**Read-only tasks: skip hooks.** If the user asked for quiet mode, skip all hooks for the session.
-**Do NOT read** post-task-hooks for simple single-file edits or read-only lookups.
+After **write tasks** (not simple single-file edits or read-only), scan this table. If a condition matches, make a one-line proposal. At most 1 proposal; pick highest priority. Check `user-skill-rules.md` suppression section first. Skip all if user asked for quiet mode.
+
+| Hook | Priority | Condition |
+|------|----------|-----------|
+| Experience capture | high | Debugging, troubleshooting, or took multiple rounds |
+| Consistency sync | high | Edited file A which has backlinks (check `get_backlinks`) |
+| SOP drift | medium | Followed an SOP but execution diverged from its steps |
+| Linked update | medium | Changed a CSV/TODO status and related docs exist |
+| Structure classification | medium | Created a file in a temporary location or inbox |
+| Pattern extraction | low | 3+ structurally similar operations this session |
+| Conversation retrospective | low | Session >10 turns with decisions or trade-offs |
+
+If a hook triggers → read [references/post-task-hooks.md](./references/post-task-hooks.md) for the propose format and any user-defined hooks. If nothing matches, end quietly — do not read the file.
 
 ## Preference capture
 
