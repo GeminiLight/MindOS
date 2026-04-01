@@ -843,6 +843,17 @@ async function startGuiSetup() {
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
 
   const isFirstTime = !config.mindRoot;
+
+  // Clean up zombie process from a previous abandoned setup session.
+  if (config.setupPort) {
+    try {
+      const { killByPort } = await import('../bin/lib/stop.js');
+      killByPort(Number(config.setupPort));
+      // Brief wait for port to free
+      await new Promise(r => setTimeout(r, 500));
+    } catch { /* best effort */ }
+  }
+
   config.setupPending = true;
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
 
@@ -890,6 +901,11 @@ async function startGuiSetup() {
   write(c.yellow(t('guiStarting') + '\n'));
 
   // Start the server in the background
+  // Record the temporary setup port in config so stopMindos() can clean it up
+  // if the user abandons setup mid-way or closes the browser without completing.
+  config.setupPort = usePort;
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+
   // Pass MINDOS_WEB_PORT (not PORT) so loadConfig() won't override with the
   // config file port — this is critical when we need a temporary port.
   const cliPath = resolve(__dirname, '../bin/cli.js');

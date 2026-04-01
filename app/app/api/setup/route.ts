@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
       webPassword: webPassword ?? '',
       startMode: current.startMode,
       setupPending: false,  // clear the flag
+      setupPort: undefined, // clear temporary setup port (zombie cleanup)
       disabledSkills,
       guideState: {
         active: true,

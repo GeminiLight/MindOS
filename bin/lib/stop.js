@@ -9,7 +9,7 @@ import { CONFIG_PATH } from './constants.js';
  * Tries lsof first, then falls back to parsing `ss` output.
  * Returns number of processes killed.
  */
-function killByPort(port) {
+export function killByPort(port) {
   const pidsToKill = new Set();
 
   // Method 1: lsof
@@ -82,11 +82,13 @@ export function stopMindos(opts = {}) {
   }
 
   // Read ports from config for port-based cleanup
-  let webPort = '3456', mcpPort = '8781';
+  let webPort = '3456', mcpPort = '8781', setupPort = null;
   try {
     const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
     if (config.port) webPort = String(config.port);
     if (config.mcpPort) mcpPort = String(config.mcpPort);
+    // Temporary port used by GUI setup — may still have a zombie process
+    if (config.setupPort) setupPort = String(config.setupPort);
   } catch {}
 
   const pids = loadPids();
@@ -106,6 +108,7 @@ export function stopMindos(opts = {}) {
   // are not recorded in the PID file and would otherwise become orphaned.
   // Include any extra ports (e.g. old ports from before a config change).
   const portsToClean = new Set([webPort, mcpPort]);
+  if (setupPort) portsToClean.add(setupPort);
   if (opts.extraPorts) {
     for (const p of opts.extraPorts) portsToClean.add(String(p));
   }
