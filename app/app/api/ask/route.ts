@@ -451,7 +451,18 @@ export async function POST(req: NextRequest) {
     }
     if (bootstrap.instruction.ok) initContextBlocks.push(`## bootstrap_instruction\n\n${bootstrap.instruction.content}`);
     if (bootstrap.index?.ok) initContextBlocks.push(`## bootstrap_index\n\n${bootstrap.index.content}`);
-    if (bootstrap.config_json.ok) initContextBlocks.push(`## bootstrap_config_json\n\n${bootstrap.config_json.content}`);
+    if (bootstrap.config_json.ok) {
+      // Strip UI-only sections (uiSchema, keySpecs) — they are consumed exclusively
+      // by the frontend renderer and add ~1,120 tokens of noise the agent never uses.
+      let configContent = bootstrap.config_json.content;
+      try {
+        const parsed = JSON.parse(configContent);
+        delete parsed.uiSchema;
+        delete parsed.keySpecs;
+        configContent = JSON.stringify(parsed, null, 2);
+      } catch { /* keep original if parse fails */ }
+      initContextBlocks.push(`## bootstrap_config_json\n\n${configContent}`);
+    }
     if (bootstrap.config_md?.ok) initContextBlocks.push(`## bootstrap_config_md\n\n${bootstrap.config_md.content}`);
     if (bootstrap.target_readme?.ok) initContextBlocks.push(`## bootstrap_target_readme\n\n${bootstrap.target_readme.content}`);
     if (bootstrap.target_instruction?.ok) initContextBlocks.push(`## bootstrap_target_instruction\n\n${bootstrap.target_instruction.content}`);
@@ -492,7 +503,11 @@ export async function POST(req: NextRequest) {
 
     const promptParts: string[] = [AGENT_SYSTEM_PROMPT];
     promptParts.push(`---\n\n${timeContext}`);
-    promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${initStatus}`);
+    // Only inject initStatus when there are failures or truncation warnings.
+    // On the happy path (~99% of requests) this saves ~100 tokens.
+    if (initFailures.length > 0 || truncationWarnings.length > 0) {
+      promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${initStatus}`);
+    }
 
     if (initContextBlocks.length > 0) {
       promptParts.push(`---\n\nInitialization context:\n\n${initContextBlocks.join('\n\n---\n\n')}`);
