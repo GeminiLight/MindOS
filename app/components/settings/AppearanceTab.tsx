@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
 import { CONTENT_WIDTHS, FONTS, FONT_SIZES, AppearanceTabProps } from './types';
+import { SettingCard } from './Primitives';
 
 /* ── Setting Group ── */
 function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
@@ -56,7 +57,10 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
   const a = t.settings.appearance;
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
+
+      {/* ── Card 1: Reading — font, size, width ── */}
+      <SettingCard icon={<BookOpen size={15} />} title={a.readingTitle ?? 'Reading'} description={a.readingDesc ?? 'Customize how your notes look'}>
 
       {/* ── Font — each font previews itself ── */}
       <SettingGroup icon={<Type size={14} />} label={a.readingFont}>
@@ -185,6 +189,11 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         </div>
       </SettingGroup>
 
+      </SettingCard>
+
+      {/* ── Card 2: Preferences — theme, language ── */}
+      <SettingCard icon={<Palette size={15} />} title={a.preferencesTitle ?? 'Preferences'}>
+
       {/* ── Theme — amber pills ── */}
       <SettingGroup icon={<Sun size={14} />} label={a.colorTheme}>
         <PillSelector
@@ -226,6 +235,8 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
           }}
         />
       </SettingGroup>
+
+      </SettingCard>
 
       <p className="text-xs text-muted-foreground/40 px-0.5">{a.browserNote}</p>
 

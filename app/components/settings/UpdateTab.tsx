@@ -178,59 +178,60 @@ function DesktopUpdateTab() {
             {errorMsg}
           </div>
         )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleCheck}
-          disabled={state === 'checking' || state === 'downloading'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
-          {u?.checkButton ?? 'Check for Updates'}
-        </button>
-
-        {state === 'idle' && available && (
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1">
           <button
-            onClick={handleInstall}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            onClick={handleCheck}
+            disabled={state === 'checking' || state === 'downloading'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <Download size={14} />
-            {version ? `Update to v${version}` : 'Update'}
+            <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
+            {u?.checkButton ?? 'Check for Updates'}
           </button>
-        )}
 
-        {state === 'ready' && (
-          <button
-            onClick={async () => {
-              try {
-                await bridge.installUpdate();
-              } catch {
-                setState('error');
-                setErrorMsg(u?.error ?? 'Failed to install update. Please try again.');
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+          {state === 'idle' && available && (
+            <button
+              onClick={handleInstall}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            >
+              <Download size={14} />
+              {version ? `Update to v${version}` : 'Update'}
+            </button>
+          )}
+
+          {state === 'ready' && (
+            <button
+              onClick={async () => {
+                try {
+                  await bridge.installUpdate();
+                } catch {
+                  setState('error');
+                  setErrorMsg(u?.error ?? 'Failed to install update. Please try again.');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            >
+              <RefreshCw size={14} />
+              {u?.desktopRestart ?? 'Restart Now'}
+            </button>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="border-t border-border/50 pt-3 space-y-2">
+          <a
+            href={CHANGELOG_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <RefreshCw size={14} />
-            {u?.desktopRestart ?? 'Restart Now'}
-          </button>
-        )}
-      </div>
-
-      <div className="border-t border-border pt-4 space-y-2">
-        <a
-          href={CHANGELOG_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ExternalLink size={12} />
-          {u?.releaseNotes ?? 'View release notes'}
-        </a>
-        <p className="text-2xs text-muted-foreground/60">
-          {u?.desktopHint ?? 'Updates are delivered through the Desktop app auto-updater.'}
-        </p>
+            <ExternalLink size={12} />
+            {u?.releaseNotes ?? 'View release notes'}
+          </a>
+          <p className="text-2xs text-muted-foreground/60">
+            {u?.desktopHint ?? 'Updates are delivered through the Desktop app auto-updater.'}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -527,44 +528,43 @@ function BrowserUpdateTab() {
             )}
           </div>
         )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={checkUpdate}
-          disabled={state === 'checking' || state === 'updating'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
-          {u?.checkButton ?? 'Check for Updates'}
-        </button>
-
-        {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1">
           <button
-            onClick={handleUpdate}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            onClick={checkUpdate}
+            disabled={state === 'checking' || state === 'updating'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <Download size={14} />
-            {u?.updateButton ? u.updateButton(info.latest) : `Update to v${info.latest}`}
+            <RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} />
+            {u?.checkButton ?? 'Check for Updates'}
           </button>
-        )}
-      </div>
 
-      {/* Info */}
-      <div className="border-t border-border pt-4 space-y-2">
-        <a
-          href={CHANGELOG_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ExternalLink size={12} />
-          {u?.releaseNotes ?? 'View release notes'}
-        </a>
-        <p className="text-2xs text-muted-foreground/60">
-          {u?.hint ?? 'Updates are installed via npm. Equivalent to running'} <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos update</code> {u?.inTerminal ?? 'in your terminal.'}
-        </p>
+          {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
+            <button
+              onClick={handleUpdate}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
+            >
+              <Download size={14} />
+              {u?.updateButton ? u.updateButton(info.latest) : `Update to v${info.latest}`}
+            </button>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="border-t border-border/50 pt-3 space-y-2">
+          <a
+            href={CHANGELOG_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ExternalLink size={12} />
+            {u?.releaseNotes ?? 'View release notes'}
+          </a>
+          <p className="text-2xs text-muted-foreground/60">
+            {u?.hint ?? 'Updates are installed via npm. Equivalent to running'} <code className="font-mono bg-muted px-1 py-0.5 rounded">mindos update</code> {u?.inTerminal ?? 'in your terminal.'}
+          </p>
+        </div>
       </div>
     </div>
   );

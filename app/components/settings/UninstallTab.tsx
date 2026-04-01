@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Trash2, AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/LocaleContext';
+import { SettingCard } from './Primitives';
 
 type Phase = 'idle' | 'confirming' | 'running' | 'success' | 'error';
 
@@ -80,18 +81,7 @@ export function UninstallTab() {
   );
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-          <Trash2 size={14} className="text-muted-foreground" />
-          {u.title}
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          {isDesktop ? u.descDesktop : u.descCli}
-        </p>
-      </div>
-
+    <SettingCard icon={<Trash2 size={15} />} title={u.title} description={isDesktop ? u.descDesktop : u.descCli}>
       {/* Knowledge base safety note */}
       <div className="flex gap-2.5 p-3 rounded-md bg-muted/50 border border-border">
         <ShieldCheck size={14} className="text-success shrink-0 mt-0.5" />
@@ -174,6 +164,6 @@ export function UninstallTab() {
           </button>
         </div>
       )}
-    </div>
+    </SettingCard>
   );
 }

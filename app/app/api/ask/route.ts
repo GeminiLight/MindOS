@@ -706,6 +706,7 @@ export async function POST(req: NextRequest) {
               }
             }
             closeStream();
+          } else {
             // Route to MindOS agent (existing logic)
             await session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined);
             metrics.recordRequest(Date.now() - requestStartTime);
