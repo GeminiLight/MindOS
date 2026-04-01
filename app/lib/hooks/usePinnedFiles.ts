@@ -15,8 +15,13 @@ function getSnapshot(): string[] {
   }
 }
 
+function getClientSnapshot(): string[] {
+  return cachedPins;
+}
+
+const SERVER_SNAPSHOT: string[] = [];
 function getServerSnapshot(): string[] {
-  return [];
+  return SERVER_SNAPSHOT;
 }
 
 // Lazy init — avoid calling getSnapshot() at module load time during SSR
@@ -62,7 +67,7 @@ function writePins(pins: string[]): void {
 
 export function usePinnedFiles() {
   ensureInit();
-  const pins = useSyncExternalStore(subscribe, () => cachedPins, getServerSnapshot);
+  const pins = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
 
   const isPinned = useCallback((path: string) => pins.includes(path), [pins]);
 
