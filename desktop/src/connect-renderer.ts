@@ -595,6 +595,8 @@ async function handleConnect(): Promise<void> {
     const result = await ipc.connect(addr, pw || null);
     if (result.ok) {
       if (btn) btn.textContent = t('connected');
+      // Reset after brief delay — window usually closes, but if not, allow retry
+      setTimeout(() => { connectInProgress = false; if (btn) { btn.disabled = false; btn.textContent = t('connect'); } }, 2000);
     } else {
       if (status) {
         status.className = 'status-bar error';

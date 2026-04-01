@@ -635,6 +635,8 @@ async function startLocalMode(): Promise<string | null> {
 
   processManager.on('status-change', (status: string) => {
     refreshTray(status as 'starting' | 'running' | 'error');
+    // Reset crash dialog flag when service recovers — so it can show again if it crashes later
+    if (status === 'running') crashDialogShown = false;
   });
 
   startupComplete = true;
@@ -843,8 +845,7 @@ function cleanupConflictingLaunchdService(): void {
       });
     } catch { /* no matching processes — fine */ }
 
-    // Step 4: Brief wait for ports to release
-    exec('sleep 1', { stdio: 'ignore' });
+    // Note: no explicit wait needed — findAvailablePort will retry if ports haven't released yet
 
   } catch (err) {
     // Non-critical — if cleanup fails, findAvailablePort will still work as fallback
@@ -856,6 +857,7 @@ function cleanupConflictingLaunchdService(): void {
 function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawnChild(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let settled = false;
 
     // Log last output for diagnostics on failure
     let lastOutput = '';
@@ -863,15 +865,19 @@ function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<stri
     proc.stderr?.on('data', (d: Buffer) => { lastOutput = d.toString().trim().split('\n').pop() || ''; });
 
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       proc.kill('SIGKILL');
       reject(new Error(`${path.basename(bin)} ${args[0] || ''} timed out after ${Math.round(timeoutMs / 1000)}s\nLast output: ${lastOutput}`));
     }, timeoutMs);
     proc.on('exit', (code: number | null) => {
       clearTimeout(timer);
-      if (code === 0 || code === null) resolve();
+      if (settled) return;
+      settled = true;
+      if (code === 0) resolve();
       else reject(new Error(`${path.basename(bin)} ${args[0] || ''} exited with code ${code}\n${lastOutput}`));
     });
-    proc.on('error', (err: Error) => { clearTimeout(timer); reject(err); });
+    proc.on('error', (err: Error) => { clearTimeout(timer); if (!settled) { settled = true; reject(err); } });
   });
 }
 
@@ -1232,7 +1238,13 @@ async function bootApp(): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) {
     mainWindow = createMainWindow();
     setupIPC();
-    createTray(mainWindow, trayCallbacks);
+    try {
+      createTray(mainWindow, trayCallbacks);
+    } catch (trayErr) {
+      console.warn('[MindOS] Tray creation failed — close will quit instead of hide:', (trayErr as Error)?.message);
+      // Without tray, let window close normally (remove the hide-on-close behavior)
+      mainWindow.removeAllListeners('close');
+    }
     registerShortcuts(mainWindow);
     setupUpdater();
   }

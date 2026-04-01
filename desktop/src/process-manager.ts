@@ -38,6 +38,8 @@ export class ProcessManager extends EventEmitter {
   private mcpRestartInProgress = false;
   /** Captured stderr from web process for diagnostics when startup fails */
   private webStderrLines: string[] = [];
+  /** Captured stderr from MCP process for crash diagnostics */
+  private mcpStderrLines: string[] = [];
   /** Set to true when web process exits during startup (before health check succeeds) */
   private webProcessDied = false;
 
@@ -73,6 +75,7 @@ export class ProcessManager extends EventEmitter {
     this.stopped = false;
     this.webProcessDied = false;
     this.webStderrLines = [];
+    this.mcpStderrLines = [];
     this.externalMcp = false;
     this.emit('status-change', 'starting');
 
@@ -455,10 +458,18 @@ export class ProcessManager extends EventEmitter {
 
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
     this.pipeChildOutput(proc, which);
-    // Capture stderr to detect EADDRINUSE vs other crash reasons
-    let lastStderr = '';
+    // Capture stderr for crash diagnostics — keep last ~2KB
+    const stderrChunks: string[] = [];
     proc.stderr?.on('data', (chunk: Buffer) => {
-      lastStderr = chunk.toString();
+      stderrChunks.push(chunk.toString());
+      // Keep only last 10 chunks (~2KB) to avoid unbounded growth
+      if (stderrChunks.length > 10) stderrChunks.shift();
+      // Also feed into the per-process stderr lines buffer
+      const lines = chunk.toString().split('\n').filter(Boolean);
+      if (which === 'mcp') {
+        this.mcpStderrLines.push(...lines);
+        if (this.mcpStderrLines.length > 100) this.mcpStderrLines.splice(0, this.mcpStderrLines.length - 100);
+      }
     });
     const handler = (code: number | null, signal: string | null) => {
       console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
@@ -472,11 +483,13 @@ export class ProcessManager extends EventEmitter {
         return;
       }
 
+      const lastStderr = stderrChunks.join('');
       const wasPortConflict = lastStderr.includes('EADDRINUSE') || lastStderr.includes('address already in use');
 
+      const stderrLines = which === 'web' ? this.webStderrLines : this.mcpStderrLines;
       this.crashCount[which]++;
-      this.logCrash(which, code, signal, this.webStderrLines.slice(-20));
-      this.emit('crash', which, this.crashCount[which as keyof typeof this.crashCount], code, this.webStderrLines.slice(-10));
+      this.logCrash(which, code, signal, stderrLines.slice(-20));
+      this.emit('crash', which, this.crashCount[which as keyof typeof this.crashCount], code, stderrLines.slice(-10));
 
       if (this.crashCount[which] < 3) {
         const delay = this.crashCount[which] === 1 ? 2000 : 5000;

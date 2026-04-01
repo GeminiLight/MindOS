@@ -405,3 +405,63 @@
 - **日期**: 2026-04-01
 - **根因**: SSH 连接保存为 `ssh://host:port`，点击后填入 HTTP 输入框，Test Connection 必定失败
 - **修复**: loadRecentConnections() 过滤掉 `ssh://` 开头的条目，HTTP panel 不再显示 SSH 连接
+
+### ✅ P2 #19: 更新检查只启动时一次
+
+- **日期**: 2026-04-02
+- **修复**: 加 12 小时定时检查 setInterval
+
+### ✅ P2 #21: SSH passphrase key 静默失败
+
+- **日期**: 2026-04-02
+- **修复**: 检测 stderr 中 "permission denied" 关键词，追加 ssh-add 提示
+
+### ✅ P2 #24: 不可重试 SSH 错误仍重试 3 次
+
+- **日期**: 2026-04-02
+- **修复**: 解析 stderr，permission denied / host key verification failed / connection refused 直接 break
+
+### ✅ P2 #27: getNpxPath 返回 npm
+
+- **日期**: 2026-04-02
+- **修复**: 找不到 npx 时返回 'npx'（让 PATH 解析），不再返回 npm
+
+### ✅ P2 #29: spawnWithEnv 超时后双 resolve
+
+- **日期**: 2026-04-02
+- **修复**: 加 settled 标记，超时 SIGKILL 后 exit 事件不再误 resolve
+
+### ✅ P2 #30: crashDialogShown 永不重置
+
+- **日期**: 2026-04-02
+- **修复**: status-change 为 running 时重置 crashDialogShown = false
+
+### ✅ P2 #31: tray 创建失败变无头进程
+
+- **日期**: 2026-04-02
+- **修复**: try/catch createTray，失败时 removeAllListeners('close') 让窗口正常关闭
+
+### ✅ P2 #32: lastStderr 覆盖丢失 EADDRINUSE
+
+- **日期**: 2026-04-02
+- **修复**: stderrChunks 追加（限 10 chunks ~2KB），join 后再检测端口冲突
+
+### ✅ P2 #33: MCP crash 输出 web stderr
+
+- **日期**: 2026-04-02
+- **修复**: 新增 mcpStderrLines 独立维护，crash event 传对应进程的 stderr
+
+### ✅ P2 #34: connectInProgress 成功后不重置
+
+- **日期**: 2026-04-02
+- **修复**: 成功后 2s 延迟重置 flag 和按钮
+
+### ✅ P2 #35: port finder 只 10 个端口
+
+- **日期**: 2026-04-02
+- **修复**: 扩大到 30 个端口 + 65535 上界保护
+
+### ✅ P2 #36: exec('sleep 1') 阻塞主线程
+
+- **日期**: 2026-04-02
+- **修复**: 删除，findAvailablePort 已有兜底

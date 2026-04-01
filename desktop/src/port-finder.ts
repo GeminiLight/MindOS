@@ -20,15 +20,17 @@ export function isPortInUse(port: number): Promise<boolean> {
 
 /**
  * Find an available port starting from the given port.
- * Tries up to 10 consecutive ports.
+ * Tries up to 30 consecutive ports, clamped to valid range (1-65535).
  */
-export async function findAvailablePort(start: number, maxAttempts = 10): Promise<number> {
+export async function findAvailablePort(start: number, maxAttempts = 30): Promise<number> {
   for (let i = 0; i < maxAttempts; i++) {
     const port = start + i;
+    if (port > 65535) break; // Don't try invalid ports
     const inUse = await isPortInUse(port);
     if (!inUse) return port;
   }
-  const err = new Error(`No available port found in range ${start}-${start + maxAttempts - 1}`);
+  const end = Math.min(start + maxAttempts - 1, 65535);
+  const err = new Error(`No available port found in range ${start}-${end}`);
   (err as Error & { code: string }).code = 'ERR_NO_PORT';
   throw err;
 }

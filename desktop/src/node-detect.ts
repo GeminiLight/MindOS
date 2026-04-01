@@ -219,9 +219,7 @@ export function getNpxPath(nodePath: string): string {
   const binDir = path.dirname(nodePath);
   const npx = path.join(binDir, 'npx');
   if (existsSync(npx)) return npx;
-  // Fallback: npm should be next to node
-  const npm = path.join(binDir, 'npm');
-  if (existsSync(npm)) return npm;
+  // Fallback: bare 'npx' — let PATH resolve it. Don't return npm (different CLI args).
   return 'npx';
 }
 

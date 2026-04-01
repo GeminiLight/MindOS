@@ -261,6 +261,22 @@ function registerSshHandlers(
         } catch (retryErr: any) {
           lastError = retryErr.message || 'SSH tunnel failed';
           if (activeTunnel) { await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+
+          // Don't retry non-transient SSH errors — they'll fail identically every time
+          const errLower = lastError.toLowerCase();
+          const nonRetryable =
+            errLower.includes('permission denied') ||
+            errLower.includes('host key verification failed') ||
+            errLower.includes('no such identity') ||
+            errLower.includes('connection refused');
+          if (nonRetryable) {
+            // Enhance error message for passphrase-related failures
+            if (errLower.includes('permission denied') && !errLower.includes('password')) {
+              lastError += '\n\nIf your SSH key has a passphrase, run: ssh-add ~/.ssh/id_ed25519 (or your key path)';
+            }
+            break;
+          }
+
           if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         }
       }

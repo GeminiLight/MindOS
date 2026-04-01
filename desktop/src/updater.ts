@@ -73,8 +73,11 @@ export function setupUpdater(): void {
     autoUpdater.quitAndInstall(false, true);
   });
 
-  // Silent check on startup (after 10s delay)
+  // Silent check on startup (after 10s delay), then every 12 hours
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(() => {});
   }, 10_000);
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 12 * 60 * 60 * 1000);
 }
