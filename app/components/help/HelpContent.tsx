@@ -178,31 +178,10 @@ export default function HelpContent() {
   }, [tocItems]);
 
   return (
-    <div className="content-width px-4 md:px-6 py-8 md:py-12 relative">
-      {/* ── Floating TOC (wide screens only) ── */}
-      <nav className="hidden xl:block fixed top-24 w-44" style={{ left: 'calc(50% + 340px)' }} aria-label="Table of contents">
-        <ul className="space-y-1 border-l border-border pl-3">
-          {tocItems.map(item => (
-            <li key={item.id}>
-              <a
-                href={`#${item.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className={`block text-xs py-1 transition-colors ${
-                  activeSection === item.id
-                    ? 'text-[var(--amber)] font-medium border-l-2 border-[var(--amber)] -ml-[13px] pl-[11px]'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {item.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {/* ── Header ── */}
+    <div className="flex justify-center gap-8 px-4 md:px-6 py-8 md:py-12">
+      {/* ── Main content ── */}
+      <div className="min-w-0 w-full" style={{ maxWidth: 'var(--content-width-override, var(--content-width, 780px))' }}>
+        {/* ── Header ── */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1 h-6 rounded-full bg-[var(--amber)]" />
@@ -288,6 +267,33 @@ export default function HelpContent() {
           </div>
         </Section>
       </div>
+      </div>
+
+      {/* ── Sticky TOC (wide screens only) ── */}
+      <nav className="hidden xl:block shrink-0 w-40" aria-label="Table of contents">
+        <div className="sticky top-24">
+          <ul className="space-y-1 border-l border-border pl-3">
+            {tocItems.map(item => (
+              <li key={item.id}>
+                <a
+                  href={`#${item.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className={`block text-xs py-1 transition-colors ${
+                    activeSection === item.id
+                      ? 'text-[var(--amber)] font-medium border-l-2 border-[var(--amber)] -ml-[13px] pl-[11px]'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </nav>
     </div>
   );
 }

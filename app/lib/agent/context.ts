@@ -7,13 +7,11 @@
 import { complete, type Model } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { ToolResultMessage, AssistantMessage, UserMessage } from '@mariozechner/pi-ai';
+import { countCjkChars } from '@/lib/core/cjk';
 
 // ---------------------------------------------------------------------------
 // Token estimation — CJK-aware (CJK ~1.5 tokens/char, ASCII ~0.25 tokens/char)
 // ---------------------------------------------------------------------------
-
-/** CJK character ranges: Han, Hiragana, Katakana, Hangul */
-const CJK_RANGE = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g;
 
 /**
  * Estimate token count for a string using character-class heuristics.
@@ -22,8 +20,7 @@ const CJK_RANGE = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g;
  * This is 3-4x more accurate than naive length/4 for mixed CJK/English text.
  */
 export function estimateStringTokens(text: string): number {
-  const cjkMatches = text.match(CJK_RANGE);
-  const cjkCount = cjkMatches ? cjkMatches.length : 0;
+  const cjkCount = countCjkChars(text);
   const nonCjkCount = text.length - cjkCount;
   return Math.ceil(cjkCount * 1.5 + nonCjkCount / 4);
 }

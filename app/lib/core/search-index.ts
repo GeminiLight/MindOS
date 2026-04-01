@@ -2,11 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { collectAllFiles } from './tree';
 import { readFile } from './fs-ops';
+import { CJK_CHAR_REGEX } from './cjk';
 
 const MAX_CONTENT_LENGTH = 50_000;
-
-// CJK Unicode ranges: Chinese, Japanese Hiragana/Katakana, Korean
-const CJK_REGEX = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
 
 // Intl.Segmenter for proper CJK word segmentation (available in Node 16+)
 const zhSegmenter = typeof Intl !== 'undefined' && Intl.Segmenter
@@ -37,7 +35,7 @@ function tokenize(text: string): Set<string> {
   }
 
   // CJK word segmentation
-  if (CJK_REGEX.test(lower)) {
+  if (CJK_CHAR_REGEX.test(lower)) {
     if (zhSegmenter) {
       // Intl.Segmenter: proper word boundaries
       for (const { segment, isWordLike } of zhSegmenter.segment(lower)) {
@@ -47,14 +45,14 @@ function tokenize(text: string): Set<string> {
         tokens.add(word);
         // Also add individual CJK characters as unigrams (for single-char queries)
         for (const ch of word) {
-          if (CJK_REGEX.test(ch)) tokens.add(ch);
+          if (CJK_CHAR_REGEX.test(ch)) tokens.add(ch);
         }
       }
     } else {
       // Fallback: bigrams + unigrams
       const cjkChars: string[] = [];
       for (const ch of lower) {
-        if (CJK_REGEX.test(ch)) {
+        if (CJK_CHAR_REGEX.test(ch)) {
           cjkChars.push(ch);
         } else {
           if (cjkChars.length > 0) {

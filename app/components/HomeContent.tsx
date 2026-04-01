@@ -1,13 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, Zap, History, SlidersHorizontal, ListTodo, Star } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Folder, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, History, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
-import { getAllRenderers, getPluginRenderers } from '@/lib/renderers/registry';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
 import SystemPulse from './SystemPulse';
@@ -249,32 +248,33 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   const lastFile = recent[0];
 
   return (
-    <div className="content-width px-4 md:px-6 py-8 md:py-12">
+    <div className="content-width px-4 md:px-6 py-10 md:py-14">
       <GuideCard />
       <ExampleCleanupBanner />
 
-      {/* ── Hero ── */}
-      <div className="mb-14">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-6 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/30" />
+      {/* ══════════ Hero ══════════ */}
+      <div className="mb-10">
+        {/* Brand mark */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-1 h-7 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/20" />
           <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
             MindOS
           </h1>
         </div>
-        <p className="text-base leading-relaxed mb-5 text-muted-foreground pl-4 max-w-md">
+        <p className="text-sm leading-relaxed text-muted-foreground pl-4 max-w-lg mb-6">
           {t.app.tagline}
         </p>
 
-        {/* AI-first command bar */}
-        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-4">
+        {/* Command bar — the single most important action */}
+        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pl-4">
           <button
             onClick={triggerAsk}
             title="⌘/"
             data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber-dim)]"
+            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:shadow-md group"
           >
-            <Sparkles size={15} className="shrink-0 text-[var(--amber)]" />
-            <span className="text-sm flex-1 text-left text-foreground">
+            <Sparkles size={15} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
+            <span className="text-sm flex-1 text-left text-muted-foreground">
               {suggestions[suggestionIdx]}
             </span>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
@@ -284,29 +284,20 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           <button
             onClick={triggerSearch}
             title="⌘K"
-            className="flex items-center gap-2 px-3 py-3 rounded-xl border border-border text-sm text-muted-foreground transition-colors shrink-0 hover:bg-muted"
+            className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/60 text-sm text-muted-foreground transition-all duration-150 shrink-0 hover:bg-muted hover:shadow-sm"
           >
             <Search size={14} />
-            <span className="hidden sm:inline">{t.home.shortcuts.searchFiles}</span>
             <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-mono bg-muted">
               ⌘K
             </kbd>
           </button>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-wrap gap-3 mt-5 pl-4">
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber-text)]"
-          >
-            <FolderInput size={14} />
-            <span>{t.fileTree.importFile}</span>
-            <ArrowRight size={13} className="opacity-50" />
-          </button>
+        {/* Quick actions — only 2: New + Continue */}
+        <div className="flex items-center gap-3 mt-4 pl-4">
           <Link
             href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-muted text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:shadow-sm bg-[var(--amber)] text-[var(--amber-foreground)]"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
@@ -314,149 +305,90 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           {lastFile && (
             <Link
               href={`/view/${encodePath(lastFile.path)}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
             >
-              <ArrowRight size={14} />
+              <ArrowRight size={14} className="text-[var(--amber)]/60" />
               <span>{t.home.continueEditing}</span>
-              <span className="text-xs opacity-50 truncate max-w-36" suppressHydrationWarning>
+              <span className="text-xs opacity-40 truncate max-w-32" suppressHydrationWarning>
                 {lastFile.path.split('/').pop()}
               </span>
             </Link>
           )}
-          <Link
-            href="/explore"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 text-[var(--amber)]"
-          >
-            <Compass size={14} />
-            <span>{t.explore.title}</span>
-          </Link>
         </div>
       </div>
 
-      {/* ── System Pulse: Agent status + stats ── */}
+      {/* ══════════ Knowledge Pulse ══════════ */}
       <SystemPulse />
 
-      {/* ── Section: Pinned Files ── */}
+      {/* ══════════ Pinned Files ══════════ */}
       <PinnedFilesSection formatTime={formatTime} />
 
-      {/* ── Section: Spaces ── */}
-      <section className="mb-12">
-        <SectionTitle
-          icon={<Brain size={13} />}
-          count={spaceList.length > 0 ? spaceList.length : undefined}
-          action={<CreateSpaceButton t={t} />}
-        >
-          {t.home.spaces}
-        </SectionTitle>
-        {spaceList.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-                const emoji = extractEmoji(s.name);
-                const label = stripEmoji(s.name);
-                const isEmpty = s.fileCount === 0;
-                return (
-                  <Link
-                    key={s.name}
-                    href={`/view/${encodePath(s.path)}`}
-                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
-                      isEmpty
-                        ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
-                    }`}
-                  >
-                    {emoji ? (
-                      <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                    ) : (
-                      <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                      {s.description && (
-                        <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                      )}
-                      <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
-                        {t.home.nFiles(s.fileCount)}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-            {spaceList.length > SPACES_PER_ROW && (
-              <ToggleButton
-                expanded={showAllSpaces}
-                onToggle={() => setShowAllSpaces(v => !v)}
-                showLabel={t.home.showMore}
-                hideLabel={t.home.showLess}
-                className="mt-2"
-              />
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-muted-foreground py-2">
-            {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
-          </p>
-        )}
-      </section>
-
-      {/* ── Section: Tools ── */}
-      {builtinFeatures.length > 0 && (
-        <section className="mb-12">
-          <SectionTitle icon={<Zap size={13} />} count={builtinFeatures.length}>
-            {t.home.builtinFeatures}
-          </SectionTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {builtinFeatures.map((r) => {
-              const active = !!r.entryPath && existingSet.has(r.entryPath);
-              const toolNames = t.home.toolName as Record<string, string> | undefined;
-              const toolDescs = t.home.toolDesc as Record<string, string> | undefined;
-              return (
-                <ToolCard
-                  key={r.id}
-                  id={r.id}
-                  name={toolNames?.[r.id] ?? r.name}
-                  description={toolDescs?.[r.id] ?? r.description}
-                  entryPath={r.entryPath}
-                  active={active}
-                  inactiveTitle={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
-                />
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ── Section: Extensions ── */}
-      {availablePlugins.length > 0 && (
-        <section className="mb-12">
+      {/* ══════════ Spaces ══════════ */}
+      {(spaceList.length > 0 || true) && (
+        <section className="mb-10">
           <SectionTitle
-            icon={<Puzzle size={13} />}
-            count={availablePlugins.length}
-            action={
-              availablePlugins.length > PLUGINS_INITIAL ? (
-                <ToggleButton
-                  expanded={showAllPlugins}
-                  onToggle={() => setShowAllPlugins(v => !v)}
-                  showLabel={t.home.viewAll}
-                  hideLabel={t.home.showLess}
-                />
-              ) : undefined
-            }
+            icon={<Brain size={13} />}
+            count={spaceList.length > 0 ? spaceList.length : undefined}
+            action={<CreateSpaceButton t={t} />}
           >
-            {t.home.plugins}
+            {t.home.spaces}
           </SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
-              <FeatureChip key={r.id} id={r.id} icon={r.icon} name={r.name} entryPath={r.entryPath} active />
-            ))}
-          </div>
+          {spaceList.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
+                  const emoji = extractEmoji(s.name);
+                  const label = stripEmoji(s.name);
+                  const isEmpty = s.fileCount === 0;
+                  return (
+                    <Link
+                      key={s.name}
+                      href={`/view/${encodePath(s.path)}`}
+                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                        isEmpty
+                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                      }`}
+                    >
+                      {emoji ? (
+                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
+                      ) : (
+                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                        {s.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
+                          {t.home.nFiles(s.fileCount)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {spaceList.length > SPACES_PER_ROW && (
+                <ToggleButton
+                  expanded={showAllSpaces}
+                  onToggle={() => setShowAllSpaces(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-2"
+                />
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">
+              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
+            </p>
+          )}
         </section>
       )}
 
-      {/* ── Section: Recently Edited ── */}
+      {/* ══════════ Recently Edited ══════════ */}
       {recent.length > 0 && (
-        <section className="mb-12">
+        <section className="mb-10">
           <SectionTitle
             icon={<Clock size={13} />}
             count={recent.length}
@@ -473,31 +405,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             {t.home.recentlyEdited}
           </SectionTitle>
 
-          {/* Spotlight — latest file */}
-          <Link
-            href={`/view/${encodePath(recent[0].path)}`}
-            className="block mb-5 p-4 rounded-xl border border-border/50 bg-gradient-to-r from-[var(--amber-subtle)] to-transparent hover:border-[var(--amber)]/40 hover:shadow-sm transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
-                {recent[0].path.endsWith('.csv')
-                  ? <Table size={18} className="text-[var(--amber)]" />
-                  : <FileText size={18} className="text-[var(--amber)]" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="text-base font-medium text-foreground block truncate">
-                  {recent[0].path.split('/').pop()}
-                </span>
-                <span className="text-xs text-muted-foreground mt-0.5 block" suppressHydrationWarning>
-                  {recent[0].path.split('/').slice(0, -1).join('/') || 'Root'} · {formatTime(recent[0].mtime)}
-                </span>
-              </div>
-              <ArrowRight size={16} className="text-muted-foreground group-hover:text-[var(--amber)] transition-colors shrink-0" />
-            </div>
-          </Link>
-
           {groups.length > 0 ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {groups.map((group) => {
                 const visibleFiles = showAll ? group.files : group.files.slice(0, FILES_PER_GROUP);
                 const hasMoreFiles = group.files.length > FILES_PER_GROUP;
@@ -511,16 +420,16 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       <span className="text-xs font-semibold font-display text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
                         {group.space}
                       </span>
-                      <span className="text-xs text-muted-foreground opacity-60 tabular-nums" suppressHydrationWarning>
+                      <span className="text-xs text-muted-foreground/50 tabular-nums" suppressHydrationWarning>
                         {t.home.nFiles(group.totalFiles)} · {formatTime(group.latestMtime)}
                       </span>
                       {hasMoreFiles && !showAll && (
-                        <span className="text-xs text-muted-foreground opacity-40">
+                        <span className="text-xs text-muted-foreground/30 tabular-nums">
                           +{group.files.length - FILES_PER_GROUP}
                         </span>
                       )}
                     </Link>
-                    <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
+                    <div className="flex flex-col gap-0.5 ml-2 border-l border-border/40 pl-3">
                       {visibleFiles.map(({ path: filePath, mtime }) => (
                         <FileRow
                           key={filePath}
@@ -538,12 +447,12 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               {rootFiles.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 px-1 py-1.5">
-                    <FileText size={13} className="shrink-0 text-muted-foreground" />
-                    <span className="text-xs font-semibold font-display text-muted-foreground">
+                    <FileText size={13} className="shrink-0 text-muted-foreground/50" />
+                    <span className="text-xs font-semibold font-display text-muted-foreground/60">
                       {t.home.other}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
+                  <div className="flex flex-col gap-0.5 ml-2 border-l border-border/40 pl-3">
                     {rootFiles.map(({ path: filePath, mtime }) => (
                       <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
                     ))}
@@ -563,7 +472,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             </div>
           ) : (
             <div className="relative pl-4">
-              <div className="absolute left-0 top-1 bottom-1 w-px bg-border" />
+              <div className="absolute left-0 top-1 bottom-1 w-px bg-border/40" />
               <div className="flex flex-col gap-0.5">
                 {(showAll ? recent : recent.slice(0, 5)).map(({ path: filePath, mtime }, idx) => {
                   const isCSV = filePath.endsWith('.csv');
@@ -575,23 +484,23 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         aria-hidden="true"
                         className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
                           idx === 0
-                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
-                            : 'w-1.5 h-1.5 bg-muted-foreground/30'
+                            ? 'w-2 h-2 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
+                            : 'w-1.5 h-1.5 bg-muted-foreground/20'
                         }`}
                       />
                       <Link
                         href={`/view/${encodePath(filePath)}`}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
                       >
                         {isCSV
-                          ? <Table size={13} className="shrink-0 text-success" />
-                          : <FileText size={13} className="shrink-0 text-muted-foreground" />
+                          ? <Table size={12} className="shrink-0 text-success" />
+                          : <FileText size={12} className="shrink-0 text-muted-foreground/50" />
                         }
                         <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate block text-foreground" suppressHydrationWarning>{name}</span>
-                          {dir && <span className="text-xs truncate block text-muted-foreground opacity-60" suppressHydrationWarning>{dir}</span>}
+                          <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
+                          {dir && <span className="text-xs truncate block text-muted-foreground/40" suppressHydrationWarning>{dir}</span>}
                         </div>
-                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-50" suppressHydrationWarning>
+                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground/40" suppressHydrationWarning>
                           {formatTime(mtime)}
                         </span>
                       </Link>
@@ -614,8 +523,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       )}
 
       {/* Footer */}
-      <div className="py-6 border-t border-border/30 flex items-center gap-1.5 text-xs font-display text-muted-foreground opacity-40">
-        <Sparkles size={10} className="text-[var(--amber)]" />
+      <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">
+        <Sparkles size={10} className="text-[var(--amber)]/40" />
         <span>{t.app.footer}</span>
       </div>
     </div>
