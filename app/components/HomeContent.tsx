@@ -331,171 +331,6 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
       </div>
 
-      {/* ── Section: Recently Edited ── */}
-      {recent.length > 0 && (
-        <section className="mb-12">
-          <SectionTitle
-            icon={<Clock size={13} />}
-            count={recent.length}
-            action={
-              <Link
-                href="/changes"
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 font-display"
-              >
-                <History size={12} />
-                <span>{t.home.changeHistory}</span>
-              </Link>
-            }
-          >
-            {t.home.recentlyEdited}
-          </SectionTitle>
-
-          {/* Spotlight — latest file */}
-          {recent.length > 0 && (
-            <Link
-              href={`/view/${encodePath(recent[0].path)}`}
-              className="block mb-5 p-4 rounded-xl border border-border/50 bg-gradient-to-r from-[var(--amber-subtle)] to-transparent hover:border-[var(--amber)]/40 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
-                  {recent[0].path.endsWith('.csv')
-                    ? <Table size={18} className="text-[var(--amber)]" />
-                    : <FileText size={18} className="text-[var(--amber)]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-base font-medium text-foreground block truncate">
-                    {recent[0].path.split('/').pop()}
-                  </span>
-                  <span className="text-xs text-muted-foreground mt-0.5 block" suppressHydrationWarning>
-                    {recent[0].path.split('/').slice(0, -1).join('/') || 'Root'} · {formatTime(recent[0].mtime)}
-                  </span>
-                </div>
-                <ArrowRight size={16} className="text-muted-foreground group-hover:text-[var(--amber)] transition-colors shrink-0" />
-              </div>
-            </Link>
-          )}
-
-          {groups.length > 0 ? (
-            /* Space-Grouped View */
-            <div className="flex flex-col gap-4">
-              {groups.map((group) => {
-                const visibleFiles = showAll ? group.files : group.files.slice(0, FILES_PER_GROUP);
-                const hasMoreFiles = group.files.length > FILES_PER_GROUP;
-                return (
-                  <div key={group.space}>
-                    <Link
-                      href={`/view/${encodePath(group.spacePath)}`}
-                      className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
-                    >
-                      <Folder size={13} className="shrink-0 text-[var(--amber)]" />
-                      <span className="text-xs font-semibold font-display text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
-                        {group.space}
-                      </span>
-                      <span className="text-xs text-muted-foreground opacity-60 tabular-nums" suppressHydrationWarning>
-                        {t.home.nFiles(group.totalFiles)} · {formatTime(group.latestMtime)}
-                      </span>
-                      {hasMoreFiles && !showAll && (
-                        <span className="text-xs text-muted-foreground opacity-40">
-                          +{group.files.length - FILES_PER_GROUP}
-                        </span>
-                      )}
-                    </Link>
-                    <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
-                      {visibleFiles.map(({ path: filePath, mtime }) => (
-                        <FileRow
-                          key={filePath}
-                          filePath={filePath}
-                          mtime={mtime}
-                          formatTime={formatTime}
-                          subPath={filePath.split('/').slice(1, -1).join('/')}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Root-level files (Other) */}
-              {rootFiles.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 px-1 py-1.5">
-                    <FileText size={13} className="shrink-0 text-muted-foreground" />
-                    <span className="text-xs font-semibold font-display text-muted-foreground">
-                      {t.home.other}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
-                    {rootFiles.map(({ path: filePath, mtime }) => (
-                      <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Show more / less */}
-              {groups.some(g => g.files.length > FILES_PER_GROUP) && (
-                <ToggleButton
-                  expanded={showAll}
-                  onToggle={() => setShowAll(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-1 ml-1"
-                />
-              )}
-            </div>
-          ) : (
-            /* Flat Timeline Fallback */
-            <div className="relative pl-4">
-              <div className="absolute left-0 top-1 bottom-1 w-px bg-border" />
-              <div className="flex flex-col gap-0.5">
-                {(showAll ? recent : recent.slice(0, 5)).map(({ path: filePath, mtime }, idx) => {
-                  const isCSV = filePath.endsWith('.csv');
-                  const name = filePath.split('/').pop() || filePath;
-                  const dir = filePath.split('/').slice(0, -1).join('/');
-                  return (
-                    <div key={filePath} className="relative group">
-                      <div
-                        aria-hidden="true"
-                        className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
-                          idx === 0
-                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
-                            : 'w-1.5 h-1.5 bg-muted-foreground/30'
-                        }`}
-                      />
-                      <Link
-                        href={`/view/${encodePath(filePath)}`}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
-                      >
-                        {isCSV
-                          ? <Table size={13} className="shrink-0 text-success" />
-                          : <FileText size={13} className="shrink-0 text-muted-foreground" />
-                        }
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate block text-foreground" suppressHydrationWarning>{name}</span>
-                          {dir && <span className="text-xs truncate block text-muted-foreground opacity-60" suppressHydrationWarning>{dir}</span>}
-                        </div>
-                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-50" suppressHydrationWarning>
-                          {formatTime(mtime)}
-                        </span>
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-              {recent.length > 5 && (
-                <ToggleButton
-                  expanded={showAll}
-                  onToggle={() => setShowAll(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-2 ml-3"
-                />
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
       {/* ── Section: Spaces ── */}
       <section className="mb-12">
         <SectionTitle
@@ -608,6 +443,165 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               <FeatureChip key={r.id} id={r.id} icon={r.icon} name={r.name} entryPath={r.entryPath} active />
             ))}
           </div>
+        </section>
+      )}
+
+      {/* ── Section: Recently Edited ── */}
+      {recent.length > 0 && (
+        <section className="mb-12">
+          <SectionTitle
+            icon={<Clock size={13} />}
+            count={recent.length}
+            action={
+              <Link
+                href="/changes"
+                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 font-display"
+              >
+                <History size={12} />
+                <span>{t.home.changeHistory}</span>
+              </Link>
+            }
+          >
+            {t.home.recentlyEdited}
+          </SectionTitle>
+
+          {/* Spotlight — latest file */}
+          <Link
+            href={`/view/${encodePath(recent[0].path)}`}
+            className="block mb-5 p-4 rounded-xl border border-border/50 bg-gradient-to-r from-[var(--amber-subtle)] to-transparent hover:border-[var(--amber)]/40 hover:shadow-sm transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
+                {recent[0].path.endsWith('.csv')
+                  ? <Table size={18} className="text-[var(--amber)]" />
+                  : <FileText size={18} className="text-[var(--amber)]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-base font-medium text-foreground block truncate">
+                  {recent[0].path.split('/').pop()}
+                </span>
+                <span className="text-xs text-muted-foreground mt-0.5 block" suppressHydrationWarning>
+                  {recent[0].path.split('/').slice(0, -1).join('/') || 'Root'} · {formatTime(recent[0].mtime)}
+                </span>
+              </div>
+              <ArrowRight size={16} className="text-muted-foreground group-hover:text-[var(--amber)] transition-colors shrink-0" />
+            </div>
+          </Link>
+
+          {groups.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {groups.map((group) => {
+                const visibleFiles = showAll ? group.files : group.files.slice(0, FILES_PER_GROUP);
+                const hasMoreFiles = group.files.length > FILES_PER_GROUP;
+                return (
+                  <div key={group.space}>
+                    <Link
+                      href={`/view/${encodePath(group.spacePath)}`}
+                      className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
+                    >
+                      <Folder size={13} className="shrink-0 text-[var(--amber)]" />
+                      <span className="text-xs font-semibold font-display text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
+                        {group.space}
+                      </span>
+                      <span className="text-xs text-muted-foreground opacity-60 tabular-nums" suppressHydrationWarning>
+                        {t.home.nFiles(group.totalFiles)} · {formatTime(group.latestMtime)}
+                      </span>
+                      {hasMoreFiles && !showAll && (
+                        <span className="text-xs text-muted-foreground opacity-40">
+                          +{group.files.length - FILES_PER_GROUP}
+                        </span>
+                      )}
+                    </Link>
+                    <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
+                      {visibleFiles.map(({ path: filePath, mtime }) => (
+                        <FileRow
+                          key={filePath}
+                          filePath={filePath}
+                          mtime={mtime}
+                          formatTime={formatTime}
+                          subPath={filePath.split('/').slice(1, -1).join('/')}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {rootFiles.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 px-1 py-1.5">
+                    <FileText size={13} className="shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-semibold font-display text-muted-foreground">
+                      {t.home.other}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5 ml-2 border-l border-border pl-3">
+                    {rootFiles.map(({ path: filePath, mtime }) => (
+                      <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {groups.some(g => g.files.length > FILES_PER_GROUP) && (
+                <ToggleButton
+                  expanded={showAll}
+                  onToggle={() => setShowAll(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-1 ml-1"
+                />
+              )}
+            </div>
+          ) : (
+            <div className="relative pl-4">
+              <div className="absolute left-0 top-1 bottom-1 w-px bg-border" />
+              <div className="flex flex-col gap-0.5">
+                {(showAll ? recent : recent.slice(0, 5)).map(({ path: filePath, mtime }, idx) => {
+                  const isCSV = filePath.endsWith('.csv');
+                  const name = filePath.split('/').pop() || filePath;
+                  const dir = filePath.split('/').slice(0, -1).join('/');
+                  return (
+                    <div key={filePath} className="relative group">
+                      <div
+                        aria-hidden="true"
+                        className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
+                          idx === 0
+                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
+                            : 'w-1.5 h-1.5 bg-muted-foreground/30'
+                        }`}
+                      />
+                      <Link
+                        href={`/view/${encodePath(filePath)}`}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
+                      >
+                        {isCSV
+                          ? <Table size={13} className="shrink-0 text-success" />
+                          : <FileText size={13} className="shrink-0 text-muted-foreground" />
+                        }
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate block text-foreground" suppressHydrationWarning>{name}</span>
+                          {dir && <span className="text-xs truncate block text-muted-foreground opacity-60" suppressHydrationWarning>{dir}</span>}
+                        </div>
+                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-50" suppressHydrationWarning>
+                          {formatTime(mtime)}
+                        </span>
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+              {recent.length > 5 && (
+                <ToggleButton
+                  expanded={showAll}
+                  onToggle={() => setShowAll(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-2 ml-3"
+                />
+              )}
+            </div>
+          )}
         </section>
       )}
 

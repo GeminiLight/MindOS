@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2 } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -20,6 +20,7 @@ import DirPicker from '@/components/DirPicker';
 import { renameFileAction, deleteFileAction } from '@/lib/actions';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { buildLineDiff } from '@/components/changes/line-diff';
+import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 
 interface ViewPageClientProps {
   filePath: string;
