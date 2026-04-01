@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles, XCircle, Clock, ArrowRight } from 'lucide-react';
+import { Play, SkipForward, RotateCcw, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, Sparkles, XCircle, Clock, ArrowRight, FolderOpen } from 'lucide-react';
 import { runStepWithAI, clearSkillCache } from './execution';
 import type { WorkflowYaml, WorkflowStepRuntime, StepStatus } from './types';
 
@@ -44,7 +44,7 @@ function TimelineNode({ status, index }: { status: StepStatus; index: number }) 
   // pending
   return (
     <div className={`${base} border-2 border-border bg-background`}>
-      <span className="text-[9px] font-bold text-muted-foreground/40">{index + 1}</span>
+      <span className="text-[11px] font-bold text-muted-foreground/50">{index + 1}</span>
     </div>
   );
 }
@@ -205,6 +205,19 @@ export default function WorkflowRunner({ workflow, filePath }: { workflow: Workf
 
   return (
     <div>
+      {/* Working directory + description */}
+      {(workflow.workDir || workflow.description) && (
+        <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground flex-wrap">
+          {workflow.workDir && (
+            <span className="flex items-center gap-1.5 font-mono text-2xs bg-muted/50 px-2 py-0.5 rounded">
+              <FolderOpen size={10} className="shrink-0" />
+              {workflow.workDir}
+            </span>
+          )}
+          {workflow.description && <span className="leading-relaxed">{workflow.description}</span>}
+        </div>
+      )}
+
       {/* Progress bar — full width, thin, elegant */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">

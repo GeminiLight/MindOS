@@ -18,7 +18,6 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(!!(workflow.workDir));
 
   useEffect(() => {
     if (!saveSuccess) return;
@@ -109,19 +108,11 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
           className="w-full text-sm bg-transparent text-muted-foreground placeholder:text-muted-foreground/30 focus:outline-none border-none p-0"
         />
 
-        {/* Advanced toggle */}
-        <div className="flex items-center gap-3">
-          {!showAdvanced ? (
-            <button onClick={() => setShowAdvanced(true)}
-              className="text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              + Working directory
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <FolderOpen size={12} className="text-muted-foreground/40 shrink-0" />
-              <DirPicker value={workflow.workDir || ''} onChange={v => updateMeta({ workDir: v || undefined })} />
-            </div>
-          )}
+        {/* Working directory — always visible */}
+        <div className="flex items-center gap-2">
+          <FolderOpen size={12} className="text-muted-foreground/40 shrink-0" />
+          <DirPicker value={workflow.workDir || ''} onChange={v => updateMeta({ workDir: v || undefined })} />
+        </div>
         </div>
       </div>
 
@@ -130,16 +121,16 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
         <div className="relative">
           {/* Vertical timeline line */}
           {workflow.steps.length > 1 && (
-            <div className="absolute left-[15px] top-6 bottom-16 w-px bg-border" />
+            <div className="absolute left-[19px] top-6 bottom-16 w-px bg-border" />
           )}
 
           {/* Step list */}
           <div className="flex flex-col gap-3 mb-5 relative">
             {workflow.steps.map((step, i) => (
-              <div key={step.id} className="relative pl-9">
+              <div key={step.id} className="relative pl-11">
                 {/* Timeline node */}
-                <div className="absolute left-[9px] top-3 w-[13px] h-[13px] rounded-full border-2 border-border bg-background z-10 flex items-center justify-center">
-                  <span className="text-[7px] font-bold text-muted-foreground/60">{i + 1}</span>
+                <div className="absolute left-[7px] top-3 w-[22px] h-[22px] rounded-full border-2 border-border bg-background z-10 flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-muted-foreground/60">{i + 1}</span>
                 </div>
                 <StepEditor
                   step={step}
@@ -154,9 +145,9 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
           </div>
 
           {/* Add step — at the end of timeline */}
-          <div className="relative pl-9">
-            <div className="absolute left-[9px] top-2.5 w-[13px] h-[13px] rounded-full border-2 border-dashed border-border bg-background z-10 flex items-center justify-center">
-              <Plus size={7} className="text-muted-foreground/40" />
+          <div className="relative pl-11">
+            <div className="absolute left-[7px] top-2.5 w-[22px] h-[22px] rounded-full border-2 border-dashed border-border bg-background z-10 flex items-center justify-center">
+              <Plus size={9} className="text-muted-foreground/40" />
             </div>
             <button onClick={addStep}
               className="w-full text-left px-3 py-2 rounded-lg text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/40 transition-colors">
