@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, Zap, History, SlidersHorizontal, ListTodo } from 'lucide-react';
+import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Compass, Folder, Puzzle, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, Zap, History, SlidersHorizontal, ListTodo, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from '@/lib/LocaleContext';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
+import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { getAllRenderers, getPluginRenderers } from '@/lib/renderers/registry';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
