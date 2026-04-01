@@ -74,7 +74,7 @@
 - [x] **语义循环检测** — ✅ 已实现。除了完全相同的 tool+args 3x 重复外，新增模式循环检测（A→B→A→B，周期长度 2-4）。提取到 `lib/agent/loop-detection.ts`
 
 ### P2 — Tool 输出流式化
-- [ ] **长时间工具流式反馈** — web_fetch 等工具执行期间 UI 无进度反馈
+- [x] **长时间工具流式反馈** — ✅ 已实现。route.ts 推送 `tool_start`/`tool_end` SSE 事件，stream-consumer.ts 维护状态机，ToolCallBlock 渲染 running=转圈/done=绿勾/error=红叉。流中断时自动标记 error
   - 方案：通过 SSE 推送工具执行状态
 
 ---
