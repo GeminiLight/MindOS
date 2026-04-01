@@ -5,7 +5,7 @@
 ## 🔍 搜索与检索
 
 ### P0 — 搜索质量
-- [ ] **BM25 相关性排序** — 当前只有 `occurrences / content.length`，缺乏 IDF（逆文档频率）。引入 BM25 后，稀有词权重更高，搜索结果质量显著提升
+- [x] **BM25 相关性排序** — ✅ 已实现。`search.ts` 使用 BM25 公式（k1=1.2, b=0.75），支持多词查询独立评分求和，两遍扫描（先算 df 再评分）。`getCandidatesUnion` 已优化 CJK bigram 候选集剪枝（按 token 命中数过滤，threshold = tokenCount/2）
   - 文件：`app/lib/core/search.ts:115`, `search-index.ts`
   - 方案：计算 `idf = log((N - df + 0.5) / (df + 0.5))`，结合文档长度归一化
 

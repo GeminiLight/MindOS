@@ -164,6 +164,12 @@ export class SearchIndex {
   /**
    * Get candidates via UNION of token sets (for BM25 multi-term scoring).
    * Unlike getCandidates (intersection), this returns any file matching any token.
+   *
+   * Optimization: when the query produces many tokens (common with CJK bigrams),
+   * files are ranked by how many distinct query tokens they match. Files matching
+   * fewer than half the tokens are pruned — unless that would leave zero results,
+   * in which case all matching files are returned. This prevents CJK bigram
+   * explosion from creating massive candidate sets full of low-quality matches.
    */
   getCandidatesUnion(query: string): string[] | null {
     if (!query.trim()) return null;
@@ -172,14 +178,31 @@ export class SearchIndex {
     const tokens = tokenize(query.toLowerCase().trim());
     if (tokens.size === 0) return null;
 
-    const result = new Set<string>();
+    // Count how many query tokens each file matches
+    const hitCount = new Map<string, number>();
     for (const token of tokens) {
       const set = this.invertedIndex.get(token);
       if (set) {
-        for (const path of set) result.add(path);
+        for (const filePath of set) {
+          hitCount.set(filePath, (hitCount.get(filePath) ?? 0) + 1);
+        }
       }
     }
-    return Array.from(result);
+
+    if (hitCount.size === 0) return [];
+
+    // When query has many tokens (e.g. CJK bigrams), prune low-overlap files
+    const tokenCount = tokens.size;
+    if (tokenCount >= 3) {
+      const threshold = Math.max(1, Math.floor(tokenCount / 2));
+      const filtered = [...hitCount.entries()]
+        .filter(([, count]) => count >= threshold)
+        .map(([path]) => path);
+      // Only apply pruning if it doesn't eliminate everything
+      if (filtered.length > 0) return filtered;
+    }
+
+    return [...hitCount.keys()];
   }
 
   /**
