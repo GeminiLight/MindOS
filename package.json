@@ -62,7 +62,7 @@
     "!app/package-lock.json"
   ],
   "scripts": {
-    "prepack": "cd mcp && npm install --include=dev && npm run build && cd ../app && npm install --no-workspaces && ./node_modules/.bin/next build --webpack && cd .. && node scripts/prepare-standalone.mjs",
+    "prepack": "rm -rf _standalone && cd mcp && npm install --include=dev && npm run build && cd ../app && npm install --no-workspaces && ./node_modules/.bin/next build --webpack && cd .. && node scripts/prepare-standalone.mjs",
     "setup": "node scripts/setup.js",
     "dev": "mindos dev",
     "build": "mindos build",
