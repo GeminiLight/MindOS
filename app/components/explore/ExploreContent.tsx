@@ -86,7 +86,7 @@ export default function ExploreContent() {
             <UseCaseCard
               key={uc.id}
               icon={uc.icon}
-              image={uc.image ?? `/explore/${uc.id}.png`}
+              image={uc.image}
               title={data.title}
               description={data.desc}
               prompt={data.prompt}

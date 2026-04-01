@@ -252,14 +252,14 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       <ExampleCleanupBanner />
 
       {/* ── Hero ── */}
-      <div className="mb-10">
+      <div className="mb-14">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-5 rounded-full bg-[var(--amber)]" />
+          <div className="w-1 h-6 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/30" />
           <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
             MindOS
           </h1>
         </div>
-        <p className="text-sm leading-relaxed mb-5 text-muted-foreground pl-4">
+        <p className="text-base leading-relaxed mb-5 text-muted-foreground pl-4 max-w-md">
           {t.app.tagline}
         </p>
 
@@ -269,7 +269,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             onClick={triggerAsk}
             title="⌘/"
             data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber-dim)]"
+            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:bg-[var(--amber-dim)]"
           >
             <Sparkles size={15} className="shrink-0 text-[var(--amber)]" />
             <span className="text-sm flex-1 text-left text-foreground">
@@ -293,7 +293,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
 
         {/* Quick Actions */}
-        <div className="flex flex-wrap gap-2.5 mt-4 pl-4">
+        <div className="flex flex-wrap gap-3 mt-5 pl-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('mindos:open-import'))}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:translate-x-0.5 bg-[var(--amber-dim)] text-[var(--amber-text)]"
@@ -331,122 +331,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
       </div>
 
-      {/* ── Section 1: Spaces ── */}
-      <section className="mb-8">
-        <SectionTitle
-          icon={<Brain size={13} />}
-          count={spaceList.length > 0 ? spaceList.length : undefined}
-          action={<CreateSpaceButton t={t} />}
-        >
-          {t.home.spaces}
-        </SectionTitle>
-        {spaceList.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-                const emoji = extractEmoji(s.name);
-                const label = stripEmoji(s.name);
-                const isEmpty = s.fileCount === 0;
-                return (
-                  <Link
-                    key={s.name}
-                    href={`/view/${encodePath(s.path)}`}
-                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
-                      isEmpty
-                        ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
-                    }`}
-                  >
-                    {emoji ? (
-                      <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                    ) : (
-                      <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                      {s.description && (
-                        <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                      )}
-                      <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
-                        {t.home.nFiles(s.fileCount)}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-            {spaceList.length > SPACES_PER_ROW && (
-              <ToggleButton
-                expanded={showAllSpaces}
-                onToggle={() => setShowAllSpaces(v => !v)}
-                showLabel={t.home.showMore}
-                hideLabel={t.home.showLess}
-                className="mt-2"
-              />
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-muted-foreground py-2">
-            {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
-          </p>
-        )}
-      </section>
-
-      {/* ── Section 2: Tools ── */}
-      {builtinFeatures.length > 0 && (
-        <section className="mb-8">
-          <SectionTitle icon={<Zap size={13} />} count={builtinFeatures.length}>
-            {t.home.builtinFeatures}
-          </SectionTitle>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {builtinFeatures.map((r) => {
-              const active = !!r.entryPath && existingSet.has(r.entryPath);
-              const toolNames = t.home.toolName as Record<string, string> | undefined;
-              const toolDescs = t.home.toolDesc as Record<string, string> | undefined;
-              return (
-                <ToolCard
-                  key={r.id}
-                  id={r.id}
-                  name={toolNames?.[r.id] ?? r.name}
-                  description={toolDescs?.[r.id] ?? r.description}
-                  entryPath={r.entryPath}
-                  active={active}
-                  inactiveTitle={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
-                />
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ── Section 3: Extensions ── */}
-      {availablePlugins.length > 0 && (
-        <section className="mb-8">
-          <SectionTitle
-            icon={<Puzzle size={13} />}
-            count={availablePlugins.length}
-            action={
-              availablePlugins.length > PLUGINS_INITIAL ? (
-                <ToggleButton
-                  expanded={showAllPlugins}
-                  onToggle={() => setShowAllPlugins(v => !v)}
-                  showLabel={t.home.viewAll}
-                  hideLabel={t.home.showLess}
-                />
-              ) : undefined
-            }
-          >
-            {t.home.plugins}
-          </SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
-              <FeatureChip key={r.id} id={r.id} icon={r.icon} name={r.name} entryPath={r.entryPath} active />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Section 4: Recently Edited ── */}
+      {/* ── Section: Recently Edited ── */}
       {recent.length > 0 && (
         <section className="mb-12">
           <SectionTitle
@@ -464,6 +349,31 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           >
             {t.home.recentlyEdited}
           </SectionTitle>
+
+          {/* Spotlight — latest file */}
+          {recent.length > 0 && (
+            <Link
+              href={`/view/${encodePath(recent[0].path)}`}
+              className="block mb-5 p-4 rounded-xl border border-border/50 bg-gradient-to-r from-[var(--amber-subtle)] to-transparent hover:border-[var(--amber)]/40 hover:shadow-sm transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
+                  {recent[0].path.endsWith('.csv')
+                    ? <Table size={18} className="text-[var(--amber)]" />
+                    : <FileText size={18} className="text-[var(--amber)]" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-base font-medium text-foreground block truncate">
+                    {recent[0].path.split('/').pop()}
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5 block" suppressHydrationWarning>
+                    {recent[0].path.split('/').slice(0, -1).join('/') || 'Root'} · {formatTime(recent[0].mtime)}
+                  </span>
+                </div>
+                <ArrowRight size={16} className="text-muted-foreground group-hover:text-[var(--amber)] transition-colors shrink-0" />
+              </div>
+            </Link>
+          )}
 
           {groups.length > 0 ? (
             /* Space-Grouped View */
@@ -548,8 +458,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         aria-hidden="true"
                         className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
                           idx === 0
-                            ? 'w-2 h-2 bg-[var(--amber)] outline-2 outline-[var(--amber-dim)]'
-                            : 'w-1.5 h-1.5 bg-border'
+                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
+                            : 'w-1.5 h-1.5 bg-muted-foreground/30'
                         }`}
                       />
                       <Link
@@ -586,8 +496,123 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </section>
       )}
 
+      {/* ── Section: Spaces ── */}
+      <section className="mb-12">
+        <SectionTitle
+          icon={<Brain size={13} />}
+          count={spaceList.length > 0 ? spaceList.length : undefined}
+          action={<CreateSpaceButton t={t} />}
+        >
+          {t.home.spaces}
+        </SectionTitle>
+        {spaceList.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
+                const emoji = extractEmoji(s.name);
+                const label = stripEmoji(s.name);
+                const isEmpty = s.fileCount === 0;
+                return (
+                  <Link
+                    key={s.name}
+                    href={`/view/${encodePath(s.path)}`}
+                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                      isEmpty
+                        ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                        : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                    }`}
+                  >
+                    {emoji ? (
+                      <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
+                    ) : (
+                      <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                      {s.description && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground opacity-50 mt-0.5 block">
+                        {t.home.nFiles(s.fileCount)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            {spaceList.length > SPACES_PER_ROW && (
+              <ToggleButton
+                expanded={showAllSpaces}
+                onToggle={() => setShowAllSpaces(v => !v)}
+                showLabel={t.home.showMore}
+                hideLabel={t.home.showLess}
+                className="mt-2"
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground py-2">
+            {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
+          </p>
+        )}
+      </section>
+
+      {/* ── Section: Tools ── */}
+      {builtinFeatures.length > 0 && (
+        <section className="mb-12">
+          <SectionTitle icon={<Zap size={13} />} count={builtinFeatures.length}>
+            {t.home.builtinFeatures}
+          </SectionTitle>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {builtinFeatures.map((r) => {
+              const active = !!r.entryPath && existingSet.has(r.entryPath);
+              const toolNames = t.home.toolName as Record<string, string> | undefined;
+              const toolDescs = t.home.toolDesc as Record<string, string> | undefined;
+              return (
+                <ToolCard
+                  key={r.id}
+                  id={r.id}
+                  name={toolNames?.[r.id] ?? r.name}
+                  description={toolDescs?.[r.id] ?? r.description}
+                  entryPath={r.entryPath}
+                  active={active}
+                  inactiveTitle={r.entryPath ? t.home.createToActivate.replace('{file}', r.entryPath) : t.home.builtinInactive}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Section: Extensions ── */}
+      {availablePlugins.length > 0 && (
+        <section className="mb-12">
+          <SectionTitle
+            icon={<Puzzle size={13} />}
+            count={availablePlugins.length}
+            action={
+              availablePlugins.length > PLUGINS_INITIAL ? (
+                <ToggleButton
+                  expanded={showAllPlugins}
+                  onToggle={() => setShowAllPlugins(v => !v)}
+                  showLabel={t.home.viewAll}
+                  hideLabel={t.home.showLess}
+                />
+              ) : undefined
+            }
+          >
+            {t.home.plugins}
+          </SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {(showAllPlugins ? availablePlugins : availablePlugins.slice(0, PLUGINS_INITIAL)).map(r => (
+              <FeatureChip key={r.id} id={r.id} icon={r.icon} name={r.name} entryPath={r.entryPath} active />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Footer */}
-      <div className="mt-16 flex items-center gap-1.5 text-xs font-display text-muted-foreground opacity-60">
+      <div className="py-6 border-t border-border/30 flex items-center gap-1.5 text-xs font-display text-muted-foreground opacity-40">
         <Sparkles size={10} className="text-[var(--amber)]" />
         <span>{t.app.footer}</span>
       </div>

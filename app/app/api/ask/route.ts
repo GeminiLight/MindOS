@@ -520,18 +520,18 @@ export async function POST(req: NextRequest) {
     const requestStartTime = Date.now();
     const stream = new ReadableStream({
       start(controller) {
-        let closed = false;
+        let streamClosed = false;
         function send(event: MindOSSSEvent) {
-          if (closed) return;
+          if (streamClosed) return;
           try {
             controller.enqueue(encoder.encode(`data:${JSON.stringify(event)}\n\n`));
           } catch {
-            closed = true;
+            streamClosed = true;
           }
         }
-        function closeStream() {
-          if (closed) return;
-          closed = true;
+        function safeClose() {
+          if (streamClosed) return;
+          streamClosed = true;
           try { controller.close(); } catch { /* already closed */ }
         }
 
@@ -705,7 +705,7 @@ export async function POST(req: NextRequest) {
                 await closeSession(acpSessionId).catch(() => {});
               }
             }
-            closeStream();
+            safeClose();
           } else {
             // Route to MindOS agent (existing logic)
             await session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined);
@@ -715,7 +715,7 @@ export async function POST(req: NextRequest) {
             } else {
               send({ type: 'done' });
             }
-            closeStream();
+            safeClose();
           }
         };
 
@@ -723,7 +723,7 @@ export async function POST(req: NextRequest) {
           metrics.recordRequest(Date.now() - requestStartTime);
           metrics.recordError();
           send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
-          closeStream();
+          safeClose();
         });
       },
     });
