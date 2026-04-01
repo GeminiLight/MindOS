@@ -85,7 +85,7 @@ export function AgentSelector({ value, onChange }: { value?: string; onChange: (
         <button type="button" onClick={() => setOpen(v => !v)}
           className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors">
           <span className={value ? 'text-foreground truncate' : 'text-muted-foreground'}>
-            {displayName || 'Select agent'}
+            {displayName || 'MindOS'}
           </span>
           <ChevronDown size={12} className="text-muted-foreground shrink-0" />
         </button>
@@ -103,8 +103,8 @@ export function AgentSelector({ value, onChange }: { value?: string; onChange: (
       </div>
 
       <button onClick={() => select(undefined)}
-        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${!value ? 'text-[var(--amber)] font-medium' : 'text-muted-foreground'}`}>
-        (none — use default)
+        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${!value ? 'text-[var(--amber)] font-medium' : 'text-foreground'}`}>
+        MindOS <span className="text-muted-foreground/50 ml-1">(default)</span>
       </button>
       {filtered.slice(0, 30).map(a => (
         <button key={a.id} onClick={() => select(a.id)}
