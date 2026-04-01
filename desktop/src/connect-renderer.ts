@@ -429,7 +429,9 @@ async function loadRecentConnections(): Promise<void> {
   const ipc = getIpc();
   if (!ipc) return;
   try {
-    recentConnections = await ipc.getRecentConnections() || [];
+    const all = await ipc.getRecentConnections() || [];
+    // Filter out SSH connections — they can't be used from the HTTP panel
+    recentConnections = all.filter(c => !c.address.startsWith('ssh://'));
     renderRecent();
   } catch { /* ignore */ }
 }

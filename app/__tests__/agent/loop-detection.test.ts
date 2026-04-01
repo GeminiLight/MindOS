@@ -49,6 +49,24 @@ describe('detectLoop', () => {
       ];
       expect(detectLoop(history)).toBe(true);
     });
+
+    it('does not false-positive on same tool names with all different args', () => {
+      // Agent reads different files in alternation — not a loop
+      const history = [
+        step('readFile', 'a.md'), step('writeFile', 'x.md'),
+        step('readFile', 'b.md'), step('writeFile', 'y.md'),
+      ];
+      expect(detectLoop(history)).toBe(false);
+    });
+
+    it('detects cycle when at least one arg pair matches', () => {
+      // read same file, write to different targets — still a loop
+      const history = [
+        step('readFile', 'a.md'), step('writeFile', 'x.md'),
+        step('readFile', 'a.md'), step('writeFile', 'z.md'),
+      ];
+      expect(detectLoop(history)).toBe(true);
+    });
   });
 
   describe('edge cases', () => {

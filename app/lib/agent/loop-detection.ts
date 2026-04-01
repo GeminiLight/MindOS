@@ -25,19 +25,26 @@ export function detectLoop(history: StepEntry[], threshold = 3): boolean {
   }
 
   // Check 2: pattern cycle detection (e.g. A→B→A→B or A→B→C→A→B→C)
-  // Test cycle lengths 2-4 on the last 8 steps
+  // Compares tool name only (not args) to catch cycles where the same
+  // tools are called in the same order but with slightly varied args.
+  // To reduce false positives, we require the cycle to repeat at least
+  // twice AND at least one pair in the cycle must share identical args.
   if (history.length >= 4) {
     const window = history.slice(-8);
     for (let cycleLen = 2; cycleLen <= 4 && cycleLen * 2 <= window.length; cycleLen++) {
       const tail = window.slice(-cycleLen * 2);
-      let isPattern = true;
+      let toolsMatch = true;
+      let anyArgsMatch = false;
       for (let i = 0; i < cycleLen; i++) {
         if (tail[i].tool !== tail[i + cycleLen].tool) {
-          isPattern = false;
+          toolsMatch = false;
           break;
         }
+        if (tail[i].input === tail[i + cycleLen].input) {
+          anyArgsMatch = true;
+        }
       }
-      if (isPattern) return true;
+      if (toolsMatch && anyArgsMatch) return true;
     }
   }
 

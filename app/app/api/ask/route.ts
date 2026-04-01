@@ -349,22 +349,26 @@ export async function POST(req: NextRequest) {
       target_config_md: null as ReturnType<typeof readKnowledgeFile> | null,
     };
 
-    // Only load secondary bootstrap files if they exist and have content
+    // Only load secondary bootstrap files if they have meaningful content.
+    // Files with ≤10 chars are typically empty or just a heading — not worth
+    // injecting into the prompt (saves ~200-500 tokens per empty file).
+    const MIN_USEFUL_CONTENT_LENGTH = 10;
+
     const indexResult = readKnowledgeFile('README.md');
-    if (indexResult.ok && indexResult.content.trim().length > 10) bootstrap.index = indexResult;
+    if (indexResult.ok && indexResult.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.index = indexResult;
 
     const configMdResult = readKnowledgeFile('CONFIG.md');
-    if (configMdResult.ok && configMdResult.content.trim().length > 10) bootstrap.config_md = configMdResult;
+    if (configMdResult.ok && configMdResult.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.config_md = configMdResult;
 
     if (targetDir) {
       const tr = readKnowledgeFile(`${targetDir}/README.md`);
-      if (tr.ok && tr.content.trim().length > 10) bootstrap.target_readme = tr;
+      if (tr.ok && tr.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.target_readme = tr;
       const ti = readKnowledgeFile(`${targetDir}/INSTRUCTION.md`);
-      if (ti.ok && ti.content.trim().length > 10) bootstrap.target_instruction = ti;
+      if (ti.ok && ti.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.target_instruction = ti;
       const tc = readKnowledgeFile(`${targetDir}/CONFIG.json`);
-      if (tc.ok && tc.content.trim().length > 10) bootstrap.target_config_json = tc;
+      if (tc.ok && tc.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.target_config_json = tc;
       const tm = readKnowledgeFile(`${targetDir}/CONFIG.md`);
-      if (tm.ok && tm.content.trim().length > 10) bootstrap.target_config_md = tm;
+      if (tm.ok && tm.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) bootstrap.target_config_md = tm;
     }
 
     // Only report failures + truncation warnings for loaded files

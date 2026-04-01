@@ -16,6 +16,38 @@ import { getPrivateNodePath, isPrivateNodeInstalled, getBundledNodePath, isBundl
 
 const execAsync = promisify(exec);
 
+const MIN_NODE_MAJOR = 18;
+
+/**
+ * Check if a node binary meets the minimum version requirement (>= 18).
+ * Returns true if version is OK, false if too old or check fails.
+ */
+function checkNodeVersion(nodePath: string): boolean {
+  try {
+    const { execSync } = require('child_process');
+    const ver = execSync(`"${nodePath}" --version`, { encoding: 'utf-8', timeout: 3000 }).trim();
+    // ver looks like "v22.16.0"
+    const match = ver.match(/^v(\d+)\./);
+    if (!match) return false;
+    return parseInt(match[1], 10) >= MIN_NODE_MAJOR;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a version directory name (e.g. "v22.16.0") meets requirements.
+ * Rejects versions below MIN_NODE_MAJOR and pre-release versions (nightly/rc/alpha/beta).
+ */
+function isVersionDirAcceptable(ver: string): boolean {
+  const match = ver.match(/^v(\d+)\./);
+  if (!match) return false;
+  if (parseInt(match[1], 10) < MIN_NODE_MAJOR) return false;
+  // Reject pre-release: v23.0.0-nightly, v22.0.0-rc.1, etc.
+  if (ver.includes('-')) return false;
+  return true;
+}
+
 /** Build an enriched PATH that includes common Node.js bin directories */
 function enrichedPath(extraBinDir?: string): string {
   const home = app.getPath('home');
@@ -62,19 +94,20 @@ export async function getNodePath(): Promise<string | null> {
 
   // 1. Explicit env var (instant)
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
-    return process.env.MINDOS_NODE_BIN;
+    if (checkNodeVersion(process.env.MINDOS_NODE_BIN)) return process.env.MINDOS_NODE_BIN;
+    console.warn(`[MindOS] MINDOS_NODE_BIN (${process.env.MINDOS_NODE_BIN}) is below Node ${MIN_NODE_MAJOR}, skipping`);
   }
 
-  // 2. NVM: symlink (instant)
+  // 2. NVM: symlink (instant + version check)
   const nvmCurrent = path.join(home, '.nvm', 'current', 'bin', 'node');
-  if (existsSync(nvmCurrent)) return nvmCurrent;
+  if (existsSync(nvmCurrent) && checkNodeVersion(nvmCurrent)) return nvmCurrent;
 
-  // 3. NVM: version directories (instant, fs only)
+  // 3. NVM: version directories (instant, fs only — filter by version)
   const nvmVersionsDir = path.join(home, '.nvm', 'versions', 'node');
   try {
     if (existsSync(nvmVersionsDir)) {
       const versions = readdirSync(nvmVersionsDir)
-        .filter((v: string) => v.startsWith('v'))
+        .filter((v: string) => v.startsWith('v') && isVersionDirAcceptable(v))
         .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
       for (const ver of versions) {
         const nodePath = path.join(nvmVersionsDir, ver, 'bin', 'node');
@@ -83,18 +116,20 @@ export async function getNodePath(): Promise<string | null> {
     }
   } catch { /* ignore */ }
 
-  // 4. fnm (instant, fs only)
+  // 4. fnm (instant, fs only + version check)
   const fnmDir = process.env.FNM_DIR || path.join(home, '.fnm');
   try {
     const fnmAliases = path.join(fnmDir, 'aliases', 'default');
     if (existsSync(fnmAliases)) {
       const ver = readFileSync(fnmAliases, 'utf-8').trim();
-      const fnmNode = path.join(fnmDir, 'node-versions', ver, 'installation', 'bin', 'node');
-      if (existsSync(fnmNode)) return fnmNode;
+      if (isVersionDirAcceptable(ver)) {
+        const fnmNode = path.join(fnmDir, 'node-versions', ver, 'installation', 'bin', 'node');
+        if (existsSync(fnmNode)) return fnmNode;
+      }
     }
   } catch { /* ignore */ }
 
-  // 5. Common system paths (instant, fs only)
+  // 5. Common system paths (instant, fs only + version check)
   const systemPaths = [
     '/usr/local/bin/node',           // Intel Homebrew
     '/opt/homebrew/bin/node',        // Apple Silicon Homebrew
@@ -103,13 +138,13 @@ export async function getNodePath(): Promise<string | null> {
     path.join(home, '.local', 'bin', 'node'),
   ];
   for (const p of systemPaths) {
-    if (existsSync(p)) return p;
+    if (existsSync(p) && checkNodeVersion(p)) return p;
   }
 
-  // 6. `which node` with enriched PATH (fast, ~100ms)
+  // 6. `which node` with enriched PATH (fast, ~100ms + version check)
   try {
     const result = await execWithPath('which node', { timeout: 3000 });
-    if (result && existsSync(result)) return result;
+    if (result && existsSync(result) && checkNodeVersion(result)) return result;
   } catch { /* ignore */ }
 
   // 7. Shell login detection — bounded fallback (1.5s per shell, 3s total ceiling)
@@ -125,7 +160,7 @@ export async function getNodePath(): Promise<string | null> {
         `${sh} -il -c "which node" 2>/dev/null`,
         { timeout: Math.min(1500, remaining) }
       );
-      if (result && existsSync(result)) return result;
+      if (result && existsSync(result) && checkNodeVersion(result)) return result;
     } catch { /* ignore */ }
   }
 
