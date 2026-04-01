@@ -6,11 +6,12 @@ import { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
-  Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, MoreHorizontal,
+  Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, MoreHorizontal, Star,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction } from '@/lib/actions';
 import { useLocale } from '@/lib/LocaleContext';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
+import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
@@ -134,9 +135,15 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }:
 }) {
   const router = useRouter();
   const { t } = useLocale();
+  const { isPinned, togglePin } = usePinnedFiles();
+  const pinned = isPinned(node.path);
 
   return (
     <ContextMenuShell x={x} y={y} onClose={onClose}>
+      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
+        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
+        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
+      </button>
       <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
         <ScrollText size={14} className="shrink-0" /> {t.fileTree.editRules}
       </button>
@@ -168,9 +175,15 @@ function FolderContextMenu({ x, y, node, onClose, onRename, onDelete }: {
   const router = useRouter();
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
+  const { isPinned, togglePin } = usePinnedFiles();
+  const pinned = isPinned(node.path);
 
   return (
-    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={140}>
+    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={180}>
+      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
+        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
+        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
+      </button>
       <button className={MENU_ITEM} disabled={isPending} onClick={() => {
         startTransition(async () => {
           const result = await convertToSpaceAction(node.path);
@@ -570,6 +583,8 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   const [, startDeleteTransition] = useTransition();
   const renameRef = useRef<HTMLInputElement>(null);
   const { t } = useLocale();
+  const { isPinned, togglePin } = usePinnedFiles();
+  const pinned = isPinned(node.path);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -659,6 +674,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       >
         {getIcon(node)}
         <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
+        {pinned && <Star size={10} className="shrink-0 fill-[var(--amber)] text-[var(--amber)] opacity-60" />}
       </button>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/file:flex items-center gap-0.5">
         <button
@@ -683,6 +699,10 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
         >
           <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); setContextMenu(null); }}>
             <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
+          </button>
+          <button className={MENU_ITEM} onClick={() => { togglePin(node.path); setContextMenu(null); }}>
+            <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
+            {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
           </button>
           <button className={MENU_ITEM} onClick={(e) => { setContextMenu(null); startRename(e); }}>
             <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}

@@ -601,6 +601,53 @@ export type { BacklinkEntry } from './core/types';
 export type { MindSpaceSummary } from './core';
 export type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary, ContentChangeSource } from './core';
 
+// ─── Public API: Trash (delegated to @mindos/core/trash) ────────────────────
+
+import {
+  moveToTrash as coreMoveToTrash,
+  restoreFromTrash as coreRestoreFromTrash,
+  restoreAsCopy as coreRestoreAsCopy,
+  permanentlyDelete as corePermanentlyDelete,
+  listTrash as coreListTrash,
+  emptyTrash as coreEmptyTrash,
+  purgeExpired as corePurgeExpired,
+} from './core/trash';
+export type { TrashMeta } from './core/trash';
+
+export function moveToTrashFile(filePath: string) {
+  const result = coreMoveToTrash(getMindRoot(), filePath);
+  invalidateCache();
+  return result;
+}
+
+export function restoreFromTrash(trashId: string, overwrite = false) {
+  const result = coreRestoreFromTrash(getMindRoot(), trashId, overwrite);
+  invalidateCache();
+  return result;
+}
+
+export function restoreAsCopy(trashId: string) {
+  const result = coreRestoreAsCopy(getMindRoot(), trashId);
+  invalidateCache();
+  return result;
+}
+
+export function permanentlyDeleteFromTrash(trashId: string) {
+  corePermanentlyDelete(getMindRoot(), trashId);
+}
+
+export function listTrash() {
+  return coreListTrash(getMindRoot());
+}
+
+export function emptyTrashAll() {
+  return coreEmptyTrash(getMindRoot());
+}
+
+export function purgeExpiredTrash() {
+  return corePurgeExpired(getMindRoot());
+}
+
 export function findBacklinks(targetPath: string): BacklinkEntry[] {
   const { allFiles } = ensureCache();
   return coreFindBacklinks(getMindRoot(), targetPath, allFiles);
