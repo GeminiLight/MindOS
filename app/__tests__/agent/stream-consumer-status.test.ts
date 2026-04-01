@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
+import type { ToolCallPart } from '@/lib/types';
 
 /** Helper: encode SSE events into a ReadableStream */
 function makeStream(...events: object[]): ReadableStream<Uint8Array> {
@@ -88,18 +89,15 @@ describe('consumeUIMessageStream — status event handling', () => {
       { type: 'tool_start', toolCallId: 'tc1', toolName: 'read_file', args: { path: 'a.md' } },
       // stream ends without tool_end or done
     );
-    const updates: ReturnType<typeof vi.fn> extends (...args: infer A) => void ? A[0] : never[] = [];
-    const result = await consumeUIMessageStream(stream, (msg) => { updates.push(msg as never); });
-    // After unexpected stream end, the tool call part should be finalized to 'error' state
-    // The final onUpdate call reflects the finalized state
-    const lastUpdate = updates[updates.length - 1] as { parts?: Array<{ type: string; state?: string }> } | undefined;
-    if (lastUpdate) {
-      const toolPart = lastUpdate.parts?.find((p) => p.type === 'tool-call');
-      expect(toolPart?.state).toBe('error');
-    } else {
-      // If no update was emitted during stream, check the final returned message
-      const toolPart = result.parts?.find(p => p.type === 'tool-call') as { state?: string } | undefined;
-      expect(toolPart?.state).toBe('error');
-    }
+    const updates: Array<{ parts?: unknown[] }> = [];
+    const result = await consumeUIMessageStream(stream, (msg) => { updates.push(msg as { parts?: unknown[] }); });
+    // After unexpected stream end, the tool call part should be finalized to 'error' state.
+    // Check both the last onUpdate emission and the final returned message.
+    const allParts = [
+      ...(updates[updates.length - 1]?.parts ?? []),
+      ...(result.parts ?? []),
+    ];
+    const toolPart = allParts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
+    expect(toolPart?.state).toBe('error');
   });
 });

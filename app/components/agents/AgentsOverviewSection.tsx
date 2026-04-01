@@ -16,6 +16,7 @@ import type { AgentInfo } from '@/components/settings/types';
 import type { AgentBuckets, RiskItem } from './agents-content-model';
 import { resolveAgentStatus } from './agents-content-model';
 import { AgentAvatar } from './AgentsPrimitives';
+import RecentActivityFeed from './RecentActivityFeed';
 
 interface OverviewCopy {
   connected: string;
@@ -224,6 +225,9 @@ export default function AgentsOverviewSection({
           description={`${pulseCopy.enabledSkills}: ${enabledSkillCount}`}
         />
       </nav>
+
+      {/* ═══════════ RECENT ACTIVITY ═══════════ */}
+      <RecentActivityFeed />
 
       {/* ═══════════ AGENT CARDS ═══════════ */}
       {sortedAgents.length > 0 ? (

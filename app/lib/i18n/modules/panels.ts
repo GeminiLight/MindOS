@@ -288,6 +288,9 @@ export const panelsEn = {
       riskMcpStopped: 'MCP server is not running.',
       riskDetected: (n: number) => `${n} detected agent(s) need configuration.`,
       riskSkillsDisabled: 'All skills are disabled.',
+      recentActivity: 'Recent Activity',
+      viewAll: 'View all',
+      showLess: 'Show less',
     },
     mcp: {
       title: 'MCP Connections',
@@ -885,6 +888,9 @@ export const panelsZh = {
       riskMcpStopped: 'MCP 服务未运行。',
       riskDetected: (n: number) => `${n} 个已检测 Agent 待配置。`,
       riskSkillsDisabled: '所有技能已禁用。',
+      recentActivity: '最近活动',
+      viewAll: '查看全部',
+      showLess: '收起',
     },
     mcp: {
       title: 'MCP 连接',
