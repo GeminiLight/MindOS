@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -21,6 +21,7 @@ import { renameFileAction, deleteFileAction } from '@/lib/actions';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { buildLineDiff } from '@/components/changes/line-diff';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
+import ExportModal from '@/components/ExportModal';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -48,6 +49,7 @@ export default function ViewPageClient({
   const { t } = useLocale();
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(filePath);
+  const [exportOpen, setExportOpen] = useState(false);
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -448,6 +450,14 @@ export default function ViewPageClient({
                   <Star size={16} className={pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''} />
                 </button>
                 <button
+                  type="button"
+                  onClick={() => setExportOpen(true)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title={t.fileTree.export}
+                >
+                  <Download size={16} />
+                </button>
+                <button
                   ref={moreRef}
                   type="button"
                   onClick={() => setMoreOpen(v => !v)}
@@ -595,6 +605,15 @@ export default function ViewPageClient({
         variant="destructive"
         onCancel={() => setShowDeleteConfirm(false)}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* Export modal */}
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        filePath={filePath}
+        isDirectory={false}
+        fileName={filePath.split('/').pop() ?? filePath}
       />
     </div>
   );
