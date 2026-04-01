@@ -120,7 +120,7 @@
 ### 🟡 中优先
 
 - [x] **MCP `mindos_create_space` + `mindos_rename_space`** — App：`createSpaceFilesystem`、`renameSpaceDirectory`、`/api/file` op；MCP 仅转发。见 `wiki/specs/spec-mcp-space-tools.md`
-- [ ] **I4：CLI per-command `--help`** — `mindos start --help` 显示子命令选项。与 I1 一起做，CLI 专业度提升
+- [x] **I4：CLI per-command `--help`** — 6 个知识库命令（agent/api/ask/file/search/space）已全部支持 `--help` / `-h` 标志；`bin/lib/command.js` 统一 `printCommandHelp` 框架；命令元数据（name/group/summary/usage/examples/flags）完整。CLI 专业度提升。
 - [x] **I5：首次使用引导流程** — GuideCard 替换 WelcomeBanner，3 任务卡片（探索 KB / AI 对话 / 配置同步）+ 交互式完成追踪 + C2→C4 渐进推荐 + 后端 guideState 持久化 + Settings 恢复入口。[spec](./specs/spec-first-use-guide.md)
 - [x] **I13：Space 体验增强** — 新建一级目录自动生成 INSTRUCTION.md + README.md（Agent bootstrap 不再降级）+ 首页 "Recently Active" 按 Space 分组展示 + "All Spaces" 导航行。[spec](./specs/spec-space-auto-scaffolding.md)
 - [x] **I14：新建心智空间** — 首页 Spaces grid 末尾 "+" 卡片，inline 表单输入名称+描述，一键创建 Space（目录 + INSTRUCTION.md + README.md）。复用 createFile + scaffoldIfNewSpace。[spec](./specs/spec-create-space.md)
@@ -149,9 +149,9 @@
 ### 🟢 低优先（等需求驱动）
 
 - [x] **Toast/Snackbar 系统** — 自建 `lib/toast.ts`（module-level store + useSyncExternalStore）+ `Toaster.tsx`。支持 success/error/info/copy + undo action button。已用于删除撤销、导出、收藏等反馈。
-- [ ] **⌘K Command Palette 扩展** — 当前只搜文件。可扩展为：快捷操作（Toggle dark mode / Restart walkthrough / Go to /explore）+ Skill 开关 + 最近 AI 对话。**触发条件**：用户反馈"操作路径长"或"找不到功能"时。工作量 ~3-4h
+- [x] **⌘K Command Palette 扩展** — 已实现 5 个快捷操作：Settings / Restart Walkthrough / Toggle Dark Mode / Go to Agents / Go to Discover。缺 Skill 开关 + 最近 AI 对话（触发条件：用户反馈）。
 - [ ] **Zustand/Jotai 替代 Context 嵌套** — 当前 4 层 Provider（Locale → Walkthrough → Mcp → SidebarLayout），Context 变化导致子树 re-render。已用 `useMemo` 缓解，当前无感知性能问题。**触发条件**：profiler 显示 Context re-render 是瓶颈，或 Provider 层数超过 6 层时。工作量 ~4-6h
-- [ ] **i18n 按模块拆分** — `i18n-en.ts` 712 行 / `i18n-zh.ts` 737 行，全部翻译在单一 `as const` 对象中。类型系统保证 key 一致性。**触发条件**：加第 3 种语言，或单文件超过 1000 行时。工作量 ~2-3h
+- [x] **i18n 按模块拆分** — 8 个模块文件（common/navigation/ai-chat/knowledge/panels/settings/onboarding/features），总计 3347 行。`index.ts` 统一导入+导出，类型系统保证 key 一致性。支持未来第 3 种语言扩展无需改结构。
 - [ ] **I11：局域网自动发现 (mDNS/Bonjour)** — 手机/平板自动连。P2 桌面端阶段再做更合适，[详情](./63-stage-mdns.md)
 
 ### 已完成 / 不做
