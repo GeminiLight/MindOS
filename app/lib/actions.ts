@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createFile, deleteFile, deleteDirectory, convertToSpace, renameFile, renameSpace, getMindRoot, invalidateCache, collectAllFiles } from '@/lib/fs';
+import { moveToTrash, restoreFromTrash, restoreAsCopy, permanentlyDelete, listTrash, emptyTrash, purgeExpired, type TrashMeta } from '@/lib/core/trash';
 import { createSpaceFilesystem, generateReadmeTemplate } from '@/lib/core/create-space';
 import { INSTRUCTION_TEMPLATE, cleanDirName } from '@/lib/core/space-scaffold';
 import { revalidatePath } from 'next/cache';
@@ -25,7 +26,7 @@ export async function createFileAction(dirPath: string, fileName: string): Promi
 
 export async function deleteFileAction(filePath: string): Promise<{ success: boolean; error?: string }> {
   try {
-    deleteFile(filePath);
+    moveToTrash(getMindRoot(), filePath);
     revalidatePath('/', 'layout');
     return { success: true };
   } catch (err) {
@@ -59,7 +60,7 @@ export async function deleteFolderAction(
   dirPath: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    deleteDirectory(dirPath);
+    moveToTrash(getMindRoot(), dirPath);
     revalidatePath('/', 'layout');
     return { success: true };
   } catch (err) {
@@ -187,5 +188,55 @@ export async function cleanupExamplesAction(): Promise<{ success: boolean; delet
     return { success: true, deleted: files.length };
   } catch (err) {
     return { success: false, deleted: 0, error: err instanceof Error ? err.message : 'Failed to cleanup' };
+  }
+}
+
+// ─── Trash Actions ────────────────────────────────────────────────────────────
+
+export async function listTrashAction(): Promise<TrashMeta[]> {
+  // Purge expired items on each list call (lazy cleanup)
+  purgeExpired(getMindRoot());
+  return listTrash(getMindRoot());
+}
+
+export async function restoreFromTrashAction(
+  trashId: string,
+  mode: 'restore' | 'overwrite' | 'copy' = 'restore',
+): Promise<{ success: boolean; restoredPath?: string; error?: string; conflict?: boolean }> {
+  try {
+    const root = getMindRoot();
+    let result: { restoredPath: string };
+    if (mode === 'copy') {
+      result = restoreAsCopy(root, trashId);
+    } else {
+      result = restoreFromTrash(root, trashId, mode === 'overwrite');
+    }
+    invalidateCache();
+    revalidatePath('/', 'layout');
+    return { success: true, restoredPath: result.restoredPath };
+  } catch (err: unknown) {
+    const e = err as Error & { code?: string };
+    if (e.code === 'RESTORE_CONFLICT') {
+      return { success: false, error: e.message, conflict: true };
+    }
+    return { success: false, error: e.message ?? 'Failed to restore' };
+  }
+}
+
+export async function permanentlyDeleteAction(trashId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    permanentlyDelete(getMindRoot(), trashId);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to delete' };
+  }
+}
+
+export async function emptyTrashAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+  try {
+    const count = emptyTrash(getMindRoot());
+    return { success: true, count };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to empty trash' };
   }
 }
