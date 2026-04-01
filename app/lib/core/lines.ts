@@ -58,14 +58,19 @@ export function appendToFile(mindRoot: string, filePath: string, content: string
       fs.appendFileSync(absPath, content, 'utf-8');
       return;
     }
-    // Read last 2 bytes to determine if we need a newline separator
+    // Read last few bytes to determine if we need a newline separator.
+    // Read 8 bytes to handle multi-byte UTF-8 chars (CJK = 3 bytes each).
+    const readLen = Math.min(8, stat.size);
     const fd = fs.openSync(absPath, 'r');
-    const buf = Buffer.alloc(2);
-    const bytesRead = fs.readSync(fd, buf, 0, 2, Math.max(0, stat.size - 2));
-    fs.closeSync(fd);
-    const tail = buf.toString('utf-8', 0, bytesRead);
-    const separator = tail.endsWith('\n\n') ? '' : '\n';
-    fs.appendFileSync(absPath, separator + content, 'utf-8');
+    try {
+      const buf = Buffer.alloc(readLen);
+      fs.readSync(fd, buf, 0, readLen, Math.max(0, stat.size - readLen));
+      const tail = buf.toString('utf-8');
+      const separator = tail.endsWith('\n\n') ? '' : '\n';
+      fs.appendFileSync(absPath, separator + content, 'utf-8');
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch (err) {
     // Fallback to read-write for edge cases (e.g., file doesn't exist yet)
     const existing = readFile(mindRoot, filePath);

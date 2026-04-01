@@ -33,8 +33,7 @@
 - [x] **精确 Token 计数** — ✅ 已实现。CJK ~1.5 tokens/char, ASCII ~0.25 tokens/char，比 `length/4` 对中文准确 3-4 倍
 
 ### P1 — 大文件处理
-- [ ] **智能段落提取** — 当前 >20k 字符直接截断（`tools.ts:17`），丢失后半部分全部信息
-  - 方案：按查询相关性提取 Top-K 段落（chunk + 余弦相似度排序）
+- [x] **智能段落提取** — ✅ 已实现。`extractRelevantContent()` 按查询相关性提取 Top-K 段落，保留文档顺序。无查询时按段落边界截断。替代旧的 `truncate()` 逻辑
 
 ### P1 — Bootstrap 优化
 - [x] **按需懒加载 Bootstrap** — ✅ 已实现。次要文件（README.md, CONFIG.md, target_*）仅在内容 >10 字符时加载，跳过空/样板文件节省 token
@@ -49,16 +48,13 @@
 ## 📁 文件树 & 缓存
 
 ### P0 — 异步化
-- [ ] **文件操作 async 化** — `tree.ts` 使用 `fs.readdirSync`（阻塞事件循环），大目录（1000+ 文件）会导致服务器响应延迟
-  - 文件：`app/lib/core/tree.ts:28-31`
-  - 方案：改用 `fs.promises.readdir` + `Promise.all` 并行遍历
+- [x] **文件操作 async 化** — ✅ 已实现。新增 `collectAllFilesAsync()` 使用 `fs.promises.readdir` + `Promise.all` 并行遍历，不阻塞事件循环。保留同步版本向后兼容
 
 ### P0 — 缓存粒度
 - [x] **路径级缓存失效** — ✅ 已实现。`invalidateCacheForFile/NewFile/DeletedFile` 替代全局 invalidateCache，写入操作触发增量搜索索引更新
 
 ### P1 — 文件监听
-- [ ] **文件系统 Watcher** — 外部编辑（VSCode、Finder）不被检测，5s 缓存期间可能提供过期数据
-  - 方案：引入 chokidar 监听 mindRoot，变动时精准失效缓存 + 推送 SSE 事件
+- [x] **文件系统 Watcher** — ✅ 已实现。`startFileWatcher()` 使用 Node.js `fs.watch(recursive)` + 500ms debounce 监听 mindRoot。外部编辑立即失效缓存，不再等待 5s TTL。错误时静默降级
 
 ### P1 — 搜索索引持久化
 - [x] **磁盘持久化搜索索引** — ✅ 已实现。`persist()` 序列化到 `~/.mindos/search-index.json`，`load()` 启动时恢复（含 mtime 采样校验）。写操作后 5s debounce 自动持久化
@@ -93,16 +89,13 @@
   - 方案：写入时构建 `backlinkIndex: Map<target, Set<source>>`，查询 O(1)
 
 ### P1 — UI 虚拟化
-- [ ] **大列表虚拟渲染** — 文件树/搜索结果无虚拟化，500+ 条目会导致 UI 卡顿
-  - 方案：引入 `@tanstack/react-virtual`
+- [x] **大列表虚拟渲染** — ✅ 已实现。SearchPanel 搜索结果使用 `react-virtuoso` 虚拟化渲染，500+ 结果不卡顿
 
 ### P1 — Diff 异步化
-- [ ] **Worker Thread 计算 Diff** — LCS 算法 O(n*m)，大文件阻塞主线程（`agent/tools.ts:43-68`，已有 2000 行保护）
-  - 方案：Web Worker / worker_threads 异步计算
+- [x] **Worker Thread 计算 Diff** — ✅ 已实现。新增 `diff-worker.ts` + `diff-async.ts`，>2000 行文件的 LCS diff 在 worker_threads 中异步计算（5s 超时），不阻塞 agent 主线程
 
 ### P2 — 行编辑优化
-- [ ] **原子追加操作** — `lines.ts` 的 `updateLines()` 每次行编辑都读写整个文件。追加操作应用 `fs.appendFileSync`
-  - 文件：`app/lib/core/lines.ts:37-42`
+- [x] **原子追加操作** — ✅ 已实现。`appendToFile()` 改用 `fs.appendFileSync`，只读最后 8 字节判断换行，O(1) 替代 O(file-size)。fd leak 已修复（try/finally）
 
 ---
 

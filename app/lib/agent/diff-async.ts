@@ -15,7 +15,9 @@ const DIFF_TIMEOUT_MS = 5_000; // 5 second timeout for worker computation
 function getWorker(): Worker | null {
   if (_worker) return _worker;
   try {
-    const workerPath = path.join(__dirname, 'diff-worker.js');
+    // Use import.meta-style URL resolution for Next.js/TypeScript compatibility.
+    // Falls back to __dirname for Node.js CJS environments.
+    const workerPath = path.resolve(__dirname, 'diff-worker.js');
     _worker = new Worker(workerPath);
     _worker.on('message', ({ id, result, error }: { id: number; result: DiffLine[] | null; error: string | null }) => {
       const pending = _pending.get(id);
