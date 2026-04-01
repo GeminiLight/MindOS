@@ -14,7 +14,14 @@ function parseHeadings(content: string): Heading[] {
   const slugger = new GithubSlugger();
   const lines = content.split('\n');
   const headings: Heading[] = [];
+  let inCodeBlock = false;
   for (const line of lines) {
+    // Toggle code fence state (``` or ~~~, with optional language tag)
+    if (/^(`{3,}|~{3,})/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
     const match = line.match(/^(#{1,4})\s+(.+)/);
     if (match) {
       const level = match[1].length;
