@@ -716,6 +716,7 @@ export async function POST(req: NextRequest) {
               send({ type: 'done' });
             }
             closeStream();
+          }
         };
 
         runAgent().catch((err) => {
