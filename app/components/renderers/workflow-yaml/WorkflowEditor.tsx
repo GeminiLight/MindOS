@@ -113,7 +113,6 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
           <FolderOpen size={12} className="text-muted-foreground/40 shrink-0" />
           <DirPicker value={workflow.workDir || ''} onChange={v => updateMeta({ workDir: v || undefined })} />
         </div>
-        </div>
       </div>
 
       {/* ── Steps Section — Timeline style ── */}
