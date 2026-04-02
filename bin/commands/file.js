@@ -128,7 +128,7 @@ function walkFiles(dir, root, opts = {}) {
 
 function fileList(root, _args, flags) {
   const files = walkFiles(root, root, {
-    recursive: flags.recursive || flags.r || true,
+    recursive: flags.recursive ?? flags.r ?? true,
     space: flags.space || null,
   });
 

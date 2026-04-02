@@ -265,7 +265,7 @@ export const ACP_ERRORS = {
   SPAWN_FAILED: { code: -32004, message: 'Failed to spawn agent process' },
   TRANSPORT_ERROR: { code: -32005, message: 'Transport error' },
   AUTH_REQUIRED: { code: -32000, message: 'Authentication required' },
-  RESOURCE_NOT_FOUND: { code: -32002, message: 'Resource not found' },
+  RESOURCE_NOT_FOUND: { code: -32006, message: 'Resource not found' },
   PARSE_ERROR: { code: -32700, message: 'Parse error' },
   INVALID_REQUEST: { code: -32600, message: 'Invalid request' },
   METHOD_NOT_FOUND: { code: -32601, message: 'Method not found' },
