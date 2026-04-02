@@ -5,7 +5,12 @@
 import { autoUpdater } from 'electron-updater';
 import { ipcMain, BrowserWindow, app, dialog } from 'electron';
 
-export function setupUpdater(): void {
+export interface UpdaterOptions {
+  /** Called right before quitAndInstall so main can skip its cleanup handler */
+  onBeforeQuitAndInstall?: () => void;
+}
+
+export function setupUpdater(opts?: UpdaterOptions): () => void {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.autoRunAppAfterInstall = true;
@@ -70,14 +75,26 @@ export function setupUpdater(): void {
     if (!isDownloaded) {
       await autoUpdater.downloadUpdate();
     }
+    // Signal main process to skip cleanup — let the installer relaunch
+    opts?.onBeforeQuitAndInstall?.();
     autoUpdater.quitAndInstall(false, true);
   });
 
   // Silent check on startup (after 10s delay), then every 12 hours
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
+  const startupCheck = setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.warn('[MindOS:updater] Startup check failed:', err?.message);
+    });
   }, 10_000);
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
+  const periodicCheck = setInterval(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.warn('[MindOS:updater] Periodic check failed:', err?.message);
+    });
   }, 12 * 60 * 60 * 1000);
+
+  // Return cleanup function
+  return () => {
+    clearTimeout(startupCheck);
+    clearInterval(periodicCheck);
+  };
 }

@@ -8,8 +8,10 @@ import { useLocale } from '@/lib/LocaleContext';
 interface MindosDesktopBridge {
   checkUpdate: () => Promise<{ available: boolean; version?: string }>;
   installUpdate: () => Promise<void>;
+  onUpdateAvailable?: (cb: (info: { version?: string }) => void) => () => void;
   onUpdateProgress?: (cb: (progress: { percent: number }) => void) => () => void;
   onUpdateReady?: (cb: () => void) => () => void;
+  onUpdateError?: (cb: (info: { message?: string }) => void) => () => void;
   getAppInfo?: () => Promise<{ version?: string }>;
 }
 
@@ -83,11 +85,25 @@ function DesktopUpdateTab() {
     }).catch((err) => { console.warn("[UpdateTab] getAppInfo failed:", err); });
     handleCheck();
     const cleanups: Array<() => void> = [];
+    if (bridge.onUpdateAvailable) {
+      cleanups.push(bridge.onUpdateAvailable((info) => {
+        setAvailable(true);
+        if (info?.version) setVersion(info.version);
+        // Move to idle so the "Update to vX.Y.Z" button appears
+        setState((prev) => prev === 'checking' ? 'idle' : prev);
+      }));
+    }
     if (bridge.onUpdateProgress) {
       cleanups.push(bridge.onUpdateProgress((p) => setProgress(Math.round(p.percent))));
     }
     if (bridge.onUpdateReady) {
       cleanups.push(bridge.onUpdateReady(() => setState('ready')));
+    }
+    if (bridge.onUpdateError) {
+      cleanups.push(bridge.onUpdateError((info) => {
+        setState('error');
+        setErrorMsg(info?.message || 'Update failed. Please try again.');
+      }));
     }
     return () => cleanups.forEach((fn) => fn());
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -61,7 +61,9 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let connectionMonitor: ConnectionMonitor | null = null;
 let isQuitting = false;
+let isUpdating = false; // Set before quitAndInstall — skips cleanup so the installer can launch
 let activeRecoveryPoll: ReturnType<typeof setInterval> | null = null;
+let cleanupUpdater: (() => void) | null = null;
 let currentMode: 'local' | 'remote' = 'local';
 let currentWebPort: number | undefined;
 let currentMcpPort: number | undefined;
@@ -243,9 +245,9 @@ function createMainWindow(): BrowserWindow {
 
   if (savedState?.maximized) win.maximize();
 
-  // macOS: hide window instead of closing
+  // macOS: hide window instead of closing (unless quitting or updating)
   win.on('close', (e) => {
-    if (!isQuitting) { e.preventDefault(); win.hide(); }
+    if (!isQuitting && !isUpdating) { e.preventDefault(); win.hide(); }
   });
   win.on('resize', () => saveWindowState(win));
   win.on('move', () => saveWindowState(win));
@@ -527,7 +529,8 @@ async function startLocalMode(): Promise<string | null> {
       ? [zh ? `使用端口 ${suggestedPort}` : `Use port ${suggestedPort}`, zh ? '稍后处理' : 'Dismiss']
       : [zh ? '确定' : 'OK'];
 
-    const result = await dialog.showMessageBox(mainWindow!, {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const result = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       title,
       message: title,
@@ -539,7 +542,7 @@ async function startLocalMode(): Promise<string | null> {
     if (suggestedPort && result.response === 0) {
       // User chose to use the suggested port — respawn MCP and update client configs
       try {
-        processManager!.startMcpOnPort(suggestedPort);
+        processManager?.startMcpOnPort(suggestedPort);
         console.info(`[MindOS] MCP restarted on port ${suggestedPort}`);
         updateTrayMenu(currentMode, 'running', undefined, processManager?.webPort, suggestedPort);
         // Auto-update MCP client configs that use http transport with the old port
@@ -893,7 +896,7 @@ function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<stri
 
 let isSwitchingMode = false;
 async function handleChangeMode(): Promise<void> {
-  if (isSwitchingMode) return;
+  if (isSwitchingMode || isQuitting || isUpdating) return;
   isSwitchingMode = true;
   try {
     const selectedMode = await showModeSelectWindow();
@@ -907,6 +910,7 @@ async function handleChangeMode(): Promise<void> {
 // ── Tray Action: Switch Server (remote mode — show connect window) ──
 
 async function handleSwitchServer(): Promise<void> {
+  if (isQuitting || isUpdating) return;
   clearActiveTunnel(); // Close existing SSH tunnel before switching
   const url = await showConnectWindow();
   if (!url) return; // user cancelled
@@ -922,6 +926,7 @@ async function handleSwitchServer(): Promise<void> {
 
 async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (isQuitting || isUpdating) return;
 
   const oldMode = currentMode;
   const zh = navigator_lang() === 'zh';
@@ -958,11 +963,19 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
 
   // 3. Apply
   if (url) {
+    // Clean up any ongoing recovery poll from a previous crash
+    if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; }
     saveDesktopMode(targetMode);
     const openUrl = targetMode === 'local' ? resolveLocalMindOsBrowseUrl(url) : url;
     mainWindow.loadURL(openUrl);
     refreshTray('running');
-    if (oldPM) oldPM.stop().catch(() => {});
+    // Stop old processes with timeout to avoid hanging
+    if (oldPM) {
+      Promise.race([
+        oldPM.stop(),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stop timeout')), 5000)),
+      ]).catch((err) => console.warn('[MindOS] Old process cleanup:', err instanceof Error ? err.message : err));
+    }
     if (oldCM) oldCM.stop();
   } else {
     // Revert silently — restore all state
@@ -981,7 +994,7 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
 
 let isRestarting = false;
 async function handleRestartServices(): Promise<void> {
-  if (currentMode !== 'local' || isRestarting) return;
+  if (currentMode !== 'local' || isRestarting || isQuitting || isUpdating) return;
   isRestarting = true;
   invalidateConfig(); // Re-read config (setup wizard may have changed ports/paths)
   const zh = navigator_lang() === 'zh';
@@ -1255,7 +1268,7 @@ async function bootApp(): Promise<void> {
       mainWindow.removeAllListeners('close');
     }
     registerShortcuts(mainWindow);
-    setupUpdater();
+    cleanupUpdater = setupUpdater({ onBeforeQuitAndInstall: () => { isUpdating = true; } });
   }
 
   refreshTray('running');
@@ -1272,13 +1285,16 @@ async function bootApp(): Promise<void> {
     closeSplash();
     const zh = navigator_lang() === 'zh';
     if (mainWindow && !mainWindow.isDestroyed()) {
-      void dialog.showMessageBox(mainWindow, {
+      dialog.showMessageBox(mainWindow, {
         type: 'error',
         title: zh ? '页面加载失败' : 'Page failed to load',
         message: zh ? `无法加载：${failedUrl}` : `Could not load: ${failedUrl}`,
         detail: `${desc} (code ${code})\n\n${zh ? '若使用本地模式，请在终端执行 MINDOS_OPEN_DEVTOOLS=1 启动应用以打开开发者工具，或在浏览器访问同一地址对比。' : 'Tip: launch with MINDOS_OPEN_DEVTOOLS=1 to open DevTools, or open the same URL in a browser.'}`,
+      }).then(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+      }).catch((err) => {
+        console.warn('[MindOS] Error showing load failure dialog:', err);
       });
-      mainWindow.show();
     }
   });
 
@@ -1381,6 +1397,8 @@ app.on('window-all-closed', () => { /* tray keeps alive */ });
 app.on('activate', () => { if (mainWindow) mainWindow.show(); });
 
 app.on('before-quit', (e) => {
+  // When updating via electron-updater, skip cleanup — let the installer relaunch the app
+  if (isUpdating) return;
   if (!isQuitting) {
     e.preventDefault();
     isQuitting = true;
@@ -1398,6 +1416,7 @@ app.on('before-quit', (e) => {
       } catch { /* best-effort */ }
       if (connectionMonitor) connectionMonitor.stop();
       if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; }
+      if (cleanupUpdater) { cleanupUpdater(); cleanupUpdater = null; }
       clearActiveTunnel();
       app.exit(0);
     };

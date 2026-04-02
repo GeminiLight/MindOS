@@ -19,7 +19,13 @@ let activeTunnel: SshTunnel | null = null;
 
 export function getActiveTunnel(): SshTunnel | null { return activeTunnel; }
 export function clearActiveTunnel(): void {
-  if (activeTunnel) { activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+  if (activeTunnel) {
+    activeTunnel.onDeath = undefined; // Prevent stale callback from firing
+    activeTunnel.stop().catch((err) => {
+      console.warn('[MindOS:ssh] Tunnel stop failed:', err instanceof Error ? err.message : err);
+    });
+    activeTunnel = null;
+  }
 }
 
 function connectPreloadPath(): string {
@@ -232,7 +238,7 @@ function registerSshHandlers(
 
   safeHandle('connect:ssh-connect', async (_: unknown, host: string, remotePort: number) => {
     try {
-      if (activeTunnel) { await activeTunnel.stop(); activeTunnel = null; }
+      if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop(); activeTunnel = null; }
 
       // Retry up to 3 times to handle transient failures and port collisions
       let lastError = '';
@@ -266,7 +272,7 @@ function registerSshHandlers(
           return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
         } catch (retryErr: any) {
           lastError = retryErr.message || 'SSH tunnel failed';
-          if (activeTunnel) { await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+          if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
 
           // Don't retry non-transient SSH errors — they'll fail identically every time
           const errLower = lastError.toLowerCase();
