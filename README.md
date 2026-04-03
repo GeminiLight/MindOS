@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
+  <a href="https://github.com/GeminiLight/MindOS/releases/latest"><img src="https://img.shields.io/badge/Desktop_App-Download-10b981.svg?style=for-the-badge" alt="Desktop App"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-Group-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
@@ -99,13 +100,24 @@ You express preferences but the next chat starts from zero, leaving your thinkin
 
 ### 1. Install
 
-**Option A: npm (recommended)**
+**Option A: Desktop App (macOS / Windows / Linux)**
+
+Download from [GitHub Releases](https://github.com/GeminiLight/MindOS/releases/latest) — double-click to install, no terminal needed.
+
+| Platform | Download |
+|:---------|:---------|
+| macOS (Apple Silicon) | [MindOS-arm64.dmg](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-arm64.dmg) |
+| macOS (Intel) | [MindOS.dmg](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.dmg) |
+| Windows | [MindOS-Setup.exe](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-Setup.exe) |
+| Linux | [MindOS.AppImage](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.AppImage) |
+
+**Option B: npm**
 
 ```bash
 npm install -g @geminilight/mindos@latest
 ```
 
-**Option B: Clone from source**
+**Option C: Clone from source**
 
 ```bash
 git clone https://github.com/GeminiLight/MindOS
