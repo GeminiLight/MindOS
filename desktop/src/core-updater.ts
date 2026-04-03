@@ -209,8 +209,10 @@ export class CoreUpdater extends EventEmitter {
     const latestVersion = typeof data.version === 'string' ? data.version : '';
     const minDesktop = typeof data.minDesktopVersion === 'string' ? data.minDesktopVersion : '0.0.0';
 
+    const urls = Array.isArray(data.urls) ? data.urls as string[] : [];
     const available = !!(
       latestVersion &&
+      urls.length > 0 &&
       semver.valid(latestVersion) &&
       semver.valid(currentVersion) &&
       semver.gt(latestVersion, currentVersion)
@@ -220,7 +222,7 @@ export class CoreUpdater extends EventEmitter {
       available,
       currentVersion,
       latestVersion,
-      urls: Array.isArray(data.urls) ? data.urls as string[] : [],
+      urls,
       size: typeof data.size === 'number' ? data.size : 0,
       sha256: typeof data.sha256 === 'string' ? data.sha256 : '',
       minDesktopVersion: minDesktop,
@@ -239,9 +241,15 @@ export class CoreUpdater extends EventEmitter {
     expectedSize: number,
     expectedSha256: string,
   ): Promise<void> {
+    // Abort any in-flight download before starting a new one
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+
     // Clean up previous download attempts
     if (existsSync(DOWNLOAD_DIR)) rmSync(DOWNLOAD_DIR, { recursive: true, force: true });
-    if (existsSync(TARBALL_PATH)) unlinkSync(TARBALL_PATH);
+    if (existsSync(TARBALL_PATH)) try { unlinkSync(TARBALL_PATH); } catch { /* may not exist */ }
     mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
     this.abortController = new AbortController();
