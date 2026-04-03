@@ -10,7 +10,7 @@ on:
         default: '0.1.2'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-runtime:
@@ -56,6 +56,7 @@ jobs:
           SHA256="${{ steps.archive.outputs.sha256 }}"
           SIZE="${{ steps.archive.outputs.size }}"
           MIN_DESKTOP="${{ inputs.min_desktop_version || '0.1.2' }}"
+          GH_URL="https://github.com/GeminiLight/MindOS/releases/download/runtime-latest/mindos-runtime-${VERSION}.tar.gz"
           cat > /tmp/latest.json << EOF
           {
             "version": "${VERSION}",
@@ -63,13 +64,30 @@ jobs:
             "size": ${SIZE},
             "sha256": "${SHA256}",
             "urls": [
-              "https://releases.mindos.com/runtime/mindos-runtime-${VERSION}.tar.gz",
-              "https://mindos-releases.oss-cn-shanghai.aliyuncs.com/runtime/mindos-runtime-${VERSION}.tar.gz"
+              "${GH_URL}"
             ]
           }
           EOF
           echo "📄 latest.json:"
           cat /tmp/latest.json
+
+      - name: Upload to GitHub Release (runtime-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          TAG="runtime-latest"
+          # Create or update the dedicated runtime release
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "MindOS Core Runtime (Latest)" \
+              --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}" \
+              --prerelease
+          # Delete old assets, upload new ones
+          gh release upload "$TAG" "$ARCHIVE" /tmp/latest.json --clobber
+          # Update release notes with current version
+          gh release edit "$TAG" --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}"
+          echo "✅ Uploaded to GitHub Release: $TAG (v${VERSION})"
 
       - name: Upload to Cloudflare R2
         continue-on-error: true
