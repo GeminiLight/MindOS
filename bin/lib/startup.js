@@ -46,7 +46,7 @@ export async function printStartupInfo(webPort, mcpPort) {
   console.log(`\n  ${dim('Quick connect:')}  ${cyan('mindos mcp install claude-code -g -y')}`);
   console.log(`  ${dim('Full config:')}    ${cyan('mindos token')}`);
 
-  if (localIP) console.log(dim(`\n  💡 Remote? SSH port forwarding: ssh -L ${webPort}:localhost:${webPort} -L ${mcpPort}:localhost:${mcpPort} user@${localIP}`));
+  if (localIP) console.log(dim(`\n  💡 LAN access:  http://${localIP}:${webPort}  (MCP: http://${localIP}:${mcpPort}/mcp)`));
 
   // Sync status
   const mindRoot = config.mindRoot;

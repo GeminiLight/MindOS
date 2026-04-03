@@ -435,7 +435,7 @@ const commands = {
         execFileSync(process.execPath, [standaloneServer], {
           cwd: resolve(ROOT, '_standalone'),
           stdio: 'inherit',
-          env: { ...process.env, NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: webPort },
+          env: { ...process.env, NODE_ENV: 'production', HOSTNAME: process.env.MINDOS_WEB_HOST || '0.0.0.0', PORT: webPort },
         });
       } catch (err) {
         process.exit(err.status || 1);
@@ -444,7 +444,7 @@ const commands = {
       run(
         `${NEXT_BIN} start -p ${webPort} ${extra}`,
         resolve(ROOT, 'app'),
-        { HOSTNAME: '127.0.0.1' }
+        { HOSTNAME: process.env.MINDOS_WEB_HOST || '0.0.0.0' }
       );
     }
   },
