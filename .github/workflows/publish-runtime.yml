@@ -1,0 +1,136 @@
+name: Publish Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_desktop_version:
+        description: 'Minimum Desktop version required (e.g. 0.1.2)'
+        type: string
+        required: false
+        default: '0.1.2'
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          cd app && npm install --no-workspaces
+          cd ../mcp && npm install --include=dev && npm run build
+
+      - name: Build Next.js standalone
+        run: cd app && npx next build --webpack
+        env:
+          NODE_ENV: production
+
+      - name: Materialize standalone assets
+        run: node scripts/prepare-standalone.mjs 2>/dev/null || node -e "
+          const { materializeStandaloneAssets } = require('./scripts/prepare-standalone.mjs');
+          materializeStandaloneAssets('./app');
+        " 2>/dev/null || echo 'Standalone assets already materialized'
+
+      - name: Build runtime archive
+        id: archive
+        run: |
+          bash scripts/build-runtime-archive.sh
+          VERSION=$(node -p "require('./package.json').version")
+          ARCHIVE="/tmp/mindos-runtime-${VERSION}.tar.gz"
+          SHA256=$(sha256sum "$ARCHIVE" | cut -d' ' -f1)
+          SIZE=$(stat -c%s "$ARCHIVE")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate manifest
+        run: |
+          VERSION="${{ steps.archive.outputs.version }}"
+          SHA256="${{ steps.archive.outputs.sha256 }}"
+          SIZE="${{ steps.archive.outputs.size }}"
+          MIN_DESKTOP="${{ inputs.min_desktop_version || '0.1.2' }}"
+          cat > /tmp/latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "minDesktopVersion": "${MIN_DESKTOP}",
+            "size": ${SIZE},
+            "sha256": "${SHA256}",
+            "urls": [
+              "https://releases.mindos.com/runtime/mindos-runtime-${VERSION}.tar.gz",
+              "https://mindos-releases.oss-cn-shanghai.aliyuncs.com/runtime/mindos-runtime-${VERSION}.tar.gz"
+            ]
+          }
+          EOF
+          echo "📄 latest.json:"
+          cat /tmp/latest.json
+
+      - name: Upload to Cloudflare R2
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "R2 not configured, skipping"
+            exit 0
+          fi
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          # Versioned tarball
+          aws s3 cp "$ARCHIVE" "s3://mindos-releases/runtime/mindos-runtime-${VERSION}.tar.gz" \
+            --endpoint-url "$R2_ENDPOINT" --no-progress
+          # Latest manifest (no-cache so clients always get fresh version)
+          aws s3 cp /tmp/latest.json "s3://mindos-releases/runtime/latest.json" \
+            --endpoint-url "$R2_ENDPOINT" --no-progress \
+            --cache-control "no-cache, max-age=60" --content-type "application/json"
+          echo "✅ Uploaded to R2: runtime/mindos-runtime-${VERSION}.tar.gz + runtime/latest.json"
+
+      - name: Upload to Alibaba Cloud OSS
+        continue-on-error: true
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+        run: |
+          if [ -z "$OSS_ACCESS_KEY_ID" ]; then
+            echo "OSS not configured, skipping"
+            exit 0
+          fi
+          oss_upload() {
+            local file="$1"
+            local object_key="$2"
+            local content_type="${3:-application/octet-stream}"
+            local date=$(date -u +"%a, %d %b %Y %H:%M:%S GMT")
+            local resource="/${OSS_BUCKET}/${object_key}"
+            local string_to_sign="PUT\n\n${content_type}\n${date}\n${resource}"
+            local signature=$(printf "$string_to_sign" | openssl dgst -sha1 -hmac "$OSS_ACCESS_KEY_SECRET" -binary | base64)
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X PUT \
+              -H "Date: ${date}" \
+              -H "Content-Type: ${content_type}" \
+              -H "Authorization: OSS ${OSS_ACCESS_KEY_ID}:${signature}" \
+              -T "$file" \
+              "https://${OSS_BUCKET}.${OSS_ENDPOINT}/${object_key}")
+            if [ "$http_code" = "200" ]; then
+              echo "  Uploaded: $object_key"
+            else
+              echo "  Failed ($http_code): $object_key"
+              return 1
+            fi
+          }
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          oss_upload "$ARCHIVE" "runtime/mindos-runtime-${VERSION}.tar.gz" || true
+          oss_upload /tmp/latest.json "runtime/latest.json" "application/json" || true
+          echo "✅ Uploaded to OSS: runtime/mindos-runtime-${VERSION}.tar.gz + runtime/latest.json"
