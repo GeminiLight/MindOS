@@ -341,12 +341,11 @@ export async function initSync(mindRoot, opts = {}) {
     execFileSync('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
   }
 
-  // 5. Test connection
+  // 5. Test connection (also captures refs to avoid a second SSH round-trip)
   if (!nonInteractive) console.log(dim('Testing connection...'));
+  let remoteRefs = '';
   try {
-    // `git ls-remote --exit-code origin` returns non-zero for an empty remote,
-    // which breaks first-time setup against a freshly created repository.
-    gitExecSSH(['ls-remote', 'origin'], mindRoot, isSshUrl, 15000);
+    remoteRefs = gitExecSSH(['ls-remote', 'origin'], mindRoot, isSshUrl, 15000);
     if (!nonInteractive) console.log(green('✔ Connection successful'));
   } catch (lsErr) {
     const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
@@ -369,9 +368,10 @@ export async function initSync(mindRoot, opts = {}) {
   if (!nonInteractive) console.log(green('✔ Sync configured'));
 
   // 7. First sync: pull if remote has content, push otherwise
+  //    Reuse remoteRefs from step 5 to avoid redundant SSH connection (~3-4s saved)
+  const hasRemoteContent = remoteRefs.includes('refs/heads/');
   try {
-    const refs = gitExecSSH(['ls-remote', '--heads', 'origin'], mindRoot, isSshUrl);
-    if (refs) {
+    if (hasRemoteContent) {
       if (!nonInteractive) console.log(dim('Pulling from remote...'));
       try {
         const pullEnv = isSshUrl ? { ...process.env, ...getSshEnv() } : process.env;

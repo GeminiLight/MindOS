@@ -56,7 +56,7 @@ type UpdateState = 'idle' | 'checking' | 'updating' | 'updated' | 'error' | 'tim
 
 const CHANGELOG_URL = 'https://github.com/GeminiLight/MindOS/releases';
 const POLL_INTERVAL = 3_000;
-const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const POLL_TIMEOUT = 15 * 60 * 1000; // 15 minutes — legacy fallback build can take 10min+ on slow machines
 const UPDATE_STATE_KEY = 'mindos_update_in_progress';
 
 const STAGE_LABELS: Record<string, { en: string; zh: string }> = {

@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'This provider does not support listing models' });
     }
 
-    const cfg = effectiveAiConfig();
+    const cfg = effectiveAiConfig(provider as ProviderId);
     let resolvedKey = apiKey || '';
     if (!resolvedKey || resolvedKey === '***set***') {
-      resolvedKey = cfg.provider === provider ? cfg.apiKey : '';
+      resolvedKey = cfg.apiKey;
     }
 
     if (!resolvedKey) {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
 
     try {
-      const models = await fetchModels(provider as ProviderId, resolvedKey, baseUrl || (cfg.provider === provider ? cfg.baseUrl : '') || '', ctrl.signal);
+      const models = await fetchModels(provider as ProviderId, resolvedKey, baseUrl || cfg.baseUrl || '', ctrl.signal);
       return NextResponse.json({ ok: true, models });
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') {

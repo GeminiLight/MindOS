@@ -182,6 +182,20 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsListModels: false,
     category: 'more',
   },
+  ollama: {
+    id: 'ollama',
+    name: 'Ollama',
+    nameZh: 'Ollama (本地)',
+    defaultModel: 'llama3.2',
+    piProviderOverride: 'openai' as KnownProvider,
+    fixedBaseUrl: 'http://localhost:11434/v1',
+    apiKeyFallback: 'ollama',
+    supportsBaseUrl: true,
+    supportsThinking: false,
+    supportsListModels: true,
+    signupUrl: 'https://ollama.com/download',
+    category: 'more',
+  },
 };
 
 export const ALL_PROVIDER_IDS = Object.keys(PROVIDER_PRESETS) as ProviderId[];

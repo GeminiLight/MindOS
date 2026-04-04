@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff, Check } from 'lucide-react';
 import { SectionLabel, PrimaryButton, Input, Field, SettingCard } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
@@ -76,16 +76,26 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
   const [token, setToken] = useState('');
   const [branch, setBranch] = useState('main');
   const [showToken, setShowToken] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [connectStep, setConnectStep] = useState<number>(-1); // -1=idle, 0..3=steps, 4=done
   const [error, setError] = useState('');
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const connecting = connectStep >= 0 && connectStep < 4;
 
   const urlType = remoteUrl.trim() ? isValidGitUrl(remoteUrl.trim()) : null;
   const isValid = urlType === 'https' || urlType === 'ssh';
   const showTokenField = urlType === 'https';
 
   const handleConnect = async () => {
-    setConnecting(true);
+    setConnectStep(0);
     setError('');
+
+    // Progress steps on a timer (visual only — actual work is one API call)
+    const advanceStep = (step: number, delayMs: number) =>
+      setTimeout(() => setConnectStep(s => s >= 0 && s < 4 ? step : s), delayMs);
+    stepTimerRef.current = advanceStep(1, 2000);  // "Authenticating..." → "Syncing data..."
+    const t2 = advanceStep(2, 5000);              // → "Almost done..."
+
     try {
       await apiFetch('/api/sync', {
         method: 'POST',
@@ -96,21 +106,30 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
           token: token.trim() || undefined,
           branch: branch.trim() || 'main',
         }),
-        timeout: 120_000, // git init + clone can take 60s+
+        timeout: 120_000,
       });
-      onInitComplete();
+      setConnectStep(4); // success
+      setTimeout(() => onInitComplete(), 600);
     } catch (err: unknown) {
       let msg = err instanceof Error ? err.message : 'Connection failed';
-      // Make timeout errors actionable for users
       if (msg.includes('timed out')) {
         msg = syncT?.timeoutError ?? 'Connection timed out. The remote repository may be large or the network is slow. Please try again.';
       }
       const hint = getSyncErrorHint(msg, remoteUrl, syncT);
       setError(hint ? `${msg}\n${hint}` : msg);
+      setConnectStep(-1);
     } finally {
-      setConnecting(false);
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+      clearTimeout(t2);
     }
   };
+
+  const connectSteps = [
+    syncT?.stepConnecting ?? 'Connecting to remote...',
+    syncT?.stepAuthenticating ?? 'Authenticating...',
+    syncT?.stepSyncing ?? 'Syncing data...',
+    syncT?.stepAlmostDone ?? 'Almost done...',
+  ];
 
   return (
     <div className="space-y-4">
@@ -194,17 +213,43 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
           />
         </Field>
 
-        {/* Connect button */}
-        <PrimaryButton
-          onClick={handleConnect}
-          disabled={!isValid || connecting}
-          className="flex items-center gap-2"
-        >
-          {connecting && <Loader2 size={14} className="animate-spin" />}
-          {connecting
-            ? (syncT?.connecting ?? 'Connecting...')
-            : (syncT?.connectButton ?? 'Connect & Start Sync')}
-        </PrimaryButton>
+        {/* Connect button + progress */}
+        {!connecting && connectStep !== 4 && (
+          <PrimaryButton
+            onClick={handleConnect}
+            disabled={!isValid}
+            className="flex items-center gap-2"
+          >
+            {syncT?.connectButton ?? 'Connect & Start Sync'}
+          </PrimaryButton>
+        )}
+
+        {(connecting || connectStep === 4) && (
+          <div className="space-y-2 py-1">
+            {connectSteps.map((label, i) => {
+              const isDone = connectStep > i || connectStep === 4;
+              const isActive = connectStep === i && connectStep < 4;
+              if (connectStep < i && connectStep < 4) return null; // not yet
+              return (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  {isDone
+                    ? <Check size={13} className="text-success shrink-0" />
+                    : <Loader2 size={13} className="animate-spin text-muted-foreground shrink-0" />
+                  }
+                  <span className={isDone ? 'text-success' : isActive ? 'text-foreground' : 'text-muted-foreground'}>
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
+            {connectStep === 4 && (
+              <div className="flex items-center gap-2 text-xs">
+                <CheckCircle2 size={13} className="text-success shrink-0" />
+                <span className="text-success font-medium">{syncT?.stepDone ?? 'Sync configured successfully!'}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Error */}
         {error && (
