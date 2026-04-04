@@ -109,6 +109,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={t.search.placeholder}
+          aria-label={t.search.placeholder}
           className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-sm outline-none"
         />
         {loading && (
@@ -122,7 +123,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0" role="listbox" aria-label="Search results">
         {results.length === 0 && query && !loading && (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t.search.noResults}</div>
         )}
@@ -141,6 +142,8 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
               const dirPath = parts.slice(0, -1).join('/');
               return (
                 <button
+                  role="option"
+                  aria-selected={i === selectedIndex}
                   onClick={() => navigate(result)}
                   onMouseEnter={() => setSelectedIndex(i)}
                   className={`
