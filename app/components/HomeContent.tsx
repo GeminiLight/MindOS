@@ -251,6 +251,69 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {/* ══════════ Pinned Files ══════════ */}
       <PinnedFilesSection formatTime={formatTime} />
 
+      {/* ══════════ Spaces ══════════ */}
+      {(spaceList.length > 0 || true) && (
+        <section className="mb-10">
+          <SectionTitle
+            icon={<Brain size={13} />}
+            count={spaceList.length > 0 ? spaceList.length : undefined}
+            action={<CreateSpaceButton t={t} />}
+          >
+            {t.home.spaces}
+          </SectionTitle>
+          {spaceList.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
+                  const emoji = extractEmoji(s.name);
+                  const label = stripEmoji(s.name);
+                  const isEmpty = s.fileCount === 0;
+                  return (
+                    <Link
+                      key={s.name}
+                      href={`/view/${encodePath(s.path)}`}
+                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                        isEmpty
+                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                      }`}
+                    >
+                      {emoji ? (
+                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
+                      ) : (
+                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                        {s.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
+                          {t.home.nFiles(s.fileCount)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {spaceList.length > SPACES_PER_ROW && (
+                <ToggleButton
+                  expanded={showAllSpaces}
+                  onToggle={() => setShowAllSpaces(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-2"
+                />
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">
+              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* ══════════ Recently Edited ══════════ */}
       {recent.length > 0 && (
         <section className="mb-10">
@@ -383,69 +446,6 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                 />
               )}
             </div>
-          )}
-        </section>
-      )}
-
-      {/* ══════════ Spaces ══════════ */}
-      {(spaceList.length > 0 || true) && (
-        <section className="mb-10">
-          <SectionTitle
-            icon={<Brain size={13} />}
-            count={spaceList.length > 0 ? spaceList.length : undefined}
-            action={<CreateSpaceButton t={t} />}
-          >
-            {t.home.spaces}
-          </SectionTitle>
-          {spaceList.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-                  const emoji = extractEmoji(s.name);
-                  const label = stripEmoji(s.name);
-                  const isEmpty = s.fileCount === 0;
-                  return (
-                    <Link
-                      key={s.name}
-                      href={`/view/${encodePath(s.path)}`}
-                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
-                        isEmpty
-                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
-                      }`}
-                    >
-                      {emoji ? (
-                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                      ) : (
-                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                        {s.description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                        )}
-                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
-                          {t.home.nFiles(s.fileCount)}
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-              {spaceList.length > SPACES_PER_ROW && (
-                <ToggleButton
-                  expanded={showAllSpaces}
-                  onToggle={() => setShowAllSpaces(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-2"
-                />
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground py-2">
-              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
-            </p>
           )}
         </section>
       )}
