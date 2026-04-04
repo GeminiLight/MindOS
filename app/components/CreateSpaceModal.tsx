@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { createSpaceAction } from '@/lib/actions';
-import { apiFetch } from '@/lib/api';
+import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import DirPicker from './DirPicker';
 
 /* ── Create Space Modal ── */
@@ -36,22 +36,12 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
     return () => window.removeEventListener('mindos:create-space', handler);
   }, []);
 
-  // Check AI availability when modal opens
   useEffect(() => {
     if (!open || aiAvailable !== null) return;
-    apiFetch<{ ai?: { provider?: string; providers?: Record<string, { apiKey?: string }> } }>('/api/settings')
-      .then(data => {
-        const provider = data.ai?.provider ?? '';
-        const providers = data.ai?.providers ?? {};
-        const activeProvider = providers[provider as keyof typeof providers];
-        const hasKey = !!(activeProvider?.apiKey);
-        setAiAvailable(hasKey);
-        setUseAi(hasKey);
-      })
-      .catch(() => {
-        setAiAvailable(false);
-        setUseAi(false);
-      });
+    checkAiAvailable().then(ok => {
+      setAiAvailable(ok);
+      setUseAi(ok);
+    });
   }, [open, aiAvailable]);
 
   const close = useCallback(() => {
@@ -89,46 +79,8 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
     if (result.success) {
       const createdPath = result.path ?? trimmed;
 
-      // If AI is enabled, trigger AI initialization in background
       if (useAi && aiAvailable) {
-        const isZh = document.documentElement.lang === 'zh';
-        const prompt = isZh
-          ? `初始化新建的心智空间「${trimmed}」，路径为「${createdPath}/」。${description ? `描述：「${description}」。` : ''}两个文件均已存在模板，用 write_file 覆盖：\n1. 「${createdPath}/README.md」— 写入空间用途、结构概览、使用指南\n2. 「${createdPath}/INSTRUCTION.md」— 写入 AI Agent 在此空间中的行为规则和操作约定\n\n内容简洁实用，直接使用工具写入。`
-          : `Initialize the new Mind Space "${trimmed}" at "${createdPath}/". ${description ? `Description: "${description}". ` : ''}Both files already exist with templates — use write_file to overwrite:\n1. "${createdPath}/README.md" — write purpose, structure overview, usage guidelines\n2. "${createdPath}/INSTRUCTION.md" — write rules for AI agents operating in this space\n\nKeep content concise and actionable. Write files directly using tools.`;
-
-        window.dispatchEvent(new CustomEvent('mindos:ai-init', {
-          detail: { spaceName: trimmed, spacePath: createdPath, description, state: 'working' },
-        }));
-
-        // /api/ask returns SSE — use raw fetch and consume the stream
-        // so the server-side agent runs to completion.
-        fetch('/api/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
-            currentFile: createdPath + '/INSTRUCTION.md',
-          }),
-        }).then(async (res) => {
-          if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-          const reader = res.body.getReader();
-          try {
-            while (true) {
-              const { done } = await reader.read();
-              if (done) break;
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          window.dispatchEvent(new CustomEvent('mindos:ai-init', {
-            detail: { spacePath: createdPath, state: 'done' },
-          }));
-          window.dispatchEvent(new Event('mindos:files-changed'));
-        }).catch(() => {
-          window.dispatchEvent(new CustomEvent('mindos:ai-init', {
-            detail: { spacePath: createdPath, state: 'error' },
-          }));
-        });
+        triggerSpaceAiInit(trimmed, createdPath, description);
       }
 
       close();

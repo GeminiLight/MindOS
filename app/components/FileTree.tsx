@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
+import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
@@ -194,7 +195,14 @@ function FolderContextMenu({ x, y, node, onClose, onRename, onNewFile, onDelete 
       <button className={MENU_ITEM} disabled={isPending} onClick={() => {
         startTransition(async () => {
           const result = await convertToSpaceAction(node.path);
-          if (result.success) { router.refresh(); notifyFilesChanged(); }
+          if (result.success) {
+            router.refresh();
+            notifyFilesChanged();
+            const spaceName = node.name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || node.name;
+            checkAiAvailable().then(ok => {
+              if (ok) triggerSpaceAiInit(spaceName, node.path);
+            });
+          }
           onClose();
         });
       }}>
