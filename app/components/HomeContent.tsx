@@ -159,7 +159,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   useEffect(() => {
     const interval = setInterval(() => {
       setSuggestionIdx(i => (i + 1) % suggestions.length);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(interval);
   }, [suggestions.length]);
 
@@ -201,9 +201,14 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:shadow-md group"
           >
             <Sparkles size={15} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
-            <span className="text-sm flex-1 text-left text-muted-foreground">
-              {suggestions[suggestionIdx]}
-            </span>
+            <div className="flex-1 min-h-[1.5rem] flex items-center">
+              <span 
+                key={suggestionIdx}
+                className="text-sm text-left text-muted-foreground animate-in fade-in duration-300"
+              >
+                {suggestions[suggestionIdx]}
+              </span>
+            </div>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
               ⌘/
             </kbd>
