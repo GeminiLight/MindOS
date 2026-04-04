@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, X, Settings, Pencil } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode, SYSTEM_FILES } from '@/lib/types';
@@ -187,6 +187,66 @@ function DirContextMenu({ x, y, path, label, onClose }: {
   );
 }
 
+// ─── Space Uninitialized Banner ───────────────────────────────────────────────
+
+const DISMISS_KEY_PREFIX = 'mindos-space-uninit-dismissed:';
+
+function SpaceUninitBanner({ dirPath }: { dirPath: string }) {
+  const { t } = useLocale();
+  const storageKey = DISMISS_KEY_PREFIX + dirPath;
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem(storageKey) === '1') setDismissed(true);
+  }, [storageKey]);
+
+  if (dismissed) return null;
+
+  const handleDismiss = () => {
+    localStorage.setItem(storageKey, '1');
+    setDismissed(true);
+  };
+
+  return (
+    <div className="mb-4 rounded-lg border border-error/40 bg-error/5 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <AlertTriangle size={18} className="text-error shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">{t.dirView.uninitTitle}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t.dirView.uninitDesc}</p>
+          <div className="flex items-center gap-3 mt-2.5">
+            <Link
+              href={`/view/${encodePath(`${dirPath}/README.md`)}`}
+              className="inline-flex items-center gap-1 text-xs text-[var(--amber)] hover:underline"
+            >
+              <Pencil size={12} /> {t.dirView.uninitEditReadme}
+            </Link>
+            <Link
+              href={`/view/${encodePath(`${dirPath}/INSTRUCTION.md`)}`}
+              className="inline-flex items-center gap-1 text-xs text-[var(--amber)] hover:underline"
+            >
+              <Pencil size={12} /> {t.dirView.uninitEditInstruction}
+            </Link>
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Settings size={12} /> {t.dirView.uninitSettings}
+            </Link>
+          </div>
+        </div>
+        <button
+          onClick={handleDismiss}
+          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 shrink-0"
+          aria-label="Dismiss"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── DirView ──────────────────────────────────────────────────────────────────
 
 export default function DirView({ dirPath, entries, spacePreview }: DirViewProps) {
@@ -251,8 +311,13 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
       {/* Content */}
       <div className="flex-1 px-4 md:px-6 py-6">
         <div className="max-w-[860px] mx-auto">
+          {/* Uninitialized space warning */}
+          {spacePreview?.isTemplate && (
+            <SpaceUninitBanner dirPath={dirPath} />
+          )}
+
           {/* Space preview cards */}
-          {spacePreview && (
+          {spacePreview && !spacePreview.isTemplate && (
             <SpacePreviewSection preview={spacePreview} dirPath={dirPath} />
           )}
 

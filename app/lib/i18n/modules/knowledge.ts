@@ -329,6 +329,11 @@ export const knowledgeEn = {
     emptyFolder: 'This folder is empty.',
     fileCount: (n: number) => `${n} files`,
     newFile: 'New file',
+    uninitTitle: 'Space not yet initialized',
+    uninitDesc: 'README.md and INSTRUCTION.md contain default templates. Configure an AI API key in Settings to auto-generate personalized content, or edit them manually.',
+    uninitEditReadme: 'Edit README',
+    uninitEditInstruction: 'Edit Instruction',
+    uninitSettings: 'Settings',
   },
   view: {
     saveDirectory: 'Directory',
@@ -681,6 +686,11 @@ export const knowledgeZh = {
     emptyFolder: '此目录为空。',
     fileCount: (n: number) => `${n} 个文件`,
     newFile: '新建文件',
+    uninitTitle: '空间尚未初始化',
+    uninitDesc: 'README.md 和 INSTRUCTION.md 仍是默认模板。配置 AI API 密钥后可自动生成个性化内容，或手动编辑。',
+    uninitEditReadme: '编辑 README',
+    uninitEditInstruction: '编辑 Instruction',
+    uninitSettings: '设置',
   },
   view: {
     saveDirectory: '目录',

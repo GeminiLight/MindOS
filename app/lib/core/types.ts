@@ -1,6 +1,8 @@
 export interface SpacePreview {
   instructionLines: string[];
   readmeLines: string[];
+  /** True when both files still contain only the default scaffold template. */
+  isTemplate?: boolean;
 }
 
 export interface FileNode {

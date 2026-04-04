@@ -232,10 +232,27 @@ function extractBodyLines(filePath: string, maxLines: number): string[] {
   } catch { return []; }
 }
 
+const TEMPLATE_MARKERS = [
+  'Define local execution rules for this directory.',
+  '(your files here)',
+  '(Describe the purpose and usage of this space.)',
+  '(Add usage guidelines for this space.)',
+];
+
+function isTemplateContent(filePath: string): boolean {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return TEMPLATE_MARKERS.some(m => content.includes(m));
+  } catch { return false; }
+}
+
 function buildSpacePreview(dirAbsPath: string) {
+  const instructionPath = path.join(dirAbsPath, 'INSTRUCTION.md');
+  const readmePath = path.join(dirAbsPath, 'README.md');
   return {
-    instructionLines: extractBodyLines(path.join(dirAbsPath, 'INSTRUCTION.md'), SPACE_PREVIEW_MAX_LINES),
-    readmeLines: extractBodyLines(path.join(dirAbsPath, 'README.md'), SPACE_PREVIEW_MAX_LINES),
+    instructionLines: extractBodyLines(instructionPath, SPACE_PREVIEW_MAX_LINES),
+    readmeLines: extractBodyLines(readmePath, SPACE_PREVIEW_MAX_LINES),
+    isTemplate: isTemplateContent(instructionPath) && isTemplateContent(readmePath),
   };
 }
 
