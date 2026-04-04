@@ -51,12 +51,7 @@ export function AgentsPanelHubNav({
         href="/agents?tab=a2a"
         active={inAgentsRoute && tab === 'a2a'}
       />
-      <PanelNavRow
-        icon={<History size={14} className={inAgentsRoute && tab === 'sessions' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navSessions}
-        href="/agents?tab=sessions"
-        active={inAgentsRoute && tab === 'sessions'}
-      />
+      {/* Sessions tab hidden */}
     </div>
   );
 }
