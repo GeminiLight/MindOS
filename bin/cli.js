@@ -841,7 +841,7 @@ ${dim('Shortcut: mindos start --daemon  →  install + start in one step')}
       const webPort = updateConfig.port ?? 3456;
       const mcpPort = updateConfig.mcpPort ?? 8781;
       console.log(dim('  (Waiting for Web UI to come back up — first run after update includes a rebuild...)'));
-      const ready = await waitForHttp(Number(webPort), { retries: 180, intervalMs: 2000, label: 'Web UI', logFile: LOG_PATH });
+      const ready = await waitForHttp(Number(webPort), { retries: 450, intervalMs: 2000, label: 'Web UI', logFile: LOG_PATH });
       if (ready) {
         const localIP = getLocalIP();
         console.log(`\n${'─'.repeat(53)}`);
