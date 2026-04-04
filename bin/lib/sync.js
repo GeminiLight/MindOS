@@ -293,7 +293,18 @@ export async function initSync(mindRoot, opts = {}) {
   }
 
   // 1b. Ensure .gitignore exists
+  // 1b. Ensure .gitignore has system file exclusions
   const gitignorePath = resolve(mindRoot, '.gitignore');
+  const SYSTEM_IGNORES = [
+    'INSTRUCTION.md',
+    'README.md',
+    'CONFIG.json',
+    'CHANGELOG.md',
+    'TODO.md',
+    'Agent-Audit.md',
+    'Agent-Diff.md',
+    'CONFIG.md',
+  ];
   if (!existsSync(gitignorePath)) {
     writeFileSync(gitignorePath, [
       '# MindOS auto-generated',
@@ -306,7 +317,23 @@ export async function initSync(mindRoot, opts = {}) {
       'node_modules/',
       '.obsidian/',
       '',
+      '# MindOS system files (managed by the app, not user content)',
+      ...SYSTEM_IGNORES,
+      '',
     ].join('\n'), 'utf-8');
+  } else {
+    // Existing .gitignore — append missing system file entries
+    const existing = readFileSync(gitignorePath, 'utf-8');
+    const missing = SYSTEM_IGNORES.filter(f => !existing.includes(f));
+    if (missing.length > 0) {
+      const append = '\n# MindOS system files (auto-added)\n' + missing.join('\n') + '\n';
+      writeFileSync(gitignorePath, existing.trimEnd() + '\n' + append, 'utf-8');
+    }
+  }
+
+  // Remove system files from git tracking if already committed
+  for (const file of SYSTEM_IGNORES) {
+    try { execFileSync('git', ['rm', '--cached', '--ignore-unmatch', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
   }
 
   // Handle token for HTTPS
