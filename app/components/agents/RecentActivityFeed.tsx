@@ -40,7 +40,17 @@ export default function RecentActivityFeed() {
   const visible = showAll ? meaningful : meaningful.slice(0, VISIBLE_OPS);
   const hiddenCount = meaningful.length - VISIBLE_OPS;
 
-  if (loading || ops.length === 0) return null;
+  if (loading) return (
+    <section className="animate-pulse" aria-label="Recent Activity">
+      <div className="h-4 w-36 bg-muted rounded mb-3" />
+      <div className="space-y-2">
+        <div className="h-10 bg-muted/50 rounded-lg" />
+        <div className="h-10 bg-muted/50 rounded-lg" />
+      </div>
+    </section>
+  );
+
+  if (ops.length === 0) return null;
 
   const copy = t.agentsContent?.overview;
 

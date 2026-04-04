@@ -87,7 +87,15 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   );
   const hiddenCount = files.length - VISIBLE_LIMIT;
 
-  if (loading) return null;
+  if (loading) return (
+    <section className="mb-10 animate-pulse">
+      <div className="h-4 w-24 bg-muted rounded mb-3" />
+      <div className="space-y-2">
+        <div className="h-10 bg-muted/50 rounded-lg" />
+        <div className="h-10 bg-muted/50 rounded-lg" />
+      </div>
+    </section>
+  );
 
   return (
     <section className="mb-10">

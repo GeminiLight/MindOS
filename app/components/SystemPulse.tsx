@@ -66,7 +66,12 @@ export default function SystemPulse() {
     localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
   };
 
-  if (!mcp || mcp.loading) return null;
+  if (!mcp || mcp.loading) return (
+    <section className="mb-8 animate-pulse">
+      <div className="h-4 w-32 bg-muted rounded mb-3" />
+      <div className="h-16 bg-muted/50 rounded-xl" />
+    </section>
+  );
 
   // ── State 0: No agents detected ──
   if (agents.every(a => !a.present)) {
