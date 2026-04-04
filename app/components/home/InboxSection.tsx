@@ -36,8 +36,6 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [organizing, setOrganizing] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const dragCounterRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isOrganizing = externalOrganizing || organizing;
 
@@ -129,6 +127,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer font-display"
+              title={t.inbox.uploadButton}
             >
               <Upload size={12} />
             </button>
@@ -159,38 +158,9 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
         onChange={(e) => handleUpload(e.target.files)}
       />
 
-      {/* Content */}
+      {/* Content — drag-drop is handled by SidebarLayout's global overlay */}
       {files.length === 0 ? (
-        <div
-          className={`rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors duration-150 ${
-            isDragOver
-              ? 'border-[var(--amber)] bg-[var(--amber-dim)]'
-              : 'border-border hover:border-border/80'
-          }`}
-          onDragEnter={(e) => {
-            if (!e.dataTransfer.types.includes('Files')) return;
-            e.preventDefault();
-            dragCounterRef.current++;
-            if (dragCounterRef.current === 1) setIsDragOver(true);
-          }}
-          onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes('Files')) return;
-            e.preventDefault();
-          }}
-          onDragLeave={() => {
-            dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
-            if (dragCounterRef.current === 0) setIsDragOver(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dragCounterRef.current = 0;
-            setIsDragOver(false);
-            if (e.dataTransfer.files.length > 0) {
-              quickDropToInbox(Array.from(e.dataTransfer.files), t);
-            }
-          }}
-        >
+        <div className="rounded-xl border-2 border-dashed border-border px-4 py-8 text-center">
           <Inbox size={24} className="mx-auto mb-2 text-muted-foreground/30" />
           <p className="text-sm text-muted-foreground/70 font-display">
             {t.inbox.emptyTitle}
