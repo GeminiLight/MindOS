@@ -12,6 +12,7 @@ interface AgentOpEntry {
   result: 'ok' | 'error';
   message?: string;
   durationMs?: number;
+  agentName?: string;
 }
 
 /**
@@ -29,6 +30,7 @@ export function logAgentOp(entry: AgentOpEntry): void {
       result: entry.result,
       message: entry.message,
       durationMs: entry.durationMs,
+      agentName: entry.agentName,
     });
     // Best-effort cleanup of legacy JSONL path.
     try {

@@ -239,6 +239,28 @@ export function getOrganizeTools(): AgentTool<any>[] {
   return knowledgeBaseTools.filter(t => ORGANIZE_TOOL_NAMES.has(t.name));
 }
 
+/**
+ * Read-only tool set for Chat mode.
+ *
+ * Allows searching and reading the knowledge base + web access,
+ * but blocks all write operations. Extensible: add tool names here
+ * to grant more read-only capabilities to Chat mode.
+ */
+const CHAT_TOOL_NAMES = new Set([
+  'list_files',
+  'read_file',
+  'read_file_chunk',
+  'search',
+  'get_recent',
+  'get_backlinks',
+  'web_search',
+  'web_fetch',
+]);
+
+export function getChatTools(): AgentTool<any>[] {
+  return knowledgeBaseTools.filter(t => CHAT_TOOL_NAMES.has(t.name));
+}
+
 export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
   const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
   try {

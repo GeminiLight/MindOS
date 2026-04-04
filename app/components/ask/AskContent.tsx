@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { Sparkles, Send, StopCircle, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, Plus } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
-import type { Message, ImagePart } from '@/lib/types';
+import type { Message, ImagePart, AskMode } from '@/lib/types';
+import ModeCapsule, { getPersistedMode } from '@/components/ask/ModeCapsule';
 import { useAskSession } from '@/hooks/useAskSession';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -88,6 +89,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
   const [selectedAcpAgent, setSelectedAcpAgent] = useState<AcpAgentSelection | null>(null);
+  const [chatMode, setChatMode] = useState<AskMode>('agent');
+
+  useEffect(() => {
+    setChatMode(getPersistedMode());
+  }, []);
 
   const session = useAskSession(currentFile);
   const upload = useFileUpload();
@@ -342,6 +348,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           : f.content,
       })),
       selectedAcpAgent,  // Send structured field instead of text prefix
+      mode: chatMode,
     });
 
     const doFetch = async (): Promise<{ finalMessage: Message }> => {
@@ -677,14 +684,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                   onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
                 />
               )}
-              {/* Agent */}
-              {selectedAcpAgent && (
-                <FileChip
-                  path={selectedAcpAgent.name}
-                  variant="agent"
-                  onRemove={() => { setSelectedAcpAgent(null); inputRef.current?.focus(); }}
-                />
-              )}
+              {/* Agent — selection now shown via AgentSelectorCapsule, not as a chip */}
             </div>
             {/* Errors (merged) */}
             {(upload.uploadError || imageUpload.imageError) && (
@@ -693,17 +693,18 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </div>
         )}
 
-        {/* Agent selector — only when no agent selected but agents available (mounted guard for hydration) */}
-        {mounted && !selectedAcpAgent && acpDetection.installedAgents.length > 0 && (
-          <div className="px-3 pt-1 pb-0.5">
+        {/* Mode + Agent selector row */}
+        <div className="flex items-center gap-1.5 px-3 pt-1 pb-0.5">
+          <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
+          {mounted && acpDetection.installedAgents.length > 0 && (
             <AgentSelectorCapsule
-              selectedAgent={null}
+              selectedAgent={selectedAcpAgent}
               onSelect={setSelectedAcpAgent}
               installedAgents={acpDetection.installedAgents}
               loading={acpDetection.loading}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Input form */}
         <form

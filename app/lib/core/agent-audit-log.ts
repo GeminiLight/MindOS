@@ -9,6 +9,8 @@ export interface AgentAuditEvent {
   result: 'ok' | 'error';
   message?: string;
   durationMs?: number;
+  /** Name of the agent that performed this operation (e.g. "claude-code", "cursor"). */
+  agentName?: string;
   op?: 'append' | 'legacy_agent_audit_md_import' | 'legacy_agent_log_jsonl_import';
 }
 
@@ -19,6 +21,8 @@ export interface AgentAuditInput {
   result: 'ok' | 'error';
   message?: string;
   durationMs?: number;
+  /** Name of the agent that performed this operation. */
+  agentName?: string;
 }
 
 interface AgentAuditState {
@@ -111,6 +115,7 @@ interface LegacyAgentOp {
   result?: 'ok' | 'error';
   message?: string;
   durationMs?: number;
+  agentName?: string;
 }
 
 function parseLegacyMdBlocks(raw: string): LegacyAgentOp[] {
@@ -253,6 +258,7 @@ export function appendAgentAuditEvent(mindRoot: string, input: AgentAuditInput):
     result: input.result === 'error' ? 'error' : 'ok',
     message: normalizeMessage(input.message),
     durationMs: typeof input.durationMs === 'number' ? input.durationMs : undefined,
+    agentName: typeof input.agentName === 'string' && input.agentName.trim() ? input.agentName.trim() : undefined,
     op: 'append',
   };
   state.events.unshift(event);
@@ -275,6 +281,7 @@ export function parseAgentAuditJsonLines(raw: string): AgentAuditInput[] {
     result: entry.result === 'error' ? 'error' : 'ok',
     message: normalizeMessage(entry.message),
     durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : undefined,
+    agentName: typeof entry.agentName === 'string' ? entry.agentName : undefined,
   }));
 }
 

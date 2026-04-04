@@ -46,7 +46,15 @@ function sourceFromRequest(req: NextRequest, body: Record<string, unknown>) {
   if (bodySource === 'agent' || bodySource === 'user' || bodySource === 'system') return bodySource;
   const headerSource = req.headers.get('x-mindos-source');
   if (headerSource === 'agent' || headerSource === 'user' || headerSource === 'system') return headerSource;
+  // If request has x-mindos-agent header, it's from an agent
+  if (req.headers.get('x-mindos-agent')) return 'agent' as const;
   return 'user' as const;
+}
+
+/** Extract agent name from request (MCP client identity, e.g. "claude-code"). */
+function agentNameFromRequest(req: NextRequest): string | undefined {
+  const name = req.headers.get('x-mindos-agent');
+  return name && name.trim() ? name.trim() : undefined;
 }
 
 // GET /api/file?path=foo.md&op=read_file|read_lines | GET ?op=list_spaces (no path)

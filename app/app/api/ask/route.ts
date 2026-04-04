@@ -19,8 +19,9 @@ import fs from 'fs';
 import path from 'path';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
-import { getRequestScopedTools, getOrganizeTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
-import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT } from '@/lib/agent/prompt';
+import { getRequestScopedTools, getOrganizeTools, getChatTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
+import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
+import type { AskModeApi } from '@/lib/types';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
 import { logAgentOp } from '@/lib/agent/log';
 import { readSettings } from '@/lib/settings';
@@ -294,6 +295,7 @@ function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition<any,
           params: args,
           result: outputText.startsWith('Error:') ? 'error' : 'ok',
           message: outputText.slice(0, 200),
+          agentName: 'MindOS Ask',
         });
       } catch {
         // logging must never kill the stream
@@ -315,8 +317,8 @@ export async function POST(req: NextRequest) {
     attachedFiles?: string[];
     uploadedFiles?: Array<{ name: string; content: string }>;
     maxSteps?: number;
-    /** 'organize' = lean prompt for file import organize; default = full prompt */
-    mode?: 'organize' | 'default';
+    /** Ask mode: 'chat' = read-only tools; 'agent' = full tools; 'organize' = lean import mode */
+    mode?: AskModeApi;
     /** ACP agent selection: if present, route to ACP instead of MindOS */
     selectedAcpAgent?: { id: string; name: string } | null;
   };
@@ -327,19 +329,22 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, currentFile, attachedFiles, uploadedFiles, selectedAcpAgent } = body;
-  const isOrganizeMode = body.mode === 'organize';
+  const askMode: AskModeApi = body.mode === 'organize' ? 'organize'
+    : body.mode === 'chat' ? 'chat'
+    : 'agent';
 
   // Read agent config from settings
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
+  const defaultMaxSteps = askMode === 'chat' ? 8 : (agentConfig.maxSteps ?? 20);
   const stepLimit = Number.isFinite(body.maxSteps)
     ? Math.min(30, Math.max(1, Number(body.maxSteps)))
-    : Math.min(30, Math.max(1, agentConfig.maxSteps ?? 20));
+    : Math.min(30, Math.max(1, defaultMaxSteps));
   const enableThinking = agentConfig.enableThinking ?? false;
   const thinkingBudget = agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
-  // Uploaded files — shared by both modes
+  // Uploaded files — shared by all modes
   const uploadedParts: string[] = [];
   if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
     for (const f of uploadedFiles.slice(0, 8)) {
@@ -349,11 +354,11 @@ export async function POST(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------------
-  // Build system prompt — lean path for organize mode, full path otherwise
+  // Build system prompt — three-way split by askMode
   // ---------------------------------------------------------------------------
   let systemPrompt: string;
 
-  if (isOrganizeMode) {
+  if (askMode === 'organize') {
     // Organize mode: minimal prompt — only KB structure + uploaded files
     const promptParts: string[] = [ORGANIZE_SYSTEM_PROMPT];
 
@@ -374,8 +379,56 @@ export async function POST(req: NextRequest) {
     }
 
     systemPrompt = promptParts.join('\n\n');
+  } else if (askMode === 'chat') {
+    // Chat mode: lean prompt with read-only KB access.
+    // Skips: SKILL.md, bootstrap INSTRUCTION/CONFIG, write-supplement, target dir context.
+    // Keeps: KB structure (README.md), time, current/attached files, uploaded files.
+    const promptParts: string[] = [CHAT_SYSTEM_PROMPT];
+
+    promptParts.push(`---\n\nmind_root=${getMindRoot()}`);
+
+    const bootstrapIndex = readKnowledgeFile('README.md');
+    if (bootstrapIndex.ok && bootstrapIndex.content.trim().length > 10) {
+      promptParts.push(`---\n\n## Knowledge Base Structure\n\n${bootstrapIndex.content}`);
+    }
+
+    const now = new Date();
+    promptParts.push(`---\n\n## Current Time Context\n- Current UTC Time: ${now.toISOString()}\n- System Local Time: ${new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'long' }).format(now)}`);
+
+    const contextParts: string[] = [];
+    const seen = new Set<string>();
+    if (Array.isArray(attachedFiles) && attachedFiles.length > 0) {
+      for (const filePath of attachedFiles!) {
+        if (seen.has(filePath)) continue;
+        seen.add(filePath);
+        try {
+          const content = truncate(getFileContent(filePath));
+          contextParts.push(`## Attached: ${filePath}\n\n${content}`);
+        } catch { /* ignore missing files */ }
+      }
+    }
+    if (currentFile && !seen.has(currentFile)) {
+      seen.add(currentFile);
+      try {
+        const content = truncate(getFileContent(currentFile));
+        contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
+      } catch { /* ignore */ }
+    }
+    if (contextParts.length > 0) {
+      promptParts.push(`---\n\nThe user is currently viewing these files:\n\n${contextParts.join('\n\n---\n\n')}`);
+    }
+
+    if (uploadedParts.length > 0) {
+      promptParts.push(
+        `---\n\n## ⚠️ USER-UPLOADED FILES\n\n` +
+        `Their FULL CONTENT is below. Use this directly — do NOT call read tools on them.\n\n` +
+        uploadedParts.join('\n\n---\n\n'),
+      );
+    }
+
+    systemPrompt = promptParts.join('\n\n');
   } else {
-    // Full mode: original prompt assembly
+    // Agent mode: full prompt assembly
     // Auto-load skill + bootstrap context for each request.
     const isZh = serverSettings.disabledSkills?.includes('mindos') ?? false;
     const skillDirName = isZh ? 'mindos-zh' : 'mindos';
@@ -560,7 +613,9 @@ export async function POST(req: NextRequest) {
     // Capture API key for this request — safe since each POST creates a new Agent instance.
     const requestApiKey = apiKey;
     const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-    const requestTools = isOrganizeMode ? getOrganizeTools() : await getRequestScopedTools();
+    const requestTools = askMode === 'organize' ? getOrganizeTools()
+      : askMode === 'chat' ? getChatTools()
+      : await getRequestScopedTools();
     const customTools = toPiCustomToolDefinitions(requestTools);
 
     const authStorage = AuthStorage.create();

@@ -30,31 +30,33 @@ const MCP_PORT       = parseInt(process.env.MCP_PORT ?? "8781", 10);
 const MCP_ENDPOINT   = process.env.MCP_ENDPOINT    ?? "/mcp";
 const CHARACTER_LIMIT = 25_000;
 
-function headers(): Record<string, string> {
+function headers(agentName?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   if (AUTH_TOKEN) h["Authorization"] = `Bearer ${AUTH_TOKEN}`;
+  // Sanitize: strip control chars, limit to 100 chars
+  if (agentName) h["x-mindos-agent"] = agentName.replace(/[\x00-\x1f]/g, '').slice(0, 100);
   return h;
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
-async function get(path: string, params?: Record<string, string>): Promise<Record<string, unknown>> {
+async function get(path: string, params?: Record<string, string>, agentName?: string): Promise<Record<string, unknown>> {
   const url = new URL(path, BASE_URL);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, v);
     }
   }
-  const res = await fetch(url.toString(), { headers: headers() });
+  const res = await fetch(url.toString(), { headers: headers(agentName) });
   const json = await res.json() as Record<string, unknown>;
   if (!res.ok) throw new Error((json.error as string) ?? `HTTP ${res.status}`);
   return json;
 }
 
-async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function post(path: string, body: Record<string, unknown>, agentName?: string): Promise<Record<string, unknown>> {
   const res = await fetch(new URL(path, BASE_URL).toString(), {
     method: "POST",
-    headers: headers(),
+    headers: headers(agentName),
     body: JSON.stringify(body),
   });
   const json = await res.json() as Record<string, unknown>;
@@ -77,14 +79,14 @@ function truncate(text: string, limit = CHARACTER_LIMIT): string {
 
 // ─── Agent operation logging ────────────────────────────────────────────────
 
-async function logOp(tool: string, params: Record<string, unknown>, result: 'ok' | 'error', message: string) {
+async function logOp(tool: string, params: Record<string, unknown>, result: 'ok' | 'error', message: string, agentName?: string) {
   try {
-    const entry = { ts: new Date().toISOString(), tool, params, result, message: message.slice(0, 200) };
+    const entry = { ts: new Date().toISOString(), tool, params, result, message: message.slice(0, 200), agentName: agentName || undefined };
     const line = JSON.stringify(entry) + '\n';
     // Append to .agent-log.json via the app API
     await fetch(new URL("/api/file", BASE_URL).toString(), {
       method: "POST",
-      headers: headers(),
+      headers: headers(agentName),
       body: JSON.stringify({ op: "append_to_file", path: ".agent-log.json", content: line }),
     }).catch(() => {});
   } catch {
@@ -95,6 +97,17 @@ async function logOp(tool: string, params: Record<string, unknown>, result: 'ok'
 // ─── Tool Registration ───────────────────────────────────────────────────────
 
 function registerTools(server: McpServer) {
+
+/** Get the MCP client name for this server session (e.g. "claude-code", "cursor"). */
+function clientName(): string | undefined {
+  return server.server.getClientVersion()?.name || undefined;
+}
+
+// Session-aware wrappers that auto-inject client identity into every API call
+const _get = (path: string, params?: Record<string, string>) => get(path, params, clientName());
+const _post = (path: string, body: Record<string, unknown>) => post(path, body, clientName());
+const _logOp = (tool: string, params: Record<string, unknown>, result: 'ok' | 'error', msg: string) =>
+  logOp(tool, params, result, msg, clientName());
 
 // ── mindos_list_files ───────────────────────────────────────────────────────
 
@@ -107,11 +120,11 @@ server.registerTool("mindos_list_files", {
   annotations: { readOnlyHint: true },
 }, async ({ response_format }) => {
   try {
-    const json = await get("/api/files", { format: response_format });
+    const json = await _get("/api/files", { format: response_format });
     const result = typeof json.tree === "string" ? json.tree : JSON.stringify(json.tree ?? json, null, 2);
-    logOp("mindos_list_files", { response_format }, "ok", `${result.length} chars`);
+    _logOp("mindos_list_files", { response_format }, "ok", `${result.length} chars`);
     return ok(result);
-  } catch (e) { logOp("mindos_list_files", { response_format }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_list_files", { response_format }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_list_spaces ──────────────────────────────────────────────────────
@@ -126,20 +139,20 @@ server.registerTool("mindos_list_spaces", {
   annotations: { readOnlyHint: true },
 }, async ({ response_format }) => {
   try {
-    const json = await get("/api/file", { op: "list_spaces" });
+    const json = await _get("/api/file", { op: "list_spaces" });
     const spaces = json.spaces as Array<{ name: string; path: string; fileCount: number; description: string }>;
     if (response_format === "json") {
-      logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
+      _logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
       return ok(JSON.stringify({ spaces: spaces ?? [] }, null, 2));
     }
     const lines = (spaces ?? []).map(
       (s) => `- **${s.name}** (\`${s.path}/\`) — ${s.fileCount} file(s)${s.description ? ` — ${s.description}` : ""}`,
     );
     const text = lines.length ? lines.join("\n") : "(no top-level spaces in tree)";
-    logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
+    _logOp("mindos_list_spaces", { response_format }, "ok", `${spaces?.length ?? 0} spaces`);
     return ok(text);
   } catch (e) {
-    logOp("mindos_list_spaces", { response_format }, "error", String(e));
+    _logOp("mindos_list_spaces", { response_format }, "error", String(e));
     return error(String(e));
   }
 });
@@ -157,16 +170,16 @@ server.registerTool("mindos_read_file", {
   annotations: { readOnlyHint: true },
 }, async ({ path, offset, limit }) => {
   try {
-    const json = await get("/api/file", { path, op: "read_file" });
+    const json = await _get("/api/file", { path, op: "read_file" });
     const content = json.content as string;
     const slice = content.slice(offset, offset + limit);
     const hasMore = offset + limit < content.length;
     const header = hasMore
       ? `[Showing characters ${offset}–${offset + slice.length} of ${content.length}. Use offset=${offset + limit} for next page.]\n\n`
       : offset > 0 ? `[Showing characters ${offset}–${offset + slice.length} of ${content.length}]\n\n` : "";
-    logOp("mindos_read_file", { path }, "ok", `${content.length} chars`);
+    _logOp("mindos_read_file", { path }, "ok", `${content.length} chars`);
     return ok(header + slice);
-  } catch (e) { logOp("mindos_read_file", { path }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_read_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_write_file ───────────────────────────────────────────────────────
@@ -180,10 +193,10 @@ server.registerTool("mindos_write_file", {
   }),
 }, async ({ path, content }) => {
   try {
-    await post("/api/file", { op: "save_file", path, content });
-    logOp("mindos_write_file", { path }, "ok", `Wrote ${content.length} chars`);
+    await _post("/api/file", { op: "save_file", path, content });
+    _logOp("mindos_write_file", { path }, "ok", `Wrote ${content.length} chars`);
     return ok(`Successfully wrote ${content.length} characters to "${path}"`);
-  } catch (e) { logOp("mindos_write_file", { path }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_write_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_create_file ──────────────────────────────────────────────────────
@@ -197,10 +210,10 @@ server.registerTool("mindos_create_file", {
   }),
 }, async ({ path, content }) => {
   try {
-    await post("/api/file", { op: "create_file", path, content });
-    logOp("mindos_create_file", { path }, "ok", `Created ${content.length} chars`);
+    await _post("/api/file", { op: "create_file", path, content });
+    _logOp("mindos_create_file", { path }, "ok", `Created ${content.length} chars`);
     return ok(`Created "${path}" (${content.length} characters)`);
-  } catch (e) { logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_batch_create_files ────────────────────────────────────────────────
@@ -220,7 +233,7 @@ server.registerTool("mindos_batch_create_files", {
   const errors: string[] = [];
   for (const file of files) {
     try {
-      await post("/api/file", { op: "create_file", path: file.path, content: file.content });
+      await _post("/api/file", { op: "create_file", path: file.path, content: file.content });
       created.push(file.path);
     } catch (e) {
       errors.push(`${file.path}: ${String(e)}`);
@@ -228,7 +241,7 @@ server.registerTool("mindos_batch_create_files", {
   }
   let msg = `Batch creation complete.\nCreated ${created.length} file(s): ${created.join(", ")}`;
   if (errors.length > 0) msg += `\n\nFailed to create ${errors.length} file(s):\n${errors.join("\n")}`;
-  logOp("mindos_batch_create_files", { count: files.length }, created.length === files.length ? "ok" : "error", msg.slice(0, 200));
+  _logOp("mindos_batch_create_files", { count: files.length }, created.length === files.length ? "ok" : "error", msg.slice(0, 200));
   return created.length === files.length ? ok(msg) : error(msg);
 });
 
@@ -245,7 +258,7 @@ server.registerTool("mindos_create_space", {
   }),
 }, async ({ name, description, parent_path }) => {
   try {
-    const json = await post("/api/file", {
+    const json = await _post("/api/file", {
       op: "create_space",
       path: "_",
       name,
@@ -253,10 +266,10 @@ server.registerTool("mindos_create_space", {
       parent_path,
     });
     const p = json.path as string;
-    logOp("mindos_create_space", { name, parent_path }, "ok", p);
+    _logOp("mindos_create_space", { name, parent_path }, "ok", p);
     return ok(`Created Mind Space at "${p}"`);
   } catch (e) {
-    logOp("mindos_create_space", { name, parent_path }, "error", String(e));
+    _logOp("mindos_create_space", { name, parent_path }, "error", String(e));
     return error(String(e));
   }
 });
@@ -273,11 +286,11 @@ server.registerTool("mindos_rename_space", {
   }),
 }, async ({ path: spacePath, new_name }) => {
   try {
-    const json = await post("/api/file", { op: "rename_space", path: spacePath, new_name });
-    logOp("mindos_rename_space", { path: spacePath, new_name }, "ok", String(json.newPath));
+    const json = await _post("/api/file", { op: "rename_space", path: spacePath, new_name });
+    _logOp("mindos_rename_space", { path: spacePath, new_name }, "ok", String(json.newPath));
     return ok(`Renamed space "${spacePath}" → "${json.newPath}"`);
   } catch (e) {
-    logOp("mindos_rename_space", { path: spacePath, new_name }, "error", String(e));
+    _logOp("mindos_rename_space", { path: spacePath, new_name }, "error", String(e));
     return error(String(e));
   }
 });
@@ -293,10 +306,10 @@ server.registerTool("mindos_delete_file", {
   annotations: { destructiveHint: true },
 }, async ({ path }) => {
   try {
-    await post("/api/file", { op: "delete_file", path });
-    logOp("mindos_delete_file", { path }, "ok", `Deleted "${path}"`);
+    await _post("/api/file", { op: "delete_file", path });
+    _logOp("mindos_delete_file", { path }, "ok", `Deleted "${path}"`);
     return ok(`Deleted "${path}"`);
-  } catch (e) { logOp("mindos_delete_file", { path }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_delete_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_rename_file ──────────────────────────────────────────────────────
@@ -310,7 +323,7 @@ server.registerTool("mindos_rename_file", {
   }),
 }, async ({ path, new_name }) => {
   try {
-    const json = await post("/api/file", { op: "rename_file", path, new_name });
+    const json = await _post("/api/file", { op: "rename_file", path, new_name });
     return ok(`Renamed "${path}" → "${json.newPath}"`);
   } catch (e) { return error(String(e)); }
 });
@@ -326,7 +339,7 @@ server.registerTool("mindos_move_file", {
   }),
 }, async ({ from_path, to_path }) => {
   try {
-    const json = await post("/api/file", { op: "move_file", path: from_path, to_path });
+    const json = await _post("/api/file", { op: "move_file", path: from_path, to_path });
     const affected = json.affectedFiles as string[] ?? [];
     const lines = [`Moved "${from_path}" → "${json.newPath}"`];
     if (affected.length > 0) {
@@ -358,10 +371,10 @@ server.registerTool("mindos_search_notes", {
     if (file_type !== "all") params.file_type = file_type;
     if (modified_after) params.modified_after = modified_after;
     if (response_format) params.format = response_format;
-    const json = await get("/api/search", params);
-    logOp("mindos_search_notes", { query, limit }, "ok", `Search completed`);
+    const json = await _get("/api/search", params);
+    _logOp("mindos_search_notes", { query, limit }, "ok", `Search completed`);
     return ok(truncate(JSON.stringify(json, null, 2)));
-  } catch (e) { logOp("mindos_search_notes", { query }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_search_notes", { query }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_get_recent ───────────────────────────────────────────────────────
@@ -376,7 +389,7 @@ server.registerTool("mindos_get_recent", {
   annotations: { readOnlyHint: true },
 }, async ({ limit, response_format }) => {
   try {
-    const json = await get("/api/recent-files", { limit: String(limit), format: response_format });
+    const json = await _get("/api/recent-files", { limit: String(limit), format: response_format });
     return ok(JSON.stringify(json, null, 2));
   } catch (e) { return error(String(e)); }
 });
@@ -392,7 +405,7 @@ server.registerTool("mindos_read_lines", {
   annotations: { readOnlyHint: true },
 }, async ({ path }) => {
   try {
-    const json = await get("/api/file", { path, op: "read_lines" });
+    const json = await _get("/api/file", { path, op: "read_lines" });
     const lines = json.lines as string[];
     const numbered = lines.map((l, i) => `${i}: ${l}`).join("\n");
     return ok(`${lines.length} lines total:\n\n${numbered}`);
@@ -411,7 +424,7 @@ server.registerTool("mindos_insert_lines", {
   }),
 }, async ({ path, after_index, lines }) => {
   try {
-    await post("/api/file", { op: "insert_lines", path, after_index, lines });
+    await _post("/api/file", { op: "insert_lines", path, after_index, lines });
     return ok(`Inserted ${lines.length} line(s) after index ${after_index} in "${path}"`);
   } catch (e) { return error(String(e)); }
 });
@@ -429,7 +442,7 @@ server.registerTool("mindos_update_lines", {
   }),
 }, async ({ path, start, end, lines }) => {
   try {
-    await post("/api/file", { op: "update_lines", path, start, end, lines });
+    await _post("/api/file", { op: "update_lines", path, start, end, lines });
     return ok(`Replaced lines ${start}–${end} in "${path}" with ${lines.length} new line(s)`);
   } catch (e) { return error(String(e)); }
 });
@@ -445,10 +458,10 @@ server.registerTool("mindos_append_to_file", {
   }),
 }, async ({ path, content }) => {
   try {
-    await post("/api/file", { op: "append_to_file", path, content });
-    logOp("mindos_append_to_file", { path }, "ok", `Appended ${content.length} chars`);
+    await _post("/api/file", { op: "append_to_file", path, content });
+    _logOp("mindos_append_to_file", { path }, "ok", `Appended ${content.length} chars`);
     return ok(`Appended ${content.length} character(s) to "${path}"`);
-  } catch (e) { logOp("mindos_append_to_file", { path }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_append_to_file", { path }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_insert_after_heading ─────────────────────────────────────────────
@@ -463,10 +476,10 @@ server.registerTool("mindos_insert_after_heading", {
   }),
 }, async ({ path, heading, content }) => {
   try {
-    await post("/api/file", { op: "insert_after_heading", path, heading, content });
-    logOp("mindos_insert_after_heading", { path, heading }, "ok", `Inserted after "${heading}"`);
+    await _post("/api/file", { op: "insert_after_heading", path, heading, content });
+    _logOp("mindos_insert_after_heading", { path, heading }, "ok", `Inserted after "${heading}"`);
     return ok(`Inserted content after heading "${heading}" in "${path}"`);
-  } catch (e) { logOp("mindos_insert_after_heading", { path, heading }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_insert_after_heading", { path, heading }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_update_section ───────────────────────────────────────────────────
@@ -481,10 +494,10 @@ server.registerTool("mindos_update_section", {
   }),
 }, async ({ path, heading, content }) => {
   try {
-    await post("/api/file", { op: "update_section", path, heading, content });
-    logOp("mindos_update_section", { path, heading }, "ok", `Updated section "${heading}"`);
+    await _post("/api/file", { op: "update_section", path, heading, content });
+    _logOp("mindos_update_section", { path, heading }, "ok", `Updated section "${heading}"`);
     return ok(`Updated section "${heading}" in "${path}"`);
-  } catch (e) { logOp("mindos_update_section", { path, heading }, "error", String(e)); return error(String(e)); }
+  } catch (e) { _logOp("mindos_update_section", { path, heading }, "error", String(e)); return error(String(e)); }
 });
 
 // ── mindos_append_csv ───────────────────────────────────────────────────────
@@ -498,7 +511,7 @@ server.registerTool("mindos_append_csv", {
   }),
 }, async ({ path, row }) => {
   try {
-    const json = await post("/api/file", { op: "append_csv", path, row });
+    const json = await _post("/api/file", { op: "append_csv", path, row });
     return ok(`Appended row to "${path}". File now has ${json.newRowCount} rows.`);
   } catch (e) { return error(String(e)); }
 });
@@ -514,7 +527,7 @@ server.registerTool("mindos_get_backlinks", {
   annotations: { readOnlyHint: true },
 }, async ({ path }) => {
   try {
-    const json = await get("/api/backlinks", { path });
+    const json = await _get("/api/backlinks", { path });
     return ok(JSON.stringify(json, null, 2));
   } catch (e) { return error(String(e)); }
 });
@@ -532,7 +545,7 @@ server.registerTool("mindos_bootstrap", {
   try {
     const params: Record<string, string> = {};
     if (target_dir) params.target_dir = target_dir;
-    const json = await get("/api/bootstrap", params);
+    const json = await _get("/api/bootstrap", params);
     const sections = Object.entries(json)
       .filter(([, v]) => v !== undefined && v !== null)
       .map(([key, val]) => `--- ${key} ---\n\n${val}`)
@@ -553,7 +566,7 @@ server.registerTool("mindos_get_history", {
   annotations: { readOnlyHint: true },
 }, async ({ path, limit }) => {
   try {
-    const json = await get("/api/git", { op: "history", path, limit: String(limit) });
+    const json = await _get("/api/git", { op: "history", path, limit: String(limit) });
     const entries = json.entries as Array<{ hash: string; date: string; message: string; author: string }>;
     if (entries.length === 0) return ok(`No git history found for "${path}"`);
     const lines = [`# Git History: ${path}`, "", `${entries.length} commit(s):`, ""];
@@ -576,7 +589,7 @@ server.registerTool("mindos_get_file_at_version", {
   annotations: { readOnlyHint: true },
 }, async ({ path, commit }) => {
   try {
-    const json = await get("/api/git", { op: "show", path, commit });
+    const json = await _get("/api/git", { op: "show", path, commit });
     const content = json.content as string;
     return ok(truncate(`# ${path} @ ${commit.slice(0, 8)}\n\n${content}`));
   } catch (e) { return error(String(e)); }
@@ -648,7 +661,9 @@ async function main() {
       const sid = transport.sessionId;
       if (sid) {
         sessions.set(sid, { transport, server });
-        console.error(`[MCP] New session ${sid.slice(0, 8)} (${sessions.size} active)`);
+        const client = server.server.getClientVersion();
+        const clientLabel = client?.name ? ` (${client.name})` : '';
+        console.error(`[MCP] New session ${sid.slice(0, 8)}${clientLabel} (${sessions.size} active)`);
       }
     });
 

@@ -61,6 +61,12 @@ export interface LocalAttachment {
   content: string;
 }
 
+/** User-facing Ask modes. 'organize' is internal-only (not selectable by users). */
+export type AskMode = 'chat' | 'agent';
+
+/** All Ask modes including internal ones sent to the API */
+export type AskModeApi = AskMode | 'organize';
+
 export interface ChatSession {
   id: string;
   currentFile?: string;

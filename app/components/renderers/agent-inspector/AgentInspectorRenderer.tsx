@@ -20,6 +20,7 @@ interface AgentOp {
   params: Record<string, unknown>;
   result: 'ok' | 'error';
   message?: string;
+  agentName?: string;
 }
 
 interface AgentAuditState {
@@ -179,6 +180,17 @@ function OpCard({ op }: { op: AgentOp }) {
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* agent name badge */}
+          {op.agentName && (
+            <span className="font-display" style={{
+              fontSize: '0.62rem', fontWeight: 500,
+              padding: '1px 6px', borderRadius: 999,
+              background: 'var(--muted)', color: 'var(--muted-foreground)',
+              whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis',
+            }} title={op.agentName}>
+              {op.agentName.length > 30 ? op.agentName.slice(0, 30) + '...' : op.agentName}
+            </span>
+          )}
           {/* result */}
           {op.result === 'ok'
             ? <CheckCircle2 size={13} style={{ color: 'var(--success)' }} />
@@ -217,6 +229,12 @@ function OpCard({ op }: { op: AgentOp }) {
               border: `1px solid ${op.result === 'error' ? 'rgba(200,80,80,0.2)' : 'rgba(122,173,128,0.2)'}`,
             }}>
               {op.message}
+            </div>
+          )}
+          {/* agent info */}
+          {op.agentName && (
+            <div className="font-display" style={{ marginTop: 6, fontSize: '0.68rem', color: 'var(--muted-foreground)' }}>
+              Agent: <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{op.agentName}</span>
             </div>
           )}
           {/* absolute timestamp */}
