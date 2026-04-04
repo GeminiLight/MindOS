@@ -181,7 +181,15 @@ function autoPull(mindRoot, isSshUrl = false) {
           try { execFileSync('git', ['checkout', '--ours', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
         }
         execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe' });
-        execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept both versions)'], { cwd: mindRoot, stdio: 'pipe' });
+        // --no-edit avoids editor prompt for merge commit; --allow-empty handles edge case where ours == theirs
+        try {
+          execFileSync('git', ['-c', 'core.editor=true', 'commit', '--no-edit'], { cwd: mindRoot, stdio: 'pipe' });
+        } catch {
+          // If merge commit fails (e.g. nothing to commit), try explicit message
+          try {
+            execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept local versions)', '--allow-empty'], { cwd: mindRoot, stdio: 'pipe' });
+          } catch {}
+        }
         saveSyncState({
           ...loadSyncState(),
           lastPull: new Date().toISOString(),
