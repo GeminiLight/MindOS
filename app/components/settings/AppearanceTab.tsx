@@ -95,10 +95,55 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
   return (
     <div className="space-y-4">
 
-      {/* ── Card 1: Reading — font, size, width ── */}
-      <SettingCard icon={<BookOpen size={15} />} title={a.readingTitle ?? 'Reading'} description={a.readingDesc ?? 'Customize how your notes look'}>
+      {/* ── Card 1: Preferences — theme, language ── */}
+      <SettingCard icon={<Palette size={15} />} title={a.preferencesTitle ?? 'Preferences'}>
 
-      {/* ── Font — each font previews itself ── */}
+      {/* ── Theme — amber pills ── */}
+      <SettingGroup icon={<Sun size={14} />} label={a.colorTheme}>
+        <PillSelector
+          options={[
+            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
+            { value: 'dark', label: a.dark, icon: <Moon size={14} /> },
+            { value: 'light', label: a.light, icon: <Sun size={14} /> },
+          ]}
+          value={themePref}
+          onChange={v => {
+            setThemePref(v);
+            localStorage.setItem('theme', v);
+            const isDark = v === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              : v === 'dark';
+            setDark(isDark);
+            document.documentElement.classList.toggle('dark', isDark);
+          }}
+        />
+      </SettingGroup>
+
+      {/* ── Language — amber pills ── */}
+      <SettingGroup icon={<Globe size={14} />} label={a.language}>
+        <PillSelector
+          options={[
+            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
+            { value: 'en', label: 'EN' },
+            { value: 'zh', label: '中文' },
+          ]}
+          value={localePref}
+          onChange={v => {
+            setLocalePref(v);
+            localStorage.setItem('locale', v);
+            const resolved: Locale = v === 'system'
+              ? (navigator.language.startsWith('zh') ? 'zh' : 'en')
+              : v as Locale;
+            setLocale(resolved);
+            document.cookie = `locale=${resolved};path=/;max-age=31536000;SameSite=Lax`;
+          }}
+        />
+      </SettingGroup>
+
+      </SettingCard>
+
+      {/* ── Card 2: Reading — font, size, width ── */}
+      <SettingCard icon={<BookOpen size={15} />} title={a.readingTitle ?? 'Reading'} description={a.readingDesc ?? 'Customize how your notes look'}>
       <SettingGroup icon={<Type size={14} />} label={a.readingFont}>
         <div className="space-y-0.5">
           {FONTS.map(f => {
@@ -223,53 +268,6 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
             );
           })}
         </div>
-      </SettingGroup>
-
-      </SettingCard>
-
-      {/* ── Card 2: Preferences — theme, language ── */}
-      <SettingCard icon={<Palette size={15} />} title={a.preferencesTitle ?? 'Preferences'}>
-
-      {/* ── Theme — amber pills ── */}
-      <SettingGroup icon={<Sun size={14} />} label={a.colorTheme}>
-        <PillSelector
-          options={[
-            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
-            { value: 'dark', label: a.dark, icon: <Moon size={14} /> },
-            { value: 'light', label: a.light, icon: <Sun size={14} /> },
-          ]}
-          value={themePref}
-          onChange={v => {
-            setThemePref(v);
-            localStorage.setItem('theme', v);
-            const isDark = v === 'system'
-              ? window.matchMedia('(prefers-color-scheme: dark)').matches
-              : v === 'dark';
-            setDark(isDark);
-            document.documentElement.classList.toggle('dark', isDark);
-          }}
-        />
-      </SettingGroup>
-
-      {/* ── Language — amber pills ── */}
-      <SettingGroup icon={<Globe size={14} />} label={a.language}>
-        <PillSelector
-          options={[
-            { value: 'system', label: a.system, icon: <Monitor size={14} /> },
-            { value: 'en', label: 'EN' },
-            { value: 'zh', label: '中文' },
-          ]}
-          value={localePref}
-          onChange={v => {
-            setLocalePref(v);
-            localStorage.setItem('locale', v);
-            const resolved: Locale = v === 'system'
-              ? (navigator.language.startsWith('zh') ? 'zh' : 'en')
-              : v as Locale;
-            setLocale(resolved);
-            document.cookie = `locale=${resolved};path=/;max-age=31536000;SameSite=Lax`;
-          }}
-        />
       </SettingGroup>
 
       </SettingCard>
