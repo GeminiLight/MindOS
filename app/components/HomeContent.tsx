@@ -9,8 +9,6 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import OnboardingView from './OnboardingView';
 import GuideCard from './GuideCard';
 import SystemPulse from './SystemPulse';
-import EchoSpotlight from './EchoSpotlight';
-import QuickSuggestion from './QuickSuggestion';
 import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 import type { SpaceInfo } from '@/app/page';
 
@@ -244,80 +242,14 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
       </div>
 
+      {/* ══════════ Knowledge Stats ══════════ */}
+      <KnowledgeStatsBar spaces={spaceList} totalFiles={recent.length} />
+
       {/* ══════════ Knowledge Pulse ══════════ */}
       <SystemPulse />
 
-      {/* ══════════ Echo Spotlight ══════════ */}
-      <EchoSpotlight />
-
-      {/* ══════════ Quick Suggestion ══════════ */}
-      <QuickSuggestion recent={recent} />
-
       {/* ══════════ Pinned Files ══════════ */}
       <PinnedFilesSection formatTime={formatTime} />
-
-      {/* ══════════ Spaces ══════════ */}
-      {(spaceList.length > 0 || true) && (
-        <section className="mb-10">
-          <SectionTitle
-            icon={<Brain size={13} />}
-            count={spaceList.length > 0 ? spaceList.length : undefined}
-            action={<CreateSpaceButton t={t} />}
-          >
-            {t.home.spaces}
-          </SectionTitle>
-          {spaceList.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-                  const emoji = extractEmoji(s.name);
-                  const label = stripEmoji(s.name);
-                  const isEmpty = s.fileCount === 0;
-                  return (
-                    <Link
-                      key={s.name}
-                      href={`/view/${encodePath(s.path)}`}
-                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
-                        isEmpty
-                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
-                      }`}
-                    >
-                      {emoji ? (
-                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                      ) : (
-                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                        {s.description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                        )}
-                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
-                          {t.home.nFiles(s.fileCount)}
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-              {spaceList.length > SPACES_PER_ROW && (
-                <ToggleButton
-                  expanded={showAllSpaces}
-                  onToggle={() => setShowAllSpaces(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-2"
-                />
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground py-2">
-              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
-            </p>
-          )}
-        </section>
-      )}
 
       {/* ══════════ Recently Edited ══════════ */}
       {recent.length > 0 && (
@@ -455,6 +387,69 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </section>
       )}
 
+      {/* ══════════ Spaces ══════════ */}
+      {(spaceList.length > 0 || true) && (
+        <section className="mb-10">
+          <SectionTitle
+            icon={<Brain size={13} />}
+            count={spaceList.length > 0 ? spaceList.length : undefined}
+            action={<CreateSpaceButton t={t} />}
+          >
+            {t.home.spaces}
+          </SectionTitle>
+          {spaceList.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
+                  const emoji = extractEmoji(s.name);
+                  const label = stripEmoji(s.name);
+                  const isEmpty = s.fileCount === 0;
+                  return (
+                    <Link
+                      key={s.name}
+                      href={`/view/${encodePath(s.path)}`}
+                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                        isEmpty
+                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
+                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                      }`}
+                    >
+                      {emoji ? (
+                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
+                      ) : (
+                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
+                        {s.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
+                          {t.home.nFiles(s.fileCount)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {spaceList.length > SPACES_PER_ROW && (
+                <ToggleButton
+                  expanded={showAllSpaces}
+                  onToggle={() => setShowAllSpaces(v => !v)}
+                  showLabel={t.home.showMore}
+                  hideLabel={t.home.showLess}
+                  className="mt-2"
+                />
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">
+              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Footer */}
       <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">
         <Sparkles size={10} className="text-[var(--amber)]/40" />
@@ -522,6 +517,34 @@ function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
       <Plus size={12} />
       <span>{t.home.newSpace}</span>
     </button>
+  );
+}
+
+/* ── Knowledge Stats Bar ── */
+function KnowledgeStatsBar({ spaces, totalFiles }: { spaces: SpaceInfo[]; totalFiles: number }) {
+  const { t } = useLocale();
+  const totalFileCount = useMemo(() => spaces.reduce((sum, s) => sum + s.fileCount, 0), [spaces]);
+  const home = t.home;
+
+  if (totalFileCount === 0 && spaces.length === 0) return null;
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-center gap-px rounded-lg overflow-hidden border border-border/40">
+        <div className="flex-1 px-3 py-2.5 bg-card">
+          <p className="text-2xs text-muted-foreground/50 leading-none mb-1 font-display">{home.statFiles ?? 'Files'}</p>
+          <p className="text-base font-semibold text-foreground font-mono tabular-nums leading-none">{totalFileCount}</p>
+        </div>
+        <div className="flex-1 px-3 py-2.5 bg-card border-l border-border/30">
+          <p className="text-2xs text-muted-foreground/50 leading-none mb-1 font-display">{home.statSpaces ?? 'Spaces'}</p>
+          <p className="text-base font-semibold text-foreground font-mono tabular-nums leading-none">{spaces.length}</p>
+        </div>
+        <div className="flex-1 px-3 py-2.5 bg-card border-l border-border/30">
+          <p className="text-2xs text-muted-foreground/50 leading-none mb-1 font-display">{home.statRecent ?? 'Recent'}</p>
+          <p className="text-base font-semibold text-foreground font-mono tabular-nums leading-none">{totalFiles}</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
