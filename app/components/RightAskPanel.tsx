@@ -6,8 +6,8 @@ import AskContent from '@/components/ask/AskContent';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 
-const DEFAULT_WIDTH = 380;
-const MIN_WIDTH = 300;
+const DEFAULT_WIDTH = 400;
+const MIN_WIDTH = 360;
 const MAX_WIDTH_ABS = 4000;
 const FOCUS_SNAP_THRESHOLD = 80;
 
@@ -92,7 +92,7 @@ export default function RightAskPanel({
         transition-[width,transform] duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}
-      style={{ width: effectiveWidth }}
+      style={{ width: effectiveWidth, minWidth: `${MIN_WIDTH}px` }}
       role="complementary"
       aria-label="MindOS Agent panel"
     >

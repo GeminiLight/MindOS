@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { useWalkthrough } from './WalkthroughProvider';
+import { useWalkthrough } from '@/lib/stores/walkthrough-store';
 
 interface WalkthroughTooltipProps {
   stepIndex: number;

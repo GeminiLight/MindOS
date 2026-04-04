@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, memo, useState, useCallback } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, ImagePart } from '@/lib/types';
@@ -77,20 +77,21 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
   if (!cleaned && !isStreaming) return null;
   return (
     <div className="prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground
-      prose-p:my-1 prose-p:leading-relaxed
-      prose-headings:font-semibold prose-headings:my-2 prose-headings:text-[13px]
-      prose-ul:my-1 prose-li:my-0.5
-      prose-ol:my-1
-      prose-code:text-[0.8em] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
-      prose-pre:bg-muted prose-pre:text-foreground prose-pre:text-xs
-      prose-blockquote:border-l-amber-400 prose-blockquote:text-muted-foreground
-      prose-a:text-amber-500 prose-a:no-underline hover:prose-a:underline
+      prose-p:my-2 prose-p:leading-relaxed
+      prose-headings:font-semibold prose-headings:my-3
+      prose-h1:text-base prose-h2:text-[15px] prose-h3:text-sm
+      prose-ul:my-1.5 prose-li:my-0.5
+      prose-ol:my-1.5
+      prose-code:text-[0.8em] prose-code:bg-background/60 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+      prose-pre:bg-background/60 prose-pre:text-foreground prose-pre:text-xs
+      prose-blockquote:border-l-[var(--amber)] prose-blockquote:text-muted-foreground
+      prose-a:text-[var(--amber)] prose-a:no-underline hover:prose-a:underline
       prose-strong:text-foreground prose-strong:font-semibold
       prose-table:text-xs prose-th:py-1 prose-td:py-1
     ">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>
       {isStreaming && (
-        <span className="inline-block w-1.5 h-3.5 bg-amber-400 ml-0.5 align-middle animate-pulse rounded-sm" />
+        <span className="inline-block w-1.5 h-3.5 bg-[var(--amber)] ml-0.5 align-middle animate-pulse rounded-sm" />
       )}
     </div>
   );
@@ -178,13 +179,30 @@ export default memo(function MessageList({
   labels,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const scrollToBottom = useCallback(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      setShowScrollDown(scrollHeight - scrollTop - clientHeight > 100);
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4 min-h-0">
+    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4 min-h-0">
       {messages.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 min-h-[200px] px-4">
           {/* Brand anchor */}
@@ -267,6 +285,18 @@ export default memo(function MessageList({
         </div>
       ))}
       <div ref={endRef} />
+
+      {/* Scroll-to-bottom FAB */}
+      {showScrollDown && messages.length > 0 && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 p-1.5 rounded-full border border-border/60 bg-card shadow-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="Scroll to bottom"
+        >
+          <ArrowDown size={14} />
+        </button>
+      )}
     </div>
   );
 });
