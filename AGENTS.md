@@ -218,6 +218,35 @@ npm test                          # 手动跑测试，不杀 dev server
 - **关于 / 诊断**：建议同时展示 **MindOS 版本** 与 **Desktop 壳版本**，避免用户只对不上号。
 - 全文与 checklist：`wiki/specs/spec-desktop-bundled-mindos.md`（「发布与版本」）、发版步骤 `wiki/refs/git-sync-workflow.md`。
 
+### Desktop 发版步骤
+
+**不要用 `npm run release` 发 Desktop**——它只发 npm 包。Desktop 通过 GitHub Actions workflow 构建和发布。
+
+1. **确认代码已 push 到 origin main**，且 `sync-to-mindos` CI 已完成（公开仓已同步）
+2. **确定 Desktop 版本号**：查看上一个 release tag（`gh release list --repo GeminiLight/MindOS | head -3`），patch +1
+3. **触发 Build Desktop workflow**：
+   ```bash
+   gh workflow run "Build Desktop" --repo GeminiLight/MindOS \
+     -f publish=true \
+     -f tag=desktop-v<VERSION>
+   ```
+   - `publish=true`：构建完成后自动创建 GitHub Release（默认已开启）
+   - `tag=desktop-v<VERSION>`：**必须传**，workflow 会从 tag 提取版本号写入 `desktop/package.json`，确保安装包文件名正确（如 `MindOS-0.1.13.dmg`）
+   - `sign_mac=true`：macOS 签名+公证（默认已开启）
+4. **验证 Release**：`gh release view desktop-v<VERSION> --repo GeminiLight/MindOS`
+   - 检查 assets 包含所有平台：`.dmg`（arm64 + x64）、`.exe`、`.AppImage`、`.deb`
+   - 检查文件名版本号正确（不是旧版本号）
+5. **如果 Release 有问题**（文件名错误、缺文件等）：
+   ```bash
+   gh release delete desktop-v<VERSION> --repo GeminiLight/MindOS --yes
+   # 重新触发 step 3
+   ```
+
+**常见踩坑：**
+- 忘传 `tag` → 安装包文件名用 `desktop/package.json` 的旧版本号
+- 忘传 `publish=true`（旧默认值）→ finalize job 跳过，不创建 Release
+- 公开仓未同步最新代码 → 构建的是旧版本，等 `sync-to-mindos` 完成再触发
+
 ## 文档维护
 
 ### 文档一致性规则
