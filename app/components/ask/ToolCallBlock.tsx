@@ -1,34 +1,38 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import {
+  ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, AlertTriangle,
+  Search, FolderOpen, BookOpen, Pencil, FilePlus, FileText, Pin, Trash2,
+  ArrowRightLeft, Link2, History, Clock, Table, Wrench as WrenchIcon,
+} from 'lucide-react';
 import type { ToolCallPart } from '@/lib/types';
+import type { LucideIcon } from 'lucide-react';
 
 const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
 
-/** Tools that produce diff output — auto-expand when done */
 const DIFF_TOOLS = new Set([
   'write_file', 'create_file', 'update_section',
   'insert_after_heading', 'edit_lines', 'append_to_file',
 ]);
 
-const TOOL_ICONS: Record<string, string> = {
-  search: '🔍',
-  list_files: '📂',
-  read_file: '📖',
-  write_file: '✏️',
-  create_file: '📄',
-  append_to_file: '📝',
-  insert_after_heading: '📌',
-  update_section: '✏️',
-  delete_file: '🗑️',
-  rename_file: '📝',
-  move_file: '📦',
-  get_backlinks: '🔗',
-  get_history: '📜',
-  get_file_at_version: '⏪',
-  get_recent: '🕐',
-  append_csv: '📊',
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  search: Search,
+  list_files: FolderOpen,
+  read_file: BookOpen,
+  write_file: Pencil,
+  create_file: FilePlus,
+  append_to_file: FileText,
+  insert_after_heading: Pin,
+  update_section: Pencil,
+  delete_file: Trash2,
+  rename_file: FileText,
+  move_file: ArrowRightLeft,
+  get_backlinks: Link2,
+  get_history: History,
+  get_file_at_version: History,
+  get_recent: Clock,
+  append_csv: Table,
 };
 
 function formatInput(input: unknown): string {
@@ -80,7 +84,7 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   const [manualToggle, setManualToggle] = useState<boolean | null>(null);
   const expanded = manualToggle ?? (hasDiff && isDone);
 
-  const icon = TOOL_ICONS[part.toolName] ?? '🔧';
+  const IconComponent = TOOL_ICONS[part.toolName] ?? WrenchIcon;
   const isDestructive = DESTRUCTIVE_TOOLS.has(part.toolName);
 
   const parsed = useMemo(() => parseToolOutput(part.output), [part.output]);
@@ -99,17 +103,17 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   return (
     <div className={`my-1 rounded-md border text-xs font-mono ${
       isDestructive
-        ? 'border-[var(--amber)]/30 bg-[var(--amber)]/5'
-        : 'border-border/50 bg-muted/30'
+        ? 'border-[var(--amber)]/30 bg-background/60'
+        : 'border-border/50 bg-background/60'
     }`}>
       <button
         type="button"
         onClick={() => setManualToggle(v => v === null ? !expanded : !v)}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-muted/50 transition-colors rounded-md"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-muted/30 transition-colors rounded-md"
       >
         {expanded ? <ChevronDown size={12} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={12} className="shrink-0 text-muted-foreground" />}
         {isDestructive && <AlertTriangle size={11} className="shrink-0 text-[var(--amber)]" />}
-        <span>{icon}</span>
+        <IconComponent size={12} className={`shrink-0 ${isDestructive ? 'text-[var(--amber)]' : 'text-muted-foreground'}`} />
         <span className={`font-medium ${isDestructive ? 'text-[var(--amber)]' : 'text-foreground'}`}>{part.toolName}</span>
         <span className="text-muted-foreground truncate flex-1">{headerLabel}</span>
         <span className="shrink-0 ml-auto">
