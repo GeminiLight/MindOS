@@ -144,6 +144,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     errorLabels: { noResponse: t.ask.errorNoResponse, stopped: t.ask.stopped },
     resetInputState,
   });
+  const { isLoading, loadingPhase, reconnectAttempt, reconnectMaxRef } = chat;
+  const handleSubmit = chat.submit;
+  const handleStop = chat.stop;
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -171,7 +174,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       setTimeout(() => inputRef.current?.focus(), 50);
       void session.initSessions();
       setInput(initialMessage || '');
-      firstMessageFired.current = false;
+      chat.firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
     upload.clearAttachments();
     imageUpload.clearImages();
@@ -359,10 +362,6 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     },
     [],
   );
-
-  const { isLoading, loadingPhase, reconnectAttempt, reconnectMaxRef } = chat;
-  const handleSubmit = chat.submit;
-  const handleStop = chat.stop;
 
   const handleResetSession = useCallback(() => {
     if (chat.isLoadingRef.current) return;

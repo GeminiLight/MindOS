@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback } from 'react';
-import type { Message, AskMode } from '@/lib/types';
+import type { Message, ImagePart, AskMode } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
@@ -12,7 +12,7 @@ export interface AskChatRefs {
   inputValueRef: React.RefObject<string>;
   mentionRef: React.RefObject<{ mentionQuery: string | null }>;
   slashRef: React.RefObject<{ slashQuery: string | null }>;
-  imageUploadRef: React.RefObject<{ images: { data: string; mimeType: string }[]; clearImages: () => void }>;
+  imageUploadRef: React.RefObject<{ images: ImagePart[]; clearImages: () => void }>;
   sessionRef: React.RefObject<{
     messages: Message[];
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
