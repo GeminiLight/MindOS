@@ -22,9 +22,12 @@ function getMindRoot() {
 }
 
 function resolvePath(root, filePath) {
-  // Accept both relative (to mind root) and absolute paths
-  if (filePath.startsWith('/')) return filePath;
-  return resolve(root, filePath);
+  const resolved = resolve(root, filePath);
+  if (!resolved.startsWith(root)) {
+    console.error(red(`Access denied: path outside knowledge base`));
+    process.exit(EXIT.ERROR);
+  }
+  return resolved;
 }
 
 export const meta = {
