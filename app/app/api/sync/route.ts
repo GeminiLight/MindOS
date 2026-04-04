@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { execSync, execFile } from 'child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 
@@ -201,6 +201,37 @@ export async function POST(req: NextRequest) {
         const gitignoreSavePath = join(mindRoot, '.gitignore');
         writeFileSync(gitignoreSavePath, body.content, 'utf-8');
         return NextResponse.json({ ok: true });
+      }
+
+      case 'resolve-conflict': {
+        // Resolve a single conflict: keep-local (default) or keep-remote
+        const file = body.remote; // reuse field: relative path of conflict file
+        const strategy = body.branch ?? 'keep-local'; // reuse field
+        if (!file || typeof file !== 'string') {
+          return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
+        }
+        const conflictPath = join(mindRoot, file + '.sync-conflict');
+        const originalPath = join(mindRoot, file);
+        try {
+          if (strategy === 'keep-remote' && existsSync(conflictPath)) {
+            // Replace local with remote version
+            const remoteContent = readFileSync(conflictPath, 'utf-8');
+            writeFileSync(originalPath, remoteContent, 'utf-8');
+          }
+          // Clean up .sync-conflict file
+          if (existsSync(conflictPath)) {
+            unlinkSync(conflictPath);
+          }
+          // Remove this conflict from sync state
+          const state = loadSyncState();
+          if (state.conflicts) {
+            state.conflicts = state.conflicts.filter((c: { file: string }) => c.file !== file);
+            writeFileSync(SYNC_STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+          }
+          return NextResponse.json({ ok: true });
+        } catch (e) {
+          return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+        }
       }
 
       default:

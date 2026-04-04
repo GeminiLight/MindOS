@@ -174,7 +174,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
             {/* 1. API Key — most essential, enter first */}
             <Field
               label={<>{t.settings.ai.apiKey} {envKeyName && <EnvBadge overridden={env[envKeyName]} />}</>}
-              hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : t.settings.ai.keyHint}
+              hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : hasFallbackKey ? t.settings.ai.keyOptionalHint : t.settings.ai.keyHint}
             >
               <ApiKeyInput
                 value={currentConfig.apiKey}
@@ -352,13 +352,24 @@ function ModelInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
+  const fetchVersionRef = useRef(0);
+  const loadingRef = useRef(false);
 
   const hasKey = !!apiKey || !!envKey || !!PROVIDER_PRESETS[provider]?.apiKeyFallback;
 
+  // Reset fetched cache when provider/key/baseUrl changes
+  useEffect(() => {
+    fetchedRef.current = false;
+    fetchVersionRef.current++;
+    setModels(null);
+  }, [provider, apiKey, baseUrl]);
+
   const fetchModels = useCallback(async (silent = false) => {
-    if (loading) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     if (!silent) setError('');
+    const version = fetchVersionRef.current;
     try {
       const body: Record<string, string> = { provider };
       if (apiKey) body.apiKey = apiKey;
@@ -369,7 +380,9 @@ function ModelInput({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (version !== fetchVersionRef.current) return;
       const json = await res.json();
+      if (version !== fetchVersionRef.current) return;
       if (json.ok && Array.isArray(json.models)) {
         setModels(json.models);
         fetchedRef.current = true;
@@ -378,25 +391,20 @@ function ModelInput({
         setError(json.error || 'Failed to fetch models');
       }
     } catch {
+      if (version !== fetchVersionRef.current) return;
       if (!silent) setError('Network error');
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [provider, apiKey, baseUrl, loading]);
+  }, [provider, apiKey, baseUrl]);
 
-  // Auto-fetch models on first input focus (background, silent)
   const handleFocus = useCallback(() => {
     setFocused(true);
-    if (!fetchedRef.current && supportsListModels && hasKey && !loading) {
+    if (!fetchedRef.current && supportsListModels && hasKey && !loadingRef.current) {
       fetchModels(true);
     }
-  }, [supportsListModels, hasKey, loading, fetchModels]);
-
-  // Reset fetched cache when provider/key/baseUrl changes
-  useEffect(() => {
-    fetchedRef.current = false;
-    setModels(null);
-  }, [provider, apiKey, baseUrl]);
+  }, [supportsListModels, hasKey, fetchModels]);
 
   // Filtered models for typeahead
   const filtered = useMemo(() => {
@@ -451,7 +459,7 @@ function ModelInput({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDropdown]);
 
-  const displayList = open ? (filtered.length > 0 ? filtered : models ?? []) : filtered;
+  const displayList = filtered;
 
   return (
     <div ref={containerRef} className="relative">

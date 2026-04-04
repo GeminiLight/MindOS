@@ -168,9 +168,10 @@ function autoPull(mindRoot, isSshUrl = false) {
       saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
     } catch {
       // merge conflict → keep both versions
+      let conflicts = [];
+      let conflictWarnings = [];
       try {
-        const conflicts = gitExec(['diff', '--name-only', '--diff-filter=U'], mindRoot).split('\n').filter(Boolean);
-        const conflictWarnings = [];
+        conflicts = gitExec(['diff', '--name-only', '--diff-filter=U'], mindRoot).split('\n').filter(Boolean);
         for (const file of conflicts) {
           try {
             const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
@@ -181,14 +182,26 @@ function autoPull(mindRoot, isSshUrl = false) {
           try { execFileSync('git', ['checkout', '--ours', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
         }
         execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe' });
-        execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept both versions)'], { cwd: mindRoot, stdio: 'pipe' });
+        // --no-edit avoids editor prompt for merge commit; --allow-empty handles edge case where ours == theirs
+        try {
+          execFileSync('git', ['-c', 'core.editor=true', 'commit', '--no-edit'], { cwd: mindRoot, stdio: 'pipe' });
+        } catch {
+          // If merge commit fails (e.g. nothing to commit), try explicit message
+          try {
+            execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept local versions)', '--allow-empty'], { cwd: mindRoot, stdio: 'pipe' });
+          } catch {}
+        }
+      } catch (err) {
+        // Even if commit fails, record the error — conflicts are still saved below
+        saveSyncState({ ...loadSyncState(), lastError: err.message, lastErrorTime: new Date().toISOString() });
+      }
+      // Always save conflicts (even if commit failed) so UI can show resolution buttons
+      if (conflicts.length > 0) {
         saveSyncState({
           ...loadSyncState(),
           lastPull: new Date().toISOString(),
           conflicts: conflicts.map(f => ({ file: f, time: new Date().toISOString(), noBackup: conflictWarnings.includes(f) })),
         });
-      } catch (err) {
-        saveSyncState({ ...loadSyncState(), lastError: err.message, lastErrorTime: new Date().toISOString() });
       }
     }
   }

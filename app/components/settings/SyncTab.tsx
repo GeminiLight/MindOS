@@ -61,6 +61,62 @@ function getSyncErrorHint(error: string, remote?: string | null, syncT?: Record<
   return '';
 }
 
+/* ── Conflict Row ──────────────────────────────────────────────── */
+
+function ConflictRow({ file, time, syncT, onResolved }: {
+  file: string; time: string; syncT?: Record<string, unknown>; onResolved: () => void;
+}) {
+  const [resolving, setResolving] = useState<string | null>(null); // 'local' | 'remote' | null
+
+  const handleResolve = async (strategy: 'keep-local' | 'keep-remote') => {
+    setResolving(strategy === 'keep-local' ? 'local' : 'remote');
+    try {
+      await apiFetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resolve-conflict', remote: file, branch: strategy }),
+      });
+      onResolved();
+    } catch {
+      setResolving(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 text-xs">
+      <AlertCircle size={12} className="text-error shrink-0" />
+      <a
+        href={`/view/${encodeURIComponent(file)}`}
+        className="font-mono truncate hover:text-foreground hover:underline transition-colors flex-1 min-w-0"
+        title={file}
+      >
+        {file}
+      </a>
+      <span className="text-muted-foreground shrink-0">{timeAgo(time, syncT)}</span>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => handleResolve('keep-local')}
+          disabled={!!resolving}
+          className="px-2 py-0.5 rounded border border-border text-2xs hover:bg-muted transition-colors disabled:opacity-40"
+          title={syncT?.keepLocalHint ?? 'Keep this device\'s version'}
+        >
+          {resolving === 'local' ? <Loader2 size={10} className="animate-spin" /> : (syncT?.keepLocal ?? 'Keep local')}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleResolve('keep-remote')}
+          disabled={!!resolving}
+          className="px-2 py-0.5 rounded border border-border text-2xs hover:bg-muted transition-colors disabled:opacity-40"
+          title={syncT?.keepRemoteHint ?? 'Replace with remote version'}
+        >
+          {resolving === 'remote' ? <Loader2 size={10} className="animate-spin" /> : (syncT?.keepRemote ?? 'Keep remote')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Gitignore Editor ──────────────────────────────────────────── */
 
 function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
@@ -572,37 +628,23 @@ export function SyncTab({ t }: SyncTabProps) {
 
         {/* Conflicts */}
         {conflicts.length > 0 && (
-          <div className="pt-2 border-t border-border/50">
-            <p className="text-xs font-medium text-foreground mb-2">
+          <div className="pt-2 border-t border-border/50 space-y-3">
+            <p className="text-xs font-medium text-foreground">
               {(syncT?.conflictsTitle as ((n: number) => string))?.(conflicts.length) ?? `Conflicts (${conflicts.length})`}
             </p>
-            <div className="space-y-1.5">
+            <p className="text-2xs text-muted-foreground">
+              {syncT?.conflictExplain ?? 'These files were changed on both this device and the remote. Choose which version to keep for each file.'}
+            </p>
+            <div className="space-y-2">
               {conflicts.map((c, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs group">
-                  <AlertCircle size={12} className="text-error shrink-0" />
-                  <a
-                    href={`/view/${encodeURIComponent(c.file)}`}
-                    className="font-mono truncate hover:text-foreground hover:underline transition-colors"
-                    title={`Open ${c.file}`}
-                  >
-                    {c.file}
-                  </a>
-                  <a
-                    href={`/view/${encodeURIComponent(c.file + '.sync-conflict')}`}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground"
-                    title="View remote version (.sync-conflict)"
-                  >
-                    <ExternalLink size={11} />
-                  </a>
-                  <span className="text-muted-foreground shrink-0 ml-auto">{timeAgo(c.time, syncT)}</span>
-                </div>
+                <ConflictRow key={i} file={c.file} time={c.time} syncT={syncT} onResolved={fetchStatus} />
               ))}
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {status.lastError && (
+        {/* Error — hide if conflicts section already explains the issue */}
+        {status.lastError && conflicts.length === 0 && (
           <div className="flex items-start gap-2 text-xs p-2.5 rounded-lg bg-destructive/10 text-destructive">
             <AlertCircle size={12} className="shrink-0 mt-0.5" />
             <div className="space-y-1">

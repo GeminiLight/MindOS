@@ -659,7 +659,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           }
         }}
       >
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background overflow-x-hidden">
           <ChangesBanner />
           {children}
         </div>
