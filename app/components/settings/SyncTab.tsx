@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff } from 'lucide-react';
-import { SectionLabel, PrimaryButton, Input } from './Primitives';
+import { SectionLabel, PrimaryButton, Input, Field, SettingCard } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
 import type { Messages } from '@/lib/i18n';
@@ -113,123 +113,114 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-          <GitBranch size={18} className="text-muted-foreground" />
-        </div>
-        <div>
-          <h3 className="text-sm font-medium text-foreground">
-            {syncT?.emptyTitle ?? 'Cross-device Sync'}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {syncT?.emptyDesc ?? 'Automatically sync your knowledge base across devices via Git.'}
-          </p>
-        </div>
-      </div>
-
-      {/* Git Remote URL */}
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-foreground block">
-          {syncT?.remoteUrl ?? 'Git Remote URL'}
-        </label>
-        <Input
-          type="text"
-          value={remoteUrl}
-          onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
-          placeholder="git@github.com:user/repo.git"
-          className={`font-mono ${remoteUrl.trim() && !isValid ? 'border-destructive' : ''}`}
-        />
-        {remoteUrl.trim() && !isValid && (
-          <p className="text-xs text-destructive">
-            {syncT?.invalidUrl ?? 'Invalid Git URL — use HTTPS (https://...) or SSH (git@...)'}
-          </p>
-        )}
-        {urlType === 'ssh' && (
-          <p className="text-xs text-muted-foreground">
-            {syncT?.sshHint ?? 'Requires SSH key on this machine. Verify with: ssh -T git@github.com'}
-          </p>
-        )}
-      </div>
-
-      {/* Access Token (HTTPS only) */}
-      {showTokenField && (
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground block">
-            {syncT?.accessToken ?? 'Access Token'}{' '}
-            <span className="text-muted-foreground font-normal">{syncT?.optional ?? '(optional, for private repos)'}</span>
-          </label>
-          <div className="relative">
-            <Input
-              type={showToken ? 'text' : 'password'}
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              placeholder="ghp_xxxxxxxxxxxx"
-              className="pr-9 font-mono"
-            />
-            <button
-              type="button"
-              onClick={() => setShowToken(!showToken)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground transition-colors"
-            >
-              {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {syncT?.tokenHint ?? 'GitHub:'}{' '}
-            <a
-              href="https://github.com/settings/tokens/new?scopes=repo&description=MindOS+Sync"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-foreground transition-colors"
-            >
-              {syncT?.tokenLink ?? 'Create a token (repo scope)'}
-            </a>
-          </p>
-        </div>
-      )}
-
-      {/* Branch */}
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-foreground block">
-          {syncT?.branchLabel ?? 'Branch'}
-        </label>
-        <Input
-          type="text"
-          value={branch}
-          onChange={e => setBranch(e.target.value)}
-          placeholder="main"
-          className="max-w-[200px] font-mono"
-        />
-      </div>
-
-      {/* Connect button */}
-      <PrimaryButton
-        onClick={handleConnect}
-        disabled={!isValid || connecting}
-        className="flex items-center gap-2"
+    <div className="space-y-4">
+      <SettingCard
+        icon={<GitBranch size={15} />}
+        title={syncT?.emptyTitle ?? 'Cross-device Sync'}
+        description={syncT?.emptyDesc ?? 'Automatically sync your knowledge base across devices via Git.'}
       >
-        {connecting && <Loader2 size={14} className="animate-spin" />}
-        {connecting
-          ? (syncT?.connecting ?? 'Connecting...')
-          : (syncT?.connectButton ?? 'Connect & Start Sync')}
-      </PrimaryButton>
+        {/* Git Remote URL */}
+        <Field
+          label={syncT?.remoteUrl ?? 'Git Remote URL'}
+          hint={urlType === 'ssh'
+            ? (syncT?.sshHint ?? 'Requires SSH key on this machine. Verify with: ssh -T git@github.com')
+            : undefined
+          }
+        >
+          <Input
+            type="text"
+            value={remoteUrl}
+            onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
+            placeholder="git@github.com:user/repo.git"
+            className={`font-mono ${remoteUrl.trim() && !isValid ? 'border-destructive' : ''}`}
+          />
+          {!remoteUrl.trim() && (
+            <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+              <p><span className="font-medium text-foreground/70">SSH</span> git@github.com:user/repo.git — {syncT?.sshBrief ?? 'recommended, one-time key setup'}</p>
+              <p><span className="font-medium text-foreground/70">HTTPS</span> https://github.com/user/repo.git — {syncT?.httpsBrief ?? 'requires access token for private repos'}</p>
+            </div>
+          )}
+          {remoteUrl.trim() && !isValid && (
+            <p className="text-xs text-destructive mt-1">
+              {syncT?.invalidUrl ?? 'Invalid Git URL — use HTTPS (https://...) or SSH (git@...)'}
+            </p>
+          )}
+        </Field>
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-start gap-2 text-xs p-3 rounded-lg bg-destructive/10 text-destructive" role="alert" aria-live="polite">
-          <AlertCircle size={13} className="shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            {error.split('\n').map((line, i) => (
-              <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : ''}`}>{line}</span>
-            ))}
+        {/* Access Token (HTTPS only) */}
+        {showTokenField && (
+          <Field
+            label={<>{syncT?.accessToken ?? 'Access Token'} <span className="text-muted-foreground font-normal">{syncT?.optional ?? '(optional, for private repos)'}</span></>}
+            hint={undefined}
+          >
+            <div className="relative">
+              <Input
+                type={showToken ? 'text' : 'password'}
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                placeholder="ghp_xxxxxxxxxxxx"
+                className="pr-9 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground transition-colors"
+              >
+                {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {syncT?.tokenHint ?? 'GitHub:'}{' '}
+              <a
+                href="https://github.com/settings/tokens/new?scopes=repo&description=MindOS+Sync"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground transition-colors"
+              >
+                {syncT?.tokenLink ?? 'Create a token (repo scope)'}
+              </a>
+            </p>
+          </Field>
+        )}
+
+        {/* Branch */}
+        <Field label={syncT?.branchLabel ?? 'Branch'}>
+          <Input
+            type="text"
+            value={branch}
+            onChange={e => setBranch(e.target.value)}
+            placeholder="main"
+            className="max-w-[200px] font-mono"
+          />
+        </Field>
+
+        {/* Connect button */}
+        <PrimaryButton
+          onClick={handleConnect}
+          disabled={!isValid || connecting}
+          className="flex items-center gap-2"
+        >
+          {connecting && <Loader2 size={14} className="animate-spin" />}
+          {connecting
+            ? (syncT?.connecting ?? 'Connecting...')
+            : (syncT?.connectButton ?? 'Connect & Start Sync')}
+        </PrimaryButton>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-start gap-2 text-xs p-3 rounded-lg bg-destructive/10 text-destructive" role="alert" aria-live="polite">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              {error.split('\n').map((line, i) => (
+                <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : ''}`}>{line}</span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </SettingCard>
 
       {/* Features */}
-      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pt-2">
+      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground px-5">
         {[
           syncT?.featureAutoCommit ?? 'Auto-commit on save',
           syncT?.featureAutoPull ?? 'Auto-pull from remote',
@@ -370,128 +361,122 @@ export function SyncTab({ t }: SyncTabProps) {
   const conflicts = status.conflicts || [];
 
   return (
-    <div className="space-y-6">
-      <SectionLabel>{syncT?.sectionTitle ?? 'Sync'}</SectionLabel>
-
-      {/* Status overview */}
-      <div className="space-y-2.5 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelProvider ?? 'Provider'}</span>
-          <span className="font-mono text-sm">{status.provider}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelRemote ?? 'Remote'}</span>
-          <span className="font-mono text-sm truncate" title={status.remote}>{status.remote}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelBranch ?? 'Branch'}</span>
-          <span className="font-mono text-sm">{status.branch}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelLastSync ?? 'Last sync'}</span>
-          <span className="text-sm">{timeAgo(status.lastSync, syncT)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelUnpushed ?? 'Unpushed'}</span>
-          <span className="text-sm">{(syncT?.unpushedCommits as ((n: number) => string))?.(status.unpushed) ?? `${status.unpushed} commits`}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-24 shrink-0">{syncT?.labelAutoSync ?? 'Auto-sync'}</span>
-          <span className="text-sm">
-            commit: {status.autoCommitInterval}s, pull: {Math.floor((status.autoPullInterval || 300) / 60)}min
+    <div className="space-y-4">
+      <SettingCard
+        icon={<GitBranch size={15} />}
+        title={syncT?.sectionTitle ?? 'Sync'}
+        description={status.remote}
+        badge={
+          <span className="text-2xs px-1.5 py-0.5 rounded bg-success/15 text-success font-medium">
+            {syncT?.labelEnabled ?? 'Active'}
           </span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-2">
-        <button
-          type="button"
-          onClick={handleSyncNow}
-          disabled={syncing}
-          title={syncing ? t.hints.syncInProgress : undefined}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
-          {syncT?.syncNow ?? 'Sync Now'}
-        </button>
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={toggling}
-          title={toggling ? t.hints.toggleInProgress : undefined}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            status.enabled
-              ? 'border-border text-muted-foreground hover:text-destructive hover:border-destructive/50'
-              : 'border-success/30 text-success hover:bg-success/10'
-          }`}
-        >
-          {status.enabled ? (syncT?.disableAutoSync ?? 'Disable Auto-sync') : (syncT?.enableAutoSync ?? 'Enable Auto-sync')}
-        </button>
-      </div>
-
-      {/* Message */}
-      {message && (
-        <div className="flex items-start gap-1.5 text-xs" role="status" aria-live="polite">
-          {message.type === 'success' ? (
-            <><CheckCircle2 size={13} className="text-success shrink-0 mt-0.5" /><span className="text-success">{message.text}</span></>
-          ) : (
-            <>
-              <AlertCircle size={13} className="text-destructive shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                {message.text.split('\n').map((line, i) => (
-                  <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : 'text-destructive'}`}>{line}</span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Conflicts (Task H — enhanced with links) */}
-      {conflicts.length > 0 && (
-        <div className="pt-2 border-t border-border">
-          <SectionLabel>{(syncT?.conflictsTitle as ((n: number) => string))?.(conflicts.length) ?? `Conflicts (${conflicts.length})`}</SectionLabel>
-          <div className="space-y-1.5">
-            {conflicts.map((c, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs group">
-                <AlertCircle size={12} className="text-error shrink-0" />
-                <a
-                  href={`/view/${encodeURIComponent(c.file)}`}
-                  className="font-mono truncate hover:text-foreground hover:underline transition-colors"
-                  title={`Open ${c.file}`}
-                >
-                  {c.file}
-                </a>
-                <a
-                  href={`/view/${encodeURIComponent(c.file + '.sync-conflict')}`}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground"
-                  title="View remote version (.sync-conflict)"
-                >
-                  <ExternalLink size={11} />
-                </a>
-                <span className="text-muted-foreground shrink-0 ml-auto">{timeAgo(c.time, syncT)}</span>
-              </div>
-            ))}
+        }
+      >
+        {/* Status rows */}
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{syncT?.labelBranch ?? 'Branch'}</span>
+            <span className="font-mono text-xs">{status.branch}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {syncT?.conflictHint ?? 'Click a file to view your version. Hover and click'} <ExternalLink size={10} className="inline" /> {syncT?.conflictHintSuffix ?? 'to see the remote version.'}
-          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{syncT?.labelLastSync ?? 'Last sync'}</span>
+            <span className="text-xs">{timeAgo(status.lastSync, syncT)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{syncT?.labelUnpushed ?? 'Unpushed'}</span>
+            <span className="text-xs">{(syncT?.unpushedCommits as ((n: number) => string))?.(status.unpushed) ?? `${status.unpushed} commits`}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{syncT?.labelAutoSync ?? 'Auto-sync'}</span>
+            <span className="text-xs">
+              commit {status.autoCommitInterval}s · pull {Math.floor((status.autoPullInterval || 300) / 60)}min
+            </span>
+          </div>
         </div>
-      )}
 
-      {/* Error */}
-      {status.lastError && (
-        <div className="pt-2 border-t border-border">
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            {syncT?.syncNow ?? 'Sync Now'}
+          </button>
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={toggling}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {syncT?.disableAutoSync ?? 'Disable Auto-sync'}
+          </button>
+        </div>
+
+        {/* Message */}
+        {message && (
+          <div className="flex items-start gap-1.5 text-xs" role="status" aria-live="polite">
+            {message.type === 'success' ? (
+              <><CheckCircle2 size={13} className="text-success shrink-0 mt-0.5" /><span className="text-success">{message.text}</span></>
+            ) : (
+              <>
+                <AlertCircle size={13} className="text-destructive shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  {message.text.split('\n').map((line, i) => (
+                    <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : 'text-destructive'}`}>{line}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Conflicts */}
+        {conflicts.length > 0 && (
+          <div className="pt-2 border-t border-border/50">
+            <p className="text-xs font-medium text-foreground mb-2">
+              {(syncT?.conflictsTitle as ((n: number) => string))?.(conflicts.length) ?? `Conflicts (${conflicts.length})`}
+            </p>
+            <div className="space-y-1.5">
+              {conflicts.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs group">
+                  <AlertCircle size={12} className="text-error shrink-0" />
+                  <a
+                    href={`/view/${encodeURIComponent(c.file)}`}
+                    className="font-mono truncate hover:text-foreground hover:underline transition-colors"
+                    title={`Open ${c.file}`}
+                  >
+                    {c.file}
+                  </a>
+                  <a
+                    href={`/view/${encodeURIComponent(c.file + '.sync-conflict')}`}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground"
+                    title="View remote version (.sync-conflict)"
+                  >
+                    <ExternalLink size={11} />
+                  </a>
+                  <span className="text-muted-foreground shrink-0 ml-auto">{timeAgo(c.time, syncT)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {status.lastError && (
           <div className="flex items-start gap-2 text-xs p-2.5 rounded-lg bg-destructive/10 text-destructive">
             <AlertCircle size={12} className="shrink-0 mt-0.5" />
             <div className="space-y-1">
               <span className="block">{status.lastError}</span>
-              <span className="block text-destructive/70">{getSyncErrorHint(status.lastError, status.remote, syncT)}</span>
+              {getSyncErrorHint(status.lastError, status.remote, syncT) && (
+                <span className="block text-destructive/70">{getSyncErrorHint(status.lastError, status.remote, syncT)}</span>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </SettingCard>
     </div>
   );
 }

@@ -26,7 +26,7 @@
 - 工具调用审计：`app/lib/core/agent-audit-log.ts`，落盘 `<mindRoot>/.mindos/agent-audit-log.json`
 - Token/请求等 runtime 指标：`app/lib/metrics.ts` + `app/app/api/monitoring/route.ts`
 
-> 注意：当前 `app/lib/mcp-agents.ts` 与 `bin/lib/mcp-agents.js` 存在条目差异（`vscode`、`codex` 在 App 侧有定义，CLI 侧缺失 MCP_AGENTS 条目），属于已知漂移风险。
+> ~~注意：App 与 CLI 存在条目差异~~ — 已修复（v0.6.39）。`github-copilot` 和 `codex` 已同步到 CLI 侧。
 
 ---
 
@@ -53,7 +53,7 @@
 | `qoder` | Qoder | json | `mcpServers` | `~/.qoder.json` | - | `stdio` | additional |
 | `trae-cn` | Trae CN | json | `mcpServers` | `Trae CN/User/mcp.json` | `.trae/mcp.json` | `stdio` | additional |
 | `roo` | Roo Code | json | `mcpServers` | `Code/User/globalStorage/.../roo-cline/.../mcp_settings.json` | `.roo/mcp.json` | `stdio` | additional |
-| `vscode` | VS Code | json | `servers`（`mcp.servers`） | `Code/User/settings.json` | `.vscode/mcp.json` | `stdio` | universal |
+| `github-copilot` | GitHub Copilot | json | `servers` | `Code/User/mcp.json` | `.vscode/mcp.json` | `stdio` | universal |
 | `codex` | Codex | toml | `mcp_servers` | `~/.codex/config.toml` | - | `stdio` | universal |
 
 ---
@@ -61,7 +61,7 @@
 ## Skills 目录与加载机制（按 Agent）
 
 ### 1) Universal 模式（直接读取 `.agents/skills`）
-适用：`cursor`、`cline`、`gemini-cli`、`kimi-cli`、`opencode`、`vscode`、`codex`。
+适用：`cursor`、`cline`、`gemini-cli`、`kimi-cli`、`opencode`、`github-copilot`、`codex`。
 
 - 项目级：`<project>/.agents/skills/<skill>/`
 - 全局（`-g`）：`~/.agents/skills/<skill>/`

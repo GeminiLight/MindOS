@@ -33,7 +33,7 @@ const SKILL_AGENT_REGISTRY: Record<string, { mode: 'universal' | 'additional' | 
   'qoder': { mode: 'additional', skillAgentName: 'qoder' },
   'trae-cn': { mode: 'additional', skillAgentName: 'trae-cn' },
   'roo': { mode: 'additional', skillAgentName: 'roo' },
-  'vscode': { mode: 'universal' },
+  'github-copilot': { mode: 'universal' },
   'codex': { mode: 'universal' },
 };
 
@@ -217,8 +217,8 @@ describe('CLI skill install — end-to-end scenarios', () => {
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a qoder -g -y');
   });
 
-  it('S9c: vscode should use universal fallback (no explicit -a vscode)', () => {
-    const cmd = simulate('en', ['vscode']);
+  it('S9c: github-copilot should use universal fallback (no explicit -a)', () => {
+    const cmd = simulate('en', ['github-copilot']);
     expect(cmd).toBe('npx skills add "GeminiLight/MindOS" --skill mindos -a universal -g -y');
   });
 

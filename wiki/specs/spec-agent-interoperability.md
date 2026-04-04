@@ -185,20 +185,19 @@ Authorization = "Bearer xxx"
   presenceCli: 'agy',
   presenceDirs: ['~/.gemini/antigravity/'],
 },
-'vscode': {
-  name: 'VS Code',
+'github-copilot': {
+  name: 'GitHub Copilot',
   project: '.vscode/mcp.json',
   global: process.platform === 'darwin'
-    ? '~/Library/Application Support/Code/User/settings.json'
-    : '~/.config/Code/User/settings.json',
+    ? '~/Library/Application Support/Code/User/mcp.json'
+    : '~/.config/Code/User/mcp.json',
   key: 'servers',
-  globalNestedKey: 'mcp.servers',
   preferredTransport: 'stdio',
   presenceDirs: [
     '~/Library/Application Support/Code/',
     '~/.config/Code/',
-    '~/.vscode/',
   ],
+  presenceCli: 'code',
 },
 ```
 

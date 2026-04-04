@@ -133,9 +133,9 @@ describe('POST /api/mcp/install-skill — agent filtering', () => {
     expect(cmd).toContain('-a universal');
   });
 
-  it('treats vscode as universal in skill install', async () => {
+  it('treats github-copilot as universal in skill install', async () => {
     const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['vscode'] }));
+    await POST(makeReq({ skill: 'mindos', agents: ['github-copilot'] }));
 
     const cmd = execSyncMock.mock.calls[0][0] as string;
     expect(cmd).toContain('-a universal');

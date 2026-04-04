@@ -181,7 +181,7 @@ describe('POST /api/mcp/install', () => {
     const req = new NextRequest('http://localhost/api/mcp/install', {
       method: 'POST',
       body: JSON.stringify({
-        agents: [{ key: 'vscode', scope: 'global' }],
+        agents: [{ key: 'github-copilot', scope: 'global' }],
         transport: 'stdio',
       }),
       headers: { 'content-type': 'application/json' },
@@ -209,7 +209,7 @@ describe('POST /api/mcp/install', () => {
     const req = new NextRequest('http://localhost/api/mcp/install', {
       method: 'POST',
       body: JSON.stringify({
-        agents: [{ key: 'vscode', scope: 'project' }],
+        agents: [{ key: 'github-copilot', scope: 'project' }],
         transport: 'stdio',
       }),
       headers: { 'content-type': 'application/json' },
@@ -251,7 +251,7 @@ describe('GET /api/mcp/agents', () => {
     expect(keys).toContain('qoder');
     expect(keys).toContain('trae-cn');
     expect(keys).toContain('roo');
-    expect(keys).toContain('vscode');
+    expect(keys).toContain('github-copilot');
     expect(keys).toContain('codex');
   });
 

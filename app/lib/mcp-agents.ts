@@ -212,14 +212,13 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
       '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
     ],
   },
-  'vscode': {
-    name: 'VS Code',
+  'github-copilot': {
+    name: 'GitHub Copilot',
     project: '.vscode/mcp.json',
     global: process.platform === 'darwin'
-      ? '~/Library/Application Support/Code/User/settings.json'
-      : '~/.config/Code/User/settings.json',
+      ? '~/Library/Application Support/Code/User/mcp.json'
+      : '~/.config/Code/User/mcp.json',
     key: 'servers',
-    globalNestedKey: 'mcp.servers',
     preferredTransport: 'stdio',
     presenceDirs: [
       '~/Library/Application Support/Code/',
@@ -261,7 +260,7 @@ export const SKILL_AGENT_REGISTRY: Record<string, SkillAgentRegistration> = {
   'qoder': { mode: 'additional', skillAgentName: 'qoder' },
   'trae-cn': { mode: 'additional', skillAgentName: 'trae-cn' },
   'roo': { mode: 'additional', skillAgentName: 'roo' },
-  'vscode': { mode: 'universal' },
+  'github-copilot': { mode: 'universal' },
   'codex': { mode: 'universal' },
 };
 

@@ -180,6 +180,30 @@ export const MCP_AGENTS = {
       '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
     ],
   },
+  'github-copilot': {
+    name: 'GitHub Copilot',
+    project: '.vscode/mcp.json',
+    global: process.platform === 'darwin'
+      ? '~/Library/Application Support/Code/User/mcp.json'
+      : '~/.config/Code/User/mcp.json',
+    key: 'servers',
+    preferredTransport: 'stdio',
+    presenceDirs: [
+      '~/Library/Application Support/Code/',
+      '~/.config/Code/',
+    ],
+    presenceCli: 'code',
+  },
+  'codex': {
+    name: 'Codex',
+    project: null,
+    global: '~/.codex/config.toml',
+    key: 'mcp_servers',
+    format: 'toml',
+    preferredTransport: 'stdio',
+    presenceCli: 'codex',
+    presenceDirs: ['~/.codex/'],
+  },
 };
 
 /**
@@ -204,7 +228,7 @@ export const SKILL_AGENT_REGISTRY = {
   'qoder': { mode: 'additional', skillAgentName: 'qoder' },
   'trae-cn': { mode: 'additional', skillAgentName: 'trae-cn' },
   'roo': { mode: 'additional', skillAgentName: 'roo' },
-  'vscode': { mode: 'universal' },
+  'github-copilot': { mode: 'universal' },
   'codex': { mode: 'universal' },
 };
 
