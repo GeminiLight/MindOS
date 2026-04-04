@@ -177,6 +177,7 @@
 - [x] **⌘K Command Palette 扩展** — 已实现 5 个快捷操作：Settings / Restart Walkthrough / Toggle Dark Mode / Go to Agents / Go to Discover。缺 Skill 开关 + 最近 AI 对话（触发条件：用户反馈）。
 - [x] **Zustand 替代 Context 嵌套** — McpContext/LocaleContext/WalkthroughContext 全部迁移为 Zustand store（selector-based 订阅）。Provider 嵌套从 4 层降至 0 层。MCP 30s 轮询不再导致全树 re-render。新增 `app/lib/stores/` 目录（mcp-store/locale-store/walkthrough-store + 3 个 Init 组件）。72 个消费端文件更新。1116 测试全过。
 - [x] **ACP 检测性能优化** — `/api/acp/detect` 从 ~13 个独立子进程改为单次 shell 批量 `which`（1 个 exec 调用）。服务端/客户端缓存 TTL 从 5min 提升至 30min。首次检测从 2-5s 降至 <500ms，后续命中缓存零延迟。
+- [x] **用户偏好文件迁移** — `user-skill-rules.md`（根目录）→ `.mindos/user-preferences.md`。语义更准确（preferences 而非 rules），路径归入 `.mindos/` 系统目录。CLI 启动时 4 级链式自动迁移覆盖所有历史位置。15+ 文件路径引用更新（API/CLI/SKILL.md EN+ZH/preference-capture/write-supplement）。
 - [x] **首页 System Pulse** — 新增 `SystemPulse` 组件（Agent 连接状态 + MCP 状态 + 技能统计），自适应 3 种状态（0 Agent 引导 / 折叠摘要 / 展开详情），localStorage 持久折叠，i18n EN+ZH，focus-visible 合规。
 - [x] **i18n 按模块拆分** — 8 个模块文件（common/navigation/ai-chat/knowledge/panels/settings/onboarding/features），总计 3347 行。`index.ts` 统一导入+导出，类型系统保证 key 一致性。支持未来第 3 种语言扩展无需改结构。
 - [ ] **I11：局域网自动发现 (mDNS/Bonjour)** — 手机/平板自动连。P2 桌面端阶段再做更合适，[详情](./63-stage-mdns.md)
