@@ -57,12 +57,12 @@ describe('tools: list_files', () => {
     seedFile('data.csv', 'a,b,c');
   });
 
-  it('lists all files with default params', async () => {
+  it('lists all files with default params (excluding system files)', async () => {
     const result = await callTool('list_files', {});
     expect(result).toContain('Profile/');
     expect(result).toContain('Identity.md');
     expect(result).toContain('Goals.md');
-    expect(result).toContain('README.md');
+    expect(result).not.toContain('README.md'); // System file hidden from Agent
     expect(result).toContain('data.csv');
     expect(result).not.toContain('Error:');
   });
@@ -75,11 +75,11 @@ describe('tools: list_files', () => {
     expect(result).not.toContain('data.csv');
   });
 
-  it('respects depth parameter', async () => {
+  it('respects depth parameter (hides system files)', async () => {
     const result = await callTool('list_files', { depth: 1 });
     expect(result).toContain('Profile/');
     expect(result).toContain('...');
-    expect(result).toContain('README.md');
+    expect(result).not.toContain('README.md'); // System file hidden
   });
 
   it('returns error message for non-existent directory', async () => {

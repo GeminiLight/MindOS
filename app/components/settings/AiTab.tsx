@@ -169,22 +169,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
         {/* Provider configuration fields */}
         {preset && (
           <div className="space-y-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-            {/* Model */}
-            <Field label={t.settings.ai.model}>
-              <ModelInput
-                value={currentConfig.model}
-                onChange={v => patchProvider(provider, { model: v })}
-                placeholder={preset.defaultModel}
-                provider={provider}
-                apiKey={currentConfig.apiKey}
-                envKey={!!activeEnvKey}
-                baseUrl={currentConfig.baseUrl}
-                supportsListModels={preset.supportsListModels}
-                t={t}
-              />
-            </Field>
-
-            {/* API Key */}
+            {/* 1. API Key — most essential, enter first */}
             <Field
               label={<>{t.settings.ai.apiKey} {envKeyName && <EnvBadge overridden={env[envKeyName]} />}</>}
               hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : t.settings.ai.keyHint}
@@ -205,10 +190,9 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
                   {locale === 'zh' ? `获取 ${preset.nameZh} API Key` : `Get ${preset.name} API Key`}
                 </a>
               )}
-              {renderTestButton(provider, !!currentConfig.apiKey, !!activeEnvKey)}
             </Field>
 
-            {/* Base URL — only for providers that support it */}
+            {/* 2. Base URL — before Model so "List Models" uses the correct endpoint */}
             {preset.supportsBaseUrl && (
               <Field
                 label={t.settings.ai.baseUrl}
@@ -221,6 +205,24 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
                 />
               </Field>
             )}
+
+            {/* 3. Model — after Base URL so "List Models" queries the right endpoint */}
+            <Field label={t.settings.ai.model}>
+              <ModelInput
+                value={currentConfig.model}
+                onChange={v => patchProvider(provider, { model: v })}
+                placeholder={preset.defaultModel}
+                provider={provider}
+                apiKey={currentConfig.apiKey}
+                envKey={!!activeEnvKey}
+                baseUrl={currentConfig.baseUrl}
+                supportsListModels={preset.supportsListModels}
+                t={t}
+              />
+            </Field>
+
+            {/* 4. Test — after all fields, tests the complete configuration */}
+            {renderTestButton(provider, !!currentConfig.apiKey, !!activeEnvKey)}
           </div>
         )}
 

@@ -49,6 +49,7 @@ export function getMindRoot(): string {
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store']);
 const ALLOWED_EXTENSIONS = new Set(['.md', '.csv', '.json']);
+const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md', 'TODO.md']);
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -266,6 +267,9 @@ function buildFileTree(dirPath: string, rootOverride?: string): FileNode[] {
         nodes.push(node);
       }
     } else if (entry.isFile()) {
+      // Filter out system files at root level
+      if (dirPath === root && SYSTEM_FILES.has(entry.name)) continue;
+      
       const ext = path.extname(entry.name).toLowerCase();
       if (ALLOWED_EXTENSIONS.has(ext)) {
         nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext });
@@ -302,6 +306,9 @@ function buildAllFiles(dirPath: string): string[] {
       if (IGNORED_DIRS.has(entry.name)) continue;
       files.push(...buildAllFiles(fullPath));
     } else if (entry.isFile()) {
+      // Filter out system files at root level
+      if (dirPath === root && SYSTEM_FILES.has(entry.name)) continue;
+      
       const ext = path.extname(entry.name).toLowerCase();
       if (ALLOWED_EXTENSIONS.has(ext)) {
         files.push(path.relative(root, fullPath));

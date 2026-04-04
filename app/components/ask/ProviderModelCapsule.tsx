@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Cpu, ChevronDown, Check, Settings } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
@@ -95,7 +95,10 @@ export default function ProviderModelCapsule({
   const defaultProvider = (settingsData?.ai?.provider && isProviderId(settingsData.ai.provider))
     ? settingsData.ai.provider as ProviderId
     : 'anthropic';
-  const configuredProviders = settingsData ? getConfiguredProviders(settingsData) : [];
+  const configuredProviders = useMemo(
+    () => settingsData ? getConfiguredProviders(settingsData) : [],
+    [settingsData],
+  );
 
   // Auto-clear stale override if the provider lost its API key
   useEffect(() => {

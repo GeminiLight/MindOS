@@ -1226,3 +1226,27 @@
 - **含义：** 当 `attempt == MAX_RETRIES`（最后一次），`canRetry = false` → 直接 throw，避免第 4 次尝试
 - **助记：** 试了 MAX_RETRIES 次 → 放弃。`attempt < MAX_RETRIES` 保证只有前 N-1 次才会 sleep+retry
 
+## 性能 / Performance
+
+### useCallback 依赖不稳定 → 输入框打字卡顿（2026-03-25）
+
+- **症状：** AskContent 输入框打字有明显延迟/卡顿
+- **根因：** `handleInputChange`、`handleSubmit`、`handleInputKeyDown` 等核心回调的依赖数组包含了 `mention`、`slash`、`session`、`input` 等不稳定引用，导致每次击键都重建所有回调，触发整棵子树 re-render
+- **解决：** 用 `useRef` 持有不稳定值的最新引用（`mentionRef`、`slashRef`、`sessionRef`、`inputValueRef` 等），回调内通过 `.current` 读取，依赖数组清空或仅保留真正需要的 prop
+- **附加优化：** `syncTextareaToContent` 中将 `getComputedStyle` 结果缓存到 `WeakMap`，避免每次击键触发 style recalc + forced reflow
+- **规则：** 高频回调（onChange/onKeyDown）的 `useCallback` 依赖中禁止放入 hook 返回的对象（如 `useMention()`、`useSlashCommand()`），它们每次 render 都是新引用
+
+### useMention 文件过滤在大型知识库下的性能隐患（待修复）
+
+- **文件：** `app/hooks/useMention.ts` — `updateMentionFromInput` (L56-68)
+- **现状：** 每次触发 `@` 提及搜索时，对 `allFiles` 数组做 `.map().filter().sort().slice()`，全量遍历 + 排序。80ms debounce 缓解了频率，但在大型知识库（>1000 文件）下每次仍是 O(N log N)
+- **触发路径：** 用户在输入框输入 `@` 后每次击键 → 80ms debounce → `updateMentionFromInput` → 全量 map/filter/sort
+- **可能的优化方案（按复杂度递增）：**
+  1. **提前剪枝**：`filter` 先于 `map`——先 `includes(q)` 粗筛掉不匹配项，只对命中项计算 score + sort。减少排序规模
+  2. **预建索引**：在 `allFiles` 变化时（`setAllFiles` 后）预建文件名索引（Map<lowerName, path>），搜索时直接查索引而非遍历
+  3. **前缀树 / Trie**：对文件名建 trie，`startsWith` 查询 O(k) 而非 O(N)
+  4. **Web Worker**：将过滤/排序逻辑移到 Worker 线程，主线程不阻塞。适合 >5000 文件的场景
+  5. **服务端搜索**：将搜索请求发到 `/api/files?q=xxx`，服务端用 SQLite FTS 或内存索引处理，客户端只存结果
+- **推荐**：先做方案 1（零成本改动），再评估是否需要方案 2。方案 4/5 仅在用户反馈确实有大型 KB 时再做
+- **当前风险等级：** 低（80ms debounce + slice(0,30) 已足够应付 500-1000 文件规模）
+

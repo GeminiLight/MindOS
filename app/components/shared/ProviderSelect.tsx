@@ -78,10 +78,7 @@ export default function ProviderSelect({
     );
   };
 
-  const primaryItems = groups.primary;
-  const secondaryItems = groups.secondary;
-  const advancedItems = groups.advanced;
-  const hasMore = secondaryItems.length > 0 || advancedItems.length > 0;
+  const { primary: primaryItems, more: moreItems } = groups;
 
   return (
     <div className="space-y-2">
@@ -91,7 +88,7 @@ export default function ProviderSelect({
       </div>
 
       {/* Show more toggle */}
-      {hasMore && (
+      {moreItems.length > 0 && (
         <>
           <button
             type="button"
@@ -101,24 +98,12 @@ export default function ProviderSelect({
             <ChevronDown size={12} className={`transition-transform ${showMore ? 'rotate-180' : ''}`} />
             {showMore
               ? (locale === 'zh' ? '收起' : 'Show less')
-              : (locale === 'zh' ? `更多 (${secondaryItems.length + advancedItems.length})` : `More providers (${secondaryItems.length + advancedItems.length})`)}
+              : (locale === 'zh' ? `更多 (${moreItems.length})` : `More providers (${moreItems.length})`)}
           </button>
 
           {showMore && (
-            <div className="space-y-2">
-              <div className={compact ? 'flex flex-wrap gap-2' : 'grid grid-cols-1 gap-2'}>
-                {secondaryItems.map(renderItem)}
-              </div>
-              {advancedItems.length > 0 && (
-                <>
-                  <p className="text-xs text-muted-foreground pt-1">
-                    {locale === 'zh' ? '更多平台' : 'More platforms'}
-                  </p>
-                  <div className={compact ? 'flex flex-wrap gap-2' : 'grid grid-cols-1 gap-2'}>
-                    {advancedItems.map(renderItem)}
-                  </div>
-                </>
-              )}
+            <div className={compact ? 'flex flex-wrap gap-2' : 'grid grid-cols-1 gap-2'}>
+              {moreItems.map(renderItem)}
             </div>
           )}
         </>

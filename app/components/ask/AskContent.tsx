@@ -29,23 +29,32 @@ import type { AcpAgentSelection } from '@/hooks/useAskModal';
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
 const TEXTAREA_MAX_VISIBLE_LINES = 8;
 
+/** Per-element cached metrics to avoid getComputedStyle on every keystroke */
+const _metricsCache = new WeakMap<HTMLTextAreaElement, { maxH: number }>();
+
 /** Auto-size textarea height to fit content, capped at maxVisibleLines */
 function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number): void {
-  const style = getComputedStyle(el);
-  const parsedLh = parseFloat(style.lineHeight);
-  const parsedFs = parseFloat(style.fontSize);
-  const fontSize = Number.isFinite(parsedFs) ? parsedFs : 14;
-  const lineHeight = Number.isFinite(parsedLh) ? parsedLh : fontSize * 1.375;
-  const pad =
-    (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
-    (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
-  const maxH = lineHeight * maxVisibleLines + pad;
-  if (!Number.isFinite(maxH) || maxH <= 0) return;
-  el.style.height = '0px';
-  const next = Math.min(el.scrollHeight, maxH);
-  el.style.height = `${Number.isFinite(next) ? next : maxH}px`;
-  // Only show scrollbar when content exceeds max height
-  el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
+  let cached = _metricsCache.get(el);
+  if (!cached) {
+    const style = getComputedStyle(el);
+    const parsedLh = parseFloat(style.lineHeight);
+    const parsedFs = parseFloat(style.fontSize);
+    const fontSize = Number.isFinite(parsedFs) ? parsedFs : 14;
+    const lineHeight = Number.isFinite(parsedLh) ? parsedLh : fontSize * 1.375;
+    const pad =
+      (Number.isFinite(parseFloat(style.paddingTop)) ? parseFloat(style.paddingTop) : 0) +
+      (Number.isFinite(parseFloat(style.paddingBottom)) ? parseFloat(style.paddingBottom) : 0);
+    const maxH = lineHeight * maxVisibleLines + pad;
+    if (!Number.isFinite(maxH) || maxH <= 0) return;
+    cached = { maxH };
+    _metricsCache.set(el, cached);
+  }
+  const { maxH } = cached;
+  el.style.height = 'auto';
+  const contentH = el.scrollHeight;
+  const next = Math.min(contentH, maxH);
+  el.style.height = `${next}px`;
+  el.style.overflowY = contentH > maxH ? 'auto' : 'hidden';
 }
 
 interface AskContentProps {
@@ -80,17 +89,25 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   useEffect(() => setMounted(true), []);
 
   const [input, setInput] = useState('');
+  const inputValueRef = useRef('');
+  inputValueRef.current = input;
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<'connecting' | 'thinking' | 'streaming' | 'reconnecting'>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const reconnectMaxRef = useRef(3);
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+  const attachedFilesRef = useRef(attachedFiles);
+  attachedFilesRef.current = attachedFiles;
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
+  const selectedSkillRef = useRef(selectedSkill);
+  selectedSkillRef.current = selectedSkill;
   const [selectedAcpAgent, setSelectedAcpAgent] = useState<AcpAgentSelection | null>(null);
+  const selectedAcpAgentRef = useRef(selectedAcpAgent);
+  selectedAcpAgentRef.current = selectedAcpAgent;
   const [chatMode, setChatMode] = useState<AskMode>('agent');
   const [providerOverride, setProviderOverride] = useState<ProviderId | null>(null);
 
@@ -100,7 +117,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, []);
 
   const session = useAskSession(currentFile);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const upload = useFileUpload();
+  const uploadRef = useRef(upload);
+  uploadRef.current = upload;
   const imageUpload = useImageUpload();
   const mention = useMention();
   const slash = useSlashCommand();
@@ -110,12 +131,12 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     const handler = (e: Event) => {
       const files = (e as CustomEvent).detail?.files;
       if (Array.isArray(files) && files.length > 0) {
-        upload.injectFiles(files);
+        uploadRef.current.injectFiles(files);
       }
     };
     window.addEventListener('mindos:inject-ask-files', handler);
     return () => window.removeEventListener('mindos:inject-ask-files', handler);
-  }, [upload]);
+  }, []);
 
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
@@ -174,15 +195,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (!isModal && !isFocused) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (mention.mentionQuery !== null) { mention.resetMention(); return; }
-        if (slash.slashQuery !== null) { slash.resetSlash(); return; }
+        if (mentionRef.current.mentionQuery !== null) { mentionRef.current.resetMention(); return; }
+        if (slashRef.current.slashQuery !== null) { slashRef.current.resetSlash(); return; }
         if (isFocused && onMaximize) { onMaximize(); return; }
         if (isModal && onClose) { onClose(); }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [variant, visible, onClose, mention, slash, maximized, onMaximize]);
+  }, [variant, visible, onClose, maximized, onMaximize]);
 
   // Close attach menu on any outside click
   useEffect(() => {
@@ -202,16 +223,28 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     syncTextareaToContent(el, TEXTAREA_MAX_VISIBLE_LINES);
   }, [input, isLoading, visible]);
 
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const handler = () => _metricsCache.delete(el);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mentionRef = useRef(mention);
+  mentionRef.current = mention;
+  const slashRef = useRef(slash);
+  slashRef.current = slash;
   const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     setInput(val);
     const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
     if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
-    mentionTimerRef.current = setTimeout(() => mention.updateMentionFromInput(val, pos), 80);
-    slashTimerRef.current = setTimeout(() => slash.updateSlashFromInput(val, pos), 80);
-  }, [mention, slash]);
+    mentionTimerRef.current = setTimeout(() => mentionRef.current.updateMentionFromInput(val, pos), 80);
+    slashTimerRef.current = setTimeout(() => slashRef.current.updateSlashFromInput(val, pos), 80);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -222,107 +255,127 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const selectMention = useCallback((filePath: string) => {
     const el = inputRef.current;
-    const cursorPos = el?.selectionStart ?? input.length;
-    const before = input.slice(0, cursorPos);
+    const val = inputValueRef.current;
+    const cursorPos = el?.selectionStart ?? val.length;
+    const before = val.slice(0, cursorPos);
     const atIdx = before.lastIndexOf('@');
-    const newVal = input.slice(0, atIdx) + input.slice(cursorPos);
+    const newVal = val.slice(0, atIdx) + val.slice(cursorPos);
     setInput(newVal);
-    mention.resetMention();
-    if (!attachedFiles.includes(filePath)) {
+    mentionRef.current.resetMention();
+    if (!attachedFilesRef.current.includes(filePath)) {
       setAttachedFiles(prev => [...prev, filePath]);
     }
     setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(atIdx, atIdx);
     }, 0);
-  }, [input, attachedFiles, mention]);
+  }, []);
 
   const selectSlashCommand = useCallback((item: SlashItem) => {
     const el = inputRef.current;
-    const cursorPos = el?.selectionStart ?? input.length;
-    const before = input.slice(0, cursorPos);
+    const val = inputValueRef.current;
+    const cursorPos = el?.selectionStart ?? val.length;
+    const before = val.slice(0, cursorPos);
     const slashIdx = before.lastIndexOf('/');
-    const newVal = input.slice(0, slashIdx) + input.slice(cursorPos);
+    const newVal = val.slice(0, slashIdx) + val.slice(cursorPos);
     setInput(newVal);
     setSelectedSkill(item);
-    slash.resetSlash();
+    slashRef.current.resetSlash();
     setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(slashIdx, slashIdx);
     }, 0);
-  }, [input, slash]);
+  }, []);
+
+  const imageUploadRef = useRef(imageUpload);
+  imageUploadRef.current = imageUpload;
+  const isLoadingRef = useRef(isLoading);
+  isLoadingRef.current = isLoading;
+  const selectMentionRef = useRef(selectMention);
+  selectMentionRef.current = selectMention;
+  const selectSlashRef = useRef(selectSlashCommand);
+  selectSlashRef.current = selectSlashCommand;
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (mention.mentionQuery !== null) {
+      const m = mentionRef.current;
+      const s = slashRef.current;
+      if (m.mentionQuery !== null) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          mention.resetMention();
+          m.resetMention();
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          mention.navigateMention('down');
+          m.navigateMention('down');
         } else if (e.key === 'ArrowUp') {
           e.preventDefault();
-          mention.navigateMention('up');
+          m.navigateMention('up');
         } else if (e.key === 'Enter' || e.key === 'Tab') {
           if (e.key === 'Enter' && (e.shiftKey || e.nativeEvent.isComposing)) return;
-          if (mention.mentionResults.length > 0) {
+          if (m.mentionResults.length > 0) {
             e.preventDefault();
-            selectMention(mention.mentionResults[mention.mentionIndex]);
+            selectMentionRef.current(m.mentionResults[m.mentionIndex]);
           }
         }
         return;
       }
-      if (slash.slashQuery !== null) {
+      if (s.slashQuery !== null) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          slash.resetSlash();
+          s.resetSlash();
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          slash.navigateSlash('down');
+          s.navigateSlash('down');
         } else if (e.key === 'ArrowUp') {
           e.preventDefault();
-          slash.navigateSlash('up');
+          s.navigateSlash('up');
         } else if (e.key === 'Enter' || e.key === 'Tab') {
           if (e.key === 'Enter' && (e.shiftKey || e.nativeEvent.isComposing)) return;
-          if (slash.slashResults.length > 0) {
+          if (s.slashResults.length > 0) {
             e.preventDefault();
-            selectSlashCommand(slash.slashResults[slash.slashIndex]);
+            selectSlashRef.current(s.slashResults[s.slashIndex]);
           }
         }
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoading && (input.trim() || imageUpload.images.length > 0)) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isLoadingRef.current && (inputValueRef.current.trim() || imageUploadRef.current.images.length > 0)) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
     },
-    [mention, selectMention, slash, selectSlashCommand, isLoading, input, imageUpload.images],
+    [],
   );
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mention.mentionQuery !== null || slash.slashQuery !== null) return;
-    const text = input.trim();
-    if ((!text && imageUpload.images.length === 0) || isLoading) return;
+    const m = mentionRef.current;
+    const s = slashRef.current;
+    const img = imageUploadRef.current;
+    const sess = sessionRef.current;
+    const upl = uploadRef.current;
+    if (m.mentionQuery !== null || s.slashQuery !== null) return;
+    const text = inputValueRef.current.trim();
+    if ((!text && img.images.length === 0) || isLoadingRef.current) return;
 
-    const pendingImages = imageUpload.images.length > 0 ? [...imageUpload.images] : undefined;
+    const skill = selectedSkillRef.current;
+    const acpAgent = selectedAcpAgentRef.current;
+    const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
     const userMsg: Message = {
       role: 'user',
-      content: text,  // No [ACP:] prefix — pass clean text
+      content: text,
       timestamp: Date.now(),
-      ...(selectedSkill && { skillName: selectedSkill.name }),
+      ...(skill && { skillName: skill.name }),
       ...(pendingImages && { images: pendingImages }),
     };
-    imageUpload.clearImages();
-    const requestMessages = [...session.messages, userMsg];
-    session.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
+    img.clearImages();
+    const requestMessages = [...sess.messages, userMsg];
+    sess.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
     setInput('');
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
@@ -348,14 +401,14 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     const requestBody = JSON.stringify({
       messages: requestMessages,
       currentFile,
-      attachedFiles,
-      uploadedFiles: upload.localAttachments.map(f => ({
+      attachedFiles: attachedFilesRef.current,
+      uploadedFiles: upl.localAttachments.map(f => ({
         name: f.name,
         content: f.content.length > 20_000
           ? f.content.slice(0, 20_000) + '\n\n[...truncated to first ~20000 chars]'
           : f.content,
       })),
-      selectedAcpAgent,  // Send structured field instead of text prefix
+      selectedAcpAgent: acpAgent,
       mode: chatMode,
       providerOverride: providerOverride ?? undefined,
     });
@@ -393,7 +446,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         res.body,
         (msg) => {
           setLoadingPhase('streaming');
-          session.setMessages(prev => {
+          sessionRef.current.setMessages(prev => {
             const updated = [...prev];
             updated[updated.length - 1] = msg;
             return updated;
@@ -413,7 +466,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         if (attempt > 0) {
           setReconnectAttempt(attempt);
           setLoadingPhase('reconnecting');
-          session.setMessages(prev => {
+          sessionRef.current.setMessages(prev => {
             const updated = [...prev];
             updated[updated.length - 1] = { role: 'assistant', content: '', timestamp: Date.now() };
             return updated;
@@ -425,7 +478,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         try {
           const { finalMessage } = await doFetch();
           if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
-            session.setMessages(prev => {
+            sessionRef.current.setMessages(prev => {
               const updated = [...prev];
               updated[updated.length - 1] = { role: 'assistant', content: `__error__${t.ask.errorNoResponse}` };
               return updated;
@@ -442,7 +495,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       if (lastError) throw lastError;
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
-        session.setMessages(prev => {
+        sessionRef.current.setMessages(prev => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
@@ -456,7 +509,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         });
       } else {
         const errMsg = err instanceof Error ? err.message : 'Something went wrong';
-        session.setMessages(prev => {
+        sessionRef.current.setMessages(prev => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
@@ -475,22 +528,22 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       setReconnectAttempt(0);
       abortRef.current = null;
     }
-  }, [input, session, isLoading, currentFile, attachedFiles, upload.localAttachments, imageUpload.images, imageUpload.clearImages, mention.mentionQuery, slash.slashQuery, selectedSkill, selectedAcpAgent, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
+  }, [currentFile, chatMode, providerOverride, t.ask.errorNoResponse, t.ask.stopped, onFirstMessage]);
 
   const handleResetSession = useCallback(() => {
-    if (isLoading) return;
-    session.resetSession();
+    if (isLoadingRef.current) return;
+    sessionRef.current.resetSession();
     setInput('');
     setAttachedFiles(currentFile ? [currentFile] : []);
-    upload.clearAttachments();
-    imageUpload.clearImages();
-    mention.resetMention();
-    slash.resetSlash();
+    uploadRef.current.clearAttachments();
+    imageUploadRef.current.clearImages();
+    mentionRef.current.resetMention();
+    slashRef.current.resetSlash();
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
     setShowHistory(false);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [isLoading, currentFile, session, upload, imageUpload, mention, slash]);
+  }, [currentFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     // Accept mindos file paths and image drops
@@ -506,43 +559,39 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    // Try mindos file path first
     const filePath = e.dataTransfer.getData('text/mindos-path');
-    if (filePath && !attachedFiles.includes(filePath)) {
+    if (filePath && !attachedFilesRef.current.includes(filePath)) {
       setAttachedFiles(prev => [...prev, filePath]);
       return;
     }
-    // Try image drop
-    await imageUpload.handleDrop(e);
-  }, [attachedFiles, imageUpload]);
+    await imageUploadRef.current.handleDrop(e);
+  }, []);
 
-  /** Handle paste — intercept images before normal text paste */
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    // Check synchronously for image items — must preventDefault before awaiting
     const hasImageItem = Array.from(items).some(
       item => item.kind === 'file' && item.type.startsWith('image/')
     );
     if (hasImageItem) {
       e.preventDefault();
-      void imageUpload.handlePaste(e);
+      void imageUploadRef.current.handlePaste(e);
     }
-  }, [imageUpload]);
+  }, []);
 
   const handleLoadSession = useCallback((id: string) => {
-    session.loadSession(id);
+    sessionRef.current.loadSession(id);
     setShowHistory(false);
     setInput('');
     setAttachedFiles(currentFile ? [currentFile] : []);
-    upload.clearAttachments();
-    imageUpload.clearImages();
-    mention.resetMention();
-    slash.resetSlash();
+    uploadRef.current.clearAttachments();
+    imageUploadRef.current.clearImages();
+    mentionRef.current.resetMention();
+    slashRef.current.resetSlash();
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [session, currentFile, upload, imageUpload, mention, slash]);
+  }, [currentFile]);
 
   const iconSize = isPanel ? 13 : 14;
   const inputIconSize = 15;

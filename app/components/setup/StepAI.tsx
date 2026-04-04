@@ -89,16 +89,7 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
             )}
           </Field>
 
-          {/* Model */}
-          <Field label={s.model}>
-            <Input
-              value={currentConfig.model}
-              onChange={e => patchConfig({ model: e.target.value })}
-              placeholder={currentPreset.defaultModel}
-            />
-          </Field>
-
-          {/* Base URL — only for providers that support it */}
+          {/* Base URL — before Model so defaults are correct when listing models */}
           {currentPreset.supportsBaseUrl && (
             <Field label={s.baseUrl} hint={s.baseUrlHint}>
               <Input
@@ -108,6 +99,15 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
               />
             </Field>
           )}
+
+          {/* Model */}
+          <Field label={s.model}>
+            <Input
+              value={currentConfig.model}
+              onChange={e => patchConfig({ model: e.target.value })}
+              placeholder={currentPreset.defaultModel}
+            />
+          </Field>
         </div>
       )}
 

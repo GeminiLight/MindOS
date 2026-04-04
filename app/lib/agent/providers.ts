@@ -38,7 +38,7 @@ export interface ProviderPreset {
   supportsThinking: boolean;
   supportsListModels: boolean;
   signupUrl?: string;
-  category: 'primary' | 'secondary' | 'advanced';
+  category: 'primary' | 'more';
 }
 
 export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
@@ -47,7 +47,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     name: 'Anthropic',
     nameZh: 'Anthropic',
     defaultModel: 'claude-sonnet-4-6',
-    supportsBaseUrl: false,
+    supportsBaseUrl: true,
     supportsThinking: true,
     supportsListModels: true,
     signupUrl: 'https://console.anthropic.com/settings/keys',
@@ -84,7 +84,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsThinking: false,
     supportsListModels: true,
     signupUrl: 'https://console.groq.com/keys',
-    category: 'secondary',
+    category: 'more',
   },
   xai: {
     id: 'xai',
@@ -94,7 +94,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: true,
-    category: 'secondary',
+    category: 'more',
   },
   openrouter: {
     id: 'openrouter',
@@ -104,7 +104,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: true,
-    category: 'secondary',
+    category: 'more',
   },
   mistral: {
     id: 'mistral',
@@ -114,7 +114,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: true,
-    category: 'secondary',
+    category: 'more',
   },
   deepseek: {
     id: 'deepseek',
@@ -127,7 +127,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsThinking: true,
     supportsListModels: true,
     signupUrl: 'https://platform.deepseek.com/api_keys',
-    category: 'secondary',
+    category: 'more',
   },
   zai: {
     id: 'zai',
@@ -137,7 +137,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
-    category: 'secondary',
+    category: 'more',
   },
   'kimi-coding': {
     id: 'kimi-coding',
@@ -147,7 +147,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
-    category: 'secondary',
+    category: 'more',
   },
   cerebras: {
     id: 'cerebras',
@@ -157,7 +157,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: true,
-    category: 'advanced',
+    category: 'more',
   },
   minimax: {
     id: 'minimax',
@@ -167,7 +167,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: false,
-    category: 'advanced',
+    category: 'more',
   },
   huggingface: {
     id: 'huggingface',
@@ -177,7 +177,7 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
-    category: 'advanced',
+    category: 'more',
   },
 };
 
@@ -191,17 +191,15 @@ export function getPreset(id: ProviderId): ProviderPreset {
   return PROVIDER_PRESETS[id] ?? PROVIDER_PRESETS.anthropic;
 }
 
-export function groupedProviders(): { primary: ProviderId[]; secondary: ProviderId[]; advanced: ProviderId[] } {
+export function groupedProviders(): { primary: ProviderId[]; more: ProviderId[] } {
   const primary: ProviderId[] = [];
-  const secondary: ProviderId[] = [];
-  const advanced: ProviderId[] = [];
+  const more: ProviderId[] = [];
   for (const id of ALL_PROVIDER_IDS) {
-    const cat = PROVIDER_PRESETS[id].category;
-    if (cat === 'primary') primary.push(id);
-    else if (cat === 'secondary') secondary.push(id);
-    else advanced.push(id);
+    if (PROVIDER_PRESETS[id].category === 'primary') primary.push(id);
+    else more.push(id);
   }
-  return { primary, secondary, advanced };
+  more.sort((a, b) => PROVIDER_PRESETS[a].name.localeCompare(PROVIDER_PRESETS[b].name));
+  return { primary, more };
 }
 
 // ---------------------------------------------------------------------------
