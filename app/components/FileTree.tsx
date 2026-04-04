@@ -129,8 +129,8 @@ const MENU_DIVIDER = "my-1 border-t border-border/50";
 
 // ─── SpaceContextMenu ─────────────────────────────────────────────────────────
 
-function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onImport?: (space: string) => void; onDelete: () => void;
+function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onImport, onDelete }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onNewFile: () => void; onImport?: (space: string) => void; onDelete: () => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
@@ -139,18 +139,22 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }:
 
   return (
     <ContextMenuShell x={x} y={y} onClose={onClose}>
-      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
-        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
-        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
+      <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
+        <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
       </button>
       <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
-        <ScrollText size={14} className="shrink-0" /> {t.fileTree.editRules}
+        <ScrollText size={14} className="shrink-0" /> {t.fileTree.viewRules}
       </button>
       {onImport && (
         <button className={MENU_ITEM} onClick={() => { onImport(node.path); onClose(); }}>
           <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
         </button>
       )}
+      <div className={MENU_DIVIDER} />
+      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
+        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
+        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
+      </button>
       <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
         <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
       </button>
@@ -168,8 +172,8 @@ function SpaceContextMenu({ x, y, node, onClose, onRename, onImport, onDelete }:
 
 // ─── FolderContextMenu ────────────────────────────────────────────────────────
 
-function FolderContextMenu({ x, y, node, onClose, onRename, onDelete }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onDelete: () => void;
+function FolderContextMenu({ x, y, node, onClose, onRename, onNewFile, onDelete }: {
+  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onNewFile: () => void; onDelete: () => void;
 }) {
   const router = useRouter();
   const { t } = useLocale();
@@ -178,7 +182,11 @@ function FolderContextMenu({ x, y, node, onClose, onRename, onDelete }: {
   const pinned = isPinned(node.path);
 
   return (
-    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={180}>
+    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={220}>
+      <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
+        <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
+      </button>
+      <div className={MENU_DIVIDER} />
       <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
         <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
         {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
@@ -296,8 +304,6 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   const renameRef = useRef<HTMLInputElement>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [plusPopover, setPlusPopover] = useState(false);
-  const plusRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
   const [deleteConfirm, setDeleteConfirm] = useState<null | 'space' | 'folder'>(null);
   const [isPendingDelete, startDeleteTransition] = useTransition();
@@ -444,42 +450,18 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
         </button>
         <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
           <button
-            ref={plusRef}
             type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setPlusPopover(v => !v);
+              const rect = e.currentTarget.getBoundingClientRect();
+              setContextMenu({ x: rect.left, y: rect.bottom + 4 });
             }}
             className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title={t.fileTree.newFileTitle}
+            title="More"
           >
-            <Plus size={13} />
+            <MoreHorizontal size={14} />
           </button>
-          {isSpace ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`);
-                onNavigate?.();
-              }}
-              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title={t.fileTree.editRules}
-            >
-              <ScrollText size={12} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={startRename}
-              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title={t.fileTree.rename}
-            >
-              <Pencil size={12} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -518,6 +500,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
+          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
           onImport={onImport}
           onDelete={() => setDeleteConfirm('space')}
         />
@@ -528,6 +511,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
+          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
           onDelete={() => setDeleteConfirm('folder')}
         />
       ))}
@@ -561,21 +545,6 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
         }}
       />
 
-      {plusPopover && plusRef.current && (() => {
-        const rect = plusRef.current!.getBoundingClientRect();
-        return (
-          <ContextMenuShell x={rect.left} y={rect.bottom + 4} onClose={() => setPlusPopover(false)} menuHeight={80}>
-            <button className={MENU_ITEM} onClick={() => { setPlusPopover(false); setOpen(true); setShowNewFile(true); }}>
-              <FileText size={14} className="shrink-0" /> {t.fileTree.newFile}
-            </button>
-            {onImport && (
-              <button className={MENU_ITEM} onClick={() => { setPlusPopover(false); onImport(node.path); }}>
-                <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
-              </button>
-            )}
-          </ContextMenuShell>
-        );
-      })()}
     </div>
   );
 }

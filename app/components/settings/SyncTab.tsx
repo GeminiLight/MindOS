@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff, Check } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff, Check, ChevronRight, FileX2 } from 'lucide-react';
 import { SectionLabel, PrimaryButton, Input, Field, SettingCard } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
@@ -59,6 +59,98 @@ function getSyncErrorHint(error: string, remote?: string | null, syncT?: Record<
   }
 
   return '';
+}
+
+/* ── Gitignore Editor ──────────────────────────────────────────── */
+
+function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  const [content, setContent] = useState('');
+  const [saved, setSaved] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saveOk, setSaveOk] = useState(false);
+  const loaded = useRef(false);
+
+  const dirty = content !== saved;
+
+  useEffect(() => {
+    if (!open || loaded.current) return;
+    loaded.current = true;
+    setLoading(true);
+    apiFetch<{ content: string }>('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'gitignore-get' }),
+    }).then(data => {
+      setContent(data.content);
+      setSaved(data.content);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [open]);
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'gitignore-save', content }),
+      });
+      setSaved(content);
+      setSaveOk(true);
+      setTimeout(() => setSaveOk(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <div className="pt-2 border-t border-border/50">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+      >
+        <ChevronRight size={14} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+        <FileX2 size={13} className="shrink-0" />
+        <span>{syncT?.gitignoreTitle ?? 'Excluded files'}</span>
+        <span className="text-2xs opacity-50">.gitignore</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          {loading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 size={14} className="animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                rows={8}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+                placeholder={syncT?.gitignorePlaceholder ?? '# Files to exclude from sync\n*.tmp\nsecret/'}
+                spellCheck={false}
+              />
+              <div className="flex items-center gap-2">
+                {dirty && (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
+                  >
+                    {syncT?.gitignoreSave ?? 'Save'}
+                  </button>
+                )}
+                {saveOk && (
+                  <span className="flex items-center gap-1 text-xs text-success">
+                    <Check size={12} /> {syncT?.gitignoreSaved ?? 'Saved'}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── Empty state — GUI sync init form ─────────────────────────── */
@@ -521,6 +613,9 @@ export function SyncTab({ t }: SyncTabProps) {
             </div>
           </div>
         )}
+
+        {/* Gitignore editor */}
+        <GitignoreEditor syncT={syncT} />
       </SettingCard>
     </div>
   );

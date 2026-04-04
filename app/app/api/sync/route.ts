@@ -106,7 +106,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { action: string; remote?: string; branch?: string; token?: string };
+    const body = await req.json() as { action: string; remote?: string; branch?: string; token?: string; content?: string };
     const config = loadConfig();
     const mindRoot = config.mindRoot;
 
@@ -182,6 +182,25 @@ export async function POST(req: NextRequest) {
         // Clear sync state
         try { writeFileSync(SYNC_STATE_PATH, '{}', 'utf-8'); } catch {}
         return NextResponse.json({ ok: true, enabled: false });
+      }
+
+      case 'gitignore-get': {
+        const gitignorePath = join(mindRoot, '.gitignore');
+        try {
+          const content = readFileSync(gitignorePath, 'utf-8');
+          return NextResponse.json({ content });
+        } catch {
+          return NextResponse.json({ content: '' });
+        }
+      }
+
+      case 'gitignore-save': {
+        if (typeof body.content !== 'string') {
+          return NextResponse.json({ error: 'Missing content' }, { status: 400 });
+        }
+        const gitignoreSavePath = join(mindRoot, '.gitignore');
+        writeFileSync(gitignoreSavePath, body.content, 'utf-8');
+        return NextResponse.json({ ok: true });
       }
 
       default:
