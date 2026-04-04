@@ -12,7 +12,7 @@ export default function AgentInstall({ agents, t, onRefresh }: McpAgentInstallPr
   const m = t.settings?.mcp;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [transport, setTransport] = useState<'auto' | 'stdio' | 'http'>('auto');
-  const [httpUrl, setHttpUrl] = useState('http://localhost:8787/mcp');
+  const [httpUrl, setHttpUrl] = useState('http://localhost:8781/mcp');
   const [httpToken, setHttpToken] = useState('');
   const [scopes, setScopes] = useState<Record<string, 'project' | 'global'>>({});
   const [installing, setInstalling] = useState(false);
