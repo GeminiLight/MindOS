@@ -22,7 +22,9 @@ import AgentSelectorCapsule from '@/components/ask/AgentSelectorCapsule';
 import ProviderModelCapsule, { getPersistedProvider } from '@/components/ask/ProviderModelCapsule';
 import type { ProviderId } from '@/lib/agent/providers';
 import { useAskChat } from '@/hooks/useAskChat';
+import { listDirFilesAction } from '@/lib/actions';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { useAcpDetection } from '@/hooks/useAcpDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 
@@ -394,8 +396,25 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     e.preventDefault();
     setIsDragOver(false);
     const filePath = e.dataTransfer.getData('text/mindos-path');
-    if (filePath && !attachedFilesRef.current.includes(filePath)) {
-      setAttachedFiles(prev => [...prev, filePath]);
+    if (filePath) {
+      const pathType = e.dataTransfer.getData('text/mindos-type');
+      if (pathType === 'directory') {
+        const MAX_DIR_FILES = 30;
+        const files = await listDirFilesAction(filePath);
+        if (files.length === 0) return;
+        const existing = new Set(attachedFilesRef.current);
+        const newFiles = files.filter(f => !existing.has(f));
+        if (newFiles.length === 0) return;
+        if (files.length > MAX_DIR_FILES) {
+          const added = newFiles.slice(0, MAX_DIR_FILES);
+          setAttachedFiles(prev => [...prev, ...added]);
+          toast(`${added.length} files attached (${files.length - MAX_DIR_FILES} skipped, limit ${MAX_DIR_FILES})`, { duration: 4000 });
+        } else {
+          setAttachedFiles(prev => [...prev, ...newFiles]);
+        }
+      } else if (!attachedFilesRef.current.includes(filePath)) {
+        setAttachedFiles(prev => [...prev, filePath]);
+      }
       return;
     }
     await imageUploadRef.current.handleDrop(e);

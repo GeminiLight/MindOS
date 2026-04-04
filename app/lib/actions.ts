@@ -205,6 +205,14 @@ export async function cleanupExamplesAction(): Promise<{ success: boolean; delet
   }
 }
 
+// ─── Directory Listing ────────────────────────────────────────────────────────
+
+export async function listDirFilesAction(dirPath: string): Promise<string[]> {
+  const allFiles = collectAllFiles();
+  const prefix = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+  return allFiles.filter(f => f.startsWith(prefix));
+}
+
 // ─── Trash Actions ────────────────────────────────────────────────────────────
 
 export async function listTrashAction(): Promise<TrashMeta[]> {
