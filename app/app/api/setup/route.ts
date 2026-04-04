@@ -5,6 +5,7 @@ import os from 'os';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { applyTemplate } from '@/lib/template';
 import { expandSetupPathHome } from './path-utils';
+import { type ProviderId, isProviderId, PROVIDER_PRESETS } from '@/lib/agent/providers';
 
 function maskApiKey(key: string): string {
   if (!key || key.length < 6) return key ? '***' : '';
@@ -17,6 +18,22 @@ export async function GET() {
     const home = os.homedir();
     const sep = process.platform === 'win32' ? '\\' : '/';
     const defaultMindRoot = s.mindRoot || [home, 'MindOS', 'mind'].join(sep);
+
+    // Build providerConfigs for frontend (masked keys)
+    const providerConfigs: Record<string, { model: string; baseUrl?: string; apiKeyMask: string }> = {};
+    for (const [id, cfg] of Object.entries(s.ai.providers)) {
+      if (!cfg) continue;
+      providerConfigs[id] = {
+        model: cfg.model,
+        baseUrl: cfg.baseUrl,
+        apiKeyMask: maskApiKey(cfg.apiKey),
+      };
+    }
+
+    // Backward-compatible legacy fields
+    const anthropicCfg = s.ai.providers.anthropic ?? { apiKey: '', model: 'claude-sonnet-4-6' };
+    const openaiCfg = s.ai.providers.openai ?? { apiKey: '', model: 'gpt-5.4', baseUrl: '' };
+
     return NextResponse.json({
       mindRoot: defaultMindRoot,
       homeDir: home,
@@ -26,11 +43,14 @@ export async function GET() {
       authToken: s.authToken ?? '',
       webPassword: s.webPassword ?? '',
       provider: s.ai.provider,
-      anthropicApiKey: maskApiKey(s.ai.providers.anthropic.apiKey),
-      anthropicModel: s.ai.providers.anthropic.model,
-      openaiApiKey: maskApiKey(s.ai.providers.openai.apiKey),
-      openaiModel: s.ai.providers.openai.model,
-      openaiBaseUrl: s.ai.providers.openai.baseUrl ?? '',
+      // Legacy fields for backward compat
+      anthropicApiKey: maskApiKey(anthropicCfg.apiKey),
+      anthropicModel: anthropicCfg.model,
+      openaiApiKey: maskApiKey(openaiCfg.apiKey),
+      openaiModel: openaiCfg.model,
+      openaiBaseUrl: openaiCfg.baseUrl ?? '',
+      // New dynamic format
+      providerConfigs,
       guideState: s.guideState ?? null,
     });
   } catch (e) {
@@ -95,22 +115,23 @@ export async function POST(req: NextRequest) {
     // configured key with blank just because the user didn't re-enter it.
     let mergedAi = current.ai;
     if (ai) {
-      const inAnthropicKey = ai.providers?.anthropic?.apiKey;
-      const inOpenaiKey    = ai.providers?.openai?.apiKey;
-      mergedAi = {
-        provider: ai.provider ?? current.ai.provider,
-        providers: {
-          anthropic: {
-            apiKey: inAnthropicKey || current.ai.providers.anthropic.apiKey,
-            model:  ai.providers?.anthropic?.model || current.ai.providers.anthropic.model,
-          },
-          openai: {
-            apiKey:  inOpenaiKey || current.ai.providers.openai.apiKey,
-            model:   ai.providers?.openai?.model  || current.ai.providers.openai.model,
-            baseUrl: ai.providers?.openai?.baseUrl ?? current.ai.providers.openai.baseUrl ?? '',
-          },
-        },
-      };
+      const newProvider = ai.provider && isProviderId(ai.provider) ? ai.provider : current.ai.provider;
+      const mergedProviders = { ...current.ai.providers };
+
+      // Merge each provider's config from the incoming payload
+      if (ai.providers && typeof ai.providers === 'object') {
+        for (const [id, inCfg] of Object.entries(ai.providers as Record<string, any>)) {
+          if (!isProviderId(id) || !inCfg) continue;
+          const existing = mergedProviders[id] ?? { apiKey: '', model: PROVIDER_PRESETS[id].defaultModel };
+          mergedProviders[id] = {
+            apiKey: inCfg.apiKey || existing.apiKey,
+            model: inCfg.model || existing.model,
+            ...(inCfg.baseUrl !== undefined ? { baseUrl: inCfg.baseUrl } : existing.baseUrl ? { baseUrl: existing.baseUrl } : {}),
+          };
+        }
+      }
+
+      mergedAi = { provider: newProvider, providers: mergedProviders };
     }
 
     const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];

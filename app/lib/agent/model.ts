@@ -1,123 +1,117 @@
 import { getModel as piGetModel, type Model } from '@mariozechner/pi-ai';
-import { effectiveAiConfig } from '@/lib/settings';
+import { effectiveAiConfig, type ProviderConfig } from '@/lib/settings';
+import { type ProviderId, PROVIDER_PRESETS, getPreset } from './providers';
 
 /** Check if any message in the conversation contains images */
 export function hasImages(messages: Array<{ images?: unknown[] }>): boolean {
   return messages.some(m => m.images && m.images.length > 0);
 }
 
-/** Ensure model input includes 'image' when images are present */
 function ensureVisionCapable(model: Model<any>): Model<any> {
   const inputs = model.input as readonly string[];
   if (inputs.includes('image')) return model;
-  // Upgrade input to include image — most modern models support it
   return { ...model, input: [...inputs, 'image'] as any };
 }
 
+export interface ModelConfigOverrides {
+  provider?: ProviderId;
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
+  hasImages?: boolean;
+}
+
 /**
- * Build a pi-ai Model for the configured provider.
+ * Build a pi-ai Model for any configured provider.
  *
- * - Anthropic: uses getModel() from pi-ai registry directly.
- * - OpenAI: uses getModel() then overrides baseUrl if custom endpoint is configured.
- *   Falls back to constructing a Model literal for unknown model IDs.
- *   Custom API variant can be specified for non-standard endpoints.
- *
- * Returns { model, modelName, apiKey } — Agent needs model + apiKey via getApiKey hook.
+ * Accepts optional overrides — used by test-key and list-models
+ * to construct models from unsaved UI values.
  */
-export function getModelConfig(options?: { hasImages?: boolean }): {
+export function getModelConfig(options?: ModelConfigOverrides): {
   model: Model<any>;
   modelName: string;
   apiKey: string;
-  provider: 'anthropic' | 'openai';
+  provider: ProviderId;
 } {
-  const cfg = effectiveAiConfig();
+  const saved = effectiveAiConfig();
 
-  if (cfg.provider === 'openai') {
-    const modelName = cfg.openaiModel;
-    let model: Model<any>;
+  const cfg = {
+    provider: options?.provider ?? saved.provider,
+    apiKey: options?.apiKey ?? saved.apiKey,
+    model: options?.model ?? saved.model,
+    baseUrl: options?.baseUrl ?? saved.baseUrl,
+  };
 
-    // API variant: 'openai-completions' = /chat/completions (widest compatibility),
-    // 'openai-responses' = /responses (OpenAI native). Custom proxies (baseUrl set)
-    // almost always only support chat completions, so default to that when baseUrl is set.
-    const hasCustomBase = !!cfg.openaiBaseUrl;
-    const defaultApi = hasCustomBase ? 'openai-completions' : 'openai-responses';
-    const customApiVariant = (cfg as any).openaiApiVariant; // May exist in extended config
+  const preset = getPreset(cfg.provider);
+  const modelName = cfg.model;
 
-    try {
-      const resolved = piGetModel('openai', modelName as any);
-      if (!resolved) throw new Error('Model not in registry');
-      model = resolved;
-      // If user has a custom baseUrl, override API to completions for compatibility
-      if (hasCustomBase && !customApiVariant) {
-        model = { ...model, api: defaultApi };
-      }
-    } catch {
-      // Model not in pi-ai registry — construct manually for custom/proxy endpoints
-      model = {
-        id: modelName,
-        name: modelName,
-        api: (customApiVariant ?? defaultApi) as any,
-        provider: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        reasoning: false,
-        input: ['text'] as const,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128_000,
-        maxTokens: 16_384,
-      };
-    }
+  let model = resolveModel(preset, modelName, cfg.baseUrl);
 
-    // For custom proxy endpoints, set conservative compat flags.
-    // Most proxies (Azure, Bedrock relays, corporate gateways) only support
-    // a subset of OpenAI's features. These defaults prevent silent failures.
-    // NOTE: maxTokensField is NOT overridden — pi-ai auto-detects the correct
-    // field based on URL (defaults to max_completion_tokens for modern APIs).
-    if (hasCustomBase) {
-      model = {
-        ...model,
-        baseUrl: cfg.openaiBaseUrl,
-        compat: {
-          ...(model as any).compat,
-          supportsStore: false,
-          supportsDeveloperRole: false,
-          supportsReasoningEffort: false,
-          supportsUsageInStreaming: false,
-          supportsStrictMode: false,
-        },
-      };
-      if (customApiVariant) {
-        model = { ...model, api: customApiVariant };
-      }
-    }
-
-    const finalModel = options?.hasImages ? ensureVisionCapable(model) : model;
-    return { model: finalModel, modelName, apiKey: cfg.openaiApiKey, provider: 'openai' };
+  if (options?.hasImages) {
+    model = ensureVisionCapable(model);
   }
 
-  // Anthropic
-  const modelName = cfg.anthropicModel;
+  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider };
+}
+
+/**
+ * Try pi-ai registry first, then fall back to a manually constructed Model.
+ * Applies baseUrl overrides and compat flags from the provider preset.
+ */
+function resolveModel(preset: typeof PROVIDER_PRESETS[ProviderId], modelName: string, baseUrl: string): Model<any> {
   let model: Model<any>;
+  const hasCustomBase = !!baseUrl;
 
   try {
-    const resolved = piGetModel('anthropic', modelName as any);
+    const resolved = piGetModel(preset.piProvider as any, modelName as any);
     if (!resolved) throw new Error('Model not in registry');
     model = resolved;
   } catch {
-    // Unknown Anthropic model — construct manually
     model = {
       id: modelName,
       name: modelName,
-      api: 'anthropic-messages' as const,
-      provider: 'anthropic',
-      baseUrl: 'https://api.anthropic.com',
+      api: preset.piApiDefault as any,
+      provider: preset.piProvider,
+      baseUrl: preset.defaultBaseUrl || '',
       reasoning: false,
       input: ['text'] as const,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 200_000,
-      maxTokens: 8_192,
+      contextWindow: 128_000,
+      maxTokens: 16_384,
     };
   }
 
-  const finalModel = options?.hasImages ? ensureVisionCapable(model) : model;
-  return { model: finalModel, modelName, apiKey: cfg.anthropicApiKey, provider: 'anthropic' };
+  if (hasCustomBase) {
+    model = { ...model, baseUrl };
+
+    // For custom endpoints, use completions API for max compatibility
+    if (preset.piApiDefault === 'openai-responses' || model.api === 'openai-responses') {
+      model = { ...model, api: 'openai-completions' as any };
+    }
+  }
+
+  // Merge preset compat flags
+  if (preset.compat || hasCustomBase) {
+    const baseCompat = hasCustomBase ? {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      supportsUsageInStreaming: false,
+      supportsStrictMode: false,
+    } : {};
+
+    model = {
+      ...model,
+      compat: { ...(model as any).compat, ...baseCompat, ...preset.compat },
+    };
+  }
+
+  return model;
+}
+
+/** Get the effective provider's saved config (for API routes that read per-provider settings) */
+export function getProviderConfig(provider: ProviderId): ProviderConfig | undefined {
+  const { readSettings } = require('@/lib/settings');
+  const s = readSettings();
+  return s.ai.providers[provider];
 }

@@ -11,6 +11,7 @@ import GuideCard from './GuideCard';
 import SystemPulse from './SystemPulse';
 import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 import type { SpaceInfo } from '@/app/page';
+import RecentActivityFeed from '@/components/agents/RecentActivityFeed';
 
 interface RecentFile {
   path: string;
@@ -449,6 +450,11 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           )}
         </section>
       )}
+
+      {/* ══════════ Recent Agent Activity ══════════ */}
+      <div className="mb-10">
+        <RecentActivityFeed />
+      </div>
 
       {/* Footer */}
       <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">

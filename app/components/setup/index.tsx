@@ -5,7 +5,8 @@ import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/LocaleContext';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
-import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus } from './types';
+import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus, ProviderSetupConfig } from './types';
+import { type ProviderId, isProviderId, PROVIDER_PRESETS } from '@/lib/agent/providers';
 import { TOTAL_STEPS, STEP_KB, STEP_AI, STEP_AGENTS, STEP_REVIEW } from './constants';
 import StepKB from './StepKB';
 import StepAI from './StepAI';
@@ -47,6 +48,19 @@ function parseInstallResult(
 
 /** Phase 1: Save setup config. Returns whether restart is needed. Throws on failure. */
 async function saveConfig(state: SetupState): Promise<boolean> {
+  // Build providers dict from dynamic providerConfigs
+  const providers: Record<string, { apiKey: string; model: string; baseUrl?: string }> = {};
+  if (state.provider !== 'skip') {
+    for (const [id, cfg] of Object.entries(state.providerConfigs)) {
+      if (!cfg) continue;
+      providers[id] = {
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}),
+      };
+    }
+  }
+
   const payload = {
     mindRoot: state.mindRoot,
     template: state.template || undefined,
@@ -56,10 +70,7 @@ async function saveConfig(state: SetupState): Promise<boolean> {
     webPassword: state.webPassword,
     ai: state.provider === 'skip' ? undefined : {
       provider: state.provider,
-      providers: {
-        anthropic: { apiKey: state.anthropicKey, model: state.anthropicModel },
-        openai: { apiKey: state.openaiKey, model: state.openaiModel, baseUrl: state.openaiBaseUrl },
-      },
+      providers,
     },
   };
   const res = await fetch('/api/setup', {
@@ -113,13 +124,10 @@ export default function SetupWizard() {
     mindRoot: '~/MindOS/mind',
     template: 'en',
     provider: 'anthropic',
-    anthropicKey: '',
-    anthropicModel: 'claude-sonnet-4-6',
-    anthropicKeyMask: '',
-    openaiKey: '',
-    openaiModel: 'gpt-5.4',
-    openaiBaseUrl: '',
-    openaiKeyMask: '',
+    providerConfigs: {
+      anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
+      openai: { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+    },
     webPort: 3456,
     mcpPort: 8781,
     authToken: '',
@@ -150,6 +158,44 @@ export default function SetupWizard() {
       .then(r => r.json())
       .then(data => {
         if (data.homeDir) setHomeDir(data.homeDir);
+        // Build providerConfigs from server response (supports both old and new format)
+        const provConfigs: Partial<Record<ProviderId, ProviderSetupConfig>> = { ...prev.providerConfigs };
+
+        // Handle legacy flat format from server
+        if (data.anthropicApiKey || data.anthropicModel) {
+          provConfigs.anthropic = {
+            ...provConfigs.anthropic,
+            apiKey: provConfigs.anthropic?.apiKey ?? '',
+            model: data.anthropicModel || provConfigs.anthropic?.model || 'claude-sonnet-4-6',
+            apiKeyMask: data.anthropicApiKey || '',
+          };
+        }
+        if (data.openaiApiKey || data.openaiModel) {
+          provConfigs.openai = {
+            ...provConfigs.openai,
+            apiKey: provConfigs.openai?.apiKey ?? '',
+            model: data.openaiModel || provConfigs.openai?.model || 'gpt-5.4',
+            baseUrl: data.openaiBaseUrl ?? provConfigs.openai?.baseUrl ?? '',
+            apiKeyMask: data.openaiApiKey || '',
+          };
+        }
+
+        // Handle new dynamic providers format from server
+        if (data.providerConfigs && typeof data.providerConfigs === 'object') {
+          for (const [id, cfg] of Object.entries(data.providerConfigs as Record<string, any>)) {
+            if (isProviderId(id) && cfg) {
+              provConfigs[id] = {
+                apiKey: provConfigs[id]?.apiKey ?? '',
+                model: cfg.model || PROVIDER_PRESETS[id].defaultModel,
+                baseUrl: cfg.baseUrl ?? '',
+                apiKeyMask: cfg.apiKeyMask || '',
+              };
+            }
+          }
+        }
+
+        const resolvedProvider = data.provider && isProviderId(data.provider) ? data.provider : prev.provider;
+
         setState(prev => ({
           ...prev,
           mindRoot: data.mindRoot || prev.mindRoot,
@@ -157,12 +203,8 @@ export default function SetupWizard() {
           mcpPort: typeof data.mcpPort === 'number' ? data.mcpPort : prev.mcpPort,
           authToken: data.authToken || prev.authToken,
           webPassword: data.webPassword || prev.webPassword,
-          provider: (data.provider === 'anthropic' || data.provider === 'openai') ? data.provider : prev.provider,
-          anthropicModel: data.anthropicModel || prev.anthropicModel,
-          anthropicKeyMask: data.anthropicApiKey || '',
-          openaiModel: data.openaiModel || prev.openaiModel,
-          openaiBaseUrl: data.openaiBaseUrl ?? prev.openaiBaseUrl,
-          openaiKeyMask: data.openaiApiKey || '',
+          provider: resolvedProvider,
+          providerConfigs: provConfigs,
         }));
         // Generate a new token only if none exists yet
         if (!data.authToken) {

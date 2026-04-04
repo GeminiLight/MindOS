@@ -1,4 +1,5 @@
 import type { Messages } from '@/lib/i18n';
+import type { ProviderId } from '@/lib/agent/providers';
 
 // ─── i18n type aliases ───────────────────────────────────────────────────────
 export type SetupMessages = Messages['setup'];
@@ -7,18 +8,20 @@ export type McpMessages = Messages['settings']['mcp'];
 // ─── Template ────────────────────────────────────────────────────────────────
 export type Template = 'en' | 'zh' | 'empty' | '';
 
+// ─── Per-provider config stored in setup state ───────────────────────────────
+export interface ProviderSetupConfig {
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  apiKeyMask?: string;
+}
+
 // ─── Setup state ─────────────────────────────────────────────────────────────
 export interface SetupState {
   mindRoot: string;
   template: Template;
-  provider: 'anthropic' | 'openai' | 'skip';
-  anthropicKey: string;
-  anthropicModel: string;
-  anthropicKeyMask: string;   // masked existing key from server (display only)
-  openaiKey: string;
-  openaiModel: string;
-  openaiBaseUrl: string;
-  openaiKeyMask: string;      // masked existing key from server (display only)
+  provider: ProviderId | 'skip';
+  providerConfigs: Partial<Record<ProviderId, ProviderSetupConfig>>;
   webPort: number;
   mcpPort: number;
   authToken: string;

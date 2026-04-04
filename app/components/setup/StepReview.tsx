@@ -8,6 +8,8 @@ import {
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import type { SetupState, SetupMessages, AgentInstallStatus } from './types';
+import { PROVIDER_PRESETS, isProviderId } from '@/lib/agent/providers';
+import { useLocale } from '@/lib/LocaleContext';
 
 // ─── Restart Block ────────────────────────────────────────────────────────────
 
@@ -254,12 +256,24 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
     if (ok) { setCopied(true); toast.copy(); }
   }, [state.authToken]);
 
+  const { locale } = useLocale();
+
   // Derive health check statuses
   const kbOk = !!state.mindRoot;
   const aiOk = state.provider !== 'skip' && state.provider !== '';
   const successAgents = Object.values(agentStatuses).filter(a => a.state === 'ok').length;
   const agentsOk = successAgents > 0;
   const hasToken = !!state.authToken;
+
+  // Resolve provider display name and model from dynamic config
+  let providerDisplayName = '';
+  let providerModelName = '';
+  if (aiOk && isProviderId(state.provider as string)) {
+    const preset = PROVIDER_PRESETS[state.provider as keyof typeof PROVIDER_PRESETS];
+    providerDisplayName = locale === 'zh' ? preset.nameZh : preset.name;
+    const cfg = state.providerConfigs[state.provider as keyof typeof PROVIDER_PRESETS];
+    providerModelName = cfg?.model || preset.defaultModel;
+  }
 
   const checks: Array<{
     ok: boolean;
@@ -279,7 +293,7 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
       icon: <Brain size={14} />,
       title: s.healthAi ?? 'AI Provider',
       detail: aiOk
-        ? `${state.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} (${(state.provider === 'anthropic' ? state.anthropicModel : state.openaiModel) || 'default'})`
+        ? `${providerDisplayName} (${providerModelName || 'default'})`
         : (s.healthAiNone ?? 'Not configured — AI features disabled'),
       action: aiOk ? undefined : (s.healthAiAction ?? 'Add an API key in Settings → AI.'),
     },

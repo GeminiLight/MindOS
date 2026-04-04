@@ -146,7 +146,10 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     if (!data) return;
     const defaults: AiSettings = {
       provider: 'anthropic',
-      providers: { anthropic: { apiKey: '', model: '' }, openai: { apiKey: '', model: '', baseUrl: '' } },
+      providers: {
+        anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
+        openai: { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+      },
     };
     setData(d => d ? { ...d, ai: defaults } : d);
     const DEBOUNCE_DELAY = 800;

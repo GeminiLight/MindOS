@@ -1,118 +1,37 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { complete } from '@mariozechner/pi-ai';
 import { effectiveAiConfig } from '@/lib/settings';
+import { getModelConfig } from '@/lib/agent/model';
+import { type ProviderId, isProviderId } from '@/lib/agent/providers';
 
-const TIMEOUT = 10_000;
+const TIMEOUT = 15_000;
 
 type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
 
-function classifyError(status: number, body: string): { code: ErrorCode; error: string } {
-  if (status === 401 || status === 403) return { code: 'auth_error', error: 'Invalid API key' };
-  if (status === 404) return { code: 'model_not_found', error: 'Model not found' };
-  if (status === 429) return { code: 'rate_limited', error: 'Rate limited' };
-  // Try to extract error message from response body
-  try {
-    const parsed = JSON.parse(body);
-    const msg = parsed?.error?.message || parsed?.error || '';
-    if (typeof msg === 'string' && msg.length > 0) return { code: 'unknown', error: msg.slice(0, 200) };
-  } catch { /* not JSON */ }
-  return { code: 'unknown', error: `HTTP ${status}` };
-}
+function classifyPiAiError(err: unknown): { code: ErrorCode; error: string } {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
 
-async function testAnthropic(apiKey: string, model: string): Promise<{ ok: boolean; latency?: number; code?: ErrorCode; error?: string }> {
-  const start = Date.now();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
-      signal: ctrl.signal,
-    });
-    const latency = Date.now() - start;
-    if (res.ok) return { ok: true, latency };
-    const body = await res.text();
-    return { ok: false, ...classifyError(res.status, body) };
-  } catch (e: unknown) {
-    if (e instanceof Error && e.name === 'AbortError') return { ok: false, code: 'network_error', error: 'Request timed out' };
-    return { ok: false, code: 'network_error', error: e instanceof Error ? e.message : 'Network error' };
-  } finally {
-    clearTimeout(timer);
-  }
-}
+  if (err instanceof Error && err.name === 'AbortError')
+    return { code: 'network_error', error: 'Request timed out' };
 
-async function testOpenAI(apiKey: string, model: string, baseUrl: string): Promise<{ ok: boolean; latency?: number; code?: ErrorCode; error?: string }> {
-  const start = Date.now();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
-  const url = (baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/chat/completions';
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
-      signal: ctrl.signal,
-    });
-    const latency = Date.now() - start;
-    if (!res.ok) {
-      const body = await res.text();
-      return { ok: false, ...classifyError(res.status, body) };
-    }
+  if (lower.includes('401') || lower.includes('403') || lower.includes('invalid') && lower.includes('key')
+    || lower.includes('authentication') || lower.includes('unauthorized'))
+    return { code: 'auth_error', error: 'Invalid API key' };
 
-    // Tool compatibility test — `/api/ask` always sends tool definitions.
-    const toolRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: 'hi' },
-        ],
-        tools: [{
-          type: 'function',
-          function: {
-            name: 'noop',
-            description: 'No-op function used for compatibility checks.',
-            parameters: {
-              type: 'object',
-              properties: {},
-              additionalProperties: false,
-            },
-          },
-        }],
-        tool_choice: 'none',
-      }),
-      signal: ctrl.signal,
-    });
-    if (!toolRes.ok) {
-      const toolBody = await toolRes.text();
-      const toolErr = classifyError(toolRes.status, toolBody);
-      return {
-        ok: false,
-        code: toolErr.code,
-        error: `Model endpoint passes basic test but is incompatible with agent tool calls: ${toolErr.error}`,
-      };
-    }
+  if (lower.includes('404') || lower.includes('not found') || lower.includes('does not exist'))
+    return { code: 'model_not_found', error: `Model not found: ${msg.slice(0, 200)}` };
 
-    return { ok: true, latency };
-  } catch (e: unknown) {
-    if (e instanceof Error && e.name === 'AbortError') return { ok: false, code: 'network_error', error: 'Request timed out' };
-    return { ok: false, code: 'network_error', error: e instanceof Error ? e.message : 'Network error' };
-  } finally {
-    clearTimeout(timer);
-  }
+  if (lower.includes('429') || lower.includes('rate') || lower.includes('quota'))
+    return { code: 'rate_limited', error: 'Rate limited — try again later' };
+
+  if (lower.includes('econnrefused') || lower.includes('enotfound')
+    || lower.includes('etimedout') || lower.includes('fetch failed')
+    || lower.includes('network'))
+    return { code: 'network_error', error: msg.slice(0, 200) };
+
+  return { code: 'unknown', error: msg.slice(0, 200) };
 }
 
 export async function POST(req: NextRequest) {
@@ -125,28 +44,50 @@ export async function POST(req: NextRequest) {
       baseUrl?: string;
     };
 
-    if (provider !== 'anthropic' && provider !== 'openai') {
-      return NextResponse.json({ ok: false, code: 'unknown', error: 'Invalid provider' }, { status: 400 });
+    if (!provider || !isProviderId(provider)) {
+      return NextResponse.json(
+        { ok: false, code: 'unknown', error: 'Invalid provider' },
+        { status: 400 },
+      );
     }
 
-    // Resolve actual API key: use provided key, fallback to config/env for masked or missing
     const cfg = effectiveAiConfig();
     let resolvedKey = apiKey || '';
     if (!resolvedKey || resolvedKey === '***set***') {
-      resolvedKey = provider === 'anthropic' ? cfg.anthropicApiKey : cfg.openaiApiKey;
+      resolvedKey = cfg.provider === provider ? cfg.apiKey : '';
     }
 
     if (!resolvedKey) {
       return NextResponse.json({ ok: false, code: 'auth_error', error: 'No API key configured' });
     }
 
-    const resolvedModel = model || (provider === 'anthropic' ? cfg.anthropicModel : cfg.openaiModel);
+    const resolvedModel = model || (cfg.provider === provider ? cfg.model : undefined);
 
-    const result = provider === 'anthropic'
-      ? await testAnthropic(resolvedKey, resolvedModel)
-      : await testOpenAI(resolvedKey, resolvedModel, baseUrl || cfg.openaiBaseUrl);
+    const start = Date.now();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
 
-    return NextResponse.json(result);
+    try {
+      const { model: piModel } = getModelConfig({
+        provider: provider as ProviderId,
+        apiKey: resolvedKey,
+        model: resolvedModel || undefined,
+        baseUrl: baseUrl || undefined,
+      });
+
+      await complete(piModel, {
+        messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }],
+      }, {
+        apiKey: resolvedKey,
+        signal: ctrl.signal,
+      });
+
+      return NextResponse.json({ ok: true, latency: Date.now() - start });
+    } catch (e) {
+      return NextResponse.json({ ok: false, ...classifyPiAiError(e) });
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (err) {
     return NextResponse.json({ ok: false, code: 'unknown', error: String(err) }, { status: 500 });
   }

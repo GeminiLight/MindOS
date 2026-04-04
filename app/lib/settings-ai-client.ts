@@ -2,25 +2,26 @@
  * Client-side mirror of "can /api/ask run?" using GET /api/settings payload.
  * Must stay aligned with server `effectiveAiConfig()` provider + key resolution.
  */
+import { type ProviderId, PROVIDER_PRESETS, isProviderId } from './agent/providers';
 
 export type SettingsJsonForAi = {
   ai?: {
     provider?: string;
-    providers?: {
-      anthropic?: { apiKey?: string };
-      openai?: { apiKey?: string };
-    };
+    providers?: Partial<Record<string, { apiKey?: string }>>;
   };
-  envOverrides?: Partial<Record<'ANTHROPIC_API_KEY' | 'OPENAI_API_KEY', boolean>>;
+  envOverrides?: Partial<Record<string, boolean>>;
 };
 
 export function isAiConfiguredForAsk(data: SettingsJsonForAi): boolean {
-  const prov = data.ai?.provider === 'openai' ? 'openai' : 'anthropic';
+  const provId = data.ai?.provider;
+  const provider: ProviderId = (provId && isProviderId(provId)) ? provId : 'anthropic';
+  const preset = PROVIDER_PRESETS[provider];
   const env = data.envOverrides ?? {};
-  if (prov === 'openai') {
-    const k = data.ai?.providers?.openai?.apiKey;
-    return (typeof k === 'string' && k.length > 0) || !!env.OPENAI_API_KEY;
-  }
-  const k = data.ai?.providers?.anthropic?.apiKey;
-  return (typeof k === 'string' && k.length > 0) || !!env.ANTHROPIC_API_KEY;
+
+  const k = data.ai?.providers?.[provider]?.apiKey;
+  if (typeof k === 'string' && k.length > 0) return true;
+
+  if (preset.apiKeyEnvVar && env[preset.apiKeyEnvVar]) return true;
+
+  return false;
 }

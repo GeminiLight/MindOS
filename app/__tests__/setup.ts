@@ -35,11 +35,9 @@ vi.mock('@/lib/settings', () => ({
   effectiveSopRoot: () => state.root,
   effectiveAiConfig: () => ({
     provider: 'anthropic',
-    anthropicApiKey: '',
-    anthropicModel: 'claude-sonnet-4-6',
-    openaiApiKey: '',
-    openaiModel: 'gpt-5.4',
-    openaiBaseUrl: '',
+    apiKey: '',
+    model: 'claude-sonnet-4-6',
+    baseUrl: '',
   }),
 }));
 

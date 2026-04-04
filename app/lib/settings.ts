@@ -2,21 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { parseAcpAgentOverrides } from './acp/agent-descriptors';
+import { type ProviderId, PROVIDER_PRESETS, isProviderId } from './agent/providers';
 
 const SETTINGS_PATH = path.join(os.homedir(), '.mindos', 'config.json');
 
 export interface ProviderConfig {
   apiKey: string;
   model: string;
-  baseUrl?: string; // only for openai-compatible providers
+  baseUrl?: string;
 }
 
 export interface AiConfig {
-  provider: 'anthropic' | 'openai';
-  providers: {
-    anthropic: ProviderConfig;
-    openai: ProviderConfig;
-  };
+  provider: ProviderId;
+  providers: Partial<Record<ProviderId, ProviderConfig>>;
 }
 
 export interface AgentConfig {
@@ -57,7 +55,7 @@ export interface ServerSettings {
 
 const DEFAULTS: ServerSettings = {
   ai: {
-    provider: 'anthropic',
+    provider: 'anthropic' as ProviderId,
     providers: {
       anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
       openai:    { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
@@ -91,20 +89,23 @@ function migrateAi(parsed: Record<string, unknown>): AiConfig {
   const ai = parsed.ai as Record<string, unknown> | undefined;
   if (!ai) return { ...DEFAULTS.ai };
 
-  const providerField = ai.provider;
-  const provider: 'anthropic' | 'openai' =
-    providerField === 'anthropic' || providerField === 'openai' ? providerField : 'anthropic';
+  const providerField = typeof ai.provider === 'string' ? ai.provider : 'anthropic';
+  const provider: ProviderId = isProviderId(providerField) ? providerField : 'anthropic';
 
-  // Already new format
+  // Already new format — parse all known providers from disk
   if (ai.providers && typeof ai.providers === 'object') {
     const p = ai.providers as Record<string, unknown>;
-    return {
-      provider,
-      providers: {
-        anthropic: parseProvider(p.anthropic, DEFAULTS.ai.providers.anthropic),
-        openai:    parseProvider(p.openai,    DEFAULTS.ai.providers.openai),
-      },
-    };
+    const providers: Partial<Record<ProviderId, ProviderConfig>> = {};
+    for (const id of Object.keys(p)) {
+      if (!isProviderId(id)) continue;
+      const preset = PROVIDER_PRESETS[id];
+      const defaultCfg = DEFAULTS.ai.providers[id] ?? { apiKey: '', model: preset.defaultModel };
+      providers[id] = parseProvider(p[id], defaultCfg);
+    }
+    // Ensure at least anthropic and openai exist (backward compat)
+    if (!providers.anthropic) providers.anthropic = DEFAULTS.ai.providers.anthropic;
+    if (!providers.openai) providers.openai = DEFAULTS.ai.providers.openai;
+    return { provider, providers };
   }
 
   // Old flat format — migrate
@@ -213,21 +214,35 @@ export function writeSettings(settings: ServerSettings): void {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
 }
 
-/** Effective AI config — settings file overrides env vars when non-empty */
-export function effectiveAiConfig() {
+/** Effective AI config — unified interface for all providers.
+ *  Resolves: saved config → env var → preset default, in that priority order. */
+export function effectiveAiConfig(): {
+  provider: ProviderId;
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+} {
   const s = readSettings();
-  const provider = (s.ai.provider || process.env.AI_PROVIDER || 'anthropic') as 'anthropic' | 'openai';
-  const anthropic = s.ai.providers.anthropic;
-  const openai    = s.ai.providers.openai;
+  const envProvider = process.env.AI_PROVIDER;
+  const provider: ProviderId = isProviderId(s.ai.provider)
+    ? s.ai.provider
+    : (envProvider && isProviderId(envProvider) ? envProvider : 'anthropic');
 
-  return {
-    provider,
-    anthropicApiKey: anthropic.apiKey || process.env.ANTHROPIC_API_KEY || '',
-    anthropicModel:  anthropic.model  || process.env.ANTHROPIC_MODEL   || 'claude-sonnet-4-6',
-    openaiApiKey:    openai.apiKey    || process.env.OPENAI_API_KEY    || '',
-    openaiModel:     openai.model     || process.env.OPENAI_MODEL      || 'gpt-5.4',
-    openaiBaseUrl:   openai.baseUrl   || process.env.OPENAI_BASE_URL   || '',
-  };
+  const preset = PROVIDER_PRESETS[provider] ?? PROVIDER_PRESETS.anthropic;
+  const provCfg = s.ai.providers[provider] ?? {};
+
+  const apiKey = provCfg.apiKey
+    || (preset.apiKeyEnvVar ? process.env[preset.apiKeyEnvVar] : '')
+    || '';
+  const model = provCfg.model
+    || (preset.modelEnvVar ? process.env[preset.modelEnvVar] : '')
+    || preset.defaultModel;
+  const baseUrl = provCfg.baseUrl
+    || (preset.baseUrlEnvVar ? process.env[preset.baseUrlEnvVar] : '')
+    || preset.defaultBaseUrl
+    || '';
+
+  return { provider, apiKey, model, baseUrl };
 }
 
 /** Effective MIND_ROOT — settings file can override, env var is fallback */

@@ -1,5 +1,6 @@
 import type { Locale, Messages } from '@/lib/i18n';
 import type React from 'react';
+import type { ProviderId } from '@/lib/agent/providers';
 
 export interface ProviderConfig {
   apiKey: string;
@@ -8,11 +9,8 @@ export interface ProviderConfig {
 }
 
 export interface AiSettings {
-  provider: 'anthropic' | 'openai';
-  providers: {
-    anthropic?: ProviderConfig;
-    openai?: ProviderConfig;
-  };
+  provider: ProviderId;
+  providers: Partial<Record<ProviderId, ProviderConfig>>;
 }
 
 export interface AgentSettings {

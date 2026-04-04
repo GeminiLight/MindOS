@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Globe, History, LayoutDashboard, Server, Zap } from 'lucide-react';
+import { Globe, History, LayoutDashboard, Server, Zap, Activity } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
@@ -10,6 +10,7 @@ type HubCopy = {
   navSkills: string;
   navNetwork: string;
   navSessions: string;
+  navActivity?: string;
 };
 
 export function AgentsPanelHubNav({
@@ -52,6 +53,12 @@ export function AgentsPanelHubNav({
         active={inAgentsRoute && tab === 'a2a'}
       />
       {/* Sessions tab hidden */}
+      <PanelNavRow
+        icon={<Activity size={14} className={inAgentsRoute && tab === 'activity' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navActivity ?? 'Activity'}
+        href="/agents?tab=activity"
+        active={inAgentsRoute && tab === 'activity'}
+      />
     </div>
   );
 }

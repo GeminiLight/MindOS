@@ -2,10 +2,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { invalidateCache } from '@/lib/fs';
+import { PROVIDER_PRESETS, ALL_PROVIDER_IDS } from '@/lib/agent/providers';
 
 function maskToken(token: string | undefined): string {
   if (!token) return '';
-  // Show first 4 and last 4 chars: xxxx-••••-••••-••••-••••-xxxx
   const parts = token.split('-');
   if (parts.length >= 2) {
     return parts[0] + '-' + parts.slice(1, -1).map(() => '••••').join('-') + '-' + parts[parts.length - 1];
@@ -16,49 +16,53 @@ function maskToken(token: string | undefined): string {
 export async function GET() {
   const settings = readSettings();
 
-  const envValues = {
-    AI_PROVIDER:       process.env.AI_PROVIDER || '',
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? '***set***' : '',
-    ANTHROPIC_MODEL:   process.env.ANTHROPIC_MODEL || '',
-    OPENAI_API_KEY:    process.env.OPENAI_API_KEY ? '***set***' : '',
-    OPENAI_MODEL:      process.env.OPENAI_MODEL || '',
-    OPENAI_BASE_URL:   process.env.OPENAI_BASE_URL || '',
-    MIND_ROOT:         process.env.MIND_ROOT || '',
+  // Build env values/overrides dynamically from all provider presets
+  const envOverrides: Record<string, boolean> = {
+    AI_PROVIDER: !!process.env.AI_PROVIDER,
+    MIND_ROOT:   !!process.env.MIND_ROOT,
+  };
+  const envValues: Record<string, string> = {
+    AI_PROVIDER: process.env.AI_PROVIDER || '',
+    MIND_ROOT:   process.env.MIND_ROOT || '',
   };
 
-  // Mask API keys
-  const anthropic = settings.ai.providers.anthropic;
-  const openai    = settings.ai.providers.openai;
+  for (const preset of Object.values(PROVIDER_PRESETS)) {
+    if (preset.apiKeyEnvVar) {
+      envOverrides[preset.apiKeyEnvVar] = !!process.env[preset.apiKeyEnvVar];
+      envValues[preset.apiKeyEnvVar] = process.env[preset.apiKeyEnvVar] ? '***set***' : '';
+    }
+    if (preset.modelEnvVar) {
+      envOverrides[preset.modelEnvVar] = !!process.env[preset.modelEnvVar];
+      envValues[preset.modelEnvVar] = process.env[preset.modelEnvVar] || '';
+    }
+    if (preset.baseUrlEnvVar) {
+      envOverrides[preset.baseUrlEnvVar] = !!process.env[preset.baseUrlEnvVar];
+      envValues[preset.baseUrlEnvVar] = process.env[preset.baseUrlEnvVar] || '';
+    }
+  }
+
+  // Mask API keys for all configured providers
+  const maskedProviders: Record<string, { apiKey: string; model: string; baseUrl?: string }> = {};
+  for (const [id, cfg] of Object.entries(settings.ai.providers)) {
+    if (!cfg) continue;
+    maskedProviders[id] = {
+      apiKey: cfg.apiKey ? '***set***' : '',
+      model: cfg.model ?? '',
+      ...(cfg.baseUrl !== undefined ? { baseUrl: cfg.baseUrl } : {}),
+    };
+  }
 
   const masked = {
     ai: {
       provider: settings.ai.provider,
-      providers: {
-        anthropic: {
-          apiKey: anthropic?.apiKey ? '***set***' : '',
-          model:  anthropic?.model  ?? '',
-        },
-        openai: {
-          apiKey:  openai?.apiKey  ? '***set***' : '',
-          model:   openai?.model   ?? '',
-          baseUrl: openai?.baseUrl ?? '',
-        },
-      },
+      providers: maskedProviders,
     },
     mindRoot: settings.mindRoot,
     webPassword: settings.webPassword ? '***set***' : '',
     authToken: maskToken(settings.authToken),
     mcpPort: settings.mcpPort ?? 8781,
     agent: settings.agent ?? {},
-    envOverrides: {
-      AI_PROVIDER:       !!process.env.AI_PROVIDER,
-      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
-      ANTHROPIC_MODEL:   !!process.env.ANTHROPIC_MODEL,
-      OPENAI_API_KEY:    !!process.env.OPENAI_API_KEY,
-      OPENAI_MODEL:      !!process.env.OPENAI_MODEL,
-      OPENAI_BASE_URL:   !!process.env.OPENAI_BASE_URL,
-      MIND_ROOT:         !!process.env.MIND_ROOT,
-    },
+    envOverrides,
     envValues,
   };
   return NextResponse.json(masked);
@@ -69,11 +73,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as Partial<ServerSettings>;
     const current = readSettings();
 
-    // Merge providers, preserving masked keys
-    const incomingAnthropic = body.ai?.providers?.anthropic;
-    const incomingOpenai    = body.ai?.providers?.openai;
-    const curAnthropic      = current.ai.providers.anthropic;
-    const curOpenai         = current.ai.providers.openai;
+    // Merge providers dynamically, preserving masked keys ('***set***' = keep existing)
+    const mergedProviders = { ...current.ai.providers };
+    if (body.ai?.providers) {
+      for (const [id, incoming] of Object.entries(body.ai.providers)) {
+        if (!incoming) continue;
+        const cur = mergedProviders[id as keyof typeof mergedProviders] ?? { apiKey: '', model: '' };
+        mergedProviders[id as keyof typeof mergedProviders] = {
+          ...cur,
+          ...incoming,
+          apiKey: incoming.apiKey === '***set***'
+            ? (cur.apiKey ?? '')
+            : (incoming.apiKey ?? cur.apiKey ?? ''),
+          model: incoming.model ?? cur.model ?? '',
+        };
+      }
+    }
 
     // Resolve webPassword: '***set***' means keep existing, '' means clear, anything else = new value
     const incomingWebPassword = body.webPassword;
@@ -91,24 +106,7 @@ export async function POST(req: NextRequest) {
     const next: ServerSettings = {
       ai: {
         provider: body.ai?.provider ?? current.ai.provider,
-        providers: {
-          anthropic: {
-            ...curAnthropic,
-            ...(incomingAnthropic ?? {}),
-            apiKey: incomingAnthropic?.apiKey === '***set***'
-              ? (curAnthropic.apiKey ?? '')
-              : (incomingAnthropic?.apiKey ?? curAnthropic.apiKey ?? ''),
-            model: incomingAnthropic?.model ?? curAnthropic.model ?? 'claude-sonnet-4-6',
-          },
-          openai: {
-            ...curOpenai,
-            ...(incomingOpenai ?? {}),
-            apiKey: incomingOpenai?.apiKey === '***set***'
-              ? (curOpenai.apiKey ?? '')
-              : (incomingOpenai?.apiKey ?? curOpenai.apiKey ?? ''),
-            model: incomingOpenai?.model ?? curOpenai.model ?? 'gpt-5.4',
-          },
-        },
+        providers: mergedProviders,
       },
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,

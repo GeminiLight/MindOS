@@ -17,6 +17,7 @@ import AgentsMcpSection from './AgentsMcpSection';
 import AgentsSkillsSection from './AgentsSkillsSection';
 import AgentsPanelA2aTab from './AgentsPanelA2aTab';
 import AgentsPanelSessionsTab from './AgentsPanelSessionsTab';
+import AgentActivitySection from './AgentActivitySection';
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
   const { t } = useLocale();
@@ -24,6 +25,12 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
   const pageHeader = useMemo(() => {
+    if (tab === 'activity') {
+      return {
+        title: a.navActivity ?? 'Activity',
+        subtitle: a.activitySubtitle ?? 'Agent operations audit log.',
+      };
+    }
     if (tab === 'sessions') {
       return {
         title: 'Sessions',
@@ -124,6 +131,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
 
       {tab === 'sessions' && (
         <AgentsPanelSessionsTab />
+      )}
+
+      {tab === 'activity' && (
+        <AgentActivitySection />
       )}
     </div>
   );

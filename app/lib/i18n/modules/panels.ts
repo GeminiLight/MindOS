@@ -41,7 +41,7 @@ export const panelsEn = {
       navSkills: 'Skills',
       navNetwork: 'Network',
       navSessions: 'Sessions',
-      // A2A tab
+      navActivity: 'Activity',
       a2aTabTitle: 'Remote Agents',
       a2aTabEmpty: 'No remote agents',
       a2aTabEmptyHint: 'Discover agents to enable cross-agent delegation.',
@@ -251,6 +251,7 @@ export const panelsEn = {
     navSkills: 'Skills',
     navNetwork: 'Network',
     navSessions: 'Sessions',
+    navActivity: 'Activity',
     a2aTabTitle: 'Remote Agents',
     a2aTabEmptyHint: 'Discover agents to enable cross-agent delegation.',
     backToOverview: 'Back to Agents',
@@ -641,6 +642,7 @@ export const panelsZh = {
       navSkills: '技能',
       navNetwork: '网络',
       navSessions: '会话',
+      navActivity: '活动',
       // A2A tab
       a2aTabTitle: '远程 Agent',
       a2aTabEmpty: '无远程 Agent',
@@ -851,6 +853,7 @@ export const panelsZh = {
     navSkills: 'Skills',
     navNetwork: '网络',
     navSessions: '会话',
+    navActivity: '活动',
     a2aTabTitle: '远程 Agent',
     a2aTabEmptyHint: '发现远程 Agent 以启用跨 Agent 委派。',
     backToOverview: '返回 Agents',

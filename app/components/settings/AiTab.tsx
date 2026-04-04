@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AlertCircle, ChevronDown, Loader2, Sparkles, Bot, Monitor } from 'lucide-react';
+import { AlertCircle, ChevronDown, Loader2, Sparkles, Bot, Monitor, ExternalLink } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SettingCard, SettingRow } from './Primitives';
 import { useLocale } from '@/lib/LocaleContext';
+import { type ProviderId, PROVIDER_PRESETS, isProviderId } from '@/lib/agent/providers';
+import ProviderSelect from '@/components/shared/ProviderSelect';
 
 type TestState = 'idle' | 'testing' | 'ok' | 'error';
 type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
@@ -27,16 +29,16 @@ function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
 }
 
 export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
+  const { locale } = useLocale();
   const env = data.envOverrides ?? {};
   const envVal = data.envValues ?? {};
   const provider = data.ai.provider;
+  const preset = isProviderId(provider) ? PROVIDER_PRESETS[provider] : null;
 
-  // --- Test key state ---
   const [testResult, setTestResult] = useState<Record<string, TestResult>>({});
   const okTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const prevProviderRef = useRef(provider);
 
-  // Reset test result when provider changes
   useEffect(() => {
     if (prevProviderRef.current !== provider) {
       prevProviderRef.current = provider;
@@ -45,16 +47,14 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
     }
   }, [provider]);
 
-  // Cleanup ok timer
   useEffect(() => () => { if (okTimerRef.current) clearTimeout(okTimerRef.current); }, []);
 
-  // Sync reconnectRetries to localStorage so AskContent can read it without fetching settings
   useEffect(() => {
     const v = data.agent?.reconnectRetries ?? 3;
     try { localStorage.setItem('mindos-reconnect-retries', String(v)); } catch (err) { console.warn("[AiTab] localStorage setItem reconnectRetries failed:", err); }
   }, [data.agent?.reconnectRetries]);
 
-  const handleTestKey = useCallback(async (providerName: 'anthropic' | 'openai') => {
+  const handleTestKey = useCallback(async (providerName: ProviderId) => {
     const prov = data.ai.providers?.[providerName] ?? {} as ProviderConfig;
     setTestResult(prev => ({ ...prev, [providerName]: { state: 'testing' } }));
 
@@ -62,7 +62,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
       const body: Record<string, string> = { provider: providerName };
       if (prov.apiKey) body.apiKey = prov.apiKey;
       if (prov.model) body.model = prov.model;
-      if (providerName === 'openai' && prov.baseUrl) body.baseUrl = prov.baseUrl;
+      if (prov.baseUrl) body.baseUrl = prov.baseUrl;
 
       const res = await fetch('/api/settings/test-key', {
         method: 'POST',
@@ -91,8 +91,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
     }
   }, [data.ai.providers]);
 
-  // Reset test result when key changes
-  const patchProviderWithReset = useCallback((name: 'anthropic' | 'openai', patch: Partial<ProviderConfig>) => {
+  const patchProvider = useCallback((name: ProviderId, patch: Partial<ProviderConfig>) => {
     if ('apiKey' in patch) {
       setTestResult(prev => ({ ...prev, [name]: { state: 'idle' } }));
     }
@@ -104,19 +103,19 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
     });
   }, [data.ai.providers, updateAi]);
 
-  function patchProvider(name: 'anthropic' | 'openai', patch: Partial<ProviderConfig>) {
-    patchProviderWithReset(name, patch);
-  }
-
-  const anthropic = data.ai.providers?.anthropic ?? { apiKey: '', model: '' };
-  const openai    = data.ai.providers?.openai    ?? { apiKey: '', model: '', baseUrl: '' };
-
-  const activeApiKey = provider === 'anthropic' ? anthropic.apiKey : openai.apiKey;
-  const activeEnvKey = provider === 'anthropic' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY;
+  const currentConfig = data.ai.providers?.[provider] ?? { apiKey: '', model: '', baseUrl: '' };
+  const envKeyName = preset?.apiKeyEnvVar;
+  const activeApiKey = currentConfig.apiKey;
+  const activeEnvKey = envKeyName ? env[envKeyName] : false;
   const missingApiKey = !activeApiKey && !activeEnvKey;
 
-  // Test button helper
-  const renderTestButton = (providerName: 'anthropic' | 'openai', hasKey: boolean, hasEnv: boolean) => {
+  const configuredProviders = new Set(
+    Object.entries(data.ai.providers ?? {})
+      .filter(([, cfg]) => cfg && cfg.apiKey)
+      .map(([id]) => id as ProviderId),
+  );
+
+  const renderTestButton = (providerName: ProviderId, hasKey: boolean, hasEnv: boolean) => {
     const result = testResult[providerName] ?? { state: 'idle' as TestState };
     const disabled = result.state === 'testing' || (!hasKey && !hasEnv);
 
@@ -150,95 +149,79 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
     );
   };
 
+  const displayName = preset ? (locale === 'zh' ? preset.nameZh : preset.name) : provider;
+
   return (
     <div className="space-y-4">
       {/* ── Card 1: AI Provider ── */}
       <SettingCard
         icon={<Sparkles size={15} />}
         title={t.settings.ai.provider}
-        description={provider === 'anthropic' ? 'Anthropic Claude' : 'OpenAI / compatible'}
+        description={displayName}
       >
-        {/* Provider toggle — two clickable mini-cards */}
-        <div className="flex gap-2">
-          {(['anthropic', 'openai'] as const).map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => updateAi({ provider: p })}
-              className={`flex-1 flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border transition-all ${
-                provider === p
-                  ? 'border-[var(--amber)] bg-[var(--amber-subtle)] shadow-sm'
-                  : 'border-border/50 hover:border-border hover:bg-muted/30'
-              }`}
-            >
-              <span className={`text-sm font-medium ${provider === p ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {p === 'anthropic' ? 'Anthropic' : 'OpenAI'}
-              </span>
-              <EnvBadge overridden={env.AI_PROVIDER} />
-            </button>
-          ))}
-        </div>
+        <ProviderSelect
+          value={provider}
+          onChange={id => { if (id !== 'skip') updateAi({ provider: id }); }}
+          compact
+          configuredProviders={configuredProviders}
+        />
 
-        {/* Model + API Key */}
-        {provider === 'anthropic' ? (
-          <>
-            <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.ANTHROPIC_MODEL} /></>}>
+        {/* Provider configuration fields */}
+        {preset && (
+          <div className="space-y-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+            {/* Model */}
+            <Field label={<>{t.settings.ai.model} {preset.modelEnvVar && <EnvBadge overridden={env[preset.modelEnvVar]} />}</>}>
               <ModelInput
-                value={anthropic.model}
-                onChange={v => patchProvider('anthropic', { model: v })}
-                placeholder={envVal.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}
-                provider="anthropic"
-                apiKey={anthropic.apiKey}
-                envKey={env.ANTHROPIC_API_KEY}
+                value={currentConfig.model}
+                onChange={v => patchProvider(provider, { model: v })}
+                placeholder={(preset.modelEnvVar && envVal[preset.modelEnvVar]) || preset.defaultModel}
+                provider={provider}
+                apiKey={currentConfig.apiKey}
+                envKey={!!activeEnvKey}
+                baseUrl={currentConfig.baseUrl}
+                supportsListModels={preset.supportsListModels}
                 t={t}
               />
             </Field>
+
+            {/* API Key */}
             <Field
-              label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.ANTHROPIC_API_KEY} /></>}
-              hint={env.ANTHROPIC_API_KEY ? t.settings.ai.envFieldNote('ANTHROPIC_API_KEY') : t.settings.ai.keyHint}
+              label={<>{t.settings.ai.apiKey} {envKeyName && <EnvBadge overridden={env[envKeyName]} />}</>}
+              hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : t.settings.ai.keyHint}
             >
               <ApiKeyInput
-                value={anthropic.apiKey}
-                onChange={v => patchProvider('anthropic', { apiKey: v })}
+                value={currentConfig.apiKey}
+                onChange={v => patchProvider(provider, { apiKey: v })}
               />
-              {renderTestButton('anthropic', !!anthropic.apiKey, !!env.ANTHROPIC_API_KEY)}
+              {preset.signupUrl && !currentConfig.apiKey && !activeEnvKey && (
+                <a
+                  href={preset.signupUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs mt-1.5 hover:underline"
+                  style={{ color: 'var(--amber)' }}
+                >
+                  <ExternalLink size={10} />
+                  {locale === 'zh' ? `获取 ${preset.nameZh} API Key` : `Get ${preset.name} API Key`}
+                </a>
+              )}
+              {renderTestButton(provider, !!currentConfig.apiKey, !!activeEnvKey)}
             </Field>
-          </>
-        ) : (
-          <>
-            <Field label={<>{t.settings.ai.model} <EnvBadge overridden={env.OPENAI_MODEL} /></>}>
-              <ModelInput
-                value={openai.model}
-                onChange={v => patchProvider('openai', { model: v })}
-                placeholder={envVal.OPENAI_MODEL || 'gpt-5.4'}
-                provider="openai"
-                apiKey={openai.apiKey}
-                envKey={env.OPENAI_API_KEY}
-                baseUrl={openai.baseUrl}
-                t={t}
-              />
-            </Field>
-            <Field
-              label={<>{t.settings.ai.apiKey} <EnvBadge overridden={env.OPENAI_API_KEY} /></>}
-              hint={env.OPENAI_API_KEY ? t.settings.ai.envFieldNote('OPENAI_API_KEY') : t.settings.ai.keyHint}
-            >
-              <ApiKeyInput
-                value={openai.apiKey}
-                onChange={v => patchProvider('openai', { apiKey: v })}
-              />
-              {renderTestButton('openai', !!openai.apiKey, !!env.OPENAI_API_KEY)}
-            </Field>
-            <Field
-              label={<>{t.settings.ai.baseUrl} <EnvBadge overridden={env.OPENAI_BASE_URL} /></>}
-              hint={t.settings.ai.baseUrlHint}
-            >
-              <Input
-                value={openai.baseUrl ?? ''}
-                onChange={e => patchProvider('openai', { baseUrl: e.target.value })}
-                placeholder={envVal.OPENAI_BASE_URL || 'https://api.openai.com/v1'}
-              />
-            </Field>
-          </>
+
+            {/* Base URL — only for providers that support it */}
+            {preset.supportsBaseUrl && (
+              <Field
+                label={<>{t.settings.ai.baseUrl} {preset.baseUrlEnvVar && <EnvBadge overridden={env[preset.baseUrlEnvVar]} />}</>}
+                hint={t.settings.ai.baseUrlHint}
+              >
+                <Input
+                  value={currentConfig.baseUrl ?? ''}
+                  onChange={e => patchProvider(provider, { baseUrl: e.target.value })}
+                  placeholder={(preset.baseUrlEnvVar && envVal[preset.baseUrlEnvVar]) || preset.defaultBaseUrl || 'https://api.openai.com/v1'}
+                />
+              </Field>
+            )}
+          </div>
         )}
 
         {/* Inline warnings */}
@@ -307,7 +290,8 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
           </Select>
         </SettingRow>
 
-        {provider === 'anthropic' && (
+        {/* Thinking — show for providers that support it */}
+        {preset?.supportsThinking && (
           <>
             <SettingRow label={t.settings.agent.thinking} hint={t.settings.agent.thinkingHint}>
               <Toggle checked={data.agent?.enableThinking ?? false} onChange={() => updateAgent({ enableThinking: !(data.agent?.enableThinking ?? false) })} />
@@ -341,15 +325,16 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
 /* ── Model Input with "List models" picker ── */
 
 function ModelInput({
-  value, onChange, placeholder, provider, apiKey, envKey, baseUrl, t,
+  value, onChange, placeholder, provider, apiKey, envKey, baseUrl, supportsListModels, t,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
-  provider: 'anthropic' | 'openai';
+  provider: ProviderId;
   apiKey: string;
   envKey?: boolean;
   baseUrl?: string;
+  supportsListModels: boolean;
   t: AiTabProps['t'];
 }) {
   const [models, setModels] = useState<string[] | null>(null);
@@ -408,16 +393,18 @@ function ModelInput({
           placeholder={placeholder}
           className="flex-1"
         />
-        <button
-          type="button"
-          disabled={!hasKey || loading}
-          onClick={fetchModels}
-          title={t.settings.ai.listModels}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-        >
-          {loading ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
-          {t.settings.ai.listModels}
-        </button>
+        {supportsListModels && (
+          <button
+            type="button"
+            disabled={!hasKey || loading}
+            onClick={fetchModels}
+            title={t.settings.ai.listModels}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
+            {t.settings.ai.listModels}
+          </button>
+        )}
       </div>
       {error && <p className="text-xs text-error mt-1">{error}</p>}
       {open && models && models.length > 0 && (
@@ -460,7 +447,6 @@ function AskDisplayMode() {
     const next = value as 'panel' | 'popup';
     setMode(next);
     try { localStorage.setItem('ask-mode', next); } catch (err) { console.warn("[AiTab] localStorage setItem ask-mode failed:", err); }
-    // Notify SidebarLayout to pick up the change
     window.dispatchEvent(new StorageEvent('storage', { key: 'ask-mode', newValue: next }));
   };
 
