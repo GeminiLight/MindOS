@@ -274,11 +274,24 @@ export default function SetupWizard() {
     setError('');
     const agentKeys = Array.from(selectedAgents);
 
+    // Ensure auth token exists before saving (race: token generation may still be in-flight)
+    let finalState = state;
+    if (!state.authToken) {
+      try {
+        const res = await fetch('/api/setup/generate-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (data.token) {
+          finalState = { ...state, authToken: data.token };
+          setState(finalState);
+        }
+      } catch { /* proceed without — server will generate one */ }
+    }
+
     // Phase 1: Save config
     setSetupPhase('saving');
     let restartNeeded = false;
     try {
-      restartNeeded = await saveConfig(state);
+      restartNeeded = await saveConfig(finalState);
       if (restartNeeded) setNeedsRestart(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -295,7 +308,7 @@ export default function SetupWizard() {
       setAgentStatuses(initialStatuses);
 
       try {
-        const statuses = await installAgents(agentKeys, agents, agentTransport, agentScope, state.mcpPort, state.authToken);
+        const statuses = await installAgents(agentKeys, agents, agentTransport, agentScope, finalState.mcpPort, finalState.authToken);
         setAgentStatuses(statuses);
       } catch (e) {
         console.warn('[SetupWizard] agent batch install failed:', e);
