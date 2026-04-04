@@ -6,7 +6,7 @@
 
 ## Bug
 
-- [x] **Ask AI 输入框打字卡顿** — 核心回调（`handleInputChange`/`handleSubmit`/`handleInputKeyDown`）依赖不稳定 hook 返回值导致每次击键重建回调 + 全子树 re-render。修复：ref 持有不稳定值 + 回调依赖清空 + `syncTextareaToContent` 缓存 `getComputedStyle`。
+- [x] **Ask AI 输入框打字卡顿** — 核心回调依赖不稳定 hook 返回值导致每次击键重建回调 + 全子树 re-render。修复：ref 持有不稳定值 + 回调依赖清空 + `syncTextareaToContent` 缓存 `getComputedStyle`。附带重构：提取 `useAskChat` hook（~248 行 submit/retry 逻辑）、`AskHeader` 组件（React.memo）、`MessageList` 包裹 React.memo + memoize labels。AskContent 从 898 行降至 709 行。
 - [x] **Agent 框架迁移 Vercel AI SDK → pi-agent-core** — 完成 6 阶段迁移（Phase 0-5）。Spec v2 所有 6 个设计缺陷已修复。涉及 7 文件改写 + 完整 SSE 协议重定义。详见 `wiki/specs/migrate-to-pi-agent.md` — v0.6.0
 - [x] **A2A 协议 Phase 1** — Agent Card 发现端点 (`/.well-known/agent-card.json`) + JSON-RPC 端点 (`/api/a2a`)。支持 SendMessage / GetTask / CancelTask。5 个 KB 技能暴露。18 个测试覆盖。详见 `wiki/specs/spec-a2a-integration.md`
 

@@ -100,12 +100,17 @@ export const knowledgeEn = {
       saved > 0
         ? `${saved} saved, ${skipped} skipped (unsupported format)`
         : `${skipped} file${skipped === 1 ? '' : 's'} skipped — unsupported format`,
+    tooLarge: (n: number) =>
+      `${n} file${n === 1 ? '' : 's'} too large (max 10 MB)`,
+    savedWithOversized: (saved: number, oversized: number) =>
+      `${saved} saved, ${oversized} skipped (too large)`,
     organizePrompt: (fileNames: string[]) =>
       `Please organize these files from Inbox into appropriate locations in my knowledge base. Analyze each file's content and move it to the most fitting Space or directory. Create new directories if needed. Here are the files:\n\n${fileNames.map(n => `- Inbox/${n}`).join('\n')}`,
     dropOverlay: 'Drop to save to Inbox',
     dropOverlayFormats: 'md · txt · pdf · csv · json',
     noMindRoot: 'Please configure your knowledge base first',
     saveFailed: 'Failed to save files',
+    organizeFailed: 'Could not read files for organizing',
   },
   pulse: {
     title: 'Your Agents',
@@ -442,12 +447,17 @@ export const knowledgeZh = {
       saved > 0
         ? `已保存 ${saved} 个，跳过 ${skipped} 个（格式不支持）`
         : `${skipped} 个文件被跳过（格式不支持）`,
+    tooLarge: (n: number) =>
+      `${n} 个文件过大（上限 10 MB）`,
+    savedWithOversized: (saved: number, oversized: number) =>
+      `已保存 ${saved} 个，${oversized} 个过大被跳过`,
     organizePrompt: (fileNames: string[]) =>
       `请将收件箱中的这些文件整理到知识库的合适位置。分析每个文件的内容，将其移动到最匹配的空间或目录。需要的话可以创建新目录。以下是待整理的文件：\n\n${fileNames.map(n => `- Inbox/${n}`).join('\n')}`,
     dropOverlay: '拖放到收件箱快速保存',
     dropOverlayFormats: 'md · txt · pdf · csv · json',
     noMindRoot: '请先配置知识库路径',
     saveFailed: '保存文件失败',
+    organizeFailed: '无法读取文件进行整理',
   },
   pulse: {
     title: '你的 Agent',

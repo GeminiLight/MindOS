@@ -84,7 +84,9 @@ async function quickDropToInbox(
 
   if (payload.length === 0) {
     if (oversizedCount > 0) {
-      showQuickDropToast(0, oversizedCount, t);
+      toast.error(t.inbox.tooLarge(oversizedCount), 4000);
+    } else if (files.length > 0) {
+      toast.error(t.inbox.saveFailed, 4000);
     }
     return;
   }
@@ -99,35 +101,39 @@ async function quickDropToInbox(
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       console.error('[QuickDrop] Save failed:', data.error);
-      showQuickDropToast(0, payload.length, t);
+      toast.error(t.inbox.saveFailed, 4000);
       return;
     }
 
     const result = await res.json();
     const saved = result.saved?.length ?? 0;
-    const skipped = result.skipped?.length ?? 0;
-    showQuickDropToast(saved, skipped, t);
+    const formatSkipped = result.skipped?.length ?? 0;
+
+    showQuickDropToast(saved, formatSkipped, oversizedCount, t);
     window.dispatchEvent(new Event('mindos:files-changed'));
     window.dispatchEvent(new Event('mindos:inbox-updated'));
   } catch (err) {
     console.error('[QuickDrop] Network error:', err);
-    showQuickDropToast(0, payload.length, t);
+    toast.error(t.inbox.saveFailed, 4000);
   }
 }
 
 function showQuickDropToast(
   saved: number,
-  skipped: number,
+  formatSkipped: number,
+  oversized: number,
   t: ReturnType<typeof useLocale>['t'],
 ) {
-  if (saved > 0 && skipped > 0) {
-    toast.success(t.inbox.savedWithSkipped(saved, skipped), 4000);
+  if (saved > 0 && oversized > 0 && formatSkipped === 0) {
+    toast.success(t.inbox.savedWithOversized(saved, oversized), 4000);
+  } else if (saved > 0 && (formatSkipped + oversized) > 0) {
+    toast.success(t.inbox.savedWithSkipped(saved, formatSkipped + oversized), 4000);
   } else if (saved > 0) {
     toast.success(t.inbox.savedToast(saved), 3000);
-  } else if (skipped > 0) {
-    toast.error(t.inbox.savedWithSkipped(0, skipped), 4000);
   } else {
-    toast.error(t.inbox.saveFailed, 4000);
+    if (oversized > 0) toast.error(t.inbox.tooLarge(oversized), 4000);
+    if (formatSkipped > 0) toast.error(t.inbox.savedWithSkipped(0, formatSkipped), 4000);
+    if (oversized === 0 && formatSkipped === 0) toast.error(t.inbox.saveFailed, 4000);
   }
 }
 
@@ -289,6 +295,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         if (attachments.length > 0) {
           aiOrganize.start(attachments, prompt);
         } else {
+          toast.error(t.inbox.organizeFailed, 4000);
           window.dispatchEvent(new Event('mindos:organize-done'));
         }
       })();
@@ -647,7 +654,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           e.preventDefault();
           dragCounterRef.current = 0;
           setDragOverlay(false);
-          if (e.dataTransfer.files.length > 0) {
+          if (e.dataTransfer.files.length > 0 && !importModalOpen) {
             quickDropToInbox(Array.from(e.dataTransfer.files), t);
           }
         }}

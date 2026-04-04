@@ -66,6 +66,54 @@ function gitExec(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim();
 }
 
+/** Check if URL is SSH format (git@host:path) */
+function isSSHUrl(url) {
+  return /^git@[\w.-]+:.+/.test(url);
+}
+
+/** Get SSH environment for git commands to auto-accept new hosts */
+function getSshEnv() {
+  // StrictHostKeyChecking=accept-new: auto-add unknown hosts to known_hosts
+  // BatchMode=yes: no interactive prompts (fail fast if key not available)
+  const sshCmd = 'ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes';
+  return { GIT_SSH_COMMAND: sshCmd };
+}
+
+/** Validate SSH setup before attempting to use SSH URL */
+function validateSSHSetup(url, mindRoot, nonInteractive) {
+  if (!isSSHUrl(url)) return { isSSH: false };
+
+  const sshDir = resolve(homedir(), '.ssh');
+  const id_rsa = resolve(sshDir, 'id_rsa');
+  const id_ed25519 = resolve(sshDir, 'id_ed25519');
+  const hasKey = existsSync(id_rsa) || existsSync(id_ed25519);
+  const hasAgent = !!process.env.SSH_AUTH_SOCK;
+
+  if (!hasKey && !hasAgent) {
+    const hint = isSSHUrl(url)
+      ? `SSH key not found at ${sshDir}/id_rsa or id_ed25519. Create one with:\n` +
+        `  ssh-keygen -t ed25519 -f ${id_rsa}\n` +
+        `Then verify with: ssh -T git@github.com`
+      : '';
+    return {
+      isSSH: true,
+      isValid: false,
+      error: `No SSH credentials found. ${hint}`,
+    };
+  }
+
+  return { isSSH: true, isValid: true };
+}
+
+/** Execute git command with SSH support (auto-add to known_hosts on first connection) */
+function gitExecSSH(args, cwd, isSSH = false, timeoutMs = 15000) {
+  const opts = { cwd, encoding: 'utf-8', stdio: 'pipe', timeout: timeoutMs };
+  if (isSSH) {
+    opts.env = { ...process.env, ...getSshEnv() };
+  }
+  return execFileSync('git', args, opts).trim();
+}
+
 function getRemoteUrl(cwd) {
   try {
     return gitExec(['remote', 'get-url', 'origin'], cwd);
@@ -92,23 +140,25 @@ function getUnpushedCount(cwd) {
 
 // ── Core sync functions ─────────────────────────────────────────────────────
 
-function autoCommitAndPush(mindRoot) {
+function autoCommitAndPush(mindRoot, isSshUrl = false) {
   try {
+    const sshEnv = isSshUrl ? getSshEnv() : {};
     execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe' });
     const status = gitExec(['status', '--porcelain'], mindRoot);
     if (!status) return;
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
     execFileSync('git', ['commit', '-m', `auto-sync: ${timestamp}`], { cwd: mindRoot, stdio: 'pipe' });
-    execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd: mindRoot, stdio: 'pipe', env: { ...process.env, ...sshEnv } });
     saveSyncState({ ...loadSyncState(), lastSync: new Date().toISOString(), lastError: null });
   } catch (err) {
     saveSyncState({ ...loadSyncState(), lastError: err.message, lastErrorTime: new Date().toISOString() });
   }
 }
 
-function autoPull(mindRoot) {
+function autoPull(mindRoot, isSshUrl = false) {
+  const sshEnv = isSshUrl ? getSshEnv() : {};
   try {
-    execFileSync('git', ['pull', '--rebase', '--autostash'], { cwd: mindRoot, stdio: 'pipe' });
+    execFileSync('git', ['pull', '--rebase', '--autostash'], { cwd: mindRoot, stdio: 'pipe', env: { ...process.env, ...sshEnv } });
     saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
   } catch {
     // rebase conflict → abort → merge
@@ -205,7 +255,15 @@ export async function initSync(mindRoot, opts = {}) {
     rl.close();
   }
 
-  // 1. Ensure git repo
+  // Pre-flight SSH validation (before git init)
+  const sshValidation = validateSSHSetup(remoteUrl, mindRoot, nonInteractive);
+  if (sshValidation.isSSH && !sshValidation.isValid) {
+    const err = sshValidation.error;
+    if (nonInteractive) throw new Error(err);
+    console.error(red(`✘ ${err}`));
+    process.exit(1);
+  }
+  const isSshUrl = sshValidation.isSSH;
   if (!isGitRepo(mindRoot)) {
     if (!nonInteractive) console.log(dim('Initializing git repository...'));
     execFileSync('git', ['init'], { cwd: mindRoot, stdio: 'pipe' });
@@ -288,7 +346,7 @@ export async function initSync(mindRoot, opts = {}) {
   try {
     // `git ls-remote --exit-code origin` returns non-zero for an empty remote,
     // which breaks first-time setup against a freshly created repository.
-    execFileSync('git', ['ls-remote', 'origin'], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+    gitExecSSH(['ls-remote', 'origin'], mindRoot, isSshUrl, 15000);
     if (!nonInteractive) console.log(green('✔ Connection successful'));
   } catch (lsErr) {
     const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
@@ -312,21 +370,22 @@ export async function initSync(mindRoot, opts = {}) {
 
   // 7. First sync: pull if remote has content, push otherwise
   try {
-    const refs = gitExec(['ls-remote', '--heads', 'origin'], mindRoot);
+    const refs = gitExecSSH(['ls-remote', '--heads', 'origin'], mindRoot, isSshUrl);
     if (refs) {
       if (!nonInteractive) console.log(dim('Pulling from remote...'));
       try {
-        execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit' });
+        const pullEnv = isSshUrl ? { ...process.env, ...getSshEnv() } : process.env;
+        execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit', env: pullEnv });
       } catch {
         if (!nonInteractive) console.log(yellow('Pull completed with warnings. Check for conflicts.'));
       }
     } else {
       if (!nonInteractive) console.log(dim('Pushing to remote...'));
-      autoCommitAndPush(mindRoot);
+      autoCommitAndPush(mindRoot, isSshUrl);
     }
   } catch {
     if (!nonInteractive) console.log(dim('Performing initial push...'));
-    autoCommitAndPush(mindRoot);
+    autoCommitAndPush(mindRoot, isSshUrl);
   }
   if (!nonInteractive) console.log(green('✔ Initial sync complete\n'));
 }
@@ -340,6 +399,9 @@ export async function startSyncDaemon(mindRoot) {
   if (!config.enabled) return null;
   if (!mindRoot || !isGitRepo(mindRoot)) return null;
 
+  const remoteUrl = getRemoteUrl(mindRoot) || '';
+  const isSshUrl = isSSHUrl(remoteUrl);
+
   const chokidar = await import('chokidar');
 
   // File watcher → debounced auto-commit + push
@@ -351,14 +413,14 @@ export async function startSyncDaemon(mindRoot) {
   });
   watcher.on('all', () => {
     clearTimeout(commitTimer);
-    commitTimer = setTimeout(() => autoCommitAndPush(mindRoot), (config.autoCommitInterval || 30) * 1000);
+    commitTimer = setTimeout(() => autoCommitAndPush(mindRoot, isSshUrl), (config.autoCommitInterval || 30) * 1000);
   });
 
   // Periodic pull
-  const pullInterval = setInterval(() => autoPull(mindRoot), (config.autoPullInterval || 300) * 1000);
+  const pullInterval = setInterval(() => autoPull(mindRoot, isSshUrl), (config.autoPullInterval || 300) * 1000);
 
   // Pull on startup
-  autoPull(mindRoot);
+  autoPull(mindRoot, isSshUrl);
 
   // Graceful shutdown: flush pending changes before exit
   let shutdownInProgress = false;
@@ -435,8 +497,10 @@ export function manualSync(mindRoot) {
   if (!mindRoot || !isGitRepo(mindRoot)) {
     throw new Error('Not a git repository. Run `mindos sync init` first.');
   }
-  autoPull(mindRoot);
-  autoCommitAndPush(mindRoot);
+  const remoteUrl = getRemoteUrl(mindRoot) || '';
+  const isSshUrl = isSSHUrl(remoteUrl);
+  autoPull(mindRoot, isSshUrl);
+  autoCommitAndPush(mindRoot, isSshUrl);
 }
 
 /**

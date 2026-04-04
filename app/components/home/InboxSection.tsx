@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   Inbox,
@@ -59,21 +59,27 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
     }
   }, []);
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debouncedRefresh = useCallback(() => {
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(fetchInbox, 80);
+  }, [fetchInbox]);
+
   useEffect(() => {
     fetchInbox();
 
-    const onFilesChanged = () => fetchInbox();
-    const onOrganizeDone = () => { setOrganizing(false); fetchInbox(); };
+    const onOrganizeDone = () => { setOrganizing(false); debouncedRefresh(); };
 
-    window.addEventListener('mindos:files-changed', onFilesChanged);
-    window.addEventListener('mindos:inbox-updated', onFilesChanged);
+    window.addEventListener('mindos:files-changed', debouncedRefresh);
+    window.addEventListener('mindos:inbox-updated', debouncedRefresh);
     window.addEventListener('mindos:organize-done', onOrganizeDone);
     return () => {
-      window.removeEventListener('mindos:files-changed', onFilesChanged);
-      window.removeEventListener('mindos:inbox-updated', onFilesChanged);
+      clearTimeout(refreshTimerRef.current);
+      window.removeEventListener('mindos:files-changed', debouncedRefresh);
+      window.removeEventListener('mindos:inbox-updated', debouncedRefresh);
       window.removeEventListener('mindos:organize-done', onOrganizeDone);
     };
-  }, [fetchInbox]);
+  }, [fetchInbox, debouncedRefresh]);
 
   const visibleFiles = useMemo(
     () => (showAll ? files : files.slice(0, VISIBLE_LIMIT)),
