@@ -17,7 +17,7 @@ import {
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { getFileContent, getMindRoot } from '@/lib/fs';
+import { getFileContent, getMindRoot, collectAllFiles } from '@/lib/fs';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { isProviderId, type ProviderId } from '@/lib/agent/providers';
 import { getRequestScopedTools, getOrganizeTools, getChatTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
@@ -33,6 +33,26 @@ import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import { createSession, promptStream, closeSession } from '@/lib/acp/session';
 import type { AcpSessionUpdate } from '@/lib/acp/types';
 import type { Message as FrontendMessage } from '@/lib/types';
+
+const MAX_DIR_FILES = 30;
+
+/** Expand attachedFiles entries: directory paths (trailing /) become individual file paths. */
+function expandAttachedFiles(raw: string[]): string[] {
+  const result: string[] = [];
+  const allFiles = collectAllFiles();
+  for (const entry of raw) {
+    if (entry.endsWith('/')) {
+      const prefix = entry;
+      let count = 0;
+      for (const f of allFiles) {
+        if (f.startsWith(prefix) && ++count <= MAX_DIR_FILES) result.push(f);
+      }
+    } else {
+      result.push(entry);
+    }
+  }
+  return result;
+}
 
 /** Safe JSON parse — returns {} on invalid input */
 function safeParseJson(raw: string | undefined): Record<string, unknown> {
@@ -331,7 +351,8 @@ export async function POST(req: NextRequest) {
     return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body', 400);
   }
 
-  const { messages, currentFile, attachedFiles, uploadedFiles, selectedAcpAgent } = body;
+  const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles, selectedAcpAgent } = body;
+  const attachedFiles = Array.isArray(rawAttached) ? expandAttachedFiles(rawAttached) : rawAttached;
   const askMode: AskModeApi = body.mode === 'organize' ? 'organize'
     : body.mode === 'chat' ? 'chat'
     : 'agent';
