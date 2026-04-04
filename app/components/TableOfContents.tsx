@@ -106,24 +106,15 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
   };
 
   return (
-    <aside
-      className="hidden xl:flex flex-col fixed z-10 overflow-hidden"
-      style={{
-        top: TOPBAR_H,
-        height: `calc(100vh - ${TOPBAR_H}px)`,
-        width: NAV_W,
-        right: 'var(--right-panel-width, 0px)',
-        transform: collapsed ? `translateX(${NAV_W}px)` : 'translateX(0)',
-        transition: 'transform 200ms ease-in-out, right 200ms ease-out',
-      }}
-    >
-      {/* Collapse / expand toggle */}
+    <>
+      {/* Collapse / expand toggle — separate from aside so it stays visible */}
       <button
         onClick={() => setCollapsed(v => !v)}
-        className="absolute top-6 flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
+        className="hidden xl:flex fixed z-10 top-[50px] flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
         style={{
-          left: -20,
+          right: `calc(var(--right-panel-width, 0px) + ${collapsed ? 0 : NAV_W}px)`,
           background: 'var(--background)',
+          transition: 'right 200ms ease-in-out',
         }}
         title={collapsed ? t.view.tocExpand : t.view.tocCollapse}
       >
@@ -134,7 +125,18 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         />
       </button>
 
-      {/* Scrollable nav list — min-h-0 enables flex child to shrink & scroll */}
+      {/* TOC panel */}
+      <aside
+        className="hidden xl:flex flex-col fixed z-10 overflow-hidden"
+        style={{
+          top: TOPBAR_H,
+          height: `calc(100vh - ${TOPBAR_H}px)`,
+          width: NAV_W,
+          right: 'var(--right-panel-width, 0px)',
+          transform: collapsed ? `translateX(${NAV_W}px)` : 'translateX(0)',
+          transition: 'transform 200ms ease-in-out, right 200ms ease-out',
+        }}
+      >
       <nav
         ref={navRef}
         aria-label={t.view.tocTitle}
@@ -188,5 +190,6 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         })}
       </nav>
     </aside>
+    </>
   );
 }
