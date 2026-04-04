@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Table, Paperclip, ImageIcon, Zap, Bot } from 'lucide-react';
+import { X, FileText, Table, Paperclip, ImageIcon, Zap, Bot, Folder } from 'lucide-react';
 
 interface FileChipProps {
   path: string;
@@ -38,9 +38,13 @@ export default function FileChip({ path, onRemove, variant = 'kb', imageData, im
 
   useEffect(() => setMounted(true), []);
 
-  const name = path.split('/').pop() ?? path;
-  const isCsv = variant === 'kb' && name.endsWith('.csv');
-  const { icon: Icon, cls: iconClass } = isCsv
+  const isDir = variant === 'kb' && path.endsWith('/');
+  const cleanPath = isDir ? path.slice(0, -1) : path;
+  const name = cleanPath.split('/').pop() ?? cleanPath;
+  const isCsv = variant === 'kb' && !isDir && name.endsWith('.csv');
+  const { icon: Icon, cls: iconClass } = isDir
+    ? { icon: Folder, cls: 'text-yellow-400' }
+    : isCsv
     ? { icon: Table, cls: 'text-success' }
     : VARIANT_ICON[variant];
   const style = VARIANT_STYLE[variant];
