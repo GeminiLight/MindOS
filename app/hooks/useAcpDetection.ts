@@ -30,7 +30,7 @@ interface AcpDetectionState {
 
 const STORAGE_KEY = 'mindos:acp-detection';
 const STALE_TTL_MS = 30 * 60 * 1000;
-const REVALIDATE_TTL_MS = 5 * 60 * 1000;
+const REVALIDATE_TTL_MS = 30 * 60 * 1000;
 
 interface DetectionCache {
   installed: DetectedAgent[];

@@ -26,36 +26,45 @@ interface NotInstalledAgent {
   packageName?: string;
 }
 
-/* ── Server-side detection cache (5 min TTL) ──────────────────────────── */
+/* ── Server-side detection cache (30 min TTL) ─────────────────────────── */
 
-const DETECT_CACHE_TTL_MS = 5 * 60 * 1000;
+const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
 let detectCache: { data: { installed: InstalledAgent[]; notInstalled: NotInstalledAgent[] }; ts: number } | null = null;
 
 /* ── Async detection helpers ──────────────────────────────────────────── */
 
-function whichAsync(binary: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const child = exec(`which ${binary}`, { encoding: 'utf-8', timeout: 2000 }, (err, stdout) => {
-      resolve(err ? null : (stdout.trim() || null));
-    });
-    child.on('error', () => resolve(null));
-  });
-}
-
 /**
- * Batch `which` for multiple unique binaries in a single call.
- * Returns a Map<binary, path | null>.
+ * Single-shell batch detection. Runs one `which` per binary but via a
+ * combined shell script so we spawn exactly ONE child process.
+ * Output: one line per binary — either the path or empty.
  */
-async function whichBatch(binaries: string[]): Promise<Map<string, string | null>> {
+function whichBatch(binaries: string[]): Promise<Map<string, string | null>> {
   const unique = [...new Set(binaries)];
-  if (unique.length === 0) return new Map();
+  if (unique.length === 0) return Promise.resolve(new Map());
 
-  const results = await Promise.all(unique.map(async (bin) => {
-    const path = await whichAsync(bin);
-    return [bin, path] as const;
-  }));
+  // Build a shell snippet: for each binary, print path or empty line
+  // e.g. `which gemini 2>/dev/null || echo ""; which claude 2>/dev/null || echo ""`
+  const script = unique
+    .map(bin => `which ${bin} 2>/dev/null || echo ""`)
+    .join('; ');
 
-  return new Map(results);
+  return new Promise((resolve) => {
+    exec(script, { encoding: 'utf-8', timeout: 3000 }, (err, stdout) => {
+      const map = new Map<string, string | null>();
+      if (err) {
+        // On total failure, mark all as not found
+        for (const bin of unique) map.set(bin, null);
+        resolve(map);
+        return;
+      }
+      const lines = stdout.split('\n');
+      for (let i = 0; i < unique.length; i++) {
+        const line = (lines[i] ?? '').trim();
+        map.set(unique[i], line || null);
+      }
+      resolve(map);
+    });
+  });
 }
 
 /* ── Route handler ─────────────────────────────────────────────────────── */
