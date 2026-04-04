@@ -107,17 +107,19 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
   const envKeyName = preset ? getApiKeyEnvVar(provider) : undefined;
   const activeApiKey = currentConfig.apiKey;
   const activeEnvKey = envKeyName ? env[envKeyName] : false;
-  const missingApiKey = !activeApiKey && !activeEnvKey;
+  const hasFallbackKey = !!preset?.apiKeyFallback;
+  const missingApiKey = !activeApiKey && !activeEnvKey && !hasFallbackKey;
 
   const configuredProviders = new Set(
     Object.entries(data.ai.providers ?? {})
-      .filter(([, cfg]) => cfg && cfg.apiKey)
+      .filter(([id, cfg]) => (cfg && cfg.apiKey) || PROVIDER_PRESETS[id as ProviderId]?.apiKeyFallback)
       .map(([id]) => id as ProviderId),
   );
 
   const renderTestButton = (providerName: ProviderId, hasKey: boolean, hasEnv: boolean) => {
     const result = testResult[providerName] ?? { state: 'idle' as TestState };
-    const disabled = result.state === 'testing' || (!hasKey && !hasEnv);
+    const hasFallback = !!PROVIDER_PRESETS[providerName]?.apiKeyFallback;
+    const disabled = result.state === 'testing' || (!hasKey && !hasEnv && !hasFallback);
 
     return (
       <div className="flex items-center gap-2 mt-1.5">

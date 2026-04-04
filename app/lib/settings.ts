@@ -234,6 +234,7 @@ export function effectiveAiConfig(providerOverride?: ProviderId): {
 
   const apiKey = provCfg.apiKey
     || getApiKeyFromEnv(provider)
+    || preset.apiKeyFallback
     || '';
   const model = provCfg.model
     || preset.defaultModel;

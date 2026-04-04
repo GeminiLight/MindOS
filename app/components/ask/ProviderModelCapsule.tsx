@@ -55,6 +55,7 @@ export function persistProvider(provider: ProviderId | null): void {
 
 /**
  * Determine which providers are configured (have an API key set via settings or env).
+ * Providers with apiKeyFallback (e.g. Ollama) are always considered configured.
  */
 function getConfiguredProviders(data: SettingsData): ProviderId[] {
   const result: ProviderId[] = [];
@@ -62,10 +63,11 @@ function getConfiguredProviders(data: SettingsData): ProviderId[] {
   const env = data.envOverrides ?? {};
 
   for (const id of ALL_PROVIDER_IDS) {
+    const preset = PROVIDER_PRESETS[id];
     const hasSettingsKey = providers[id]?.apiKey === '***set***';
     const envVar = getApiKeyEnvVar(id);
     const hasEnvKey = envVar ? !!env[envVar] : false;
-    if (hasSettingsKey || hasEnvKey) result.push(id);
+    if (hasSettingsKey || hasEnvKey || preset.apiKeyFallback) result.push(id);
   }
   return result;
 }
