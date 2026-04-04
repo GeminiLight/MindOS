@@ -48,7 +48,7 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
 
   const configuredProviders = new Set(
     Object.entries(state.providerConfigs)
-      .filter(([, cfg]) => cfg && (cfg.apiKey || cfg.apiKeyMask))
+      .filter(([id, cfg]) => (cfg && (cfg.apiKey || cfg.apiKeyMask)) || PROVIDER_PRESETS[id as ProviderId]?.apiKeyFallback)
       .map(([id]) => id as ProviderId),
   );
 
@@ -84,7 +84,9 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
                 style={{ color: 'var(--amber)' }}
               >
                 <ExternalLink size={10} />
-                {locale === 'zh' ? `获取 ${currentPreset.nameZh} API Key` : `Get ${currentPreset.name} API Key`}
+                {currentPreset.apiKeyFallback
+                  ? (locale === 'zh' ? `下载 ${currentPreset.nameZh}` : `Download ${currentPreset.name}`)
+                  : (locale === 'zh' ? `获取 ${currentPreset.nameZh} API Key` : `Get ${currentPreset.name} API Key`)}
               </a>
             )}
           </Field>

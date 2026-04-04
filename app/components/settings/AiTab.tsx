@@ -187,7 +187,9 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
                   style={{ color: 'var(--amber)' }}
                 >
                   <ExternalLink size={10} />
-                  {locale === 'zh' ? `获取 ${preset.nameZh} API Key` : `Get ${preset.name} API Key`}
+                  {hasFallbackKey
+                    ? (locale === 'zh' ? `下载 ${preset.nameZh}` : `Download ${preset.name}`)
+                    : (locale === 'zh' ? `获取 ${preset.nameZh} API Key` : `Get ${preset.name} API Key`)}
                 </a>
               )}
             </Field>

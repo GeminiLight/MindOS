@@ -53,17 +53,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cfg = effectiveAiConfig();
+    const cfg = effectiveAiConfig(provider as ProviderId);
     let resolvedKey = apiKey || '';
     if (!resolvedKey || resolvedKey === '***set***') {
-      resolvedKey = cfg.provider === provider ? cfg.apiKey : '';
+      resolvedKey = cfg.apiKey;
     }
 
     if (!resolvedKey) {
       return NextResponse.json({ ok: false, code: 'auth_error', error: 'No API key configured' });
     }
 
-    const resolvedModel = model || (cfg.provider === provider ? cfg.model : undefined);
+    const resolvedModel = model || cfg.model;
 
     const start = Date.now();
     const ctrl = new AbortController();
