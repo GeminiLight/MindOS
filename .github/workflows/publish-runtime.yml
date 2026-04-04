@@ -86,7 +86,13 @@ jobs:
             gh release create "$TAG" --title "MindOS Core Runtime (Latest)" \
               --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}" \
               --prerelease
-          # Delete old assets, upload new ones
+          # Delete old tarball assets (keep only current version)
+          for asset in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null); do
+            case "$asset" in
+              mindos-runtime-*.tar.gz) gh release delete-asset "$TAG" "$asset" --yes 2>/dev/null || true ;;
+            esac
+          done
+          # Upload new tarball + manifest
           gh release upload "$TAG" "$ARCHIVE" /tmp/latest.json --clobber
           # Update release notes with current version
           gh release edit "$TAG" --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}"
