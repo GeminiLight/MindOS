@@ -38,11 +38,16 @@ export function writeFile(mindRoot: string, filePath: string, content: string): 
  */
 export function createFile(mindRoot: string, filePath: string, initialContent = ''): void {
   const resolved = resolveSafe(mindRoot, filePath);
-  if (fs.existsSync(resolved)) {
-    throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, `File already exists: ${filePath}`, { filePath });
-  }
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  fs.writeFileSync(resolved, initialContent, 'utf-8');
+  try {
+    // 'wx' flag: create exclusively — fails atomically if file already exists (no TOCTOU race)
+    fs.writeFileSync(resolved, initialContent, { encoding: 'utf-8', flag: 'wx' });
+  } catch (err: unknown) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, `File already exists: ${filePath}`, { filePath });
+    }
+    throw err;
+  }
 }
 
 /**
