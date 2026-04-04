@@ -102,14 +102,7 @@ You express preferences but the next chat starts from zero, leaving your thinkin
 
 **Option A: Desktop App (macOS / Windows / Linux)**
 
-Download from [GitHub Releases](https://github.com/GeminiLight/MindOS/releases/latest) — double-click to install, no terminal needed.
-
-| Platform | Download |
-|:---------|:---------|
-| macOS (Apple Silicon) | [MindOS-arm64.dmg](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-arm64.dmg) |
-| macOS (Intel) | [MindOS.dmg](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.dmg) |
-| Windows | [MindOS-Setup.exe](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-Setup.exe) |
-| Linux | [MindOS.AppImage](https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS.AppImage) |
+Download from the [official website](https://tianfuwang.tech/MindOS/#quickstart) or [GitHub Releases](https://github.com/GeminiLight/MindOS/releases/latest) — double-click to install, no terminal needed.
 
 **Option B: npm**
 
