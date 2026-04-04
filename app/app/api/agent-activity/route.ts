@@ -10,7 +10,7 @@ import { effectiveSopRoot } from '@/lib/settings';
  */
 export async function GET(req: NextRequest) {
   const limitParam = req.nextUrl.searchParams.get('limit');
-  const limit = Math.max(1, Math.min(Number(limitParam) || 10, 50));
+  const limit = Math.max(1, Math.min(Number(limitParam) || 10, 500));
 
   const root = effectiveSopRoot();
   const events = listAgentAuditEvents(root, limit);

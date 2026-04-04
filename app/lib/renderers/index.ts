@@ -3,7 +3,6 @@
  * To regenerate: node scripts/gen-renderer-index.js
  */
 import { registerRenderer } from './registry';
-import { manifest as agentInspector } from '@/components/renderers/agent-inspector/manifest';
 import { manifest as backlinks } from '@/components/renderers/backlinks/manifest';
 import { manifest as config } from '@/components/renderers/config/manifest';
 import { manifest as csv } from '@/components/renderers/csv/manifest';
@@ -14,7 +13,7 @@ import { manifest as workflowYaml } from '@/components/renderers/workflow-yaml/m
 import { manifest as graph } from '@/components/renderers/graph/manifest';
 
 const manifests = [
-  agentInspector, backlinks, config, csv, summary, timeline, todo, workflowYaml, graph,
+  backlinks, config, csv, summary, timeline, todo, workflowYaml, graph,
 ];
 
 for (const m of manifests) {

@@ -2,74 +2,15 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import {
-  Terminal, FileEdit, FilePlus, Trash2, Search, Clock,
-  CheckCircle2, AlertCircle, ChevronDown, ArrowRight,
-} from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
-
-/* ── Types ── */
-
-interface AgentOp {
-  id: string;
-  ts: string;
-  tool: string;
-  params: Record<string, unknown>;
-  result: 'ok' | 'error';
-  message?: string;
-}
-
-type OpKind = 'read' | 'write' | 'create' | 'delete' | 'search' | 'other';
-
-/* ── Helpers ── */
-
-function opKind(tool: string): OpKind {
-  if (/search/.test(tool)) return 'search';
-  if (/read|list|get/.test(tool)) return 'read';
-  if (/create/.test(tool)) return 'create';
-  if (/delete/.test(tool)) return 'delete';
-  if (/write|update|insert|append/.test(tool)) return 'write';
-  return 'other';
-}
-
-const KIND_COLOR: Record<OpKind, string> = {
-  read: 'text-blue-400',
-  write: 'text-[var(--amber)]',
-  create: 'text-[var(--success)]',
-  delete: 'text-[var(--error)]',
-  search: 'text-purple-400',
-  other: 'text-muted-foreground',
-};
-
-function OpIcon({ kind }: { kind: OpKind }) {
-  const cls = `shrink-0 ${KIND_COLOR[kind]}`;
-  const s = 12;
-  if (kind === 'read') return <Clock size={s} className={cls} />;
-  if (kind === 'write') return <FileEdit size={s} className={cls} />;
-  if (kind === 'create') return <FilePlus size={s} className={cls} />;
-  if (kind === 'delete') return <Trash2 size={s} className={cls} />;
-  if (kind === 'search') return <Search size={s} className={cls} />;
-  return <Terminal size={s} className={cls} />;
-}
-
-function relativeTs(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return '<1m';
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(diff / 3_600_000);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(diff / 86_400_000)}d`;
-}
-
-function getFilePath(params: Record<string, unknown>): string | null {
-  return typeof params.path === 'string' ? params.path : null;
-}
+import {
+  type AgentOp,
+  opKind, KIND_COLOR, OpIcon, relativeTs, getFilePath,
+} from './agent-activity-shared';
 
 const VISIBLE_OPS = 5;
-
-/* ── Component ── */
 
 export default function RecentActivityFeed() {
   const { t } = useLocale();
@@ -93,7 +34,6 @@ export default function RecentActivityFeed() {
       const k = opKind(op.tool);
       return k === 'write' || k === 'create' || k === 'delete';
     });
-    // If few writes, also show reads/searches
     return writes.length >= 3 ? writes : ops;
   }, [ops]);
 
@@ -111,7 +51,7 @@ export default function RecentActivityFeed() {
           {copy?.recentActivity ?? 'Recent Activity'}
         </h2>
         <Link
-          href={`/view/${encodePath('.mindos/agent-audit-log.json')}`}
+          href="/agents?tab=activity"
           className="text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity font-display"
         >
           {copy?.viewAll ?? 'View all'} →
@@ -131,7 +71,7 @@ export default function RecentActivityFeed() {
                 i > 0 ? 'border-t border-border/30' : ''
               } hover:bg-muted/30 transition-colors`}
             >
-              <OpIcon kind={kind} />
+              <OpIcon kind={kind} size={12} />
 
               <span className="text-xs font-medium text-foreground font-display shrink-0">
                 {toolShort}
@@ -147,6 +87,13 @@ export default function RecentActivityFeed() {
                 </Link>
               ) : (
                 <span className="flex-1" />
+              )}
+
+              {/* agent name badge */}
+              {op.agentName && (
+                <span className="text-[0.6rem] font-medium text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded-full shrink-0 font-display" title={op.agentName}>
+                  {op.agentName.length > 20 ? op.agentName.slice(0, 20) + '...' : op.agentName}
+                </span>
               )}
 
               {op.result === 'ok'
