@@ -162,18 +162,23 @@ export default memo(function MessageList({
   return (
     <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4 min-h-0">
       {messages.length === 0 && (
-        <div className="mt-6 space-y-3 max-w-md mx-auto">
-          <p className="text-center text-sm text-muted-foreground/60">{emptyPrompt}</p>
+        <div className="flex flex-col items-center justify-center flex-1 min-h-[200px] px-4">
+          {/* Brand anchor */}
+          <div className="w-10 h-10 rounded-xl bg-[var(--amber)]/10 flex items-center justify-center mb-4">
+            <Sparkles size={20} className="text-[var(--amber)]" />
+          </div>
+          <p className="text-center text-sm font-medium text-foreground/80 mb-1">{emptyPrompt}</p>
           {emptyHint && (
-            <p className="text-center text-[11px] text-muted-foreground/40">{emptyHint}</p>
+            <p className="text-center text-[11px] text-muted-foreground/50 mb-5">{emptyHint}</p>
           )}
-          <div className="flex flex-wrap gap-2 px-2">
+          {/* Suggestion chips — centered 2-column grid */}
+          <div className="grid grid-cols-2 gap-2 max-w-sm w-full">
             {suggestions.map((s, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => onSuggestionClick(s)}
-                className="text-left text-xs px-3 py-2 rounded-lg border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="text-left text-xs px-3 py-2.5 rounded-lg border border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30 hover:bg-[var(--amber)]/5 transition-colors leading-snug"
               >
                 {s}
               </button>

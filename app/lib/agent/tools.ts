@@ -4,7 +4,7 @@ import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import {
   searchFiles, getFileContent, getFileTree, getRecentlyModified,
   saveFileContent, createFile, appendToFile, insertAfterHeading, updateSection,
-  deleteFile, renameFile, moveFile, findBacklinks, gitLog, gitShowFile, appendCsvRow,
+  moveToTrashFile, renameFile, moveFile, findBacklinks, gitLog, gitShowFile, appendCsvRow,
   getMindRoot,
 } from '@/lib/fs';
 import { readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
@@ -707,11 +707,11 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'delete_file',
     label: 'Delete File',
-    description: 'Permanently delete a file from the knowledge base. This is destructive and cannot be undone.',
+    description: 'Delete a file from the knowledge base. The file is moved to trash and can be recovered within 30 days.',
     parameters: PathParam,
     execute: safeExecute(async (_id, params: Static<typeof PathParam>) => {
-      deleteFile(params.path);
-      return textResult(`File deleted: ${params.path}`);
+      const meta = moveToTrashFile(params.path);
+      return textResult(`Moved to trash: ${params.path} (recoverable for 30 days, trashId: ${meta.id})`);
     }),
   },
 

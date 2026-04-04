@@ -129,13 +129,34 @@ describe('POST /api/file', () => {
     expect((await res.json()).error).toBe('missing content');
   });
 
-  it('delete_file removes a file', async () => {
+  it('delete_file moves file to trash instead of permanent delete', async () => {
     seedFile('to-delete.md', 'bye');
     invalidateCache();
 
     const res = await POST(post({ op: 'delete_file', path: 'to-delete.md' }));
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.trashId).toBeTruthy();
+
+    // File should no longer exist at original location
     expect(fs.existsSync(path.join(root(), 'to-delete.md'))).toBe(false);
+
+    // File should exist in trash
+    const trashDir = path.join(path.dirname(root()), '.trash');
+    expect(fs.existsSync(trashDir)).toBe(true);
+    const trashFile = path.join(trashDir, body.trashId as string);
+    expect(fs.existsSync(trashFile)).toBe(true);
+
+    // Trash content should match original
+    const trashContent = fs.readFileSync(trashFile, 'utf-8');
+    expect(trashContent).toBe('bye');
+  });
+
+  it('delete_file returns error for non-existent file', async () => {
+    invalidateCache();
+    const res = await POST(post({ op: 'delete_file', path: 'does-not-exist.md' }));
+    expect(res.status).toBe(500);
   });
 
   it('rename_file renames a file', async () => {
