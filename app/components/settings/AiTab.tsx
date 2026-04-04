@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { AlertCircle, ChevronDown, Loader2, Sparkles, Bot, Monitor, ExternalLink } from 'lucide-react';
 import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
 import { Field, Select, Input, EnvBadge, ApiKeyInput, Toggle, SettingCard, SettingRow } from './Primitives';
@@ -347,14 +347,18 @@ function ModelInput({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const fetchedRef = useRef(false);
 
-  const hasKey = !!apiKey || !!envKey;
+  const hasKey = !!apiKey || !!envKey || !!PROVIDER_PRESETS[provider]?.apiKeyFallback;
 
-  const fetchModels = useCallback(async () => {
+  const fetchModels = useCallback(async (silent = false) => {
     if (loading) return;
     setLoading(true);
-    setError('');
+    if (!silent) setError('');
     try {
       const body: Record<string, string> = { provider };
       if (apiKey) body.apiKey = apiKey;
@@ -368,42 +372,104 @@ function ModelInput({
       const json = await res.json();
       if (json.ok && Array.isArray(json.models)) {
         setModels(json.models);
-        setOpen(true);
-      } else {
+        fetchedRef.current = true;
+        if (!silent) setOpen(true);
+      } else if (!silent) {
         setError(json.error || 'Failed to fetch models');
       }
     } catch {
-      setError('Network error');
+      if (!silent) setError('Network error');
     } finally {
       setLoading(false);
     }
   }, [provider, apiKey, baseUrl, loading]);
 
+  // Auto-fetch models on first input focus (background, silent)
+  const handleFocus = useCallback(() => {
+    setFocused(true);
+    if (!fetchedRef.current && supportsListModels && hasKey && !loading) {
+      fetchModels(true);
+    }
+  }, [supportsListModels, hasKey, loading, fetchModels]);
+
+  // Reset fetched cache when provider/key/baseUrl changes
   useEffect(() => {
-    if (!open) return;
+    fetchedRef.current = false;
+    setModels(null);
+  }, [provider, apiKey, baseUrl]);
+
+  // Filtered models for typeahead
+  const filtered = useMemo(() => {
+    if (!models || !value.trim()) return models ?? [];
+    const q = value.toLowerCase();
+    return models.filter(m => m.toLowerCase().includes(q));
+  }, [models, value]);
+
+  // Show typeahead when focused + models loaded + user is typing (or Browse was clicked)
+  const showDropdown = open || (focused && models !== null && value.trim().length > 0 && filtered.length > 0);
+
+  // Reset highlight when filtered list changes
+  useEffect(() => { setHighlightIdx(-1); }, [filtered]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightIdx < 0 || !listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-model-item]');
+    items[highlightIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [highlightIdx]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const items = showDropdown ? filtered : [];
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx(i => (i + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx(i => (i - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter' && highlightIdx >= 0 && highlightIdx < items.length) {
+      e.preventDefault();
+      onChange(items[highlightIdx]);
+      setOpen(false);
+      setFocused(false);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setFocused(false);
+    }
+  }, [showDropdown, filtered, highlightIdx, onChange]);
+
+  useEffect(() => {
+    if (!showDropdown) return;
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setFocused(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+  }, [showDropdown]);
+
+  const displayList = open ? (filtered.length > 0 ? filtered : models ?? []) : filtered;
 
   return (
     <div ref={containerRef} className="relative">
       <div className="flex gap-1.5">
         <Input
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => { onChange(e.target.value); if (!open) setFocused(true); }}
+          onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="flex-1"
+          autoComplete="off"
         />
         {supportsListModels && (
           <button
             type="button"
             disabled={!hasKey || loading}
-            onClick={fetchModels}
+            onClick={() => fetchModels(false)}
             title={t.settings.ai.listModels}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
@@ -413,21 +479,26 @@ function ModelInput({
         )}
       </div>
       {error && <p className="text-xs text-error mt-1">{error}</p>}
-      {open && models && models.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
-          {models.map(m => (
+      {showDropdown && displayList.length > 0 && (
+        <div ref={listRef} className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+          {displayList.map((m, i) => (
             <button
               key={m}
               type="button"
-              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${m === value ? 'bg-accent/60 font-medium' : ''}`}
-              onClick={() => { onChange(m); setOpen(false); }}
+              data-model-item
+              className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                m === value ? 'bg-accent/60 font-medium'
+                : i === highlightIdx ? 'bg-accent'
+                : 'hover:bg-accent'
+              }`}
+              onClick={() => { onChange(m); setOpen(false); setFocused(false); }}
             >
               {m}
             </button>
           ))}
         </div>
       )}
-      {open && models && models.length === 0 && (
+      {open && displayList.length === 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg px-3 py-2 text-xs text-muted-foreground">
           {t.settings.ai.noModelsFound}
         </div>

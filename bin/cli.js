@@ -1268,18 +1268,15 @@ ${bold('Examples:')}
     const mindRoot = process.env.MIND_ROOT;
 
     if (sub === 'init') {
-      // Parse --non-interactive --remote <url> --branch <branch> --token <token>
-      const args = cliArgs.slice(1);
-      const flagIdx = (flag) => args.indexOf(flag);
-      const flagVal = (flag) => { const i = flagIdx(flag); return i >= 0 && i + 1 < args.length ? args[i + 1] : ''; };
-      const nonInteractive = args.includes('--non-interactive');
+      // Flags are already parsed by parseArgs into cliFlags
+      const nonInteractive = cliFlags['non-interactive'] === true;
 
       if (nonInteractive) {
         await initSync(mindRoot, {
           nonInteractive: true,
-          remote: flagVal('--remote'),
-          token: flagVal('--token'),
-          branch: flagVal('--branch') || 'main',
+          remote: typeof cliFlags.remote === 'string' ? cliFlags.remote : '',
+          token: typeof cliFlags.token === 'string' ? cliFlags.token : '',
+          branch: (typeof cliFlags.branch === 'string' ? cliFlags.branch : '') || 'main',
         });
       } else {
         await initSync(mindRoot);

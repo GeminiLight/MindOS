@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette, FlaskConical } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
 import { CONTENT_WIDTHS, FONTS, FONT_SIZES, AppearanceTabProps } from './types';
 import { SettingCard } from './Primitives';
@@ -16,36 +16,6 @@ function SettingGroup({ icon, label, children }: { icon: React.ReactNode; label:
       </div>
       {children}
     </div>
-  );
-}
-
-/* ── Labs Toggle ── */
-function LabsToggle({ label, description, checked, onChange }: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-3 cursor-pointer group">
-      <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium text-foreground block">{label}</span>
-        <span className="text-xs text-muted-foreground">{description}</span>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
-          checked ? 'bg-[var(--amber)]' : 'bg-muted-foreground/20'
-        }`}
-      >
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0'
-        }`} />
-      </button>
-    </label>
   );
 }
 
@@ -78,12 +48,6 @@ function PillSelector<T extends string>({ options, value, onChange }: {
 
 export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWidth, setContentWidth, dark, setDark, locale, setLocale, t }: AppearanceTabProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [labsEcho, setLabsEcho] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-echo') === '1' : false
-  );
-  const [labsWorkflows, setLabsWorkflows] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-workflows') === '1' : false
-  );
   const [themePref, setThemePref] = useState<string>(() =>
     typeof window !== 'undefined' ? (localStorage.getItem('theme') ?? 'system') : 'system'
   );
@@ -273,32 +237,6 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
       </SettingCard>
 
       <p className="text-xs text-muted-foreground/40 px-0.5">{a.browserNote}</p>
-
-      {/* ── Labs — experimental features ── */}
-      <SettingCard icon={<FlaskConical size={15} />} title={a.labsTitle ?? 'Labs'} description={a.labsDesc ?? 'Experimental features that are still in development.'}>
-        <div className="space-y-3">
-          <LabsToggle
-            label={a.labsEcho ?? 'Echo'}
-            description={a.labsEchoDesc ?? 'Reflective journaling powered by your notes.'}
-            checked={labsEcho}
-            onChange={v => {
-              setLabsEcho(v);
-              localStorage.setItem('mindos:labs-echo', v ? '1' : '0');
-              window.dispatchEvent(new Event('mindos:labs-changed'));
-            }}
-          />
-          <LabsToggle
-            label={a.labsWorkflows ?? 'Flows'}
-            description={a.labsWorkflowsDesc ?? 'Visual workflow automation for agents.'}
-            checked={labsWorkflows}
-            onChange={v => {
-              setLabsWorkflows(v);
-              localStorage.setItem('mindos:labs-workflows', v ? '1' : '0');
-              window.dispatchEvent(new Event('mindos:labs-changed'));
-            }}
-          />
-        </div>
-      </SettingCard>
 
       {/* ── Keyboard Shortcuts ── */}
       <div className="border-t border-border pt-4">

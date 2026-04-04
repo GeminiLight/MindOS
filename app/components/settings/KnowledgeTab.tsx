@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
-import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle, SettingCard, SettingRow } from './Primitives';
@@ -15,6 +15,15 @@ import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
   const k = t.settings.knowledge;
+  const a = t.settings.appearance;
+
+  // Labs feature flags
+  const [labsEcho, setLabsEcho] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-echo') === '1' : false
+  );
+  const [labsWorkflows, setLabsWorkflows] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-workflows') === '1' : false
+  );
 
   // Hidden files toggle
   const [showHidden, setShowHidden] = useState(() =>
@@ -289,6 +298,32 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </button>
         </SettingCard>
       )}
+
+      {/* ── Card 4: Labs — experimental features ── */}
+      <SettingCard icon={<FlaskConical size={15} />} title={a.labsTitle ?? 'Labs'} description={a.labsDesc ?? 'Experimental features that are still in development.'}>
+        <div className="space-y-3">
+          <LabsToggle
+            label={a.labsEcho ?? 'Echo'}
+            description={a.labsEchoDesc ?? 'Reflective journaling powered by your notes.'}
+            checked={labsEcho}
+            onChange={v => {
+              setLabsEcho(v);
+              localStorage.setItem('mindos:labs-echo', v ? '1' : '0');
+              window.dispatchEvent(new Event('mindos:labs-changed'));
+            }}
+          />
+          <LabsToggle
+            label={a.labsWorkflows ?? 'Flows'}
+            description={a.labsWorkflowsDesc ?? 'Visual workflow automation for agents.'}
+            checked={labsWorkflows}
+            onChange={v => {
+              setLabsWorkflows(v);
+              localStorage.setItem('mindos:labs-workflows', v ? '1' : '0');
+              window.dispatchEvent(new Event('mindos:labs-changed'));
+            }}
+          />
+        </div>
+      </SettingCard>
 
       {/* System Monitoring — collapsible */}
       <MonitoringSection k={k} />
