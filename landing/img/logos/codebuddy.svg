@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#1a1a2e"/>
+  <defs>
+    <linearGradient id="cbg" x1="10" y1="10" x2="38" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00A3FF"/>
+      <stop offset="100%" stop-color="#0057B8"/>
+    </linearGradient>
+  </defs>
+  <!-- Code brackets -->
+  <path d="M16 16 L10 24 L16 32" fill="none" stroke="url(#cbg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 16 L38 24 L32 32" fill="none" stroke="url(#cbg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- AI spark in center -->
+  <path d="M24 18 C24 22 26 24 30 24 C26 24 24 26 24 30 C24 26 22 24 18 24 C22 24 24 22 24 18Z" fill="url(#cbg)"/>
+</svg>
