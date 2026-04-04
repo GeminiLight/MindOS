@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from './use-cases.generated';
 import UseCaseCard from './UseCaseCard';
 

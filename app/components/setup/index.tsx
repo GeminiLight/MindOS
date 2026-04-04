@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus, ProviderSetupConfig } from './types';

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, Loader2, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { createSpaceAction } from '@/lib/actions';
 import { apiFetch } from '@/lib/api';

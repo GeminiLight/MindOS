@@ -19,7 +19,7 @@ vi.mock('@/lib/api', () => ({
   ApiError: MockApiError,
 }));
 
-vi.mock('@/lib/LocaleContext', () => ({
+vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     locale: 'en' as const,
     t: {

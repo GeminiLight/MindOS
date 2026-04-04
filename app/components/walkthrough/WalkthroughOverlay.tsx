@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useId } from 'react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useWalkthrough } from './WalkthroughProvider';
 import { walkthroughSteps } from './steps';
 import WalkthroughTooltip from './WalkthroughTooltip';

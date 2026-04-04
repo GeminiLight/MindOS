@@ -185,12 +185,17 @@ describe('tools: delete_file', () => {
     seedFile('to-delete.md', '# Delete me');
   });
 
-  it('deletes an existing file', async () => {
+  it('moves file to trash instead of permanent delete', async () => {
     const result = await callTool('delete_file', { path: 'to-delete.md' });
-    expect(result).toContain('File deleted');
+    expect(result).toContain('Moved to trash');
 
     const read = await callTool('read_file', { path: 'to-delete.md' });
     expect(read).toContain('Error:');
+  });
+
+  it('returns error for non-existent file', async () => {
+    const result = await callTool('delete_file', { path: 'ghost.md' });
+    expect(result).toContain('Error:');
   });
 });
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, AlertCircle, ChevronDown, Activity, ArrowRight } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import {
   type AgentOp,
   opKind, KindBadge, relativeTs, getFilePath,

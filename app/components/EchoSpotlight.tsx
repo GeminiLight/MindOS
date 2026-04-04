@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Feather, ArrowRight } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 const STORAGE_KEY = 'mindos-echo-daily-line';
 

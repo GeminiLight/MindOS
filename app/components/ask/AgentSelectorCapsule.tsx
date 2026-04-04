@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Bot, ChevronDown, X, Check } from 'lucide-react';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 import type { DetectedAgent } from '@/hooks/useAcpDetection';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface AgentSelectorCapsuleProps {
   selectedAgent: AcpAgentSelection | null;

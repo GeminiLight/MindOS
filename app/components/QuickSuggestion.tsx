@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Lightbulb, X } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 const DISMISS_KEY = 'mindos:suggestion-dismissed';
 const STALE_DAYS = 30;

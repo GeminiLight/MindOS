@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { Toggle } from '../settings/Primitives';
 import PanelHeader from './PanelHeader';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface PluginsPanelProps {
   active: boolean;

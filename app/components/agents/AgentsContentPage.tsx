@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { toast } from '@/lib/toast';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { copyToClipboard } from '@/lib/clipboard';

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Globe, BookOpen, FileText, Loader2, GitBranch, AlertCircle } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 type Template = 'en' | 'zh' | 'empty';
 

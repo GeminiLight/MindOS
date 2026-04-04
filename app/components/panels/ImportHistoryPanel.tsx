@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronDown, FilePlus, FileEdit, ExternalLink, Trash2, FileInput,
 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import PanelHeader from './PanelHeader';
 import {

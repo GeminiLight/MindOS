@@ -3,7 +3,7 @@
 import { useState, useCallback, useTransition } from 'react';
 import { Trash2, RotateCcw, X, Folder, FileText, Table, AlertTriangle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { restoreFromTrashAction, permanentlyDeleteAction, emptyTrashAction } from '@/lib/actions';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { toast } from '@/lib/toast';

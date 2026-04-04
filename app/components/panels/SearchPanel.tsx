@@ -6,7 +6,7 @@ import { Search, X, FileText, Table } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import PanelHeader from './PanelHeader';
 import { Virtuoso } from 'react-virtuoso';
 

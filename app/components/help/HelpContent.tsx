@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { BookOpen, Rocket, Brain, Keyboard, HelpCircle, Bot, ChevronDown, Copy, Check } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 

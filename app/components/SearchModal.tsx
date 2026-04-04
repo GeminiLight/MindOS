@@ -6,7 +6,7 @@ import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compas
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
 
 interface SearchModalProps {

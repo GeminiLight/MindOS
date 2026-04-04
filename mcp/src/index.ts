@@ -299,16 +299,17 @@ server.registerTool("mindos_rename_space", {
 
 server.registerTool("mindos_delete_file", {
   title: "Delete File",
-  description: "Permanently delete a file from the knowledge base.",
+  description: "Delete a file from the knowledge base. The file is moved to trash and can be recovered within 30 days.",
   inputSchema: z.object({
     path: z.string().min(1),
   }),
   annotations: { destructiveHint: true },
 }, async ({ path }) => {
   try {
-    await _post("/api/file", { op: "delete_file", path });
-    _logOp("mindos_delete_file", { path }, "ok", `Deleted "${path}"`);
-    return ok(`Deleted "${path}"`);
+    const res = await _post("/api/file", { op: "delete_file", path });
+    const trashId = res?.trashId ? ` (trashId: ${res.trashId})` : '';
+    _logOp("mindos_delete_file", { path }, "ok", `Moved to trash: "${path}"${trashId}`);
+    return ok(`Moved to trash: "${path}"${trashId}`);
   } catch (e) { _logOp("mindos_delete_file", { path }, "error", String(e)); return error(String(e)); }
 });
 

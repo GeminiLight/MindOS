@@ -9,7 +9,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import type { SetupState, SetupMessages, AgentInstallStatus } from './types';
 import { PROVIDER_PRESETS, isProviderId } from '@/lib/agent/providers';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 // ─── Restart Block ────────────────────────────────────────────────────────────
 

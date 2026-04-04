@@ -308,6 +308,13 @@
 
 ## MCP
 
+### 删除文件的入口不一致——部分走回收站、部分硬删 ✅ 已解决
+- **现象：** Web UI 删除文件进回收站可恢复，但 MCP `mindos_delete_file` 和 AI Agent `delete_file` 工具做永久硬删除，数据无法恢复
+- **原因：** Tier 1 Trash 功能实现时只改了 Server Actions（Web UI 入口），漏了 API route `POST /api/file` 的 `delete_file` op 和 Agent tools
+- **解决：** API route 和 Agent tools 的 `delete_file` 统一改为调用 `moveToTrashFile()`，返回 `trashId`。MCP 工具描述同步更新
+- **规则：** 同一语义操作（如"删除"）的所有入口必须走同一实现路径。新增入口时全局搜索同操作的其他入口，确认行为一致
+- **文件：** `app/app/api/file/route.ts`、`app/lib/agent/tools.ts`、`mcp/src/index.ts`
+
 ### JSONC 配置文件导致 Agent 安装失败
 - **现象：** Cursor Agent 安装时报 `SyntaxError: Unexpected token '/', "// { // "... is not valid JSON`
 - **原因：** Cursor、Windsurf、Cline 等 VS Code 系编辑器的 MCP 配置文件是 JSONC 格式（允许 `//` 单行注释和 `/* */` 块注释），但代码用 `JSON.parse()` 解析，遇到注释直接崩
@@ -1249,4 +1256,13 @@
   5. **服务端搜索**：将搜索请求发到 `/api/files?q=xxx`，服务端用 SQLite FTS 或内存索引处理，客户端只存结果
 - **推荐**：先做方案 1（零成本改动），再评估是否需要方案 2。方案 4/5 仅在用户反馈确实有大型 KB 时再做
 - **当前风险等级：** 低（80ms debounce + slice(0,30) 已足够应付 500-1000 文件规模）
+
+### `next build --webpack` 污染 `.next` 缓存 → dev server 每请求 compile 7-8s（2026-04-05）
+
+- **症状：** `next dev`（turbopack）每个请求 compile 7-8s，`/api/tree-version`（9 行代码）也要 15s 完成；view 页面 render 60-100s；3s 轮询不断积压，页面完全点不动
+- **根因：** `npm run build`（走 `next build --webpack`）向 `.next/cache/webpack/` 写入 490MB production cache，同时覆盖 `.next/cache/.tsbuildinfo` 等共享元数据。再次启动 `next dev`（走 turbopack）时，turbopack 检测到元数据与自身缓存不一致 → 整体 invalidate → 每个请求重新编译全部依赖链
+- **表现特征：** `.next` 总大小 2.8GB（turbopack dev cache 650MB + webpack production cache 490MB + 其他碎片）；连续多天开发不重启会逐步恶化
+- **解决：** `rm -rf .next` + 重启 dev server。冷启动首轮 100-300ms，缓存热后回到个位数 ms
+- **预防：** 每次 `npm run build` / `npm run release` 后，重启 dev server 前先 `rm -rf .next`
+- **注意：** 仅影响 dev mode。Production build 所有 route 预编译，不存在 compile 阶段
 

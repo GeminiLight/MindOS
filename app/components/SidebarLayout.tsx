@@ -33,7 +33,7 @@ import OrganizeToast from './OrganizeToast';
 import CreateSpaceModal from './CreateSpaceModal';
 import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import dynamic from 'next/dynamic';
 
 const ImportModal = dynamic(() => import('./ImportModal'), { ssr: false });

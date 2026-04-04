@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, ChevronDown, SkipForward } from 'lucide-react';
 import { type ProviderId, PROVIDER_PRESETS, groupedProviders } from '@/lib/agent/providers';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface ProviderSelectProps {
   value: ProviderId | 'skip';

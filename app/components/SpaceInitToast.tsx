@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react';
 import { Sparkles, Check, Undo2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { revertSpaceInitAction } from '@/lib/actions';
 

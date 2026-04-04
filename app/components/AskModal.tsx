@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import AskContent from '@/components/ask/AskContent';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 

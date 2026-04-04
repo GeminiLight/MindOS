@@ -4,7 +4,7 @@ import './globals.css';
 import { getFileTree } from '@/lib/fs';
 import ShellLayout from '@/components/ShellLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { LocaleProvider } from '@/lib/LocaleContext';
+import LocaleStoreInit from '@/lib/stores/LocaleStoreInit';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import Toaster from '@/components/ui/Toaster';
 import RegisterSW from './register-sw';
@@ -106,7 +106,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexMono.variable} ${ibmPlexSans.variable} ${lora.variable} antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
-        <LocaleProvider ssrLocale={ssrLocale}>
+        <LocaleStoreInit ssrLocale={ssrLocale} />
           <TooltipProvider delay={300}>
             <ErrorBoundary>
               <ShellLayout fileTree={fileTree}>
@@ -117,7 +117,6 @@ export default async function RootLayout({
           <Toaster />
           <RegisterSW />
           <UpdateOverlay />
-        </LocaleProvider>
       </body>
     </html>
   );

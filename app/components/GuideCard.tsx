@@ -5,7 +5,7 @@ import { X, Sparkles, Upload, MessageCircle, ExternalLink, Check, ChevronRight, 
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { openAskModal } from '@/hooks/useAskModal';
 import { walkthroughSteps } from './walkthrough/steps';
 import type { GuideState } from '@/lib/settings';

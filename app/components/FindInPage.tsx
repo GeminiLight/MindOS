@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronUp, ChevronDown } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface FindInPageProps {
   containerRef: React.RefObject<HTMLElement | null>;

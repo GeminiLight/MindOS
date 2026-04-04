@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Folder, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, History, Star } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import OnboardingView from './OnboardingView';

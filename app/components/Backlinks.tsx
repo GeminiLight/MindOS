@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Link as LinkIcon, FileText } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
 import type { BacklinkItem } from '@/lib/types';
 

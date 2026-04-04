@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Terminal, ChevronDown, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import {
   type AgentOp, type OpKind,
   opKind, KIND_STYLE, KIND_LABEL, OpIcon, KindBadge, formatTs, relativeTs, getFilePath,

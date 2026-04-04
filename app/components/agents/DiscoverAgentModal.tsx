@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X, Loader2, Globe, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { RemoteAgent } from '@/lib/a2a/types';
 
 interface DiscoverAgentModalProps {

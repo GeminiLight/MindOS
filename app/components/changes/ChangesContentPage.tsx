@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, History, RefreshCw } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import CustomSelect from '@/components/CustomSelect';
 import { collapseDiffContext, buildLineDiff } from './line-diff';
 

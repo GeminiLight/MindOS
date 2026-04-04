@@ -8,7 +8,7 @@ import type { ProviderId } from '@/lib/agent/providers';
 import { PROVIDER_PRESETS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import StepPorts from './StepPorts';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 export interface StepAIProps {
   state: SetupState;

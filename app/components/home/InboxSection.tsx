@@ -11,7 +11,7 @@ import {
   Loader2,
   ChevronRight,
 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 
 interface InboxFile {

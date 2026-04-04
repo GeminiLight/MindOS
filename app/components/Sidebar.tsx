@@ -11,7 +11,7 @@ import SettingsModal from './SettingsModal';
 import SyncStatusBar, { SyncDot, MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import type { Tab } from './settings/types';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface SidebarProps {
   fileTree: FileNode[];

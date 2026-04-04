@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Bot, ChevronDown, ArrowRight } from 'lucide-react';
 import { useMcpDataOptional } from '@/lib/stores/mcp-store';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { AgentInfo } from '@/components/settings/types';
 
 /* ── Constants ── */

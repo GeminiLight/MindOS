@@ -9,7 +9,7 @@ const mockPersistSession = vi.fn();
 const mockClearPersistTimer = vi.fn();
 const mockInitSessions = vi.fn();
 
-vi.mock('@/lib/LocaleContext', () => ({
+vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     t: {
       ask: {

@@ -10,7 +10,7 @@ vi.mock('@/lib/api', () => ({
   apiFetch: mockApiFetch,
 }));
 
-vi.mock('@/lib/LocaleContext', () => ({
+vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     locale: 'en' as const,
     t: {

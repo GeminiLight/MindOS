@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
 import type { AiSettings, AgentSettings, SettingsData, Tab } from './types';
 import { AiTab } from './AiTab';

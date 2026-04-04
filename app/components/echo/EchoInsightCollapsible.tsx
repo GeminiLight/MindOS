@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { useSettingsAiAvailable } from '@/hooks/useSettingsAiAvailable';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 const proseInsight =
   'prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground ' +

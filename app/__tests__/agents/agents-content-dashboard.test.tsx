@@ -97,7 +97,7 @@ vi.mock('@/lib/stores/mcp-store', () => ({
   useMcpData: () => baseMcpState,
 }));
 
-vi.mock('@/lib/LocaleContext', () => ({
+vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const, setLocale: () => {}, t: messages.en }),
 }));
 

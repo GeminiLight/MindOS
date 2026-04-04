@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquare, Sparkles, ChevronDown, Check } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { AskMode } from '@/lib/types';
 
 const STORAGE_KEY = 'mindos-ask-mode';

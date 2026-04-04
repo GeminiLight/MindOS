@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Check, ChevronDown, ChevronUp, Clock, Code2, Download, Globe, Loader2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Trash2, Wifi, WifiOff, Wrench, Zap } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useAcpConfig } from '@/hooks/useAcpConfig';
 import type { RemoteAgent, DelegationRecord } from '@/lib/a2a/types';
 import type { AcpRegistryEntry } from '@/lib/acp/types';

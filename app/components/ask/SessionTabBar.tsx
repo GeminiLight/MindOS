@@ -3,7 +3,7 @@
 import { Plus, X } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface SessionTabBarProps {
   sessions: ChatSession[];

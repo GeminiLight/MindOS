@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 
 interface Heading {

@@ -7,7 +7,7 @@ import {
   ChevronDown, FilePlus, FileEdit, ExternalLink,
   Maximize2, Minimize2, FileIcon,
 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import type { OrganizeStageHint } from '@/hooks/useAiOrganize';
 import { encodePath } from '@/lib/utils';

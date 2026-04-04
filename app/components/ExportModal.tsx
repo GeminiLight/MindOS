@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { X, Download, FileText, Globe, Archive, Check, Loader2 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
 
 type ExportFormat = 'md' | 'html' | 'zip' | 'zip-html';

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Send, StopCircle, X, Plus } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { Send, StopCircle, X, Plus, FileText, ImageIcon } from 'lucide-react';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { AskMode } from '@/lib/types';
 import ModeCapsule, { getPersistedMode } from '@/components/ask/ModeCapsule';
 import { useAskSession } from '@/hooks/useAskSession';
@@ -513,197 +513,170 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         </div>
       )}
 
-      {/* Input area — auto-height composer, no manual resize */}
-      <div
-        className={cn(
-          'shrink-0 border-t border-border',
-          isDragOver && 'ring-2 ring-[var(--amber)] ring-inset bg-[var(--amber-dim)]',
-        )}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-
-        {/* Unified context chip flow */}
-        {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || selectedAcpAgent || upload.uploadError || imageUpload.imageError) && (
-          <div className={cn('shrink-0 px-3 pt-2 pb-1', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
-            <div className="flex flex-wrap gap-1.5">
-              {/* KB files (@ attached) */}
-              {attachedFiles.map(f => (
-                <FileChip key={f} path={f} variant="kb" onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
-              ))}
-              {/* Uploaded files */}
-              {upload.localAttachments.map((f, idx) => (
-                <FileChip key={`up-${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
-              ))}
-              {/* Images (name chip + hover preview) */}
-              {imageUpload.images.map((img, idx) => (
-                <FileChip
-                  key={`img-${idx}`}
-                  path={`Image ${idx + 1}`}
-                  variant="image"
-                  imageData={img.data}
-                  imageMime={img.mimeType}
-                  onRemove={() => imageUpload.removeImage(idx)}
-                />
-              ))}
-              {/* Skill */}
-              {selectedSkill && (
-                <FileChip
-                  path={selectedSkill.name}
-                  variant="skill"
-                  onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
-                />
-              )}
-              {/* Agent — selection now shown via AgentSelectorCapsule, not as a chip */}
-            </div>
-            {/* Errors (merged) */}
-            {(upload.uploadError || imageUpload.imageError) && (
-              <div className="mt-1 text-xs text-error">{upload.uploadError || imageUpload.imageError}</div>
-            )}
-          </div>
-        )}
-
-        {/* Mode + Agent + Provider selector row */}
-        <div className="flex items-center gap-1.5 px-3 pt-1 pb-0.5">
-          <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
-          {mounted && acpDetection.installedAgents.length > 0 && (
-            <AgentSelectorCapsule
-              selectedAgent={selectedAcpAgent}
-              onSelect={setSelectedAcpAgent}
-              installedAgents={acpDetection.installedAgents}
-              loading={acpDetection.loading}
-            />
+      {/* Composer card — unified input area with rounded container */}
+      <div className="shrink-0 px-3 pb-2 pt-1">
+        <div
+          className={cn(
+            'rounded-xl border border-border/60 bg-card shadow-sm transition-shadow',
+            isDragOver && 'ring-2 ring-[var(--amber)] bg-[var(--amber-dim)]',
           )}
-          {mounted && (
-            <ProviderModelCapsule
-              value={providerOverride}
-              onChange={setProviderOverride}
-              disabled={isLoading}
-            />
-          )}
-        </div>
-
-        {/* Input form */}
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="flex items-end gap-1.5 px-3 py-2"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
-          {/* + attach button with mini menu */}
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowAttachMenu(v => !v)}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title={t.hints.attachFile}
-            >
-              <Plus size={inputIconSize} />
-            </button>
-            {showAttachMenu && (
-              <div className="absolute bottom-full left-0 mb-1 py-1 rounded-lg border border-border bg-card shadow-lg z-50 min-w-[140px]">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
-                  onClick={() => { setShowAttachMenu(false); upload.uploadInputRef.current?.click(); }}
-                >
-                  File
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
-                  onClick={() => { setShowAttachMenu(false); imageInputRef.current?.click(); }}
-                >
-                  Image
-                </button>
+          {/* Unified context chip flow */}
+          {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || selectedAcpAgent || upload.uploadError || imageUpload.imageError) && (
+            <div className={cn('px-3 pt-2.5 pb-1', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
+              <div className="flex flex-wrap gap-1.5">
+                {attachedFiles.map(f => (
+                  <FileChip key={f} path={f} variant="kb" onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
+                ))}
+                {upload.localAttachments.map((f, idx) => (
+                  <FileChip key={`up-${f.name}-${idx}`} path={f.name} variant="upload" onRemove={() => upload.removeAttachment(idx)} />
+                ))}
+                {imageUpload.images.map((img, idx) => (
+                  <FileChip
+                    key={`img-${idx}`}
+                    path={`Image ${idx + 1}`}
+                    variant="image"
+                    imageData={img.data}
+                    imageMime={img.mimeType}
+                    onRemove={() => imageUpload.removeImage(idx)}
+                  />
+                ))}
+                {selectedSkill && (
+                  <FileChip
+                    path={selectedSkill.name}
+                    variant="skill"
+                    onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
+                  />
+                )}
               </div>
-            )}
-          </div>
-
-          <input
-            ref={upload.uploadInputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
-            onChange={async (e) => {
-              const inputEl = e.currentTarget;
-              await upload.pickFiles(inputEl.files);
-              inputEl.value = '';
-            }}
-          />
-          <input
-            ref={imageInputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            onChange={async (e) => {
-              const inputEl = e.currentTarget;
-              await imageUpload.handleFileSelect(inputEl.files);
-              inputEl.value = '';
-            }}
-          />
-
-          <textarea
-            ref={(el) => {
-              inputRef.current = el;
-            }}
-            value={input}
-            onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
-            onKeyDown={handleInputKeyDown}
-            onPaste={handlePaste}
-            placeholder={t.ask.placeholder}
-            rows={1}
-            className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
-          />
-
-          {isLoading ? (
-            <button type="button" onClick={handleStop} className="p-1.5 rounded-md transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
-              {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
-            </button>
-          ) : (
-            <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-1.5 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
-              <Send size={14} />
-            </button>
+              {(upload.uploadError || imageUpload.imageError) && (
+                <div className="mt-1 text-xs text-error">{upload.uploadError || imageUpload.imageError}</div>
+              )}
+            </div>
           )}
-        </form>
-      </div>
 
-      {/* Footer hints — panel: compact 3 items; modal: full set */}
-      <div
-        className={cn(
-          'flex shrink-0 items-center flex-wrap px-3 pb-1.5',
-          isPanel
-            ? 'gap-x-3 gap-y-1 text-[10px] text-muted-foreground/40'
-            : 'gap-x-3 gap-y-1 text-[10px] md:text-xs text-muted-foreground/50',
-        )}
-      >
-        <span suppressHydrationWarning>
-          <kbd className="font-mono">↵</kbd> {t.ask.send}
-        </span>
-        {!isPanel && (
-          <span suppressHydrationWarning>
-            <kbd className="font-mono">⇧</kbd>
-            <kbd className="font-mono ml-0.5">↵</kbd> {t.ask.newlineHint}
-          </span>
-        )}
-        <span suppressHydrationWarning>
-          <kbd className="font-mono">@</kbd> {t.ask.attachFile}
-        </span>
-        <span suppressHydrationWarning>
-          <kbd className="font-mono">/</kbd> {t.ask.skillsHint}
-        </span>
-        {!isPanel && (
-          <span suppressHydrationWarning>
-            <kbd className="font-mono">ESC</kbd> {t.search.close}
-          </span>
-        )}
-        {isLoading && input.trim() && (
-          <span className="text-[10px] text-[var(--amber)]/80">
-            {t.ask.draftingHint}
-          </span>
-        )}
+          {/* Input form */}
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className="flex items-end gap-1 px-1.5 py-1.5"
+          >
+            {/* + attach button with mini menu */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAttachMenu(v => !v)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                title={t.hints.attachFile}
+              >
+                <Plus size={inputIconSize} />
+              </button>
+              {showAttachMenu && (
+                <div className="absolute bottom-full left-0 mb-1 py-1 rounded-lg border border-border bg-card shadow-lg z-50 min-w-[140px]">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                    onClick={() => { setShowAttachMenu(false); upload.uploadInputRef.current?.click(); }}
+                  >
+                    <FileText size={12} className="shrink-0 text-muted-foreground" />
+                    {t.ask.attachFileLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                    onClick={() => { setShowAttachMenu(false); imageInputRef.current?.click(); }}
+                  >
+                    <ImageIcon size={12} className="shrink-0 text-muted-foreground" />
+                    {t.ask.attachImageLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <input
+              ref={upload.uploadInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+              onChange={async (e) => {
+                const inputEl = e.currentTarget;
+                await upload.pickFiles(inputEl.files);
+                inputEl.value = '';
+              }}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              onChange={async (e) => {
+                const inputEl = e.currentTarget;
+                await imageUpload.handleFileSelect(inputEl.files);
+                inputEl.value = '';
+              }}
+            />
+
+            <textarea
+              ref={(el) => {
+                inputRef.current = el;
+              }}
+              value={input}
+              onChange={e => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
+              onKeyDown={handleInputKeyDown}
+              onPaste={handlePaste}
+              placeholder={t.ask.placeholder}
+              rows={1}
+              className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
+            />
+
+            {isLoading ? (
+              <button type="button" onClick={handleStop} className="p-1.5 rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
+                {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
+              </button>
+            ) : (
+              <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+                <Send size={14} />
+              </button>
+            )}
+          </form>
+
+          {/* Mode + Agent + Provider selector row — inside card bottom */}
+          <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 border-t border-border/30">
+            <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
+            {mounted && acpDetection.installedAgents.length > 0 && (
+              <AgentSelectorCapsule
+                selectedAgent={selectedAcpAgent}
+                onSelect={setSelectedAcpAgent}
+                installedAgents={acpDetection.installedAgents}
+                loading={acpDetection.loading}
+              />
+            )}
+            {mounted && (
+              <ProviderModelCapsule
+                value={providerOverride}
+                onChange={setProviderOverride}
+                disabled={isLoading}
+              />
+            )}
+            {/* Inline footer hints — right-aligned */}
+            <div className="flex-1" />
+            <div className={cn(
+              'flex items-center gap-x-2 text-[10px] text-muted-foreground/40 shrink-0',
+            )}>
+              <span suppressHydrationWarning>
+                <kbd className="font-mono">@</kbd> {t.ask.attachFile}
+              </span>
+              <span suppressHydrationWarning>
+                <kbd className="font-mono">/</kbd> {t.ask.skillsHint}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );

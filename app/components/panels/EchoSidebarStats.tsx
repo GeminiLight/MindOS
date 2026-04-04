@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, MessageSquare, AlertCircle } from 'lucide-react';
 import type { ContentChangeEvent } from '@/lib/fs';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface EchoStats {
   fileCount: number;

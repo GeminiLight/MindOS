@@ -7,7 +7,7 @@ import {
   Shield, ShieldCheck, Trash2, Wifi, WifiOff, Zap,
   FileEdit, FilePlus, Clock, Terminal, CheckCircle2, AlertCircle, ChevronDown, BookOpen,
 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
 import { encodePath } from '@/lib/utils';
 import { useMcpData } from '@/lib/stores/mcp-store';

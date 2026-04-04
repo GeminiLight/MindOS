@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { SyncStatus } from './settings/types';
 import { timeAgo } from './settings/SyncTab';
 

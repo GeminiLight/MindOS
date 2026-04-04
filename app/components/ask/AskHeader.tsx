@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Sparkles, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface AskHeaderProps {
   isPanel: boolean;

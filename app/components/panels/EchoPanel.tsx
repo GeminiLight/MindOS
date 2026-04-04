@@ -6,7 +6,7 @@ import { UserRound, Bookmark, Sun, History, Brain } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow } from './PanelNavRow';
 import EchoSidebarStats from './EchoSidebarStats';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
 
 interface EchoPanelProps {

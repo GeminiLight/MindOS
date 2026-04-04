@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
-vi.mock('@/lib/LocaleContext', () => ({
+vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     locale: 'en' as const,
     t: {

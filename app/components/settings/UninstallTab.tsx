@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Trash2, AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { SettingCard } from './Primitives';
 
 type Phase = 'idle' | 'confirming' | 'running' | 'success' | 'error';

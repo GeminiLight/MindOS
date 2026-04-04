@@ -15,7 +15,7 @@ import TableOfContents from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
 import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import DirPicker from '@/components/DirPicker';
 import { renameFileAction, deleteFileAction, undoDeleteAction } from '@/lib/actions';
 import { toast } from '@/lib/toast';

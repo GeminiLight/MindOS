@@ -17,7 +17,7 @@ import {
   updateLines,
   insertAfterHeading,
   updateSection,
-  deleteFile,
+  moveToTrashFile,
   renameFile,
   renameSpace,
   moveFile,
@@ -266,15 +266,15 @@ export async function POST(req: NextRequest) {
 
       case 'delete_file': {
         const before = safeRead(filePath);
-        deleteFile(filePath);
+        const trashMeta = moveToTrashFile(filePath);
         changeEvent = {
           op,
           path: filePath,
-          summary: 'Deleted file',
+          summary: 'Moved to trash',
           before,
           after: '',
         };
-        resp = NextResponse.json({ ok: true });
+        resp = NextResponse.json({ ok: true, trashId: trashMeta.id });
         break;
       }
 

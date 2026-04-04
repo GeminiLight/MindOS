@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Plus, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import PanelHeader from './PanelHeader';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime } from '@/lib/utils';
 
 interface WorkflowItem {

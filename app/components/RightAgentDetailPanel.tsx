@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect } from 'react';
 import { useMcpData } from '@/lib/stores/mcp-store';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import AgentsPanelAgentDetail from '@/components/panels/AgentsPanelAgentDetail';
 import { resolveAgentDetailStatus } from '@/components/panels/agents-panel-resolve-status';

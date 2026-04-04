@@ -6,7 +6,7 @@ import { ArrowUpRight, Bookmark, Brain, Check, History, Sun, UserRound } from 'l
 import type { EchoSegment } from '@/lib/echo-segments';
 import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
 import type { Locale, Messages } from '@/lib/i18n';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';

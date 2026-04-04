@@ -5,7 +5,7 @@ import {
   X, FolderInput, FolderOpen, Sparkles, FileText, AlertCircle,
   AlertTriangle, Loader2, Check, ChevronDown,
 } from 'lucide-react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { useFileImport, type ImportIntent, type ConflictMode } from '@/hooks/useFileImport';
 import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';

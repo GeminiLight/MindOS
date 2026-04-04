@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { FilePlus, Home, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
-import { useLocale } from '@/lib/LocaleContext';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 
 export default function ViewNotFound() {
