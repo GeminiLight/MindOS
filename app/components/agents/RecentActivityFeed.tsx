@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown, Activity, ArrowRight } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/LocaleContext';
 import {
@@ -46,16 +46,20 @@ export default function RecentActivityFeed() {
 
   return (
     <section aria-label="Recent Activity">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-medium text-foreground">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[var(--amber)]"><Activity size={13} /></span>
+        <h2 className="text-sm font-semibold font-display text-foreground">
           {copy?.recentActivity ?? 'Recent Activity'}
         </h2>
-        <Link
-          href="/agents?tab=activity"
-          className="text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity font-display"
-        >
-          {copy?.viewAll ?? 'View all'} →
-        </Link>
+        <div className="ml-auto">
+          <Link
+            href="/agents?tab=activity"
+            className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors font-display"
+          >
+            <ArrowRight size={12} />
+            <span>{copy?.viewAll ?? 'View all'}</span>
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
