@@ -18,6 +18,7 @@ function createSession(currentFile?: string): ChatSession {
 }
 
 export function sessionTitle(s: ChatSession): string {
+  if (s.title) return s.title;
   const firstUser = s.messages.find((m) => m.role === 'user');
   if (!firstUser) return '(empty session)';
   const line = firstUser.content.replace(/\s+/g, ' ').trim();
@@ -213,6 +214,19 @@ export function useAskSession(currentFile?: string) {
     [activeSessionId, currentFile, sessions],
   );
 
+  const renameSession = useCallback((id: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx < 0) return prev;
+      const updated = { ...prev[idx], title: trimmed || undefined };
+      const next = [...prev];
+      next[idx] = updated;
+      void upsertSession(updated);
+      return next;
+    });
+  }, []);
+
   const clearAllSessions = useCallback(() => {
     // Only delete sessions that have messages (were persisted)
     const persistedIds = sessions.filter(s => s.messages.length > 0).map(s => s.id);
@@ -236,6 +250,7 @@ export function useAskSession(currentFile?: string) {
     resetSession,
     loadSession,
     deleteSession,
+    renameSession,
     clearAllSessions,
   };
 }

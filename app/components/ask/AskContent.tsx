@@ -468,12 +468,14 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           activeSessionId={session.activeSessionId}
           onLoad={handleLoadSession}
           onDelete={session.deleteSession}
+          onRename={session.renameSession}
           onClearAll={session.clearAllSessions}
           labels={{
             title: t.ask.sessionHistory ?? 'Session History',
             clearAll: t.ask.clearAll ?? 'Clear all',
             confirmClear: t.ask.confirmClear ?? 'Confirm clear?',
             noSessions: t.ask.noSessions ?? 'No saved sessions.',
+            rename: t.ask.renameSession ?? 'Rename',
           }}
         />
       )}

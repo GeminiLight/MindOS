@@ -78,6 +78,7 @@ export type AskModeApi = AskMode | 'organize';
 
 export interface ChatSession {
   id: string;
+  title?: string;
   currentFile?: string;
   createdAt: number;
   updatedAt: number;
