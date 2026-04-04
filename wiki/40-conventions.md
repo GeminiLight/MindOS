@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-04-04 | Current version: v0.6 -->
 
 # 编码约定 (Conventions)
 
@@ -18,9 +18,11 @@
 | UI 组件 | shadcn/ui + Tailwind | MUI / Ant Design | 轻量，可定制 |
 | 富文本编辑 | TipTap | ProseMirror 直接用 | 封装层更友好 |
 | 源码编辑 | CodeMirror 6 | Monaco | 更轻量 |
-| AI SDK | Vercel AI SDK | LangChain | 原生流式，无重依赖 |
+| Agent SDK | pi-agent-core 0.60.0 | Vercel AI SDK / LangChain | Agent 执行循环 + TypeBox 工具定义，原生流式 |
 | MCP SDK | `@modelcontextprotocol/sdk` | 自实现 | 标准协议 |
 | 搜索 | Fuse.js | Lunr / ElasticSearch | 纯前端，零部署 |
+| A2A 协议 | Google A2A Protocol | 自实现 RPC | 标准 Agent 间通信协议 |
+| ACP 协议 | Agent Client Protocol | 直接进程调用 | 标准 Agent 客户端协议，31+ Agent 注册表 |
 
 ## 命名规范
 

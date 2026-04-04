@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-04-04 | Current version: v0.6 -->
 
 # 插件系统 (Stage: Plugins)
 
@@ -22,6 +22,7 @@ MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户
 | 插件 | 触发文件 | 功能 |
 |------|---------|------|
 | Workflow Runner | `Workflow.md`, `SOP.md` | `## Step N` → 可执行步骤卡片，单步 Run/Skip |
+| Workflow YAML Engine | `*.yaml` in Workflows/ | YAML 工作流引擎：Skill/Agent 集成、可视化编辑器、单步/全量执行 |
 
 ## 应用内建能力（非插件面板）
 
@@ -31,6 +32,7 @@ MindOS 内置渲染器插件体系，通过 `registerRenderer()` 注册，用户
 | CSV Views | 任意 `.csv`（排除 TODO） | Table/Gallery/Board 视图；作为 MindOS 内建能力，不在插件面板管理 |
 | Agent Inspector | `.mindos/agent-audit-log.json`（兼容旧 `.agent-log.json`） | Agent 工具调用日志可视化；作为 MindOS 内建能力，不在插件面板管理 |
 | Config Panel | `CONFIG.json` | 配置编辑面板；作为 MindOS 内建能力，不在插件面板管理 |
+| Diff Viewer | `.mindos/change-log.json` 关联文件 | 文件变更 inline diff 可视化；作为 MindOS 内建能力，不在插件面板管理 |
 
 ## 注册机制
 

@@ -1,6 +1,6 @@
 # MindOS Agent 架构
 
-> 最后更新: 2026-03-27
+> 最后更新: 2026-04-04
 
 ## 一、系统分层
 
@@ -26,24 +26,21 @@
 ## 二、包依赖关系
 
 ```
-@mariozechner/pi-ai              ← LLM provider 抽象
-    └─ @mariozechner/pi-agent-core   ← agent 执行循环
-        └─ @mariozechner/pi-coding-agent  ← session/extensions/resources
-
+@mariozechner/pi-ai              ← LLM provider 抽象 (Anthropic/OpenAI)
+    └─ @mariozechner/pi-agent-core   ← agent 执行循环 + session 管理
 ```
 
-MindOS 使用 `pi-coding-agent` 的部分：
+MindOS 使用 `pi-agent-core` 的部分：
 
-- `createAgentSession` — 创建 agent session
-- `DefaultResourceLoader` — 资源发现（skills, extensions）
-- `SessionManager` — session 持久化
-- `AuthStorage` / `ModelRegistry` — API key 管理
-- `SettingsManager` — 运行时配置
-- `convertToLlm` — 消息格式转换
+- `AgentSession` — agent 执行循环（tool call → execute → respond）
+- `SessionManager` — session 持久化 (~/.mindos/sessions/)
+- `ToolDefinition` — TypeBox schema 工具定义
+- `subscribe('turn_end')` + `steer()` — Loop 检测与 abort
+- `ModelRegistry` — provider/model 路由
 
 MindOS **不使用**的部分：
 
-- 内置 coding tools（bash/edit/write）— 用自己的知识库工具替代
+- 内置 coding tools（bash/edit/write）— 用自己的 25 个知识库工具替代
 - CLI / TUI — MindOS 是 Web UI 产品
 - 默认 system prompt — 用 MindOS 自己的 prompt 覆盖
 
@@ -53,9 +50,10 @@ Agent 能使用的工具分四类：
 
 | 类别 | 数量 | 来源文件 | 工具列表 |
 |---|---|---|---|
-| MindOS 知识库工具 | ~20 | `app/lib/agent/tools.ts` | list_files, read_file, read_file_chunk, search, write_file, create_file, batch_create_files, append_to_file, insert_after_heading, update_section, edit_lines, delete_file, rename_file, move_file, get_backlinks, get_history, get_file_at_version, append_csv, web_search, fetch_url |
-| Skill 工具 | 2 | `app/lib/agent/tools.ts` | list_skills, load_skill |
-| MCP 桥接工具 | 2 | `app/lib/agent/tools.ts` | list_mcp_tools, call_mcp_tool |
+| 知识库工具 | 25 | `app/lib/agent/tools.ts` | list_files, read_file, read_file_chunk, search, write_file, create_file, batch_create_files, append_to_file, insert_after_heading, update_section, edit_lines, delete_file, rename_file, move_file, get_backlinks, get_history, get_file_at_version, append_csv, get_recent, web_search, web_fetch, list_skills, load_skill, list_mcp_tools, call_mcp_tool |
+| A2A 工具 | 6 | `app/lib/a2a/a2a-tools.ts` | list_remote_agents, discover_agent, discover_agents, delegate_to_agent, check_task_status, orchestrate |
+| ACP 工具 | 2 | `app/lib/acp/acp-tools.ts` | list_acp_agents, call_acp_agent |
+| **合计** | **33** | | |
 
 ### 工具执行安全机制
 
@@ -82,6 +80,19 @@ toPiCustomToolDefinitions 里的 execute wrapper
 3. 额外 MCP servers 可通过 `~/.mindos/mcp.json` 配置（当前为 stub，预留扩展）
 
 然后 `toPiCustomToolDefinitions()` 把全部 `AgentTool[]` 转成 pi 的 `ToolDefinition[]`，在每个工具的 `execute` 里嵌入写保护和日志。
+
+### Chat 模式 vs Agent 模式
+
+MindOS 支持两种对话模式，用户可在 Ask 面板顶部切换：
+
+| 维度 | Chat 模式 | Agent 模式 |
+|---|---|---|
+| System Prompt | 精简 ~250 tokens | 完整 prompt + Skill + Bootstrap |
+| 工具数量 | 8 个（只读） | 33 个（读写 + A2A + ACP） |
+| 可用工具 | list_files, read_file, read_file_chunk, search, get_recent, get_backlinks, web_search, web_fetch | 全部 33 个 |
+| Step 上限 | 8 | 默认 25 |
+| Token 节省 | ~81% overhead 减少 | — |
+| 适用场景 | 快速问答、文件检索 | 文件编辑、多步操作、Agent 协作 |
 
 ## 四、Session 持久化
 
@@ -180,7 +191,44 @@ MCP_AGENTS 注册表 (app/lib/mcp-agents.ts)
 
 在 Agents 页面 (`/agents`)，所有 agent 并列显示连接状态、MCP servers、安装的 skills。
 
-## 八、关键文件索引
+## 八、SSE 流协议
+
+POST /api/ask 返回 Server-Sent Events，自定义 6 种事件类型：
+
+| 事件 | 格式 | 说明 |
+|---|---|---|
+| `text_delta` | `{ content: string }` | 文本增量 |
+| `thinking_delta` | `{ content: string }` | Extended Thinking 增量 |
+| `tool_start` | `{ name, args }` | 工具调用开始 |
+| `tool_end` | `{ name, result }` | 工具调用结束 |
+| `done` | `{ usage }` | 流结束 |
+| `error` | `{ message, code }` | 错误 |
+
+## 九、A2A & ACP 协作
+
+### A2A Protocol (Agent-to-Agent)
+
+MindOS 实现了 Google A2A 协议，使得不同 MindOS 实例（或任何 A2A 兼容 Agent）可以互相通信：
+
+```
+MindOS A ──── A2A JSON-RPC ────▶ MindOS B
+  │                                   │
+  ├─ discover_agent(url)              ├─ /.well-known/agent-card.json
+  ├─ delegate_to_agent(task)          ├─ POST /api/a2a (SendMessage)
+  └─ check_task_status(id)            └─ GET /api/a2a (GetTask)
+```
+
+**暴露的 KB 技能：** Search Knowledge Base, Read Note, Write Note, List Files, Organize Files
+
+### ACP Protocol (Agent Client Protocol)
+
+MindOS 集成了 ACP 协议，可作为客户端调用远程 ACP Agent：
+
+- **注册表**：31+ 个 ACP Agent 可用（/api/acp/registry）
+- **Session**：通过 subprocess 启动 ACP agent，管理生命周期
+- **工具**：`list_acp_agents` 列举可用 Agent，`call_acp_agent` 调用指定 Agent
+
+## 十、关键文件索引
 
 | 文件 | 职责 |
 |---|---|
@@ -200,3 +248,9 @@ MCP_AGENTS 注册表 (app/lib/mcp-agents.ts)
 | `app/components/ask/AskContent.tsx` | 前端发消息入口 |
 | `app/hooks/useAskSession.ts` | 前端 session 管理 |
 | `app/components/settings/McpSkillsSection.tsx` | 设置页：skills + extensions + toggle |
+| `app/lib/a2a/a2a-tools.ts` | A2A 工具定义（6 个） |
+| `app/lib/a2a/agent-card.ts` | Agent Card 生成 |
+| `app/lib/a2a/task-handler.ts` | A2A 任务处理 |
+| `app/lib/acp/acp-tools.ts` | ACP 工具定义（2 个） |
+| `app/lib/acp/session.ts` | ACP Session 管理 |
+| `app/lib/acp/registry.ts` | ACP Agent 注册表 |

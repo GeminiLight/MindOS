@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-03-24 | Current stage: P1 -->
+<!-- Last verified: 2026-04-04 | Current version: v0.6 -->
 
 # 页面设计 (Page Design)
 
@@ -96,6 +96,10 @@ Drawer (triggered by ☰):
 | `/login` | 登录 | `LoginPage` | Web 密码认证 |
 | `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
 | `/echo/[segment]` | 回响内容页 | `app/app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `wiki/specs/spec-echo-content-pages.md` |
+| `/agents` | 智能体总览 | `app/agents/page.tsx` | Overview / MCP / Skills / Network 四 Tab |
+| `/agents/[agentKey]` | 智能体详情 | `app/agents/[agentKey]/page.tsx` | Skill 管理 + MCP 状态 + Runtime 诊断 |
+| `/trash` | 回收站 | `app/trash/page.tsx` | 已删除文件恢复/永久删除 |
+| `/changes` | 变更记录 | `app/changes/page.tsx` | 文件变更事件追踪 + diff 查看 |
 
 ---
 
@@ -350,7 +354,7 @@ ViewPageClient ─────┤
 
 ## 5. 设置 (SettingsModal)
 
-`⌘,` 触发，8-tab 结构。
+`⌘,` 触发，10-tab 结构。
 
 ### Tab 清单
 
@@ -363,6 +367,10 @@ ViewPageClient ─────┤
 | `plugins` | `PluginsTab` | 插件开关 |
 | `sync` | `SyncTab` | Git 同步配置、冲突管理 |
 | `shortcuts` | `ShortcutsTab` | 快捷键参考 |
+| `agents` | `AgentsTab` | Agent 发现、MCP 连接状态 |
+| `monitoring` | `MonitoringTab` | 系统/应用/知识库/MCP 实时指标 |
+| `update` | `UpdateTab` | 版本更新检查与安装 |
+| `uninstall` | `UninstallTab` | 卸载 MindOS |
 
 ### 布局
 
@@ -508,6 +516,11 @@ MindOS 通过 Renderer Registry 支持可插拔的内容渲染器。
 | DiffRenderer | `*.diff` | 代码差异查看 |
 | TimelineRenderer | `CHANGELOG.md` | 时间线展示 |
 | CsvView | `*.csv` | 表格/看板/画廊三视图 |
+| WorkflowYamlRenderer | `Workflows/**/*.yaml` | YAML 工作流引擎 |
+| SummaryRenderer | `DAILY.md`, `SUMMARY.md` | AI 每日简报 |
+| BacklinksRenderer | `BACKLINKS.md`, `index.md` | 反向链接展示 |
+| AgentInspectorRenderer | `.mindos/agent-audit-log.json` | Agent 日志查看 |
+| ConfigRenderer | `CONFIG.json` | 配置编辑面板 |
 
 ### 渲染优先级
 
@@ -553,14 +566,14 @@ MindOS 通过 Renderer Registry 支持可插拔的内容渲染器。
 
 | 改动 | 说明 | 预估 |
 |------|------|------|
-| Activity Bar + Panel 布局重构 | 左侧 48px Rail（Logo + 空间/回响/搜索/插件/智能体/探索 + 底部 Help/Sync/Settings）+ 可切换 Panel，与主内容并排。AI 对话、搜索等多为 Panel/右侧栏形态。移动端 Drawer 不变。回响见 `wiki/specs/spec-echo-panel.md`。详见 `wiki/specs/spec-activity-bar-layout.md` | 3-4d |
+| Activity Bar + Panel 布局重构 | 左侧 48px Rail（Logo + 空间/回响/搜索/插件/智能体/探索 + 底部 Help/Sync/Settings）+ 可切换 Panel，与主内容并排。AI 对话、搜索等多为 Panel/右侧栏形态。移动端 Drawer 不变。回响见 `wiki/specs/spec-echo-panel.md`。详见 `wiki/specs/spec-activity-bar-layout.md` ✅ 已完成 | 3-4d |
 
 ### P1 — 日常效率
 
 | 改动 | 说明 | 预估 |
 |------|------|------|
 | ~~输入框 textarea 化~~ | ~~AskModal 的 `<input>` 改为自适应高度 `<textarea>`，支持多行输入（Shift+Enter 换行）~~ ✅ 已完成 | — |
-| FileTree Pin 收藏 | 常用文件/文件夹置顶，⭐ 标记，localStorage 持久化 | 0.5d |
+| FileTree Pin 收藏 | 常用文件/文件夹置顶，⭐ 标记，localStorage 持久化 ✅ 已完成 | 0.5d |
 | FileTree 折叠记忆 | 记住用户展开/折叠的目录状态，刷新后恢复 | 0.5d |
 | 色彩变量一致性 | 清理残留的 Tailwind amber-500 硬编码，统一用 CSS 变量 | 0.5d |
 

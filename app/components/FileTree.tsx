@@ -76,10 +76,12 @@ function countContentFiles(node: FileNode): number {
   return (node.children ?? []).reduce((sum, c) => sum + countContentFiles(c), 0);
 }
 
-function filterVisibleNodes(nodes: FileNode[]): FileNode[] {
+/** Filter out system files and dot-entries that shouldn't appear by default. */
+function filterHiddenNodes(nodes: FileNode[], isRoot: boolean): FileNode[] {
   return nodes.filter(node => {
-    if (node.type !== 'file') return true;
-    return !SYSTEM_FILES.has(node.name);
+    if (isRoot && node.name.startsWith('.')) return false;
+    if (node.type === 'file' && SYSTEM_FILES.has(node.name)) return false;
+    return true;
   });
 }
 
@@ -758,10 +760,7 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, p
   const showHidden = useShowHiddenFiles();
 
   const isRoot = depth === 0;
-  let visibleNodes = showHidden ? nodes : filterVisibleNodes(nodes);
-  if (isRoot && !showHidden) {
-    visibleNodes = visibleNodes.filter(n => !n.name.startsWith('.'));
-  }
+  const visibleNodes = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
 
   useEffect(() => {
     if (!currentPath || depth !== 0) return;

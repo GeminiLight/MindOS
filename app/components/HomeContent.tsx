@@ -315,6 +315,11 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </section>
       )}
 
+      {/* ══════════ Recent Agent Activity ══════════ */}
+      <div className="mb-10">
+        <RecentActivityFeed />
+      </div>
+
       {/* ══════════ Recently Edited ══════════ */}
       {recent.length > 0 && (
         <section className="mb-10">
@@ -450,11 +455,6 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           )}
         </section>
       )}
-
-      {/* ══════════ Recent Agent Activity ══════════ */}
-      <div className="mb-10">
-        <RecentActivityFeed />
-      </div>
 
       {/* Footer */}
       <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">
