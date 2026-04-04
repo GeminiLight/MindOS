@@ -19,6 +19,48 @@ export function timeAgo(iso: string | null | undefined, syncT?: Record<string, u
   return (syncT?.timeDayAgo as ((n: number) => string))?.(d) ?? `${d}d ago`;
 }
 
+/** Classify a raw sync error and return a user-friendly message with action hint. */
+function formatSyncError(raw: string, syncT?: Record<string, unknown>): string {
+  const hint = getSyncErrorHint(raw, undefined, syncT);
+  return hint ? `${raw}\n${hint}` : raw;
+}
+
+/** Return an actionable hint for common sync errors. */
+function getSyncErrorHint(error: string, remote?: string | null, syncT?: Record<string, unknown>): string {
+  const lower = error.toLowerCase();
+
+  // SSH authentication failures
+  if (lower.includes('permission denied') || lower.includes('publickey')) {
+    return syncT?.hintSshAuth as string ?? 'SSH key may not be configured. Run: ssh-keygen -t ed25519 && ssh -T git@github.com';
+  }
+  // SSH host key / connection
+  if (lower.includes('host key') || lower.includes('known_hosts') || lower.includes('fingerprint')) {
+    return syncT?.hintSshHost as string ?? 'Run: ssh-keyscan github.com >> ~/.ssh/known_hosts';
+  }
+  // HTTPS auth failures
+  if (lower.includes('authentication failed') || lower.includes('invalid credentials') || lower.includes('401') || lower.includes('403')) {
+    return syncT?.hintHttpsAuth as string ?? 'Access token may be expired or missing. Check Settings → Developer settings → Personal access tokens.';
+  }
+  // Network / timeout
+  if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('could not resolve')) {
+    return syncT?.hintNetwork as string ?? 'Check your network connection and try again.';
+  }
+  // Remote not found
+  if (lower.includes('not found') || lower.includes('does not exist') || lower.includes('repository not found')) {
+    return syncT?.hintNotFound as string ?? 'Repository not found. Check the URL and ensure the repo exists.';
+  }
+  // Push rejected (non-fast-forward)
+  if (lower.includes('non-fast-forward') || lower.includes('rejected') || lower.includes('fetch first')) {
+    return syncT?.hintPushRejected as string ?? 'Remote has changes. Click "Sync Now" to pull and retry.';
+  }
+  // Merge conflicts
+  if (lower.includes('conflict') || lower.includes('merge')) {
+    return syncT?.hintConflict as string ?? 'Merge conflict detected. Check the Conflicts section below.';
+  }
+
+  return '';
+}
+
 /* ── Empty state — GUI sync init form ─────────────────────────── */
 
 function isValidGitUrl(url: string): 'https' | 'ssh' | false {
@@ -63,7 +105,8 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
       if (msg.includes('timed out')) {
         msg = syncT?.timeoutError ?? 'Connection timed out. The remote repository may be large or the network is slow. Please try again.';
       }
-      setError(msg);
+      const hint = getSyncErrorHint(msg, remoteUrl, syncT);
+      setError(hint ? `${msg}\n${hint}` : msg);
     } finally {
       setConnecting(false);
     }
@@ -170,7 +213,11 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
       {error && (
         <div className="flex items-start gap-2 text-xs p-3 rounded-lg bg-destructive/10 text-destructive" role="alert" aria-live="polite">
           <AlertCircle size={13} className="shrink-0 mt-0.5" />
-          <span>{error}</span>
+          <div className="space-y-1">
+            {error.split('\n').map((line, i) => (
+              <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : ''}`}>{line}</span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -227,8 +274,9 @@ export function SyncTab({ t }: SyncTabProps) {
       });
       setMessage({ type: 'success', text: syncT?.syncComplete ?? 'Sync complete' });
       await fetchStatus();
-    } catch {
-      setMessage({ type: 'error', text: syncT?.syncFailed ?? 'Sync failed' });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : 'Sync failed';
+      setMessage({ type: 'error', text: formatSyncError(raw, syncT) });
     } finally {
       setSyncing(false);
       setTimeout(() => setMessage(null), 3000);
@@ -333,11 +381,18 @@ export function SyncTab({ t }: SyncTabProps) {
 
       {/* Message */}
       {message && (
-        <div className="flex items-center gap-1.5 text-xs" role="status" aria-live="polite">
+        <div className="flex items-start gap-1.5 text-xs" role="status" aria-live="polite">
           {message.type === 'success' ? (
-            <><CheckCircle2 size={13} className="text-success" /><span className="text-success">{message.text}</span></>
+            <><CheckCircle2 size={13} className="text-success shrink-0 mt-0.5" /><span className="text-success">{message.text}</span></>
           ) : (
-            <><AlertCircle size={13} className="text-destructive" /><span className="text-destructive">{message.text}</span></>
+            <>
+              <AlertCircle size={13} className="text-destructive shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                {message.text.split('\n').map((line, i) => (
+                  <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : 'text-destructive'}`}>{line}</span>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -377,9 +432,12 @@ export function SyncTab({ t }: SyncTabProps) {
       {/* Error */}
       {status.lastError && (
         <div className="pt-2 border-t border-border">
-          <div className="flex items-start gap-2 text-xs text-destructive">
+          <div className="flex items-start gap-2 text-xs p-2.5 rounded-lg bg-destructive/10 text-destructive">
             <AlertCircle size={12} className="shrink-0 mt-0.5" />
-            <span>{status.lastError}</span>
+            <div className="space-y-1">
+              <span className="block">{status.lastError}</span>
+              <span className="block text-destructive/70">{getSyncErrorHint(status.lastError, status.remote, syncT)}</span>
+            </div>
           </div>
         </div>
       )}

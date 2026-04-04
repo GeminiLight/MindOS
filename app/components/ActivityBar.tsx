@@ -192,17 +192,17 @@ export default function ActivityBar({
     >
       {/* Content wrapper — overflow-hidden prevents text flash during width transitions */}
       <div className="flex flex-col h-full w-full overflow-hidden">
-        {/* ── Top: Logo ── */}
+        {/* ── Top: Logo — fixed h matches PanelHeader (py-3 + text-xs + py-3 = 40px) ── */}
         <Link
           href="/"
-          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full py-[13px] hover:opacity-80 transition-opacity`}
+          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[40px] shrink-0 hover:opacity-80 transition-opacity`}
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />
           {expanded && <span className="text-sm font-semibold text-foreground font-display whitespace-nowrap">MindOS</span>}
         </Link>
 
-        <div className={`${expanded ? 'mx-3' : 'mx-auto w-6'} border-t border-border`} />
+        <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
 
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
@@ -224,13 +224,13 @@ export default function ActivityBar({
         <div className="flex-1" />
 
         {/* ── Secondary: Explore ── */}
-        <div className={`${expanded ? 'mx-3' : 'mx-auto w-6'} border-t border-border`} />
+        <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} onClick={() => onDiscoverClick ? debounced(onDiscoverClick) : toggle('discover')} />
         </div>
 
         {/* ── Bottom: Action buttons (not panel toggles) ── */}
-        <div className={`${expanded ? 'mx-3' : 'mx-auto w-6'} border-t border-border`} />
+        <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton
             icon={<Settings size={18} />}
