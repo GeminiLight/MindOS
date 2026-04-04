@@ -79,15 +79,16 @@ export default function AgentsOverviewSection({
   a2aCount?: number;
 }) {
   const allHealthy = riskQueue.length === 0 && mcpRunning;
-  const totalAgents = allAgents.length;
   const [riskOpen, setRiskOpen] = useState(false);
 
   const sortedAgents = useMemo(
     () =>
-      [...allAgents].sort((a, b) => {
-        const rank = (x: AgentInfo) => (x.present && x.installed ? 0 : x.present ? 1 : 2);
-        return rank(a) - rank(b) || a.name.localeCompare(b.name);
-      }),
+      [...allAgents]
+        .filter(a => a.present) // hide not-found agents from overview
+        .sort((a, b) => {
+          const rank = (x: AgentInfo) => (x.installed ? 0 : 1);
+          return rank(a) - rank(b) || a.name.localeCompare(b.name);
+        }),
     [allAgents],
   );
 
@@ -103,7 +104,7 @@ export default function AgentsOverviewSection({
             icon={<Zap size={14} aria-hidden="true" />}
             label={pulseCopy.connected}
             value={buckets.connected.length}
-            total={totalAgents}
+            total={sortedAgents.length}
             tone="ok"
           />
           <StatCell
@@ -235,7 +236,7 @@ export default function AgentsOverviewSection({
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-foreground">{copy.usagePulse}</h2>
             <span className="text-2xs text-muted-foreground tabular-nums select-none">
-              {copy.agentCount(totalAgents)}
+              {copy.agentCount(sortedAgents.length)}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

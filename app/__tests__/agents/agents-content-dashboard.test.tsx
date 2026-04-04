@@ -113,7 +113,8 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.overview.pulseMcp);
     expect(html).toContain('Cursor');
     expect(html).toContain('Codex');
-    expect(html).toContain('Ghost Agent');
+    // Ghost Agent (present: false) is hidden from overview — only present agents shown
+    expect(html).not.toContain('Ghost Agent');
     expect(html).toContain('MCP');
     expect(html).toContain('Skills');
   });
