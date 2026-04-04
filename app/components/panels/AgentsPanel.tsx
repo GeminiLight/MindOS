@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
-import { useMcpData } from '@/hooks/useMcpData';
+import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { useLocale } from '@/lib/LocaleContext';
 import PanelHeader from './PanelHeader';

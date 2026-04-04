@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/LocaleContext';
-import { useMcpData } from '@/hooks/useMcpData';
+import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';

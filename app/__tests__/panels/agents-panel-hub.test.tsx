@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=mcp'),
 }));
 
-vi.mock('@/hooks/useMcpData', () => ({
+vi.mock('@/lib/stores/mcp-store', () => ({
   useMcpData: () => ({
     status: {
       running: true,

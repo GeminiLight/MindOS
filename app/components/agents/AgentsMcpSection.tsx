@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Search, Server } from 'lucide-react';
-import type { McpContextValue } from '@/hooks/useMcpData';
+import type { McpContextValue } from '@/lib/stores/mcp-store';
 import type { AgentBuckets, AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
 import {
   ActionButton,

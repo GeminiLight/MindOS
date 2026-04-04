@@ -180,7 +180,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
               }}
               title={heading.text}
             >
-              <span className="line-clamp-2">
+              <span className="line-clamp-2" suppressHydrationWarning>
                 {heading.text}
               </span>
             </a>

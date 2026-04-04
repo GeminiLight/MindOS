@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ChevronDown, ChevronRight, Search, Trash2, Zap } from 'lucide-react';
 import { Toggle } from '@/components/settings/Primitives';
 import { apiFetch } from '@/lib/api';
-import type { McpContextValue } from '@/hooks/useMcpData';
+import type { McpContextValue } from '@/lib/stores/mcp-store';
 import type {
   AgentBuckets,
   SkillCapabilityFilter,

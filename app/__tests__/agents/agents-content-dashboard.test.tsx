@@ -93,7 +93,7 @@ const baseMcpState = {
   installAgent: async () => true,
 };
 
-vi.mock('@/hooks/useMcpData', () => ({
+vi.mock('@/lib/stores/mcp-store', () => ({
   useMcpData: () => baseMcpState,
 }));
 

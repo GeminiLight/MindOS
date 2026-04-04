@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { apiFetch } from '@/lib/api';
-import { useMcpDataOptional } from '@/hooks/useMcpData';
+import { useMcpDataOptional } from '@/lib/stores/mcp-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { SkillInfo, McpSkillsSectionProps } from './types';

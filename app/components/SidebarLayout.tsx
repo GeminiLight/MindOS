@@ -38,7 +38,7 @@ import dynamic from 'next/dynamic';
 
 const ImportModal = dynamic(() => import('./ImportModal'), { ssr: false });
 import { WalkthroughProvider } from './walkthrough';
-import McpProvider from '@/hooks/useMcpData';
+import McpStoreInit from '@/lib/stores/McpStoreInit';
 import '@/lib/renderers/index'; // client-side renderer registration source of truth
 import { useLeftPanel } from '@/hooks/useLeftPanel';
 import { useAskPanel } from '@/hooks/useAskPanel';
@@ -466,8 +466,8 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
 
   return (
     <WalkthroughProvider>
-    <McpProvider>
     <>
+      <McpStoreInit />
       {/* Skip link */}
       <a
         href="#main-content"
@@ -711,7 +711,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         }
       `}</style>
     </>
-    </McpProvider>
     </WalkthroughProvider>
   );
 }

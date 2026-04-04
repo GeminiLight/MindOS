@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Bot, ChevronDown, ArrowRight } from 'lucide-react';
-import { useMcpDataOptional } from '@/hooks/useMcpData';
+import { useMcpDataOptional } from '@/lib/stores/mcp-store';
 import { useLocale } from '@/lib/LocaleContext';
 import type { AgentInfo } from '@/components/settings/types';
 

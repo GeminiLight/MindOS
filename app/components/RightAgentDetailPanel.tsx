@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useEffect } from 'react';
-import { useMcpData } from '@/hooks/useMcpData';
+import { useMcpData } from '@/lib/stores/mcp-store';
 import { useLocale } from '@/lib/LocaleContext';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import AgentsPanelAgentDetail from '@/components/panels/AgentsPanelAgentDetail';

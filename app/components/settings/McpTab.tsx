@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Loader2, Copy, Check, Monitor, Globe, AlertCircle, RotateCcw, RefreshCw, Eye, EyeOff, ChevronDown, ChevronRight, Link2, Shield } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { useMcpDataOptional } from '@/hooks/useMcpData';
+import { useMcpDataOptional } from '@/lib/stores/mcp-store';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
 import { apiFetch } from '@/lib/api';
