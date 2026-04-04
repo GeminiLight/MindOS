@@ -44,6 +44,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sync desktop/package.json version from tag input (e.g. desktop-v0.1.13 → 0.1.13)
+      # so electron-builder produces correctly versioned filenames and installers.
+      - name: Sync version from tag
+        if: inputs.tag != ''
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#desktop-v}"
+          echo "Setting desktop version to $VERSION (from tag: $TAG)"
+          cd desktop && npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "✅ desktop/package.json version: $(node -p "require('./package.json').version")"
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
