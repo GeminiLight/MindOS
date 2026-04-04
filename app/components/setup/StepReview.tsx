@@ -119,7 +119,8 @@ export default function StepReview({
 
   return (
     <div className="space-y-5">
-      {/* Compact config summary */}
+      {/* Compact config summary — hidden once done (health check replaces it) */}
+      {setupPhase !== 'done' && (
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
         {summaryRows.map(([label, value], i) => (
           <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm"
@@ -132,14 +133,15 @@ export default function StepReview({
           </div>
         ))}
       </div>
+      )}
 
       {/* Before submit: review hint */}
       {setupPhase === 'review' && (
         <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{s.reviewHint}</p>
       )}
 
-      {/* Progress stepper — visible during/after setup */}
-      {setupPhase !== 'review' && (
+      {/* Progress stepper — visible during setup, hidden once done */}
+      {setupPhase !== 'review' && setupPhase !== 'done' && (
         <div className="space-y-2 py-2">
           {phases.map(({ key, label }, i) => {
             const idx = phaseOrder.indexOf(key);
@@ -318,7 +320,7 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
               <div className="flex items-center gap-1.5 text-sm font-medium" style={{ color: 'var(--foreground)' }}>
                 {icon} {title}
               </div>
-              <p className="text-xs mt-0.5 truncate" style={{ color: ok ? 'var(--muted-foreground)' : 'var(--amber-text)' }}>
+              <p className="text-xs mt-0.5 break-words" style={{ color: ok ? 'var(--muted-foreground)' : 'var(--amber-text)' }}>
                 {detail}
               </p>
               {action && (
