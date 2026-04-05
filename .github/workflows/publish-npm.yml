@@ -1,9 +1,9 @@
-name: Publish to npm (fallback)
+name: Publish to npm
 
-# Primary npm publish happens on GeminiLight/MindOS (public repo).
-# This is manual-only fallback. The standard publish-npm.yml is synced
-# to the public repo by sync-to-mindos.yml.
 on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       tag:
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
