@@ -75,6 +75,12 @@ export function useAcpDetection(): AcpDetectionState {
   }, []);
 
   useEffect(() => {
+    const onSettingsChanged = () => refresh();
+    window.addEventListener('mindos:settings-changed', onSettingsChanged);
+    return () => window.removeEventListener('mindos:settings-changed', onSettingsChanged);
+  }, [refresh]);
+
+  useEffect(() => {
     const isForce = forceRef.current;
     forceRef.current = false;
 
