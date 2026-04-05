@@ -123,8 +123,43 @@ function writeWindowsShim(cliJs: string): void {
  * We must write to ALL relevant files so the PATH is available everywhere.
  * Returns true if we appended to at least one file.
  */
+/**
+ * Append ~/.mindos/bin to user PATH on Windows via PowerShell setx.
+ * Returns true if PATH was modified.
+ */
+function appendMindosBinToWindowsPath(): boolean {
+  const binDir = shimDir();
+  try {
+    // Read current user PATH from registry
+    const { execSync } = require('child_process');
+    let currentPath = '';
+    try {
+      currentPath = execSync(
+        'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\"Path\", \"User\")"',
+        { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+    } catch { /* empty PATH is fine */ }
+
+    // Check if already present (idempotent)
+    const entries = currentPath.split(';').map((s: string) => s.trim().toLowerCase());
+    if (entries.includes(binDir.toLowerCase())) return false;
+
+    // Prepend our bin dir
+    const newPath = `${binDir};${currentPath}`;
+    execSync(
+      `powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('Path', '${newPath.replace(/'/g, "''")}', 'User')"`,
+      { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    console.info(`[MindOS] Added ${binDir} to Windows user PATH`);
+    return true;
+  } catch (err) {
+    console.warn('[MindOS] Could not update Windows PATH:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 function appendMindosBinToShellRc(): boolean {
-  if (process.platform === 'win32') return false;
+  if (process.platform === 'win32') return appendMindosBinToWindowsPath();
 
   const home = app.getPath('home');
   const block = `\n${SHELL_MARKER}\nexport PATH="$HOME/.mindos/bin:$PATH"\n`;

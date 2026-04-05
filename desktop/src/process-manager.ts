@@ -689,40 +689,97 @@ export class ProcessManager extends EventEmitter {
   /**
    * Kill processes holding a specific port (fallback when PID files are missing/stale).
    * Only kills node/next processes to avoid harming unrelated services.
+   * Uses platform-specific tools with cascading fallbacks:
+   *   macOS:   lsof → fuser
+   *   Linux:   lsof → ss → fuser
+   *   Windows: Get-NetTCPConnection (PowerShell)
    */
   static killProcessesOnPort(port: number): void {
-    if (process.platform === 'win32') return;
     try {
-      const { execSync } = require('child_process');
-      // Get PIDs listening on the port
-      let pids: number[] = [];
-      try {
-        const output = execSync(`lsof -ti:${port}`, { encoding: 'utf-8', timeout: 3000 }).trim();
-        pids = output.split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
-      } catch {
-        // lsof not available or no process on port
-        return;
-      }
+      const pids = ProcessManager.findPidsOnPort(port);
       for (const pid of pids) {
         ProcessManager.killIfNodeProcess(pid, `port ${port} occupant`);
       }
     } catch { /* best effort */ }
   }
 
-  /** Verify a PID is a node/next process before killing it — prevents harming unrelated processes */
+  /** Find PIDs listening on a given port — cross-platform with fallbacks */
+  private static findPidsOnPort(port: number): number[] {
+    const { execSync } = require('child_process');
+    const opts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+
+    if (process.platform === 'win32') {
+      // Windows: PowerShell Get-NetTCPConnection
+      try {
+        const out = execSync(
+          `powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue).OwningProcess"`,
+          opts,
+        ).trim();
+        return out.split(/\r?\n/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
+      } catch { return []; }
+    }
+
+    // Unix: try lsof → ss → fuser
+    try {
+      const out = execSync(`lsof -ti:${port}`, opts).trim();
+      if (out) return out.split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
+    } catch { /* lsof not available */ }
+
+    // Fallback: ss (Linux modern — not on macOS)
+    if (process.platform === 'linux') {
+      try {
+        const out = execSync(`ss -tlnp sport = :${port}`, opts).trim();
+        const pids: number[] = [];
+        for (const match of out.matchAll(/pid=(\d+)/g)) {
+          const p = parseInt(match[1], 10);
+          if (p > 0) pids.push(p);
+        }
+        if (pids.length > 0) return pids;
+      } catch { /* ss not available */ }
+    }
+
+    // Fallback: fuser (available on most Unix)
+    try {
+      const out = execSync(`fuser ${port}/tcp`, opts).trim();
+      return out.split(/\s+/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
+    } catch { /* fuser not available */ }
+
+    return [];
+  }
+
+  /**
+   * Verify a PID is a node/next process before killing it — prevents harming unrelated processes.
+   * On Windows: uses wmic/PowerShell to check process name before killing.
+   * On Unix: uses ps -p to check.
+   */
   private static killIfNodeProcess(pid: number, label: string): void {
     try {
       process.kill(pid, 0); // check alive
-      if (process.platform !== 'win32') {
+      const { execSync } = require('child_process');
+
+      if (process.platform === 'win32') {
+        // Windows: verify process name via wmic before killing
         try {
-          const { execSync } = require('child_process');
+          const name = execSync(
+            `wmic process where ProcessId=${pid} get Name /format:value`,
+            { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] },
+          ).trim();
+          if (!name.toLowerCase().includes('node')) {
+            return; // PID reused by non-node process, skip
+          }
+        } catch { return; } // wmic failed, skip to be safe
+      } else {
+        try {
           const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
           if (!comm.includes('node') && !comm.includes('next')) {
             return; // PID reused by non-node process, skip
           }
         } catch { return; } // ps failed, skip to be safe
       }
+
       console.warn(`[MindOS] Killing ${label} process (PID ${pid})`);
+      // Windows: process.kill with SIGTERM maps to TerminateProcess (hard kill).
+      // This is acceptable for cleanup; graceful shutdown via IPC is not available cross-process.
       process.kill(pid, 'SIGTERM');
     } catch { /* already dead */ }
   }

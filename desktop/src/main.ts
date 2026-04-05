@@ -813,6 +813,7 @@ async function healPreviousInstallation(): Promise<void> {
 
   // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
   cleanupConflictingLaunchdService();
+  cleanupLinuxSystemdService();
 
   // 2. Kill orphaned processes from BOTH Desktop and CLI pid files
   ProcessManager.cleanupOrphanedChildren();
@@ -899,7 +900,7 @@ function validatePrivateNode(): void {
   try { rmSync(nodeDir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
-/** Remove .next if it exists but is corrupt (missing BUILD_ID and no standalone server). */
+/** Remove .next if it exists but is corrupt (missing BUILD_ID and no standalone server, or partial standalone). */
 function validateBuildCache(appDir: string): void {
   const nextDir = path.join(appDir, '.next');
   if (!existsSync(nextDir)) return;
@@ -907,7 +908,16 @@ function validateBuildCache(appDir: string): void {
   const hasBuildId = existsSync(path.join(nextDir, 'BUILD_ID'));
   const hasStandalone = existsSync(path.join(nextDir, 'standalone', 'server.js'));
 
-  if (hasBuildId || hasStandalone) return; // build looks valid
+  // Standalone mode requires .next/static/ for CSS/JS assets — without it the UI is broken
+  if (hasStandalone) {
+    if (!existsSync(path.join(nextDir, 'static'))) {
+      console.warn('[MindOS:heal] Incomplete standalone build (missing .next/static/) — removing to trigger rebuild');
+      try { rmSync(nextDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+    return;
+  }
+
+  if (hasBuildId) return; // regular build looks valid
 
   // .next exists but neither BUILD_ID nor standalone — corrupt / interrupted build
   console.warn('[MindOS:heal] Corrupt .next build cache detected — removing to trigger rebuild');
@@ -1000,6 +1010,51 @@ function cleanupConflictingLaunchdService(): void {
   } catch (err) {
     // Non-critical — if cleanup fails, findAvailablePort will still work as fallback
     console.warn('[MindOS] launchd cleanup failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Detect and clean up a conflicting CLI systemd user service on Linux.
+ *
+ * Similar to the macOS launchd case: if the user ran `mindos start --daemon`
+ * (which creates ~/.config/systemd/user/mindos.service), then deleted the app,
+ * systemd keeps restarting the service and occupies all ports.
+ */
+function cleanupLinuxSystemdService(): void {
+  if (process.platform !== 'linux') return;
+
+  try {
+    const { execSync: exec } = require('child_process');
+    const opts = { encoding: 'utf-8' as const, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+
+    // Check if the service is active or enabled
+    let isActive = false;
+    try {
+      const status = exec('systemctl --user is-active mindos 2>/dev/null || true', opts).trim();
+      isActive = status === 'active' || status === 'activating';
+    } catch { /* systemctl not available */ return; }
+
+    if (!isActive) {
+      // Also check by alternative service name com.mindos.app
+      try {
+        const status = exec('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts).trim();
+        isActive = status === 'active' || status === 'activating';
+        if (isActive) {
+          console.warn('[MindOS] Detected conflicting systemd service com.mindos.app — stopping it');
+          try { exec('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
+          try { exec('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
+          return;
+        }
+      } catch { /* ok */ }
+      return;
+    }
+
+    console.warn('[MindOS] Detected conflicting systemd service mindos — stopping it');
+    try { exec('systemctl --user stop mindos', opts); } catch { /* ok */ }
+    try { exec('systemctl --user disable mindos', opts); } catch { /* ok */ }
+    console.info('[MindOS] Stopped systemd user service');
+  } catch {
+    // Non-critical
   }
 }
 
