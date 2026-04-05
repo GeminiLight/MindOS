@@ -14,6 +14,13 @@ export const meta = {
   group: 'Connections',
   summary: 'Show auth token and MCP config',
   usage: 'mindos token',
+  flags: {
+    '--json': 'Output as JSON',
+  },
+  examples: [
+    'mindos token',
+    'mindos token --json',
+  ],
 };
 
 export const run = (args, flags) => {

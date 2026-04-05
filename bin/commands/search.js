@@ -1,23 +1,26 @@
 import { bold, dim, cyan, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { output, isJsonMode, EXIT } from '../lib/command.js';
+import { output, isJsonMode, EXIT, printCommandHelp } from '../lib/command.js';
 import { getBaseUrl, getAuthHeaders } from '../lib/remote.js';
 
 export const meta = {
   name: 'search', group: 'Knowledge',
-  summary: 'Search knowledge base via API',
+  summary: 'Search your knowledge base',
   usage: 'mindos search "<query>"',
-  examples: ['mindos search "meeting notes"', 'mindos search "RAG" --limit 5 --json'],
+  flags: {
+    '--limit <n>': 'Max results (default: 20)',
+    '--json': 'Output as JSON',
+  },
+  examples: [
+    'mindos search "meeting notes"',
+    'mindos search "RAG" --limit 5 --json',
+  ],
 };
 
 export async function run(args, flags) {
   const query = args.join(' ');
-  if (!query || flags.help || flags.h) {
-    console.log(bold('mindos search') + ' — Knowledge base search');
-    console.log('');
-    console.log('Usage: mindos search "<query>"');
-    console.log('Flags: --limit <n> (default 20), --json');
-    console.log('Note: MindOS must be running. Offline: mindos file search "<query>"');
+  if (!query) {
+    printCommandHelp({ meta });
     return;
   }
   loadConfig();

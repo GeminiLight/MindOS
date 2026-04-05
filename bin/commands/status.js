@@ -12,8 +12,8 @@ import { resolve } from 'node:path';
 
 export const meta = {
   name: 'status',
-  group: 'Core',
-  summary: 'Show MindOS service status overview',
+  group: 'Service',
+  summary: 'Show service status',
   usage: 'mindos status',
   examples: [
     'mindos status',

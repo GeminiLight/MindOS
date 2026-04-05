@@ -23,6 +23,7 @@ export function loadConfig() {
   set('MINDOS_WEB_PORT',    config.port);
   set('MINDOS_MCP_PORT',    config.mcpPort);
   set('AUTH_TOKEN',         config.authToken);
+  set('MINDOS_AUTH_TOKEN',  config.authToken);
   set('WEB_PASSWORD',       config.webPassword);
   set('AI_PROVIDER',        config.ai?.provider);
   // Remote URL: allows CLI to operate against a remote MindOS instance

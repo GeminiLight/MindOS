@@ -15,46 +15,38 @@ description: >
 
 # MindOS Skill
 
-<!-- version: 2.0.0 — unified CLI + MCP skill -->
+<!-- version: 3.0.0 — CLI-first, MCP optional -->
 
-## Choose your execution mode
+## CLI commands
 
-**If you can run bash commands** (Claude Code, Gemini CLI, Codex, pi-coding-agent) → use the **CLI column**.
-**If you only have MCP tools** (`mindos_*`) → use the **MCP column**.
-**Both available** → prefer CLI (lower token cost).
+Use `mindos file <subcommand>` for all knowledge base operations. Add `--json` for structured output.
 
-| Operation | CLI (bash) | MCP (tool call) |
-|-----------|-----------|-----------------|
-| Bootstrap context | `mindos file list` | `mindos_bootstrap` |
-| List spaces | `mindos space list` | `mindos_list_spaces` |
-| List files | `mindos file list [dir]` | `mindos_list_files` |
-| Search | `mindos search "query"` | `mindos_search_notes(query)` ×2-4 variants |
-| Read file | `mindos file read <path>` | `mindos_read_file(path)` |
-| Read lines | `mindos file read <path> --lines 10:20` | `mindos_read_lines(path, start, end)` |
-| Create file | `mindos file create <path> --content "..."` | `mindos_create_file(path, content)` |
-| Overwrite file | `mindos file create <path> --content "..." --force` | `mindos_write_file(path, content)` |
-| Edit section | *(read → edit → overwrite)* | `mindos_update_section(path, heading, content)` |
-| Insert after heading | *(read → edit → overwrite)* | `mindos_insert_after_heading(path, heading, content)` |
-| Append to file | `echo "text" >> <full-path>` | `mindos_append_to_file(path, content)` |
-| Delete file | `mindos file delete <path>` | `mindos_delete_file(path)` |
-| Rename/move | `mindos file rename <old> <new>` | `mindos_rename_file(path, newName)` |
-| Move file | `mindos file move <from> <to>` | `mindos_move_file(path, destination)` |
-| Create space | `mindos space create "name"` | `mindos_create_space(name)` |
-| Backlinks | `mindos api GET /api/backlinks?path=<path>` | `mindos_get_backlinks(path)` |
-| Git history | `mindos api GET /api/git?op=log&path=<path>` | `mindos_get_history(path)` |
-| Append CSV row | *(read → append → overwrite)* | `mindos_append_csv(path, values)` |
-| Raw API | `mindos api <METHOD> <path>` | *(use specific tools above)* |
+| Operation | Command |
+|-----------|---------|
+| List files | `mindos file list` |
+| Read file | `mindos file read <path>` |
+| Write/overwrite | `mindos file write <path> --content "..."` |
+| Create new file | `mindos file create <path> --content "..."` |
+| Append to file | `mindos file append <path> --content "..."` |
+| Edit section | `mindos file edit-section <path> -H "## Heading" --content "..."` |
+| Insert after heading | `mindos file insert-heading <path> -H "## Heading" --content "..."` |
+| Append CSV row | `mindos file append-csv <path> --row "col1,col2,col3"` |
+| Delete file | `mindos file delete <path>` |
+| Rename/move | `mindos file rename <old> <new>` |
+| Search | `mindos search "query"` |
+| Backlinks | `mindos file backlinks <path>` |
+| Recent files | `mindos file recent --limit 10` |
+| Git history | `mindos file history <path>` |
+| List spaces | `mindos space list` |
+| Create space | `mindos space create "name"` |
 
-### CLI setup (skip if using MCP)
+> **MCP users:** If you only have MCP tools (`mindos_*`), use them directly — they are self-describing via their schemas. Prefer CLI when available (lower token cost).
+
+### CLI setup
 
 ```bash
-# Install
 npm install -g @geminilight/mindos
-
-# Remote mode (MindOS on another machine)
-mindos config set url http://<IP>:<PORT>
-mindos config set authToken <token>
-# Get token on server: mindos token
+# Remote mode: mindos config set url http://<IP>:<PORT> && mindos config set authToken <token>
 ```
 
 ---
@@ -74,7 +66,7 @@ mindos config set authToken <token>
 
 - **NEVER write to the KB root** unless explicitly told. Root is for governance files only. New content goes under the most fitting subdirectory.
 - **NEVER assume directory names.** Infer from the actual bootstrap tree — the KB may use Chinese names or flat layout.
-- **NEVER use full-file overwrite for a small edit.** Use `update_section` / `update_lines` (MCP) or surgical read-edit-write (CLI). Full rewrites destroy git diffs.
+- **NEVER use full-file overwrite for a small edit.** Use `mindos file edit-section` or `mindos file insert-heading` for targeted changes. Full rewrites destroy git diffs.
 - **NEVER search with a single keyword.** Fire 2-4 parallel searches (synonyms, abbreviations, Chinese/English variants).
 - **NEVER modify `INSTRUCTION.md` or `README.md` without confirmation.** Governance docs — treat as high-sensitivity.
 - **NEVER create a file without checking siblings.** Read 1-2 files in the target directory to learn local style.

@@ -26,7 +26,7 @@ function getMindRoot() {
 export const meta = {
   name: 'space',
   group: 'Knowledge',
-  summary: 'Knowledge base structure (ls, mkdir, rmdir, init, info, tree)',
+  summary: 'Manage spaces (list, tree, create, rename)',
   usage: 'mindos space <subcommand>',
   examples: [
     'mindos space ls',
@@ -45,29 +45,8 @@ export async function run(args, flags) {
   const sub = args[0];
   loadConfig();
 
-  if (!sub || flags.help || flags.h) {
-    console.log(`
-${bold('mindos space')} — Knowledge base structure management
-
-${bold('Browse:')}
-  ${cyan('ls [path]'.padEnd(24))}${dim('List contents of a directory (default: root)')}
-  ${cyan('tree [path]'.padEnd(24))}${dim('Show directory tree recursively')}
-  ${cyan('info <path>'.padEnd(24))}${dim('Show directory details (type, files, modified)')}
-
-${bold('Structure:')}
-  ${cyan('create <name>'.padEnd(24))}${dim('Create a new Space (directory + INSTRUCTION.md)')}
-  ${cyan('mkdir <path>'.padEnd(24))}${dim('Create a directory (no INSTRUCTION.md)')}
-  ${cyan('rmdir <path>'.padEnd(24))}${dim('Delete a directory and all its contents')}
-  ${cyan('rename <old> <new>'.padEnd(24))}${dim('Rename or move a directory')}
-  ${cyan('init <path>'.padEnd(24))}${dim('Upgrade a directory to a Space (add INSTRUCTION.md)')}
-
-${bold('Examples:')}
-  ${dim('mindos space ls')}
-  ${dim('mindos space ls "📝 笔记" --json')}
-  ${dim('mindos space tree "⚙️ 配置"')}
-  ${dim('mindos space mkdir "📝 笔记/新分类/子分类"')}
-  ${dim('mindos space init "exploration"')}
-`);
+  if (!sub) {
+    printHelp();
     return;
   }
 
@@ -447,4 +426,29 @@ async function remoteSpaceDispatch(sub, args, flags) {
     console.error(red(`Remote error: ${e.message}`));
     process.exit(EXIT.ERROR);
   }
+}
+
+export function printHelp() {
+  console.log(`
+${bold('mindos space')} — Knowledge base structure management
+
+${bold('Browse:')}
+  ${cyan('ls [path]'.padEnd(24))}${dim('List contents of a directory (default: root)')}
+  ${cyan('tree [path]'.padEnd(24))}${dim('Show directory tree recursively')}
+  ${cyan('info <path>'.padEnd(24))}${dim('Show directory details (type, files, modified)')}
+
+${bold('Structure:')}
+  ${cyan('create <name>'.padEnd(24))}${dim('Create a new Space (directory + INSTRUCTION.md)')}
+  ${cyan('mkdir <path>'.padEnd(24))}${dim('Create a directory (no INSTRUCTION.md)')}
+  ${cyan('rmdir <path>'.padEnd(24))}${dim('Delete a directory and all its contents')}
+  ${cyan('rename <old> <new>'.padEnd(24))}${dim('Rename or move a directory')}
+  ${cyan('init <path>'.padEnd(24))}${dim('Upgrade a directory to a Space (add INSTRUCTION.md)')}
+
+${bold('Examples:')}
+  ${dim('mindos space ls')}
+  ${dim('mindos space ls "📝 笔记" --json')}
+  ${dim('mindos space tree "⚙️ 配置"')}
+  ${dim('mindos space mkdir "📝 笔记/新分类/子分类"')}
+  ${dim('mindos space init "exploration"')}
+`);
 }

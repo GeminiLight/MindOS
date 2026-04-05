@@ -10,46 +10,38 @@ description: >
 
 # MindOS 技能
 
-<!-- version: 2.0.0 — CLI + MCP 统一技能 -->
+<!-- version: 3.0.0 — CLI 优先，MCP 可选 -->
 
-## 执行方式选择
+## CLI 命令
 
-**能执行 bash 命令**（Claude Code、Gemini CLI、Codex、pi-coding-agent）→ 用 **CLI 列**。
-**只有 MCP 工具**（`mindos_*` 开头）→ 用 **MCP 列**。
-**两者都有** → 优先 CLI（更省 token）。
+使用 `mindos file <子命令>` 完成所有知识库操作。加 `--json` 获取结构化输出。
 
-| 操作 | CLI (bash) | MCP (tool call) |
-|------|-----------|-----------------|
-| 加载上下文 | `mindos file list` | `mindos_bootstrap` |
-| 列出空间 | `mindos space list` | `mindos_list_spaces` |
-| 列出文件 | `mindos file list [目录]` | `mindos_list_files` |
-| 搜索 | `mindos search "关键词"` | `mindos_search_notes(query)` ×2-4 变体 |
-| 读取文件 | `mindos file read <路径>` | `mindos_read_file(path)` |
-| 读取行 | `mindos file read <路径> --lines 10:20` | `mindos_read_lines(path, start, end)` |
-| 创建文件 | `mindos file create <路径> --content "..."` | `mindos_create_file(path, content)` |
-| 覆盖文件 | `mindos file create <路径> --content "..." --force` | `mindos_write_file(path, content)` |
-| 编辑段落 | *(读取 → 修改 → 覆盖写回)* | `mindos_update_section(path, heading, content)` |
-| 标题后插入 | *(读取 → 修改 → 覆盖写回)* | `mindos_insert_after_heading(path, heading, content)` |
-| 追加内容 | `echo "text" >> <完整路径>` | `mindos_append_to_file(path, content)` |
-| 删除文件 | `mindos file delete <路径>` | `mindos_delete_file(path)` |
-| 重命名 | `mindos file rename <旧> <新>` | `mindos_rename_file(path, newName)` |
-| 移动文件 | `mindos file move <源> <目标>` | `mindos_move_file(path, destination)` |
-| 创建空间 | `mindos space create "名称"` | `mindos_create_space(name)` |
-| 反向链接 | `mindos api GET /api/backlinks?path=<path>` | `mindos_get_backlinks(path)` |
-| 历史记录 | `mindos api GET /api/git?op=log&path=<path>` | `mindos_get_history(path)` |
-| 追加 CSV 行 | *(读取 → 追加 → 覆盖写回)* | `mindos_append_csv(path, values)` |
-| Raw API | `mindos api <METHOD> <path>` | *(用上面的具体工具)* |
+| 操作 | 命令 |
+|------|------|
+| 列出文件 | `mindos file list` |
+| 读取文件 | `mindos file read <路径>` |
+| 写入/覆盖 | `mindos file write <路径> --content "..."` |
+| 创建新文件 | `mindos file create <路径> --content "..."` |
+| 追加内容 | `mindos file append <路径> --content "..."` |
+| 编辑段落 | `mindos file edit-section <路径> -H "## 标题" --content "..."` |
+| 标题后插入 | `mindos file insert-heading <路径> -H "## 标题" --content "..."` |
+| 追加 CSV 行 | `mindos file append-csv <路径> --row "列1,列2,列3"` |
+| 删除文件 | `mindos file delete <路径>` |
+| 重命名/移动 | `mindos file rename <旧> <新>` |
+| 搜索 | `mindos search "关键词"` |
+| 反向链接 | `mindos file backlinks <路径>` |
+| 最近文件 | `mindos file recent --limit 10` |
+| Git 历史 | `mindos file history <路径>` |
+| 列出空间 | `mindos space list` |
+| 创建空间 | `mindos space create "名称"` |
 
-### CLI 安装（MCP 用户跳过）
+> **MCP 用户：** 如果只有 MCP 工具（`mindos_*`），直接使用——工具的 schema 已自带说明。有 CLI 时优先用 CLI（更省 token）。
+
+### CLI 安装
 
 ```bash
-# 安装
 npm install -g @geminilight/mindos
-
-# 远程模式（MindOS 运行在另一台机器上）
-mindos config set url http://<IP>:<端口>
-mindos config set authToken <token>
-# 在服务器上获取 token：mindos token
+# 远程模式：mindos config set url http://<IP>:<端口> && mindos config set authToken <token>
 ```
 
 ---
@@ -69,7 +61,7 @@ mindos config set authToken <token>
 
 - **禁止写入知识库根目录**（除非明确要求）。根目录仅放治理文件，新内容放最合适的子目录。
 - **禁止假设目录名。** 从实际目录树推断——知识库可能用中文名或扁平结构。
-- **禁止用整文件覆盖做小修改。** 用 `update_section` / `update_lines`（MCP）或精确读-改-写（CLI），整文件覆盖破坏 git diff。
+- **禁止用整文件覆盖做小修改。** 用 `mindos file edit-section` 或 `mindos file insert-heading` 做精准修改，整文件覆盖破坏 git diff。
 - **禁止单关键词搜索。** 至少 2-4 个并行搜索（同义词、缩写、中英文变体）。
 - **禁止未确认就修改 `INSTRUCTION.md` 或 `README.md`。** 治理文档——高敏感度。
 - **禁止不看邻居就创建文件。** 先读目标目录 1-2 个文件，了解命名和风格。

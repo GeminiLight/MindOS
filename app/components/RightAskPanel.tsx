@@ -9,7 +9,9 @@ import { useResizeDrag } from '@/hooks/useResizeDrag';
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 400;
 const MAX_WIDTH_ABS = 4000;
-const FOCUS_SNAP_THRESHOLD = 80;
+const ENTER_SNAP_THRESHOLD = 80;
+const EXIT_SNAP_THRESHOLD = 16;
+const MIN_CONTENT_WIDTH = 360;
 
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 
@@ -37,6 +39,7 @@ export default function RightAskPanel({
   maximized = false, onMaximize, sidebarOffset = 0,
 }: RightAskPanelProps) {
   const snapFiredRef = useRef(false);
+  const justExitedMaxRef = useRef(false);
 
   const maxAvailable = typeof window !== 'undefined'
     ? window.innerWidth - sidebarOffset
@@ -45,12 +48,28 @@ export default function RightAskPanel({
   const handleResize = useCallback((w: number) => {
     if (snapFiredRef.current) return;
     const clamped = Math.min(w, maxAvailable);
-    if (maximized && clamped < maxAvailable - FOCUS_SNAP_THRESHOLD && onMaximize) {
+
+    // Exit maximized: user drags right even a little (16px) → exit immediately
+    if (maximized && clamped < maxAvailable - EXIT_SNAP_THRESHOLD && onMaximize) {
+      justExitedMaxRef.current = true;
       onMaximize();
-      onWidthChange(clamped);
+      const maxPanelForContent = typeof window !== 'undefined'
+        ? window.innerWidth - sidebarOffset - MIN_CONTENT_WIDTH
+        : clamped;
+      onWidthChange(Math.min(clamped, maxPanelForContent));
       return;
     }
-    if (!maximized && clamped >= maxAvailable - FOCUS_SNAP_THRESHOLD && onMaximize) {
+
+    // Snap to fullscreen: panel near max edge OR content squeezed below minimum.
+    // Suppress content-based snap while justExitedMaxRef is true (user recently
+    // exited fullscreen and panel is still wide); only re-enable once the panel
+    // has been shrunk enough that content is comfortable (reset in handleMouseDown).
+    const contentRemaining = typeof window !== 'undefined'
+      ? window.innerWidth - sidebarOffset - clamped
+      : Infinity;
+    const shouldSnap = clamped >= maxAvailable - ENTER_SNAP_THRESHOLD
+      || (!justExitedMaxRef.current && contentRemaining < MIN_CONTENT_WIDTH);
+    if (!maximized && shouldSnap && onMaximize) {
       snapFiredRef.current = true;
       onMaximize();
       return;
@@ -58,7 +77,7 @@ export default function RightAskPanel({
     if (!maximized) {
       onWidthChange(clamped);
     }
-  }, [maxAvailable, onMaximize, maximized, onWidthChange]);
+  }, [maxAvailable, sidebarOffset, onMaximize, maximized, onWidthChange]);
 
   const handleResizeEnd = useCallback((w: number) => {
     if (snapFiredRef.current) return;
@@ -77,8 +96,19 @@ export default function RightAskPanel({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     snapFiredRef.current = false;
+    // Only re-enable content-based snap once the panel has been shrunk enough
+    // that content is comfortably above minimum. This prevents the bounce:
+    // exit fullscreen → new drag → immediately re-snap because panel still wide.
+    if (justExitedMaxRef.current) {
+      const currentContent = typeof window !== 'undefined'
+        ? window.innerWidth - sidebarOffset - width
+        : Infinity;
+      if (currentContent >= MIN_CONTENT_WIDTH) {
+        justExitedMaxRef.current = false;
+      }
+    }
     rawMouseDown(e);
-  }, [rawMouseDown]);
+  }, [rawMouseDown, sidebarOffset, width]);
 
   const effectiveWidth = maximized
     ? `calc(100vw - ${sidebarOffset}px)`

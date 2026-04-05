@@ -8,13 +8,8 @@
  */
 
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
-
-function expandHome(p) {
-  return p.startsWith('~/') ? resolve(homedir(), p.slice(2)) : p;
-}
+import { expandHome } from './path-expand.js';
 
 export const MCP_AGENTS = {
   'claude-code': {

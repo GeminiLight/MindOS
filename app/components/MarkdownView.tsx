@@ -51,11 +51,18 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-// Heading components with suppressHydrationWarning to prevent
-// rehype-slug + emoji hydration mismatches between server and client
+// react-markdown passes an AST `node` prop to custom components;
+// strip it (and any other non-DOM keys) before forwarding to the real element.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripNonDom(props: Record<string, any>): Record<string, any> {
+  const { node, inline, ordered, depth, isHeader, ...domProps } = props;
+  return domProps;
+}
+
 function makeHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') {
-  const HeadingComponent = ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <Tag {...props} suppressHydrationWarning>{children}</Tag>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const HeadingComponent = ({ children, ...props }: any) => (
+    <Tag {...stripNonDom(props)} suppressHydrationWarning>{children}</Tag>
   );
   HeadingComponent.displayName = Tag;
   return HeadingComponent;
@@ -68,11 +75,12 @@ const components: Components = {
   h4: makeHeading('h4'),
   h5: makeHeading('h5'),
   h6: makeHeading('h6'),
-  code({ children, ...props }) {
-    return <code {...props} suppressHydrationWarning>{children}</code>;
+  code({ children, node, ...rest }) {
+    void node;
+    return <code {...stripNonDom(rest)} suppressHydrationWarning>{children}</code>;
   },
-  pre({ children, ...props }) {
-    // Extract code string from children
+  pre({ children, node, ...rest }) {
+    void node;
     let codeString = '';
     if (children && typeof children === 'object' && 'props' in children) {
       const codeEl = children as React.ReactElement<{ children?: React.ReactNode }>;
@@ -80,31 +88,38 @@ const components: Components = {
     }
     return (
       <div className="relative group">
-        <pre {...props} suppressHydrationWarning>{children}</pre>
+        <pre {...stripNonDom(rest)} suppressHydrationWarning>{children}</pre>
         <CopyButton code={codeString} />
       </div>
     );
   },
-  li({ children, ...props }) {
-    return <li {...props} suppressHydrationWarning>{children}</li>;
+  li({ children, node, ...rest }) {
+    void node;
+    return <li {...stripNonDom(rest)} suppressHydrationWarning>{children}</li>;
   },
-  a({ href, children, ...props }) {
+  p({ children, node, ...rest }) {
+    void node;
+    return <p {...stripNonDom(rest)} suppressHydrationWarning>{children}</p>;
+  },
+  a({ href, children, node, ...rest }) {
+    void node;
     const isExternal = href?.startsWith('http');
     return (
       <a
         href={href}
         target={isExternal ? '_blank' : undefined}
         rel={isExternal ? 'noopener noreferrer' : undefined}
-        {...props}
+        {...stripNonDom(rest)}
       >
         {children}
       </a>
     );
   },
-  img({ src, alt, ...props }) {
+  img({ src, alt, node, ...rest }) {
+    void node;
     if (!src) return null;
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt ?? ''} {...props} />;
+    return <img src={src} alt={alt ?? ''} {...stripNonDom(rest)} />;
   },
 };
 

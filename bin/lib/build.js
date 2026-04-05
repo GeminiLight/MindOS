@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { ROOT, BUILD_STAMP, DEPS_STAMP, STANDALONE_SERVER, STANDALONE_STAMP } from './constants.js';
 import { red, dim, yellow } from './colors.js';
-import { run, npmInstall } from './utils.js';
+import { execInherited as run, npmInstall } from './shell.js';
 
 export function needsBuild() {
   // Prefer prebuilt standalone shipped with the npm package.

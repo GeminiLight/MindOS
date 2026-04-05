@@ -2,7 +2,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT } from './constants.js';
 import { yellow } from './colors.js';
-import { run, npmInstall } from './utils.js';
+import { execInherited as run, npmInstall } from './shell.js';
 
 export const MCP_DIR = resolve(ROOT, 'mcp');
 export const MCP_SRC_DIR = resolve(MCP_DIR, 'src');

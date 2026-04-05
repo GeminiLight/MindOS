@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
-import { expandHome, parseJsonc } from './utils.js';
+import { expandHome } from './path-expand.js';
+import { parseJsonc } from './jsonc.js';
 import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
 
 export { MCP_AGENTS };

@@ -1,23 +1,26 @@
 import { bold, dim, cyan, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
-import { EXIT } from '../lib/command.js';
+import { EXIT, printCommandHelp } from '../lib/command.js';
 
 export const meta = {
   name: 'api',
-  group: 'Knowledge',
-  summary: 'Raw API passthrough (GET/POST/PUT/DELETE any endpoint)',
+  group: 'Config',
+  summary: 'Raw API passthrough (GET/POST/PUT/DELETE)',
   usage: 'mindos api <METHOD> <path>',
+  flags: {
+    '--body <json>': 'Request body as JSON string',
+    '--port <port>': 'MindOS web port',
+  },
+  examples: [
+    'mindos api GET /api/health',
+    'mindos api GET /api/files',
+    'mindos api POST /api/ask --body \'{"messages":[...],"mode":"chat"}\'',
+  ],
 };
 
 export async function run(args, flags) {
-  if (args.length < 2 || flags.help || flags.h) {
-    console.log(bold('mindos api') + ' — Raw API passthrough\n');
-    console.log('Usage: mindos api <METHOD> <path> [--body <json>]');
-    console.log('Methods: GET, POST, PUT, PATCH, DELETE\n');
-    console.log('Examples:');
-    console.log('  mindos api GET /api/health');
-    console.log('  mindos api GET /api/files');
-    console.log('  mindos api POST /api/ask --body \'{"question":"..."}\'');
+  if (args.length < 2) {
+    printCommandHelp({ meta });
     return;
   }
 

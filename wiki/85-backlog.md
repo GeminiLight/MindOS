@@ -14,6 +14,8 @@
 
 > 按优先级排序（高 → 低）。已完成项折叠在末尾。
 
+- [x] **CLI 架构重构：cli.js 模块化 + utils.js 拆分** — `bin/cli.js` 从 1466 行巨石文件瘦身为 134 行纯路由。19 个内联命令全部提取为 `bin/commands/*.js` 模块。`utils.js` 拆分为 `shell.js`/`path-expand.js`/`jsonc.js`。`expandHome` 3 处重复定义合并为单一来源。命令自动注册 + 别名支持
+- [x] **CLI Help 系统改进** — `--help` 安全拦截（18 个命令不再因 `--help` 执行实际操作）。支持 `mindos help <cmd>` 和 `mindos --help <cmd>` 两种形式。全局帮助新增 USAGE / Learn More 段。17 个命令的 `meta` 补充 flags + examples，auto-help 自动生成。`isTTY` 改为函数以支持 `NO_COLOR` 延迟求值
 - [x] **测试文件适配 pi-agent-core**：`__tests__/core/context.test.ts` 和 `__tests__/core/tools.test.ts` 已适配 `AgentMessage` + 新 `compactMessages` 签名。511 tests passing.
 - [x] **App 端 skill-rules.md 注入**：route.ts 从用户知识库 `.agents/skills/{name}/` 读取 `skill-rules.md` + `user-rules.md` 并注入 system prompt。支持中英文切换、空文件跳过、截断标志。详见 `wiki/specs/spec-app-skill-rules-injection.md`
 - [x] **AIP-001 统一错误处理**：`MindOSError` 类 + 12 个 `ErrorCodes` + `apiError()`。core/ 13 处 throw 已迁移，API 统一返回 `{ ok, error: { code, message } }` 格式
@@ -60,6 +62,8 @@
 - [x] **P2: file.js 复用 core 模块** — 保持现状（CLI 离线命令独立实现），因 core 是 TypeScript 需编译，CLI 是纯 JS 零依赖。标记为 won't fix
 - [x] **P2: 统一 exit code 规范** — `EXIT` 常量（OK=0, ERROR=1, ARGS=2, CONNECT=3, NOT_FOUND=4）定义在 `bin/lib/command.js`，所有 `commands/` 模块已迁移
 - [x] **P3: --json 覆盖所有命令** — doctor/sync/config show/token 全部支持 `--json`，Agent 可对所有命令获取结构化输出
+- [x] **CLI-first Agent 模式** — 新增 8 个 `mindos file` 子命令（write/append/edit-section/insert-heading/append-csv/backlinks/recent/history），Agent 可通过 CLI 完成全部 KB 操作无需 MCP server。Onboarding Step 7 新增 CLI/MCP 模式选择（CLI 默认选中）。修复 CLI 参数解析器对短标志取值和 dash 开头内容的处理。[spec](./specs/spec-cli-first-agent-mode.md)
+- [x] **P1: `mindos agent` 语义重构** — `mindos agent` 从"管理 Agent"改为"Agent 模式执行任务"。任务执行（`mindos agent "整理笔记"`）与管理（`list`/`info`/`stats`）通过子命令区分。`mindos ask` 明确为 chat 模式（只读工具）。两个命令均改用 SSE 流式输出 + 正确的 `/api/ask` message 格式（修复旧 `{ question }` 格式不兼容问题）。新增 `bin/lib/sse-stream.js` 共享 SSE 客户端
 
 ### Inbox Quick Capture
 

@@ -87,7 +87,7 @@ export async function promptSkillUpdate(mismatches) {
   }
 
   // Non-interactive mode: just print hint
-  if (!isTTY || process.env.LAUNCHED_BY_LAUNCHD === '1' || process.env.INVOCATION_ID) {
+  if (!isTTY() || process.env.LAUNCHED_BY_LAUNCHD === '1' || process.env.INVOCATION_ID) {
     console.log(`     ${dim('Run `mindos start` in a terminal to update interactively.')}`);
     return;
   }

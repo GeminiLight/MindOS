@@ -140,6 +140,12 @@
 - **现象：** 构建缓存导致 stale artifact 错误
 - **解决：** 清理整个 `.next` 目录，不做选择性清理
 
+### `mindos ask` 旧版发送 `{ question }` 格式，API 不识别
+- **现象：** `mindos ask "xxx"` 无响应或报错（API 返回 SSE 但 CLI 尝试 `res.json()` 解析）
+- **原因：** API `/api/ask` 期望 `{ messages: [{role:'user',content:'...'}], mode:'chat'|'agent' }` 格式，旧版 CLI 发送的 `{ question }` 不被识别，且无 SSE 流式处理
+- **解决：** CLI `ask` 和 `agent` 命令已改用正确的 `messages` 数组格式 + SSE 流式读取
+- **教训：** CLI 与 API 的 contract 必须同步演进；API 签名变更后需检查所有调用方
+
 ### npx next 会拉全局缓存版本导致 Web UI 崩溃
 - **现象：** `mindos start` 后 Web UI 立即崩溃，报 `TypeError: Cannot read properties of undefined (reading 'map')`
 - **原因：** `npx next start` 不保证用本地 `node_modules` 的版本。如果用户全局 npx 缓存里有更高版本的 Next.js（如 16.2.0），而 build 产物是本地 16.1.6 编译的，版本不匹配导致运行时崩溃
@@ -1265,6 +1271,37 @@
   5. **服务端搜索**：将搜索请求发到 `/api/files?q=xxx`，服务端用 SQLite FTS 或内存索引处理，客户端只存结果
 - **推荐**：先做方案 1（零成本改动），再评估是否需要方案 2。方案 4/5 仅在用户反馈确实有大型 KB 时再做
 - **当前风险等级：** 低（80ms debounce + slice(0,30) 已足够应付 500-1000 文件规模）
+
+### CLI `utils.js` 反模式 — 已修复（2026-04-05）
+
+- **问题：** `bin/lib/utils.js` 是典型反模式（generic utility），包含不相关的函数（`run`, `npmInstall`, `expandHome`, `parseJsonc`），`expandHome` 还在 `agent.js` 和 `mcp-agents.js` 中各有一份重复定义
+- **解决：** 拆分为领域命名模块 `shell.js`、`path-expand.js`、`jsonc.js`，删除所有重复定义。所有消费者统一从新模块导入
+- **规则：** 禁止创建 `utils.js` / `helpers.js` / `common.js`。每个模块必须按领域命名
+
+### CLI `cli.js` 1466 行巨石文件 — 已修复（2026-04-05）
+
+- **问题：** `bin/cli.js` 包含 19 个内联命令实现（1466 行），只有 7 个命令模块化；加新命令需在巨石文件中编辑，维护成本高
+- **解决：** 将全部 19 个命令提取为 `bin/commands/*.js` 模块，`cli.js` 仅保留 134 行的路由 + help 生成。命令自动注册（`modules` 数组 + `meta.aliases` 支持别名）
+- **规则：** 新增 CLI 命令必须在 `bin/commands/` 下创建独立文件，导出 `{ meta, run }`
+
+### `stopSyncDaemon()` 是同步函数但被 `.catch()` 调用（2026-04-05）
+
+- **问题：** `stopSyncDaemon()` 返回 `undefined`，在 `process.on('exit')` 中被 `stopSyncDaemon().catch(...)` 调用 → `undefined.catch()` 抛 TypeError，导致 `clearPids()` 不执行
+- **解决：** 改为 `try { stopSyncDaemon(); } catch {}`
+- **规则：** 调用函数前检查其签名，同步函数不能用 `.catch()`
+
+### CLI `--help` 不安全 — 执行命令而非显示帮助（2026-04-05）
+
+- **问题：** `mindos build --help`、`mindos start --help` 等只有 6/24 个命令自行处理 `--help`，其余 18 个命令在 `--help` 时仍然执行实际操作（如触发构建、启动服务）
+- **解决：** 在 `cli.js` 路由层集中拦截 `--help`。路由发现 `hasHelp && resolvedCmd` 时，调用 `showCommandHelp()` 并 `process.exit(0)`，不分发到 `run()`。同时支持 `mindos help <cmd>` 和 `mindos --help <cmd>` 两种形式
+- **auto-help：** 无自定义 `printHelp` 的命令由 `printCommandHelp(meta)` 自动生成帮助页（展示 USAGE、flags、examples、aliases）
+- **规则：** 命令模块不再需要自行检查 `flags.help`——路由层统一处理。新增命令只需在 `meta` 中填写 `flags` 和 `examples`
+
+### `isTTY` 从常量改为函数 — 调用方必须加 `()`（2026-04-05）
+
+- **问题：** `colors.js` 导出 `isTTY` 从布尔常量改为函数，用于支持延迟求值。`skill-check.js` 中 `if (!isTTY)` 变为 `if (!function)` → 永远 false
+- **解决：** 所有消费方改为 `isTTY()` 调用
+- **规则：** 导出签名变更时，grep 所有消费方逐一确认
 
 ### `next build --webpack` 污染 `.next` 缓存 → dev server 每请求 compile 7-8s（2026-04-05）
 
