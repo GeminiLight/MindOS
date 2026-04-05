@@ -19,6 +19,20 @@ export function isPortInUse(port: number): Promise<boolean> {
 }
 
 /**
+ * Wait for a specific port to become available (e.g. after killing an orphaned process).
+ * Returns true if the port freed up, false if still in use after timeout.
+ */
+export async function waitForPortRelease(port: number, maxWaitMs = 5000): Promise<boolean> {
+  const interval = 300;
+  const maxAttempts = Math.ceil(maxWaitMs / interval);
+  for (let i = 0; i < maxAttempts; i++) {
+    if (!(await isPortInUse(port))) return true;
+    await new Promise(r => setTimeout(r, interval));
+  }
+  return false;
+}
+
+/**
  * Find an available port starting from the given port.
  * Tries up to 30 consecutive ports, clamped to valid range (1-65535).
  */

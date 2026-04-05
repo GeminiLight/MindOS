@@ -7,6 +7,16 @@ import {
 import { Field, Select } from '@/components/settings/Primitives';
 import type { SetupMessages, McpMessages, AgentEntry, AgentInstallStatus, ConnectionMode } from './types';
 
+const AGENT_INSTALL_URLS: Record<string, string> = {
+  'claude-code': 'https://docs.anthropic.com/en/docs/claude-code/overview',
+  'cursor': 'https://www.cursor.com/',
+  'windsurf': 'https://codeium.com/windsurf',
+  'cline': 'https://github.com/cline/cline',
+  'trae': 'https://www.trae.ai/',
+  'gemini-cli': 'https://github.com/google-gemini/gemini-cli',
+  'augment': 'https://www.augmentcode.com/',
+};
+
 export interface StepAgentsProps {
   agents: AgentEntry[];
   agentsLoading: boolean;
@@ -79,10 +89,21 @@ export default function StepAgents({
         {s.agentDetected}
       </span>
     );
+    const installUrl = AGENT_INSTALL_URLS[key];
     return (
-      <span className="text-xs px-1.5 py-0.5 rounded"
-        style={{ background: 'color-mix(in srgb, var(--muted-foreground) 10%, transparent)', color: 'var(--muted-foreground)' }}>
-        {s.agentNotFound}
+      <span className="flex items-center gap-1.5">
+        <span className="text-xs px-1.5 py-0.5 rounded"
+          style={{ background: 'color-mix(in srgb, var(--muted-foreground) 10%, transparent)', color: 'var(--muted-foreground)' }}>
+          {s.agentNotFound}
+        </span>
+        {installUrl && (
+          <a href={installUrl} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="text-2xs hover:underline"
+            style={{ color: 'var(--amber)' }}>
+            {s.agentGetIt}
+          </a>
+        )}
       </span>
     );
   };

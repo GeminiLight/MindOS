@@ -478,7 +478,22 @@ function fileAppendCsv(root, filePath, flags) {
   const line = escapeCsvRow(values) + '\n';
 
   mkdirSync(dirname(full), { recursive: true });
-  appendFileSync(full, line, 'utf-8');
+
+  let separator = '';
+  if (existsSync(full)) {
+    const stat = statSync(full);
+    if (stat.size > 0) {
+      const fd = openSync(full, 'r');
+      try {
+        const buf = Buffer.alloc(1);
+        readSync(fd, buf, 0, 1, stat.size - 1);
+        if (buf[0] !== 0x0a) separator = '\n';
+      } finally {
+        closeSync(fd);
+      }
+    }
+  }
+  appendFileSync(full, separator + line, 'utf-8');
 
   const content = readFileSync(full, 'utf-8');
   const newRowCount = content.trim().split('\n').length;

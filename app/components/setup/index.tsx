@@ -467,7 +467,7 @@ export default function SetupWizard() {
           ) : completed ? (
             // After completing: show Restart button or Go link
             needsRestart ? (
-              <RestartButton s={s} newPort={state.webPort} />
+              <RestartButton s={s} newPort={state.webPort} webPassword={state.webPassword} />
             ) : (
               <a href="/?welcome=1"
                 className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg transition-colors hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"

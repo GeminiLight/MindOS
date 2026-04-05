@@ -29,31 +29,52 @@ export function RestartBanner({ s }: { s: SetupMessages }) {
 }
 
 /** Restart button — shown in the bottom navigation bar (same position as Complete/Saving button) */
-export function RestartButton({ s, newPort }: { s: SetupMessages; newPort: number }) {
+export function RestartButton({ s, newPort, webPassword }: { s: SetupMessages; newPort: number; webPassword?: string }) {
   const [restarting, setRestarting] = useState(false);
   const [done, setDone] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const delayRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Cleanup polling interval on unmount
-  useEffect(() => () => { clearInterval(pollRef.current); }, []);
+  useEffect(() => () => { clearTimeout(delayRef.current); clearInterval(pollRef.current); }, []);
 
   const handleRestart = async () => {
     setRestarting(true);
     try {
-      await fetch('/api/restart', { method: 'POST' });
+      const restartRes = await fetch('/api/restart', { method: 'POST' });
+      if (!restartRes.ok) throw new Error(`restart failed (${restartRes.status})`);
       setDone(true);
-      const redirect = () => { window.location.href = `http://localhost:${newPort}/?welcome=1`; };
-      // Poll the new port until ready, then redirect
+      const rawHost = window.location.hostname || 'localhost';
+      const host = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
+      const baseUrl = `http://${host}:${newPort}`;
+      const redirect = () => { window.location.href = `${baseUrl}/?welcome=1`; };
+
       let attempts = 0;
       clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
+      // Delay first poll to ensure the old server has been killed by `mindos restart`
+      const startPoll = () => { pollRef.current = setInterval(async () => {
         attempts++;
         try {
-          const r = await fetch(`http://localhost:${newPort}/api/health`);
-          if (r.status < 500) { clearInterval(pollRef.current); redirect(); return; }
+          const r = await fetch(`${baseUrl}/api/health`);
+          if (r.status < 500) {
+            clearInterval(pollRef.current);
+            // Auto-authenticate so the user doesn't have to re-enter their password
+            if (webPassword) {
+              try {
+                await fetch(`${baseUrl}/api/auth`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ password: webPassword }),
+                  credentials: 'include',
+                });
+              } catch { /* auth failed — user will see login page instead */ }
+            }
+            redirect();
+            return;
+          }
         } catch { /* not ready yet */ }
-        if (attempts >= 10) { clearInterval(pollRef.current); redirect(); }
-      }, 800);
+        if (attempts >= 30) { clearInterval(pollRef.current); redirect(); }
+      }, 800); };
+      delayRef.current = setTimeout(startPoll, 2000);
     } catch (e) {
       console.warn('[SetupWizard] restart request failed:', e);
       setRestarting(false);

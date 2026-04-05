@@ -13,11 +13,11 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
-import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync, rmSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { spawn as spawnChild } from 'child_process';
 import { ProcessManager } from './process-manager';
-import { findAvailablePort } from './port-finder';
+import { findAvailablePort, waitForPortRelease, isPortInUse } from './port-finder';
 import { createTray, updateTrayMenu, type TrayCallbacks } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { restoreWindowState, saveWindowState } from './window-state';
@@ -515,6 +515,14 @@ async function startLocalMode(): Promise<string | null> {
   webPort = currentWebPort;
   mcpPort = currentMcpPort;
 
+  // Auto-update MCP client configs if ports shifted from configured values.
+  // This happens when healing couldn't free the original port (non-MindOS process occupying it).
+  const configuredMcpPort = config.mcpPort || DEFAULT_MCP_PORT;
+  if (mcpPort !== configuredMcpPort) {
+    console.info(`[MindOS] MCP port shifted ${configuredMcpPort} → ${mcpPort} — updating client configs`);
+    updateMcpClientConfigs(configuredMcpPort, mcpPort);
+  }
+
   let crashDialogShown = false;
   let mcpFailed = false;
   let startupComplete = false;  // Only show crash dialog after successful startup
@@ -785,6 +793,125 @@ function updateMcpClientConfigs(oldPort: number, newPort: number): void {
 /** Update tray with current state — always includes ports/address */
 function refreshTray(status: 'starting' | 'running' | 'error'): void {
   updateTrayMenu(currentMode, status, currentRemoteAddress, currentWebPort, currentMcpPort);
+}
+
+// ── Boot-time Silent Healing ──
+
+/**
+ * Detect and silently fix residual state from a previous MindOS installation.
+ *
+ * When users delete MindOS.app from /Applications (the standard macOS uninstall),
+ * orphaned processes, stale PID files, incompatible Node.js, and corrupt build
+ * caches may remain. This function fixes them all before normal startup proceeds
+ * so that reinstalling "just works" — no user intervention needed.
+ *
+ * Safe to call on every boot (idempotent). Never touches user data (config values,
+ * knowledge base, auth tokens).
+ */
+async function healPreviousInstallation(): Promise<void> {
+  const t0 = Date.now();
+
+  // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
+  cleanupConflictingLaunchdService();
+
+  // 2. Kill orphaned processes from BOTH Desktop and CLI pid files
+  ProcessManager.cleanupOrphanedChildren();
+  ProcessManager.cleanupCliPidFile();
+
+  // 3. Port-based fallback kill — catches processes not tracked by PID files
+  //    (e.g. Next.js worker processes, externally started MCP)
+  //    Brief pause gives SIGTERM'd processes time to exit before we check ports.
+  await new Promise(r => setTimeout(r, 500));
+
+  const config = readMindOsConfigFileUncached();
+  const webPort = config.port || DEFAULT_WEB_PORT;
+  const mcpPort = config.mcpPort || DEFAULT_MCP_PORT;
+
+  const webInUse = await isPortInUse(webPort);
+  const mcpInUse = await isPortInUse(mcpPort);
+
+  if (webInUse) {
+    ProcessManager.killProcessesOnPort(webPort);
+  }
+  if (mcpInUse) {
+    ProcessManager.killProcessesOnPort(mcpPort);
+  }
+
+  // 4. Wait for configured ports to free up (gives killed processes time to exit)
+  //    This prevents findAvailablePort from jumping to 3457 during reinstall.
+  if (webInUse || mcpInUse) {
+    const [webFreed, mcpFreed] = await Promise.all([
+      webInUse ? waitForPortRelease(webPort, 5000) : Promise.resolve(true),
+      mcpInUse ? waitForPortRelease(mcpPort, 5000) : Promise.resolve(true),
+    ]);
+    if (!webFreed) {
+      console.warn(`[MindOS:heal] Port ${webPort} still in use after cleanup — findAvailablePort will handle it`);
+    }
+    if (!mcpFreed) {
+      console.warn(`[MindOS:heal] Port ${mcpPort} still in use after cleanup — findAvailablePort will handle it`);
+    }
+  }
+
+  // 5. Validate private Node.js — if version too low or broken, remove it
+  //    (startLocalMode → downloadNode will re-download a fresh copy)
+  validatePrivateNode();
+
+  // 6. Validate .next build cache — remove if corrupt (triggers rebuild in startLocalMode)
+  //    Only clean up the cache stored under the bundled runtime app dir.
+  try {
+    const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+    const bundledRoot = getDefaultBundledMindOsDirectory();
+    if (bundledRoot) {
+      validateBuildCache(path.join(bundledRoot, 'app'));
+    }
+  } catch { /* non-critical */ }
+
+  const elapsed = Date.now() - t0;
+  if (elapsed > 100) {
+    console.info(`[MindOS:heal] Previous installation healing completed in ${elapsed}ms`);
+  }
+}
+
+/** Remove private Node.js if it can't run or version is too low (< 18). */
+function validatePrivateNode(): void {
+  const nodeBin = path.join(
+    app.getPath('home'), '.mindos', 'node',
+    process.platform === 'win32' ? 'node.exe' : 'bin/node',
+  );
+  if (!existsSync(nodeBin)) return; // nothing to validate
+
+  try {
+    const { execSync } = require('child_process');
+    const version = execSync(`"${nodeBin}" --version`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    const match = version.match(/^v(\d+)/);
+    if (match && parseInt(match[1], 10) >= 18) return; // good
+    console.warn(`[MindOS:heal] Private Node.js ${version} is below v18 — removing`);
+  } catch {
+    console.warn('[MindOS:heal] Private Node.js failed version check — removing');
+  }
+
+  // Remove the entire private node directory — downloadNode() will replace it
+  const nodeDir = path.join(app.getPath('home'), '.mindos', 'node');
+  try { rmSync(nodeDir, { recursive: true, force: true }); } catch { /* best effort */ }
+}
+
+/** Remove .next if it exists but is corrupt (missing BUILD_ID and no standalone server). */
+function validateBuildCache(appDir: string): void {
+  const nextDir = path.join(appDir, '.next');
+  if (!existsSync(nextDir)) return;
+
+  const hasBuildId = existsSync(path.join(nextDir, 'BUILD_ID'));
+  const hasStandalone = existsSync(path.join(nextDir, 'standalone', 'server.js'));
+
+  if (hasBuildId || hasStandalone) return; // build looks valid
+
+  // .next exists but neither BUILD_ID nor standalone — corrupt / interrupted build
+  console.warn('[MindOS:heal] Corrupt .next build cache detected — removing to trigger rebuild');
+  try { rmSync(nextDir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
 /**
@@ -1495,8 +1622,7 @@ app.whenReady().then(async () => {
 
   ensureMindosCliShim();
   cleanupOrphanedSshTunnel();
-  ProcessManager.cleanupOrphanedChildren();
-  cleanupConflictingLaunchdService();
+  await healPreviousInstallation();
 
   if (needsDesktopModeSelectAtLaunch()) {
     const mode = await showModeSelectWindow();

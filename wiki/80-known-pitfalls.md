@@ -50,6 +50,11 @@
 - **原因：** (1) `checkCliConflict()` 仅 `kill(pid,0)` 即假定 MindOS Web 已在 `config.port ?? 3456` 上监听，**未探测 `/api/health`**，陈旧 PID 或无关进程占位会导致假阳性；(2) `prepare-mindos-runtime` 未拷贝仓库 `bin/`，打包内缺少 `mindos-runtime/bin/cli.js`
 - **解决：** 冲突分支在 `loadURL` 前 `verifyMindOsWebListening`（短重试）；`prepare-mindos-runtime` 在存在时拷贝 `bin/`；用户可手动删 `~/.mindos/mindos.pid` 后重开（仍建议用新版本逻辑自动回落到起本地服务）
 
+### macOS：用户拖拽删除 .app 后残留进程、端口、PID 文件导致重装异常
+- **现象：** 重装后端口跳到 3457、launchd daemon 无限重试、.next 构建缓存损坏、MCP 客户端配置失效
+- **原因：** macOS 无卸载 hook；拖垃圾桶不触发任何清理。孤立的 Next.js/MCP 进程持续占端口；`desktop-children.pid`/`mindos.pid` 残留；launchd `com.mindos.app` 的 `KeepAlive.SuccessfulExit=false` 导致无限重启
+- **解决：** `healPreviousInstallation()` 在每次 Desktop 启动时静默运行——停 launchd daemon、清理双 PID 文件（Desktop + CLI）、port-based fallback kill、等待端口释放（5s）、验证私有 Node.js 版本、验证 .next 构建缓存。端口偏移时自动更新 MCP 客户端配置。用户无感知。[spec](./specs/spec-desktop-reinstall-healing.md)
+
 ### macOS：`file://…/app.asar` 内嵌页面 `ERR_FAILED`（connect / splash）
 - **现象：** `did-fail-load` 指向 `…/app.asar/src/connect.html` 等；模式选择或远程连接窗口打不开
 - **原因：** 部分环境下 Chromium 对 asar 内 `file://` 主文档或子资源加载不稳定

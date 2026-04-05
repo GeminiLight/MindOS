@@ -661,23 +661,69 @@ export class ProcessManager extends EventEmitter {
       if (!raw) return;
       const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
       for (const pid of pids) {
-        try {
-          process.kill(pid, 0); // check alive
-          // Verify it's a node process (avoid killing unrelated PID reuse)
-          if (process.platform !== 'win32') {
-            try {
-              const { execSync } = require('child_process');
-              const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
-              if (!comm.includes('node') && !comm.includes('next')) {
-                continue; // PID reused by non-node process, skip
-              }
-            } catch { continue; } // ps failed, skip to be safe
-          }
-          console.warn(`[MindOS] Killing orphaned child process (PID ${pid})`);
-          process.kill(pid, 'SIGTERM');
-        } catch { /* already dead */ }
+        ProcessManager.killIfNodeProcess(pid, 'orphaned child');
       }
       unlinkSync(ProcessManager.PID_FILE);
     } catch { /* non-critical */ }
+  }
+
+  /**
+   * Kill orphaned CLI-started processes (mindos.pid) from a previous `mindos start` session.
+   * Desktop and CLI use separate PID files — both must be cleaned up on reinstall.
+   */
+  static cleanupCliPidFile(): void {
+    const home = process.env.HOME || process.env.USERPROFILE || '/tmp';
+    const cliPidPath = path.join(home, '.mindos', 'mindos.pid');
+    try {
+      if (!existsSync(cliPidPath)) return;
+      const raw = readFileSync(cliPidPath, 'utf-8').trim();
+      if (!raw) return;
+      const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
+      for (const pid of pids) {
+        ProcessManager.killIfNodeProcess(pid, 'orphaned CLI');
+      }
+      unlinkSync(cliPidPath);
+    } catch { /* non-critical */ }
+  }
+
+  /**
+   * Kill processes holding a specific port (fallback when PID files are missing/stale).
+   * Only kills node/next processes to avoid harming unrelated services.
+   */
+  static killProcessesOnPort(port: number): void {
+    if (process.platform === 'win32') return;
+    try {
+      const { execSync } = require('child_process');
+      // Get PIDs listening on the port
+      let pids: number[] = [];
+      try {
+        const output = execSync(`lsof -ti:${port}`, { encoding: 'utf-8', timeout: 3000 }).trim();
+        pids = output.split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
+      } catch {
+        // lsof not available or no process on port
+        return;
+      }
+      for (const pid of pids) {
+        ProcessManager.killIfNodeProcess(pid, `port ${port} occupant`);
+      }
+    } catch { /* best effort */ }
+  }
+
+  /** Verify a PID is a node/next process before killing it — prevents harming unrelated processes */
+  private static killIfNodeProcess(pid: number, label: string): void {
+    try {
+      process.kill(pid, 0); // check alive
+      if (process.platform !== 'win32') {
+        try {
+          const { execSync } = require('child_process');
+          const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
+          if (!comm.includes('node') && !comm.includes('next')) {
+            return; // PID reused by non-node process, skip
+          }
+        } catch { return; } // ps failed, skip to be safe
+      }
+      console.warn(`[MindOS] Killing ${label} process (PID ${pid})`);
+      process.kill(pid, 'SIGTERM');
+    } catch { /* already dead */ }
   }
 }
