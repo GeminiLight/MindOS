@@ -2,16 +2,27 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { readSettings } from '@/lib/settings';
 import { maskToken } from '@/lib/format';
+import { networkInterfaces } from 'os';
 
 /** Parse hostname from Host header, handling IPv6 brackets */
 function parseHostname(host: string): string {
-  // IPv6: [::1]:3003 → [::1]
   if (host.includes(']')) {
     return host.slice(0, host.lastIndexOf(']') + 1);
   }
-  // IPv4/hostname: 192.168.1.1:3003 → 192.168.1.1
   const colonIdx = host.lastIndexOf(':');
   return colonIdx > 0 ? host.slice(0, colonIdx) : host;
+}
+
+/** Get first non-internal IPv4 address */
+function getLocalIP(): string | null {
+  try {
+    for (const ifaces of Object.values(networkInterfaces())) {
+      for (const iface of ifaces ?? []) {
+        if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
 }
 
 export async function GET(req: NextRequest) {
@@ -52,12 +63,9 @@ export async function GET(req: NextRequest) {
       port,
       toolCount: running ? 24 : 0,
       authConfigured,
-      // Masked for display; full token only used server-side in snippet generation
       maskedToken: authConfigured ? maskToken(token) : undefined,
-      // Full token for config snippet copy — this API is protected by proxy.ts middleware
-      // (same-origin or bearer token required). Consistent with /api/settings which also
-      // exposes the token to authenticated users.
       authToken: authConfigured ? token : undefined,
+      localIP: getLocalIP(),
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

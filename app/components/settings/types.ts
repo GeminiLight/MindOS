@@ -66,6 +66,7 @@ export interface McpStatus {
   authConfigured: boolean;
   maskedToken?: string;
   authToken?: string;
+  localIP?: string | null;
 }
 
 export interface AgentInfo {

@@ -162,11 +162,10 @@ function ConnectGuide({ status, mode, onModeChange, m }: {
   const hasToken = status.authConfigured && !!status.authToken;
   const displayToken = revealed ? (status.authToken ?? '') : (status.maskedToken ?? '');
   const serverUrl = status.endpoint || `http://127.0.0.1:${status.port}/mcp`;
-  // For "remote access" instructions, use the browser's actual hostname (not localhost from MCP status)
-  // so remote users see the correct IP, and local users see a meaningful address.
-  const browserHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  const webPort = typeof window !== 'undefined' ? window.location.port : String(status.port);
-  const remoteUrl = `http://${browserHost}:${webPort}`;
+  // Use server-detected LAN IP for remote access instructions (not localhost)
+  const remoteHost = status.localIP || 'localhost';
+  const webPort = typeof window !== 'undefined' ? window.location.port || '3456' : '3456';
+  const remoteUrl = `http://${remoteHost}:${webPort}`;
   const maskedAuthToken = status.maskedToken ?? '';
 
   return (
