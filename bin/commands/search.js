@@ -1,6 +1,7 @@
 import { bold, dim, cyan, red } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
+import { getBaseUrl, getAuthHeaders } from '../lib/remote.js';
 
 export const meta = {
   name: 'search', group: 'Knowledge',
@@ -20,13 +21,11 @@ export async function run(args, flags) {
     return;
   }
   loadConfig();
-  const port = flags.port || process.env.MINDOS_WEB_PORT || '3456';
-  const token = process.env.MINDOS_AUTH_TOKEN || '';
+  const baseUrl = getBaseUrl();
   const limit = parseInt(flags.limit) || 20;
-  const headers = {};
-  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const headers = getAuthHeaders();
   try {
-    const res = await fetch('http://localhost:' + port + '/api/search?q=' + encodeURIComponent(query) + '&limit=' + limit, { headers });
+    const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`, { headers });
     if (!res.ok) throw new Error('API error (' + res.status + ')');
     const data = await res.json();
     const results = data.results || data || [];

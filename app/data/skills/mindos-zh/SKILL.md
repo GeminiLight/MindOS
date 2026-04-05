@@ -2,164 +2,168 @@
 name: mindos-zh
 description: >
   操作 MindOS 知识库：更新笔记, 搜索知识库, 整理文件, 执行SOP/工作流, 复盘, 追加CSV, 跨Agent交接,
-  路由非结构化输入到对应文件, 提炼经验, 同步关联文档.
-  update notes, search knowledge base, organize, SOP, retrospective, CSV, handoff, route notes, distill experience.
+  路由非结构化输入到对应文件, 提炼经验, 同步关联文档. update notes, search knowledge base, organize,
+  SOP, retrospective, CSV, handoff, route notes, distill experience.
   仅 mindRoot 知识库内任务。不用于：改代码仓库/项目文档/KB 外路径。
   核心概念：空间、指令(INSTRUCTION.md)、技能(SKILL.md)；笔记可承载指令与技能。
-  当用户说"帮我记下来"、"搜一下我的笔记"、"更新知识库"、"整理文件"、"执行工作流"、
-  "记录这次会议的决策"、"追加到表格"、"交接给下一个 Agent" 时触发。
-  也适用于：save/record a note, search KB, update/edit files, run SOP, capture decisions,
-  append CSV rows, cross-agent handoff — 所有 mindRoot 知识库内的读写操作。
 ---
 
-# MindOS Skill
+# MindOS 技能
 
-<!-- version: 1.3.2 -->
+<!-- version: 2.0.0 — CLI + MCP 统一技能 -->
 
-**每次任务前，内化这 5 条规则：**
+## 执行方式选择
 
-1. **bootstrap 目录树是首要索引** — 先从目录名和层级推断，再搜索。大多数定位不需要工具调用。
-2. **默认只读。** 只有用户明确要求保存、记录、整理、修改时才调写入工具。查阅/总结/引用 = 不写。
-3. **规则优先级**（越上越优先）：用户当轮指令 → `.mindos/user-preferences.md` → 就近目录 `INSTRUCTION.md` → 根 `INSTRUCTION.md` → 本 SKILL 默认。
-4. **多文件编辑必须先出计划。** 展示完整变更清单，确认后再执行。
-5. 增删/移动/重命名后 → **自动同步受影响 README**。
+**能执行 bash 命令**（Claude Code、Gemini CLI、Codex、pi-coding-agent）→ 用 **CLI 列**。
+**只有 MCP 工具**（`mindos_*` 开头）→ 用 **MCP 列**。
+**两者都有** → 优先 CLI（更省 token）。
 
----
+| 操作 | CLI (bash) | MCP (tool call) |
+|------|-----------|-----------------|
+| 加载上下文 | `mindos file list` | `mindos_bootstrap` |
+| 列出空间 | `mindos space list` | `mindos_list_spaces` |
+| 列出文件 | `mindos file list [目录]` | `mindos_list_files` |
+| 搜索 | `mindos search "关键词"` | `mindos_search_notes(query)` ×2-4 变体 |
+| 读取文件 | `mindos file read <路径>` | `mindos_read_file(path)` |
+| 读取行 | `mindos file read <路径> --lines 10:20` | `mindos_read_lines(path, start, end)` |
+| 创建文件 | `mindos file create <路径> --content "..."` | `mindos_create_file(path, content)` |
+| 覆盖文件 | `mindos file create <路径> --content "..." --force` | `mindos_write_file(path, content)` |
+| 编辑段落 | *(读取 → 修改 → 覆盖写回)* | `mindos_update_section(path, heading, content)` |
+| 标题后插入 | *(读取 → 修改 → 覆盖写回)* | `mindos_insert_after_heading(path, heading, content)` |
+| 追加内容 | `echo "text" >> <完整路径>` | `mindos_append_to_file(path, content)` |
+| 删除文件 | `mindos file delete <路径>` | `mindos_delete_file(path)` |
+| 重命名 | `mindos file rename <旧> <新>` | `mindos_rename_file(path, newName)` |
+| 移动文件 | `mindos file move <源> <目标>` | `mindos_move_file(path, destination)` |
+| 创建空间 | `mindos space create "名称"` | `mindos_create_space(name)` |
+| 反向链接 | `mindos api GET /api/backlinks?path=<path>` | `mindos_get_backlinks(path)` |
+| 历史记录 | `mindos api GET /api/git?op=log&path=<path>` | `mindos_get_history(path)` |
+| 追加 CSV 行 | *(读取 → 追加 → 覆盖写回)* | `mindos_append_csv(path, values)` |
+| Raw API | `mindos api <METHOD> <path>` | *(用上面的具体工具)* |
 
-## 绝对不要（踩坑清单）
+### CLI 安装（MCP 用户跳过）
 
-- **绝不写入 KB 根目录**，除非用户明确要求。根目录只放治理文件（`README.md`、`INSTRUCTION.md`、`CONFIG`）。新内容放语义最合适的子目录。
-- **绝不假设目录名。** 不要写死 `Workflows/`、`Projects/`、`Contacts/` — 必须从实际收到的 bootstrap 目录树推断。用户可能用中文名、扁平结构或独特层级。
-- **绝不用 `mindos_write_file` 做小修改。** 用 `update_section`、`update_lines` 或 `insert_after_heading` — 整文件覆写破坏 git diff，变更无法审计。
-- **绝不单关键词搜索。** 必须并行 2-4 条搜索（同义词、缩写、中英文变体）。单条命中率太低。
-- **绝不未经确认就改 `INSTRUCTION.md` 或 `README.md`。** 它们是治理文档，即使看起来只是修个错别字。
-- **绝不在没看过邻居文件的情况下创建新文件。** 至少读 1-2 个同目录文件，学习本地命名/标题/CSV 格式。自创新规是不一致的常见根源。
-- **绝不留孤链。** 重命名/移动后必须 `get_backlinks` 并更新每一个引用方。这是知识库断链的首因。
-- **绝不跳过多文件写入的路由确认。** 即使目标看起来很明显——用户的心智模型可能和你不同。
+```bash
+# 安装
+npm install -g @geminilight/mindos
 
----
-
-## MindOS 核心概念
-
-- **空间（Space）** — 按你的思维方式组织的知识分区。Agent 遵循同样的结构。
-- **指令（Instruction）** — 所有接入 Agent 都遵守的规则文件。写一次，全局生效。
-- **技能（Skill）** — 教 Agent 如何读写、整理知识库。Agent 按安装的 Skill 执行，不是瞎猜。
-
-**笔记即指令 / 技能** — `INSTRUCTION.md` 和 `SKILL.md` 就是目录树里的 Markdown 文件。笔记可以是随笔，也可以是 Agent 必须遵守的治理规则，或 Agent 按步骤执行的程序包。
-
----
-
-## 思维框架
-
-动手前，问自己：
-
-1. **用户意图属于哪类？** → 只读查阅 | 单文件编辑 | 多文件路由 | 结构变更 | SOP 执行。决定走下面哪条路径。
-2. **这个内容该放哪？** → 扫目录树。如果看名字 5 秒内定不下来，大概率要问用户确认。
-3. **附近有什么？** → 写之前读 1-2 个同级文件，照它们的风格。
-4. **改这里会打断什么？** → 重命名/移动：`get_backlinks`。内容修改：想想谁引用了这个事实。
-5. **用户让我写了吗，还是我自作主张？** → 没让你写就别写。
+# 远程模式（MindOS 运行在另一台机器上）
+mindos config set url http://<IP>:<端口>
+mindos config set authToken <token>
+# 在服务器上获取 token：mindos token
+```
 
 ---
 
-## 任务路由决策树
+## 规则
+
+1. **先了解结构** — 列出知识库目录树，再搜索或写入。
+2. **默认只读。** 只有用户明确要求保存、记录、整理、编辑时才写入。
+3. **规则优先级**（从高到低）：用户当前指令 → `.mindos/user-preferences.md` → 最近目录 `INSTRUCTION.md` → 根 `INSTRUCTION.md` → 本技能默认。
+4. **多文件编辑先出方案。** 展示完整变更列表，获批后再执行。
+5. 创建/删除/移动/重命名后 → **自动同步相关 README**。
+6. **写入前先读取。** 不基于假设写入。
+
+---
+
+## 禁止事项（血泪教训）
+
+- **禁止写入知识库根目录**（除非明确要求）。根目录仅放治理文件，新内容放最合适的子目录。
+- **禁止假设目录名。** 从实际目录树推断——知识库可能用中文名或扁平结构。
+- **禁止用整文件覆盖做小修改。** 用 `update_section` / `update_lines`（MCP）或精确读-改-写（CLI），整文件覆盖破坏 git diff。
+- **禁止单关键词搜索。** 至少 2-4 个并行搜索（同义词、缩写、中英文变体）。
+- **禁止未确认就修改 `INSTRUCTION.md` 或 `README.md`。** 治理文档——高敏感度。
+- **禁止不看邻居就创建文件。** 先读目标目录 1-2 个文件，了解命名和风格。
+- **禁止遗留孤立引用。** 重命名/移动后检查反向链接并更新所有引用。
+- **禁止跳过多文件写入确认。** 用户的心理模型可能和你不同。
+
+---
+
+## MindOS 概念
+
+- **空间 (Space)** — 按你的思维方式组织的知识分区。Agent 遵循相同结构。
+- **指令 (Instruction)** — `INSTRUCTION.md`，所有连接的 Agent 都遵守的规则文件。
+- **技能 (Skill)** — 教 Agent 如何读写和整理知识库。
+
+笔记可以同时承载指令和技能——它们只是目录树中的 Markdown 文件。
+
+---
+
+## 决策树
 
 ```
 用户请求
   │
-  ├─ 只是查找 / 总结 / 引用？
-  │   └─ 是 → [只读路径]：搜索 + 读取 + 标注来源。不写入。跳过 Hooks。
+  ├─ 查找 / 总结 / 引用？
+  │   └─ [只读路径]：搜索 → 读取 → 带引用回答。不写入。
   │
-  ├─ 要求保存 / 记录 / 更新 / 整理具体内容？
-  │   ├─ 单文件目标？ → [单文件编辑]
-  │   └─ 多文件或目标不明？ → [多文件路由]
+  ├─ 保存 / 记录 / 更新 / 整理具体内容？
+  │   ├─ 单文件 → [单文件编辑]
+  │   └─ 多文件或不确定 → [多文件路由] — 先出方案
   │
   ├─ 结构变更（重命名 / 移动 / 删除 / 重组）？
-  │   └─ [结构路径]
+  │   └─ [结构路径] — 变更前后检查反向链接
   │
-  ├─ 流程性 / 可重复的任务？
-  │   └─ [SOP 路径]
+  ├─ 流程性 / 可重复任务？
+  │   └─ [SOP 路径] — 找到并执行现有 SOP，或创建新的
   │
   ├─ 复盘 / 提炼 / 交接？
   │   └─ [复盘路径]
   │
-  └─ 模糊或范围过大？
-      └─ 先问清楚。基于 KB 状态提出 2-3 个具体选项。不要开始编辑。
+  └─ 模糊？
+      └─ 提问。基于知识库状态提出 2-3 个具体选项。
 ```
 
-**以上任何写入 / SOP / 结构路径 → 写入补充已加载到上下文（见下方或下一个上下文块中的 `## 写入与工作流补充` 章节）。**
+---
+
+## 判断启发
+
+**保存意图边界：**
+- "帮我记下来" / "保存" = 写入
+- "搜一下" / "总结" = 只读
+- "整理一下" → 先问：仅展示，还是写回知识库？
+
+**文件位置不确定：**
+- 5 秒内定不了 → 用最近的现有目录，告知用户
+- "随便放哪" → 收件箱，之后提议分类
+
+**范围蔓延：**
+- 输入路由到 >5 个文件 → 暂停确认
+- "全部更新" + 跨多个主题 → 分批确认
+
+**引用规范：** 引用知识库内容必须附带文件路径。
 
 ---
 
-## 工具选型
+## 任务后钩子
 
-| 意图 | 推荐工具 | 避免 |
-|------|----------|------|
-| 启动时加载上下文 | `mindos_bootstrap` | 不 bootstrap 就随机读文件 |
-| 列出顶层心智空间 | `mindos_list_spaces` | 只需分区概览却拉整棵 `list_files` |
-| 找文件 | `mindos_search_notes`（2-4 条并行关键词变体）| 单关键词搜索 |
-| 读内容 | `mindos_read_file` 或 `mindos_read_lines`（大文件） | 只需 10 行却读整文件 |
+写入任务（非简单读取）后扫描此表。最多 1 个提议；优先级最高的优先。先检查 `.mindos/user-preferences.md` 抑制项。
 
-写入、结构变更、历史工具 → 见写入与工作流补充（已加载到下方或下一个上下文块）。
+| 钩子 | 优先级 | 条件 |
+|------|--------|------|
+| 经验沉淀 | 高 | 调试、排错或多轮工作 |
+| 一致性同步 | 高 | 编辑的文件有反向链接 |
+| SOP 偏移 | 中 | 按 SOP 执行但实际偏离了步骤 |
+| 关联更新 | 中 | 更改了 CSV/TODO 状态且有关联文档 |
+| 结构分类 | 中 | 在临时位置或收件箱创建了文件 |
+| 模式提取 | 低 | 本次会话中 3+ 个结构相似的操作 |
 
-### 回退
-
-- `mindos_bootstrap` 不可用 → 手动读根 `INSTRUCTION.md` + `README.md`。
-- 搜索无结果 → 不放弃：(1) 扫上下文中的树；(2) 直接读候选文件；(3) `mindos_list_files` 细化子目录；(4) 用同义词/中英文变体重试。
-
----
-
-## 执行模式
-
-| 模式 | 适用场景 | 关键步骤 |
-|------|----------|----------|
-| **只读问答** | 查找 / 总结 / 引用 | 目录树推断 → 搜索 → 读取 → 标注来源 → 明确说信息缺口 |
-
-写入模式详细执行步骤 → 见写入与工作流补充（已加载到下方或下一个上下文块）。
-
----
-
-## 判断启发式规则
-
-**保存意图 — 读写边界识别**
-- "帮我记下来" / "记录一下" / "保存这个" = 写入
-- "搜一下有没有关于 X 的笔记" / "总结上周的工作" = 只读
-- 模糊边界（"整理一下这些内容"）→ 先问：是读取展示，还是写回 KB？
-
-**文件位置不确定时**
-- 扫目录树 5 秒内定不下来 → 不要自创新目录；放语义最近的已有目录，告知用户
-- 用户说"随便放个地方" → 放 inbox 或最顶层通用目录，任务后提议归类（触发 Structure classification hook）
-
-**范围蔓延信号**
-- 单条输入导致路由表 > 5 个文件 → 暂停，先确认范围；用户鲜少意图批量重写
-- "把这些都更新一下" + 内容跨越多个主题 → 拆成批次确认，不一次性执行
-
-**引用纪律**
-- KB 中引用的事实必须附带文件路径，便于用户核查
-
----
-
-## 任务后 Hooks
-
-**写入任务**完成后（简单单文件修改或只读查阅跳过），扫描下表。命中则发起一句话提议，最多 1 条，选优先级最高项。先查 `.mindos/user-preferences.md` 的抑制区；用户要求安静模式时全部跳过。
-
-| Hook | 优先级 | 触发条件 |
-|------|--------|---------|
-| 经验沉淀 | 高 | 调试、排错、踩坑，或多轮才解决 |
-| 一致性同步 | 高 | 编辑了有反链的文件（查 `get_backlinks`） |
-| SOP 偏差 | 中 | 按 SOP 执行但实际步骤与文档不符 |
-| 联动更新 | 中 | 改了 CSV/TODO 状态且存在关联文档 |
-| 结构归类 | 中 | 在临时目录或收件箱新建了文件 |
-| 模式提炼 | 低 | 本会话 3+ 次结构相似操作 |
-| 对话复盘 | 低 | 会话 >10 轮且涉及决策或权衡 |
-
-有 hook 命中 → 读 [references/post-task-hooks.md](./references/post-task-hooks.md) 获取提议措辞和用户自定义 hooks。都不命中则安静结束，不读此文件。
+触发时 → 读取 [references/post-task-hooks.md](./references/post-task-hooks.md)。
 
 ## 偏好捕获
 
-用户表达要长期记住的偏好（「以后不要…」「这个该放在…」）时，读 [references/preference-capture.md](./references/preference-capture.md) 并按确认后写入流程存入 `.mindos/user-preferences.md`。
-**不要读** preference-capture 除非用户真的表达了要持久化的偏好。
+用户表达持久偏好时 → 读取 [references/preference-capture.md](./references/preference-capture.md)，按确认-写入流程操作。
 
 ## SOP 编写
 
-创建或改写工作流 SOP 时，**必须 — 读 [references/sop-template.md](./references/sop-template.md)**（前置条件、分支步骤、退出条件、踩坑记录）。
-**不要读** sop-template 用于 SOP 执行（仅用于 SOP 创建/编辑）。
+创建/重写工作流 SOP 时 → 读取 [references/sop-template.md](./references/sop-template.md)。
+
+---
+
+## 错误处理（CLI）
+
+```bash
+"command not found: mindos"  → npm install -g @geminilight/mindos
+"Mind root not configured"   → mindos onboard
+"401 Unauthorized"           → 检查 AUTH_TOKEN：在服务器运行 mindos token
+"ECONNREFUSED"               → 在服务器启动：mindos start
+```

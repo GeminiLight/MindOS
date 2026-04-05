@@ -25,6 +25,10 @@ export function loadConfig() {
   set('AUTH_TOKEN',         config.authToken);
   set('WEB_PASSWORD',       config.webPassword);
   set('AI_PROVIDER',        config.ai?.provider);
+  // Remote URL: allows CLI to operate against a remote MindOS instance
+  if (config.url && !process.env.MINDOS_URL) {
+    process.env.MINDOS_URL = String(config.url);
+  }
 
   const providers = config.ai?.providers;
   if (providers) {

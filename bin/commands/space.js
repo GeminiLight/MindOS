@@ -11,6 +11,7 @@ import { resolve, basename } from 'node:path';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
+import { isRemoteMode, apiCall } from '../lib/remote.js';
 
 function getMindRoot() {
   loadConfig();
@@ -42,7 +43,7 @@ export const meta = {
 
 export async function run(args, flags) {
   const sub = args[0];
-  const root = getMindRoot();
+  loadConfig();
 
   if (!sub || flags.help || flags.h) {
     console.log(`
@@ -69,6 +70,13 @@ ${bold('Examples:')}
 `);
     return;
   }
+
+  // Remote mode: delegate to HTTP API
+  if (isRemoteMode()) {
+    return remoteSpaceDispatch(sub, args, flags);
+  }
+
+  const root = getMindRoot();
 
   switch (sub) {
     case 'ls': case 'list': return spaceLs(root, args[1], flags);
@@ -380,4 +388,63 @@ function spaceInit(root, relPath, flags) {
     return;
   }
   console.log(`${green('✔')} Initialized Space: ${cyan(relPath)}`);
+}
+
+// ── Remote mode: space operations via HTTP API ─────────────────────────────
+
+async function remoteSpaceDispatch(sub, args, flags) {
+  try {
+    switch (sub) {
+      case 'ls':
+      case 'list': {
+        const res = await apiCall('/api/file?op=list_spaces');
+        const data = await res.json();
+        const spaces = data.spaces || [];
+        if (isJsonMode(flags)) { output({ count: spaces.length, spaces }, flags); return; }
+        if (spaces.length === 0) { console.log(dim('No spaces found.')); return; }
+        console.log(`\n${bold(`Spaces (${spaces.length}):`)}\n`);
+        for (const s of spaces) {
+          const name = s.name || s.path || s;
+          const files = s.fileCount != null ? dim(` (${s.fileCount} files)`) : '';
+          console.log(`  ${cyan(name)}${files}`);
+        }
+        console.log();
+        return;
+      }
+
+      case 'create': {
+        const name = args[1];
+        if (!name) { console.error(red('Usage: mindos space create <name>')); process.exit(EXIT.ERROR); }
+        const res = await apiCall('/api/file', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'create_space', name }),
+        });
+        await res.json();
+        if (isJsonMode(flags)) { output({ ok: true, name }, flags); return; }
+        console.log(`${green('✔')} Created Space: ${cyan(name)}`);
+        return;
+      }
+
+      case 'rename':
+      case 'mv': {
+        const oldName = args[1], newName = args[2];
+        if (!oldName || !newName) { console.error(red('Usage: mindos space rename <old> <new>')); process.exit(EXIT.ERROR); }
+        const res = await apiCall('/api/file', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'rename_space', oldName, newName }),
+        });
+        await res.json();
+        if (isJsonMode(flags)) { output({ ok: true, from: oldName, to: newName }, flags); return; }
+        console.log(`${green('✔')} Renamed: ${oldName} → ${cyan(newName)}`);
+        return;
+      }
+
+      default:
+        console.error(red(`Remote mode does not support 'space ${sub}'. Use: list, create, rename`));
+        process.exit(EXIT.ERROR);
+    }
+  } catch (e) {
+    console.error(red(`Remote error: ${e.message}`));
+    process.exit(EXIT.ERROR);
+  }
 }

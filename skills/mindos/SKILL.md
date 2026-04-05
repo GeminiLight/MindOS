@@ -15,152 +15,160 @@ description: >
 
 # MindOS Skill
 
-<!-- version: 1.3.2 -->
+<!-- version: 2.0.0 — unified CLI + MCP skill -->
 
-**Before every task, internalize these 5 rules:**
+## Choose your execution mode
 
-1. The **bootstrap directory tree is the primary index** — reason from names and hierarchy before calling search. Most questions can be answered by reading what's already in context.
-2. **Default to read-only.** Only invoke write tools when the user explicitly asks to save, record, organize, or edit. Lookup / summarize / quote = no writes.
+**If you can run bash commands** (Claude Code, Gemini CLI, Codex, pi-coding-agent) → use the **CLI column**.
+**If you only have MCP tools** (`mindos_*`) → use the **MCP column**.
+**Both available** → prefer CLI (lower token cost).
+
+| Operation | CLI (bash) | MCP (tool call) |
+|-----------|-----------|-----------------|
+| Bootstrap context | `mindos file list` | `mindos_bootstrap` |
+| List spaces | `mindos space list` | `mindos_list_spaces` |
+| List files | `mindos file list [dir]` | `mindos_list_files` |
+| Search | `mindos search "query"` | `mindos_search_notes(query)` ×2-4 variants |
+| Read file | `mindos file read <path>` | `mindos_read_file(path)` |
+| Read lines | `mindos file read <path> --lines 10:20` | `mindos_read_lines(path, start, end)` |
+| Create file | `mindos file create <path> --content "..."` | `mindos_create_file(path, content)` |
+| Overwrite file | `mindos file create <path> --content "..." --force` | `mindos_write_file(path, content)` |
+| Edit section | *(read → edit → overwrite)* | `mindos_update_section(path, heading, content)` |
+| Insert after heading | *(read → edit → overwrite)* | `mindos_insert_after_heading(path, heading, content)` |
+| Append to file | `echo "text" >> <full-path>` | `mindos_append_to_file(path, content)` |
+| Delete file | `mindos file delete <path>` | `mindos_delete_file(path)` |
+| Rename/move | `mindos file rename <old> <new>` | `mindos_rename_file(path, newName)` |
+| Move file | `mindos file move <from> <to>` | `mindos_move_file(path, destination)` |
+| Create space | `mindos space create "name"` | `mindos_create_space(name)` |
+| Backlinks | `mindos api GET /api/backlinks?path=<path>` | `mindos_get_backlinks(path)` |
+| Git history | `mindos api GET /api/git?op=log&path=<path>` | `mindos_get_history(path)` |
+| Append CSV row | *(read → append → overwrite)* | `mindos_append_csv(path, values)` |
+| Raw API | `mindos api <METHOD> <path>` | *(use specific tools above)* |
+
+### CLI setup (skip if using MCP)
+
+```bash
+# Install
+npm install -g @geminilight/mindos
+
+# Remote mode (MindOS on another machine)
+mindos config set url http://<IP>:<PORT>
+mindos config set authToken <token>
+# Get token on server: mindos token
+```
+
+---
+
+## Rules
+
+1. **Bootstrap first** — list the KB tree to understand structure before searching or writing.
+2. **Default to read-only.** Only write when the user explicitly asks to save, record, organize, or edit. Lookup / summarize / quote = no writes.
 3. **Rule precedence** (highest wins): user's current-turn instruction → `.mindos/user-preferences.md` → nearest directory `INSTRUCTION.md` → root `INSTRUCTION.md` → this SKILL's defaults.
 4. **Multi-file edits require a plan first.** Present the full change list; execute only after approval.
 5. After create/delete/move/rename → **sync affected READMEs** automatically.
+6. **Read before write.** Always read a file before overwriting it. Never write based on assumptions.
 
 ---
 
 ## NEVER do (hard-won pitfalls)
 
-- **NEVER write to the KB root** unless the user explicitly says so. Root is for governance files only (`README.md`, `INSTRUCTION.md`, `CONFIG`). New content goes under the most semantically fitting subdirectory.
-- **NEVER assume directory names.** Don't hardcode `Workflows/`, `Projects/`, `Contacts/` — always infer from the bootstrap tree you actually received. The user's KB may use Chinese names, flat layout, or unconventional hierarchy.
-- **NEVER use `mindos_write_file` for a small edit.** Use `update_section`, `update_lines`, or `insert_after_heading` — full-file rewrites destroy git diffs and make changes unauditable.
-- **NEVER search with a single keyword.** Always fire 2-4 parallel searches (synonyms, abbreviations, Chinese/English variants). One keyword misses too much.
-- **NEVER modify `INSTRUCTION.md` or `README.md` without confirmation.** These are governance docs — treat as high-sensitivity even for trivial-looking typo fixes.
-- **NEVER create a file without checking siblings first.** Read at least 1-2 files in the target directory to learn local naming, heading style, and CSV schema. Inventing a new convention is a common cause of inconsistency.
-- **NEVER leave orphan references.** After any rename/move, run `get_backlinks` and update every referring file. Missing this is the #1 source of broken links in a KB.
-- **NEVER skip the routing confirmation for multi-file writes.** Even when the destinations seem obvious — the user's mental model may differ from yours.
+- **NEVER write to the KB root** unless explicitly told. Root is for governance files only. New content goes under the most fitting subdirectory.
+- **NEVER assume directory names.** Infer from the actual bootstrap tree — the KB may use Chinese names or flat layout.
+- **NEVER use full-file overwrite for a small edit.** Use `update_section` / `update_lines` (MCP) or surgical read-edit-write (CLI). Full rewrites destroy git diffs.
+- **NEVER search with a single keyword.** Fire 2-4 parallel searches (synonyms, abbreviations, Chinese/English variants).
+- **NEVER modify `INSTRUCTION.md` or `README.md` without confirmation.** Governance docs — treat as high-sensitivity.
+- **NEVER create a file without checking siblings.** Read 1-2 files in the target directory to learn local style.
+- **NEVER leave orphan references.** After rename/move, check backlinks and update every referring file.
+- **NEVER skip routing confirmation for multi-file writes.** The user's mental model may differ from yours.
 
 ---
 
 ## MindOS concepts
 
 - **Space** — Knowledge partitions organized the way you think. Agents follow the same structure.
-- **Instruction** — A rules file all connected agents obey. Written once, enforced everywhere.
-- **Skill** — Teaches agents how to read, write, and organize the KB. Agents execute installed Skills, not guesses.
+- **Instruction** — A rules file (`INSTRUCTION.md`) all connected agents obey.
+- **Skill** — Teaches agents how to read, write, and organize the KB.
 
-**Notes as Instruction and Skill** — `INSTRUCTION.md` and `SKILL.md` are just Markdown files in the tree. A note can be free-form text, governance rules agents must follow, or a procedure package agents execute.
-
----
-
-## Thinking framework
-
-Before acting, ask yourself:
-
-1. **What is the user's intent category?** → read-only lookup | single-file edit | multi-file routing | structural change | SOP execution. This determines which path to take below.
-2. **Where does this content belong?** → Scan the directory tree. If you can't place it in <5 seconds of looking at names, the user probably needs to confirm.
-3. **What already exists nearby?** → Read 1-2 sibling files before writing. Match their style.
-4. **What will break if I change this?** → For renames/moves: `get_backlinks`. For content edits: think about who else cites this fact.
-5. **Am I being asked, or am I volunteering?** → If the user didn't ask you to write, don't write.
+Notes can embody both Instruction and Skill — they're just Markdown files in the tree.
 
 ---
 
-## Task routing decision tree
+## Decision tree
 
 ```
 User request
   │
-  ├─ Only asks to look up / summarize / quote?
-  │   └─ YES → [Read-only path]: search + read + cite sources. No writes. Skip hooks.
+  ├─ Lookup / summarize / quote?
+  │   └─ [Read-only]: search → read → answer with citations. No writes.
   │
-  ├─ Asks to save / record / update / organize specific content?
-  │   ├─ Single file target? → [Single-file edit]
-  │   └─ Multiple files or unclear target? → [Multi-file routing]
+  ├─ Save / record / update / organize specific content?
+  │   ├─ Single file → [Single-file edit]
+  │   └─ Multiple files or unclear → [Multi-file routing] — plan first
   │
   ├─ Structural change (rename / move / delete / reorganize)?
-  │   └─ [Structural path]
+  │   └─ [Structural path] — check backlinks before and after
   │
   ├─ Procedural / repeatable task?
-  │   └─ [SOP path]
+  │   └─ [SOP path] — find and follow existing SOP, or create one
   │
   ├─ Retrospective / distill / handoff?
   │   └─ [Retrospective path]
   │
-  └─ Ambiguous or too broad?
-      └─ ASK for clarification. Propose 2-3 specific options based on KB state. Do NOT start editing.
+  └─ Ambiguous?
+      └─ ASK. Propose 2-3 specific options based on KB state.
 ```
-
-**For any write/SOP/structural path above → the write supplement is already loaded in context (see `## Write & Workflow Supplement` section below or in the next context block).**
-
----
-
-## Tool selection
-
-| Intent | Best tool | Avoid |
-|--------|-----------|-------|
-| Load context at start | `mindos_bootstrap` | Reading random files without bootstrap |
-| List top-level Mind Spaces | `mindos_list_spaces` | Full `mindos_list_files` when you only need zone names and README blurbs |
-| Find files | `mindos_search_notes` (2-4 parallel keyword variants) | Single-keyword search |
-| Read content | `mindos_read_file` or `mindos_read_lines` (for large files) | Reading entire large file when you need 10 lines |
-
-Write, structural, and history tools → see Write & Workflow Supplement (loaded below or in next context block).
-
-### Fallbacks
-
-- `mindos_bootstrap` unavailable → manual reads of root `INSTRUCTION.md` + `README.md`.
-- Search returns empty → don't give up: (1) scan tree in context, (2) read candidate files directly, (3) `mindos_list_files` on specific subdirectories, (4) try synonym/alternate-language keywords.
-
----
-
-## Execution patterns
-
-| Pattern | When | Key steps |
-|---------|------|-----------|
-| **Read-only Q&A** | Lookup / summarize / quote | Tree reasoning → search → read → answer with citations → state gaps |
-
-For write, SOP, structural, and handoff patterns → see Write & Workflow Supplement (loaded below or in next context block).
 
 ---
 
 ## Judgment heuristics
 
-**Save intent — read vs. write boundary**
-- "帮我记下来" / "记录一下" / "保存这个" = write
-- "搜一下有没有关于 X 的笔记" / "总结上周的工作" = read-only
-- Ambiguous boundary ("整理一下这些内容") → ask first: display only, or write back to KB?
+**Save intent boundary:**
+- "帮我记下来" / "保存" = write
+- "搜一下" / "总结" = read-only
+- "整理一下" → ask: display only, or write back?
 
-**File location uncertainty**
-- 扫目录树 5 秒内定不下来 → don't invent a new directory; use the nearest semantically-fit existing one and inform the user
-- User says "just put it somewhere" → place in inbox or top-level general directory, propose classification after (triggers Structure classification hook)
+**File location uncertainty:**
+- Can't decide in 5 seconds → use nearest existing directory, inform user
+- "Just put it somewhere" → inbox, propose classification after
 
-**Scope creep signals**
-- Single input routes to >5 files → pause, confirm scope; users rarely intend bulk rewrites
-- "Update all of these" + content spans multiple topics → split into batches, confirm each, don't execute all at once
+**Scope creep:**
+- Input routes to >5 files → pause, confirm scope
+- "Update all of these" spanning multiple topics → split into batches
 
-**Citation discipline**
-- KB-cited facts must include the file path so the user can verify
+**Citation:** KB-cited facts must include the file path.
 
 ---
 
 ## Post-task hooks
 
-After **write tasks** (not simple single-file edits or read-only), scan this table. If a condition matches, make a one-line proposal. At most 1 proposal; pick highest priority. Check `.mindos/user-preferences.md` suppression section first. Skip all if user asked for quiet mode.
+After write tasks (not simple reads), scan this table. At most 1 proposal; highest priority wins. Check `.mindos/user-preferences.md` suppression first.
 
 | Hook | Priority | Condition |
 |------|----------|-----------|
-| Experience capture | high | Debugging, troubleshooting, or took multiple rounds |
-| Consistency sync | high | Edited file A which has backlinks (check `get_backlinks`) |
-| SOP drift | medium | Followed an SOP but execution diverged from its steps |
-| Linked update | medium | Changed a CSV/TODO status and related docs exist |
-| Structure classification | medium | Created a file in a temporary location or inbox |
-| Pattern extraction | low | 3+ structurally similar operations this session |
-| Conversation retrospective | low | Session >10 turns with decisions or trade-offs |
+| Experience capture | high | Debugging, troubleshooting, or multi-round work |
+| Consistency sync | high | Edited file with backlinks |
+| SOP drift | medium | Followed SOP but diverged |
+| Linked update | medium | Changed CSV/TODO status with related docs |
+| Structure classification | medium | Created file in inbox/temp location |
+| Pattern extraction | low | 3+ similar operations this session |
 
-If a hook triggers → read [references/post-task-hooks.md](./references/post-task-hooks.md) for the propose format and any user-defined hooks. If nothing matches, end quietly — do not read the file.
+If a hook triggers → read [references/post-task-hooks.md](./references/post-task-hooks.md).
 
 ## Preference capture
 
-When the user expresses a standing preference ("don't do X", "always put Y in Z"), read [references/preference-capture.md](./references/preference-capture.md) and follow the confirm-then-write flow to `.mindos/user-preferences.md`.
-**Do NOT read** preference-capture unless the user actually expressed a preference to persist.
+When user expresses a standing preference → read [references/preference-capture.md](./references/preference-capture.md) and follow confirm-then-write flow.
 
 ## SOP authoring
 
-When creating or rewriting a workflow SOP, **MANDATORY — read [references/sop-template.md](./references/sop-template.md)** for required structure (prerequisites, steps with branches, exit conditions, pitfall log).
-**Do NOT read** sop-template for SOP execution (only for SOP creation/editing).
+When creating/rewriting an SOP → read [references/sop-template.md](./references/sop-template.md).
+
+---
+
+## Error handling (CLI)
+
+```bash
+"command not found: mindos"  → npm install -g @geminilight/mindos
+"Mind root not configured"   → mindos onboard
+"401 Unauthorized"           → Check AUTH_TOKEN: mindos token (on server)
+"ECONNREFUSED"               → Start server: mindos start
+```

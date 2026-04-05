@@ -10,6 +10,7 @@ import { resolve, basename, dirname, relative } from 'node:path';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
+import { isRemoteMode, apiCall } from '../lib/remote.js';
 
 function getMindRoot() {
   loadConfig();
@@ -52,12 +53,19 @@ export const meta = {
 
 export async function run(args, flags) {
   const sub = args[0];
-  const root = getMindRoot();
+  loadConfig();
 
   if (!sub || flags.help || flags.h) {
     printFileHelp();
     return;
   }
+
+  // Remote mode: delegate to HTTP API
+  if (isRemoteMode()) {
+    return remoteFileDispatch(sub, args, flags);
+  }
+
+  const root = getMindRoot();
 
   switch (sub) {
     case 'list': return fileList(root, args.slice(1), flags);
@@ -313,4 +321,120 @@ function fileMkdir(root, dirPath, flags) {
     return;
   }
   console.log(`${green('✔')} Created directory: ${cyan(dirPath)}`);
+}
+
+// ── Remote mode: all operations via HTTP API ──────────────────────────────
+
+async function remoteFileDispatch(sub, args, flags) {
+  try {
+    switch (sub) {
+      case 'list':
+      case 'ls': {
+        const res = await apiCall('/api/files');
+        const data = await res.json();
+        if (isJsonMode(flags)) {
+          output(data, flags);
+          return;
+        }
+        // data is a tree; flatten for display
+        const files = [];
+        function walk(nodes, prefix = '') {
+          for (const n of nodes || []) {
+            const p = prefix ? `${prefix}/${n.name}` : n.name;
+            if (n.type === 'file') files.push(p);
+            if (n.children) walk(n.children, p);
+          }
+        }
+        walk(data.tree || data);
+        console.log(`\n${bold(`Files (${files.length}):`)}\n`);
+        for (const f of files) console.log(`  ${f}`);
+        console.log();
+        return;
+      }
+
+      case 'read':
+      case 'cat': {
+        const filePath = args[1];
+        if (!filePath) { console.error(red('Usage: mindos file read <path>')); process.exit(EXIT.ERROR); }
+        const res = await apiCall(`/api/file?path=${encodeURIComponent(filePath)}&op=read_file`);
+        const data = await res.json();
+        if (isJsonMode(flags)) { output(data, flags); return; }
+        console.log(data.content ?? '');
+        return;
+      }
+
+      case 'create': {
+        const filePath = args[1];
+        if (!filePath) { console.error(red('Usage: mindos file create <path> --content "..."')); process.exit(EXIT.ERROR); }
+        const content = flags.content || `# ${basename(filePath, '.md')}\n`;
+        // --force → save_file (overwrite); default → create_file (fail if exists)
+        const action = flags.force ? 'save_file' : 'create_file';
+        const res = await apiCall('/api/file', {
+          method: 'POST',
+          body: JSON.stringify({ action, path: filePath, content }),
+        });
+        const data = await res.json();
+        if (isJsonMode(flags)) { output(data, flags); return; }
+        console.log(`${green('✔')} ${flags.force ? 'Saved' : 'Created'}: ${cyan(filePath)}`);
+        return;
+      }
+
+      case 'delete':
+      case 'rm': {
+        const filePath = args[1];
+        if (!filePath) { console.error(red('Usage: mindos file delete <path>')); process.exit(EXIT.ERROR); }
+        const res = await apiCall('/api/file', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'delete_file', path: filePath }),
+        });
+        await res.json();
+        if (isJsonMode(flags)) { output({ ok: true, deleted: filePath }, flags); return; }
+        console.log(`${green('✔')} Deleted: ${filePath}`);
+        return;
+      }
+
+      case 'rename':
+      case 'mv':
+      case 'move': {
+        const oldPath = args[1], newPath = args[2];
+        if (!oldPath || !newPath) { console.error(red('Usage: mindos file rename <old> <new>')); process.exit(EXIT.ERROR); }
+        const action = sub === 'move' ? 'move_file' : 'rename_file';
+        const body = action === 'move_file'
+          ? { action, path: oldPath, destination: newPath }
+          : { action, path: oldPath, newName: newPath };
+        const res = await apiCall('/api/file', { method: 'POST', body: JSON.stringify(body) });
+        await res.json();
+        if (isJsonMode(flags)) { output({ ok: true, from: oldPath, to: newPath }, flags); return; }
+        console.log(`${green('✔')} ${sub === 'move' ? 'Moved' : 'Renamed'}: ${oldPath} → ${cyan(newPath)}`);
+        return;
+      }
+
+      case 'search': {
+        const query = args.slice(1).join(' ');
+        if (!query) { console.error(red('Usage: mindos file search <query>')); process.exit(EXIT.ERROR); }
+        const limit = flags.limit || 20;
+        const res = await apiCall(`/api/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+        const data = await res.json();
+        if (isJsonMode(flags)) { output(data, flags); return; }
+        const results = data.results || [];
+        if (results.length === 0) { console.log(dim(`No results for "${query}"`)); return; }
+        console.log(`\n${bold(`Search: "${query}"  (${results.length} files)`)}\n`);
+        for (const r of results) {
+          console.log(`  ${cyan(r.path || r.file)}`);
+          for (const m of (r.matches || []).slice(0, 3)) {
+            console.log(`    ${dim(`L${m.line}:`)} ${m.text || m.snippet || ''}`);
+          }
+        }
+        console.log();
+        return;
+      }
+
+      default:
+        console.error(red(`Unknown subcommand: ${sub}`));
+        process.exit(EXIT.ERROR);
+    }
+  } catch (e) {
+    console.error(red(`Remote error: ${e.message}`));
+    process.exit(EXIT.ERROR);
+  }
 }
