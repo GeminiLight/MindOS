@@ -113,6 +113,30 @@ async function installAgents(
   return updated;
 }
 
+/** Phase 2.5: Install skills to selected agents. Returns success status. */
+async function installSkills(
+  skillName: string,
+  agentKeys: string[],
+): Promise<boolean> {
+  if (agentKeys.length === 0) return true;
+  
+  try {
+    const res = await fetch('/api/mcp/install-skill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        skill: skillName,
+        agents: agentKeys,
+      }),
+    });
+    const data = await res.json();
+    return data.ok === true;
+  } catch (e) {
+    console.warn('[SetupWizard] Skill installation failed:', e);
+    return false;
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function SetupWizard() {
@@ -138,6 +162,7 @@ export default function SetupWizard() {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState('');
   const [needsRestart, setNeedsRestart] = useState(false);
+  const [skillInstallStatus, setSkillInstallStatus] = useState<'pending' | 'installing' | 'ok' | 'error' | 'skipped'>('pending');
 
   const [webPortStatus, setWebPortStatus] = useState<PortStatus>({ checking: false, available: null, isSelf: false, suggestion: null });
   const [mcpPortStatus, setMcpPortStatus] = useState<PortStatus>({ checking: false, available: null, isSelf: false, suggestion: null });
@@ -150,7 +175,7 @@ export default function SetupWizard() {
   const [agentScope, setAgentScope] = useState<'global' | 'project'>('global');
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentInstallStatus>>({});
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>({ cli: true, mcp: false });
-  const [setupPhase, setSetupPhase] = useState<'review' | 'saving' | 'agents' | 'done'>('review');
+  const [setupPhase, setSetupPhase] = useState<'review' | 'saving' | 'agents' | 'skills' | 'done'>('review');
 
   // Load existing config as defaults on mount, generate token if none exists
   useEffect(() => {
@@ -357,6 +382,22 @@ export default function SetupWizard() {
       }
     }
 
+    // Phase 3: Install skills to selected agents ⭐ NEW
+    if (agentKeys.length > 0) {
+      setSetupPhase('skills');
+      setSkillInstallStatus('installing');
+      const skillName = finalState.template === 'zh' ? 'mindos-zh' : 'mindos';
+      try {
+        const skillOk = await installSkills(skillName, agentKeys);
+        setSkillInstallStatus(skillOk ? 'ok' : 'error');
+      } catch (e) {
+        console.warn('[SetupWizard] skill install failed:', e);
+        setSkillInstallStatus('error');
+      }
+    } else {
+      setSkillInstallStatus('skipped');
+    }
+
     setSubmitting(false);
     setCompleted(true);
     setSetupPhase('done');
@@ -443,6 +484,7 @@ export default function SetupWizard() {
             setupPhase={setupPhase}
             cliEnabled={connectionMode.cli}
             mcpEnabled={connectionMode.mcp}
+            skillInstallStatus={skillInstallStatus}
           />
         )}
 

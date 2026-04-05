@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Loader2, AlertTriangle, CheckCircle2, XCircle, Copy, Check,
-  FolderOpen, Brain, Plug, Shield,
+  FolderOpen, Brain, Plug, Shield, Sparkles,
 } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
@@ -112,14 +112,15 @@ export interface StepReviewProps {
   error: string;
   needsRestart: boolean;
   s: SetupMessages;
-  setupPhase: 'review' | 'saving' | 'agents' | 'done';
+  setupPhase: 'review' | 'saving' | 'agents' | 'skills' | 'done';
   cliEnabled: boolean;
   mcpEnabled: boolean;
+  skillInstallStatus?: 'pending' | 'installing' | 'ok' | 'error' | 'skipped';
 }
 
 export default function StepReview({
   state, selectedAgents, agentStatuses, onRetryAgent, error, needsRestart, s,
-  setupPhase, cliEnabled, mcpEnabled,
+  setupPhase, cliEnabled, mcpEnabled, skillInstallStatus = 'pending',
 }: StepReviewProps) {
   const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
 
@@ -134,9 +135,11 @@ export default function StepReview({
   // Progress stepper phases — dynamically built based on selected modes
   type Phase = typeof setupPhase;
   const showAgentPhase = mcpEnabled && selectedAgents.size > 0;
+  const showSkillPhase = selectedAgents.size > 0;
   const phases: { key: Phase; label: string }[] = [
     { key: 'saving', label: s.phaseSaving },
     ...(showAgentPhase ? [{ key: 'agents' as Phase, label: s.phaseAgents }] : []),
+    ...(showSkillPhase ? [{ key: 'skills' as Phase, label: s.phaseSkill ?? 'Installing skills' }] : []),
     { key: 'done', label: s.phaseDone },
   ];
   const phaseOrder: Phase[] = phases.map(p => p.key);
@@ -234,6 +237,7 @@ export default function StepReview({
           selectedAgents={selectedAgents}
           agentStatuses={agentStatuses}
           needsRestart={needsRestart}
+          skillInstallStatus={skillInstallStatus}
           s={s}
         />
       )}
@@ -243,12 +247,13 @@ export default function StepReview({
 
 /* ── Health Check Summary ─────────────────────────────────────────────────── */
 
-function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s }: {
+function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s, skillInstallStatus = 'pending' }: {
   state: SetupState;
   selectedAgents: Set<string>;
   agentStatuses: Record<string, AgentInstallStatus>;
   needsRestart: boolean;
   s: SetupMessages;
+  skillInstallStatus?: 'pending' | 'installing' | 'ok' | 'error' | 'skipped';
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -272,6 +277,7 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
   const successAgents = Object.values(agentStatuses).filter(a => a.state === 'ok').length;
   const agentsOk = successAgents > 0;
   const hasToken = !!state.authToken;
+  const skillsOk = skillInstallStatus === 'ok';
 
   // Resolve provider display name and model from dynamic config
   let providerDisplayName = '';
@@ -316,6 +322,19 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
           : (s.healthAgentsNone ?? 'No agents configured'),
       action: agentsOk ? undefined : (s.healthAgentsAction ?? 'You can add agents later in Settings → Connections.'),
     },
+    ...(selectedAgents.size > 0 ? [{
+      ok: skillsOk,
+      icon: <Sparkles size={14} />,
+      title: s.healthSkills ?? 'Skills',
+      detail: skillInstallStatus === 'ok'
+        ? (s.healthSkillsOk ?? 'Skills installed successfully')
+        : skillInstallStatus === 'error'
+          ? (s.healthSkillsError ?? 'Skill installation failed')
+          : skillInstallStatus === 'skipped'
+            ? (s.healthSkillsSkipped ?? 'Skipped')
+            : (s.healthSkillsInstalling ?? 'Installing skills...'),
+      action: skillInstallStatus === 'error' ? (s.healthSkillsAction ?? 'You can install skills manually later.') : undefined,
+    }] : []),
   ];
 
   return (
