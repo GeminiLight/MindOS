@@ -40,7 +40,10 @@ cp -r app/.next/static "$WORK/app/.next/static"
 mkdir -p "$WORK/app"
 cp -r app/public "$WORK/app/public"
 # Copy skill definitions (not included in standalone output, needed at runtime)
-[ -d app/data/skills ] && cp -r app/data/skills "$WORK/app/data/skills"
+if [ -d app/data/skills ]; then
+  mkdir -p "$WORK/app/data"
+  cp -r app/data/skills "$WORK/app/data/skills"
+fi
 
 # ── MCP server ──
 echo "  Copying MCP..."
