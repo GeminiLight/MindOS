@@ -383,22 +383,6 @@ export default function ViewPageClient({
               <span className="text-xs text-error hidden sm:inline">{saveError}</span>
             )}
 
-            {/* Graph toggle — only for md files, hidden when graph plugin is disabled */}
-            {extension === 'md' && !editing && !isDraft && isRendererEnabled('graph') && (
-              <button
-                onClick={handleToggleGraph}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
-                style={{
-                  background: effectiveGraphMode ? `${'var(--amber)'}22` : 'var(--muted)',
-                  color: effectiveGraphMode ? 'var(--amber)' : 'var(--muted-foreground)',
-                }}
-                title={effectiveGraphMode ? 'Switch to document view' : 'Switch to Wiki Graph'}
-              >
-                {effectiveGraphMode ? <FileText size={13} /> : <Share2 size={13} />}
-                <span className="hidden sm:inline">{effectiveGraphMode ? 'Doc' : 'Graph'}</span>
-              </button>
-            )}
-
             {/* Renderer toggle — only shown when a custom renderer exists (excludes graph-mode override) */}
             {registryRenderer && !editing && !isDraft && !graphRenderer && (
               <button
@@ -485,6 +469,12 @@ export default function ViewPageClient({
                     ref={moreMenuRef}
                     className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-border bg-card shadow-lg py-1"
                   >
+                    {extension === 'md' && !editing && !isDraft && isRendererEnabled('graph') && (
+                      <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left" onClick={() => { setMoreOpen(false); handleToggleGraph(); }}>
+                        {effectiveGraphMode ? <FileText size={14} className="shrink-0" /> : <Share2 size={14} className="shrink-0" />}
+                        {effectiveGraphMode ? (t.view?.switchToDoc ?? 'Document view') : (t.view?.switchToGraph ?? 'Wiki Graph')}
+                      </button>
+                    )}
                     <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left" onClick={handleCopyPath}>
                       <Copy size={14} className="shrink-0" /> {t.view?.copyPath ?? t.fileTree?.copyPath ?? 'Copy Path'}
                     </button>
