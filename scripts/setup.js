@@ -55,8 +55,8 @@ const T = {
   // step labels
   step:           { en: (n, total) => `Step ${n}/${total}`, zh: (n, total) => `步骤 ${n}/${total}` },
   stepTitles:     {
-    en: ['Knowledge Base', 'AI Provider', 'Ports', 'Auth Token', 'Web Password', 'Start Mode', 'Agent Connection'],
-    zh: ['知识库',         'AI 服务商',    '端口',   'Auth Token', 'Web 密码',     '启动方式',    'Agent 连接'],
+    en: ['Knowledge Base', 'AI Provider', 'Ports', 'Auth Token', 'Web Password', 'Start Mode', 'Connection Mode', 'Agent Connection'],
+    zh: ['知识库',         'AI 服务商',    '端口',   'Auth Token', 'Web 密码',     '启动方式',    '连接模式',          'Agent 连接'],
   },
 
   // path
@@ -143,11 +143,11 @@ const T = {
   mcpInstallDone: { en: (n) => `✔ ${n} agent(s) configured`, zh: (n) => `✔ 已配置 ${n} 个 Agent` },
   mcpSkipped:     { en: '  → Skipped. Run `mindos mcp install` anytime to configure agents.', zh: '  → 已跳过。随时运行 `mindos mcp install` 配置 Agent。' },
 
-  // skill install step
-  skillInstalling:  { en: (name) => `⏳ Installing Skill "${name}"...`, zh: (name) => `⏳ 正在安装 Skill "${name}"...` },
-  skillInstallOk:   { en: (name) => `  ${c.green('✔')} Skill "${name}" installed`, zh: (name) => `  ${c.green('✔')} Skill "${name}" 已安装` },
-  skillInstallFail: { en: (name, msg) => `  ${c.red('✘')} Skill "${name}" failed: ${msg}`, zh: (name, msg) => `  ${c.red('✘')} Skill "${name}" 安装失败：${msg}` },
-  skillSkipped:     { en: '  → No agents selected, skill install skipped.', zh: '  → 未选择 Agent，跳过 Skill 安装。' },
+  // agent config install (internal, Skill concept hidden from user)
+  skillInstalling:  { en: (name) => ``, zh: (name) => `` },
+  skillInstallOk:   { en: (name) => ``, zh: (name) => `` },
+  skillInstallFail: { en: (name, msg) => `  ${c.red('✘')} Configuration failed: ${msg}`, zh: (name, msg) => `  ${c.red('✘')} 配置失败：${msg}` },
+  skillSkipped:     { en: '', zh: '' },
 
   // restart prompts (re-onboard with config changes)
   restartRequired:   { en: 'Config changed. Service restart required.', zh: '配置已变更，需要重启服务。' },
@@ -160,14 +160,14 @@ const T = {
       '─────────────────────────────────────────────',
       '🚀 Setup complete! Start MindOS:\n',
       `     ${c.cyan(cmd)}`,
-      `  ${c.dim('MCP config, auth token, and skills info will be shown on startup.')}\n`,
+      `  ${c.dim('Connection details and auth token will be shown on startup.')}\n`,
       '─────────────────────────────────────────────',
     ],
     zh: (cmd) => [
       '─────────────────────────────────────────────',
       '🚀 初始化完成！启动 MindOS：\n',
       `     ${c.cyan(cmd)}`,
-      `  ${c.dim('MCP 配置、Auth token、Skills 信息将在启动后显示。')}\n`,
+      `  ${c.dim('连接信息和 Auth token 将在启动后显示。')}\n`,
       '─────────────────────────────────────────────',
     ],
   },
@@ -226,7 +226,7 @@ const tf = (key, ...args) => {
 
 // ── Step header ───────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 function stepHeader(n) {
   const title = T.stepTitles[uiLang][n - 1] ?? T.stepTitles.en[n - 1];
   const stepLabel = tf('step', n, TOTAL_STEPS);
@@ -775,31 +775,22 @@ async function runAgentSelect() {
   });
 
   if (selected.length === 0) {
-    write(c.dim(t('mcpSkipped') + '\n'));
+    write(c.dim(uiLang === 'zh' ? '  → 未选择 Agent。\n' : '  → No agents selected.\n'));
   }
   return selected;
 }
 
 /**
- * Install MCP config to selected agents.
- * Separated from agent selection so CLI-only mode can skip this.
+ * Write MCP config into selected agents' config files.
+ * Agent selection is handled separately by runAgentSelect().
  */
-async function runMcpInstallStep(mcpPort, authToken) {
-  const selected = await runAgentSelect();
-  if (selected.length === 0) return [];
-
-  write('\n' + c.dim(tf('mcpInstalling', selected.length) + '\n'));
-
+function installMcpConfig(selected, mcpPort, authToken) {
   const entry = { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
-  let okCount = 0;
 
   for (const agentKey of selected) {
     const agent = MCP_AGENTS[agentKey];
     const cfgPath = agent.global || agent.project;
-    if (!cfgPath) {
-      write(tf('mcpInstallFail', agent.name, 'no config path') + '\n');
-      continue;
-    }
+    if (!cfgPath) continue;
     const abs = expandHomePath(cfgPath);
     try {
       let config = {};
@@ -809,15 +800,8 @@ async function runMcpInstallStep(mcpPort, authToken) {
       const dir = resolve(abs, '..');
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       writeFileSync(abs, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-      write(tf('mcpInstallOk', agent.name, cfgPath) + '\n');
-      okCount++;
-    } catch (err) {
-      write(tf('mcpInstallFail', agent.name, String(err)) + '\n');
-    }
+    } catch { /* logged by caller via agent count */ }
   }
-
-  console.log(`\n${c.green(tf('mcpInstallDone', okCount))}`);
-  return selected;
 }
 
 /* ── Skill auto-install ────────────────────────────────────────────────────── */
@@ -864,10 +848,7 @@ function runSkillInstallStep(template, selectedAgents) {
   // Try GitHub source first, fall back to local path
   const sources = [githubSource, localSource];
 
-  write(tf('skillInstalling', skillName) + '\n');
-
   for (const source of sources) {
-    // Quote local paths for shell safety
     const quotedSource = /[/\\]/.test(source) ? `"${source}"` : source;
     const cmd = `npx skills add ${quotedSource} --skill ${skillName} ${agentFlags} -g -y`;
     try {
@@ -877,7 +858,6 @@ function runSkillInstallStep(template, selectedAgents) {
         env: { ...process.env, NODE_ENV: 'production' },
         stdio: 'pipe',
       });
-      write(tf('skillInstallOk', skillName) + '\n');
       return;
     } catch { /* try next source */ }
   }
@@ -1306,33 +1286,32 @@ async function main() {
   // ── Skill rules are now built into SKILL.md — no install needed ──────────
   // .mindos/user-preferences.md will be created on first preference capture or via `mindos init-skills`.
 
-  // ── Step 7: Agent Connection ────────────────────────────────────────────────
+  // ── Step 7: Connection Mode ─────────────────────────────────────────────────
   write('\n');
   stepHeader(7);
-
-  // 7a: Mode selection (CLI default-on, MCP default-off)
   const modes = await runModeSelect();
 
-  // 7b: Agent multi-select + conditional install
-  const agentHint = modes.mcp ? tf('mcpStepHint') : (uiLang === 'zh'
-    ? '选择要安装 CLI Skill 的 AI Agent（空格切换，A 全选，Enter 确认）。'
-    : 'Select AI agents to install CLI Skill (Space to toggle, A for all, Enter to confirm).');
-  write('\n' + c.dim(agentHint + '\n\n'));
+  // ── Step 8: Agent Connection ────────────────────────────────────────────────
+  write('\n');
+  stepHeader(8);
+  const selectedAgents = await runAgentSelect();
 
-  if (modes.mcp) {
-    // MCP mode: run full MCP install (config + agent selection)
-    const selectedAgents = await runMcpInstallStep(mcpPort, authToken);
-    // Also install SKILL.md for CLI knowledge
-    if (selectedAgents && selectedAgents.length > 0) {
-      write('\n');
-      runSkillInstallStep(selectedTemplate, selectedAgents);
+  if (selectedAgents.length > 0) {
+    const agentCount = selectedAgents.length;
+    write('\n' + c.dim(uiLang === 'zh'
+      ? `  正在为 ${agentCount} 个 Agent 配置连接…`
+      : `  Configuring connection for ${agentCount} agent${agentCount > 1 ? 's' : ''}…`) + '\n');
+
+    if (modes.mcp) {
+      installMcpConfig(selectedAgents, mcpPort, authToken);
     }
-  } else {
-    // CLI-only: run agent selection but skip MCP config, only install SKILL.md
-    const selectedAgents = await runAgentSelect();
-    if (selectedAgents && selectedAgents.length > 0) {
-      write('\n');
-      runSkillInstallStep(selectedTemplate, selectedAgents);
+    runSkillInstallStep(selectedTemplate, selectedAgents);
+
+    write(c.green(uiLang === 'zh'
+      ? `  ✔ ${agentCount} 个 Agent 已配置完成\n`
+      : `  ✔ ${agentCount} agent${agentCount > 1 ? 's' : ''} configured\n`));
+
+    if (!modes.mcp) {
       write(c.dim(uiLang === 'zh'
         ? '  → 如需启用 MCP 模式，随时运行 `mindos mcp install`。\n'
         : '  → To enable MCP mode later, run `mindos mcp install`.\n'));
