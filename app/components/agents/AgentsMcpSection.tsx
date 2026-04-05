@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Search, Server } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 import type { McpContextValue } from '@/lib/stores/mcp-store';
 import type { AgentBuckets, AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
 import {
@@ -58,6 +59,8 @@ export default function AgentsMcpSection({
     cancel: string;
     noAvailableAgents: string;
     manualRemoveHint: string;
+    removeSuccess: string;
+    removeFailed: string;
     reconnectAllInServer: string;
     reconnectAllRunning: string;
     reconnectAllDone: (ok: number, failed: number) => string;
@@ -383,7 +386,7 @@ function ByServerView({
   onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
 }) {
   const [pickerServer, setPickerServer] = useState<string | null>(null);
-  const [confirmState, setConfirmState] = useState<{ agentName: string; serverName: string } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ agentKey: string; agentName: string; serverName: string } | null>(null);
   const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [reconnectingServer, setReconnectingServer] = useState<string | null>(null);
   const [reconnectMsg, setReconnectMsg] = useState<Record<string, string>>({});
@@ -396,11 +399,27 @@ function ByServerView({
     [onInstallMindos],
   );
 
-  const handleConfirmRemove = useCallback(() => {
+  const handleConfirmRemove = useCallback(async () => {
+    if (!confirmState) return;
+    const { agentKey } = confirmState;
     setConfirmState(null);
-    setHintMessage(copy.manualRemoveHint);
+
+    // Find agent info to determine scope
+    const agent = allAgents.find(a => a.key === agentKey);
+    const scope = agent?.scope === 'project' ? 'project' : 'global';
+
+    try {
+      await apiFetch('/api/mcp/uninstall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agents: [{ key: agentKey, scope }] }),
+      });
+      setHintMessage(copy.removeSuccess ?? 'Removed. Restart your agent to apply.');
+    } catch {
+      setHintMessage(copy.removeFailed ?? 'Failed to remove. Try editing the config file manually.');
+    }
     setTimeout(() => setHintMessage(null), 4000);
-  }, [copy.manualRemoveHint]);
+  }, [confirmState, allAgents, copy]);
 
   const handleReconnectAllInServer = useCallback(
     async (serverName: string, agents: typeof allAgents) => {
@@ -520,7 +539,7 @@ function ByServerView({
                       <AgentAvatar
                         name={agent.name}
                         status={agentStatus}
-                        onRemove={() => setConfirmState({ agentName: agent.name, serverName: srv.serverName })}
+                        onRemove={() => setConfirmState({ agentKey: agent.key, agentName: agent.name, serverName: srv.serverName })}
                       />
                     </Link>
                   );
