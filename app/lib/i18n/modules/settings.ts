@@ -3,7 +3,7 @@
 export const settingsEn = {
   settings: {
     title: 'Settings',
-    tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'General', sync: 'Sync', mcp: 'Agents & Skills', plugins: 'Plugins', shortcuts: 'Shortcuts', monitoring: 'Monitoring', agents: 'Agents', update: 'Update', uninstall: 'Uninstall' },
+    tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'General', sync: 'Sync', mcp: 'Connections', plugins: 'Plugins', shortcuts: 'Shortcuts', monitoring: 'Monitoring', agents: 'Agents', update: 'Update', uninstall: 'Uninstall' },
     ai: {
       provider: 'Provider',
       model: 'Model',
@@ -417,7 +417,7 @@ export const settingsEn = {
 export const settingsZh = {
   settings: {
     title: '设置',
-    tabs: { ai: 'AI', appearance: '外观', knowledge: '通用', sync: '同步', mcp: 'Agent 与技能', plugins: '插件', shortcuts: '快捷键', monitoring: '监控', agents: '智能体', update: '更新', uninstall: '卸载' },
+    tabs: { ai: 'AI', appearance: '外观', knowledge: '通用', sync: '同步', mcp: '连接', plugins: '插件', shortcuts: '快捷键', monitoring: '监控', agents: '智能体', update: '更新', uninstall: '卸载' },
     ai: {
       provider: '服务商',
       model: '模型',
