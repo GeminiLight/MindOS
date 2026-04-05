@@ -88,11 +88,13 @@ exit 127
 
 function writeWindowsShim(cliJs: string): void {
   const nodePrivate = path.join(app.getPath('home'), '.mindos', 'node', 'node.exe');
-  const cliEsc = cliJs.replace(/"/g, '""');
-  const privEsc = nodePrivate.replace(/"/g, '""');
+  // Escape for delayed expansion: ! → ^! (must escape before setting into variable)
+  const cliEsc = cliJs.replace(/!/g, '^^!');
+  const privEsc = nodePrivate.replace(/!/g, '^^!');
   const lines = [
     '@echo off',
     'setlocal enabledelayedexpansion',
+    // Store CLI path in delayed expansion variable (handles paths with spaces, &, etc.)
     `set "CLI=${cliEsc}"`,
     'if not exist "!CLI!" (',
     '  for /f "delims=" %%i in (\'npm root -g 2^>nul\') do set "NPM_CLI=%%i\\@geminilight\\mindos\\bin\\cli.js"',
@@ -101,15 +103,57 @@ function writeWindowsShim(cliJs: string): void {
     '    exit /b 127',
     '  )',
     ')',
-    `if exist "${privEsc}" (`,
-    `  "${privEsc}" "%CLI%" %*`,
-    '  exit /b %ERRORLEVEL%',
+    // Use delayed expansion consistently for node path too
+    `set "NODE_PRIV=${privEsc}"`,
+    'if exist "!NODE_PRIV!" (',
+    '  "!NODE_PRIV!" "!CLI!" %*',
+    '  exit /b !ERRORLEVEL!',
     ')',
     'where node >nul 2>&1 || (echo mindos: Node.js not found. Open MindOS Desktop or install Node 18+. >&2 & exit /b 127)',
-    'node "%CLI%" %*',
+    'node "!CLI!" %*',
   ];
   mkdirSync(shimDir(), { recursive: true });
   writeFileSync(shimPath(), lines.join('\r\n'), 'utf-8');
+}
+
+/**
+ * Append ~/.mindos/bin to user PATH on Windows via PowerShell registry API.
+ * Uses single-quoted strings to avoid variable expansion issues.
+ * Returns true if PATH was modified.
+ */
+function appendMindosBinToWindowsPath(): boolean {
+  const binDir = shimDir();
+  try {
+    const { execFileSync } = require('child_process');
+    const psOpts = { encoding: 'utf-8' as const, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+
+    // Read current user PATH via PowerShell (execFileSync avoids shell quoting issues)
+    let currentPath = '';
+    try {
+      currentPath = execFileSync('powershell.exe', [
+        '-NoProfile', '-Command',
+        '[Environment]::GetEnvironmentVariable("Path", "User")',
+      ], psOpts).trim();
+    } catch { /* empty PATH is fine */ }
+
+    // Check if already present (idempotent)
+    const entries = currentPath.split(';').map((s: string) => s.trim().toLowerCase());
+    if (entries.includes(binDir.toLowerCase())) return false;
+
+    // Prepend our bin dir — use single-quoted PowerShell string to avoid expansion
+    const newPath = `${binDir};${currentPath}`;
+    // Escape single quotes for PowerShell single-quoted strings: ' → ''
+    const escaped = newPath.replace(/'/g, "''");
+    execFileSync('powershell.exe', [
+      '-NoProfile', '-Command',
+      `[Environment]::SetEnvironmentVariable('Path', '${escaped}', 'User')`,
+    ], psOpts);
+    console.info(`[MindOS] Added ${binDir} to Windows user PATH`);
+    return true;
+  } catch (err) {
+    console.warn('[MindOS] Could not update Windows PATH:', err instanceof Error ? err.message : err);
+    return false;
+  }
 }
 
 /**
@@ -123,41 +167,6 @@ function writeWindowsShim(cliJs: string): void {
  * We must write to ALL relevant files so the PATH is available everywhere.
  * Returns true if we appended to at least one file.
  */
-/**
- * Append ~/.mindos/bin to user PATH on Windows via PowerShell setx.
- * Returns true if PATH was modified.
- */
-function appendMindosBinToWindowsPath(): boolean {
-  const binDir = shimDir();
-  try {
-    // Read current user PATH from registry
-    const { execSync } = require('child_process');
-    let currentPath = '';
-    try {
-      currentPath = execSync(
-        'powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable(\"Path\", \"User\")"',
-        { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] },
-      ).trim();
-    } catch { /* empty PATH is fine */ }
-
-    // Check if already present (idempotent)
-    const entries = currentPath.split(';').map((s: string) => s.trim().toLowerCase());
-    if (entries.includes(binDir.toLowerCase())) return false;
-
-    // Prepend our bin dir
-    const newPath = `${binDir};${currentPath}`;
-    execSync(
-      `powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('Path', '${newPath.replace(/'/g, "''")}', 'User')"`,
-      { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] },
-    );
-    console.info(`[MindOS] Added ${binDir} to Windows user PATH`);
-    return true;
-  } catch (err) {
-    console.warn('[MindOS] Could not update Windows PATH:', err instanceof Error ? err.message : err);
-    return false;
-  }
-}
-
 function appendMindosBinToShellRc(): boolean {
   if (process.platform === 'win32') return appendMindosBinToWindowsPath();
 

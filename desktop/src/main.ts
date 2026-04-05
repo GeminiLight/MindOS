@@ -882,8 +882,9 @@ function validatePrivateNode(): void {
   if (!existsSync(nodeBin)) return; // nothing to validate
 
   try {
-    const { execSync } = require('child_process');
-    const version = execSync(`"${nodeBin}" --version`, {
+    // Use execFileSync to avoid shell quoting issues with paths containing spaces or special chars
+    const { execFileSync } = require('child_process');
+    const version = execFileSync(nodeBin, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],

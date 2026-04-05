@@ -705,16 +705,16 @@ export class ProcessManager extends EventEmitter {
 
   /** Find PIDs listening on a given port — cross-platform with fallbacks */
   private static findPidsOnPort(port: number): number[] {
-    const { execSync } = require('child_process');
+    const { execSync, execFileSync } = require('child_process');
     const opts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
 
     if (process.platform === 'win32') {
-      // Windows: PowerShell Get-NetTCPConnection
+      // Windows: PowerShell Get-NetTCPConnection (execFileSync avoids cmd.exe quoting issues)
       try {
-        const out = execSync(
-          `powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue).OwningProcess"`,
-          opts,
-        ).trim();
+        const out = (execFileSync('powershell.exe', [
+          '-NoProfile', '-Command',
+          `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue).OwningProcess`,
+        ], opts) as string).trim();
         return out.split(/\r?\n/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
       } catch { return []; }
     }
@@ -739,9 +739,12 @@ export class ProcessManager extends EventEmitter {
     }
 
     // Fallback: fuser (available on most Unix)
+    // Note: fuser outputs PIDs to stderr on Linux, so we merge stderr into stdout
     try {
-      const out = execSync(`fuser ${port}/tcp`, opts).trim();
-      return out.split(/\s+/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
+      const out = execSync(`fuser ${port}/tcp 2>&1`, { encoding: 'utf-8' as const, timeout: 3000 }).trim();
+      // fuser output looks like: "3456/tcp:  1234  5678" or just "1234 5678"
+      const pids = out.match(/\d+/g)?.map(Number).filter((p: number) => p > 0 && p !== port) ?? [];
+      if (pids.length > 0) return pids;
     } catch { /* fuser not available */ }
 
     return [];
@@ -758,16 +761,30 @@ export class ProcessManager extends EventEmitter {
       const { execSync } = require('child_process');
 
       if (process.platform === 'win32') {
-        // Windows: verify process name via wmic before killing
+        // Windows: verify process name before killing.
+        // Try PowerShell first (always available), fallback to wmic (deprecated in Win 11).
+        const { execFileSync } = require('child_process');
+        const psOpts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
         try {
-          const name = execSync(
-            `wmic process where ProcessId=${pid} get Name /format:value`,
-            { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] },
-          ).trim();
-          if (!name.toLowerCase().includes('node')) {
+          const name = execFileSync('powershell.exe', [
+            '-NoProfile', '-Command',
+            `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`,
+          ], psOpts).trim().toLowerCase();
+          if (!name.includes('node')) {
             return; // PID reused by non-node process, skip
           }
-        } catch { return; } // wmic failed, skip to be safe
+        } catch {
+          // PowerShell failed — try wmic as fallback
+          try {
+            const name = execSync(
+              `wmic process where ProcessId=${pid} get Name /format:value`,
+              psOpts,
+            ).trim();
+            if (!name.toLowerCase().includes('node')) {
+              return;
+            }
+          } catch { return; } // both failed, skip to be safe
+        }
       } else {
         try {
           const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
