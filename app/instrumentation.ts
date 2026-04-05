@@ -33,5 +33,26 @@ export async function register() {
         // mindRoot not configured yet — skip prewarming
       }
     });
+
+    // Skill auto-update: check if bundled skills are newer than installed
+    // ones (covers both CLI startup and Desktop hot-update restarts).
+    process.nextTick(async () => {
+      try {
+        const projRoot = process.env.MINDOS_PROJECT_ROOT || resolve(process.cwd(), '..');
+        const skillCheckModule = resolve(projRoot, 'bin', 'lib', 'skill-check.js');
+        const { checkSkillVersions, updateSkill } = await import(skillCheckModule);
+        const mismatches = checkSkillVersions(projRoot);
+        for (const m of mismatches) {
+          try {
+            updateSkill(m.bundledPath, m.installPath);
+            console.log(`[SkillSync] Updated ${m.name}${m.agent ? ` (${m.agent})` : ''}: v${m.installed} → v${m.bundled}`);
+          } catch (err) {
+            console.warn(`[SkillSync] Failed to update ${m.name}: ${err instanceof Error ? err.message : err}`);
+          }
+        }
+      } catch {
+        // skill-check not available or failed — silently skip
+      }
+    });
   }
 }
