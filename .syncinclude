@@ -22,6 +22,7 @@ directories:
   - tests
   - docs
   - wiki
+  - browser-extension
 
 # ─── Root files to sync ──────────────────────────────────────────────────────
 # Only these individual files at the repo root are copied.
