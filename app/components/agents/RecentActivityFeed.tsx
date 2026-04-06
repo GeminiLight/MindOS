@@ -63,13 +63,13 @@ export default function RecentActivityFeed() {
     <section aria-label="Recent Activity">
       <div className="flex items-center gap-2 mb-4">
         <span className="text-[var(--amber)]"><Activity size={13} /></span>
-        <h2 className="text-sm font-semibold font-display text-foreground">
+        <h2 className="text-sm font-semibold text-foreground">
           {copy?.recentActivity ?? 'Recent Activity'}
         </h2>
         <div className="ml-auto">
           <Link
             href="/agents?tab=activity"
-            className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors font-display"
+            className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors"
           >
             <ArrowRight size={12} />
             <span>{copy?.viewAll ?? 'View all'}</span>
@@ -105,7 +105,7 @@ export default function RecentActivityFeed() {
 
               {/* agent name badge */}
               {op.agentName && (
-                <span className="text-[0.6rem] font-medium text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded-full shrink-0 font-display" title={op.agentName}>
+                <span className="text-[0.6rem] font-medium text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded-full shrink-0" title={op.agentName}>
                   {op.agentName.length > 20 ? op.agentName.slice(0, 20) + '...' : op.agentName}
                 </span>
               )}
@@ -115,7 +115,7 @@ export default function RecentActivityFeed() {
                 : <AlertCircle size={11} className="shrink-0 text-[var(--error)]/60" />
               }
 
-              <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0 font-display" title={op.ts}>
+              <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0" title={op.ts}>
                 {relativeTs(op.ts)}
               </span>
             </div>

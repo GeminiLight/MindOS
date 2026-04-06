@@ -13,7 +13,7 @@ function FileTypeIcon({ name }: { name: string }) {
 export default function Breadcrumb({ filePath }: { filePath: string }) {
   const parts = filePath.split('/');
   return (
-    <nav className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap font-display">
+    <nav className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
       <Link href="/" className="hover:text-foreground transition-colors">
         <Home size={14} />
       </Link>

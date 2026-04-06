@@ -3,6 +3,7 @@
 export const navigationEn = {
   sidebar: {
     files: 'Spaces',
+    wiki: 'Wiki',
     search: 'Search',
     searchTitle: 'Search',
     askTitle: 'MindOS Agent',
@@ -81,6 +82,7 @@ export const navigationEn = {
 export const navigationZh = {
   sidebar: {
     files: '空间',
+    wiki: 'Wiki',
     search: '搜索',
     searchTitle: '搜索',
     askTitle: 'MindOS Agent',

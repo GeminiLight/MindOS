@@ -251,7 +251,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         <div className="flex items-center gap-3.5 px-5 py-4">
           <AgentAvatar name={agent.name} status={status} size="md" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold tracking-tight font-display text-foreground truncate">{agent.name}</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">{agent.name}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground/60">
               <span className={`font-medium px-1.5 py-px rounded-full ${
                 status === 'connected' ? 'bg-muted text-muted-foreground'
@@ -920,7 +920,7 @@ function KnowledgeInteractionSection() {
         </h2>
         <Link
           href={`/view/${encodePath('.mindos/agent-audit-log.json')}`}
-          className="text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity font-display"
+          className="text-2xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity"
         >
           {d?.viewFullLog ?? 'View log'} →
         </Link>
@@ -961,7 +961,7 @@ function KnowledgeInteractionSection() {
       {/* Timeline */}
       <div className="border-t border-border/40">
         <div className="px-4 py-2 flex items-center justify-between">
-          <p className="text-2xs text-muted-foreground/40 uppercase tracking-wider font-display">{d?.recentOps ?? 'Recent operations'}</p>
+          <p className="text-2xs text-muted-foreground/40 uppercase tracking-wider">{d?.recentOps ?? 'Recent operations'}</p>
         </div>
         {visible.map((ev, i) => {
           const kind = classifyTool(ev.tool);

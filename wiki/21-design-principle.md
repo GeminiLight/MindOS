@@ -138,13 +138,34 @@
 
 ## 字体栈
 
-三层字体分工，通过 CSS class 统一使用，**禁止 inline fontFamily**。
+四层字体分工，通过 CSS class 统一使用，**禁止 inline fontFamily**。
 
 | 层级 | 字体 | CSS class / 选择器 | 用途 |
 |------|------|-------------------|------|
+| 品牌 | IBM Plex Sans 600 + letter-spacing 0.04em | `.font-brand` | "MindOS" 品牌名（仅品牌文字） |
 | 正文 | Lora (serif) | `.prose` | Markdown 长文阅读 |
-| UI / 标题 | IBM Plex Sans | `body`、`.prose h1-h4` | 界面元素、标题 |
-| 代码 / Display | IBM Plex Mono | `.font-display`、`code`、`.font-mono` | 代码块、等宽展示、版本号 |
+| UI / 标题 | IBM Plex Sans | `body`、`.prose h1-h4` | 界面元素、标题、标签、按钮 |
+| 代码 / 技术 | IBM Plex Mono | `.font-display`、`code`、`.font-mono` | 代码块、等宽展示、版本号、文件路径、键盘快捷键 |
+
+### `.font-display` 使用范围（严格限制）
+
+`.font-display`（IBM Plex Mono 等宽体）**仅限**以下场景：
+- 代码块和内联 `<code>`
+- 键盘快捷键 `<kbd>`（如 `Cmd+K`）
+- 版本号和技术标识符（如 `v0.6.27`、commit hash）
+- JSON/CSV 数据视图
+- Agent 活动日志中的工具名和文件路径
+
+**禁止**在以下元素上使用 `.font-display`：
+- Section 标题（用默认 IBM Plex Sans）
+- 按钮文字、链接文字
+- 时间戳（relativeTime 显示）
+- 面包屑导航
+- Agent 名称、描述
+- 表单标签
+- Footer 文字
+
+> 原因：等宽字体在中文环境下字间距不自然，且在 12-14px 小字号下显得"技术感过重"，不适合作为通用 UI 字体。
 
 ### Font Weight 使用规范
 
@@ -154,9 +175,9 @@
 | IBM Plex Sans | 400, 500, 600 | UI 正文、中等强调、标题 |
 | IBM Plex Mono | 400, 600 | 代码正文、display 标题 |
 
-> ⚠️ **不要随意删除 weight 子集**（见 `80-known-pitfalls.md`），Google Fonts 加载时需要显式声明每个 weight。
+> **不要随意删除 weight 子集**（见 `80-known-pitfalls.md`），Google Fonts 加载时需要显式声明每个 weight。
 
-**规则：** 新组件统一用 Tailwind `font-mono` / `font-sans` 或 CSS class `.font-display`，不直接写 `style={{ fontFamily: ... }}`。
+**规则：** 新组件统一用 Tailwind `font-mono` / `font-sans` 或 CSS class `.font-brand`（品牌名）/ `.font-display`（代码/技术），不直接写 `style={{ fontFamily: ... }}`。
 
 ## UI 原则
 

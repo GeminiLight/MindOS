@@ -120,7 +120,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h3 className="text-base font-semibold font-display text-foreground">{h.newSpace}</h3>
+          <h3 className="text-base font-semibold text-foreground">{h.newSpace}</h3>
           <button onClick={close} className="p-1 rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <X size={14} />
           </button>

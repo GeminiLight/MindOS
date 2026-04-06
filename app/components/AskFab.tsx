@@ -27,7 +27,7 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
         shadow-sm shadow-amber-900/10
         transition-all duration-200 ease-out
         hover:shadow-md hover:shadow-amber-900/15
-        active:scale-95 cursor-pointer overflow-hidden font-display
+        active:scale-95 cursor-pointer overflow-hidden
         ${askPanelOpen ? 'opacity-0 pointer-events-none translate-y-2' : 'opacity-100 translate-y-0'}
       `}
       style={{

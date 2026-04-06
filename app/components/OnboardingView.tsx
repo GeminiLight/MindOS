@@ -64,7 +64,7 @@ export default function OnboardingView() {
       <div className="text-center mb-10">
         <div className="inline-flex items-center gap-2 mb-4">
           <Sparkles size={18} className="text-[var(--amber)]" />
-          <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
+          <h1 className="text-2xl font-brand text-foreground">
             MindOS
           </h1>
         </div>

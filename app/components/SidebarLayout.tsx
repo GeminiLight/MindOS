@@ -14,6 +14,7 @@ import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
 import WorkflowsPanel from './panels/WorkflowsPanel';
+import WikiHomePanel from './panels/WikiHomePanel';
 
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
@@ -446,6 +447,9 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         <div className={`flex flex-col h-full ${lp.activePanel === 'workflows' ? '' : 'hidden'}`}>
           <WorkflowsPanel active={lp.activePanel === 'workflows'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
+        <div className={`flex flex-col h-full ${lp.activePanel === 'wiki-home' ? '' : 'hidden'}`}>
+          <WikiHomePanel fileTree={fileTree} active={lp.activePanel === 'wiki-home'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
+        </div>
       </Panel>
 
       {/* ── Right-side Ask AI Panel ── */}
@@ -509,7 +513,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </button>
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo id="mobile" />
-          <span className="font-semibold text-foreground text-sm tracking-wide">MindOS</span>
+          <span className="text-foreground text-sm font-brand">MindOS</span>
         </Link>
         <div className="flex items-center gap-0.5">
           <button onClick={openSyncSettings} className="p-3 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent flex items-center justify-center" aria-label="Sync status">
@@ -529,7 +533,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         <div className="flex items-center justify-between px-4 py-4 border-b border-border shrink-0">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <Logo id="drawer" />
-            <span className="font-semibold text-foreground text-sm tracking-wide font-display">MindOS</span>
+            <span className="text-foreground text-sm font-brand">MindOS</span>
           </Link>
           <button onClick={() => setMobileOpen(false)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
             <X size={16} />

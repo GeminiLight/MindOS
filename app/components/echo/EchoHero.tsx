@@ -30,7 +30,7 @@ export function EchoHero({
         <p className="mb-4 font-sans text-2xs font-semibold uppercase tracking-[0.2em] text-[var(--amber-text)]">
           {heroKicker}
         </p>
-        <h1 id={titleId} className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+        <h1 id={titleId} className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
           {pageTitle}
         </h1>
         <p className="mt-3 max-w-prose font-sans text-base leading-relaxed text-muted-foreground">{lead}</p>

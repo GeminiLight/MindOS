@@ -28,7 +28,7 @@ export default function ExploreContent() {
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-5 rounded-full bg-[var(--amber)]" />
-          <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             {e.title}
           </h1>
         </div>

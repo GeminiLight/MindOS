@@ -232,7 +232,7 @@ export default function GuideCard() {
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-4 pb-2">
         <Sparkles size={16} className="text-[var(--amber)]" />
-        <span className="text-sm font-semibold flex-1 font-display text-foreground">
+        <span className="text-sm font-semibold flex-1 text-foreground">
           {g.title}
         </span>
         <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground">

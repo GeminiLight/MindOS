@@ -14,6 +14,7 @@ export const DEFAULT_LEFT_PANEL_WIDTH: Record<PanelId, number> = {
   agents: 300,
   discover: 300,
   workflows: 320,
+  'wiki-home': 320,
 };
 
 export const LEFT_PANEL: { DEFAULT: number; MIN: number; MAX_RATIO: number; MAX_ABS: number } = {

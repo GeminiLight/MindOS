@@ -440,7 +440,7 @@ export default function SetupWizard() {
           <div className="text-center mb-3">
             <div className="inline-flex items-center gap-2">
               <Sparkles size={18} style={{ color: 'var(--amber)' }} />
-              <h1 id="setup-title" className="text-2xl font-semibold tracking-tight font-display" style={{ color: 'var(--foreground)' }}>
+              <h1 id="setup-title" className="text-2xl font-brand" style={{ color: 'var(--foreground)' }}>
                 MindOS
               </h1>
             </div>

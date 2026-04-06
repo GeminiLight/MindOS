@@ -80,11 +80,11 @@ function SectionTitle({ icon, children, count, action }: SectionTitleProps) {
   return (
     <div className="flex items-center gap-2 mb-4">
       <span className="text-[var(--amber)]">{icon}</span>
-      <h2 className="text-sm font-semibold font-display text-foreground">
+      <h2 className="text-sm font-semibold text-foreground">
         {children}
       </h2>
       {count != null && count > 0 && (
-        <span className="text-xs tabular-nums text-muted-foreground font-display">{count}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
       )}
       {action ? <div className="ml-auto">{action}</div> : null}
     </div>
@@ -103,7 +103,7 @@ function ToggleButton({ expanded, onToggle, showLabel, hideLabel, className = ''
     <button
       onClick={onToggle}
       aria-expanded={expanded}
-      className={`flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display ${className}`}
+      className={`flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer ${className}`}
     >
       <ChevronDown size={12} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
       <span>{expanded ? hideLabel : showLabel}</span>
@@ -133,7 +133,7 @@ function FileRow({ filePath, mtime, formatTime, subPath }: {
         <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
         {subPath && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{subPath}</span>}
       </div>
-      <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground opacity-40" suppressHydrationWarning>
+      <span className="text-xs shrink-0 tabular-nums text-muted-foreground/40" suppressHydrationWarning>
         {formatTime(mtime)}
       </span>
     </Link>
@@ -184,7 +184,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         {/* Brand mark */}
         <div className="flex items-center gap-3 mb-2">
           <div className="w-1 h-7 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/20" />
-          <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
+          <h1 className="text-2xl font-brand text-foreground">
             MindOS
           </h1>
         </div>
@@ -335,7 +335,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             action={
               <Link
                 href="/changes"
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 font-display"
+                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80"
               >
                 <History size={12} />
                 <span>{t.home.changeHistory}</span>
@@ -357,7 +357,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
                     >
                       <Folder size={14} className="shrink-0 text-[var(--amber)]" />
-                      <span className="text-xs font-semibold font-display text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
+                      <span className="text-xs font-semibold text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
                         {group.space}
                       </span>
                       <span className="text-xs text-muted-foreground/50 tabular-nums" suppressHydrationWarning>
@@ -388,7 +388,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                 <div>
                   <div className="flex items-center gap-2 px-1 py-1.5">
                     <FileText size={14} className="shrink-0 text-muted-foreground/50" />
-                    <span className="text-xs font-semibold font-display text-muted-foreground/60">
+                    <span className="text-xs font-semibold text-muted-foreground/60">
                       {t.home.other}
                     </span>
                   </div>
@@ -440,7 +440,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                           <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
                           {dir && <span className="text-xs truncate block text-muted-foreground/40" suppressHydrationWarning>{dir}</span>}
                         </div>
-                        <span className="text-xs shrink-0 tabular-nums font-display text-muted-foreground/40" suppressHydrationWarning>
+                        <span className="text-xs shrink-0 tabular-nums text-muted-foreground/40" suppressHydrationWarning>
                           {formatTime(mtime)}
                         </span>
                       </Link>
@@ -463,7 +463,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       )}
 
       {/* Footer */}
-      <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">
+      <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs text-muted-foreground/30">
         <Sparkles size={10} className="text-[var(--amber)]/40" />
         <span>{t.app.footer}</span>
       </div>
@@ -541,7 +541,7 @@ function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
   return (
     <button
       onClick={() => window.dispatchEvent(new Event('mindos:create-space'))}
-      className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display"
+      className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer"
     >
       <Plus size={12} />
       <span>{t.home.newSpace}</span>

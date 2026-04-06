@@ -37,7 +37,7 @@ export default function UseCaseCard({ icon, image, title, description, prompt, t
           {icon}
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold font-display truncate text-foreground" title={title}>
+          <h3 className="text-sm font-semibold truncate text-foreground" title={title}>
             {title}
           </h3>
           <p className="text-xs leading-relaxed mt-1 line-clamp-2 text-muted-foreground" title={description}>

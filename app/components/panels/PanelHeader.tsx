@@ -17,7 +17,7 @@ export default function PanelHeader({
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 h-[46px] border-b border-border shrink-0">
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-display">{title}</span>
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
       <div className="flex items-center gap-1">
         {children}
         {onMaximize && (

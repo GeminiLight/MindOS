@@ -29,7 +29,7 @@ export default memo(function AskHeader({
       )}
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Sparkles size={isPanel ? 14 : 15} className="text-[var(--amber)]" />
-        <span className={isPanel ? 'font-display text-xs uppercase tracking-wider text-muted-foreground' : 'font-display'}>
+        <span className={isPanel ? 'text-xs uppercase tracking-wider text-muted-foreground' : ''}>
           {isPanel ? 'MindOS Agent' : t.ask.title}
         </span>
       </div>

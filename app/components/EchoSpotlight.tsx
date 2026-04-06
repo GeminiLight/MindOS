@@ -43,11 +43,11 @@ export default function EchoSpotlight() {
       <section className="mb-10">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[var(--amber)]"><Feather size={13} /></span>
-          <h2 className="text-sm font-semibold font-display text-foreground">{echo.title}</h2>
-          <span className="text-xs text-muted-foreground/50 font-display">{echo.dailyLine}</span>
+          <h2 className="text-sm font-semibold text-foreground">{echo.title}</h2>
+          <span className="text-xs text-muted-foreground/50">{echo.dailyLine}</span>
           <Link
             href="/echo/daily"
-            className="ml-auto text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity font-display"
+            className="ml-auto text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity"
           >
             {echo.goToEcho}
           </Link>
@@ -61,7 +61,7 @@ export default function EchoSpotlight() {
               onChange={e => saveLine(e.target.value)}
               onBlur={() => setEditing(false)}
               onKeyDown={e => { if (e.key === 'Enter') setEditing(false); }}
-              className="w-full px-3.5 py-3 rounded-xl border border-[var(--amber)]/40 bg-card text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-display italic"
+              className="w-full px-3.5 py-3 rounded-xl border border-[var(--amber)]/40 bg-card text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring italic"
               placeholder={echo.placeholder}
             />
           ) : (
@@ -85,7 +85,7 @@ export default function EchoSpotlight() {
     <section className="mb-10">
       <div className="flex items-center gap-2 mb-4">
         <span className="text-[var(--amber)]"><Feather size={13} /></span>
-        <h2 className="text-sm font-semibold font-display text-foreground">{echo.title}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{echo.title}</h2>
       </div>
       <div className="flex items-center gap-4 px-3.5 py-3.5 rounded-xl border border-dashed border-border/60 hover:border-[var(--amber)]/30 transition-all duration-150 group">
         <div className="flex-1 min-w-0">
@@ -93,7 +93,7 @@ export default function EchoSpotlight() {
             type="text"
             value={dailyLine}
             onChange={e => saveLine(e.target.value)}
-            className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 focus-visible:outline-none font-display italic"
+            className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 focus-visible:outline-none italic"
             placeholder={echo.placeholder}
           />
           <p className="text-xs text-muted-foreground/40 mt-1">{echo.inviteDesc}</p>

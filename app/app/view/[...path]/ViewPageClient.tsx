@@ -375,7 +375,7 @@ export default function ViewPageClient({
               </span>
             )}
             {saveSuccess && (
-              <span className="text-xs flex items-center gap-1.5 font-display" style={{ color: 'var(--success)' }}>
+              <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
                 <span className="hidden sm:inline">saved</span>
               </span>
@@ -388,7 +388,7 @@ export default function ViewPageClient({
             {registryRenderer && !editing && !isDraft && !graphRenderer && !isBinaryFile && (
               <button
                 onClick={handleToggleRaw}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{
                   background: effectiveUseRaw ? `${'var(--amber)'}22` : 'var(--muted)',
                   color: effectiveUseRaw ? 'var(--amber)' : 'var(--muted-foreground)',
@@ -403,7 +403,7 @@ export default function ViewPageClient({
             {!editing && !showRenderer && !isDraft && !isBinaryFile && (
               <button
                 onClick={handleEdit}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors font-display"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
                 style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)'; e.currentTarget.style.background = 'var(--accent)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'var(--muted)'; }}
@@ -417,7 +417,7 @@ export default function ViewPageClient({
                 <button
                   onClick={handleCancel}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 font-display"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
                   style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
@@ -428,7 +428,7 @@ export default function ViewPageClient({
                 <button
                   onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50 font-display"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
                   style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}

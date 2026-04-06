@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Brain } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows' | 'wiki-home';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -144,14 +144,12 @@ export default function ActivityBar({
     };
   }, []);
 
-  // Labs feature flags (Echo, Workflows) — read from localStorage, react to settings changes
-  const [labsEcho, setLabsEcho] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-echo') === '1' : false
-  );
-  const [labsWorkflows, setLabsWorkflows] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-workflows') === '1' : false
-  );
+  // Labs feature flags (Echo, Workflows) — always start false to match SSR, hydrate from localStorage in effect
+  const [labsEcho, setLabsEcho] = useState(false);
+  const [labsWorkflows, setLabsWorkflows] = useState(false);
   useEffect(() => {
+    setLabsEcho(localStorage.getItem('mindos:labs-echo') === '1');
+    setLabsWorkflows(localStorage.getItem('mindos:labs-workflows') === '1');
     const sync = () => {
       setLabsEcho(localStorage.getItem('mindos:labs-echo') === '1');
       setLabsWorkflows(localStorage.getItem('mindos:labs-workflows') === '1');
@@ -199,7 +197,7 @@ export default function ActivityBar({
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />
-          {expanded && <span className="text-sm font-semibold text-foreground font-display whitespace-nowrap">MindOS</span>}
+          {expanded && <span className="text-sm text-foreground font-brand whitespace-nowrap">MindOS</span>}
         </Link>
 
         <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
@@ -207,6 +205,7 @@ export default function ActivityBar({
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
           <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
+          <RailButton icon={<Brain size={18} />} label={t.sidebar.wiki ?? 'Wiki'} active={activePanel === 'wiki-home'} expanded={expanded} onClick={() => toggle('wiki-home')} walkthroughId="wiki-home-panel" />
           {labsEcho && <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => onEchoClick ? debounced(onEchoClick) : toggle('echo')} walkthroughId="echo-panel" />}
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
           <RailButton

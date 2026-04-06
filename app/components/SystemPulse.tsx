@@ -80,7 +80,7 @@ export default function SystemPulse() {
         {/* Use same title style as other sections */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[var(--amber)]"><Bot size={13} /></span>
-          <h2 className="text-sm font-semibold font-display text-foreground">{pulse.title}</h2>
+          <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
         </div>
         <div className="rounded-xl border border-dashed border-border/60 p-4">
           <div className="flex items-center gap-4">
@@ -115,9 +115,9 @@ export default function SystemPulse() {
           className="w-full flex items-center gap-2 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
         >
           <span className="text-[var(--amber)]"><Bot size={13} /></span>
-          <h2 className="text-sm font-semibold font-display text-foreground">{pulse.title}</h2>
-          {totalConnected > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground font-display">{totalConnected}</span>
+        <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
+        {totalConnected > 0 && (
+            <span className="text-xs tabular-nums text-muted-foreground">{totalConnected}</span>
           )}
           {/* Inline status */}
           <div className="flex items-center gap-2 ml-1">
@@ -146,9 +146,9 @@ export default function SystemPulse() {
       {/* Section title — same pattern as Spaces / Recently Edited */}
       <div className="flex items-center gap-2 mb-4">
         <span className="text-[var(--amber)]"><Bot size={13} /></span>
-        <h2 className="text-sm font-semibold font-display text-foreground">{pulse.title}</h2>
-        {totalConnected > 0 && (
-          <span className="text-xs tabular-nums text-muted-foreground font-display">{totalConnected}</span>
+          <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
+          {totalConnected > 0 && (
+            <span className="text-xs tabular-nums text-muted-foreground">{totalConnected}</span>
         )}
         {mcpRunning && (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/50 ml-1">
@@ -159,7 +159,7 @@ export default function SystemPulse() {
         <div className="flex items-center gap-2 ml-auto">
           <Link
             href="/agents"
-            className="text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity font-display"
+            className="text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity"
           >
             {pulse.manage}
           </Link>

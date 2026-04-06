@@ -346,7 +346,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                     <span className="text-2xs text-muted-foreground">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
                   )}
                   {entry.type === 'file' && entry.mtime && (
-                    <span className="text-2xs text-muted-foreground font-display" suppressHydrationWarning>
+                    <span className="text-2xs text-muted-foreground" suppressHydrationWarning>
                       {formatTime(entry.mtime)}
                     </span>
                   )}
@@ -369,7 +369,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
                   {entry.type === 'directory' ? (
                     <span className="text-xs text-muted-foreground shrink-0">{t.dirView.fileCount(fileCounts.get(entry.path) ?? 0)}</span>
                   ) : entry.mtime ? (
-                    <span className="text-xs text-muted-foreground shrink-0 tabular-nums font-display" suppressHydrationWarning>
+                    <span className="text-xs text-muted-foreground shrink-0 tabular-nums" suppressHydrationWarning>
                       {formatTime(entry.mtime)}
                     </span>
                   ) : null}

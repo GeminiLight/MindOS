@@ -72,7 +72,7 @@ export default function WalkthroughTooltip({ stepIndex, rect, position }: Walkth
 
         {/* Content */}
         <h3
-          className="text-sm font-semibold font-display mb-1"
+          className="text-sm font-semibold mb-1"
           style={{ color: 'var(--foreground)' }}
         >
           {stepData.title}

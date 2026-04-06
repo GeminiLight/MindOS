@@ -284,7 +284,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Settings size={14} className="text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider font-display">Settings</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Settings</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1.5 text-[10px]" role="status" aria-live="polite">
@@ -329,7 +329,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           </div>
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Settings size={15} className="text-muted-foreground" />
-            <span className="font-display">{t.settings.title}</span>
+            <span>{t.settings.title}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1.5 text-[10px]" role="status" aria-live="polite">
@@ -379,7 +379,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         <div className="w-[180px] shrink-0 border-r border-border flex flex-col">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <Settings size={15} className="text-muted-foreground" />
-            <span className="text-sm font-medium font-display text-foreground">{t.settings.title}</span>
+            <span className="text-sm font-medium text-foreground">{t.settings.title}</span>
           </div>
           <nav className="flex-1 overflow-y-auto py-1.5">
             {TABS.map(tabItem => (
@@ -417,7 +417,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Right header: tab title + status + close */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-            <span className="text-sm font-medium text-foreground font-display">{activeTabLabel}</span>
+            <span className="text-sm font-medium text-foreground">{activeTabLabel}</span>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-1.5 text-[10px]" role="status" aria-live="polite">
                 {saving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}

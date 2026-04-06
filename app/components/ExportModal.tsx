@@ -113,7 +113,7 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Download size={15} className="text-[var(--amber)]" />
-            <h3 id="export-modal-title" className="text-sm font-semibold font-display">
+            <h3 id="export-modal-title" className="text-sm font-semibold">
               {isDirectory ? (t.export?.exportSpace ?? 'Export Space') : (t.export?.exportFile ?? 'Export File')}
             </h3>
           </div>
@@ -129,7 +129,7 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
               <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
                 <Check size={20} className="text-success" />
               </div>
-              <p className="text-sm font-medium font-display">{t.export?.done ?? 'Export Complete'}</p>
+              <p className="text-sm font-medium">{t.export?.done ?? 'Export Complete'}</p>
               <p className="text-xs text-muted-foreground mt-1">{fileName}</p>
             </div>
           ) : state === 'error' ? (
@@ -140,7 +140,7 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
           ) : (
             <>
               <p className="text-xs text-muted-foreground mb-3 truncate" title={filePath}>{filePath}</p>
-              <p className="text-xs font-medium font-display text-foreground mb-2">{t.export?.chooseFormat ?? 'Choose format'}</p>
+              <p className="text-xs font-medium text-foreground mb-2">{t.export?.chooseFormat ?? 'Choose format'}</p>
               <div className="space-y-1.5">
                 {formats.map(f => (
                   <label

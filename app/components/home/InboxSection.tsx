@@ -113,11 +113,11 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
         <span className="text-[var(--amber)]">
           <Inbox size={13} />
         </span>
-        <h2 className="text-sm font-semibold font-display text-foreground">
+        <h2 className="text-sm font-semibold text-foreground">
           {t.inbox.title}
         </h2>
         {files.length > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-2xs font-semibold rounded-full bg-[var(--amber)]/15 text-[var(--amber)] tabular-nums font-display">
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-2xs font-semibold rounded-full bg-[var(--amber)]/15 text-[var(--amber)] tabular-nums">
             {t.inbox.count(files.length)}
           </span>
         )}
@@ -126,7 +126,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer font-display"
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
               title={t.inbox.uploadButton}
             >
               <Upload size={12} />
@@ -134,7 +134,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
             <button
               onClick={handleOrganize}
               disabled={isOrganizing}
-              className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer font-display disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               title={isOrganizing ? t.inbox.organizing : undefined}
             >
               {isOrganizing ? (
@@ -162,7 +162,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
       {files.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-border px-4 py-8 text-center">
           <Inbox size={24} className="mx-auto mb-2 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground/70 font-display">
+          <p className="text-sm text-muted-foreground/70">
             {t.inbox.emptyTitle}
           </p>
           <p className="text-xs text-muted-foreground/40 mt-1">
@@ -187,7 +187,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
           {hiddenCount > 0 && (
             <button
               onClick={() => setShowAll(v => !v)}
-              className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-display"
+              className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             >
               <ChevronRight
                 size={12}
@@ -233,7 +233,7 @@ function InboxFileRow({ file }: { file: InboxFile }) {
         {file.name}
       </span>
       {/* Time */}
-      <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0 font-display">
+      <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0">
         {age}
       </span>
       {/* Aging warning */}

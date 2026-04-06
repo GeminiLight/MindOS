@@ -89,7 +89,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-10">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">{pageHeader.title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageHeader.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
       </header>
 

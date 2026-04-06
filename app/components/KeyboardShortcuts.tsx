@@ -54,7 +54,7 @@ export default function KeyboardShortcuts() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-          <span className="text-sm font-medium font-display text-foreground">{s.title}</span>
+          <span className="text-sm font-medium text-foreground">{s.title}</span>
           <button
             onClick={() => setOpen(false)}
             className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

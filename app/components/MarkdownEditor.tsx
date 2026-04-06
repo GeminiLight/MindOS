@@ -35,7 +35,7 @@ export default function MarkdownEditor({ value, onChange, viewMode, onViewModeCh
           <button
             key={m.id}
             onClick={() => onViewModeChange(m.id)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors font-display ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
               viewMode === m.id
                 ? 'bg-card text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'

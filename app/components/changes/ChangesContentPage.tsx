@@ -134,7 +134,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
         <div className="content-width xl:mr-[220px] rounded-xl border border-border bg-card px-4 py-3 md:px-5 md:py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground font-display">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <History size={15} />
                 {t.changes.title}
               </div>
@@ -173,7 +173,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
           <div className="rounded-lg border border-border bg-card p-3">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
               <label className="block">
-                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.filePath}</span>
+                <span className="text-xs text-muted-foreground">{t.changes.filters.filePath}</span>
                 <input
                   value={pathFilter}
                   onChange={(e) => setPathFilter(e.target.value)}
@@ -182,7 +182,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                 />
               </label>
               <div className="block">
-                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.source}</span>
+                <span className="text-xs text-muted-foreground">{t.changes.filters.source}</span>
                 <CustomSelect
                   value={sourceFilter}
                   onChange={(v) => setSourceFilter(v as 'all' | 'agent' | 'user' | 'system')}
@@ -191,7 +191,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                 />
               </div>
               <div className="block">
-                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.operation}</span>
+                <span className="text-xs text-muted-foreground">{t.changes.filters.operation}</span>
                 <CustomSelect
                   value={opFilter}
                   onChange={setOpFilter}
@@ -200,7 +200,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                 />
               </div>
               <label className="block">
-                <span className="text-xs text-muted-foreground font-display">{t.changes.filters.keyword}</span>
+                <span className="text-xs text-muted-foreground">{t.changes.filters.keyword}</span>
                 <input
                   value={queryFilter}
                   onChange={(e) => setQueryFilter(e.target.value)}

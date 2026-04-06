@@ -96,7 +96,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
         <div className="content-width xl:mr-[220px] rounded-xl border border-border bg-card px-4 py-3 md:px-5 md:py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground font-display">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Trash2 size={15} />
                 {t.trash.title}
               </div>
@@ -128,7 +128,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
           {items.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
               <Trash2 size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground font-display">{t.trash.empty}</p>
+              <p className="text-sm text-muted-foreground">{t.trash.empty}</p>
               <p className="text-xs text-muted-foreground/60 mt-1">{t.trash.emptySubtext}</p>
             </div>
           ) : (
@@ -227,7 +227,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
           <div className="bg-card border border-border rounded-xl shadow-xl max-w-sm w-full mx-4 p-5">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={16} className="text-[var(--amber)]" />
-              <h3 className="text-sm font-semibold font-display">{t.trash.restoreConflict}</h3>
+              <h3 className="text-sm font-semibold">{t.trash.restoreConflict}</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
               &quot;{conflictItem.fileName}&quot; — {conflictItem.originalPath}

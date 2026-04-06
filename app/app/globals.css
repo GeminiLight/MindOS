@@ -138,6 +138,13 @@ body {
 /* Utility: IBM Plex Mono display heading font */
 .font-display { font-family: 'IBM Plex Mono', var(--font-ibm-plex-mono), monospace; }
 
+/* Brand wordmark — premium sans with engineering precision */
+.font-brand {
+  font-family: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 /* Content width — controlled by Settings > Appearance */
 :root { --content-width: 780px; --toc-width: 0px; }
 .content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; }

@@ -25,7 +25,7 @@ function Section({ id, icon, title, defaultOpen = false, children }: {
         aria-expanded={open}
       >
         <span className="text-[var(--amber)]">{icon}</span>
-        <span className="text-base font-medium font-display text-foreground flex-1">{title}</span>
+        <span className="text-base font-medium text-foreground flex-1">{title}</span>
         <ChevronDown size={16} className={`text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -186,7 +186,7 @@ export default function HelpContent() {
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1 h-6 rounded-full bg-[var(--amber)]" />
-          <h1 className="text-2xl font-bold font-display text-foreground">{h.title}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{h.title}</h1>
         </div>
         <p className="text-muted-foreground text-sm ml-3 mt-1">{h.subtitle}</p>
       </div>
