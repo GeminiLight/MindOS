@@ -20,8 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GeminiLight/MindOS/releases/latest"><img src="https://img.shields.io/badge/Desktop_App-Download-d97706.svg?style=for-the-badge" alt="Desktop App"></a>
-  <a href="browser-extension/"><img src="https://img.shields.io/badge/Web_Clipper-Install-c8873a.svg?style=for-the-badge" alt="Web Clipper"></a>
+  <a href="https://github.com/GeminiLight/MindOS/releases?q=desktop"><img src="https://img.shields.io/badge/Desktop_App-Download-d97706.svg?style=for-the-badge" alt="Desktop App"></a>
+  <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/Web_Clipper-Install-c8873a.svg?style=for-the-badge" alt="Web Clipper"></a>
 </p>
 
 MindOS is where you think, and where your AI agents act — a local-first knowledge base shared between you and every AI you use. **Share your brain with every AI — every thought grows.**

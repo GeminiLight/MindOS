@@ -20,8 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GeminiLight/MindOS/releases/latest"><img src="https://img.shields.io/badge/桌面客户端-下载-d97706.svg?style=for-the-badge" alt="桌面客户端"></a>
-  <a href="browser-extension/"><img src="https://img.shields.io/badge/网页剪藏-安装-c8873a.svg?style=for-the-badge" alt="网页剪藏"></a>
+  <a href="https://github.com/GeminiLight/MindOS/releases?q=desktop"><img src="https://img.shields.io/badge/桌面客户端-下载-d97706.svg?style=for-the-badge" alt="桌面客户端"></a>
+  <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/网页剪藏-安装-c8873a.svg?style=for-the-badge" alt="网页剪藏"></a>
 </p>
 
 MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和所有 AI 共享的本地知识库。**每次思考，都在生长。**
