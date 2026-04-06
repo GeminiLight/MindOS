@@ -470,7 +470,7 @@ export async function startSyncDaemon(mindRoot) {
     if (shutdownInProgress) return;
     shutdownInProgress = true;
     if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
-    try { autoCommitAndPush(mindRoot); } catch {}
+    try { autoCommitAndPush(mindRoot, isSshUrl); } catch {}
     stopSyncDaemon();
   };
   process.on('SIGTERM', gracefulShutdown);

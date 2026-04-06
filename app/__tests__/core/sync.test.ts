@@ -315,3 +315,40 @@ describe('sync: config management', () => {
     expect(reloaded.mindRoot).toBe(mindRoot);
   });
 });
+
+describe('sync: path traversal protection', () => {
+  beforeEach(setup);
+  afterEach(cleanup);
+
+  /**
+   * Helper to test if a file path is safely within mindRoot
+   * (mirrors the isPathWithinMindRoot function in sync/route.ts)
+   */
+  function isPathWithinMindRoot(mindRootDir: string, filePath: string): boolean {
+    const normalizedPath = path.resolve(mindRootDir, filePath);
+    return normalizedPath.startsWith(mindRootDir + '/') || normalizedPath === mindRootDir;
+  }
+
+  it('allows normal relative paths', () => {
+    expect(isPathWithinMindRoot(mindRoot, 'notes/todo.md')).toBe(true);
+    expect(isPathWithinMindRoot(mindRoot, 'README.md')).toBe(true);
+    expect(isPathWithinMindRoot(mindRoot, 'deep/nested/file.md')).toBe(true);
+  });
+
+  it('blocks path traversal with ../', () => {
+    expect(isPathWithinMindRoot(mindRoot, '../etc/passwd')).toBe(false);
+    expect(isPathWithinMindRoot(mindRoot, '../../etc/passwd')).toBe(false);
+    expect(isPathWithinMindRoot(mindRoot, 'notes/../../../etc/passwd')).toBe(false);
+  });
+
+  it('blocks absolute paths outside mindRoot', () => {
+    expect(isPathWithinMindRoot(mindRoot, '/etc/passwd')).toBe(false);
+    expect(isPathWithinMindRoot(mindRoot, '/tmp/malicious')).toBe(false);
+  });
+
+  it('allows paths that start with .. but resolve within mindRoot', () => {
+    // e.g., notes/../README.md resolves to mindRoot/README.md
+    expect(isPathWithinMindRoot(mindRoot, 'notes/../README.md')).toBe(true);
+    expect(isPathWithinMindRoot(mindRoot, './notes/../notes/todo.md')).toBe(true);
+  });
+});

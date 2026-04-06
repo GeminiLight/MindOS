@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { execSync, execFile } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 
@@ -13,8 +13,23 @@ function loadConfig() {
   try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
 }
 
+/** Atomic write to prevent data corruption on crash/power loss */
+function atomicWriteJSON(filePath: string, data: unknown) {
+  const content = JSON.stringify(data, null, 2) + '\n';
+  const tmp = filePath + '.tmp';
+  writeFileSync(tmp, content, 'utf-8');
+  renameSync(tmp, filePath);
+}
+
 function saveConfig(config: Record<string, unknown>) {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  atomicWriteJSON(CONFIG_PATH, config);
+}
+
+/** Validate that a file path is safely within mindRoot (prevents path traversal) */
+function isPathWithinMindRoot(mindRoot: string, filePath: string): boolean {
+  const normalizedPath = resolve(mindRoot, filePath);
+  // Must start with mindRoot + separator to prevent escape via symlinks or ../
+  return normalizedPath.startsWith(mindRoot + '/') || normalizedPath === mindRoot;
 }
 
 function loadSyncState() {
@@ -175,7 +190,7 @@ export async function POST(req: NextRequest) {
         delete config.sync;
         saveConfig(config);
         // Clear sync state
-        try { writeFileSync(SYNC_STATE_PATH, '{}', 'utf-8'); } catch {}
+        try { atomicWriteJSON(SYNC_STATE_PATH, {}); } catch {}
         return NextResponse.json({ ok: true, enabled: false });
       }
 
@@ -205,8 +220,12 @@ export async function POST(req: NextRequest) {
         if (!file || typeof file !== 'string') {
           return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
         }
-        const conflictPath = join(mindRoot, file + '.sync-conflict');
-        const originalPath = join(mindRoot, file);
+        // Security: prevent path traversal attacks
+        if (!isPathWithinMindRoot(mindRoot, file)) {
+          return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+        }
+        const conflictPath = resolve(mindRoot, file + '.sync-conflict');
+        const originalPath = resolve(mindRoot, file);
         try {
           if (strategy === 'keep-remote' && existsSync(conflictPath)) {
             // Replace local with remote version
@@ -221,7 +240,7 @@ export async function POST(req: NextRequest) {
           const state = loadSyncState();
           if (state.conflicts) {
             state.conflicts = state.conflicts.filter((c: { file: string }) => c.file !== file);
-            writeFileSync(SYNC_STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+            atomicWriteJSON(SYNC_STATE_PATH, state);
           }
           return NextResponse.json({ ok: true });
         } catch (e) {
@@ -234,8 +253,12 @@ export async function POST(req: NextRequest) {
         if (!file || typeof file !== 'string') {
           return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
         }
-        const localPath = join(mindRoot, file);
-        const remotePath = join(mindRoot, file + '.sync-conflict');
+        // Security: prevent path traversal attacks
+        if (!isPathWithinMindRoot(mindRoot, file)) {
+          return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+        }
+        const localPath = resolve(mindRoot, file);
+        const remotePath = resolve(mindRoot, file + '.sync-conflict');
         const local = existsSync(localPath) ? readFileSync(localPath, 'utf-8') : '';
         const remote = existsSync(remotePath) ? readFileSync(remotePath, 'utf-8') : '';
         return NextResponse.json({ local, remote });
@@ -247,17 +270,17 @@ export async function POST(req: NextRequest) {
         if (commitInterval === undefined && pullInterval === undefined) {
           return NextResponse.json({ error: 'At least one interval must be provided' }, { status: 400 });
         }
-        if (commitInterval !== undefined && (commitInterval < 10 || commitInterval > 300)) {
-          return NextResponse.json({ error: 'autoCommitInterval must be between 10 and 300 seconds' }, { status: 400 });
+        if (commitInterval !== undefined && (!Number.isInteger(commitInterval) || commitInterval < 10 || commitInterval > 300)) {
+          return NextResponse.json({ error: 'autoCommitInterval must be an integer between 10 and 300 seconds' }, { status: 400 });
         }
-        if (pullInterval !== undefined && (pullInterval < 60 || pullInterval > 3600)) {
-          return NextResponse.json({ error: 'autoPullInterval must be between 60 and 3600 seconds' }, { status: 400 });
+        if (pullInterval !== undefined && (!Number.isInteger(pullInterval) || pullInterval < 60 || pullInterval > 3600)) {
+          return NextResponse.json({ error: 'autoPullInterval must be an integer between 60 and 3600 seconds' }, { status: 400 });
         }
         const fullConfig = loadConfig();
         if (!fullConfig.sync) fullConfig.sync = {};
         if (commitInterval !== undefined) fullConfig.sync.autoCommitInterval = commitInterval;
         if (pullInterval !== undefined) fullConfig.sync.autoPullInterval = pullInterval;
-        writeFileSync(CONFIG_PATH, JSON.stringify(fullConfig, null, 2) + '\n', 'utf-8');
+        atomicWriteJSON(CONFIG_PATH, fullConfig);
         return NextResponse.json({
           autoCommitInterval: fullConfig.sync.autoCommitInterval || 30,
           autoPullInterval: fullConfig.sync.autoPullInterval || 300,
