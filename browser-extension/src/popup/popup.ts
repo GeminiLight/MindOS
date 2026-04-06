@@ -25,8 +25,10 @@ const btnConnect = $<HTMLButtonElement>('btn-connect');
 
 // Clip
 const clipTitle = $<HTMLInputElement>('clip-title');
-const clipSite = $<HTMLSpanElement>('clip-site');
-const clipWords = $<HTMLSpanElement>('clip-words');
+const clipSiteBadge = $<HTMLSpanElement>('clip-site');
+const clipSiteText = $<HTMLSpanElement>('clip-site-text');
+const clipWordsBadge = $<HTMLSpanElement>('clip-words');
+const clipWordsText = $<HTMLSpanElement>('clip-words-text');
 const dirTrigger = $<HTMLButtonElement>('dir-trigger');
 const dirLabel = $<HTMLSpanElement>('dir-label');
 const dirPanel = $<HTMLDivElement>('dir-panel');
@@ -175,16 +177,18 @@ function showClipView(errorMsg?: string) {
 
     try {
       const host = new URL(extractedContent.url).hostname.replace(/^www\./, '');
-      clipSite.textContent = host;
+      clipSiteText.textContent = host;
+      clipSiteBadge.style.display = '';
     } catch {
-      clipSite.textContent = '';
+      clipSiteBadge.style.display = 'none';
     }
 
-    clipWords.textContent = `${extractedContent.wordCount.toLocaleString()} words`;
+    clipWordsText.textContent = `${extractedContent.wordCount.toLocaleString()} words`;
+    clipWordsBadge.style.display = '';
   } else {
     clipTitle.value = '';
-    clipSite.textContent = '';
-    clipWords.textContent = '';
+    clipSiteBadge.style.display = 'none';
+    clipWordsBadge.style.display = 'none';
   }
 
   // Reset dir picker state
@@ -387,6 +391,14 @@ dirTrigger.addEventListener('click', () => toggleDirPanel());
 
 // DirPicker — confirm selection
 dirConfirm.addEventListener('click', () => toggleDirPanel(false));
+
+// DirPicker — Esc to close panel
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !dirPanel.hidden) {
+    e.preventDefault();
+    toggleDirPanel(false);
+  }
+});
 
 /* ── Error display helpers ── */
 
