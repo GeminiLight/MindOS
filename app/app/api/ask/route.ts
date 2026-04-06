@@ -1128,7 +1128,7 @@ export async function POST(req: NextRequest) {
             // and go straight to the non-streaming fallback path.
             const compatCache = readBaseUrlCompat();
             if (compatCache[effectiveBaseUrlKey] === 'non-streaming' && baseUrl && provider === 'openai') {
-              send({ type: 'status', message: '正在以兼容模式调用...' });
+              send({ type: 'status', message: 'Using compatibility mode (non-streaming)...' });
               try {
                 await runNonStreamingFallback({
                   baseUrl,
@@ -1146,7 +1146,7 @@ export async function POST(req: NextRequest) {
                 send({ type: 'done' });
               } catch (fallbackErr) {
                 metrics.recordRequest(Date.now() - requestStartTime);
-                send({ type: 'error', message: `兼容模式调用失败：${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}。请检查 Base URL、API Key 和模型名称。` });
+                send({ type: 'error', message: `Compatibility mode failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}. Please check your Base URL, API key, and model name.` });
               }
               safeClose();
               return;
@@ -1184,7 +1184,7 @@ export async function POST(req: NextRequest) {
               // No content received — check if this looks like a proxy stream+tools incompatibility.
               // Only attempt fallback for OpenAI-compatible endpoints with a custom baseUrl.
               if (baseUrl && provider === 'openai') {
-                send({ type: 'status', message: '正在检测接口兼容性，切换到兼容模式重试...' });
+                send({ type: 'status', message: 'Detecting proxy compatibility, switching to non-streaming mode...' });
                 try {
                   await runNonStreamingFallback({
                     baseUrl,
@@ -1203,7 +1203,7 @@ export async function POST(req: NextRequest) {
                   console.log(`[ask] Proxy compat detected: ${effectiveBaseUrlKey} → non-streaming (cached)`);
                   send({ type: 'done' });
                 } catch (fallbackErr) {
-                  send({ type: 'error', message: `兼容模式也失败了：${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}。请检查 Base URL、API Key 和模型名称。` });
+                  send({ type: 'error', message: `Compatibility mode also failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}. Please check your Base URL, API key, and model name.` });
                 }
               } else {
                 send({ type: 'error', message: lastModelError });
