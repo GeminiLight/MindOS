@@ -51,7 +51,7 @@ export const FONT_SIZES = [
 export const FONTS = [
   { value: 'lora', label: 'Lora', category: 'Serif', style: { fontFamily: 'Lora, Georgia, serif' } },
   { value: 'ibm-plex-sans', label: 'IBM Plex Sans', category: 'Sans', style: { fontFamily: "'IBM Plex Sans', sans-serif" } },
-  { value: 'geist', label: 'Geist', category: 'Sans', style: { fontFamily: 'var(--font-geist-sans), sans-serif' } },
+  { value: 'inter', label: 'Inter', category: 'Sans', style: { fontFamily: 'var(--font-inter), sans-serif' } },
   { value: 'ibm-plex-mono', label: 'IBM Plex Mono', category: 'Mono', style: { fontFamily: "'IBM Plex Mono', monospace" } },
 ];
 

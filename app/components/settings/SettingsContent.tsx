@@ -66,7 +66,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
 
     if (justOpened) {
       apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
-      setFont(localStorage.getItem('prose-font') ?? 'lora');
+      setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'lora');
       setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
       setContentWidth(localStorage.getItem('content-width') ?? '780px');
       const stored = localStorage.getItem('theme');
@@ -90,7 +90,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     const fontMap: Record<string, string> = {
       'lora': "'Lora', Georgia, serif",
       'ibm-plex-sans': "'IBM Plex Sans', sans-serif",
-      'geist': 'var(--font-geist-sans), sans-serif',
+      'inter': 'var(--font-inter), sans-serif',
       'ibm-plex-mono': "'IBM Plex Mono', monospace",
     };
     document.documentElement.style.setProperty('--prose-font-override', fontMap[font] ?? '');

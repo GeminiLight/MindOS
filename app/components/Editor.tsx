@@ -17,7 +17,7 @@ const darkTheme = EditorView.theme({
     backgroundColor: '#09090b',
     height: '100%',
     fontSize: '0.875rem',
-    fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
+    fontFamily: 'var(--font-ibm-plex-mono), ui-monospace, monospace',
   },
   '.cm-scroller': {
     overflow: 'auto',
