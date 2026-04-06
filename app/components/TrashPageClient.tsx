@@ -126,10 +126,12 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
       <div className="px-4 md:px-6 py-4 md:py-6">
         <div className="content-width xl:mr-[220px]">
           {items.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
-              <Trash2 size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">{t.trash.empty}</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">{t.trash.emptySubtext}</p>
+            <div className="rounded-xl border border-border/40 bg-card/30 p-12 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted/60 mb-4">
+                <Trash2 size={22} className="text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground/70">{t.trash.empty}</p>
+              <p className="text-xs text-muted-foreground/40 mt-1 max-w-xs mx-auto leading-relaxed">{t.trash.emptySubtext}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

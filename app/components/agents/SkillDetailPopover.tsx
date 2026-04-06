@@ -418,7 +418,7 @@ export default function SkillDetailPopover({
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-border p-3 text-center">
+              <div className="rounded-lg border border-border/40 bg-card/30 p-3 text-center">
                 <p className="text-xs text-muted-foreground">{copy.noAgents}</p>
               </div>
             )}

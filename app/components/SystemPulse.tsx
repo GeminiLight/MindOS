@@ -82,10 +82,10 @@ export default function SystemPulse() {
           <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Bot size={13} /></div>
           <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{pulse.title}</h2>
         </div>
-        <div className="rounded-xl border border-dashed border-border/60 p-4">
+        <div className="rounded-xl border border-border/40 bg-card/30 p-5">
           <div className="flex items-center gap-4">
-            <div className="w-9 h-9 rounded-lg bg-[var(--amber)]/8 flex items-center justify-center shrink-0">
-              <Bot size={16} className="text-[var(--amber)]" />
+            <div className="w-10 h-10 rounded-full bg-[var(--amber-subtle)] flex items-center justify-center shrink-0">
+              <Bot size={18} className="text-[var(--amber)]" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground">{pulse.connectTitle}</p>
@@ -181,7 +181,7 @@ export default function SystemPulse() {
             <Link
               key={agent.key}
               href={`/agents/${encodeURIComponent(agent.key)}`}
-              className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-border hover:border-[var(--amber)]/30 hover:shadow-sm transition-all duration-150 hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-border hover:border-[var(--amber)]/30 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {/* Avatar */}
               <div className="relative w-8 h-8 rounded-lg bg-[var(--amber)]/8 text-[var(--amber-text)] ring-1 ring-[var(--amber)]/15 flex items-center justify-center text-xs font-semibold font-display shrink-0">

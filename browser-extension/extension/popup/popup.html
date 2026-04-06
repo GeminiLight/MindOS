@@ -26,7 +26,7 @@
       <div class="form-group">
         <label for="setup-token">Auth Token</label>
         <input id="setup-token" type="password" placeholder="Paste your token here" spellcheck="false" autocomplete="off">
-        <p class="hint">Find it in MindOS → Settings → MCP</p>
+        <p class="hint">Find it in MindOS Settings → MCP</p>
       </div>
 
       <div id="setup-error" class="error-bar" hidden></div>
@@ -47,16 +47,22 @@
           <img src="../icons/icon-32.png" alt="" width="20" height="20">
           <span class="logo-text">MindOS</span>
         </div>
-        <button id="btn-settings" class="btn-icon" title="Settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <button id="btn-settings" class="btn-icon" title="Settings" aria-label="Settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
 
       <div class="clip-preview">
         <input id="clip-title" type="text" class="title-input" placeholder="Page title">
         <div class="meta-row">
-          <span id="clip-site" class="meta-badge"></span>
-          <span id="clip-words" class="meta-badge"></span>
+          <span id="clip-site" class="meta-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span id="clip-site-text"></span>
+          </span>
+          <span id="clip-words" class="meta-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span id="clip-words-text"></span>
+          </span>
         </div>
       </div>
 
@@ -70,7 +76,7 @@
         <div id="dir-panel" class="dir-panel" hidden>
           <div id="dir-breadcrumb" class="dir-breadcrumb"></div>
           <div id="dir-list" class="dir-list"></div>
-          <button id="dir-confirm" type="button" class="dir-confirm">
+          <button id="dir-confirm" type="button" class="dir-confirm" aria-label="Confirm directory selection">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
         </div>
@@ -80,7 +86,7 @@
 
       <button id="btn-save" class="btn-primary">
         <span class="btn-text">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m5 12 7-7 7 7"/></svg>
           Save to MindOS
         </span>
         <span class="btn-loading" hidden>
@@ -92,22 +98,27 @@
 
     <!-- Success View -->
     <div id="view-success" class="view" hidden>
-      <div class="success-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <div class="success-card">
+        <div class="success-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <p class="success-title">Saved!</p>
+        <p id="success-detail" class="success-detail"></p>
       </div>
-      <p class="success-title">Saved!</p>
-      <p id="success-detail" class="success-detail"></p>
-      <div style="display:flex;gap:8px">
-        <button id="btn-clip-another" class="btn-secondary" style="flex:1">Clip Again</button>
-        <button id="btn-done" class="btn-secondary" style="flex:1">Done</button>
+      <div class="success-actions">
+        <button id="btn-clip-another" class="btn-secondary">Clip Again</button>
+        <button id="btn-done" class="btn-secondary">Done</button>
       </div>
     </div>
 
     <!-- Loading View (extracting) -->
     <div id="view-loading" class="view" hidden>
       <div class="loading-state">
+        <div class="loading-brand">
+          <img src="../icons/icon-32.png" alt="" width="24" height="24">
+        </div>
         <svg class="spinner large" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31 31" stroke-linecap="round"/></svg>
-        <p>Reading page...</p>
+        <p class="loading-text">Reading page content...</p>
       </div>
     </div>
   </div>

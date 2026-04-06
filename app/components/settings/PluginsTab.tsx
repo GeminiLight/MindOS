@@ -66,7 +66,7 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground border border-dashed border-border rounded-xl px-4 py-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground border border-border/40 bg-card/30 rounded-xl px-4 py-3">
         <Puzzle size={13} className="shrink-0" />
         <span>{t.settings.plugins.comingSoon}</span>
       </div>

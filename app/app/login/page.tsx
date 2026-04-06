@@ -65,7 +65,7 @@ function LoginForm() {
               <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="#FEF3C7"/>
             </g>
           </svg>
-          <h1 className="text-xl font-brand text-foreground">
+          <h1 className="text-2xl font-brand text-foreground">
             MindOS
           </h1>
           <p className="text-xs text-muted-foreground/70 italic">

@@ -119,7 +119,7 @@ export function BulkMessage({ message }: { message: string | null }) {
 
 export function EmptyState({ message, icon, className }: { message: string; icon?: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-10 text-center ${className ?? ''}`}>
+    <div className={`rounded-xl border border-border/40 bg-card/30 p-10 text-center ${className ?? ''}`}>
       {icon && (
         <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3 text-muted-foreground/40">
           {icon}

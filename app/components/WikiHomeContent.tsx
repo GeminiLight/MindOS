@@ -89,8 +89,8 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
       <div className="mb-10">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-1 h-7 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/20" />
-          <h1 className="text-2xl font-semibold tracking-tight font-display text-foreground">
-            Wiki
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {t.sidebar.files}
           </h1>
         </div>
 
@@ -99,7 +99,7 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
           <button
             onClick={triggerAsk}
             title="⌘/"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:shadow-md group"
+            className="flex-1 flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border/50 shadow-sm bg-card/80 backdrop-blur-sm transition-all duration-200 hover:border-[var(--amber)]/40 hover:shadow-md hover:-translate-y-0.5 group"
           >
             <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
             <div className="flex-1 min-h-[1.5rem] flex items-center">
@@ -117,7 +117,7 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
           <button
             onClick={triggerSearch}
             title="⌘K"
-            className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/60 text-sm text-muted-foreground transition-all duration-150 shrink-0 hover:bg-muted hover:shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/50 text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:bg-muted/60 hover:shadow-sm hover:-translate-y-0.5"
           >
             <Search size={14} />
             <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
@@ -130,7 +130,7 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
         <div className="flex items-center gap-3 mt-4 pl-4">
           <Link
             href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:shadow-sm bg-[var(--amber)] text-[var(--amber-foreground)]"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 bg-[var(--amber)] text-[var(--amber-foreground)]"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
@@ -152,13 +152,15 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
 
       {/* ══════════ Spaces Grid ══════════ */}
       <section className="mb-10">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-[var(--amber)]"><Brain size={14} /></span>
-          <h2 className="text-sm font-semibold font-display text-foreground">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+            <Brain size={14} />
+          </div>
+          <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
             {t.home.spaces}
           </h2>
           {spaces.length > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground font-display">
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">
               {spaces.length}
             </span>
           )}
@@ -185,9 +187,11 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
         </div>
 
         {spaces.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-border px-6 py-12 text-center">
-            <Brain size={32} className="mx-auto mb-3 text-muted-foreground/20" />
-            <p className="text-sm font-medium text-muted-foreground mb-1">
+          <div className="rounded-xl border border-border/40 bg-card/30 px-6 py-12 text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[var(--amber-subtle)] mb-4">
+              <Brain size={22} className="text-[var(--amber)]/60" />
+            </div>
+            <p className="text-sm font-medium text-muted-foreground/70 mb-1">
               {t.home.noSpacesYet ?? 'No spaces yet'}
             </p>
             <p className="text-xs text-muted-foreground/60 mb-4">
@@ -214,10 +218,10 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
                   <Link
                     key={space.name}
                     href={`/view/${encodePath(space.path)}`}
-                    className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                    className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-200 ${
                       isEmpty
                         ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                        : 'border-border/60 hover:border-[var(--amber)]/30 hover:shadow-md hover:-translate-y-0.5 bg-card/40'
                     }`}
                   >
                     {emoji ? (

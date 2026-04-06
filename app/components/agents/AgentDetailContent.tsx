@@ -902,7 +902,7 @@ function KnowledgeInteractionSection() {
           <BookOpen size={12} className="text-muted-foreground/50" />
           {d?.knowledgeInteraction ?? 'Knowledge Interaction'}
         </h2>
-        <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 px-4 py-6 text-center">
+        <div className="rounded-lg border border-border/40 bg-card/30 px-4 py-6 text-center">
           <BookOpen size={20} className="text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-2xs text-muted-foreground/50">{d?.knowledgeNoData ?? 'No interactions yet. Agents will show activity here once they start working with your knowledge base.'}</p>
         </div>
@@ -1039,7 +1039,7 @@ function ActivitySection({ agent }: { agent: AgentInfo }) {
           <StatCard label={d.activityLast7d} value={agent.runtimeUsageSignal ? 'Active' : '—'} />
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 px-4 py-6 text-center">
+        <div className="rounded-lg border border-border/40 bg-card/30 px-4 py-6 text-center">
           <Activity size={20} className="text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-2xs text-muted-foreground/50">{d.activityNoData}</p>
         </div>

@@ -24,8 +24,8 @@ function Section({ id, icon, title, defaultOpen = false, children }: {
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/50 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={open}
       >
-        <span className="text-[var(--amber)]">{icon}</span>
-        <span className="text-base font-medium text-foreground flex-1">{title}</span>
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)] shrink-0">{icon}</div>
+        <span className="text-[13px] font-semibold text-foreground flex-1 tracking-wide">{title}</span>
         <ChevronDown size={16} className={`text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -186,7 +186,7 @@ export default function HelpContent() {
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1 h-6 rounded-full bg-[var(--amber)]" />
-          <h1 className="text-2xl font-bold text-foreground">{h.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{h.title}</h1>
         </div>
         <p className="text-muted-foreground text-sm ml-3 mt-1">{h.subtitle}</p>
       </div>

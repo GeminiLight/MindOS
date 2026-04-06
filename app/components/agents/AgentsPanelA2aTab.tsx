@@ -60,7 +60,7 @@ export default function AgentsPanelA2aTab({
         <>
           {/* Remote A2A agent list */}
           {agents.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-8 text-center">
+            <div className="rounded-xl border border-border/40 bg-card/30 p-8 text-center">
               <div className="w-12 h-12 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-3">
                 <Globe size={20} className="text-muted-foreground/50" aria-hidden="true" />
               </div>
@@ -109,7 +109,7 @@ function NetworkEmptyState({
   const p = t.panels.agents;
 
   return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-12 text-center">
+    <div className="rounded-xl border border-border/40 bg-card/30 p-12 text-center">
       <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
         <Network size={22} className="text-muted-foreground/50" aria-hidden="true" />
       </div>
@@ -254,7 +254,7 @@ function AcpRegistrySection() {
           ))}
         </div>
       ) : !detection.loading ? (
-        <div className="rounded-lg border border-dashed border-border/60 bg-card/40 p-5 text-center">
+        <div className="rounded-lg border border-border/40 bg-card/30 p-5 text-center">
           <p className="text-xs text-muted-foreground/70 leading-relaxed max-w-xs mx-auto">
             {p.acpNoInstalled}
           </p>

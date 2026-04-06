@@ -41,9 +41,11 @@ export default function EchoSpotlight() {
   if (dailyLine.trim()) {
     return (
       <section className="mb-10">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-[var(--amber)]"><Feather size={13} /></span>
-          <h2 className="text-sm font-semibold text-foreground">{echo.title}</h2>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+            <Feather size={13} />
+          </div>
+          <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{echo.title}</h2>
           <span className="text-xs text-muted-foreground/50">{echo.dailyLine}</span>
           <Link
             href="/echo/daily"
@@ -83,9 +85,11 @@ export default function EchoSpotlight() {
   // ── No daily line → invite ──
   return (
     <section className="mb-10">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[var(--amber)]"><Feather size={13} /></span>
-        <h2 className="text-sm font-semibold text-foreground">{echo.title}</h2>
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+          <Feather size={13} />
+        </div>
+        <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{echo.title}</h2>
       </div>
       <div className="flex items-center gap-4 px-3.5 py-3.5 rounded-xl border border-dashed border-border/60 hover:border-[var(--amber)]/30 transition-all duration-150 group">
         <div className="flex-1 min-w-0">

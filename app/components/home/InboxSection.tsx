@@ -153,15 +153,15 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   return (
     <section className="mb-10">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[var(--amber)]">
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
           <Inbox size={13} />
-        </span>
-        <h2 className="text-sm font-semibold text-foreground">
+        </div>
+        <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
           {t.inbox.title}
         </h2>
         {hasFiles && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-2xs font-semibold rounded-full bg-[var(--amber)]/15 text-[var(--amber)] tabular-nums">
+          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">
             {t.inbox.count(files.length)}
           </span>
         )}

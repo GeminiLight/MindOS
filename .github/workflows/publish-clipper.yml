@@ -58,28 +58,63 @@ jobs:
           cd browser-extension/extension
           zip -r ../mindos-web-clipper-${{ steps.version.outputs.version }}.zip .
 
+      - name: Generate release notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Collect commit messages since last clipper tag
+          PREV_TAG=$(git tag --list 'clipper-v*' --sort=-v:refname | grep -v "clipper-v${VERSION}" | head -1 || true)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "${PREV_TAG}..HEAD" --oneline --no-decorate -- browser-extension/ | head -20)
+          else
+            CHANGES=""
+          fi
+
+          {
+            echo "## MindOS Web Clipper v${VERSION}"
+            echo ""
+            echo "- One-click save any web page as clean Markdown"
+            echo "- Hierarchical folder picker (browse nested directories)"
+            echo "- Smart extraction via Mozilla Readability (strips ads/nav)"
+            echo "- YAML frontmatter (title, source, author, site, date)"
+            echo "- Dark mode (follows system)"
+            echo '- Keyboard shortcut `Ctrl+Shift+M` / right-click menu'
+            echo ""
+            echo "<details><summary>Full feature list</summary>"
+            echo ""
+            echo "- Editable title before saving"
+            echo "- Save to Inbox or any folder/subfolder"
+            echo '- Source tracking (`web-clipper` tag in Inbox)'
+            echo "- Code block preservation with language detection"
+            echo "- Auth token setup (MindOS Settings → MCP)"
+            echo "- 100% local — no cloud, no telemetry"
+            echo ""
+            echo "**Supported browsers**: Chrome 120+, Edge 120+, Brave, Arc"
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "### Install"
+            echo ""
+            echo "1. Download \`mindos-web-clipper-${VERSION}.zip\` below"
+            echo '2. Unzip → Chrome `chrome://extensions` → Developer mode → Load unpacked'
+            if [ -n "$CHANGES" ]; then
+              echo ""
+              echo "<details><summary>Commits</summary>"
+              echo ""
+              echo '```'
+              echo "$CHANGES"
+              echo '```'
+              echo "</details>"
+            fi
+          } > /tmp/release-notes.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
 
-          cat > /tmp/release-notes.md <<EOF
-          ## MindOS Web Clipper v${VERSION}
-
-          ### Install
-
-          1. Download \`mindos-web-clipper-${VERSION}.zip\` below
-          2. Unzip it
-          3. Open Chrome → \`chrome://extensions\` → Developer mode → Load unpacked → select the unzipped folder
-
-          ### What's new
-
-          See [browser-extension/README.md](https://github.com/GeminiLight/MindOS/blob/main/browser-extension/README.md) for details.
-          EOF
-
           gh release create "${TAG}" \
-            --title "MindOS Web Clipper v${VERSION}" \
+            --title "MindOS Web Clipper v${{ steps.version.outputs.version }}" \
             --notes-file /tmp/release-notes.md \
-            browser-extension/mindos-web-clipper-${VERSION}.zip
+            browser-extension/mindos-web-clipper-${{ steps.version.outputs.version }}.zip

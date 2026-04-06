@@ -72,7 +72,7 @@ export default function InboxHistoryPage() {
           <ArrowLeft size={16} />
         </Link>
         <div className="flex-1">
-          <h1 className="text-lg font-semibold text-foreground">{t.importHistory.title}</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">{t.importHistory.title}</h1>
           <p className="text-xs text-muted-foreground/60 mt-0.5">
             {entries.length > 0
               ? t.importHistory.recordCount(entries.length)

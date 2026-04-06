@@ -52,7 +52,7 @@ export default function ViewNotFound() {
         <FilePlus size={24} className="text-muted-foreground" />
       </div>
 
-      <h1 className="text-lg font-semibold text-foreground mb-2">
+      <h1 className="text-lg font-semibold tracking-tight text-foreground mb-2">
         {notFoundT?.title ?? 'File not found'}
       </h1>
 

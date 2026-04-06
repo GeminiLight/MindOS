@@ -69,7 +69,7 @@ export function EchoContinuedGroups({
   footer?: ReactNode;
 }) {
   const cell = (label: string, icon: ReactNode) => (
-    <div className="flex min-h-[5.75rem] flex-col justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 px-4 py-4 transition-colors duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/15">
+    <div className="flex min-h-[5.75rem] flex-col justify-center rounded-xl border border-border/40 bg-card/30 px-4 py-4 transition-colors duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/15">
       <div className="flex items-center gap-2">
         <span className="shrink-0 text-muted-foreground" aria-hidden>{icon}</span>
         <h3 className="font-sans text-sm font-medium text-foreground">{label}</h3>
