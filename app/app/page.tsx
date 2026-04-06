@@ -37,10 +37,10 @@ function extractDescription(spacePath: string): string {
 }
 
 
-function getTopLevelDirs(): SpaceInfo[] {
+function getTopLevelDirs(tree?: FileNode[]): SpaceInfo[] {
   try {
-    const tree = getFileTree();
-    return tree
+    const nodes = tree ?? getFileTree();
+    return nodes
       .filter(n => n.type === 'directory' && !n.name.startsWith('.'))
       .map(n => ({
         name: n.name,

@@ -67,7 +67,7 @@ interface FileTreeCache {
 }
 
 let _cache: FileTreeCache | null = null;
-const CACHE_TTL_MS = 5_000; // 5 seconds
+const CACHE_TTL_MS = 30_000; // 30 seconds (file watcher still invalidates immediately on changes)
 
 let _treeVersion = 0;
 

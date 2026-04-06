@@ -14,6 +14,7 @@ import {
   appendFileSync,
 } from 'fs';
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
+import semver from 'semver';
 
 const SHELL_MARKER = '# MindOS Desktop — CLI (mindos)';
 
@@ -25,15 +26,50 @@ function shimPath(): string {
   return path.join(shimDir(), process.platform === 'win32' ? 'mindos.cmd' : 'mindos');
 }
 
+/**
+ * Resolve the best CLI entry point: prefer cached runtime (Core Hot Update)
+ * over bundled if it has a newer version.
+ */
 function resolveCliJs(): string | null {
   const bundledRoot = getDefaultBundledMindOsDirectory();
+  let bundledCli: string | null = null;
+  let bundledVersion: string | null = null;
   if (bundledRoot) {
     const p = path.join(bundledRoot, 'bin', 'cli.js');
-    if (existsSync(p)) return p;
+    if (existsSync(p)) {
+      bundledCli = p;
+      try {
+        const pkg = JSON.parse(readFileSync(path.join(bundledRoot, 'package.json'), 'utf-8'));
+        bundledVersion = typeof pkg.version === 'string' ? pkg.version : null;
+      } catch { /* ignore */ }
+    }
   }
-  if (app.isPackaged) return null;
-  const dev = path.join(app.getAppPath(), '..', 'bin', 'cli.js');
-  return existsSync(dev) ? dev : null;
+
+  // Check cached runtime (installed by Core Hot Update)
+  const cachedRoot = path.join(app.getPath('home'), '.mindos', 'runtime');
+  const cachedCli = path.join(cachedRoot, 'bin', 'cli.js');
+  if (existsSync(cachedCli)) {
+    let cachedVersion: string | null = null;
+    try {
+      const pkg = JSON.parse(readFileSync(path.join(cachedRoot, 'package.json'), 'utf-8'));
+      cachedVersion = typeof pkg.version === 'string' ? pkg.version : null;
+    } catch { /* ignore */ }
+
+    // Prefer cached if it has a newer version than bundled
+    if (cachedVersion && semver.valid(cachedVersion)) {
+      if (!bundledVersion || !semver.valid(bundledVersion) || semver.gt(cachedVersion, bundledVersion)) {
+        return cachedCli;
+      }
+    }
+  }
+
+  if (bundledCli) return bundledCli;
+
+  if (!app.isPackaged) {
+    const dev = path.join(app.getAppPath(), '..', 'bin', 'cli.js');
+    return existsSync(dev) ? dev : null;
+  }
+  return null;
 }
 
 /** Safe single-quoted literal for POSIX sh. */

@@ -13,6 +13,7 @@ import { promisify } from 'util';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { getPrivateNodePath, isPrivateNodeInstalled, getBundledNodePath, isBundledNodeInstalled } from './node-bootstrap';
+import { getAppConfigStore } from './app-config-store';
 
 const execAsync = promisify(exec);
 
@@ -93,6 +94,14 @@ export async function getNodePath(): Promise<string | null> {
     return getPrivateNodePath();
   }
 
+  // 0c. Cached path from previous startup — avoids expensive shell detection on every launch
+  try {
+    const cached = getAppConfigStore().get('cachedNodePath');
+    if (cached && existsSync(cached) && checkNodeVersion(cached)) {
+      return cached;
+    }
+  } catch { /* cache miss — fall through to full detection */ }
+
   // 1. Explicit env var (instant)
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
     if (checkNodeVersion(process.env.MINDOS_NODE_BIN)) return process.env.MINDOS_NODE_BIN;
@@ -145,7 +154,10 @@ export async function getNodePath(): Promise<string | null> {
   // 6. `which node` with enriched PATH (fast, ~100ms + version check)
   try {
     const result = await execWithPath('which node', { timeout: 3000 });
-    if (result && existsSync(result) && checkNodeVersion(result)) return result;
+    if (result && existsSync(result) && checkNodeVersion(result)) {
+      try { getAppConfigStore().set('cachedNodePath', result); } catch { /* best-effort */ }
+      return result;
+    }
   } catch { /* ignore */ }
 
   // 7. Shell login detection — bounded fallback (1.5s per shell, 3s total ceiling)
@@ -161,7 +173,11 @@ export async function getNodePath(): Promise<string | null> {
         `${sh} -il -c "which node" 2>/dev/null`,
         { timeout: Math.min(1500, remaining) }
       );
-      if (result && existsSync(result) && checkNodeVersion(result)) return result;
+      if (result && existsSync(result) && checkNodeVersion(result)) {
+        // Cache for next startup so we skip the slow shell detection
+        try { getAppConfigStore().set('cachedNodePath', result); } catch { /* best-effort */ }
+        return result;
+      }
     } catch { /* ignore */ }
   }
 

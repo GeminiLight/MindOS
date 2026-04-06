@@ -108,7 +108,15 @@ function DesktopCoreCard() {
       // Get current Core version via a check call (also probes for updates)
       try {
         const info = await bridge.checkCoreUpdate?.();
-        if (info) setCurrentVersion(info.currentVersion);
+        if (info) {
+          setCurrentVersion(info.currentVersion);
+          // CRITICAL FIX: If no update available, explicitly set state to 'idle'
+          // This ensures the UI refreshes to show the new (current) version
+          if (!info.available) {
+            setState('idle');
+            return;
+          }
+        }
       } catch { /* ignore */ }
 
       // Check for pending download (from previous session)
@@ -196,7 +204,11 @@ function DesktopCoreCard() {
     setState('applying');
     try {
       const result = await bridge.applyCoreUpdate();
-      if (result?.version) setCurrentVersion(result.version);
+      // CRITICAL FIX: Update currentVersion to the version returned by the main process
+      // This ensures the UI immediately shows the new version after the update is applied
+      if (result?.version) {
+        setCurrentVersion(result.version);
+      }
       setState('idle');
       // Page will be reloaded by main process
     } catch (err) {
@@ -346,6 +358,10 @@ function DesktopShellCard() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    // CRITICAL: Reset state on mount to clear stale state after app restart
+    // (without this, 'state' can be 'downloading' from before the restart)
+    setState('idle');
+    
     bridge.getAppInfo?.().then((info) => {
       if (info?.version) setAppVersion(info.version);
     }).catch((err) => { console.warn("[UpdateTab] getAppInfo failed:", err); });

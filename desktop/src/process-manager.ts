@@ -100,12 +100,12 @@ export class ProcessManager extends EventEmitter {
     this.writeChildPids();
 
     // 3. Wait for health (exits early if web process dies)
-    const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 180_000);
+    const healthy = await this.waitForReady(this.opts.webPort, '/api/health', 60_000);
     if (!healthy) {
       const stderr = this.webStderrLines.slice(-20).join('\n');
       const detail = this.webProcessDied
         ? `Web process crashed before becoming ready.`
-        : `Health check timed out after 120 seconds.`;
+        : `Health check timed out after 60 seconds.`;
       throw new Error(
         `MindOS web server failed to start on port ${this.opts.webPort}.\n` +
         `${detail}\n` +
@@ -339,7 +339,7 @@ export class ProcessManager extends EventEmitter {
         });
         req.on('error', () => { /* not ready yet */ });
         req.on('timeout', () => { req.destroy(); });
-      }, 1000);
+      }, 500);
     });
   }
 

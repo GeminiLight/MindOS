@@ -89,6 +89,10 @@ export async function resolveLocalMindOsProjectRoot(
   const userCandidatePath = await getMindosInstallPath(nodePath);
   const userAnalysis = userCandidatePath ? analyzeMindOsLayout(userCandidatePath) : { version: null, runnable: false };
 
+  console.info(
+    `[RuntimeResolve] candidates: bundled=${bundledAnalysis.version ?? '—'}(${bundledAnalysis.runnable ? 'ok' : 'bad'}) cached=${cachedAnalysis.version ?? '—'}(${cachedAnalysis.runnable ? 'ok' : 'bad'}) user=${userAnalysis.version ?? '—'}(${userAnalysis.runnable ? 'ok' : 'bad'}) policy=${policy}`,
+  );
+
   const pick = pickMindOsRuntime({
     policy,
     overrideRoot,

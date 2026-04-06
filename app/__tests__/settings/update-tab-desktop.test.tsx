@@ -126,4 +126,44 @@ describe('Desktop UpdateTab error handling', () => {
 
     expect(host.textContent).toContain("You're up to date");
   });
+
+  it('resets state to idle on mount to clear stale state after app restart', async () => {
+    // This test verifies the fix for: restart → 'state' still 'downloading' → button disabled
+    mockBridge.checkUpdate.mockResolvedValue({ available: true, version: '0.2.0' });
+
+    const { UpdateTab } = await import('@/components/settings/UpdateTab');
+
+    // First render (before restart)
+    await act(async () => { root.render(<UpdateTab />); });
+
+    const updateBtn = Array.from(host.querySelectorAll('button'))
+      .find(b => b.textContent?.includes('Update to v0.2.0'));
+    expect(updateBtn).toBeTruthy();
+    expect((updateBtn as HTMLButtonElement).disabled).toBe(false);
+
+    // User clicks update, state becomes 'downloading'
+    await act(async () => { updateBtn!.click(); });
+    await act(async () => { await Promise.resolve(); });
+
+    // In real scenario, app restarts here and component remounts
+    // Unmount and create new root to simulate fresh load
+    await act(async () => { root.unmount(); });
+    host.remove();
+
+    const newHost = document.createElement('div');
+    document.body.appendChild(newHost);
+    const newRoot = createRoot(newHost);
+
+    await act(async () => { newRoot.render(<UpdateTab />); });
+
+    // CRITICAL: After remount, the "Check for Updates" button should be ENABLED
+    // (not disabled like before the fix)
+    const checkBtn = Array.from(newHost.querySelectorAll('button'))
+      .find(b => b.textContent?.includes('Check for Updates'));
+    expect(checkBtn).toBeTruthy();
+    expect((checkBtn as HTMLButtonElement).disabled).toBe(false); // Must be enabled!
+
+    await act(async () => { newRoot.unmount(); });
+    newHost.remove();
+  });
 });

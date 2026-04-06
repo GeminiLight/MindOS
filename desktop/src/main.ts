@@ -42,6 +42,7 @@ import { verifyMindOsWebListening } from './mindos-web-health';
 import { resolvePreferUnpacked } from './resolve-packaged-asset';
 import { registerMindosConnectSchemePrivileged, registerMindosConnectProtocol } from './mindos-connect-protocol';
 import { CoreUpdater } from './core-updater';
+import { getAppConfigStore } from './app-config-store';
 
 registerMindosConnectSchemePrivileged();
 
@@ -811,6 +812,17 @@ function refreshTray(status: 'starting' | 'running' | 'error'): void {
 async function healPreviousInstallation(): Promise<void> {
   const t0 = Date.now();
 
+  // Fast-restart optimisation: if the app exited cleanly less than 30 s ago,
+  // skip the full cleanup — no orphaned processes or stale ports to worry about.
+  try {
+    const configStore = getAppConfigStore();
+    const lastCleanExit = configStore.get('lastCleanExit');
+    if (lastCleanExit && (t0 - lastCleanExit) < 30_000) {
+      console.info(`[MindOS:heal] Clean exit ${t0 - lastCleanExit}ms ago — skipping cleanup`);
+      return;
+    }
+  } catch { /* config read failure — run full heal */ }
+
   // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
   cleanupConflictingLaunchdService();
   cleanupLinuxSystemdService();
@@ -1285,10 +1297,29 @@ function setupIPC(): void {
   // ── Core Hot Update IPC ──
 
   ipcMain.handle('check-core-update', async () => {
-    if (currentMode !== 'local' || !currentCoreVersion) {
+    // CRITICAL FIX: Always force a fresh read of currentCoreVersion for the check
+    // This ensures that after apply(), the new version is immediately reflected
+    if (currentMode !== 'local') {
       return { available: false, currentVersion: currentCoreVersion || '', latestVersion: '' };
     }
-    return coreUpdater.check(currentCoreVersion);
+    
+    // If currentCoreVersion is not set, it means startLocalMode hasn't been called yet
+    // Try to read it from the runtime directory
+    let versionToCheck = currentCoreVersion;
+    if (!versionToCheck) {
+      try {
+        versionToCheck = coreUpdater.getCachedVersion();
+        if (versionToCheck) {
+          console.info(`[MindOS] Recovered currentCoreVersion from cache: ${versionToCheck}`);
+        }
+      } catch { /* ignore */ }
+    }
+    
+    if (!versionToCheck) {
+      return { available: false, currentVersion: '', latestVersion: '' };
+    }
+    
+    return coreUpdater.check(versionToCheck);
   });
 
   ipcMain.handle('download-core-update', async (_e: unknown, urls: string[], version: string, size: number, sha256: string) => {
@@ -1318,6 +1349,7 @@ function setupIPC(): void {
   ipcMain.handle('apply-core-update', async () => {
     if (isQuitting || isUpdating) throw new Error('App is shutting down');
     const zh = navigator_lang() === 'zh';
+    const previousVersion = currentCoreVersion;
 
     // Inject overlay before stopping services
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1331,31 +1363,63 @@ function setupIPC(): void {
       `);
     }
 
+    let appliedVersion: string | null = null;
     try {
       // 1. Stop processes (release file locks for Windows)
+      console.info(`[CoreUpdater] Applying update: stopping processes (current: v${previousVersion})`);
       if (processManager) {
         await processManager.stop();
         processManager = null;
       }
 
       // 2. Atomic file replacement
-      coreUpdater.apply();
+      const newRuntimeDir = coreUpdater.apply();
+      const verifiedVersion = coreUpdater.getCachedVersion();
+      console.info(`[CoreUpdater] Files replaced: ${newRuntimeDir}, verified version: ${verifiedVersion}`);
+
+      // 2b. Refresh CLI shim so `mindos -v` reflects the new version
+      try { ensureMindosCliShim({ appendPath: false }); } catch (e) {
+        console.warn('[CoreUpdater] CLI shim refresh failed:', e);
+      }
 
       // 3. Restart with new runtime (startLocalMode re-resolves → picks cached)
       invalidateConfig();
       const url = await startLocalMode();
-      if (url && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
-        refreshTray('running');
+      appliedVersion = currentCoreVersion;
+      console.info(`[CoreUpdater] startLocalMode completed: url=${url}, version=${appliedVersion} (was: ${previousVersion})`);
+
+      if (appliedVersion === previousVersion) {
+        console.warn(`[CoreUpdater] WARNING: Version did not change after apply! (${previousVersion} → ${appliedVersion}). Runtime may not have been picked correctly.`);
       }
-      return { ok: true, version: currentCoreVersion };
+
+      if (url && mainWindow && !mainWindow.isDestroyed()) {
+        const result = { ok: true, version: appliedVersion };
+        // Clear Electron HTTP cache before loading the new page.
+        // Without this, Electron may serve stale HTML/JS from disk cache,
+        // causing the user to see old UI even though the backend is running new code.
+        setTimeout(async () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            try {
+              await mainWindow.webContents.session.clearCache();
+            } catch (e) {
+              console.warn('[CoreUpdater] clearCache failed:', e);
+            }
+            mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
+            refreshTray('running');
+          }
+        }, 100);
+        return result;
+      }
+      return { ok: true, version: appliedVersion };
     } catch (err) {
       // Recovery: try to restart with whatever runtime is available
       console.error('[MindOS] Core update apply failed, recovering:', err);
       try {
         invalidateConfig();
         const url = await startLocalMode();
+        appliedVersion = currentCoreVersion;
         if (url && mainWindow && !mainWindow.isDestroyed()) {
+          try { await mainWindow.webContents.session.clearCache(); } catch {}
           mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
         }
       } catch (recoverErr) {
@@ -1723,6 +1787,7 @@ app.on('before-quit', (e) => {
       if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; }
       if (cleanupUpdater) { cleanupUpdater(); cleanupUpdater = null; }
       clearActiveTunnel();
+      try { getAppConfigStore().set('lastCleanExit', Date.now()); } catch { /* best-effort */ }
       app.exit(0);
     };
     // Must use .then() — event handler cannot be async, but cleanup must complete before exit
