@@ -1,0 +1,22 @@
+{
+  "name": "mindos-web-clipper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MindOS Web Clipper — save any web page to your knowledge base",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "clean": "rm -rf dist",
+    "package": "npm run build && cd dist && zip -r ../mindos-web-clipper.zip ."
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "turndown": "^7.2.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@types/chrome": "^0.1.39",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

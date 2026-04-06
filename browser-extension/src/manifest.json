@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "MindOS Web Clipper",
+  "version": "0.1.0",
+  "description": "Save any web page to your MindOS knowledge base — one click, beautifully formatted Markdown.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "Clip to MindOS"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "http://[::1]:*/*",
+    "http://10.*.*.*:*/*",
+    "http://172.16.*.*:*/*",
+    "http://192.168.*.*:*/*"
+  ],
+  "commands": {
+    "clip-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+M",
+        "mac": "Command+Shift+M"
+      },
+      "description": "Clip current page to MindOS"
+    }
+  }
+}
