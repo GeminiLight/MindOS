@@ -27,6 +27,7 @@ import type { AskModeApi } from '@/lib/types';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
 import { logAgentOp } from '@/lib/agent/log';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
+import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
@@ -561,6 +562,10 @@ export async function POST(req: NextRequest) {
   // Read agent config from settings
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
+
+  // Detect locale from Accept-Language header for i18n status messages
+  const acceptLang = req.headers.get('accept-language') ?? '';
+  const t = acceptLang.startsWith('zh') ? i18nZh.ask : i18nEn.ask;
   const defaultMaxSteps = askMode === 'chat' ? 8 : (agentConfig.maxSteps ?? 20);
   const stepLimit = Number.isFinite(body.maxSteps)
     ? Math.min(30, Math.max(1, Number(body.maxSteps)))
@@ -1128,7 +1133,7 @@ export async function POST(req: NextRequest) {
             // and go straight to the non-streaming fallback path.
             const compatCache = readBaseUrlCompat();
             if (compatCache[effectiveBaseUrlKey] === 'non-streaming' && baseUrl && provider === 'openai') {
-              send({ type: 'status', message: 'Using compatibility mode (non-streaming)...' });
+              send({ type: 'status', message: t.proxyCompatMode });
               try {
                 await runNonStreamingFallback({
                   baseUrl,
@@ -1146,7 +1151,7 @@ export async function POST(req: NextRequest) {
                 send({ type: 'done' });
               } catch (fallbackErr) {
                 metrics.recordRequest(Date.now() - requestStartTime);
-                send({ type: 'error', message: `Compatibility mode failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}. Please check your Base URL, API key, and model name.` });
+                send({ type: 'error', message: t.proxyCompatFailed(fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)) });
               }
               safeClose();
               return;
@@ -1184,7 +1189,7 @@ export async function POST(req: NextRequest) {
               // No content received — check if this looks like a proxy stream+tools incompatibility.
               // Only attempt fallback for OpenAI-compatible endpoints with a custom baseUrl.
               if (baseUrl && provider === 'openai') {
-                send({ type: 'status', message: 'Detecting proxy compatibility, switching to non-streaming mode...' });
+                send({ type: 'status', message: t.proxyCompatDetecting });
                 try {
                   await runNonStreamingFallback({
                     baseUrl,
@@ -1203,7 +1208,7 @@ export async function POST(req: NextRequest) {
                   console.log(`[ask] Proxy compat detected: ${effectiveBaseUrlKey} → non-streaming (cached)`);
                   send({ type: 'done' });
                 } catch (fallbackErr) {
-                  send({ type: 'error', message: `Compatibility mode also failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}. Please check your Base URL, API key, and model name.` });
+                  send({ type: 'error', message: t.proxyCompatAlsoFailed(fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)) });
                 }
               } else {
                 send({ type: 'error', message: lastModelError });

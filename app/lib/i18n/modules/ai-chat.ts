@@ -30,6 +30,10 @@ export const aiChatEn = {
     errorNoResponse: 'AI returned no content. Possible causes: model does not support streaming, proxy compatibility issue, or request exceeds context limit.',
     reconnecting: (attempt: number, max: number) => `Connection lost. Reconnecting (${attempt}/${max})...`,
     reconnectFailed: 'Connection failed after multiple attempts.',
+    proxyCompatMode: 'Using compatibility mode (non-streaming)...',
+    proxyCompatFailed: (err: string) => `Compatibility mode failed: ${err}. Please check your Base URL, API key, and model name.`,
+    proxyCompatDetecting: 'Detecting proxy compatibility, switching to non-streaming mode...',
+    proxyCompatAlsoFailed: (err: string) => `Compatibility mode also failed: ${err}. Please check your Base URL, API key, and model name.`,
     retry: 'Retry',
     suggestions: [
       'Summarize this document',
@@ -148,6 +152,10 @@ export const aiChatZh = {
     errorNoResponse: 'AI 未返回有效内容。可能原因：模型不支持流式输出、中转站兼容性问题、或请求超出上下文限制。',
     reconnecting: (attempt: number, max: number) => `连接中断，正在重连 (${attempt}/${max})...`,
     reconnectFailed: '多次重连失败，请检查网络后重试。',
+    proxyCompatMode: '正在以兼容模式调用...',
+    proxyCompatFailed: (err: string) => `兼容模式失败：${err}。请检查 Base URL、API Key 和模型名称。`,
+    proxyCompatDetecting: '正在检测接口兼容性，切换到兼容模式重试...',
+    proxyCompatAlsoFailed: (err: string) => `兼容模式也失败了：${err}。请检查 Base URL、API Key 和模型名称。`,
     retry: '重试',
     suggestions: [
       '总结这篇文档',
