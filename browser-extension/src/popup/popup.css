@@ -66,7 +66,7 @@ body {
 
 /* ── Views ── */
 
-.view { display: flex; flex-direction: column; gap: 14px; }
+.view { display: flex; flex-direction: column; gap: 16px; }
 .view[hidden] { display: none !important; }
 
 /* ── Header ── */
@@ -188,8 +188,8 @@ body {
   font-size: 13px;
   transition: border-color var(--transition);
 }
-.form-group input:focus,
-.form-group select:focus {
+.form-group input:focus-visible,
+.form-group select:focus-visible {
   outline: none;
   border-color: var(--amber);
   box-shadow: 0 0 0 3px var(--amber-subtle);
@@ -214,8 +214,8 @@ body {
 .clip-preview {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+  gap: 8px;
+  padding: 12px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -236,7 +236,7 @@ body {
 
 .meta-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -283,7 +283,9 @@ body {
 .success-detail {
   text-align: center;
   font-size: 12px;
+  font-family: var(--font-mono);
   color: var(--fg-muted);
+  word-break: break-all;
 }
 
 /* ── Loading ── */

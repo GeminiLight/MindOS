@@ -33,6 +33,7 @@ const btnSettings = $<HTMLButtonElement>('btn-settings');
 // Success
 const successDetail = $<HTMLParagraphElement>('success-detail');
 const btnDone = $<HTMLButtonElement>('btn-done');
+const btnClipAnother = $<HTMLButtonElement>('btn-clip-another');
 
 /* ── State ── */
 
@@ -282,6 +283,11 @@ btnSettings.addEventListener('click', () => {
 // Done button — close popup
 btnDone.addEventListener('click', () => {
   window.close();
+});
+
+// Clip Again — go back to clip view for same page
+btnClipAnother.addEventListener('click', () => {
+  showClipView();
 });
 
 /* ── Error display helpers ── */
