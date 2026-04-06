@@ -76,6 +76,7 @@ image.png
 !landing/img/*.png
 !assets/images/*.png
 !docs/images/*.png
+!browser-extension/src/icons/*.png
 .tmux.conf
 TMUX_DOC.md
 tmux-manage.sh
