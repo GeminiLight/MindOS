@@ -50,7 +50,12 @@ export function getMindRoot(): string {
 }
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store']);
-const ALLOWED_EXTENSIONS = new Set(['.md', '.csv', '.json', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.md', '.csv', '.json', '.pdf',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
+  '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac',
+  '.mp4', '.webm', '.mov', '.mkv',
+]);
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md']);
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────

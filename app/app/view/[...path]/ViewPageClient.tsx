@@ -61,7 +61,11 @@ export default function ViewPageClient({
   // Graph mode — per-view, resets when navigating to a different file
   const [graphMode, setGraphMode] = useState(false);
   const router = useRouter();
-  const isBinaryFile = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(extension);
+  const isBinaryFile = [
+    'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico',
+    'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac',
+    'mp4', 'webm', 'mov', 'mkv',
+  ].includes(extension);
   const [editing, setEditing] = useState(!isBinaryFile && (initialEditing || content === ''));
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
