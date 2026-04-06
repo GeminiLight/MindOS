@@ -312,3 +312,119 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── DirPicker ── */
+
+.dir-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.dir-trigger:hover { border-color: rgba(200, 135, 58, 0.4); }
+.dir-trigger:focus-visible { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-subtle); }
+.dir-trigger.active { border-color: var(--amber); }
+.dir-trigger .dir-icon { color: var(--amber); flex-shrink: 0; }
+.dir-trigger .dir-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-trigger .dir-chevron { flex-shrink: 0; color: var(--fg-muted); transition: transform var(--transition); }
+.dir-trigger.active .dir-chevron { transform: rotate(180deg); }
+
+.dir-panel {
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.dir-panel[hidden] { display: none; }
+
+.dir-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 11px;
+}
+.dir-breadcrumb button {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+.dir-breadcrumb button:hover { color: var(--fg); }
+.dir-breadcrumb button.active { color: var(--amber); font-weight: 600; }
+.dir-breadcrumb .crumb-sep {
+  color: var(--fg-hint);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.dir-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.dir-list:empty::after {
+  content: '—';
+  display: block;
+  padding: 8px;
+  text-align: center;
+  color: var(--fg-hint);
+  font-size: 11px;
+}
+
+.dir-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.dir-item:hover { background: var(--bg-muted); }
+.dir-item .dir-item-icon { color: var(--amber); flex-shrink: 0; }
+.dir-item .dir-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-item .dir-item-arrow { color: var(--fg-hint); flex-shrink: 0; }
+
+.dir-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 6px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--amber);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.dir-confirm:hover { background: var(--bg-muted); }

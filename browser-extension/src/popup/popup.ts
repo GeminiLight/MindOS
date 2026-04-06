@@ -2,9 +2,9 @@
 
 import TurndownService from 'turndown';
 import { loadConfig, saveConfig, isConfigured } from '../lib/storage';
-import { testConnection, listSpaces, saveToInbox, createFile } from '../lib/api';
+import { testConnection, listDirs, saveToInbox, createFile } from '../lib/api';
 import { toClipDocument } from '../lib/markdown';
-import type { ClipperConfig, PageContent, MindOSSpace } from '../lib/types';
+import type { ClipperConfig, PageContent } from '../lib/types';
 
 const INBOX_VALUE = '__inbox__';
 
@@ -27,7 +27,12 @@ const btnConnect = $<HTMLButtonElement>('btn-connect');
 const clipTitle = $<HTMLInputElement>('clip-title');
 const clipSite = $<HTMLSpanElement>('clip-site');
 const clipWords = $<HTMLSpanElement>('clip-words');
-const clipSpace = $<HTMLSelectElement>('clip-space');
+const dirTrigger = $<HTMLButtonElement>('dir-trigger');
+const dirLabel = $<HTMLSpanElement>('dir-label');
+const dirPanel = $<HTMLDivElement>('dir-panel');
+const dirBreadcrumb = $<HTMLDivElement>('dir-breadcrumb');
+const dirList = $<HTMLDivElement>('dir-list');
+const dirConfirm = $<HTMLButtonElement>('dir-confirm');
 const clipError = $<HTMLDivElement>('clip-error');
 const btnSave = $<HTMLButtonElement>('btn-save');
 const btnSettings = $<HTMLButtonElement>('btn-settings');
@@ -41,7 +46,9 @@ const btnClipAnother = $<HTMLButtonElement>('btn-clip-another');
 
 let config: ClipperConfig;
 let extractedContent: PageContent | null = null;
-let spaces: MindOSSpace[] = [];
+let allDirs: string[] = [];
+let selectedPath = INBOX_VALUE;  // '__inbox__' or a dir path
+let browsingPath = '';           // current level being viewed in picker
 
 /* ── View switching ── */
 
@@ -139,14 +146,14 @@ async function init() {
   let extractionError = '';
 
   try {
-    [extractedContent, spaces] = await Promise.all([
+    [extractedContent, allDirs] = await Promise.all([
       extractContent(),
-      listSpaces(config),
+      listDirs(config),
     ]);
   } catch (err) {
     extractionError = err instanceof Error ? err.message : 'Cannot read this page';
     extractedContent = null;
-    spaces = await listSpaces(config).catch(() => []);
+    allDirs = await listDirs(config).catch(() => []);
   }
 
   showClipView(extractionError);
@@ -180,21 +187,98 @@ function showClipView(errorMsg?: string) {
     clipWords.textContent = '';
   }
 
-  populateSpaces(spaces);
+  // Reset dir picker state
+  selectedPath = INBOX_VALUE;
+  browsingPath = '';
+  updateDirLabel();
+  toggleDirPanel(false);
 }
 
-/** Populate the space dropdown — Inbox first, then all user spaces */
-function populateSpaces(spaceList: MindOSSpace[]) {
-  // Keep Inbox option, remove the rest
-  while (clipSpace.options.length > 1) clipSpace.remove(1);
-  for (const s of spaceList) {
-    const opt = document.createElement('option');
-    opt.value = s.path;
-    opt.textContent = s.name;
-    clipSpace.appendChild(opt);
+/** Render the hierarchical directory picker at the current browsing level */
+function renderDirPicker() {
+  // Breadcrumb
+  const segments = browsingPath ? browsingPath.split('/') : [];
+  dirBreadcrumb.innerHTML = '';
+
+  // Root / Inbox button
+  const rootBtn = document.createElement('button');
+  rootBtn.type = 'button';
+  rootBtn.textContent = '/ Inbox';
+  rootBtn.className = selectedPath === INBOX_VALUE && !browsingPath ? 'active' : '';
+  rootBtn.addEventListener('click', () => {
+    browsingPath = '';
+    selectedPath = INBOX_VALUE;
+    updateDirLabel();
+    renderDirPicker();
+  });
+  dirBreadcrumb.appendChild(rootBtn);
+
+  segments.forEach((seg, i) => {
+    const sep = document.createElement('span');
+    sep.className = 'crumb-sep';
+    sep.innerHTML = '&#8250;';
+    dirBreadcrumb.appendChild(sep);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = seg;
+    const path = segments.slice(0, i + 1).join('/');
+    btn.className = i === segments.length - 1 ? 'active' : '';
+    btn.addEventListener('click', () => {
+      browsingPath = path;
+      selectedPath = path;
+      updateDirLabel();
+      renderDirPicker();
+    });
+    dirBreadcrumb.appendChild(btn);
+  });
+
+  // Child directories at current level
+  const prefix = browsingPath ? browsingPath + '/' : '';
+  const children = allDirs
+    .filter(p => {
+      if (!p.startsWith(prefix)) return false;
+      const rest = p.slice(prefix.length);
+      return rest.length > 0 && !rest.includes('/');
+    })
+    .sort();
+
+  dirList.innerHTML = '';
+  for (const childPath of children) {
+    const childName = childPath.split('/').pop() || childPath;
+    const hasChildren = allDirs.some(p => p.startsWith(childPath + '/'));
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dir-item';
+    btn.innerHTML = `
+      <svg class="dir-item-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="dir-item-name">${childName}</span>
+      ${hasChildren ? '<svg class="dir-item-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' : ''}
+    `;
+    btn.addEventListener('click', () => {
+      browsingPath = childPath;
+      selectedPath = childPath;
+      updateDirLabel();
+      renderDirPicker();
+    });
+    dirList.appendChild(btn);
   }
-  // Default to Inbox
-  clipSpace.value = INBOX_VALUE;
+}
+
+function updateDirLabel() {
+  if (selectedPath === INBOX_VALUE) {
+    dirLabel.textContent = 'Inbox';
+  } else {
+    dirLabel.textContent = selectedPath.split('/').join(' / ');
+  }
+}
+
+function toggleDirPanel(show?: boolean) {
+  const isOpen = show ?? dirPanel.hidden;
+  dirPanel.hidden = !isOpen;
+  dirTrigger.classList.toggle('active', isOpen);
+  if (isOpen) renderDirPicker();
 }
 
 /* ── Event Handlers ── */
@@ -233,13 +317,13 @@ btnConnect.addEventListener('click', async () => {
   showView(viewLoading);
 
   try {
-    [extractedContent, spaces] = await Promise.all([
+    [extractedContent, allDirs] = await Promise.all([
       extractContent(),
-      listSpaces(config),
+      listDirs(config),
     ]);
   } catch (err) {
     extractedContent = null;
-    spaces = [];
+    allDirs = [];
     showClipView(err instanceof Error ? err.message : 'Cannot read this page');
     return;
   }
@@ -259,15 +343,14 @@ btnSave.addEventListener('click', async () => {
 
   // Override title if user edited
   const content = { ...extractedContent, title: clipTitle.value.trim() || extractedContent.title };
-  const selectedSpace = clipSpace.value;
-  const isInbox = selectedSpace === INBOX_VALUE;
+  const isInbox = selectedPath === INBOX_VALUE;
 
-  const doc = toClipDocument(content, isInbox ? '' : selectedSpace, (html) => turndown.turndown(html));
+  const doc = toClipDocument(content, isInbox ? '' : selectedPath, (html) => turndown.turndown(html));
 
   // Route to Inbox API or File API based on user choice
   const result = isInbox
     ? await saveToInbox(config, doc.fileName, doc.markdown)
-    : await createFile(config, selectedSpace, doc.fileName, doc.markdown);
+    : await createFile(config, selectedPath, doc.fileName, doc.markdown);
 
   setButtonLoading(btnSave, false);
 
@@ -277,7 +360,7 @@ btnSave.addEventListener('click', async () => {
   }
 
   // Success!
-  const displayPath = isInbox ? `Inbox/${doc.fileName}` : `${selectedSpace}/${doc.fileName}`;
+  const displayPath = isInbox ? `Inbox/${doc.fileName}` : `${selectedPath}/${doc.fileName}`;
   successDetail.textContent = displayPath;
   showView(viewSuccess);
 });
@@ -298,6 +381,12 @@ btnDone.addEventListener('click', () => {
 btnClipAnother.addEventListener('click', () => {
   showClipView();
 });
+
+// DirPicker — toggle panel
+dirTrigger.addEventListener('click', () => toggleDirPanel());
+
+// DirPicker — confirm selection
+dirConfirm.addEventListener('click', () => toggleDirPanel(false));
 
 /* ── Error display helpers ── */
 

@@ -34,6 +34,18 @@ function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
 }
 
+/** Recursively collect all directory paths from the file tree. */
+function collectDirectories(nodes: import('@/lib/types').FileNode[]): string[] {
+  const dirs: string[] = [];
+  for (const n of nodes) {
+    if (n.type === 'directory') {
+      dirs.push(n.path);
+      if (n.children) dirs.push(...collectDirectories(n.children));
+    }
+  }
+  return dirs;
+}
+
 /** Returns true if the path targets a root-level system file (INSTRUCTION.md, CONFIG.json, etc.). */
 function isSystemFile(filePath: string): boolean {
   const basename = path.posix.basename(filePath);
@@ -78,6 +90,14 @@ export async function GET(req: NextRequest) {
   if (op === 'list_spaces') {
     try {
       return NextResponse.json({ spaces: listMindSpaces() });
+    } catch (e) {
+      return err((e as Error).message, 500);
+    }
+  }
+
+  if (op === 'list_dirs') {
+    try {
+      return NextResponse.json({ dirs: collectDirectories(getFileTree()) });
     } catch (e) {
       return err((e as Error).message, 500);
     }

@@ -70,6 +70,18 @@ export async function listSpaces(config: ClipperConfig): Promise<MindOSSpace[]> 
   }
 }
 
+/** List all directory paths (flat list for hierarchical picker) */
+export async function listDirs(config: ClipperConfig): Promise<string[]> {
+  try {
+    const res = await apiFetch(config, '/api/file?op=list_dirs');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.dirs ?? []) as string[];
+  } catch {
+    return [];
+  }
+}
+
 /** Save markdown to Inbox */
 export async function saveToInbox(
   config: ClipperConfig,

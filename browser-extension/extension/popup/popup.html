@@ -61,10 +61,19 @@
       </div>
 
       <div class="form-group">
-        <label for="clip-space">Save to</label>
-        <select id="clip-space">
-          <option value="__inbox__">Inbox (default)</option>
-        </select>
+        <label>Save to</label>
+        <button id="dir-trigger" type="button" class="dir-trigger">
+          <svg class="dir-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span id="dir-label" class="dir-label">Inbox</span>
+          <svg class="dir-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="dir-panel" class="dir-panel" hidden>
+          <div id="dir-breadcrumb" class="dir-breadcrumb"></div>
+          <div id="dir-list" class="dir-list"></div>
+          <button id="dir-confirm" type="button" class="dir-confirm">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
       </div>
 
       <div id="clip-error" class="error-bar" hidden></div>
