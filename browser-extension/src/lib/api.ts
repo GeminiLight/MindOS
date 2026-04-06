@@ -70,22 +70,23 @@ export async function listSpaces(config: ClipperConfig): Promise<MindOSSpace[]> 
   }
 }
 
-/** Create a new markdown file */
-export async function createFile(
+/** Save markdown to Inbox */
+export async function saveToInbox(
   config: ClipperConfig,
-  space: string,
   fileName: string,
-  content: string,
+  markdown: string,
 ): Promise<FileApiResponse> {
-  const path = space ? `${space}/${fileName}` : fileName;
   try {
-    const res = await apiFetch(config, '/api/file', {
+    const res = await apiFetch(config, '/api/inbox', {
       method: 'POST',
       body: JSON.stringify({
-        op: 'create_file',
-        path,
-        content,
-        source: 'user',
+        files: [
+          {
+            name: fileName,
+            content: markdown,
+            encoding: 'text',
+          },
+        ],
       }),
     });
     const data = await res.json();
