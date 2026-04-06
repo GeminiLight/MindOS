@@ -758,18 +758,17 @@ export class ProcessManager extends EventEmitter {
   private static killIfNodeProcess(pid: number, label: string): void {
     try {
       process.kill(pid, 0); // check alive
-      const { execSync } = require('child_process');
+      const { execSync, execFileSync } = require('child_process');
+      const cmdOpts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
 
       if (process.platform === 'win32') {
         // Windows: verify process name before killing.
         // Try PowerShell first (always available), fallback to wmic (deprecated in Win 11).
-        const { execFileSync } = require('child_process');
-        const psOpts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
         try {
-          const name = execFileSync('powershell.exe', [
+          const name = (execFileSync('powershell.exe', [
             '-NoProfile', '-Command',
             `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`,
-          ], psOpts).trim().toLowerCase();
+          ], cmdOpts) as string).trim().toLowerCase();
           if (!name.includes('node')) {
             return; // PID reused by non-node process, skip
           }
@@ -778,7 +777,7 @@ export class ProcessManager extends EventEmitter {
           try {
             const name = execSync(
               `wmic process where ProcessId=${pid} get Name /format:value`,
-              psOpts,
+              cmdOpts,
             ).trim();
             if (!name.toLowerCase().includes('node')) {
               return;

@@ -398,7 +398,7 @@ export function ensureMindosCliShim(opts?: {
     return { ok: false, error: msg };
   }
 
-  const doAppend = opts?.appendPath !== false && process.platform !== 'win32';
+  const doAppend = opts?.appendPath !== false;
   let appended = false;
   if (doAppend) {
     try {
