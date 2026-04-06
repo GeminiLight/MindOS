@@ -32,5 +32,7 @@ function extractPageContent() {
   };
 }
 
-// Return result to executeScript caller
-extractPageContent();
+// Store result on window so popup can read it via a second executeScript call.
+// (esbuild IIFE wraps in `(() => { ... })()` which discards the return value,
+//  so we can't rely on executeScript capturing it directly.)
+(window as any).__mindosClipResult = extractPageContent();

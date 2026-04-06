@@ -93,14 +93,25 @@ async function extractContent(): Promise<PageContent> {
   }
 
   // Inject content script on demand (not always-on — saves memory on every page)
-  let results: chrome.scripting.InjectionResult[];
+  // Step 1: inject Readability + extractor (IIFE, sets window.__mindosClipResult)
   try {
-    results = await chrome.scripting.executeScript({
+    await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['content/extractor.js'],
     });
   } catch {
     throw new Error('Cannot read this page — try refreshing first');
+  }
+
+  // Step 2: read the result back (executeScript with func can return values)
+  let results: chrome.scripting.InjectionResult[];
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => (window as any).__mindosClipResult,
+    });
+  } catch {
+    throw new Error('Cannot read extraction result');
   }
 
   const result = results?.[0]?.result;
