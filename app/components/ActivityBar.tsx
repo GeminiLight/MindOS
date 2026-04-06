@@ -48,7 +48,7 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
       onClick={onClick}
       aria-pressed={active}
       aria-label={label}
-      title={expanded ? undefined : (shortcut ? `${label} (${shortcut})` : label)}
+      title={shortcut ? `${label} (${shortcut})` : label}
       data-walkthrough={walkthroughId}
       className={`
         relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 rounded-md transition-colors

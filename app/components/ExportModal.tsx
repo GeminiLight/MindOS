@@ -104,13 +104,16 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={state === 'exporting' ? undefined : handleClose}>
       <div
         className="bg-card border border-border rounded-xl shadow-xl max-w-md w-full mx-4 animate-in fade-in-0 zoom-in-95 duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-title"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Download size={15} className="text-[var(--amber)]" />
-            <h3 className="text-sm font-semibold font-display">
+            <h3 id="export-modal-title" className="text-sm font-semibold font-display">
               {isDirectory ? (t.export?.exportSpace ?? 'Export Space') : (t.export?.exportFile ?? 'Export File')}
             </h3>
           </div>

@@ -11,6 +11,7 @@ import PanelHeader from './panels/PanelHeader';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import { useLocale } from '@/lib/stores/locale-store';
 import { listTrashAction } from '@/lib/actions';
+import { DEFAULT_LEFT_PANEL_WIDTH, LEFT_PANEL } from '@/lib/config/panel-sizes';
 
 const noop = () => {};
 
@@ -25,18 +26,10 @@ function getMaxDepth(nodes: FileNode[], current = 0): number {
   return max;
 }
 
-const DEFAULT_PANEL_WIDTH: Record<PanelId, number> = {
-  files: 280,
-  search: 280,
-  echo: 280,
-  agents: 280,
-  discover: 280,
-  workflows: 280,
-};
-
-const MIN_PANEL_WIDTH = 240;
-const MAX_PANEL_WIDTH_RATIO = 0.45;
-const MAX_PANEL_WIDTH_ABS = 600;
+const DEFAULT_PANEL_WIDTH = DEFAULT_LEFT_PANEL_WIDTH;
+const MIN_PANEL_WIDTH = LEFT_PANEL.MIN;
+const MAX_PANEL_WIDTH_RATIO = LEFT_PANEL.MAX_RATIO;
+const MAX_PANEL_WIDTH_ABS = LEFT_PANEL.MAX_ABS;
 
 interface PanelProps {
   activePanel: PanelId | null;

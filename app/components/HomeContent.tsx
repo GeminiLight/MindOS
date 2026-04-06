@@ -123,7 +123,7 @@ function FileRow({ filePath, mtime, formatTime, subPath }: {
   return (
     <Link
       href={`/view/${encodePath(filePath)}`}
-      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group"
+      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group overflow-hidden"
     >
       {isCSV
         ? <Table size={12} className="shrink-0 text-success" />
@@ -200,7 +200,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             data-walkthrough="ask-button"
             className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:shadow-md group"
           >
-            <Sparkles size={15} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
+            <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
             <div className="flex-1 min-h-[1.5rem] flex items-center">
               <span 
                 key={suggestionIdx}
@@ -219,7 +219,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/60 text-sm text-muted-foreground transition-all duration-150 shrink-0 hover:bg-muted hover:shadow-sm"
           >
             <Search size={14} />
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-mono bg-muted">
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
               ⌘K
             </kbd>
           </button>
@@ -264,7 +264,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {(spaceList.length > 0 || true) && (
         <section className="mb-10">
           <SectionTitle
-            icon={<Brain size={13} />}
+            icon={<Brain size={14} />}
             count={spaceList.length > 0 ? spaceList.length : undefined}
             action={<CreateSpaceButton t={t} />}
           >
@@ -330,7 +330,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {recent.length > 0 && (
         <section className="mb-10">
           <SectionTitle
-            icon={<Clock size={13} />}
+            icon={<Clock size={14} />}
             count={recent.length}
             action={
               <Link
@@ -356,7 +356,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       href={`/view/${encodePath(group.spacePath)}`}
                       className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
                     >
-                      <Folder size={13} className="shrink-0 text-[var(--amber)]" />
+                      <Folder size={14} className="shrink-0 text-[var(--amber)]" />
                       <span className="text-xs font-semibold font-display text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
                         {group.space}
                       </span>
@@ -387,7 +387,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               {rootFiles.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 px-1 py-1.5">
-                    <FileText size={13} className="shrink-0 text-muted-foreground/50" />
+                    <FileText size={14} className="shrink-0 text-muted-foreground/50" />
                     <span className="text-xs font-semibold font-display text-muted-foreground/60">
                       {t.home.other}
                     </span>
@@ -430,7 +430,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       />
                       <Link
                         href={`/view/${encodePath(filePath)}`}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted"
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted overflow-hidden"
                       >
                         {isCSV
                           ? <Table size={12} className="shrink-0 text-success" />
@@ -476,11 +476,28 @@ function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string 
   const { t } = useLocale();
   const { pinnedFiles, removePin } = usePinnedFiles();
 
-  if (pinnedFiles.length === 0) return null;
+  if (pinnedFiles.length === 0) {
+    return (
+      <section className="mb-12">
+        <SectionTitle icon={<Star size={14} />}>
+          {t.pinnedFiles.title}
+        </SectionTitle>
+        <div className="py-6 px-4 rounded-lg border border-dashed border-border/50 text-center">
+          <Star size={20} className="mx-auto mb-2 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-muted-foreground mb-1">
+            {t.pinnedFiles.empty ?? 'No pinned files'}
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            {t.pinnedFiles.emptyHint ?? 'Click the star icon on any file to pin it here'}
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mb-12">
-      <SectionTitle icon={<Star size={13} />} count={pinnedFiles.length}>
+      <SectionTitle icon={<Star size={14} />} count={pinnedFiles.length}>
         {t.pinnedFiles.title}
       </SectionTitle>
       <div className="flex flex-col gap-0.5">
@@ -492,7 +509,7 @@ function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string 
             <div key={filePath} className="group/pin relative">
               <Link
                 href={`/view/${encodePath(filePath)}`}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted overflow-hidden"
               >
                 <Star size={12} className="shrink-0 fill-[var(--amber)] text-[var(--amber)]" />
                 {isCSV
@@ -581,7 +598,7 @@ function ExampleCleanupBanner() {
         disabled={cleaning}
         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80"
       >
-        {cleaning ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+        {cleaning ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
         {t.home.cleanupExamplesButton}
       </button>
       <button

@@ -2,6 +2,7 @@
 
 import { Loader2, Plus, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 
 /* ────────── Pill / Status / Search ────────── */
 
@@ -243,6 +244,9 @@ export function ConfirmDialog({
   variant?: 'destructive' | 'default';
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (open) cancelRef.current?.focus();
@@ -260,10 +264,10 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="alertdialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
       <div className="absolute inset-0 overlay-backdrop" onClick={onCancel} aria-hidden="true" />
-      <div className="relative bg-card border border-border rounded-lg shadow-xl p-5 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
-        <h3 className="text-sm font-medium text-foreground mb-1.5">{title}</h3>
+      <div ref={dialogRef} className="relative bg-card border border-border rounded-lg shadow-xl p-5 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
+        <h3 id="confirm-dialog-title" className="text-sm font-medium text-foreground mb-1.5">{title}</h3>
         <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{message}</p>
         <div className="flex justify-end gap-2">
           <button
