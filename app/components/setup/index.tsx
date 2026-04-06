@@ -47,7 +47,7 @@ function parseInstallResult(
 // ─── Phase runners (pure async, no setState — results consumed by caller) ────
 
 /** Phase 1: Save setup config. Returns whether restart is needed. Throws on failure. */
-async function saveConfig(state: SetupState): Promise<boolean> {
+async function saveConfig(state: SetupState, connectionMode?: { cli: boolean; mcp: boolean }): Promise<boolean> {
   // Build providers dict from dynamic providerConfigs
   const providers: Record<string, { apiKey: string; model: string; baseUrl?: string }> = {};
   if (state.provider !== 'skip') {
@@ -72,6 +72,7 @@ async function saveConfig(state: SetupState): Promise<boolean> {
       provider: state.provider,
       providers,
     },
+    connectionMode: connectionMode ?? { cli: true, mcp: false },
   };
   const res = await fetch('/api/setup', {
     method: 'POST',
@@ -355,7 +356,7 @@ export default function SetupWizard() {
     setSetupPhase('saving');
     let restartNeeded = false;
     try {
-      restartNeeded = await saveConfig(finalState);
+      restartNeeded = await saveConfig(finalState, connectionMode);
       if (restartNeeded) setNeedsRestart(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

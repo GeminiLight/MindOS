@@ -96,6 +96,18 @@ export async function POST(req: NextRequest) {
       ? (incomingAuthToken === '' ? '' : current.authToken)
       : current.authToken;
 
+    // Handle connectionMode: validate if provided, otherwise keep existing
+    let resolvedConnectionMode = current.connectionMode ?? { cli: true, mcp: false };
+    if (body.connectionMode && typeof body.connectionMode === 'object') {
+      const incomingMode = body.connectionMode as Record<string, unknown>;
+      if (typeof incomingMode.cli === 'boolean' && typeof incomingMode.mcp === 'boolean') {
+        resolvedConnectionMode = {
+          cli: incomingMode.cli,
+          mcp: incomingMode.mcp,
+        };
+      }
+    }
+
     const next: ServerSettings = {
       ai: {
         provider: body.ai?.provider ?? current.ai.provider,
@@ -108,6 +120,7 @@ export async function POST(req: NextRequest) {
       port: typeof body.port === 'number' ? body.port : current.port,
       mcpPort: typeof body.mcpPort === 'number' ? body.mcpPort : current.mcpPort,
       startMode: body.startMode ?? current.startMode,
+      connectionMode: resolvedConnectionMode,
     };
 
     writeSettings(next);

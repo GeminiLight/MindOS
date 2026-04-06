@@ -57,6 +57,11 @@ export const FONTS = [
 
 /* ── MCP Types ────────────────────────────────────────────────── */
 
+export interface ConnectionMode {
+  cli: boolean;
+  mcp: boolean;
+}
+
 export interface McpStatus {
   running: boolean;
   transport: string;
@@ -67,6 +72,7 @@ export interface McpStatus {
   maskedToken?: string;
   authToken?: string;
   localIP?: string | null;
+  connectionMode?: ConnectionMode;
 }
 
 export interface AgentInfo {

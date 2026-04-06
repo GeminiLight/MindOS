@@ -62,16 +62,18 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   }, [a, tab]);
 
   const buckets = useMemo(() => bucketAgents(mcp.agents), [mcp.agents]);
+  const mcpEnabled = mcp.status?.connectionMode?.mcp ?? false;
   const riskQueue = useMemo(
     () =>
       buildRiskQueue({
         mcpRunning: !!mcp.status?.running,
+        mcpEnabled,
         detectedCount: buckets.detected.length,
         notFoundCount: buckets.notFound.length,
         allSkillsDisabled: mcp.skills.length > 0 && mcp.skills.every((s) => !s.enabled),
         copy: a.overview,
       }),
-    [mcp.skills, mcp.status?.running, buckets.detected.length, buckets.notFound.length, a.overview],
+    [mcp.skills, mcp.status?.running, mcpEnabled, buckets.detected.length, buckets.notFound.length, a.overview],
   );
   const enabledSkillCount = useMemo(
     () => mcp.skills.filter((skill) => skill.enabled).length,
@@ -104,6 +106,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           mcpRunning={!!mcp.status?.running}
           mcpPort={mcp.status?.port ?? null}
           mcpToolCount={mcp.status?.toolCount ?? 0}
+          mcpEnabled={mcpEnabled}
           enabledSkillCount={enabledSkillCount}
           allAgents={mcp.agents}
           pulseCopy={a.workspacePulse}
@@ -111,8 +114,16 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         />
       )}
 
-      {tab === 'mcp' && (
+      {tab === 'mcp' && mcpEnabled && (
         <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
+      )}
+
+      {/* MCP tab accessed but mode disabled — show hint */}
+      {tab === 'mcp' && !mcpEnabled && !mcp.loading && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-muted-foreground">{a.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{a.mcp?.mcpDisabledHint ?? 'Enable it in Settings → Connections to use MCP agents.'}</p>
+        </div>
       )}
 
       {tab === 'skills' && (

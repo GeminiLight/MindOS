@@ -7,7 +7,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { apiFetch } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
 import type { SelectItem } from '@/components/CustomSelect';
-import type { McpTabProps, McpStatus, AgentInfo } from './types';
+import type { McpTabProps, McpStatus, AgentInfo, ConnectionMode } from './types';
 import AgentInstall from './McpAgentInstall';
 import SkillsSection from './McpSkillsSection';
 
@@ -20,7 +20,12 @@ export function McpTab({ t }: McpTabProps) {
   const [mode, setMode] = useState<'cli' | 'mcp'>('cli');
   const [restarting, setRestarting] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
+  const [savingMode, setSavingMode] = useState(false);
   const restartPollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  // Derive mcpEnabled from server state
+  const serverConnectionMode = mcp?.status?.connectionMode;
+  const mcpEnabled = serverConnectionMode?.mcp ?? false;
 
   useEffect(() => () => clearInterval(restartPollRef.current), []);
 
@@ -41,6 +46,26 @@ export function McpTab({ t }: McpTabProps) {
   // Determine active skill name based on which mindos skill is enabled
   const mindosEnabled = mcp.skills?.find(s => s.name === 'mindos')?.enabled ?? true;
   const activeSkillName = mindosEnabled ? 'mindos' : 'mindos-zh';
+
+  const handleToggleMcp = async (enabled: boolean) => {
+    setSavingMode(true);
+    try {
+      await apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionMode: { cli: true, mcp: enabled },
+        }),
+      });
+      await mcp.refresh();
+      // Switch view to MCP tab when enabling
+      if (enabled) setMode('mcp');
+    } catch {
+      toast.error('Failed to toggle connection mode');
+    } finally {
+      setSavingMode(false);
+    }
+  };
 
   const handleRestart = async () => {
     setRestarting(true);
@@ -72,6 +97,15 @@ export function McpTab({ t }: McpTabProps) {
 
   return (
     <div className="space-y-6">
+      {/* 0. Connection Mode Toggle */}
+      <ConnectionModeCard
+        mcpEnabled={mcpEnabled}
+        onToggle={handleToggleMcp}
+        saving={savingMode}
+        mcpRunning={mcp.status?.running ?? false}
+        m={m}
+      />
+
       {/* 1. Auth Token */}
       <AuthTokenCard status={mcp.status} m={m} />
 
@@ -91,6 +125,7 @@ export function McpTab({ t }: McpTabProps) {
         onRestart={handleRestart}
         onRefresh={mcp.refresh}
         activeSkillName={activeSkillName}
+        mcpEnabled={mcpEnabled}
         m={m}
         t={t}
       />
@@ -109,6 +144,83 @@ export function McpTab({ t }: McpTabProps) {
         <div className="px-4 pb-4">
           <SkillsSection t={t} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Connection Mode Card ── */
+
+function ConnectionModeCard({ mcpEnabled, onToggle, saving, mcpRunning, m }: {
+  mcpEnabled: boolean;
+  onToggle: (enabled: boolean) => void;
+  saving: boolean;
+  mcpRunning: boolean;
+  m: Record<string, any> | undefined;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
+        <div className="w-7 h-7 rounded-lg bg-[var(--amber-subtle)] flex items-center justify-center shrink-0">
+          <Plug size={14} className="text-[var(--amber)]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">{m?.modeCardTitle ?? 'Connection Mode'}</h3>
+          <p className="text-2xs text-muted-foreground">{m?.modeCardDesc ?? 'Choose how agents connect to MindOS.'}</p>
+        </div>
+      </div>
+      <div className="px-4 pb-4 space-y-2">
+        {/* CLI - always on */}
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/50">
+          <input type="checkbox" checked disabled className="w-3.5 h-3.5 rounded accent-[var(--amber)]" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Terminal size={12} className="text-muted-foreground" />
+              <span className="text-xs font-semibold text-foreground">CLI</span>
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success/10 text-success font-medium leading-none">
+                {m?.alwaysOn ?? 'Always On'}
+              </span>
+            </div>
+            <p className="text-2xs text-muted-foreground mt-0.5">{m?.cliModeDesc ?? 'Claude Code, Gemini CLI, Codex, etc.'}</p>
+          </div>
+        </div>
+
+        {/* MCP - toggleable */}
+        <label className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+          mcpEnabled
+            ? 'border-[var(--amber)]/40 bg-[var(--amber)]/[0.03]'
+            : 'border-border/50 bg-muted/30 hover:bg-muted/50'
+        }`}>
+          <input
+            type="checkbox"
+            checked={mcpEnabled}
+            disabled={saving}
+            onChange={(e) => onToggle(e.target.checked)}
+            className="w-3.5 h-3.5 rounded accent-[var(--amber)] cursor-pointer"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Plug size={12} className={mcpEnabled ? 'text-[var(--amber)]' : 'text-muted-foreground'} />
+              <span className="text-xs font-semibold text-foreground">MCP</span>
+              {mcpEnabled && (
+                <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium leading-none ${
+                  mcpRunning ? 'bg-success/10 text-success' : 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
+                }`}>
+                  {mcpRunning ? (m?.mcpRunning ?? 'Running') : (m?.mcpStopped ?? 'Stopped')}
+                </span>
+              )}
+            </div>
+            <p className="text-2xs text-muted-foreground mt-0.5">{m?.mcpModeDesc ?? 'Claude Desktop, Cursor, Windsurf, etc.'}</p>
+          </div>
+          {saving && <Loader2 size={14} className="animate-spin text-[var(--amber)] shrink-0" />}
+        </label>
+
+        {/* Hint text */}
+        <p className="text-2xs text-muted-foreground px-1 leading-relaxed">
+          {mcpEnabled
+            ? (m?.mcpEnabledHint ?? 'MCP mode enabled. Disable to simplify the interface if you only use CLI agents.')
+            : (m?.mcpDisabledHint ?? 'Enable MCP to connect Desktop clients like Claude Desktop or Cursor.')}
+        </p>
       </div>
     </div>
   );
@@ -195,7 +307,7 @@ function useCopyField() {
 
 /* ── Connect Card — header + CLI/MCP tabs + detected agents ── */
 
-function ConnectCard({ mode, onModeChange, status, agents, connectedAgents, detectedAgents, notFoundAgents, currentAgent, selectedAgent, onSelectAgent, restarting, onRestart, onRefresh, activeSkillName, m, t }: {
+function ConnectCard({ mode, onModeChange, status, agents, connectedAgents, detectedAgents, notFoundAgents, currentAgent, selectedAgent, onSelectAgent, restarting, onRestart, onRefresh, activeSkillName, mcpEnabled, m, t }: {
   mode: 'cli' | 'mcp';
   onModeChange: (m: 'cli' | 'mcp') => void;
   status: McpStatus | null;
@@ -210,10 +322,14 @@ function ConnectCard({ mode, onModeChange, status, agents, connectedAgents, dete
   onRestart: () => void;
   onRefresh: () => void;
   activeSkillName: string;
+  mcpEnabled: boolean;
   m: Record<string, any> | undefined;
   t: McpTabProps['t'];
 }) {
   if (!status) return null;
+
+  // If MCP is disabled, force CLI view
+  const effectiveMode = mcpEnabled ? mode : 'cli';
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -225,38 +341,48 @@ function ConnectCard({ mode, onModeChange, status, agents, connectedAgents, dete
         <h3 className="text-sm font-semibold text-foreground">{m?.connectionTitle ?? 'Connect Agents'}</h3>
       </div>
 
-      {/* Tab switcher */}
-      <div className="grid grid-cols-2 mx-4 mb-3 rounded-lg border border-border overflow-hidden">
-        <button
-          onClick={() => onModeChange('cli')}
-          className={`flex flex-col items-start px-3 py-2.5 text-left transition-colors ${
-            mode === 'cli' ? 'bg-muted' : 'hover:bg-muted/50'
-          }`}
-        >
+      {/* Tab switcher — only show both tabs when MCP is enabled */}
+      {mcpEnabled ? (
+        <div className="grid grid-cols-2 mx-4 mb-3 rounded-lg border border-border overflow-hidden">
+          <button
+            onClick={() => onModeChange('cli')}
+            className={`flex flex-col items-start px-3 py-2.5 text-left transition-colors ${
+              effectiveMode === 'cli' ? 'bg-muted' : 'hover:bg-muted/50'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Terminal size={12} className={effectiveMode === 'cli' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />
+              <span className={`text-xs font-semibold ${effectiveMode === 'cli' ? 'text-foreground' : 'text-muted-foreground'}`}>CLI</span>
+              <span className="text-2xs px-1 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber-text)] font-medium leading-none">{m?.recommended ?? 'Recommended'}</span>
+            </span>
+            <span className="text-2xs text-muted-foreground mt-0.5">{m?.cliAgents ?? 'Claude Code · Gemini CLI · Codex'}</span>
+          </button>
+          <button
+            onClick={() => onModeChange('mcp')}
+            className={`flex flex-col items-start px-3 py-2.5 text-left transition-colors border-l border-border ${
+              effectiveMode === 'mcp' ? 'bg-muted' : 'hover:bg-muted/50'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Plug size={12} className={effectiveMode === 'mcp' ? 'text-foreground' : 'text-muted-foreground'} />
+              <span className={`text-xs font-semibold ${effectiveMode === 'mcp' ? 'text-foreground' : 'text-muted-foreground'}`}>MCP</span>
+            </span>
+            <span className="text-2xs text-muted-foreground mt-0.5">{m?.mcpAgents ?? 'Claude Desktop · Cursor'}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="mx-4 mb-3 px-3 py-2 rounded-lg border border-border bg-muted/30">
           <span className="flex items-center gap-1.5">
-            <Terminal size={12} className={mode === 'cli' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />
-            <span className={`text-xs font-semibold ${mode === 'cli' ? 'text-foreground' : 'text-muted-foreground'}`}>CLI</span>
+            <Terminal size={12} className="text-[var(--amber)]" />
+            <span className="text-xs font-semibold text-foreground">CLI</span>
             <span className="text-2xs px-1 py-0.5 rounded bg-[var(--amber-subtle)] text-[var(--amber-text)] font-medium leading-none">{m?.recommended ?? 'Recommended'}</span>
           </span>
-          <span className="text-2xs text-muted-foreground mt-0.5">{m?.cliAgents ?? 'Claude Code · Gemini CLI · Codex'}</span>
-        </button>
-        <button
-          onClick={() => onModeChange('mcp')}
-          className={`flex flex-col items-start px-3 py-2.5 text-left transition-colors border-l border-border ${
-            mode === 'mcp' ? 'bg-muted' : 'hover:bg-muted/50'
-          }`}
-        >
-          <span className="flex items-center gap-1.5">
-            <Plug size={12} className={mode === 'mcp' ? 'text-foreground' : 'text-muted-foreground'} />
-            <span className={`text-xs font-semibold ${mode === 'mcp' ? 'text-foreground' : 'text-muted-foreground'}`}>MCP</span>
-          </span>
-          <span className="text-2xs text-muted-foreground mt-0.5">{m?.mcpAgents ?? 'Claude Desktop · Cursor'}</span>
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Tab content */}
       <div className="px-4 pb-4 space-y-4">
-        {mode === 'cli' ? (
+        {effectiveMode === 'cli' ? (
           <CliGuide status={status} activeSkillName={activeSkillName} agents={agents} connectedAgents={connectedAgents} detectedAgents={detectedAgents} notFoundAgents={notFoundAgents} onRefresh={onRefresh} m={m} t={t} />
         ) : (
           <McpGuide

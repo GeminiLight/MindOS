@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
       maskedToken: authConfigured ? maskToken(token) : undefined,
       authToken: authConfigured ? token : undefined,
       localIP: getLocalIP(),
+      connectionMode: settings.connectionMode ?? { cli: true, mcp: false },
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

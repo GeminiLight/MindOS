@@ -16,9 +16,11 @@ type HubCopy = {
 export function AgentsPanelHubNav({
   copy,
   connectedCount,
+  mcpEnabled = true,
 }: {
   copy: HubCopy;
   connectedCount: number;
+  mcpEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -34,12 +36,14 @@ export function AgentsPanelHubNav({
         href="/agents"
         active={inAgentsRoute && (tab === null || tab === 'overview')}
       />
-      <PanelNavRow
-        icon={<Server size={14} className={inAgentsRoute && tab === 'mcp' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navMcp}
-        href="/agents?tab=mcp"
-        active={inAgentsRoute && tab === 'mcp'}
-      />
+      {mcpEnabled && (
+        <PanelNavRow
+          icon={<Server size={14} className={inAgentsRoute && tab === 'mcp' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={copy.navMcp}
+          href="/agents?tab=mcp"
+          active={inAgentsRoute && tab === 'mcp'}
+        />
+      )}
       <PanelNavRow
         icon={<Zap size={14} className={inAgentsRoute && tab === 'skills' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navSkills}

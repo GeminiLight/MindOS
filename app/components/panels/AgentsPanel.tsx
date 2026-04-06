@@ -79,6 +79,7 @@ export default function AgentsPanel({
     <AgentsPanelHubNav
       copy={hubCopy}
       connectedCount={connected.length}
+      mcpEnabled={mcp.status?.connectionMode?.mcp ?? false}
     />
   );
 
@@ -116,9 +117,9 @@ export default function AgentsPanel({
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
             <div className="mx-4 border-t border-border" />
-            <div className="mx-3 rounded-lg border border-dashed border-border px-3 py-4 text-center">
-              <p className="text-xs text-muted-foreground mb-1.5">{p.noAgents}</p>
-              <p className="text-2xs text-muted-foreground mb-3">{p.skillsEmptyHint}</p>
+            <div className="mx-3 rounded-lg border border-border/40 bg-card/30 px-3 py-5 text-center">
+              <p className="text-xs text-muted-foreground/70 mb-1.5">{p.noAgents}</p>
+              <p className="text-2xs text-muted-foreground/40 mb-3">{p.skillsEmptyHint}</p>
               <button
                 onClick={handleRefresh}
                 type="button"

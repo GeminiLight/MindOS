@@ -13,6 +13,7 @@ const baseMcpState = {
     port: 8781,
     toolCount: 12,
     authConfigured: true,
+    connectionMode: { cli: true, mcp: true },
   },
   agents: [
     {

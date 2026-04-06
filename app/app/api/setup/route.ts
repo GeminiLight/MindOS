@@ -53,7 +53,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { mindRoot, template, port, mcpPort, authToken, webPassword, ai } = body;
+    const { mindRoot, template, port, mcpPort, authToken, webPassword, ai, connectionMode } = body;
 
     // Validate required fields
     if (!mindRoot || typeof mindRoot !== 'string') {
@@ -126,6 +126,15 @@ export async function POST(req: NextRequest) {
     const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];
     // Determine guide template from setup template
     const guideTemplate = body.template === 'zh' ? 'zh' : body.template === 'empty' ? 'empty' : 'en';
+    
+    // Validate and build connectionMode
+    let resolvedConnectionMode = current.connectionMode ?? { cli: true, mcp: false };
+    if (connectionMode && typeof connectionMode === 'object') {
+      if (typeof connectionMode.cli === 'boolean' && typeof connectionMode.mcp === 'boolean') {
+        resolvedConnectionMode = connectionMode;
+      }
+    }
+
     const config: ServerSettings = {
       ai: mergedAi,
       mindRoot: resolvedRoot,
@@ -145,6 +154,7 @@ export async function POST(req: NextRequest) {
         askedAI: false,
         nextStepIndex: 0,
       },
+      connectionMode: resolvedConnectionMode,
     };
 
     writeSettings(config);

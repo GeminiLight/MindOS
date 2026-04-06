@@ -18,6 +18,7 @@ vi.mock('@/lib/stores/mcp-store', () => ({
       transport: 'stdio',
       endpoint: 'http://127.0.0.1:8781/mcp',
       authConfigured: true,
+      connectionMode: { cli: true, mcp: true },
     },
     agents: [
       {

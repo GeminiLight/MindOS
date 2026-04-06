@@ -193,6 +193,19 @@ export const settingsEn = {
       comingSoon: 'Plugin marketplace coming soon.',
     },
     mcp: {
+      // Connection Mode Card
+      modeCardTitle: 'Connection Mode',
+      modeCardDesc: 'Choose how agents connect to MindOS.',
+      cliLabel: 'CLI',
+      cliModeDesc: 'Claude Code, Gemini CLI, Codex, etc.',
+      mcpLabel: 'MCP',
+      mcpModeDesc: 'Claude Desktop, Cursor, Windsurf, etc.',
+      alwaysOn: 'Always On',
+      mcpRunning: 'Running',
+      mcpStopped: 'Stopped',
+      mcpEnabledHint: 'MCP mode enabled. Disable to simplify the interface if you only use CLI agents.',
+      mcpDisabledHint: 'Enable MCP to connect Desktop clients like Claude Desktop or Cursor.',
+      // Rest of existing MCP section...
       serverTitle: 'MindOS MCP Server',
       status: 'Status',
       running: 'Running',
@@ -637,6 +650,19 @@ export const settingsZh = {
       comingSoon: '插件市场即将上线。',
     },
     mcp: {
+      // 连接模式卡片
+      modeCardTitle: '连接模式',
+      modeCardDesc: '选择 Agent 如何连接到 MindOS。',
+      cliLabel: 'CLI',
+      cliModeDesc: 'Claude Code、Gemini CLI、Codex 等。',
+      mcpLabel: 'MCP',
+      mcpModeDesc: 'Claude Desktop、Cursor、Windsurf 等。',
+      alwaysOn: '始终开启',
+      mcpRunning: '运行中',
+      mcpStopped: '已停止',
+      mcpEnabledHint: 'MCP 模式已启用。若仅使用 CLI Agent，可禁用此项以简化界面。',
+      mcpDisabledHint: '启用 MCP 以连接 Claude Desktop 或 Cursor 等桌面客户端。',
+      // 其余 MCP 配置...
       serverTitle: 'MindOS MCP 服务',
       status: '状态',
       running: '运行中',

@@ -62,6 +62,7 @@ export default function AgentsOverviewSection({
   mcpRunning,
   mcpPort,
   mcpToolCount,
+  mcpEnabled = true,
   enabledSkillCount,
   allAgents,
   pulseCopy,
@@ -73,12 +74,13 @@ export default function AgentsOverviewSection({
   mcpRunning: boolean;
   mcpPort: number | null;
   mcpToolCount: number;
+  mcpEnabled?: boolean;
   enabledSkillCount: number;
   allAgents: AgentInfo[];
   pulseCopy: PulseCopy;
   a2aCount?: number;
 }) {
-  const allHealthy = riskQueue.length === 0 && mcpRunning;
+  const allHealthy = riskQueue.length === 0 && (!mcpEnabled || mcpRunning);
   const [riskOpen, setRiskOpen] = useState(false);
 
   const sortedAgents = useMemo(
@@ -127,12 +129,14 @@ export default function AgentsOverviewSection({
             value={enabledSkillCount}
             tone="ok"
           />
-          <StatCell
-            icon={<Server size={14} aria-hidden="true" />}
-            label={copy.pulseMcp as string}
-            value={mcpRunning ? `:${mcpPort}` : '—'}
-            tone={mcpRunning ? 'ok' : 'warn'}
-          />
+          {mcpEnabled && (
+            <StatCell
+              icon={<Server size={14} aria-hidden="true" />}
+              label={copy.pulseMcp as string}
+              value={mcpRunning ? `:${mcpPort}` : '—'}
+              tone={mcpRunning ? 'ok' : 'warn'}
+            />
+          )}
           {a2aCount != null && (
             <StatCell
               icon={<Globe size={14} aria-hidden="true" />}
@@ -145,15 +149,17 @@ export default function AgentsOverviewSection({
       </section>
 
       {/* ═══════════ QUICK NAVIGATION ═══════════ */}
-      <nav className="grid grid-cols-1 md:grid-cols-2 gap-3" aria-label="Quick navigation">
-        <QuickNavCard
-          href="/agents?tab=mcp"
-          icon={<Server size={18} aria-hidden="true" />}
-          title="MCP"
-          stat={mcpRunning ? copy.toolsUnit(mcpToolCount) : copy.mcpOffline}
-          statTone={mcpRunning ? 'ok' : 'warn'}
-          description={copy.nextActionHint as string}
-        />
+      <nav className={`grid grid-cols-1 ${mcpEnabled ? 'md:grid-cols-2' : ''} gap-3`} aria-label="Quick navigation">
+        {mcpEnabled && (
+          <QuickNavCard
+            href="/agents?tab=mcp"
+            icon={<Server size={18} aria-hidden="true" />}
+            title="MCP"
+            stat={mcpRunning ? copy.toolsUnit(mcpToolCount) : copy.mcpOffline}
+            statTone={mcpRunning ? 'ok' : 'warn'}
+            description={copy.nextActionHint as string}
+          />
+        )}
         <QuickNavCard
           href="/agents?tab=skills"
           icon={<Zap size={18} aria-hidden="true" />}
@@ -241,13 +247,13 @@ export default function AgentsOverviewSection({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sortedAgents.map((agent, i) => (
-              <AgentCard key={agent.key} agent={agent} copy={copy} index={i} />
+              <AgentCard key={agent.key} agent={agent} copy={copy} index={i} mcpEnabled={mcpEnabled} />
             ))}
           </div>
         </section>
       ) : (
         <section
-          className="rounded-xl border border-dashed border-border/60 bg-gradient-to-b from-card/80 to-card/40 p-12 text-center"
+          className="rounded-xl border border-border/40 bg-card/30 p-12 text-center"
           aria-label={copy.usagePulse}
         >
           <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
@@ -375,10 +381,12 @@ function AgentCard({
   agent,
   copy,
   index,
+  mcpEnabled = true,
 }: {
   agent: AgentInfo;
   copy: OverviewCopy;
   index: number;
+  mcpEnabled?: boolean;
 }) {
   const status = resolveAgentStatus(agent);
   const mcpCount = agent.configuredMcpServerCount ?? agent.configuredMcpServers?.length ?? 0;
@@ -421,7 +429,9 @@ function AgentCard({
 
       {/* Metrics row */}
       <div className="flex items-center gap-1 pt-2.5 border-t border-border/40">
-        <MetricChip icon={<Server size={11} aria-hidden="true" />} value={mcpCount} label={copy.colMcp as string} />
+        {mcpEnabled && (
+          <MetricChip icon={<Server size={11} aria-hidden="true" />} value={mcpCount} label={copy.colMcp as string} />
+        )}
         <MetricChip icon={<Zap size={11} aria-hidden="true" />} value={skillCount} label={copy.colSkills as string} />
         <span className="flex-1 min-w-[4px]" />
         {hasRuntime && (

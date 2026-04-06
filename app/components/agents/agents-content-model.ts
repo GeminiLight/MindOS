@@ -64,13 +64,15 @@ export interface RiskCopy {
 
 export function buildRiskQueue(args: {
   mcpRunning: boolean;
+  mcpEnabled: boolean;
   detectedCount: number;
   notFoundCount: number;
   allSkillsDisabled: boolean;
   copy: RiskCopy;
 }): RiskItem[] {
   const items: RiskItem[] = [];
-  if (!args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: args.copy.riskMcpStopped });
+  // Only show MCP-related risks if MCP is explicitly enabled
+  if (args.mcpEnabled && !args.mcpRunning) items.push({ id: 'mcp-stopped', severity: 'error', title: args.copy.riskMcpStopped });
   if (args.detectedCount > 0) items.push({ id: 'detected-unconfigured', severity: 'warn', title: args.copy.riskDetected(args.detectedCount) });
   if (args.allSkillsDisabled) items.push({ id: 'skills-disabled', severity: 'warn', title: args.copy.riskSkillsDisabled });
   return items;
@@ -188,6 +190,7 @@ const defaultRiskCopy: RiskCopy = {
 
 export function buildMcpRiskQueue(args: {
   mcpRunning: boolean;
+  mcpEnabled: boolean;
   detectedCount: number;
   notFoundCount: number;
 }): RiskItem[] {

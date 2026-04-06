@@ -144,10 +144,23 @@ describe('MCP workspace model helpers', () => {
   it('builds risk queue from mcp running state and buckets (notFound excluded)', () => {
     const queue = buildMcpRiskQueue({
       mcpRunning: false,
+      mcpEnabled: true,
       detectedCount: 2,
       notFoundCount: 1,
     });
     expect(queue.length).toBe(2);
+  });
+
+  it('omits mcp-stopped risk when mcpEnabled is false', () => {
+    const queue = buildMcpRiskQueue({
+      mcpRunning: false,
+      mcpEnabled: false,
+      detectedCount: 2,
+      notFoundCount: 1,
+    });
+    // Only detected-unconfigured, no mcp-stopped
+    expect(queue.length).toBe(1);
+    expect(queue[0].id).toBe('detected-unconfigured');
   });
 });
 
