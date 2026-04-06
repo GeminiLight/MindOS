@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { LocalAttachment, Message } from '@/lib/types';
+import type { OrganizeSource } from '@/lib/organize-history';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,8 +249,11 @@ export function useAiOrganize() {
   const lastEventRef = useRef<number>(0);
   const snapshotsRef = useRef<FileSnapshots>(new Map());
   const [sourceFileNames, setSourceFileNames] = useState<string[]>([]);
+  const [source, setSource] = useState<OrganizeSource>('upload');
+  const startTimeRef = useRef<number>(0);
+  const [durationMs, setDurationMs] = useState<number>(0);
 
-  const start = useCallback(async (files: LocalAttachment[], prompt: string) => {
+  const start = useCallback(async (files: LocalAttachment[], prompt: string, organizeSource: OrganizeSource = 'upload') => {
     setPhase('organizing');
     setChanges([]);
     setCurrentTool(null);
@@ -258,6 +262,9 @@ export function useAiOrganize() {
     setError(null);
     setToolCallCount(0);
     setSourceFileNames(files.map(f => f.name));
+    setSource(organizeSource);
+    startTimeRef.current = Date.now();
+    setDurationMs(0);
     snapshotsRef.current = new Map();
     lastEventRef.current = Date.now();
 
@@ -318,6 +325,7 @@ export function useAiOrganize() {
       setSummary(result.summary);
       setToolCallCount(result.toolCallCount);
       setCurrentTool(null);
+      setDurationMs(Date.now() - startTimeRef.current);
       setPhase('done');
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
@@ -426,6 +434,9 @@ export function useAiOrganize() {
     setError(null);
     setToolCallCount(0);
     setSourceFileNames([]);
+    setSource('upload');
+    setDurationMs(0);
+    startTimeRef.current = 0;
     snapshotsRef.current = new Map();
     lastEventRef.current = 0;
   }, []);
@@ -439,6 +450,8 @@ export function useAiOrganize() {
     error,
     toolCallCount,
     sourceFileNames,
+    source,
+    durationMs,
     snapshots: snapshotsRef,
     start,
     abort,

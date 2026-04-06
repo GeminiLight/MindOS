@@ -7,6 +7,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import OnboardingView from './OnboardingView';
+import Logo from './Logo';
 import GuideCard from './GuideCard';
 import SystemPulse from './SystemPulse';
 import { InboxSection } from './home/InboxSection';
@@ -78,13 +79,15 @@ interface SectionTitleProps {
 
 function SectionTitle({ icon, children, count, action }: SectionTitleProps) {
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <span className="text-[var(--amber)]">{icon}</span>
-      <h2 className="text-sm font-semibold text-foreground">
+    <div className="flex items-center gap-2.5 mb-5">
+      <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+        {icon}
+      </div>
+      <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
         {children}
       </h2>
       {count != null && count > 0 && (
-        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">{count}</span>
       )}
       {action ? <div className="ml-auto">{action}</div> : null}
     </div>
@@ -180,25 +183,25 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       <ExampleCleanupBanner />
 
       {/* ══════════ Hero ══════════ */}
-      <div className="mb-10">
+      <div className="mb-14">
         {/* Brand mark */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-1 h-7 rounded-full bg-gradient-to-b from-[var(--amber)] to-[var(--amber)]/20" />
-          <h1 className="text-2xl font-brand text-foreground">
-            MindOS
+        <div className="flex items-center gap-5 mb-1">
+          <Logo id="home-hero" className="w-14 h-7 opacity-90" />
+          <h1 className="text-[2rem] font-brand leading-none">
+            <span className="text-foreground">Mind</span><span className="text-[var(--amber)]">OS</span>
           </h1>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground pl-4 max-w-lg mb-6">
+        <p className="text-sm text-muted-foreground/50 mt-3 max-w-md leading-relaxed">
           {t.app.tagline}
         </p>
 
         {/* Command bar — the single most important action */}
-        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pl-4">
+        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-8">
           <button
             onClick={triggerAsk}
             title="⌘/"
             data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border border-border/60 shadow-sm bg-card transition-all duration-150 hover:border-[var(--amber)]/50 hover:shadow-md group"
+            className="flex-1 flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border/50 shadow-sm bg-card/80 backdrop-blur-sm transition-all duration-200 hover:border-[var(--amber)]/40 hover:shadow-md hover:-translate-y-0.5 group"
           >
             <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
             <div className="flex-1 min-h-[1.5rem] flex items-center">
@@ -216,7 +219,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           <button
             onClick={triggerSearch}
             title="⌘K"
-            className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/60 text-sm text-muted-foreground transition-all duration-150 shrink-0 hover:bg-muted hover:shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-3.5 rounded-xl border border-border/50 text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:bg-muted/60 hover:shadow-sm hover:-translate-y-0.5"
           >
             <Search size={14} />
             <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
@@ -226,10 +229,10 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         </div>
 
         {/* Quick actions — only 2: New + Continue */}
-        <div className="flex items-center gap-3 mt-4 pl-4">
+        <div className="flex items-center gap-3 mt-5">
           <Link
             href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:shadow-sm bg-[var(--amber)] text-[var(--amber-foreground)]"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 bg-[var(--amber)] text-[var(--amber-foreground)]"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
@@ -257,12 +260,15 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         <RecentActivityFeed />
       </div>
 
+      {/* ── Visual divider ── */}
+      <div className="border-t border-border/30 mb-10" />
+
       {/* ══════════ Inbox ══════════ */}
       <InboxSection />
 
       {/* ══════════ Spaces ══════════ */}
       {(spaceList.length > 0 || true) && (
-        <section className="mb-10">
+        <section className="mb-12">
           <SectionTitle
             icon={<Brain size={14} />}
             count={spaceList.length > 0 ? spaceList.length : undefined}
@@ -272,7 +278,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
           </SectionTitle>
           {spaceList.length > 0 ? (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
                   const emoji = extractEmoji(s.name);
                   const label = stripEmoji(s.name);
@@ -281,10 +287,10 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                     <Link
                       key={s.name}
                       href={`/view/${encodePath(s.path)}`}
-                      className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-all duration-150 ${
+                      className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-200 ${
                         isEmpty
                           ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                          : 'border-border hover:border-[var(--amber)]/30 hover:shadow-sm'
+                          : 'border-border/60 hover:border-[var(--amber)]/30 hover:shadow-md hover:-translate-y-0.5 bg-card/40'
                       }`}
                     >
                       {emoji ? (
@@ -326,9 +332,12 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {/* ══════════ Pinned Files ══════════ */}
       <PinnedFilesSection formatTime={formatTime} />
 
+      {/* ── Visual divider ── */}
+      <div className="border-t border-border/30 mb-10" />
+
       {/* ══════════ Recently Edited ══════════ */}
       {recent.length > 0 && (
-        <section className="mb-10">
+        <section className="mb-12">
           <SectionTitle
             icon={<Clock size={14} />}
             count={recent.length}
@@ -369,7 +378,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         </span>
                       )}
                     </Link>
-                    <div className="flex flex-col gap-0.5 ml-2 border-l border-border/40 pl-3">
+                    <div className="flex flex-col gap-0.5 ml-2 border-l-2 border-border/20 pl-3">
                       {visibleFiles.map(({ path: filePath, mtime }) => (
                         <FileRow
                           key={filePath}
@@ -392,7 +401,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       {t.home.other}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-0.5 ml-2 border-l border-border/40 pl-3">
+                  <div className="flex flex-col gap-0.5 ml-2 border-l-2 border-border/20 pl-3">
                     {rootFiles.map(({ path: filePath, mtime }) => (
                       <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
                     ))}
@@ -412,7 +421,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             </div>
           ) : (
             <div className="relative pl-4">
-              <div className="absolute left-0 top-1 bottom-1 w-px bg-border/40" />
+              <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-gradient-to-b from-[var(--amber)]/20 via-border/30 to-transparent" />
               <div className="flex flex-col gap-0.5">
                 {(showAll ? recent : recent.slice(0, 5)).map(({ path: filePath, mtime }, idx) => {
                   const isCSV = filePath.endsWith('.csv');
@@ -422,10 +431,10 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                     <div key={filePath} className="relative group">
                       <div
                         aria-hidden="true"
-                        className={`absolute -left-4 top-1/2 -translate-y-1/2 rounded-full transition-all duration-150 group-hover:scale-150 ${
+                        className={`absolute -left-[5px] top-1/2 -translate-y-1/2 rounded-full transition-all duration-200 group-hover:scale-125 ${
                           idx === 0
-                            ? 'w-2 h-2 bg-[var(--amber)] ring-2 ring-[var(--amber)]/20'
-                            : 'w-1.5 h-1.5 bg-muted-foreground/20'
+                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-[3px] ring-[var(--amber)]/15 shadow-sm shadow-[var(--amber)]/20'
+                            : 'w-1.5 h-1.5 bg-muted-foreground/25 group-hover:bg-[var(--amber)]/50'
                         }`}
                       />
                       <Link
@@ -463,8 +472,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       )}
 
       {/* Footer */}
-      <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs text-muted-foreground/30">
-        <Sparkles size={10} className="text-[var(--amber)]/40" />
+      <div className="mt-6 py-8 border-t border-border/20 flex items-center justify-center gap-2 text-[11px] text-muted-foreground/25">
+        <Logo id="home-footer" className="w-5 h-2.5 opacity-30" />
         <span>{t.app.footer}</span>
       </div>
     </div>
@@ -482,12 +491,14 @@ function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string 
         <SectionTitle icon={<Star size={14} />}>
           {t.pinnedFiles.title}
         </SectionTitle>
-        <div className="py-6 px-4 rounded-lg border border-dashed border-border/50 text-center">
-          <Star size={20} className="mx-auto mb-2 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground mb-1">
+        <div className="py-8 px-6 rounded-xl border border-border/40 bg-card/30 text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--amber-subtle)] mb-3">
+            <Star size={18} className="text-[var(--amber)]/60" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground/70 mb-1">
             {t.pinnedFiles.empty ?? 'No pinned files'}
           </p>
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto leading-relaxed">
             {t.pinnedFiles.emptyHint ?? 'Click the star icon on any file to pin it here'}
           </p>
         </div>

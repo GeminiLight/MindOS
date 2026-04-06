@@ -2,8 +2,7 @@
 
 export const navigationEn = {
   sidebar: {
-    files: 'Spaces',
-    wiki: 'Wiki',
+    files: 'Wiki',
     search: 'Search',
     searchTitle: 'Search',
     askTitle: 'MindOS Agent',
@@ -27,6 +26,7 @@ export const navigationEn = {
     newFile: 'New file',
     newSpace: 'New Space',
     more: 'More',
+    capture: 'Capture',
     showHiddenFiles: 'Show hidden files',
     sync: {
       synced: 'Synced',
@@ -81,8 +81,7 @@ export const navigationEn = {
 
 export const navigationZh = {
   sidebar: {
-    files: '空间',
-    wiki: 'Wiki',
+    files: 'Wiki',
     search: '搜索',
     searchTitle: '搜索',
     askTitle: 'MindOS Agent',
@@ -106,6 +105,7 @@ export const navigationZh = {
     newFile: '新建文件',
     newSpace: '新建空间',
     more: '更多',
+    capture: '暂存台',
     showHiddenFiles: '显示隐藏文件',
     sync: {
       synced: '已同步',

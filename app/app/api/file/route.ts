@@ -24,6 +24,7 @@ import {
   appendCsvRow,
   getMindRoot,
   invalidateCache,
+  getFileTree,
   listMindSpaces,
   appendContentChange,
 } from '@/lib/fs';

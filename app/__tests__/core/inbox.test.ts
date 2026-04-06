@@ -7,6 +7,9 @@ import {
   ensureInboxSpace,
   listInboxFiles,
   saveToInbox,
+  deleteFromInbox,
+  archiveFromInbox,
+  listProcessedFiles,
 } from '@/lib/core/inbox';
 
 describe('ensureInboxSpace', () => {
@@ -246,5 +249,170 @@ describe('saveToInbox', () => {
 
     expect(result.saved).toHaveLength(1);
     expect(readSeeded(mindRoot, 'Inbox/encoded.md')).toContain('Hello from base64!');
+  });
+});
+
+describe('deleteFromInbox', () => {
+  let mindRoot: string;
+
+  beforeEach(() => { mindRoot = mkTempMindRoot(); });
+  afterEach(() => { cleanupMindRoot(mindRoot); });
+
+  it('deletes existing files by name', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/a.md`, 'aaa');
+    seedFile(mindRoot, `${INBOX_DIR}/b.md`, 'bbb');
+
+    const result = deleteFromInbox(mindRoot, ['a.md', 'b.md']);
+    expect(result.deleted).toEqual(['a.md', 'b.md']);
+    expect(result.notFound).toEqual([]);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'a.md'))).toBe(false);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'b.md'))).toBe(false);
+  });
+
+  it('reports not-found for missing files', () => {
+    ensureInboxSpace(mindRoot);
+    const result = deleteFromInbox(mindRoot, ['nonexistent.md']);
+    expect(result.deleted).toEqual([]);
+    expect(result.notFound).toEqual(['nonexistent.md']);
+  });
+
+  it('refuses to delete system files', () => {
+    ensureInboxSpace(mindRoot);
+    const result = deleteFromInbox(mindRoot, ['INSTRUCTION.md', 'README.md']);
+    expect(result.deleted).toEqual([]);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'INSTRUCTION.md'))).toBe(true);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'README.md'))).toBe(true);
+  });
+
+  it('handles mixed existing and missing files', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/real.md`, 'content');
+
+    const result = deleteFromInbox(mindRoot, ['real.md', 'fake.md']);
+    expect(result.deleted).toEqual(['real.md']);
+    expect(result.notFound).toEqual(['fake.md']);
+  });
+
+  it('ignores empty or invalid names', () => {
+    ensureInboxSpace(mindRoot);
+    const result = deleteFromInbox(mindRoot, ['', null as unknown as string]);
+    expect(result.deleted).toEqual([]);
+    expect(result.notFound).toEqual([]);
+  });
+
+  it('prevents path traversal attempts', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, 'outside.md', 'should not be deleted');
+
+    const result = deleteFromInbox(mindRoot, ['../outside.md']);
+    expect(result.notFound).toEqual(['../outside.md']);
+    expect(fs.existsSync(path.join(mindRoot, 'outside.md'))).toBe(true);
+  });
+});
+
+describe('archiveFromInbox', () => {
+  let mindRoot: string;
+
+  beforeEach(() => { mindRoot = mkTempMindRoot(); });
+  afterEach(() => { cleanupMindRoot(mindRoot); });
+
+  it('moves files to .processed/ with timestamp prefix', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/notes.md`, '# Notes');
+
+    const result = archiveFromInbox(mindRoot, ['notes.md']);
+    expect(result.archived).toHaveLength(1);
+    expect(result.archived[0].original).toBe('notes.md');
+    expect(result.archived[0].archivedPath).toMatch(/^Inbox\/\.processed\/\d{8}-\d{6}_notes\.md$/);
+    expect(result.notFound).toEqual([]);
+
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'notes.md'))).toBe(false);
+
+    const processedDir = path.join(mindRoot, INBOX_DIR, '.processed');
+    const processedFiles = fs.readdirSync(processedDir);
+    expect(processedFiles).toHaveLength(1);
+    expect(processedFiles[0]).toMatch(/^\d{8}-\d{6}_notes\.md$/);
+
+    const content = fs.readFileSync(path.join(processedDir, processedFiles[0]), 'utf-8');
+    expect(content).toBe('# Notes');
+  });
+
+  it('reports not-found for missing files', () => {
+    ensureInboxSpace(mindRoot);
+    const result = archiveFromInbox(mindRoot, ['nonexistent.md']);
+    expect(result.archived).toEqual([]);
+    expect(result.notFound).toEqual(['nonexistent.md']);
+  });
+
+  it('refuses to archive system files', () => {
+    ensureInboxSpace(mindRoot);
+    const result = archiveFromInbox(mindRoot, ['INSTRUCTION.md', 'README.md']);
+    expect(result.archived).toEqual([]);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'INSTRUCTION.md'))).toBe(true);
+    expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'README.md'))).toBe(true);
+  });
+
+  it('handles mixed existing and missing files', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/real.md`, 'content');
+
+    const result = archiveFromInbox(mindRoot, ['real.md', 'fake.md']);
+    expect(result.archived).toHaveLength(1);
+    expect(result.notFound).toEqual(['fake.md']);
+  });
+
+  it('creates .processed/ directory if it does not exist', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/a.md`, 'aaa');
+
+    const processedDir = path.join(mindRoot, INBOX_DIR, '.processed');
+    expect(fs.existsSync(processedDir)).toBe(false);
+
+    archiveFromInbox(mindRoot, ['a.md']);
+    expect(fs.existsSync(processedDir)).toBe(true);
+  });
+
+  it('archived files are hidden from listInboxFiles', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/visible.md`, 'visible');
+
+    expect(listInboxFiles(mindRoot)).toHaveLength(1);
+
+    archiveFromInbox(mindRoot, ['visible.md']);
+
+    expect(listInboxFiles(mindRoot)).toHaveLength(0);
+  });
+});
+
+describe('listProcessedFiles', () => {
+  let mindRoot: string;
+
+  beforeEach(() => { mindRoot = mkTempMindRoot(); });
+  afterEach(() => { cleanupMindRoot(mindRoot); });
+
+  it('returns empty array when .processed/ does not exist', () => {
+    expect(listProcessedFiles(mindRoot)).toEqual([]);
+  });
+
+  it('lists archived files sorted by date', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/a.md`, 'a');
+    seedFile(mindRoot, `${INBOX_DIR}/b.md`, 'b');
+    archiveFromInbox(mindRoot, ['a.md', 'b.md']);
+
+    const files = listProcessedFiles(mindRoot);
+    expect(files).toHaveLength(2);
+    expect(files[0].originalName).toMatch(/\.(md|csv|json)$/);
+    expect(files[0].path).toContain('.processed/');
+  });
+
+  it('extracts original name by stripping timestamp prefix', () => {
+    ensureInboxSpace(mindRoot);
+    seedFile(mindRoot, `${INBOX_DIR}/report.md`, 'content');
+    archiveFromInbox(mindRoot, ['report.md']);
+
+    const files = listProcessedFiles(mindRoot);
+    expect(files[0].originalName).toBe('report.md');
   });
 });

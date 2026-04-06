@@ -438,7 +438,6 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
         <button
           type="button"
           onClick={handleSingleClick}
-          onDoubleClick={handleDoubleClick}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData('text/mindos-path', node.path);
@@ -448,7 +447,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           className={`
             flex-1 flex items-center gap-1.5 px-1 py-1 rounded text-left min-w-0 pr-16
             text-sm transition-colors duration-100
-            hover:bg-muted cursor-text
+            hover:bg-muted cursor-default
             ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
           `}
         >
@@ -461,9 +460,6 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
               : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
-          <span className="ml-auto text-xs text-muted-foreground/30 group-hover/dir:text-muted-foreground/60 transition-colors shrink-0 hidden group-hover/dir:inline-flex items-center gap-1">
-            <Pencil size={10} />
-          </span>
           {isSpace && !open && (
             <span className="ml-auto text-xs text-muted-foreground shrink-0 tabular-nums pr-1">{contentCount}</span>
           )}
@@ -657,14 +653,13 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
     <div className="relative group/file">
       <button
         onClick={handleClick}
-        onDoubleClick={isProtected ? undefined : startRename}
         onContextMenu={handleContextMenu}
         draggable
         onDragStart={handleDragStart}
         data-filepath={node.path}
         className={`
           w-full flex items-center gap-1.5 px-2 py-1 rounded text-left
-          text-sm transition-colors duration-100 cursor-text pr-16
+          text-sm transition-colors duration-100 cursor-default pr-16
           ${isActive
             ? 'bg-accent text-foreground'
             : 'hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -674,9 +669,6 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       >
         {getIcon(node)}
         <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
-        <span className="ml-auto text-xs text-muted-foreground/30 group-hover/file:text-muted-foreground/60 transition-colors shrink-0 hidden group-hover/file:inline-flex items-center gap-1">
-          <Pencil size={10} />
-        </span>
         {pinned && <Star size={10} className="shrink-0 fill-[var(--amber)] text-[var(--amber)] opacity-60" />}
       </button>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/file:flex items-center gap-0.5">
@@ -759,7 +751,10 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, p
   const showHidden = useShowHiddenFiles();
 
   const isRoot = depth === 0;
-  const visibleNodes = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
+  const filtered = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
+  const visibleNodes = isRoot
+    ? filtered.filter(n => !(n.type === 'directory' && n.name === 'Inbox'))
+    : filtered;
 
   useEffect(() => {
     if (!currentPath || depth !== 0) return;

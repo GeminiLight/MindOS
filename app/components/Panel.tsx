@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronsDownUp, ChevronsUpDown, Plus, Import, FileText, Layers, MoreHorizontal, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, Plus, Import, FileText, Layers, MoreHorizontal, Eye, EyeOff, Trash2, Inbox } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
 import type { FileNode } from '@/lib/types';
 import FileTree, { setShowHiddenFiles, useShowHiddenFiles } from './FileTree';
@@ -128,14 +128,25 @@ export default function Panel({
     };
   }, [morePopover]);
 
-  // Fetch trash count on mount and when files change
+  const [inboxCount, setInboxCount] = useState(0);
+
   useEffect(() => {
-    const fetchCount = () => {
+    const fetchTrash = () => {
       listTrashAction().then(items => setTrashCount(items.length)).catch(() => {});
     };
-    fetchCount();
-    window.addEventListener('mindos:files-changed', fetchCount);
-    return () => window.removeEventListener('mindos:files-changed', fetchCount);
+    const fetchInbox = () => {
+      fetch('/api/inbox').then(r => r.json()).then(d => {
+        if (Array.isArray(d.files)) setInboxCount(d.files.length);
+      }).catch(() => {});
+    };
+    fetchTrash();
+    fetchInbox();
+    window.addEventListener('mindos:files-changed', fetchTrash);
+    window.addEventListener('mindos:inbox-updated', fetchInbox);
+    return () => {
+      window.removeEventListener('mindos:files-changed', fetchTrash);
+      window.removeEventListener('mindos:inbox-updated', fetchInbox);
+    };
   }, []);
 
   // Double-click hint: show only until user has used it once.
@@ -280,6 +291,16 @@ export default function Panel({
                     {showHidden && <span className="text-[var(--amber)] text-xs">✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/50" />
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    onClick={() => { setMorePopover(false); router.push('/view/Inbox/'); }}
+                  >
+                    <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
+                    <span className="flex-1">{t.sidebar.capture}</span>
+                    {inboxCount > 0 && (
+                      <span className="text-xs font-medium text-[var(--amber)] tabular-nums">{inboxCount}</span>
+                    )}
+                  </button>
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
                     onClick={() => { setMorePopover(false); router.push('/trash'); }}

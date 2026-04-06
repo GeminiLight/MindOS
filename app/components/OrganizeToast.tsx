@@ -119,10 +119,12 @@ export default function OrganizeToast({
           undone: c.undone,
         })),
         status: 'completed',
+        source: aiOrganize.source,
+        durationMs: aiOrganize.durationMs,
       });
       onHistoryUpdate?.();
     }
-  }, [isDone, aiOrganize.changes, aiOrganize.sourceFileNames, onHistoryUpdate]);
+  }, [isDone, aiOrganize.changes, aiOrganize.sourceFileNames, aiOrganize.source, aiOrganize.durationMs, onHistoryUpdate]);
 
   // Auto-dismiss timer (3 min after done, reset on user interaction)
   const resetTimer = useCallback(() => {

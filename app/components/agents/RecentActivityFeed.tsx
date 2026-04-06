@@ -61,9 +61,9 @@ export default function RecentActivityFeed() {
 
   return (
     <section aria-label="Recent Activity">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[var(--amber)]"><Activity size={13} /></span>
-        <h2 className="text-sm font-semibold text-foreground">
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Activity size={13} /></div>
+        <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
           {copy?.recentActivity ?? 'Recent Activity'}
         </h2>
         <div className="ml-auto">

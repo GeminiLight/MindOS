@@ -78,9 +78,9 @@ export default function SystemPulse() {
     return (
       <section className="mb-10">
         {/* Use same title style as other sections */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-[var(--amber)]"><Bot size={13} /></span>
-          <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Bot size={13} /></div>
+          <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{pulse.title}</h2>
         </div>
         <div className="rounded-xl border border-dashed border-border/60 p-4">
           <div className="flex items-center gap-4">
@@ -114,10 +114,10 @@ export default function SystemPulse() {
           onClick={toggleCollapsed}
           className="w-full flex items-center gap-2 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
         >
-          <span className="text-[var(--amber)]"><Bot size={13} /></span>
-        <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
-        {totalConnected > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground">{totalConnected}</span>
+          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Bot size={13} /></div>
+          <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{pulse.title}</h2>
+          {totalConnected > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">{totalConnected}</span>
           )}
           {/* Inline status */}
           <div className="flex items-center gap-2 ml-1">
@@ -144,11 +144,11 @@ export default function SystemPulse() {
   return (
     <section className="mb-10">
       {/* Section title — same pattern as Spaces / Recently Edited */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[var(--amber)]"><Bot size={13} /></span>
-          <h2 className="text-sm font-semibold text-foreground">{pulse.title}</h2>
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Bot size={13} /></div>
+          <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{pulse.title}</h2>
           {totalConnected > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground">{totalConnected}</span>
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">{totalConnected}</span>
         )}
         {mcpRunning && (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/50 ml-1">

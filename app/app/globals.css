@@ -141,8 +141,8 @@ body {
 /* Brand wordmark — premium sans with engineering precision */
 .font-brand {
   font-family: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 /* Content width — controlled by Settings > Appearance */

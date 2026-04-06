@@ -14,7 +14,6 @@ import AgentsPanel from './panels/AgentsPanel';
 import DiscoverPanel from './panels/DiscoverPanel';
 import EchoPanel from './panels/EchoPanel';
 import WorkflowsPanel from './panels/WorkflowsPanel';
-import WikiHomePanel from './panels/WikiHomePanel';
 
 import RightAskPanel from './RightAskPanel';
 import RightAgentDetailPanel, {
@@ -185,12 +184,14 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   }, [handleOpenImport]);
 
   // ── Inbox: batch AI organize from InboxSection ──
+  const organizedFileNamesRef = useRef<string[]>([]);
   useEffect(() => {
     const handler = (e: Event) => {
       const files = (e as CustomEvent).detail?.files as Array<{ name: string; path: string }> | undefined;
       if (!files || files.length === 0 || aiOrganize.phase === 'organizing') return;
 
       const prompt = t.inbox.organizePrompt(files.map(f => f.name));
+      organizedFileNamesRef.current = files.map(f => f.name);
 
       (async () => {
         const attachments: Array<{ name: string; content: string }> = [];
@@ -204,7 +205,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           } catch { /* skip unreadable files */ }
         }
         if (attachments.length > 0) {
-          aiOrganize.start(attachments, prompt);
+          aiOrganize.start(attachments, prompt, 'inbox-organize');
         } else {
           toast.error(t.inbox.organizeFailed, 4000);
           window.dispatchEvent(new Event('mindos:organize-done'));
@@ -215,12 +216,28 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     return () => window.removeEventListener('mindos:inbox-organize', handler);
   }, [aiOrganize, t]);
 
-  // Notify InboxSection when organize finishes
+  // Notify InboxSection when organize finishes + clean up source inbox files
   useEffect(() => {
-    if (aiOrganize.phase === 'done' || aiOrganize.phase === 'error') {
+    if (aiOrganize.phase === 'done') {
+      const hasSuccessfulChanges = aiOrganize.changes.some(c => c.ok);
+      const names = organizedFileNamesRef.current;
+      if (hasSuccessfulChanges && names.length > 0) {
+        fetch('/api/inbox', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ names }),
+        })
+          .then(() => {
+            window.dispatchEvent(new Event('mindos:inbox-updated'));
+          })
+          .catch(() => { /* best-effort cleanup */ });
+        organizedFileNamesRef.current = [];
+      }
+      window.dispatchEvent(new Event('mindos:organize-done'));
+    } else if (aiOrganize.phase === 'error') {
       window.dispatchEvent(new Event('mindos:organize-done'));
     }
-  }, [aiOrganize.phase]);
+  }, [aiOrganize.phase, aiOrganize.changes]);
 
   // Listen for cross-component "open panel" events (e.g. GuideCard → Agents)
   useEffect(() => {
@@ -407,6 +424,11 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           lp.setActivePanel(wasActive ? null : 'discover');
           if (!wasActive) router.push('/explore');
         }}
+        onSpacesClick={() => {
+          const wasActive = lp.activePanel === 'files';
+          lp.setActivePanel(wasActive ? null : 'files');
+          if (!wasActive) router.push('/wiki');
+        }}
         syncStatus={syncStatus}
         expanded={lp.railExpanded}
         onExpandedChange={handleExpandedChange}
@@ -446,9 +468,6 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         </div>
         <div className={`flex flex-col h-full ${lp.activePanel === 'workflows' ? '' : 'hidden'}`}>
           <WorkflowsPanel active={lp.activePanel === 'workflows'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
-        </div>
-        <div className={`flex flex-col h-full ${lp.activePanel === 'wiki-home' ? '' : 'hidden'}`}>
-          <WikiHomePanel fileTree={fileTree} active={lp.activePanel === 'wiki-home'} maximized={lp.panelMaximized} onMaximize={lp.handlePanelMaximize} />
         </div>
       </Panel>
 

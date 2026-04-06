@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Brain } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows' | 'wiki-home';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -20,6 +20,7 @@ interface ActivityBarProps {
   onAgentsClick?: () => void;
   onDiscoverClick?: () => void;
   onWorkflowsClick?: () => void;
+  onSpacesClick?: () => void;
   syncStatus: SyncStatus | null;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -83,6 +84,7 @@ export default function ActivityBar({
   onAgentsClick,
   onDiscoverClick,
   onWorkflowsClick,
+  onSpacesClick,
   syncStatus,
   expanded,
   onExpandedChange,
@@ -204,8 +206,7 @@ export default function ActivityBar({
 
         {/* ── Middle: Core panel toggles ── */}
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
-          <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => toggle('files')} walkthroughId="files-panel" />
-          <RailButton icon={<Brain size={18} />} label={t.sidebar.wiki ?? 'Wiki'} active={activePanel === 'wiki-home'} expanded={expanded} onClick={() => toggle('wiki-home')} walkthroughId="wiki-home-panel" />
+          <RailButton icon={<FolderTree size={18} />} label={t.sidebar.files} active={activePanel === 'files'} expanded={expanded} onClick={() => onSpacesClick ? debounced(onSpacesClick) : toggle('files')} walkthroughId="files-panel" />
           {labsEcho && <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} onClick={() => onEchoClick ? debounced(onEchoClick) : toggle('echo')} walkthroughId="echo-panel" />}
           <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
           <RailButton

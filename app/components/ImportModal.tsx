@@ -114,8 +114,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
       const prompt = attachments.length === 1
         ? (t.fileImport.digestPromptSingle as (name: string, space?: string) => string)(attachments[0].name, space)
         : (t.fileImport.digestPromptMulti as (n: number, space?: string) => string)(attachments.length, space);
-      // Start AI organize and immediately close modal — toast takes over
-      aiOrganize.start(attachments, prompt);
+      aiOrganize.start(attachments, prompt, 'import-modal');
       onClose();
       im.reset();
     }
