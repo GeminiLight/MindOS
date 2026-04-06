@@ -7,6 +7,14 @@ import { getMindRoot } from '@/lib/fs';
 /** MIME types for binary files served from the knowledge base */
 const BINARY_MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
 };
 
 /** Max file size to serve inline (50MB — protects against OOM) */

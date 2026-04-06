@@ -7,6 +7,7 @@ import { manifest as agentInspector } from '@/components/renderers/agent-inspect
 import { manifest as backlinks } from '@/components/renderers/backlinks/manifest';
 import { manifest as config } from '@/components/renderers/config/manifest';
 import { manifest as csv } from '@/components/renderers/csv/manifest';
+import { manifest as image } from '@/components/renderers/image/manifest';
 import { manifest as pdf } from '@/components/renderers/pdf/manifest';
 import { manifest as summary } from '@/components/renderers/summary/manifest';
 import { manifest as timeline } from '@/components/renderers/timeline/manifest';
@@ -15,7 +16,7 @@ import { manifest as workflowYaml } from '@/components/renderers/workflow-yaml/m
 import { manifest as graph } from '@/components/renderers/graph/manifest';
 
 const manifests = [
-  agentInspector, backlinks, config, csv, pdf, summary, timeline, todo, workflowYaml, graph,
+  agentInspector, backlinks, config, csv, image, pdf, summary, timeline, todo, workflowYaml, graph,
 ];
 
 for (const m of manifests) {

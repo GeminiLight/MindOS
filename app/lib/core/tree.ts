@@ -4,7 +4,7 @@ import path from 'path';
 import type { FileNode } from './types';
 
 const DEFAULT_IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store', 'mcp']);
-const DEFAULT_ALLOWED_EXTENSIONS = new Set(['.md', '.csv', '.pdf']);
+const DEFAULT_ALLOWED_EXTENSIONS = new Set(['.md', '.csv', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico']);
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md']);
 
 export interface TreeOptions {

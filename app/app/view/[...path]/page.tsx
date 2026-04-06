@@ -8,7 +8,7 @@ import DirView from '@/components/DirView';
 import Papa from 'papaparse';
 
 /** Extensions handled as binary (not read as UTF-8 text) */
-const BINARY_EXTENSIONS = new Set(['pdf']);
+const BINARY_EXTENSIONS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 
 interface PageProps {
   params: Promise<{ path: string[] }>;
