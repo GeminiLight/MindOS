@@ -7,7 +7,7 @@ const STORAGE_KEY = 'mindos_clipper_config';
 const DEFAULT_CONFIG: ClipperConfig = {
   mindosUrl: 'http://localhost:3456',
   authToken: '',
-  defaultSpace: 'Clips',
+  defaultSpace: 'Inbox',
   connected: false,
 };
 

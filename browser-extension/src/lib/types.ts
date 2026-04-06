@@ -35,15 +35,8 @@ export interface MindOSSpace {
   path: string;
 }
 
-/** API response from POST /api/file */
+/** API response from POST /api/file or /api/inbox */
 export interface FileApiResponse {
   ok?: boolean;
   error?: string;
 }
-
-/** Messages between popup ↔ content script ↔ background */
-export type ClipperMessage =
-  | { type: 'EXTRACT_CONTENT' }
-  | { type: 'CONTENT_EXTRACTED'; payload: PageContent }
-  | { type: 'EXTRACTION_FAILED'; error: string }
-  | { type: 'CLIP_PAGE' };  // from keyboard shortcut / context menu

@@ -202,7 +202,7 @@ btnConnect.addEventListener('click', async () => {
   const testConfig: ClipperConfig = {
     mindosUrl: url,
     authToken: token,
-    defaultSpace: 'Clips',
+    defaultSpace: 'Inbox',
     connected: false,
   };
 
