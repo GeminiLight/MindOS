@@ -1,10 +1,11 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, statSync, renameSync, unlinkSync, openSync, readSync, closeSync, realpathSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { MINDOS_DIR, LOG_PATH, CLI_PATH, NODE_BIN, CONFIG_PATH } from './constants.js';
 import { green, red, dim, cyan, yellow } from './colors.js';
 import { isPortInUse } from './port.js';
+import { stripBom } from './jsonc.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -15,31 +16,17 @@ import { isPortInUse } from './port.js';
  */
 function getCurrentCliPath() {
   try {
-    // Try to find mindos in PATH
-    const mindosBin = execSync('which mindos', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    const whichCmd = process.platform === 'win32' ? 'where mindos' : 'which mindos';
+    // `where` on Windows can return multiple lines; take the first match
+    const mindosBin = execSync(whichCmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim().split(/\r?\n/)[0];
     if (mindosBin) {
-      // mindos is usually a symlink, resolve it
       try {
-        const realPath = execSync(`readlink -f "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-        if (realPath && existsSync(realPath)) {
-          return realPath;
-        }
-      } catch {
-        // readlink -f not available on macOS, fallback to realpath
-        try {
-          const realPath = execSync(`realpath "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-          if (realPath && existsSync(realPath)) {
-            return realPath;
-          }
-        } catch {}
-      }
-      // Fallback: use the symlink target itself
-      if (existsSync(mindosBin)) {
-        return mindosBin;
-      }
+        const realPath = realpathSync(mindosBin);
+        if (existsSync(realPath)) return realPath;
+      } catch {}
+      if (existsSync(mindosBin)) return mindosBin;
     }
   } catch {}
-  // Fallback to static CLI_PATH if dynamic resolution fails
   return CLI_PATH;
 }
 
@@ -390,7 +377,7 @@ const launchd = {
     // Read ports before bootout so we can wait for them to be freed
     let webPort = 3456, mcpPort = 8781;
     try {
-      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+      const config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
       if (config.port) webPort = Number(config.port);
       if (config.mcpPort) mcpPort = Number(config.mcpPort);
     } catch {}

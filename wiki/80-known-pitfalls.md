@@ -1325,6 +1325,25 @@
 - **解决：** 所有消费方改为 `isTTY()` 调用
 - **规则：** 导出签名变更时，grep 所有消费方逐一确认
 
+### CLI 跨平台 17 处问题（2026-04-06）
+
+- **问题：** CLI 工具链大量 Unix-only 假设，Windows 用户几乎无法使用：`stop.js` 依赖 lsof/pkill/ss；`cli-shim.js` 向 `.cmd` 写入 shell 脚本；`file.js`/`space.js` 路径沙箱用 `root + '/'` 前缀匹配（Windows 反斜杠不匹配）；`doctor.js` 用 `:` 分割 PATH（Windows 是 `;`）；`update.js`/`gateway.js` 用 `which`/`readlink -f`；`mcp-agents.js` Cline/Roo/Copilot 配置路径缺少 `%APPDATA%` 分支
+- **解决：** 系统性修复 17 个文件：
+  - `stop.js`: Windows 用 `netstat -ano` + `taskkill /PID /T /F`；Unix 保持 lsof/ss
+  - `cli-shim.js`: Windows 写真正的 `.cmd` batch 脚本 + PowerShell profile PATH 注入
+  - `file.js`/`space.js`: 用 `path.relative()` + `..` 前缀检查替代 `startsWith(root + '/')`
+  - `doctor.js`: 用 `path.delimiter` 分割 PATH
+  - `update.js`/`gateway.js`: 用 `where`(win) / `which`(unix) + `fs.realpathSync` 替代 shell `readlink`/`realpath`
+  - `update.js`: `rm -rf` → `fs.rmSync()`
+  - `mcp-agents.js`: 添加 `win32` 分支使用 `%APPDATA%\Code\...` 路径
+  - `setup.js`: 识别 Windows 驱动器路径 `C:\`；`command -v` → `where`(win)
+  - `path-expand.js`: 支持 `~\` 和 bare `~`
+  - `jsonc.js`/`config.js`: 添加 UTF-8 BOM 剥离
+  - `open.js`: Windows `start "" "url"` 避免参数误解析
+  - `logs.js`: 用 Node fs API 实现 tail（替代 Unix `tail` 命令）
+  - `port.js`/`build.js`/`doctor.js`: 错误提示区分平台（lsof vs netstat）
+- **规则：** 新增 shell 命令前先问"Windows cmd.exe 支持吗？"；路径比较用 `path.relative()`，不用字符串拼接
+
 ### `next build --webpack` 污染 `.next` 缓存 → dev server 每请求 compile 7-8s（2026-04-05）
 
 - **症状：** `next dev`（turbopack）每个请求 compile 7-8s，`/api/tree-version`（9 行代码）也要 15s 完成；view 页面 render 60-100s；3s 轮询不断积压，页面完全点不动

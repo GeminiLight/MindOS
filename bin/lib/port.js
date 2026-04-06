@@ -33,7 +33,11 @@ export async function assertPortFree(port, name) {
   if (await isPortInUse(port)) {
     console.error(`\n${red('\u2718')} ${bold(`Port ${port} is still in use after cleanup`)} ${dim(`(${name})`)}`);
     console.error(`\n  ${dim('Stop MindOS:')}       mindos stop`);
-    console.error(`  ${dim('Find the process:')}  lsof -i :${port}\n`);
+    if (process.platform === 'win32') {
+      console.error(`  ${dim('Find the process:')}  netstat -ano | findstr :${port}\n`);
+    } else {
+      console.error(`  ${dim('Find the process:')}  lsof -i :${port}\n`);
+    }
     process.exit(1);
   }
   console.log(`  ${dim('Cleaned up orphaned processes on port')} ${port}`);

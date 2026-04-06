@@ -9,7 +9,13 @@
 
 import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { expandHome } from './path-expand.js';
+
+function winAppData(...segments) {
+  const appData = process.env.APPDATA || resolve(process.env.USERPROFILE || '', 'AppData', 'Roaming');
+  return resolve(appData, ...segments);
+}
 
 export const MCP_AGENTS = {
   'claude-code': {
@@ -42,12 +48,15 @@ export const MCP_AGENTS = {
     project: null,
     global: process.platform === 'darwin'
       ? '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json'
-      : '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
+      : process.platform === 'win32'
+        ? winAppData('Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json')
+        : '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json',
     key: 'mcpServers',
     preferredTransport: 'stdio',
     presenceDirs: [
       '~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/',
       '~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/',
+      ...(process.platform === 'win32' ? [winAppData('Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')] : []),
     ],
   },
   'trae': {
@@ -153,13 +162,16 @@ export const MCP_AGENTS = {
     project: '.trae/mcp.json',
     global: process.platform === 'darwin'
       ? '~/Library/Application Support/Trae CN/User/mcp.json'
-      : '~/.config/Trae CN/User/mcp.json',
+      : process.platform === 'win32'
+        ? winAppData('Trae CN', 'User', 'mcp.json')
+        : '~/.config/Trae CN/User/mcp.json',
     key: 'mcpServers',
     preferredTransport: 'stdio',
     presenceCli: 'trae-cli',
     presenceDirs: [
       '~/Library/Application Support/Trae CN/',
       '~/.config/Trae CN/',
+      ...(process.platform === 'win32' ? [winAppData('Trae CN')] : []),
     ],
   },
   'roo': {
@@ -167,12 +179,15 @@ export const MCP_AGENTS = {
     project: '.roo/mcp.json',
     global: process.platform === 'darwin'
       ? '~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json'
-      : '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json',
+      : process.platform === 'win32'
+        ? winAppData('Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'mcp_settings.json')
+        : '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json',
     key: 'mcpServers',
     preferredTransport: 'stdio',
     presenceDirs: [
       '~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
       '~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/',
+      ...(process.platform === 'win32' ? [winAppData('Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline')] : []),
     ],
   },
   'github-copilot': {
@@ -180,12 +195,15 @@ export const MCP_AGENTS = {
     project: '.vscode/mcp.json',
     global: process.platform === 'darwin'
       ? '~/Library/Application Support/Code/User/mcp.json'
-      : '~/.config/Code/User/mcp.json',
+      : process.platform === 'win32'
+        ? winAppData('Code', 'User', 'mcp.json')
+        : '~/.config/Code/User/mcp.json',
     key: 'servers',
     preferredTransport: 'stdio',
     presenceDirs: [
       '~/Library/Application Support/Code/',
       '~/.config/Code/',
+      ...(process.platform === 'win32' ? [winAppData('Code')] : []),
     ],
     presenceCli: 'code',
   },
@@ -239,6 +257,9 @@ export function detectAgentPresence(agentKey) {
       return true;
     } catch { /* not found */ }
   }
-  if (agent.presenceDirs?.some(d => existsSync(expandHome(d)))) return true;
+  if (agent.presenceDirs?.some(d => {
+    // Paths from winAppData() are already absolute; expandHome only handles ~/
+    try { return existsSync(d.startsWith('~') ? expandHome(d) : d); } catch { return false; }
+  })) return true;
   return false;
 }

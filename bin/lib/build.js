@@ -118,13 +118,19 @@ export function ensureAppDeps({ force = false } = {}) {
   } catch {
     console.error(red('\n\u2718 npm not found in PATH.\n'));
     console.error('  MindOS needs npm to install its app dependencies on first run.');
-    console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
-    console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
-    console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
-    console.error('  Example:');
-    console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
-    console.error(dim('    source ~/.profile\n'));
-    console.error('  Then run `mindos start` again.\n');
+    if (process.platform === 'win32') {
+      console.error('  Ensure Node.js is installed and added to your system PATH.\n');
+      console.error('  Fix: reinstall Node.js from https://nodejs.org (the installer adds it to PATH).');
+      console.error('  Then open a new terminal and run `mindos start` again.\n');
+    } else {
+      console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
+      console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
+      console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
+      console.error('  Example:');
+      console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
+      console.error(dim('    source ~/.profile\n'));
+      console.error('  Then run `mindos start` again.\n');
+    }
     process.exit(1);
   }
 
@@ -142,7 +148,12 @@ export function ensureAppDeps({ force = false } = {}) {
     run('npm install --no-workspaces', resolve(ROOT, 'app'));
     if (!verifyDeps()) {
       console.error(red('\n✘ Failed to install dependencies after retry.\n'));
-      console.error('  Try manually: cd ' + resolve(ROOT, 'app') + ' && rm -rf node_modules && npm install');
+      const appDir = resolve(ROOT, 'app');
+      if (process.platform === 'win32') {
+        console.error(`  Try manually: cd "${appDir}" && rmdir /s /q node_modules && npm install`);
+      } else {
+        console.error(`  Try manually: cd ${appDir} && rm -rf node_modules && npm install`);
+      }
       process.exit(1);
     }
   }

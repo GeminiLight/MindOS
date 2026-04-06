@@ -3,78 +3,93 @@ import { readFileSync } from 'node:fs';
 import { green, yellow, dim } from './colors.js';
 import { loadPids, clearPids } from './pid.js';
 import { CONFIG_PATH } from './constants.js';
+import { stripBom } from './jsonc.js';
+
+const isWin = process.platform === 'win32';
 
 /**
  * Portable synchronous sleep using SharedArrayBuffer + Atomics.wait.
- * Falls back to execSync('sleep N') on platforms without SharedArrayBuffer.
+ * Falls back to a busy-wait loop on platforms without SharedArrayBuffer.
  */
 function syncSleep(ms) {
   try {
     const sab = new SharedArrayBuffer(4);
     Atomics.wait(new Int32Array(sab), 0, 0, ms);
   } catch {
-    try { execSync(`sleep ${Math.ceil(ms / 1000)}`, { stdio: 'ignore' }); } catch {}
+    // Busy-wait fallback — only used when SharedArrayBuffer is unavailable
+    const end = Date.now() + ms;
+    while (Date.now() < end) { /* spin */ }
   }
 }
 
 /**
  * Kill processes listening on the given port.
- * Tries lsof first, then falls back to parsing `ss` output.
+ * Uses platform-appropriate tools: lsof/ss on Unix, netstat on Windows.
  * Returns number of processes killed.
  */
 export function killByPort(port) {
   const pidsToKill = new Set();
 
-  // Method 1: lsof
-  try {
-    const output = execSync(`lsof -ti :${port} 2>/dev/null`, { encoding: 'utf-8' }).trim();
-    if (output) {
-      for (const p of output.split('\n')) {
-        const pid = Number(p);
+  if (isWin) {
+    // Windows: parse `netstat -ano` output for LISTENING on the target port
+    try {
+      const output = execSync(`netstat -ano`, { encoding: 'utf-8' });
+      for (const line of output.split('\r\n')) {
+        if (!line.includes(`:${port} `) && !line.includes(`:${port}\t`)) continue;
+        if (!/LISTENING/i.test(line)) continue;
+        const parts = line.trim().split(/\s+/);
+        const pid = Number(parts[parts.length - 1]);
         if (pid > 0) pidsToKill.add(pid);
       }
-    }
-  } catch {
-    // lsof not available or no processes found
-  }
-
-  // Method 2: ss -tlnp (fallback — works when lsof can't see the process)
-  if (pidsToKill.size === 0) {
+    } catch { /* netstat unavailable */ }
+  } else {
+    // Unix Method 1: lsof
     try {
-      const output = execSync(`ss -tlnp 2>/dev/null`, { encoding: 'utf-8' });
-      // Match lines like: LISTEN ... *:3003 ... users:(("next-server",pid=12345,fd=21))
-      // Match `:PORT` followed by a non-digit to avoid partial matches
-      // (e.g. port 80 must not match :8080)
-      const portRe = new RegExp(`:${port}(?!\\d)`);
-      for (const line of output.split('\n')) {
-        if (!portRe.test(line)) continue;
-        const pidMatch = line.match(/pid=(\d+)/g);
-        if (pidMatch) {
-          for (const m of pidMatch) {
-            const pid = Number(m.slice(4));
-            if (pid > 0) pidsToKill.add(pid);
-          }
+      const output = execSync(`lsof -ti :${port} 2>/dev/null`, { encoding: 'utf-8' }).trim();
+      if (output) {
+        for (const p of output.split('\n')) {
+          const pid = Number(p);
+          if (pid > 0) pidsToKill.add(pid);
         }
       }
-    } catch {
-      // ss not available
+    } catch { /* lsof not available */ }
+
+    // Unix Method 2: ss -tlnp (fallback)
+    if (pidsToKill.size === 0) {
+      try {
+        const output = execSync(`ss -tlnp 2>/dev/null`, { encoding: 'utf-8' });
+        const portRe = new RegExp(`:${port}(?!\\d)`);
+        for (const line of output.split('\n')) {
+          if (!portRe.test(line)) continue;
+          const pidMatch = line.match(/pid=(\d+)/g);
+          if (pidMatch) {
+            for (const m of pidMatch) {
+              const pid = Number(m.slice(4));
+              if (pid > 0) pidsToKill.add(pid);
+            }
+          }
+        }
+      } catch { /* ss not available */ }
     }
   }
 
   let killed = 0;
-  for (const pid of pidsToKill) {
-    try { process.kill(pid, 'SIGTERM'); killed++; } catch {}
-  }
-
-  // SIGKILL fallback: if processes survive SIGTERM, force-kill after 2s.
-  // Next.js workers can ignore SIGTERM during request handling.
-  if (killed > 0) {
-    syncSleep(2000);
+  if (isWin) {
     for (const pid of pidsToKill) {
-      try {
-        process.kill(pid, 0); // check if still alive
-        process.kill(pid, 'SIGKILL'); // force kill
-      } catch { /* already dead, good */ }
+      try { execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' }); killed++; } catch {}
+    }
+  } else {
+    for (const pid of pidsToKill) {
+      try { process.kill(pid, 'SIGTERM'); killed++; } catch {}
+    }
+    if (killed > 0) {
+      syncSleep(2000);
+      for (const pid of pidsToKill) {
+        try {
+          process.kill(pid, 0);
+          process.kill(pid, 'SIGKILL');
+        } catch { /* already dead */ }
+      }
     }
   }
 
@@ -83,14 +98,17 @@ export function killByPort(port) {
 
 /**
  * Kill a process and all its children (process group).
+ * On Windows, uses taskkill /T for tree kill; on Unix, uses negative PID.
  */
 function killTree(pid) {
-  // Try to kill the entire process group first
+  if (isWin) {
+    try { execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' }); } catch {}
+    return true;
+  }
+
   try { process.kill(-pid, 'SIGTERM'); } catch {}
-  // Also kill individual process
   try { process.kill(pid, 'SIGTERM'); } catch {}
 
-  // Wait briefly then SIGKILL if still alive
   syncSleep(2000);
 
   let alive = false;
@@ -120,7 +138,7 @@ export function stopMindos(opts = {}) {
   // Read ports from config for port-based cleanup
   let webPort = '3456', mcpPort = '8781', setupPort = null;
   try {
-    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    const config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
     if (config.port) webPort = String(config.port);
     if (config.mcpPort) mcpPort = String(config.mcpPort);
     // Temporary port used by GUI setup — may still have a zombie process
@@ -155,11 +173,14 @@ export function stopMindos(opts = {}) {
   }
 
   if (!pids.length && portKilled === 0) {
-    // Last resort: pattern match (for envs without lsof)
-    // Skip in test environment to avoid killing unrelated dev servers
+    // Last resort: pattern match (for envs without lsof/netstat)
     if (process.env.NODE_ENV !== 'test') {
-      try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
-      try { execSync('pkill -f "mcp/(src/index|dist/index)" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+      if (isWin) {
+        try { execSync('taskkill /FI "IMAGENAME eq node.exe" /F', { stdio: 'ignore' }); } catch {}
+      } else {
+        try { execSync('pkill -f "next start|next dev" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+        try { execSync('pkill -f "mcp/(src/index|dist/index)" 2>/dev/null || true', { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
+      }
     }
   }
 

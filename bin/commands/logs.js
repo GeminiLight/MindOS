@@ -1,9 +1,8 @@
 /**
- * mindos logs — Tail service logs
+ * mindos logs — Tail service logs (cross-platform, no external tools)
  */
 
-import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, watch as fsWatch, openSync, readSync, closeSync } from 'node:fs';
 import { LOG_PATH } from '../lib/constants.js';
 import { dim } from '../lib/colors.js';
 
@@ -17,6 +16,38 @@ export const meta = {
   ],
 };
 
+function tailLines(filePath, count) {
+  const content = readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n');
+  return lines.slice(-count).join('\n');
+}
+
+function followFile(filePath) {
+  let size = statSync(filePath).size;
+
+  const readNew = () => {
+    let newSize;
+    try { newSize = statSync(filePath).size; } catch { return; }
+    if (newSize <= size) { size = newSize; return; }
+    const fd = openSync(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(newSize - size);
+      readSync(fd, buf, 0, buf.length, size);
+      process.stdout.write(buf.toString('utf-8'));
+    } finally {
+      closeSync(fd);
+    }
+    size = newSize;
+  };
+
+  const watcher = fsWatch(filePath, { persistent: true }, readNew);
+  // Also poll as a fallback — fs.watch is unreliable on some network/VM mounts
+  const interval = setInterval(readNew, 1000);
+
+  process.on('SIGINT', () => { watcher.close(); clearInterval(interval); process.exit(0); });
+  process.on('SIGTERM', () => { watcher.close(); clearInterval(interval); process.exit(0); });
+}
+
 export const run = async (args, flags) => {
   const { ensureMindosDir } = await import('../lib/gateway.js');
   await ensureMindosDir();
@@ -28,5 +59,9 @@ export const run = async (args, flags) => {
   }
 
   const noFollow = flags['no-follow'] === true;
-  execSync(noFollow ? `tail -n 100 ${LOG_PATH}` : `tail -f ${LOG_PATH}`, { stdio: 'inherit' });
+  console.log(tailLines(LOG_PATH, 100));
+
+  if (!noFollow) {
+    followFile(LOG_PATH);
+  }
 };

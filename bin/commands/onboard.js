@@ -21,5 +21,5 @@ export const meta = {
 
 export const run = (args, flags) => {
   const daemonFlag = flags['install-daemon'] ? ' --install-daemon' : '';
-  execInherited(`node ${resolve(ROOT, 'scripts/setup.js')}${daemonFlag}`);
+  execInherited(`node "${resolve(ROOT, 'scripts/setup.js')}"${daemonFlag}`);
 };

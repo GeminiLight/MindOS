@@ -33,7 +33,12 @@ export const run = () => {
   }
 
   try {
-    execSync(`${cmd} ${url}`, { stdio: 'ignore' });
+    if (process.platform === 'win32') {
+      // Windows `start` treats the first quoted arg as a window title
+      execSync(`start "" "${url}"`, { stdio: 'ignore' });
+    } else {
+      execSync(`${cmd} ${url}`, { stdio: 'ignore' });
+    }
     console.log(`${green('✔')} Opening ${cyan(url)}`);
   } catch {
     console.log(dim(`Could not open browser automatically. Visit: ${cyan(url)}`));

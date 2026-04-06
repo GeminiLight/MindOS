@@ -7,7 +7,7 @@
  */
 
 import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync, renameSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
+import { resolve, basename, relative, sep } from 'node:path';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
@@ -93,9 +93,12 @@ function countFiles(dir) {
 
 function resolvePath(root, relPath) {
   const full = relPath ? resolve(root, relPath) : root;
-  if (full !== root && !full.startsWith(root + '/')) {
-    console.error(red(`Access denied: path outside knowledge base`));
-    process.exit(EXIT.ERROR);
+  if (full !== root) {
+    const rel = relative(root, full);
+    if (rel === '..' || rel.startsWith(`..${sep}`) || rel.startsWith('../')) {
+      console.error(red(`Access denied: path outside knowledge base`));
+      process.exit(EXIT.ERROR);
+    }
   }
   if (!existsSync(full)) {
     console.error(red(`Not found: ${relPath || '(root)'}`));

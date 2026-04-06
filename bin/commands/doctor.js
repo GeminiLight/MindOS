@@ -5,12 +5,13 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, delimiter } from 'node:path';
 import { homedir } from 'node:os';
 import { CONFIG_PATH, ROOT } from '../lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { isPortInUse } from '../lib/port.js';
 import { EXIT } from '../lib/command.js';
+import { stripBom } from '../lib/jsonc.js';
 
 export const meta = {
   name: 'doctor',
@@ -45,7 +46,7 @@ export const run = async (_args, flags) => {
   }
   let config;
   try {
-    config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
     ok(`Config file found and valid JSON  ${dim(CONFIG_PATH)}`, 'config');
   } catch {
     err(`Config file exists but failed to parse  ${dim(CONFIG_PATH)}`, 'config');
@@ -58,7 +59,7 @@ export const run = async (_args, flags) => {
     if (!mindRoot) {
       err('Config missing required field: mindRoot');
       hasError = true;
-    } else if (!existsSync(mindRoot.replace(/^~/, homedir()))) {
+    } else if (!existsSync(mindRoot === '~' ? homedir() : mindRoot.replace(/^~[/\\]/, homedir() + '/'))) {
       warn(`mindRoot path does not exist: ${dim(mindRoot)}  (will be created on first start)`);
     } else {
       ok(`Knowledge base path exists  ${dim(mindRoot)}`);
@@ -100,14 +101,19 @@ export const run = async (_args, flags) => {
     ok(`npm ${npmVersion} reachable`);
   } catch {
     err('npm not found in PATH — app dependencies cannot be installed');
-    console.log(dim('     Node.js may be installed via nvm/fnm/volta and not visible to /bin/sh.'));
-    console.log(dim('     Fix: add your Node.js bin path to ~/.profile so non-interactive shells can find it.'));
+    if (process.platform === 'win32') {
+      console.log(dim('     Ensure Node.js is installed and its bin directory is in your system PATH.'));
+      console.log(dim('     Fix: reinstall Node.js from https://nodejs.org (the installer adds it to PATH).'));
+    } else {
+      console.log(dim('     Node.js may be installed via nvm/fnm/volta and not visible to /bin/sh.'));
+      console.log(dim('     Fix: add your Node.js bin path to ~/.profile so non-interactive shells can find it.'));
+    }
     hasError = true;
   }
 
   // 4c. ~/.mindos/bin in PATH (CLI shim)
   const mindosBin = resolve(homedir(), '.mindos', 'bin');
-  const pathDirs = (process.env.PATH || '').split(':');
+  const pathDirs = (process.env.PATH || '').split(delimiter);
   if (pathDirs.some(d => d === mindosBin || d === '$HOME/.mindos/bin' || d === '~/.mindos/bin')) {
     ok(`~/.mindos/bin is in PATH`);
   } else {

@@ -1064,10 +1064,11 @@ async function main() {
 
   while (true) {
     const input = (await askText('pathPrompt', kbDefault)).trim();
-    // If absolute path entered, use as-is; if relative (no leading /), resolve from home
-    const resolved = input.startsWith('/') || input.startsWith('~/')
-      ? (input.startsWith('~/') ? resolve(HOME, input.slice(2)) : input)
-      : resolve(HOME, input);
+    // Handle absolute paths for all platforms (Unix: /path, Windows: C:\path or C:/path)
+    const isAbsolute = input.startsWith('/') || /^[A-Za-z]:[/\\]/.test(input);
+    const resolved = input.startsWith('~/')
+      ? resolve(HOME, input.slice(2))
+      : isAbsolute ? resolve(input) : resolve(HOME, input);
     write(tf('pathResolved', resolved) + '\n');
     mindDir = resolved;
 
@@ -1323,7 +1324,8 @@ async function main() {
 
 function ensureCliInPath() {
   try {
-    execSync('command -v mindos', { stdio: 'ignore' });
+    const checkCmd = process.platform === 'win32' ? 'where mindos' : 'command -v mindos';
+    execSync(checkCmd, { stdio: 'ignore' });
     return; // already in PATH (npm -g install or previous link)
   } catch { /* not found */ }
 

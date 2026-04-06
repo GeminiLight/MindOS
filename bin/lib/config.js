@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { CONFIG_PATH } from './constants.js';
+import { stripBom } from './jsonc.js';
 
 let loaded = false;
 
@@ -9,7 +10,7 @@ export function loadConfig() {
   if (!existsSync(CONFIG_PATH)) return;
   let config;
   try {
-    config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
   } catch {
     console.error(`Warning: failed to parse ${CONFIG_PATH}`);
     return;
@@ -49,9 +50,7 @@ export function loadConfig() {
 
 export function getStartMode() {
   try {
-    const mode = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode || 'start';
-    // 'daemon' is stored in config when user chose background service;
-    // CLI maps it to the 'start' command with --daemon flag
+    const mode = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8'))).startMode || 'start';
     return mode === 'daemon' ? 'start' : mode;
   } catch {
     return 'start';
@@ -60,7 +59,7 @@ export function getStartMode() {
 
 export function isDaemonMode() {
   try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).startMode === 'daemon';
+    return JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8'))).startMode === 'daemon';
   } catch {
     return false;
   }

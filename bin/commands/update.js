@@ -5,7 +5,7 @@
  */
 
 import { execSync, spawn as nodeSpawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { ROOT, BUILD_STAMP, CONFIG_PATH, LOG_PATH } from '../lib/constants.js';
@@ -16,6 +16,7 @@ import { stopMindos } from '../lib/stop.js';
 import { getLocalIP } from '../lib/startup.js';
 import { isPortInUse } from '../lib/port.js';
 import { cleanEnvForRestart } from '../lib/clean-env.js';
+import { stripBom } from '../lib/jsonc.js';
 
 /**
  * Dynamically resolve the new ROOT after `npm install -g`.
@@ -23,27 +24,16 @@ import { cleanEnvForRestart } from '../lib/clean-env.js';
  */
 function getUpdatedRoot() {
   try {
-    const mindosBin = execSync('which mindos', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    const whichCmd = process.platform === 'win32' ? 'where mindos' : 'which mindos';
+    const mindosBin = execSync(whichCmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim().split(/\r?\n/)[0];
     if (mindosBin) {
-      // mindos bin is usually at <root>/bin/cli.js or a symlink to it
       let cliPath;
-      try {
-        cliPath = execSync(`readlink -f "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      } catch {
-        try {
-          cliPath = execSync(`realpath "${mindosBin}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-        } catch {
-          cliPath = mindosBin;
-        }
-      }
+      try { cliPath = realpathSync(mindosBin); } catch { cliPath = mindosBin; }
       if (cliPath) {
-        // cliPath is like /path/to/node_modules/@geminilight/mindos/bin/cli.js
-        // ROOT is /path/to/node_modules/@geminilight/mindos
         return resolve(dirname(cliPath), '..');
       }
     }
   } catch {}
-  // Fallback to static ROOT
   return ROOT;
 }
 
@@ -85,7 +75,7 @@ function buildIfNeeded(newRoot) {
   }
   const nextDir = resolve(newRoot, 'app', '.next');
   if (existsSync(nextDir)) {
-    execInherited(`rm -rf "${nextDir}"`, newRoot);
+    rmSync(nextDir, { recursive: true, force: true });
   }
   execInherited('node scripts/gen-renderer-index.js', newRoot);
   execInherited(`${newNextBin} build`, resolve(newRoot, 'app'));
@@ -176,7 +166,7 @@ export const run = async () => {
     writeUpdateStatus('restarting', vOpts);
     await gateway.runGatewayCommand('install');
     const updateConfig = (() => {
-      try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
+      try { return JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8'))); } catch { return {}; }
     })();
     const webPort = updateConfig.port ?? 3456;
     const mcpPort = updateConfig.mcpPort ?? 8781;
@@ -205,7 +195,7 @@ export const run = async () => {
     // (e.g. user started via `mindos start`, or GUI triggered this update).
     // If so, stop it and restart from the NEW installation path.
     const updateConfig = (() => {
-      try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
+      try { return JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8'))); } catch { return {}; }
     })();
     const webPort = Number(updateConfig.port ?? 3456);
     const mcpPort = Number(updateConfig.mcpPort ?? 8781);
