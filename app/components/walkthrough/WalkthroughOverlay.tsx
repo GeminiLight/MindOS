@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useId } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { useWalkthrough } from '@/lib/stores/walkthrough-store';
+import { useWalkthrough, useWalkthroughStore } from '@/lib/stores/walkthrough-store';
 import { walkthroughSteps } from './steps';
 import WalkthroughTooltip from './WalkthroughTooltip';
 
@@ -68,16 +68,31 @@ export default function WalkthroughOverlay() {
     return () => window.removeEventListener('keydown', handler, true);
   }, [skipFn]);
 
-  // If target element doesn't exist (e.g. Echo not enabled), auto-skip this step
+  // If target element doesn't exist (e.g. panel not enabled), auto-skip
+  // after a grace period. Use stable store ref to avoid re-triggering on
+  // every store change (which caused spurious skips during step transitions).
+  const currentStep = wt?.currentStep ?? 0;
   useEffect(() => {
     if (!step) return;
-    const el = document.querySelector(`[data-walkthrough="${step.anchor}"]`);
-    if (!el) {
-      // Target not in DOM — skip to next step after a brief delay
-      const timer = setTimeout(() => wt?.next(), 100);
-      return () => clearTimeout(timer);
-    }
-  }, [step, wt]);
+    // Wait 500ms for DOM to settle (sidebar animations, lazy rendering)
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-walkthrough="${step.anchor}"]`);
+      if (!el) {
+        useWalkthroughStore.getState().next();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]); // Only re-run when step index changes, not on every store update
+
+  // Safety timeout: if overlay stays for 60s without user interaction, auto-dismiss.
+  // Prevents permanently stuck overlay from any unforeseen edge case.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      useWalkthroughStore.getState().skip();
+    }, 60_000);
+    return () => clearTimeout(timer);
+  }, [currentStep]); // Reset on each step change
 
   if (!wt || !step) return null;
 
@@ -138,13 +153,27 @@ export default function WalkthroughOverlay() {
         />
       </svg>
 
-      {/* Tooltip */}
+      {/* Tooltip — shown when target element found */}
       {targetRect && (
         <WalkthroughTooltip
           stepIndex={wt.currentStep}
           rect={targetRect}
           position={step.position}
         />
+      )}
+
+      {/* Fallback dismiss button — shown when target element NOT found.
+          Without this, user sees dark overlay but no visible UI to dismiss it. */}
+      {!targetRect && (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center pointer-events-none">
+          <button
+            onClick={wt.skip}
+            className="pointer-events-auto px-4 py-2 text-sm rounded-lg font-medium transition-all hover:opacity-90"
+            style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+          >
+            {wt.currentStep === wt.totalSteps - 1 ? '✓' : '→'}
+          </button>
+        </div>
       )}
     </>
   );
