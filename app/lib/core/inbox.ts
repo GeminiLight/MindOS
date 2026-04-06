@@ -44,6 +44,7 @@ export interface InboxFileInfo {
 export interface InboxSaveResult {
   saved: Array<{ original: string; path: string }>;
   skipped: Array<{ name: string; reason: string }>;
+  source?: string;
 }
 
 export interface InboxSaveInput {
@@ -133,11 +134,139 @@ function resolveUniqueName(inboxDir: string, targetName: string): string {
   return targetName;
 }
 
+export interface InboxDeleteResult {
+  deleted: string[];
+  notFound: string[];
+}
+
+/**
+ * Deletes files from the Inbox directory by name.
+ * Only deletes user files — never INSTRUCTION.md or README.md.
+ */
+export function deleteFromInbox(mindRoot: string, names: string[]): InboxDeleteResult {
+  const inboxDir = path.resolve(mindRoot, INBOX_DIR);
+  const deleted: string[] = [];
+  const notFound: string[] = [];
+
+  for (const name of names) {
+    if (!name || typeof name !== 'string') continue;
+    const lower = name.toLowerCase();
+    if (lower === 'instruction.md' || lower === 'readme.md') continue;
+
+    const filePath = path.join(inboxDir, path.basename(name));
+    try {
+      resolveSafe(mindRoot, `${INBOX_DIR}/${path.basename(name)}`);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        deleted.push(name);
+      } else {
+        notFound.push(name);
+      }
+    } catch {
+      notFound.push(name);
+    }
+  }
+
+  return { deleted, notFound };
+}
+
+const PROCESSED_DIR = '.processed';
+
+export interface InboxArchiveResult {
+  archived: Array<{ original: string; archivedPath: string }>;
+  notFound: string[];
+}
+
+/**
+ * Moves files from Inbox/ to Inbox/.processed/ with a timestamp prefix.
+ * Preserves originals so users can recover them from the processed folder.
+ */
+export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiveResult {
+  const inboxDir = path.resolve(mindRoot, INBOX_DIR);
+  const processedDir = path.join(inboxDir, PROCESSED_DIR);
+  fs.mkdirSync(processedDir, { recursive: true });
+
+  const archived: InboxArchiveResult['archived'] = [];
+  const notFound: string[] = [];
+  const now = new Date();
+  const ts = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+
+  for (const name of names) {
+    if (!name || typeof name !== 'string') continue;
+    const lower = name.toLowerCase();
+    if (lower === 'instruction.md' || lower === 'readme.md') continue;
+
+    const baseName = path.basename(name);
+    const srcPath = path.join(inboxDir, baseName);
+
+    try {
+      resolveSafe(mindRoot, `${INBOX_DIR}/${baseName}`);
+      if (!fs.existsSync(srcPath)) {
+        notFound.push(name);
+        continue;
+      }
+
+      const archivedName = `${ts}_${baseName}`;
+      const destPath = path.join(processedDir, archivedName);
+      fs.renameSync(srcPath, destPath);
+      archived.push({
+        original: name,
+        archivedPath: `${INBOX_DIR}/${PROCESSED_DIR}/${archivedName}`,
+      });
+    } catch {
+      notFound.push(name);
+    }
+  }
+
+  return { archived, notFound };
+}
+
+export interface ProcessedFileInfo {
+  name: string;
+  originalName: string;
+  path: string;
+  size: number;
+  archivedAt: string;
+}
+
+/**
+ * Lists files in Inbox/.processed/ with metadata.
+ * Returns files sorted by archive time (newest first).
+ */
+export function listProcessedFiles(mindRoot: string): ProcessedFileInfo[] {
+  const processedDir = path.resolve(mindRoot, INBOX_DIR, PROCESSED_DIR);
+  if (!fs.existsSync(processedDir)) return [];
+
+  const entries = fs.readdirSync(processedDir, { withFileTypes: true });
+  const results: ProcessedFileInfo[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (entry.name.startsWith('.')) continue;
+
+    const filePath = path.join(processedDir, entry.name);
+    try {
+      const stat = fs.statSync(filePath);
+      const originalName = entry.name.replace(/^\d{8}-\d{6}_/, '');
+      results.push({
+        name: entry.name,
+        originalName,
+        path: `${INBOX_DIR}/${PROCESSED_DIR}/${entry.name}`,
+        size: stat.size,
+        archivedAt: stat.mtime.toISOString(),
+      });
+    } catch { /* skip */ }
+  }
+
+  results.sort((a, b) => new Date(b.archivedAt).getTime() - new Date(a.archivedAt).getTime());
+  return results;
+}
+
 /**
  * Saves files to the Inbox directory.
  * Handles format conversion (txt→md, html→md, etc.) and deduplication.
  */
-export function saveToInbox(mindRoot: string, files: InboxSaveInput[]): InboxSaveResult {
+export function saveToInbox(mindRoot: string, files: InboxSaveInput[], source?: string): InboxSaveResult {
   const inboxDir = ensureInboxSpace(mindRoot);
   const saved: InboxSaveResult['saved'] = [];
   const skipped: InboxSaveResult['skipped'] = [];
@@ -177,5 +306,5 @@ export function saveToInbox(mindRoot: string, files: InboxSaveInput[]): InboxSav
     }
   }
 
-  return { saved, skipped };
+  return { saved, skipped, source };
 }

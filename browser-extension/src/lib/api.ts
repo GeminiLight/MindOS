@@ -93,6 +93,7 @@ export async function saveToInbox(
       method: 'POST',
       body: JSON.stringify({
         files: [{ name: fileName, content: markdown, encoding: 'text' }],
+        source: 'web-clipper',
       }),
     });
     const data = await res.json();
@@ -119,7 +120,7 @@ export async function createFile(
   try {
     const res = await apiFetch(config, '/api/file', {
       method: 'POST',
-      body: JSON.stringify({ op: 'create_file', path, content, source: 'user' }),
+      body: JSON.stringify({ op: 'create_file', path, content, source: 'web-clipper' }),
     });
     const data = await res.json();
     if (!res.ok) {

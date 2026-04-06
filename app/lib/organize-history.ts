@@ -12,6 +12,8 @@ export interface OrganizeHistoryFile {
   undone?: boolean;
 }
 
+export type OrganizeSource = 'upload' | 'drag-drop' | 'inbox-organize' | 'import-modal' | 'plugin' | 'web-clipper';
+
 export interface OrganizeHistoryEntry {
   id: string;
   /** Unix ms */
@@ -20,6 +22,10 @@ export interface OrganizeHistoryEntry {
   sourceFiles: string[];
   files: OrganizeHistoryFile[];
   status: 'completed' | 'partial' | 'undone';
+  /** How the files were ingested */
+  source?: OrganizeSource;
+  /** Processing time in milliseconds */
+  durationMs?: number;
 }
 
 const STORAGE_KEY = 'mindos:organize-history';
