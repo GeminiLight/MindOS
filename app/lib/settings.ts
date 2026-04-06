@@ -51,6 +51,8 @@ export interface ServerSettings {
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
   acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
+  /** Proxy compatibility cache: keyed by baseUrl, value is detected mode. */
+  baseUrlCompat?: Record<string, 'streaming' | 'non-streaming'>;
 }
 
 const DEFAULTS: ServerSettings = {
@@ -179,6 +181,15 @@ export function readSettings(): ServerSettings {
       setupPending: parsed.setupPending === true ? true : undefined,
       disabledSkills: Array.isArray(parsed.disabledSkills) ? parsed.disabledSkills as string[] : undefined,
       guideState: parseGuideState(parsed.guideState),
+      baseUrlCompat: (() => {
+        const raw = parsed.baseUrlCompat;
+        if (!raw || typeof raw !== 'object') return undefined;
+        const result: Record<string, 'streaming' | 'non-streaming'> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          if (v === 'streaming' || v === 'non-streaming') result[k] = v;
+        }
+        return Object.keys(result).length > 0 ? result : undefined;
+      })(),
     };
   } catch {
     // Config file missing or corrupt → force setup wizard
@@ -206,6 +217,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.disabledSkills !== undefined) merged.disabledSkills = settings.disabledSkills;
   if (settings.guideState !== undefined) merged.guideState = settings.guideState;
   if (settings.acpAgents !== undefined) merged.acpAgents = settings.acpAgents;
+  if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;
@@ -286,4 +298,24 @@ export function effectiveAiConfig(providerOverride?: ProviderId): {
 export function effectiveSopRoot(): string {
   const s = readSettings();
   return s.mindRoot || process.env.MIND_ROOT || path.join(os.homedir(), 'MindOS', 'mind');
+}
+
+/** Read the baseUrl → compat mode cache from config. Never throws. */
+export function readBaseUrlCompat(): Record<string, 'streaming' | 'non-streaming'> {
+  try {
+    const s = readSettings();
+    return s.baseUrlCompat ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persist a baseUrl compatibility detection result. Thread-safe via merge-write. */
+export function writeBaseUrlCompat(baseUrl: string, mode: 'streaming' | 'non-streaming'): void {
+  const s = readSettings();
+  const updated: Record<string, 'streaming' | 'non-streaming'> = {
+    ...(s.baseUrlCompat ?? {}),
+    [baseUrl]: mode,
+  };
+  writeSettings({ ...s, baseUrlCompat: updated });
 }
