@@ -22,16 +22,16 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
         fixed z-40 bottom-5 right-5
         items-center justify-center
         gap-0 hover:gap-2
-        p-[11px] rounded-xl
+        p-3 rounded-xl
         text-white font-medium text-[13px]
-        shadow-md shadow-amber-900/15
+        shadow-sm shadow-amber-900/10
         transition-all duration-200 ease-out
-        hover:shadow-lg hover:shadow-amber-800/25
+        hover:shadow-md hover:shadow-amber-900/15
         active:scale-95 cursor-pointer overflow-hidden font-display
         ${askPanelOpen ? 'opacity-0 pointer-events-none translate-y-2' : 'opacity-100 translate-y-0'}
       `}
       style={{
-        background: 'linear-gradient(135deg, var(--amber), color-mix(in srgb, var(--amber) 80%, white))',
+        background: 'var(--amber)',
       }}
       title={label}
       aria-label={label}

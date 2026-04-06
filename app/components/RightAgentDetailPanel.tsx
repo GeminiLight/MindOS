@@ -6,11 +6,12 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import AgentsPanelAgentDetail from '@/components/panels/AgentsPanelAgentDetail';
 import { resolveAgentDetailStatus } from '@/components/panels/agents-panel-resolve-status';
+import { RIGHT_AGENT_DETAIL_PANEL } from '@/lib/config/panel-sizes';
 
-const DEFAULT_WIDTH = 400;
-const MIN_WIDTH = 300;
-const MAX_WIDTH_ABS = 640;
-const MAX_WIDTH_RATIO = 0.42;
+const DEFAULT_WIDTH = RIGHT_AGENT_DETAIL_PANEL.DEFAULT;
+const MIN_WIDTH = RIGHT_AGENT_DETAIL_PANEL.MIN;
+const MAX_WIDTH_ABS = RIGHT_AGENT_DETAIL_PANEL.MAX_ABS;
+const MAX_WIDTH_RATIO = RIGHT_AGENT_DETAIL_PANEL.MAX_RATIO;
 
 interface RightAgentDetailPanelProps {
   open: boolean;

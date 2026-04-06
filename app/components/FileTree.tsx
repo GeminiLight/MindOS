@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useTransition, useEffect, useSyncExterna
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
+import { ICON_SIZES } from '@/lib/config/icon-scale';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
   Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, MoreHorizontal, Star, Inbox,
@@ -61,8 +62,8 @@ interface FileTreeProps {
 
 function getIcon(node: FileNode) {
   if (node.type === 'directory') return null;
-  if (node.extension === '.csv') return <Table size={14} className="text-success shrink-0" />;
-  return <FileText size={14} className="text-muted-foreground shrink-0" />;
+  if (node.extension === '.csv') return <Table size={ICON_SIZES.md} className="text-success shrink-0" />;
+  return <FileText size={ICON_SIZES.md} className="text-muted-foreground shrink-0" />;
 }
 
 function getCurrentFilePath(pathname: string): string {
@@ -428,9 +429,10 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
           style={{ marginLeft: `${depth * 12 + 4}px` }}
           aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
+          aria-expanded={open}
         >
           <span className="block transition-transform duration-150" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-            <ChevronDown size={13} />
+            <ChevronDown size={ICON_SIZES.xs} />
           </span>
         </button>
         <button
@@ -446,7 +448,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           className={`
             flex-1 flex items-center gap-1.5 px-1 py-1 rounded text-left min-w-0 pr-16
             text-sm transition-colors duration-100
-            hover:bg-muted
+            hover:bg-muted cursor-text
             ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
           `}
         >
@@ -459,6 +461,9 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
               : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
+          <span className="ml-auto text-xs text-muted-foreground/30 group-hover/dir:text-muted-foreground/60 transition-colors shrink-0 hidden group-hover/dir:inline-flex items-center gap-1">
+            <Pencil size={10} />
+          </span>
           {isSpace && !open && (
             <span className="ml-auto text-xs text-muted-foreground shrink-0 tabular-nums pr-1">{contentCount}</span>
           )}
@@ -659,7 +664,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
         data-filepath={node.path}
         className={`
           w-full flex items-center gap-1.5 px-2 py-1 rounded text-left
-          text-sm transition-colors duration-100 cursor-pointer pr-16
+          text-sm transition-colors duration-100 cursor-text pr-16
           ${isActive
             ? 'bg-accent text-foreground'
             : 'hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -669,6 +674,9 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       >
         {getIcon(node)}
         <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
+        <span className="ml-auto text-xs text-muted-foreground/30 group-hover/file:text-muted-foreground/60 transition-colors shrink-0 hidden group-hover/file:inline-flex items-center gap-1">
+          <Pencil size={10} />
+        </span>
         {pinned && <Star size={10} className="shrink-0 fill-[var(--amber)] text-[var(--amber)] opacity-60" />}
       </button>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/file:flex items-center gap-0.5">

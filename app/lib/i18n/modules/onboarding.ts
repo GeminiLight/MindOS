@@ -11,7 +11,7 @@ export const onboardingEn = {
     importHint: 'Already have notes? Set MIND_ROOT to your existing directory in Settings.',
     syncHint: 'Want cross-device sync? Run',
     syncHintSuffix: 'in the terminal after setup.',
-    initError: 'Initialization failed. Please try again.',
+    initError: 'Initialization failed. Please refresh the page or try a different template.',
     dismiss: 'Dismiss',
   },
   setup: {
@@ -233,7 +233,7 @@ export const onboardingZh = {
     importHint: '已有笔记？在设置中将 MIND_ROOT 指向已有目录即可。',
     syncHint: '需要跨设备同步？完成初始化后在终端运行',
     syncHintSuffix: '即可。',
-    initError: '初始化失败，请重试。',
+    initError: '初始化失败。请刷新页面或尝试其他模板。',
     dismiss: '关闭',
   },
   setup: {

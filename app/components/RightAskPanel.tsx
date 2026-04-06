@@ -5,13 +5,14 @@ import { AlertCircle } from 'lucide-react';
 import AskContent from '@/components/ask/AskContent';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
+import { RIGHT_ASK_PANEL } from '@/lib/config/panel-sizes';
 
-const DEFAULT_WIDTH = 420;
-const MIN_WIDTH = 400;
-const MAX_WIDTH_ABS = 4000;
+const DEFAULT_WIDTH = RIGHT_ASK_PANEL.DEFAULT;
+const MIN_WIDTH = RIGHT_ASK_PANEL.MIN;
+const MAX_WIDTH_ABS = RIGHT_ASK_PANEL.MAX_ABS;
 const ENTER_SNAP_THRESHOLD = 80;
 const EXIT_SNAP_THRESHOLD = 16;
-const MIN_CONTENT_WIDTH = 360;
+const MIN_CONTENT_WIDTH = RIGHT_ASK_PANEL.MIN_CONTENT;
 
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 

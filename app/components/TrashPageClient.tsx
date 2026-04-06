@@ -45,7 +45,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
       } else if (result.conflict) {
         setConflictItem(item);
       } else {
-        toast.error(result.error ?? 'Failed to restore');
+        toast.error(result.error ?? t.trash.restoreFailed);
       }
     } finally {
       setBusyId(null);
@@ -61,7 +61,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
       setConflictItem(null);
       router.refresh();
     } else {
-      toast.error(result.error ?? 'Failed to restore');
+      toast.error(result.error ?? t.trash.restoreFailed);
     }
   }, [conflictItem, t, router]);
 
@@ -72,7 +72,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
       setItems(prev => prev.filter(i => i.id !== confirmDelete.id));
       toast.success(t.trash.deleted);
     } else {
-      toast.error(result.error ?? 'Failed to delete');
+      toast.error(result.error ?? t.trash.deleteFailed);
     }
     setConfirmDelete(null);
   }, [confirmDelete, t]);
@@ -84,7 +84,7 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
         setItems([]);
         toast.success(t.trash.emptied(result.count ?? 0));
       } else {
-        toast.error(result.error ?? 'Failed to empty trash');
+        toast.error(result.error ?? t.trash.emptyFailed);
       }
       setConfirmEmpty(false);
     });
