@@ -428,3 +428,4 @@ body {
   transition: background var(--transition);
 }
 .dir-confirm:hover { background: var(--bg-muted); }
+/* sync trigger */
