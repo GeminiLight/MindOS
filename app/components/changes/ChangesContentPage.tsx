@@ -128,6 +128,10 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     return t.changes.filters.system;
   }, [t]);
 
+  const opLabel = useCallback((op: string) => {
+    return (t.changes.operations as Record<string, string>)?.[op] ?? op;
+  }, [t]);
+
   return (
     <div className="min-h-screen">
       <div className="px-4 md:px-6 pt-6 md:pt-8">
@@ -256,7 +260,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                         >
                           {event.path}
                         </span>
-                        <span className={opColorClass(event.op)}>{event.op}</span>
+                        <span className={opColorClass(event.op)}>{opLabel(event.op)}</span>
                         <span>·</span>
                         <span>{sourceLabel(event.source)}</span>
                         <span>·</span>
