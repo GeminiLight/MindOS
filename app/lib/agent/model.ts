@@ -32,6 +32,7 @@ export function getModelConfig(options?: ModelConfigOverrides): {
   modelName: string;
   apiKey: string;
   provider: ProviderId;
+  baseUrl: string;
 } {
   const saved = effectiveAiConfig(options?.provider);
 
@@ -49,7 +50,7 @@ export function getModelConfig(options?: ModelConfigOverrides): {
     model = ensureVisionCapable(model);
   }
 
-  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider };
+  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider, baseUrl: cfg.baseUrl };
 }
 
 /**

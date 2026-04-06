@@ -26,7 +26,7 @@ import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT } from 
 import type { AskModeApi } from '@/lib/types';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
 import { logAgentOp } from '@/lib/agent/log';
-import { readSettings } from '@/lib/settings';
+import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
@@ -401,6 +401,134 @@ function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition<any,
 }
 
 // ---------------------------------------------------------------------------
+// Non-streaming fallback for proxies that don't support stream + tools
+// ---------------------------------------------------------------------------
+
+/**
+ * Mini agent loop using non-streaming OpenAI-compatible API.
+ * Used when a proxy silently breaks stream+tools by returning plain text.
+ * Emits SSE events identical to the streaming path so the frontend is unaffected.
+ */
+async function runNonStreamingFallback(opts: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  historyMessages: { role: string; content: unknown }[];
+  userContent: string;
+  tools: AgentTool<any>[];
+  send: (event: MindOSSSEvent) => void;
+  signal: AbortSignal;
+  maxSteps: number;
+}): Promise<void> {
+  const { baseUrl, apiKey, model, systemPrompt, historyMessages, userContent, tools, send, signal, maxSteps } = opts;
+
+  const openaiTools = tools.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description ?? '',
+      parameters: (t as any).parameters ?? { type: 'object', properties: {} },
+    },
+  }));
+
+  const messages: { role: string; content: unknown; tool_calls?: unknown; tool_call_id?: string }[] = [
+    { role: 'system', content: systemPrompt },
+    ...historyMessages,
+    { role: 'user', content: userContent },
+  ];
+
+  const toolMap = new Map(tools.map(t => [t.name, t]));
+  const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+  let step = 0;
+
+  while (step < maxSteps) {
+    if (signal.aborted) throw new Error('Request aborted');
+    step++;
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        tools: openaiTools.length > 0 ? openaiTools : undefined,
+        tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
+        stream: false,
+      }),
+      signal,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`Non-streaming API error ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await resp.json() as any;
+    const choice = data?.choices?.[0];
+    if (!choice) throw new Error('Empty response from API');
+
+    const msg = choice.message;
+    const finishReason: string = choice.finish_reason ?? 'stop';
+
+    // Emit text content in chunks to simulate streaming appearance
+    if (msg.content) {
+      const text: string = typeof msg.content === 'string' ? msg.content : '';
+      if (text) {
+        const chunkSize = 40;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          send({ type: 'text_delta', delta: text.slice(i, i + chunkSize) });
+          await new Promise(r => setTimeout(r, 8));
+        }
+      }
+    }
+
+    // No tool calls or naturally stopped → done
+    if (finishReason === 'stop' || !msg.tool_calls?.length) break;
+
+    // Execute each tool call
+    const toolResultMessages: { role: string; tool_call_id: string; content: string }[] = [];
+    for (const tc of msg.tool_calls) {
+      const toolName = tc.function?.name ?? '';
+      const toolCallId = tc.id ?? `call_${Date.now()}`;
+      let parsedArgs: Record<string, unknown> = {};
+      try { parsedArgs = JSON.parse(tc.function?.arguments ?? '{}'); } catch { /* ignore */ }
+
+      const tool = toolMap.get(toolName);
+      send({ type: 'tool_start', toolCallId, toolName, args: parsedArgs });
+
+      let resultText = '';
+      let isError = false;
+      if (tool) {
+        try {
+          const result = await tool.execute(toolCallId, parsedArgs, signal);
+          resultText = result.content
+            .filter((c: any) => c.type === 'text')
+            .map((c: any) => c.text)
+            .join('\n');
+        } catch (err) {
+          resultText = err instanceof Error ? err.message : String(err);
+          isError = true;
+        }
+      } else {
+        resultText = `Tool "${toolName}" not found`;
+        isError = true;
+      }
+
+      send({ type: 'tool_end', toolCallId, output: resultText, isError });
+      toolResultMessages.push({ role: 'tool', tool_call_id: toolCallId, content: resultText });
+    }
+
+    // Append assistant turn + tool results for next iteration
+    messages.push({ role: 'assistant', content: msg.content ?? null, tool_calls: msg.tool_calls });
+    messages.push(...toolResultMessages);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/ask
 // ---------------------------------------------------------------------------
 
@@ -689,7 +817,7 @@ export async function POST(req: NextRequest) {
     const provOverride = body.providerOverride && isProviderId(body.providerOverride)
       ? body.providerOverride as ProviderId
       : undefined;
-    const { model, modelName, apiKey, provider } = getModelConfig({
+    const { model, modelName, apiKey, provider, baseUrl } = getModelConfig({
       provider: provOverride,
       hasImages: hasImages(messages),
     });
@@ -788,6 +916,7 @@ export async function POST(req: NextRequest) {
 
         let hasContent = false;
         let lastModelError = '';
+        const effectiveBaseUrlKey = baseUrl || 'default';
 
         session.subscribe((event: AgentEvent) => {
           if (isTextDeltaEvent(event)) {
@@ -993,6 +1122,36 @@ export async function POST(req: NextRequest) {
             safeClose();
           } else {
             // Route to MindOS agent (existing logic)
+
+            // ── Proxy compatibility check ──
+            // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
+            // and go straight to the non-streaming fallback path.
+            const compatCache = readBaseUrlCompat();
+            if (compatCache[effectiveBaseUrlKey] === 'non-streaming' && baseUrl && provider === 'openai') {
+              send({ type: 'status', message: '正在以兼容模式调用...' });
+              try {
+                await runNonStreamingFallback({
+                  baseUrl,
+                  apiKey,
+                  model: modelName,
+                  systemPrompt,
+                  historyMessages: llmHistoryMessages,
+                  userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+                  tools: requestTools,
+                  send,
+                  signal: req.signal,
+                  maxSteps: stepLimit,
+                });
+                metrics.recordRequest(Date.now() - requestStartTime);
+                send({ type: 'done' });
+              } catch (fallbackErr) {
+                metrics.recordRequest(Date.now() - requestStartTime);
+                send({ type: 'error', message: `兼容模式调用失败：${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}。请检查 Base URL、API Key 和模型名称。` });
+              }
+              safeClose();
+              return;
+            }
+
             // Retry with exponential backoff for transient failures (timeout, rate limit, 5xx).
             // Only retry if no content has been streamed yet — once the user sees partial
             // output, retrying would produce duplicate/garbled content.
@@ -1022,7 +1181,33 @@ export async function POST(req: NextRequest) {
 
             metrics.recordRequest(Date.now() - requestStartTime);
             if (!hasContent && lastModelError) {
-              send({ type: 'error', message: lastModelError });
+              // No content received — check if this looks like a proxy stream+tools incompatibility.
+              // Only attempt fallback for OpenAI-compatible endpoints with a custom baseUrl.
+              if (baseUrl && provider === 'openai') {
+                send({ type: 'status', message: '正在检测接口兼容性，切换到兼容模式重试...' });
+                try {
+                  await runNonStreamingFallback({
+                    baseUrl,
+                    apiKey,
+                    model: modelName,
+                    systemPrompt,
+                    historyMessages: llmHistoryMessages,
+                    userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+                    tools: requestTools,
+                    send,
+                    signal: req.signal,
+                    maxSteps: stepLimit,
+                  });
+                  // Success → cache this endpoint as non-streaming so future requests skip the probe
+                  writeBaseUrlCompat(effectiveBaseUrlKey, 'non-streaming');
+                  console.log(`[ask] Proxy compat detected: ${effectiveBaseUrlKey} → non-streaming (cached)`);
+                  send({ type: 'done' });
+                } catch (fallbackErr) {
+                  send({ type: 'error', message: `兼容模式也失败了：${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}。请检查 Base URL、API Key 和模型名称。` });
+                }
+              } else {
+                send({ type: 'error', message: lastModelError });
+              }
             } else {
               send({ type: 'done' });
             }
