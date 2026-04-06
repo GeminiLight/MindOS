@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://github.com/GeminiLight/MindOS/releases/latest"><img src="https://img.shields.io/badge/桌面客户端-下载-10b981.svg?style=for-the-badge" alt="桌面客户端"></a>
+  <a href="browser-extension/"><img src="https://img.shields.io/badge/网页剪藏-安装-c8873a.svg?style=for-the-badge" alt="网页剪藏"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-群聊-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
@@ -89,6 +90,15 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 > ```
 > 帮我执行 MindOS 里的 XXX 工作流。
 > ```
+
+## 📢 最新动态
+
+| 日期 | 更新 |
+|------|------|
+| 2025-04 | **网页剪藏插件** — 浏览器扩展，一键剪藏任意网页到 MindOS 暂存台。[安装 →](browser-extension/) |
+| 2025-04 | **PDF & 图片导入** — 拖拽 PDF 和图片到 MindOS，自动转换为可搜索的 Markdown。 |
+| 2025-03 | **桌面客户端** — 原生 macOS / Windows / Linux 应用，支持自动更新和系统托盘。 |
+| 2025-03 | **A2A 协议** — Agent 间通信协议：发现、委派与编排。 |
 
 ## 🧠 人机共享心智
 
@@ -183,6 +193,14 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 
 > 远程配置、手动 JSON 片段、常见误区等详见 **[docs/zh/supported-agents.md](docs/zh/supported-agents.md)**。
 
+### 5. 随时随地捕获知识
+
+MindOS 的知识不必从零开始——把你已有的信息导入进来：
+
+- **拖拽导入**：将文件（PDF、图片、Markdown、CSV）直接拖入 MindOS GUI，AI 自动分析并归档到对应文件夹。
+- **网页剪藏**：安装[浏览器插件](browser-extension/)，一键保存任意网页到暂存台。快捷键 Ctrl+Shift+M 或右键菜单 →「Save to MindOS」。
+- **Agent 导入**：让任意已连接的 Agent 阅读文档并同步到你的知识库。
+
 ## ✨ 功能特性
 
 **人类侧**
@@ -192,6 +210,7 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 - **一键导入**：拖拽文件即可导入，Inline AI Organize 自动分析、分类、写入知识库，支持进度追踪和撤销。
 - **新手引导**：首次使用的分步引导体验，帮助新用户快速搭建知识库并连接第一个 Agent。
 - **插件扩展**：多种内置渲染器插件——TODO Board、CSV Views、Wiki Graph、Timeline、Workflow Editor、Agent Inspector 等。
+- **网页剪藏**：浏览器扩展，一键将任意网页保存为干净的 Markdown——存入暂存台，稍后 AI 自动整理归档。[安装 →](browser-extension/)
 
 **Agent 侧**
 

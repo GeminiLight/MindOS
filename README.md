@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://github.com/GeminiLight/MindOS/releases/latest"><img src="https://img.shields.io/badge/Desktop_App-Download-10b981.svg?style=for-the-badge" alt="Desktop App"></a>
+  <a href="browser-extension/"><img src="https://img.shields.io/badge/Web_Clipper-Install-c8873a.svg?style=for-the-badge" alt="Web Clipper"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=f59e0b" alt="npm version"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-Group-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366f1.svg?style=for-the-badge" alt="MIT License"></a>
@@ -89,6 +90,15 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 > ```
 > Help me execute the XXX SOP from MindOS.
 > ```
+
+## 📢 What's New
+
+| Date | Update |
+|------|--------|
+| 2025-04 | **Web Clipper** — Browser extension to clip any web page to your MindOS Inbox with one click. [Get it →](browser-extension/) |
+| 2025-04 | **PDF & Image Import** — Drag PDFs and images into MindOS, auto-converted to searchable Markdown. |
+| 2025-03 | **Desktop App** — Native macOS / Windows / Linux app with auto-update and system tray. |
+| 2025-03 | **A2A Protocol** — Agent-to-Agent communication: discovery, delegation, and orchestration. |
 
 ## 🧠 Human-AI Shared Mind
 
@@ -183,6 +193,14 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 
 > For remote access, manual JSON config, and common pitfalls, see **[docs/en/supported-agents.md](docs/en/supported-agents.md)**.
 
+### 5. Capture from Anywhere
+
+MindOS knowledge doesn't have to start from scratch — bring in what you already have:
+
+- **Drag & Drop**: drop files (PDF, images, Markdown, CSV) into the MindOS GUI — AI auto-organizes them into the right folders.
+- **Web Clipper**: install the [browser extension](browser-extension/) to save any web page to your Inbox with one click. Ctrl+Shift+M or right-click → "Save to MindOS".
+- **Agent Import**: tell any connected Agent to read a document and sync it into your knowledge base.
+
 ## ✨ Features
 
 **For Humans**
@@ -192,6 +210,7 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 - **One-Click Import**: drag-and-drop files with Inline AI Organize — auto-analyzes, categorizes, and writes into the knowledge base with progress tracking and undo support.
 - **Guided Onboarding**: step-by-step first-run experience that helps new users set up their knowledge base and connect their first Agent.
 - **Plugin Extensions**: multiple built-in renderer plugins — TODO Board, CSV Views, Wiki Graph, Timeline, Workflow Editor, Agent Inspector, and more.
+- **Web Clipper**: browser extension to clip any web page as clean Markdown — one click, saves to Inbox for later AI-powered organizing. [Install →](browser-extension/)
 
 **For Agents**
 
