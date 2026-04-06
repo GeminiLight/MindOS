@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowRight,
   Cable,
   ChevronDown,
   Globe,
@@ -115,14 +114,6 @@ export default function AgentsOverviewSection({
             value={buckets.detected.length}
             tone={buckets.detected.length > 0 ? 'warn' : 'muted'}
           />
-          {buckets.notFound.length > 0 && (
-            <StatCell
-              icon={<AlertTriangle size={14} aria-hidden="true" />}
-              label={pulseCopy.notFound}
-              value={buckets.notFound.length}
-              tone="muted"
-            />
-          )}
           <StatCell
             icon={<Zap size={14} aria-hidden="true" />}
             label={pulseCopy.enabledSkills}
@@ -147,28 +138,6 @@ export default function AgentsOverviewSection({
           )}
         </div>
       </section>
-
-      {/* ═══════════ QUICK NAVIGATION ═══════════ */}
-      <nav className={`grid grid-cols-1 ${mcpEnabled ? 'md:grid-cols-2' : ''} gap-3`} aria-label="Quick navigation">
-        {mcpEnabled && (
-          <QuickNavCard
-            href="/agents?tab=mcp"
-            icon={<Server size={18} aria-hidden="true" />}
-            title="MCP"
-            stat={mcpRunning ? copy.toolsUnit(mcpToolCount) : copy.mcpOffline}
-            statTone={mcpRunning ? 'ok' : 'warn'}
-            description={copy.nextActionHint as string}
-          />
-        )}
-        <QuickNavCard
-          href="/agents?tab=skills"
-          icon={<Zap size={18} aria-hidden="true" />}
-          title="Skills"
-          stat={copy.enabledUnit(enabledSkillCount)}
-          statTone="ok"
-          description={`${pulseCopy.enabledSkills}: ${enabledSkillCount}`}
-        />
-      </nav>
 
       {/* ═══════════ RISK CAPSULE ═══════════ */}
       {riskQueue.length > 0 && (
@@ -319,59 +288,6 @@ function StatCell({
       </p>
       <span className="text-2xs text-muted-foreground/70 truncate block">{label}</span>
     </div>
-  );
-}
-
-/* ────────── Quick Nav Card ────────── */
-
-function QuickNavCard({
-  href,
-  icon,
-  title,
-  stat,
-  statTone,
-  description,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  title: string;
-  stat: string;
-  statTone: 'ok' | 'warn';
-  description: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group rounded-xl border border-border bg-card p-4 flex items-start gap-3.5
-        hover:border-[var(--amber)]/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]
-        active:scale-[0.99]
-        transition-all duration-200
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="shrink-0 w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground/70 group-hover:text-[var(--amber)] group-hover:bg-[var(--amber)]/[0.08] transition-all duration-200">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-foreground">{title}</span>
-          <span
-            className={`text-2xs px-2 py-0.5 rounded-full font-medium select-none ${
-              statTone === 'ok'
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
-            }`}
-          >
-            {stat}
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground/70 leading-relaxed line-clamp-2">{description}</p>
-      </div>
-      <ArrowRight
-        size={14}
-        className="shrink-0 mt-1.5 text-muted-foreground/20 group-hover:text-[var(--amber)] group-hover:translate-x-0.5 transition-all duration-200"
-        aria-hidden="true"
-      />
-    </Link>
   );
 }
 

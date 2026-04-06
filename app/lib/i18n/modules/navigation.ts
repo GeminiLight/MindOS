@@ -81,7 +81,7 @@ export const navigationEn = {
 
 export const navigationZh = {
   sidebar: {
-    files: 'Wiki',
+    files: '知识库',
     search: '搜索',
     searchTitle: '搜索',
     askTitle: 'MindOS Agent',
