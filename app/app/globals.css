@@ -332,6 +332,25 @@ body {
 @layer utilities {
   .text-2xs { font-size: 10px; line-height: 1.4; }
   .animate-spin-slow { animation: spin 3s linear infinite; }
+  /* Checkerboard background for transparent image preview */
+  .bg-checkerboard {
+    background-color: #f0f0f0;
+    background-image:
+      linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+      linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+      linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  :is(.dark) .bg-checkerboard {
+    background-color: #1a1a1a;
+    background-image:
+      linear-gradient(45deg, #252525 25%, transparent 25%),
+      linear-gradient(-45deg, #252525 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #252525 75%),
+      linear-gradient(-45deg, transparent 75%, #252525 75%);
+  }
 }
 
 /* Hide scrollbar but keep scroll functionality */
