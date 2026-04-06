@@ -2,9 +2,9 @@
 
 import TurndownService from 'turndown';
 import { loadConfig, saveConfig, isConfigured } from '../lib/storage';
-import { testConnection, listSpaces, createFile } from '../lib/api';
+import { testConnection, saveToInbox } from '../lib/api';
 import { toClipDocument } from '../lib/markdown';
-import type { ClipperConfig, PageContent, MindOSSpace } from '../lib/types';
+import type { ClipperConfig, PageContent } from '../lib/types';
 
 /* ── DOM refs ── */
 
@@ -25,7 +25,6 @@ const btnConnect = $<HTMLButtonElement>('btn-connect');
 const clipTitle = $<HTMLInputElement>('clip-title');
 const clipSite = $<HTMLSpanElement>('clip-site');
 const clipWords = $<HTMLSpanElement>('clip-words');
-const clipSpace = $<HTMLSelectElement>('clip-space');
 const clipError = $<HTMLDivElement>('clip-error');
 const btnSave = $<HTMLButtonElement>('btn-save');
 const btnSettings = $<HTMLButtonElement>('btn-settings');
@@ -39,7 +38,6 @@ const btnClipAnother = $<HTMLButtonElement>('btn-clip-another');
 
 let config: ClipperConfig;
 let extractedContent: PageContent | null = null;
-let spaces: MindOSSpace[] = [];
 
 /* ── View switching ── */
 
@@ -109,26 +107,6 @@ async function extractContent(): Promise<PageContent> {
   return result as PageContent;
 }
 
-/* ── Populate spaces dropdown ── */
-
-function populateSpaces(spaceList: MindOSSpace[], defaultSpace: string) {
-  clipSpace.innerHTML = '';
-  // Clone to avoid mutating shared array
-  const list = [...spaceList];
-  // Always include "Clips" as an option even if not in list
-  const names = new Set(list.map(s => s.name));
-  if (!names.has('Clips')) {
-    list.unshift({ name: 'Clips', path: 'Clips' });
-  }
-  for (const s of list) {
-    const opt = document.createElement('option');
-    opt.value = s.path;
-    opt.textContent = s.name;
-    clipSpace.appendChild(opt);
-  }
-  clipSpace.value = defaultSpace || 'Clips';
-}
-
 /* ── Init ── */
 
 async function init() {
@@ -146,15 +124,13 @@ async function init() {
   let extractionError = '';
 
   try {
-    [extractedContent, spaces] = await Promise.all([
+    [extractedContent] = await Promise.all([
       extractContent(),
-      listSpaces(config),
     ]);
   } catch (err) {
     // Content extraction failed — show clip view with error
     extractionError = err instanceof Error ? err.message : 'Cannot read this page';
     extractedContent = null;
-    spaces = await listSpaces(config).catch(() => []);
   }
 
   showClipView(extractionError);
@@ -188,7 +164,7 @@ function showClipView(errorMsg?: string) {
     clipWords.textContent = '';
   }
 
-  populateSpaces(spaces, config.defaultSpace);
+  // Space selector no longer needed since we save to Inbox
 }
 
 /* ── Event Handlers ── */
@@ -227,13 +203,11 @@ btnConnect.addEventListener('click', async () => {
   showView(viewLoading);
 
   try {
-    [extractedContent, spaces] = await Promise.all([
+    [extractedContent] = await Promise.all([
       extractContent(),
-      listSpaces(config),
     ]);
   } catch (err) {
     extractedContent = null;
-    spaces = [];
     showClipView(err instanceof Error ? err.message : 'Cannot read this page');
     return;
   }
@@ -254,9 +228,11 @@ btnSave.addEventListener('click', async () => {
   // Override title if user edited
   const content = { ...extractedContent, title: clipTitle.value.trim() || extractedContent.title };
 
-  const doc = toClipDocument(content, clipSpace.value, (html) => turndown.turndown(html));
+  // Create markdown (no space prefix since going to Inbox)
+  const doc = toClipDocument(content, '', (html) => turndown.turndown(html));
 
-  const result = await createFile(config, doc.space, doc.fileName, doc.markdown);
+  // Save to Inbox directly
+  const result = await saveToInbox(config, doc.fileName, doc.markdown);
 
   setButtonLoading(btnSave, false);
 
@@ -265,11 +241,8 @@ btnSave.addEventListener('click', async () => {
     return;
   }
 
-  // Save default space preference
-  await saveConfig({ defaultSpace: clipSpace.value });
-
   // Success!
-  successDetail.textContent = `${doc.space}/${doc.fileName}`;
+  successDetail.textContent = `Inbox/${doc.fileName}`;
   showView(viewSuccess);
 });
 
