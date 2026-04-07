@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { complete } from '@mariozechner/pi-ai';
-import { effectiveAiConfig } from '@/lib/settings';
+import { effectiveAiConfig, readBaseUrlCompat, writeSettings, readSettings } from '@/lib/settings';
 import { getModelConfig } from '@/lib/agent/model';
 import { type ProviderId, isProviderId } from '@/lib/agent/providers';
 
@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
         apiKey: resolvedKey,
         signal: ctrl.signal,
       });
+
+      // Clear stale proxy compat cache for this baseUrl on successful test.
+      // Prevents stale 'non-streaming' cache from forcing the fallback path.
+      if (baseUrl) {
+        const compat = readBaseUrlCompat();
+        if (compat[baseUrl]) {
+          const s = readSettings();
+          const updated = { ...(s.baseUrlCompat ?? {}) };
+          delete updated[baseUrl];
+          writeSettings({ ...s, baseUrlCompat: updated });
+        }
+      }
 
       return NextResponse.json({ ok: true, latency: Date.now() - start });
     } catch (e) {

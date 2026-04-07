@@ -124,6 +124,15 @@ export async function POST(req: NextRequest) {
     };
 
     writeSettings(next);
+    // Clear proxy compat cache when AI config changes — stale cache causes
+    // the non-streaming fallback to be used even when streaming would work.
+    if (JSON.stringify(next.ai) !== JSON.stringify(current.ai)) {
+      const { readSettings: rs, writeSettings: ws } = await import('@/lib/settings');
+      const s = rs();
+      if (s.baseUrlCompat && Object.keys(s.baseUrlCompat).length > 0) {
+        ws({ ...s, baseUrlCompat: {} });
+      }
+    }
     if (next.mindRoot !== current.mindRoot) invalidateCache();
     return NextResponse.json({ ok: true });
   } catch (err) {
