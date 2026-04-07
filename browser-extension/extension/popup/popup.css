@@ -55,6 +55,8 @@
     --amber-text: #d9a45e;
     --success-subtle: rgba(34, 160, 107, 0.12);
     --success-light: rgba(34, 160, 107, 0.16);
+    --error: #f87171;
+    --error-subtle: rgba(248, 113, 113, 0.12);
     --error-subtle: rgba(227, 73, 53, 0.12);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
     --shadow-md: 0 2px 8px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);
@@ -368,12 +370,6 @@ body {
 .loading-text {
   color: var(--fg-muted);
   font-size: 13px;
-}
-
-.loading-spinner {
-  position: relative;
-  width: 32px;
-  height: 32px;
 }
 
 /* ── Spinner ── */

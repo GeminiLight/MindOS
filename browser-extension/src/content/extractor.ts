@@ -17,7 +17,13 @@ function extractPageContent() {
   const title = article?.title || document.title || 'Untitled';
   const content = article?.content || document.body.innerHTML;
   const textContent = article?.textContent || document.body.textContent || '';
-  const wordCount = textContent.split(/\s+/).filter(Boolean).length;
+
+  // Word count: handle both space-separated languages and CJK
+  const latinWords = textContent.split(/\s+/).filter(Boolean).length;
+  // CJK characters (Chinese, Japanese kanji, Korean hangul)
+  const cjkChars = (textContent.match(/[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af]/g) || []).length;
+  // For CJK-heavy content, use character count; otherwise word count
+  const wordCount = cjkChars > latinWords ? cjkChars : latinWords;
 
   return {
     title,

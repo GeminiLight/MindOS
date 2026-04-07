@@ -282,6 +282,7 @@ function toggleDirPanel(show?: boolean) {
   const isOpen = show ?? dirPanel.hidden;
   dirPanel.hidden = !isOpen;
   dirTrigger.classList.toggle('active', isOpen);
+  dirTrigger.setAttribute('aria-expanded', String(isOpen));
   if (isOpen) renderDirPicker();
 }
 

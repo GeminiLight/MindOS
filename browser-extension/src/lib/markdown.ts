@@ -16,13 +16,18 @@ export function sanitizeFileName(title: string): string {
 /** Generate YAML frontmatter block */
 function frontmatter(meta: Record<string, string | null | undefined>): string {
   const lines = ['---'];
+  // YAML reserved words and special patterns that need quoting
+  const yamlReserved = /^(true|false|null|yes|no|on|off|~)$/i;
+  const yamlSpecialStart = /^[*&!@`>|%-]/;
+
   for (const [key, val] of Object.entries(meta)) {
     if (val == null || val === '') continue;
     // Collapse newlines (YAML scalar values must be single-line in flow style)
     const clean = val.replace(/[\r\n]+/g, ' ').trim();
-    // Quote if value contains YAML-special characters
+    // Quote if value contains YAML-special characters or is a reserved word
     const needsQuote = clean.includes(':') || clean.includes('#') || clean.includes("'")
-      || clean.includes('"') || clean.includes('[') || clean.includes('{');
+      || clean.includes('"') || clean.includes('[') || clean.includes('{')
+      || yamlReserved.test(clean) || yamlSpecialStart.test(clean);
     const safe = needsQuote
       ? `"${clean.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
       : clean;

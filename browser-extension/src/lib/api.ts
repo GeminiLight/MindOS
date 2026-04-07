@@ -96,7 +96,12 @@ export async function saveToInbox(
         source: 'web-clipper',
       }),
     });
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      return { error: `Server returned invalid response (${res.status})` };
+    }
     if (!res.ok) {
       return { error: data.error ?? `Server error (${res.status})` };
     }
@@ -116,13 +121,18 @@ export async function createFile(
   fileName: string,
   content: string,
 ): Promise<FileApiResponse> {
-  const path = space ? `${space}/${fileName}` : fileName;
+  const path = space ? `${space.replace(/\/+$/, '')}/${fileName}` : fileName;
   try {
     const res = await apiFetch(config, '/api/file', {
       method: 'POST',
       body: JSON.stringify({ op: 'create_file', path, content, source: 'web-clipper' }),
     });
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      return { error: `Server returned invalid response (${res.status})` };
+    }
     if (!res.ok) {
       return { error: data.error ?? `Server error (${res.status})` };
     }
