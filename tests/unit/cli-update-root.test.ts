@@ -58,4 +58,32 @@ describe('mindos update root resolution', () => {
     expect(stdout).toContain(`Updated: ${CURRENT_VERSION} → 9.9.9`);
     expect(stdout).not.toContain('Already on the latest version');
   });
+
+  it('skips the shell shim under ~/.mindos/bin/ and falls back to current ROOT', () => {
+    const fakeHome = path.join(tempDir, 'home');
+    const shimDir = path.join(fakeHome, '.mindos', 'bin');
+    fs.mkdirSync(shimDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(shimDir, 'mindos'),
+      '#!/bin/sh\nexec node "$(dirname "$0")/../cli.js" "$@"\n',
+      { mode: 0o755 },
+    );
+
+    const stdout = execFileSync(process.execPath, [CLI, 'update'], {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      env: {
+        ...process.env,
+        HOME: fakeHome,
+        PATH: `${shimDir}:${fakeBinDir}:${process.env.PATH}`,
+      },
+      timeout: 15_000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    // `which mindos` finds shimDir/mindos first, but getUpdatedRoot() skips it
+    // (dirname matches $HOME/.mindos/bin). Falls back to ROOT where
+    // package.json has CURRENT_VERSION → reports "already on the latest".
+    expect(stdout).toContain('Already on the latest version');
+  });
 });

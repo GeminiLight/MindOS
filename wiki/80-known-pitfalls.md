@@ -1367,3 +1367,27 @@
 - **解决：** 在 `getFileContent` (fs.ts) 中检测 `.pdf` 扩展名，调用 `extractPdfText` 提取文本后返回。提取 PDF 处理函数到 `pdf-text.ts` 共享模块，搜索索引同步使用
 - **规则：** 新文件类型支持需检查所有读取路径（搜索索引、Agent 读取、Web UI 预览、导入/上传），不能只接入一条路径
 
+### gateway / MCP / start 三个 daemon 模式 bug（2026-04-07）
+
+**Bug 1: `getCurrentCliPath()` 把 shell shim 当 JS 交给 node**
+
+- **现象：** `mindos gateway install` 生成的 plist/systemd unit 把 `~/.mindos/bin/mindos`（shell shim）作为 ExecStart 参数传给 `node`，node 报语法错误
+- **根因：** `start.js` 在 PATH 开头注入 `~/.mindos/bin/`，`getCurrentCliPath()` 调用 `which mindos` 找到 shim（不是 symlink，`realpathSync` 不会跟踪），直接返回
+- **解决：** `getCurrentCliPath()` 和 `getUpdatedRoot()` 跳过 `dirname === resolve(MINDOS_DIR, 'bin')` 的路径
+- **同类：** `update.js:getUpdatedRoot()` 同一模式，一并修复
+- **规则：** `which` 结果可能是 shell wrapper，不能盲目传给 `node`；比较 dirname 排除已知 shim 目录
+
+**Bug 2: MCP HTTP 模式 launchd 下 stdin EOF 立即退出**
+
+- **现象：** launchd 启动的 MCP HTTP server 启动后立即关闭，日志显示 "Parent process exited (stdin closed)"
+- **根因：** launchd 将 stdin 设为 `/dev/null`（EOF on read），`mcp/src/index.ts` 的 `!process.stdin.isTTY` 条件为 true，`stdin.resume()` 后立即收到 `'end'` 事件 → 误判为父进程退出
+- **解决：** 增加 `!launchedByDaemon` 守卫（检查 `LAUNCHED_BY_LAUNCHD` / `INVOCATION_ID` 环境变量）
+- **规则：** stdin 监听用于 Desktop pipe 模式的孤儿清理；daemon 模式 stdin 是 `/dev/null`，不能作为父进程存活信号
+
+**Bug 3: `startMode=daemon` + launchd 导致递归 daemon 安装**
+
+- **现象：** launchd 通过 plist 执行 `mindos start`，`isDaemonMode()` 返回 true → 进入 daemon 分支 → 再次调用 `gateway install` → `launchctl bootout` 杀掉自己 → `KeepAlive` 重新拉起 → 无限循环
+- **根因：** `launchedByDaemon` 检查位于 `isDaemon` 分支之后（line 215），无法阻止 line 62 的 `isDaemon = isDaemonMode()` 进入 daemon 安装路径
+- **解决：** 将 `launchedByDaemon` 提前到 `isDaemon` 计算之前：`const isDaemon = !launchedByDaemon && (Boolean(flags.daemon) || isDaemonMode())`
+- **规则：** 环境检测守卫必须在分支决策之前；daemon 管理器启动的进程不应再次尝试安装自己
+

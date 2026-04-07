@@ -13,8 +13,12 @@ import { stripBom } from './jsonc.js';
  * Dynamically resolve the current mindos CLI path.
  * This is needed because CLI_PATH is evaluated at module load time,
  * but after `npm install -g @geminilight/mindos@latest`, the path may have changed.
+ *
+ * Skips ~/.mindos/bin/ — that directory contains our own shell shim
+ * (not a JS file), which must not be passed to `node` as ExecStart.
  */
 function getCurrentCliPath() {
+  const shimBinDir = resolve(MINDOS_DIR, 'bin');
   try {
     const whichCmd = process.platform === 'win32' ? 'where mindos' : 'which mindos';
     // `where` on Windows can return multiple lines; take the first match
@@ -22,9 +26,9 @@ function getCurrentCliPath() {
     if (mindosBin) {
       try {
         const realPath = realpathSync(mindosBin);
-        if (existsSync(realPath)) return realPath;
+        if (existsSync(realPath) && resolve(dirname(realPath)) !== shimBinDir) return realPath;
       } catch {}
-      if (existsSync(mindosBin)) return mindosBin;
+      if (existsSync(mindosBin) && resolve(dirname(mindosBin)) !== shimBinDir) return mindosBin;
     }
   } catch {}
   return CLI_PATH;

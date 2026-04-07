@@ -675,7 +675,12 @@ async function main() {
       console.error(`API backend: ${BASE_URL}`);
     });
 
-    if (!process.stdin.isTTY) {
+    // Detect parent-exit via stdin EOF — but only when stdin is a real pipe
+    // from a parent process (e.g. Desktop/Electron).  Under launchd/systemd,
+    // stdin is /dev/null which emits EOF immediately and would kill the server.
+    const launchedByDaemon =
+      process.env.LAUNCHED_BY_LAUNCHD === '1' || !!process.env.INVOCATION_ID;
+    if (!process.stdin.isTTY && !launchedByDaemon) {
       process.stdin.resume();
       process.stdin.on('end', () => {
         console.error('[MindOS MCP] Parent process exited (stdin closed), shutting down');
