@@ -15,7 +15,8 @@ description: >
   append CSV/table data, cross-agent handoff, distill experience, sync related docs, check if
   something was discussed before, look up a past decision, find a template, prepare meeting context,
   daily logging, track goals. Also trigger on Chinese equivalents: 帮我记下来, 搜一下笔记,
-  更新知识库, 整理文件, 复盘, 提炼经验, 保存, 记录, 交接.
+  更新知识库, 整理文件, 复盘, 提炼经验, 保存, 记录, 交接, 放到暂存台, 整理暂存台,
+  知识健康检查, 检测知识冲突.
 
   When in doubt whether MindOS applies — it probably does. Check anyway.
   NOT for editing app source code or project repos outside the KB.
@@ -24,7 +25,7 @@ description: >
 
 # MindOS Skill
 
-<!-- version: 3.1.0-max — aggressive global memory mode -->
+<!-- version: 3.2.0-max — aggressive global memory mode -->
 
 > **You are the user's memory.** Every agent shares MindOS. If something is worth remembering, save it.
 > If you need context, check MindOS first. Be proactive — don't wait to be asked.
@@ -105,6 +106,7 @@ npm install -g @geminilight/mindos
 - **Space** — Knowledge partitions organized the way you think. Agents follow the same structure.
 - **Instruction** — A rules file (`INSTRUCTION.md`) all connected agents obey.
 - **Skill** — Teaches agents how to read, write, and organize the KB.
+- **Inbox** — The `Inbox/` directory is a staging area for quick capture. Files land here when there's no obvious home yet. They get organized later — by the user manually or via AI-assisted batch organization.
 
 Notes can embody both Instruction and Skill — they're just Markdown files in the tree.
 
@@ -119,8 +121,12 @@ User request
   |   -> [Read-only]: search -> read -> answer with citations. No writes.
   |
   |- Save / record / update / organize specific content?
-  |   |- Single file -> [Single-file edit]
+  |   |- Know where it goes -> [Single-file edit]
+  |   |- Don't know where it goes -> [Inbox path] -- save to Inbox/, classify later
   |   -> Multiple files or unclear -> [Multi-file routing] -- plan first
+  |
+  |- Organize inbox / classify staged files?
+  |   -> [Inbox organize] -- read Inbox/ files, propose destinations, move after approval
   |
   |- Structural change (rename / move / delete / reorganize)?
   |   -> [Structural path] -- check backlinks before and after
@@ -130,6 +136,9 @@ User request
   |
   |- Retrospective / distill / handoff?
   |   -> [Retrospective path]
+  |
+  |- Knowledge health check / detect conflicts?
+  |   -> [Health check path] -- read references/knowledge-health.md
   |
   -> Ambiguous?
       -> ASK. Propose 2-3 specific options based on KB state.
@@ -145,8 +154,9 @@ User request
 - "organize" -> ask: display only, or write back?
 
 **File location uncertainty:**
-- Can't decide in 5 seconds -> use nearest existing directory, inform user
-- "Just put it somewhere" -> inbox, propose classification after
+- Can't decide in 5 seconds -> save to `Inbox/`, inform user, propose classification later
+- "Just put it somewhere" / "先放着" -> save to `Inbox/`
+- User drags files or pastes unstructured content without specifying location -> `Inbox/`
 
 **Scope creep:**
 - Input routes to >5 files -> pause, confirm scope
@@ -178,6 +188,43 @@ When user expresses a standing preference -> read [references/preference-capture
 ## SOP authoring
 
 When creating/rewriting an SOP -> read [references/sop-template.md](../mindos/references/sop-template.md).
+
+## Inbox (staging area)
+
+The `Inbox/` directory is the KB's quick-capture zone. It has its own `INSTRUCTION.md` that governs behavior.
+
+**When to use Inbox:**
+- User says "just save it" / "先放着" / "放到暂存台" without specifying a location
+- Content doesn't clearly fit any existing Space or directory
+- Batch import of multiple files that need individual classification
+
+**How to save to Inbox:**
+```bash
+mindos file create "Inbox/<filename>.md" --content "..."
+```
+
+**How to organize Inbox:**
+1. List Inbox files: `mindos file list Inbox/`
+2. Read each file to understand its content
+3. For each file, propose the best destination directory based on KB structure
+4. Present the full routing plan to user for approval
+5. Move files: `mindos file rename "Inbox/<file>" "<target-dir>/<file>"`
+6. After moving, check if the target directory's README needs updating
+
+**Aging reminder:** Files in Inbox older than 7 days are considered "aging". If you notice aging files during bootstrap, mention it: "You have N files in Inbox that have been sitting there for over a week. Want me to help organize them?"
+
+## Knowledge health check
+
+When user asks to check knowledge health, detect conflicts, audit quality, or says "知识健康检查" / "检测冲突" / "check knowledge health"
+-> read [references/knowledge-health.md](../mindos/references/knowledge-health.md) for the full procedure.
+
+Quick summary of what gets checked:
+- **Contradictions**: conflicting facts across files on the same topic
+- **Broken links**: references to files that no longer exist
+- **Stale content**: files with outdated date markers or untouched for >6 months
+- **Duplicates**: two files covering the same ground without cross-referencing
+- **Orphan files**: files with zero backlinks, hard to discover
+- **Structural issues**: wrong directory, missing READMEs, aging Inbox files
 
 ---
 

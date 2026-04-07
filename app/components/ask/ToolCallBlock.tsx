@@ -101,15 +101,16 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
     : formatInput(part.input);
 
   return (
-    <div className={`my-1 rounded-md border text-xs font-mono ${
+    <div className={`my-1.5 rounded-lg border text-xs font-mono ${
       isDestructive
         ? 'border-[var(--amber)]/30 bg-background/60'
-        : 'border-border/50 bg-background/60'
+        : 'border-border/40 bg-background/50'
     }`}>
       <button
         type="button"
         onClick={() => setManualToggle(v => v === null ? !expanded : !v)}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-muted/30 transition-colors rounded-md"
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-1.5 px-2.5 py-2 text-left hover:bg-muted/30 transition-colors rounded-lg"
       >
         {expanded ? <ChevronDown size={12} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={12} className="shrink-0 text-muted-foreground" />}
         {isDestructive && <AlertTriangle size={11} className="shrink-0 text-[var(--amber)]" />}
@@ -161,19 +162,19 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
             </div>
           ) : (
             /* Fallback: show input (always), output when available */
-            <div className="px-2 pb-2 pt-1 space-y-1">
+            <div className="px-2.5 pb-2.5 pt-1.5 space-y-1.5">
               {part.state === 'running' && (
-                <div className="text-muted-foreground/60 text-2xs flex items-center gap-1">
+                <div className="text-muted-foreground/60 text-2xs flex items-center gap-1.5">
                   <Loader2 size={10} className="animate-spin" /> Running...
                 </div>
               )}
-              <div className="text-muted-foreground">
-                <span className="font-semibold">Input: </span>
+              <div className="text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground/70">Input: </span>
                 <span className="break-all whitespace-pre-wrap">{JSON.stringify(part.input, null, 2)}</span>
               </div>
               {part.output !== undefined && part.output !== '' && (
-                <div className="text-muted-foreground">
-                  <span className="font-semibold">Output: </span>
+                <div className="text-muted-foreground leading-relaxed">
+                  <span className="font-semibold text-foreground/70">Output: </span>
                   <span className="break-all whitespace-pre-wrap">{part.output.length > 500 ? part.output.slice(0, 500) + '…' : part.output}</span>
                 </div>
               )}

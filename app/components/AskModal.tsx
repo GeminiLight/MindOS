@@ -29,7 +29,7 @@ export default function AskModal({ open, onClose, currentFile, initialMessage, i
         role="dialog"
         aria-modal="true"
         aria-label={t.ask.title}
-        className="w-full md:max-w-2xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col h-[92vh] md:h-auto md:max-h-[75vh]"
+        className="w-full md:max-w-2xl md:mx-4 bg-card border-t md:border border-border/60 rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col h-[92vh] md:h-auto md:max-h-[75vh]"
       >
         <AskContent
           visible={open}

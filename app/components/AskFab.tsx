@@ -22,11 +22,11 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
         fixed z-40 bottom-5 right-5
         items-center justify-center
         gap-0 hover:gap-2
-        p-3 rounded-xl
-        text-white font-medium text-[13px]
-        shadow-sm shadow-amber-900/10
+        p-3 rounded-2xl
+        text-[var(--amber-foreground)] font-medium text-[13px]
+        shadow-md shadow-[var(--amber)]/15
         transition-all duration-200 ease-out
-        hover:shadow-md hover:shadow-amber-900/15
+        hover:shadow-lg hover:shadow-[var(--amber)]/20
         active:scale-95 cursor-pointer overflow-hidden
         ${askPanelOpen ? 'opacity-0 pointer-events-none translate-y-2' : 'opacity-100 translate-y-0'}
       `}

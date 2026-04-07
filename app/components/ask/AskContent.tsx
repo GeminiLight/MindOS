@@ -65,8 +65,8 @@ interface AskContentProps {
   /** ACP agent pre-selected via "Use" button from A2A tab */
   initialAcpAgent?: AcpAgentSelection | null;
   onFirstMessage?: () => void;
-  /** 'modal' renders close button + ESC handler; 'panel' renders compact header */
-  variant: 'modal' | 'panel';
+  /** 'modal' renders close button + ESC handler; 'panel' renders compact header; 'home' renders embedded on homepage */
+  variant: 'modal' | 'panel' | 'home';
   /** Required for modal variant — called on close button / ESC / backdrop click */
   onClose?: () => void;
   maximized?: boolean;
@@ -79,6 +79,7 @@ interface AskContentProps {
 
 export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch }: AskContentProps) {
   const isPanel = variant === 'panel';
+  const isHome = variant === 'home';
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -164,8 +165,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const prevVisibleRef = useRef(false);
   const prevFileRef = useRef(currentFile);
   useEffect(() => {
-    const justOpened = variant === 'panel'
-      ? (visible && !prevVisibleRef.current)  // panel: edge detection
+    const justOpened = variant === 'panel' || variant === 'home'
+      ? (visible && !prevVisibleRef.current)  // panel/home: edge detection
       : visible;                               // modal: level detection (reset every open)
 
     // Detect file change while panel is already open
@@ -191,6 +192,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       // Modal: abort streaming on close
       chat.abortRef.current?.abort();
     }
+    // Home variant: auto-focus on mount
+    if (variant === 'home' && visible && !prevVisibleRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 150);
+    }
     prevVisibleRef.current = visible;
     prevFileRef.current = currentFile;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,9 +214,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, session.messages, session.activeSessionId, chat.isLoading]);
 
-  // Esc to close modal or exit focus mode
+  // Esc to close modal or exit focus mode (skip for home variant)
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || variant === 'home') return;
     const isModal = variant === 'modal';
     const isFocused = variant === 'panel' && maximized;
     if (!isModal && !isFocused) return;
@@ -438,21 +443,24 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     thinking: t.ask.thinking,
     generating: t.ask.generating,
     reconnecting: reconnectAttempt > 0 ? t.ask.reconnecting(reconnectAttempt, reconnectMaxRef.current) : undefined,
+    copyMessage: t.ask.copyMessage,
   }), [t, reconnectAttempt]);
 
   return (
     <>
+      {/* Header — home variant hides title, keeps history + new session buttons */}
       <AskHeader
-        isPanel={isPanel}
+        isPanel={isPanel || isHome}
+        hideTitle={isHome}
         showHistory={showHistory}
         onToggleHistory={toggleHistory}
         onReset={handleResetSession}
         isLoading={isLoading}
-        maximized={maximized}
-        onMaximize={onMaximize}
-        askMode={askMode}
-        onModeSwitch={onModeSwitch}
-        onClose={onClose}
+        maximized={isHome ? undefined : maximized}
+        onMaximize={isHome ? undefined : onMaximize}
+        askMode={isHome ? undefined : askMode}
+        onModeSwitch={isHome ? undefined : onModeSwitch}
+        onClose={isHome ? undefined : onClose}
       />
 
       {/* Session tabs — panel variant only */}
@@ -520,10 +528,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       )}
 
       {/* Composer card — unified input area with rounded container */}
-      <div className="shrink-0 px-3 pb-2 pt-1">
+      <div className="shrink-0 px-3 pb-3 pt-1">
         <div
           className={cn(
-            'rounded-xl border border-border/60 bg-card shadow-sm transition-shadow',
+            'rounded-2xl border border-border/40 bg-card shadow-md transition-all focus-within:border-[var(--amber)]/30 focus-within:shadow-lg',
             isDragOver && 'ring-2 ring-[var(--amber)] bg-[var(--amber-dim)]',
           )}
           onDragOver={handleDragOver}
@@ -568,23 +576,23 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="flex items-end gap-1 px-1.5 py-1.5"
+            className="flex items-end gap-1.5 px-2.5 py-2"
           >
             {/* + attach button with mini menu */}
             <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setShowAttachMenu(v => !v)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
                 title={t.hints.attachFile}
               >
                 <Plus size={inputIconSize} />
               </button>
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-1 py-1 rounded-lg border border-border bg-card shadow-lg z-50 min-w-[140px]">
+                <div className="absolute bottom-full left-0 mb-1.5 py-1.5 rounded-xl border border-border bg-card shadow-lg z-50 min-w-[150px]">
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left rounded-lg"
                     onClick={() => { setShowAttachMenu(false); upload.uploadInputRef.current?.click(); }}
                   >
                     <FileText size={12} className="shrink-0 text-muted-foreground" />
@@ -592,7 +600,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                   </button>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left rounded-lg"
                     onClick={() => { setShowAttachMenu(false); imageInputRef.current?.click(); }}
                   >
                     <ImageIcon size={12} className="shrink-0 text-muted-foreground" />
@@ -637,22 +645,22 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               onPaste={handlePaste}
               placeholder={t.ask.placeholder}
               rows={1}
-              className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-1.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0"
+              className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-0"
             />
 
             {isLoading ? (
-              <button type="button" onClick={handleStop} className="p-1.5 rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
+              <button type="button" onClick={handleStop} className="p-2 rounded-xl transition-colors shrink-0 text-foreground bg-muted hover:bg-muted/80" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
                 {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
               </button>
             ) : (
-              <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)]">
+              <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-2 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20">
                 <Send size={14} />
               </button>
             )}
           </form>
 
           {/* Mode + Agent + Provider selector row — inside card bottom */}
-          <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 border-t border-border/30">
+          <div className="flex items-center gap-2 px-3 pb-2.5 pt-1.5 border-t border-border/15">
             <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
             {mounted && acpDetection.installedAgents.length > 0 && (
               <AgentSelectorCapsule
