@@ -406,6 +406,73 @@ function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition<any,
 // ---------------------------------------------------------------------------
 
 /**
+ * Reassemble SSE chunks (from proxies that ignore stream:false) into a
+ * single OpenAI-style chat completion response.
+ *
+ * SSE format:  data: {"choices":[{"delta":{"content":"He"}}]}
+ * Output:      {"choices":[{"message":{"role":"assistant","content":"Hello!"},"finish_reason":"stop"}]}
+ */
+function reassembleSSE(sseText: string): any {
+  const lines = sseText.split('\n');
+  let content = '';
+  let role = 'assistant';
+  let finishReason = 'stop';
+  const toolCalls: Map<number, { id: string; type: string; function: { name: string; arguments: string } }> = new Map();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (payload === '[DONE]') break;
+
+    let chunk: any;
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue; // skip unparseable lines
+    }
+
+    const delta = chunk?.choices?.[0]?.delta;
+    if (!delta) continue;
+
+    if (delta.role) role = delta.role;
+    if (delta.content) content += delta.content;
+    if (chunk.choices[0].finish_reason) finishReason = chunk.choices[0].finish_reason;
+
+    // Accumulate tool calls (they arrive in incremental deltas)
+    if (delta.tool_calls) {
+      for (const tc of delta.tool_calls) {
+        const idx = tc.index ?? 0;
+        const existing = toolCalls.get(idx);
+        if (!existing) {
+          toolCalls.set(idx, {
+            id: tc.id ?? '',
+            type: tc.type ?? 'function',
+            function: {
+              name: tc.function?.name ?? '',
+              arguments: tc.function?.arguments ?? '',
+            },
+          });
+        } else {
+          if (tc.id) existing.id = tc.id;
+          if (tc.function?.name) existing.function.name += tc.function.name;
+          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+        }
+      }
+    }
+  }
+
+  const message: any = { role, content: content || null };
+  if (toolCalls.size > 0) {
+    message.tool_calls = Array.from(toolCalls.values());
+  }
+
+  return {
+    choices: [{ message, finish_reason: finishReason }],
+  };
+}
+
+/**
  * Convert pi-ai format messages to OpenAI API format.
  * pi-ai messages have nested structures; OpenAI format is flatter with tool_calls array.
  */
@@ -520,6 +587,9 @@ async function runNonStreamingFallback(opts: {
     if (signal.aborted) throw new Error('Request aborted');
     step++;
 
+    // Use stream:true and parse SSE ourselves.
+    // Many proxies ignore stream:false (returning SSE with empty choices or broken JSON).
+    // Using stream:true is the most universally compatible approach.
     const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -531,7 +601,7 @@ async function runNonStreamingFallback(opts: {
         messages,
         tools: openaiTools.length > 0 ? openaiTools : undefined,
         tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
-        stream: false,
+        stream: true,
       }),
       signal,
     });
@@ -541,11 +611,28 @@ async function runNonStreamingFallback(opts: {
       throw new Error(`Non-streaming API error ${resp.status}: ${errText.slice(0, 200)}`);
     }
 
-    const data = await resp.json() as any;
+    // Read the full response body (SSE or JSON)
+    const rawText = await resp.text();
+    const trimmed = rawText.trimStart();
+
+    let data: any;
+    if (trimmed.startsWith('data:')) {
+      // Response is SSE — reassemble chunks into a single OpenAI response
+      data = reassembleSSE(trimmed);
+    } else {
+      // Some endpoints might still return plain JSON even with stream:true
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`API returned invalid response: ${rawText.slice(0, 200)}`);
+      }
+    }
+
     const choice = data?.choices?.[0];
     if (!choice) throw new Error('Empty response from API');
 
-    const msg = choice.message;
+    // reassembleSSE always produces .message; standard JSON may use .message or .delta
+    const msg = choice.message ?? choice.delta ?? {};
     const finishReason: string = choice.finish_reason ?? 'stop';
 
     // Emit text content in chunks to simulate streaming appearance
@@ -1258,11 +1345,12 @@ export async function POST(req: NextRequest) {
             if (lastPromptError) throw lastPromptError;
 
             metrics.recordRequest(Date.now() - requestStartTime);
-            if (!hasContent && lastModelError) {
-              // No content received — check if this looks like a proxy stream+tools incompatibility.
-              // Only attempt fallback for OpenAI-compatible endpoints with a custom baseUrl.
+            if (!hasContent && (lastModelError || (baseUrl && provider === 'openai'))) {
+              // No content received — either a model error or proxy compatibility issue.
+              // For OpenAI-compatible endpoints with custom baseUrl, always try the fallback
+              // even without an explicit error (some proxies silently return empty responses).
               if (baseUrl && provider === 'openai') {
-                send({ type: 'status', message: t.proxyCompatDetecting });
+                send({ type: 'status', message: lastModelError ? t.proxyCompatDetecting : t.proxyCompatMode });
                 try {
                   await runNonStreamingFallback({
                     baseUrl,
