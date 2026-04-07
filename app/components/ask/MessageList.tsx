@@ -82,12 +82,12 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
       prose-h1:text-base prose-h2:text-[15px] prose-h3:text-sm
       prose-ul:my-1.5 prose-li:my-0.5
       prose-ol:my-1.5
-      prose-code:text-[0.8em] prose-code:bg-background/60 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
-      prose-pre:bg-background/60 prose-pre:text-foreground prose-pre:text-xs
-      prose-blockquote:border-l-[var(--amber)] prose-blockquote:text-muted-foreground
+      prose-code:text-[0.8em] prose-code:bg-muted/80 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none prose-code:font-mono
+      prose-pre:bg-muted/60 prose-pre:text-foreground prose-pre:text-xs prose-pre:rounded-lg
+      prose-blockquote:border-l-[var(--amber)] prose-blockquote:text-muted-foreground prose-blockquote:not-italic
       prose-a:text-[var(--amber)] prose-a:no-underline hover:prose-a:underline
       prose-strong:text-foreground prose-strong:font-semibold
-      prose-table:text-xs prose-th:py-1 prose-td:py-1
+      prose-table:text-xs prose-th:py-1.5 prose-td:py-1
     ">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>
       {isStreaming && (
@@ -145,9 +145,9 @@ function StepCounter({ parts }: { parts: Message['parts'] }) {
   const lastToolCall = toolCalls[toolCalls.length - 1];
   const toolLabel = lastToolCall.type === 'tool-call' ? lastToolCall.toolName : '';
   return (
-    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground/70">
+    <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-border/15 text-xs text-muted-foreground/60">
       <Wrench size={10} />
-      <span>Step {toolCalls.length}{toolLabel ? ` — ${toolLabel}` : ''}</span>
+      <span className="font-medium">Step {toolCalls.length}{toolLabel ? ` — ${toolLabel}` : ''}</span>
     </div>
   );
 }
@@ -205,17 +205,18 @@ export default memo(function MessageList({
   return (
     <div ref={scrollContainerRef} role="log" aria-live="polite" className="relative flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-5 min-h-0">
       {messages.length === 0 && (
-        <div className="flex flex-col items-center justify-center flex-1 min-h-[240px] px-4 pt-8">
-          {/* Brand anchor — larger, with subtle glow */}
-          <div className="w-14 h-14 rounded-2xl bg-[var(--amber)]/10 flex items-center justify-center mb-5 shadow-sm shadow-[var(--amber)]/5">
-            <Sparkles size={24} className="text-[var(--amber)]" />
+        <div className="flex flex-col items-center justify-center flex-1 min-h-[260px] px-6 pt-10 pb-4">
+          {/* Brand anchor — refined presence */}
+          <div className="relative w-12 h-12 rounded-2xl bg-[var(--amber)]/8 flex items-center justify-center mb-6">
+            <div className="absolute inset-0 rounded-2xl bg-[var(--amber)]/4 scale-[1.35]" />
+            <Sparkles size={22} className="text-[var(--amber)] relative z-10" />
           </div>
-          <p className="text-center text-base font-semibold text-foreground mb-1.5">{emptyPrompt}</p>
+          <p className="text-center text-[15px] font-semibold text-foreground tracking-tight mb-2">{emptyPrompt}</p>
           {emptyHint && (
-            <p className="text-center text-xs text-muted-foreground mb-8">{emptyHint}</p>
+            <p className="text-center text-xs text-muted-foreground/80 mb-10 tracking-wide">{emptyHint}</p>
           )}
-          {/* Suggestion chips — single column with icons */}
-          <div className="flex flex-col gap-2 max-w-xs w-full">
+          {/* Suggestion chips — refined single column */}
+          <div className="flex flex-col gap-2.5 max-w-[280px] w-full">
             {suggestions.map((s, i) => {
               const icons = [FileText, Search, Lightbulb];
               const SugIcon = icons[i % icons.length];
@@ -224,13 +225,13 @@ export default memo(function MessageList({
                   key={i}
                   type="button"
                   onClick={() => onSuggestionClick(s)}
-                  className="group/sug flex items-center gap-2.5 text-left text-[13px] px-3.5 py-3 rounded-xl border border-border/50 bg-card text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/40 hover:bg-[var(--amber)]/5 hover:shadow-sm transition-all leading-snug"
+                  className="group/sug flex items-center gap-3 text-left text-[13px] px-3.5 py-3 rounded-xl border border-border/40 bg-transparent text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30 hover:bg-[var(--amber)]/5 transition-all leading-snug"
                   aria-label={s}
                 >
-                  <span className="shrink-0 w-7 h-7 rounded-lg bg-muted flex items-center justify-center group-hover/sug:bg-[var(--amber)]/10 transition-colors">
-                    <SugIcon size={14} className="text-muted-foreground group-hover/sug:text-[var(--amber)] transition-colors" />
+                  <span className="shrink-0 w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center group-hover/sug:bg-[var(--amber)]/10 transition-colors">
+                    <SugIcon size={15} className="text-muted-foreground/70 group-hover/sug:text-[var(--amber)] transition-colors" />
                   </span>
-                  <span>{s}</span>
+                  <span className="flex-1">{s}</span>
                 </button>
               );
             })}
@@ -241,14 +242,14 @@ export default memo(function MessageList({
         <div key={i} className={`flex gap-3 animate-[fadeSlideUp_0.22s_ease_both] ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           {m.role === 'assistant' && (
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-[var(--amber)]/10 shadow-sm shadow-[var(--amber)]/5"
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-[var(--amber)]/8"
             >
               <Sparkles size={13} className="text-[var(--amber)]" />
             </div>
           )}
           {m.role === 'user' ? (
             <div
-              className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
+              className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-lg text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
             >
               <UserMessageContent content={m.content} skillName={m.skillName} images={m.images} />
             </div>
@@ -260,7 +261,7 @@ export default memo(function MessageList({
               </div>
             </div>
           ) : (
-            <div className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-card border border-border/40 shadow-sm text-foreground text-sm">
+            <div className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-bl-lg bg-card border border-border/30 shadow-sm text-foreground text-sm">
               {(m.parts && m.parts.length > 0) || stripThinkingTags(m.content) ? (
                 <>
                   <AssistantMessageWithParts message={m} isStreaming={isLoading && i === messages.length - 1} />

@@ -448,9 +448,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   return (
     <>
-      {/* Header — home variant shows title + history + new session only (no close/maximize/modeSwitch) */}
+      {/* Header — home variant hides title, keeps history + new session buttons */}
       <AskHeader
         isPanel={isPanel || isHome}
+        hideTitle={isHome}
         showHistory={showHistory}
         onToggleHistory={toggleHistory}
         onReset={handleResetSession}
@@ -530,7 +531,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       <div className="shrink-0 px-3 pb-3 pt-1">
         <div
           className={cn(
-            'rounded-2xl border border-border/50 bg-card shadow-md transition-all',
+            'rounded-2xl border border-border/40 bg-card shadow-md transition-all focus-within:border-[var(--amber)]/30 focus-within:shadow-lg',
             isDragOver && 'ring-2 ring-[var(--amber)] bg-[var(--amber-dim)]',
           )}
           onDragOver={handleDragOver}
@@ -644,7 +645,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               onPaste={handlePaste}
               placeholder={t.ask.placeholder}
               rows={1}
-              className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-1.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 outline-none focus-visible:ring-0"
+              className="min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-0"
             />
 
             {isLoading ? (
@@ -659,7 +660,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </form>
 
           {/* Mode + Agent + Provider selector row — inside card bottom */}
-          <div className="flex items-center gap-2 px-3 pb-2.5 pt-1 border-t border-border/20">
+          <div className="flex items-center gap-2 px-3 pb-2.5 pt-1.5 border-t border-border/15">
             <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
             {mounted && acpDetection.installedAgents.length > 0 && (
               <AgentSelectorCapsule

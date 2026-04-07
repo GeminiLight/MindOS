@@ -119,7 +119,7 @@ export default function RightAskPanel({
     <aside
       className={`
         hidden md:flex fixed top-0 right-0 h-screen z-40
-        flex-col bg-card border-l border-border
+        flex-col bg-card border-l border-border/30 shadow-[-4px_0_16px_rgba(0,0,0,0.04)]
         transition-[width,transform] duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}
@@ -161,7 +161,7 @@ export default function RightAskPanel({
         className="absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden md:block"
         onMouseDown={handleMouseDown}
       >
-        <div className="absolute left-[2px] top-0 w-[2px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/60 transition-opacity" />
+        <div className="absolute left-[2px] top-0 w-[1px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/50 transition-opacity duration-150" />
       </div>
     </aside>
   );
