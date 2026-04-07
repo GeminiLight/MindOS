@@ -6,7 +6,7 @@
  * installation path. If these leak into the child process, the "new"
  * server starts from the old code — the infamous "fake update" bug.
  *
- * This helper strips ALL MINDOS_*/MIND_* prefixed variables plus
+ * This helper strips ALL MINDOS_* / MIND_* prefixed variables plus
  * a curated denylist of other vars that can cause stale-path issues.
  */
 
