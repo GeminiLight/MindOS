@@ -22,23 +22,37 @@ function getLocaleSnapshot(): Locale {
   return navigator.language.startsWith('zh') ? 'zh' : 'en';
 }
 
+/**
+ * Read the locale that the inline <script> in layout.tsx already resolved.
+ * Returns 'en' to match SSR default — the LocaleStoreInit component
+ * reconciles to the real locale synchronously before first commit.
+ */
+function getPreHydrateLocale(): Locale {
+  return 'en';
+}
+
+const initialLocale = getPreHydrateLocale();
+
 export const useLocaleStore = create<LocaleStoreState>((set) => ({
-  locale: 'en',
-  t: messages['en'] as unknown as Messages,
+  locale: initialLocale,
+  t: messages[initialLocale] as unknown as Messages,
 
   setLocale: (l: Locale) => {
     document.cookie = `locale=${l};path=/;max-age=31536000;SameSite=Lax`;
     document.documentElement.lang = l === 'zh' ? 'zh' : 'en';
+    (window as any).__mindos_locale__ = l;
     set({ locale: l, t: messages[l] as unknown as Messages });
     window.dispatchEvent(new Event('mindos-locale-change'));
   },
 
   _init: (ssrLocale: Locale) => {
-    // Hydrate with client value (or SSR fallback)
-    const clientLocale = typeof window !== 'undefined' ? getLocaleSnapshot() : ssrLocale;
-    set({ locale: clientLocale, t: messages[clientLocale] as unknown as Messages });
+    // Reconcile: if client localStorage disagrees with current store, update once
+    const clientLocale = getLocaleSnapshot();
+    const current = useLocaleStore.getState().locale;
+    if (clientLocale !== current) {
+      set({ locale: clientLocale, t: messages[clientLocale] as unknown as Messages });
+    }
 
-    // Listen for external changes (e.g. localStorage change in another tab, or pre-hydration script)
     const handler = () => {
       const l = getLocaleSnapshot();
       set({ locale: l, t: messages[l] as unknown as Messages });

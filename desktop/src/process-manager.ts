@@ -9,6 +9,8 @@ import http from 'http';
 import net from 'net';
 import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync, appendFileSync } from 'fs';
 
+const IS_WIN = process.platform === 'win32';
+
 export interface ProcessManagerOptions {
   nodePath: string;
   npxPath: string;
@@ -119,7 +121,7 @@ export class ProcessManager extends EventEmitter {
     this.emit('ready');
   }
 
-  /** Graceful shutdown: SIGTERM → 5s timeout → SIGKILL */
+  /** Graceful shutdown: SIGTERM → 5s timeout → force kill */
   async stop(): Promise<void> {
     this.stopped = true;
     this.emit('status-change', 'stopping');
@@ -138,7 +140,7 @@ export class ProcessManager extends EventEmitter {
         if (!proc || proc.killed) { resolve(); return; }
 
         const forceKillTimer = setTimeout(() => {
-          try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+          try { proc.kill(); } catch { /* already dead */ }
           resolve();
         }, 5000);
 
@@ -279,7 +281,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     // Use local next from app/node_modules/.bin — don't rely on npx
-    const localNext = path.join(appDir, 'node_modules', '.bin', 'next');
+    const localNext = path.join(appDir, 'node_modules', '.bin', IS_WIN ? 'next.cmd' : 'next');
     const injectNodeOpts = (base: string) => {
       if (!useWatchdog) return base;
       return base ? `--require ${watchdog} ${base}` : `--require ${watchdog}`;
@@ -289,6 +291,7 @@ export class ProcessManager extends EventEmitter {
         cwd: appDir,
         env: { ...env, NODE_OPTIONS: injectNodeOpts(env.NODE_OPTIONS || '') },
         stdio: ['pipe', 'pipe', 'pipe'],
+        shell: IS_WIN, // .cmd files require shell on Windows
       });
     }
 
@@ -297,6 +300,7 @@ export class ProcessManager extends EventEmitter {
       cwd: appDir,
       env: { ...env, NODE_OPTIONS: injectNodeOpts(env.NODE_OPTIONS || '') },
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: IS_WIN, // npx.cmd requires shell on Windows
     });
   }
 

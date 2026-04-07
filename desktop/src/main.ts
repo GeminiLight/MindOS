@@ -27,7 +27,7 @@ import { ConnectionMonitor } from './connection-monitor';
 import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
 import { cleanupOrphanedSshTunnel, SshTunnel } from './ssh-tunnel';
 import { testConnection } from './connection-sdk';
-import { getNodePath, getMindosInstallPath, getNpxPath, getEnrichedEnv } from './node-detect';
+import { getNodePath, getMindosInstallPath, getNpxPath, getNpmPath, getLocalBinPath, getEnrichedEnv } from './node-detect';
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
 import { isNextBuildValid, isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout } from './mindos-runtime-layout';
@@ -409,7 +409,7 @@ async function startLocalMode(): Promise<string | null> {
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
       // Step 4a: Install app dependencies
-      const npmBin = path.join(path.dirname(nodePath), 'npm');
+      const npmBin = getNpmPath(path.dirname(nodePath));
       if (existsSync(npmBin) && existsSync(path.join(appDir, 'package.json'))) {
         splashStatus({ message: zh ? '正在安装依赖...' : 'Installing dependencies...' });
         await spawnWithEnv(npmBin, ['install'], appDir, enrichedEnv, 300000);
@@ -421,7 +421,7 @@ async function startLocalMode(): Promise<string | null> {
       }
       // Step 4c: Run next build
       splashStatus({ message: zh ? '正在编译前端（约需 1-2 分钟）...' : 'Compiling frontend (~1-2 min)...' });
-      const nextBin = path.join(appDir, 'node_modules', '.bin', 'next');
+      const nextBin = getLocalBinPath(appDir, 'next');
       const buildBin = existsSync(nextBin) ? nextBin : npxPath;
       const buildArgs = existsSync(nextBin) ? ['build'] : ['next', 'build'];
       await spawnWithEnv(buildBin, buildArgs, appDir, enrichedEnv, 600000);
@@ -1074,7 +1074,9 @@ function cleanupLinuxSystemdService(): void {
 /** Spawn a process with enriched env, wait for exit. Rejects on non-zero or timeout. */
 function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<string, string>, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawnChild(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    // On Windows, .cmd/.bat files (npm.cmd, next.cmd) require shell:true for spawn.
+    const needsShell = process.platform === 'win32' && /\.cmd$/i.test(bin);
+    const proc = spawnChild(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], shell: needsShell });
     let settled = false;
 
     // Log last output for diagnostics on failure
@@ -1085,7 +1087,7 @@ function spawnWithEnv(bin: string, args: string[], cwd: string, env: Record<stri
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      proc.kill('SIGKILL');
+      proc.kill(); // No signal arg — uses SIGTERM on Unix, TerminateProcess on Windows
       reject(new Error(`${path.basename(bin)} ${args[0] || ''} timed out after ${Math.round(timeoutMs / 1000)}s\nLast output: ${lastOutput}`));
     }, timeoutMs);
     proc.on('exit', (code: number | null) => {

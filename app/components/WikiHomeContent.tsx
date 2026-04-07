@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Brain, ChevronDown, FolderOpen, Plus, Sparkles, Search, FilePlus, ArrowRight } from 'lucide-react';
+import { Brain, ChevronDown, FolderOpen, Plus, Sparkles, Search, FilePlus, ArrowRight, Clock, FileText, Table, Star, X, History } from 'lucide-react';
+import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { InboxSection } from '@/components/home/InboxSection';
@@ -39,7 +40,7 @@ function getSpaceLatestMtime(spaceName: string, recentFiles: RecentFile[]): numb
   return maxMtime;
 }
 
-const SPACES_COLLAPSED = 9;
+const SPACES_COLLAPSED = 6;
 
 export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps) {
   const { t } = useLocale();
@@ -107,7 +108,7 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
                 key={suggestionIdx}
                 className="text-sm text-left text-muted-foreground animate-in fade-in duration-300"
               >
-                {suggestions[suggestionIdx]}
+                {suggestions[suggestionIdx].label}
               </span>
             </div>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
@@ -263,11 +264,158 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
       {/* ══════════ Inbox ══════════ */}
       <InboxSection />
 
+      {/* ══════════ Pinned Files ══════════ */}
+      <PinnedFilesSection formatTime={formatTime} />
+
+      {/* ── Visual divider ── */}
+      <div className="border-t border-border/30 mb-8" />
+
+      {/* ══════════ Recently Edited (flat list) ══════════ */}
+      {recent.length > 0 && (
+        <RecentlyEditedSection recent={recent} formatTime={formatTime} />
+      )}
+
       {/* Footer */}
       <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">
         <Sparkles size={10} className="text-[var(--amber)]/40" />
         <span>{t.app.footer}</span>
       </div>
     </div>
+  );
+}
+
+/* ── Section Title ── */
+function SectionTitle({ icon, children, count, action }: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  count?: number;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4">
+      <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+        {icon}
+      </div>
+      <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
+        {children}
+      </h2>
+      {count != null && count > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">{count}</span>
+      )}
+      {action ? <div className="ml-auto">{action}</div> : null}
+    </div>
+  );
+}
+
+/* ── Pinned Files Section ── */
+function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string }) {
+  const { t } = useLocale();
+  const { pinnedFiles, removePin } = usePinnedFiles();
+
+  if (pinnedFiles.length === 0) return null;
+
+  return (
+    <section className="mb-8">
+      <SectionTitle icon={<Star size={14} />} count={pinnedFiles.length}>
+        {t.pinnedFiles.title}
+      </SectionTitle>
+      <div className="flex flex-col gap-0.5">
+        {pinnedFiles.map((filePath) => {
+          const name = filePath.split('/').pop() || filePath;
+          const dir = filePath.split('/').slice(0, -1).join('/');
+          const isCSV = filePath.endsWith('.csv');
+          return (
+            <div key={filePath} className="group/pin relative">
+              <Link
+                href={`/view/${encodePath(filePath)}`}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted overflow-hidden"
+              >
+                <Star size={12} className="shrink-0 fill-[var(--amber)] text-[var(--amber)]" />
+                {isCSV
+                  ? <Table size={12} className="shrink-0 text-success" />
+                  : <FileText size={12} className="shrink-0 text-muted-foreground" />
+                }
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
+                  {dir && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{dir}</span>}
+                </div>
+              </Link>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removePin(filePath); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/pin:flex p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title={t.pinnedFiles.removedToast}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ── Recently Edited Section ── */
+const RECENT_FILES_LIMIT = 8;
+
+function RecentlyEditedSection({ recent, formatTime }: { recent: RecentFile[]; formatTime: (t: number) => string }) {
+  const { t } = useLocale();
+  const [showAll, setShowAll] = useState(false);
+
+  return (
+    <section className="mb-8">
+      <SectionTitle
+        icon={<Clock size={14} />}
+        count={recent.length}
+        action={
+          <Link
+            href="/changes"
+            className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80"
+          >
+            <History size={12} />
+            <span>{t.home.changeHistory}</span>
+          </Link>
+        }
+      >
+        {t.home.recentlyEdited}
+      </SectionTitle>
+
+      <div className="flex flex-col gap-0.5">
+        {(showAll ? recent : recent.slice(0, RECENT_FILES_LIMIT)).map(({ path: filePath, mtime }) => {
+          const name = filePath.split('/').pop() || filePath;
+          const dir = filePath.split('/').slice(0, -1).join('/');
+          const isCSV = filePath.endsWith('.csv');
+          return (
+            <Link
+              key={filePath}
+              href={`/view/${encodePath(filePath)}`}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group overflow-hidden"
+            >
+              {isCSV
+                ? <Table size={12} className="shrink-0 text-success" />
+                : <FileText size={12} className="shrink-0 text-muted-foreground" />
+              }
+              <div className="flex-1 min-w-0">
+                <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
+                {dir && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{dir}</span>}
+              </div>
+              <span className="text-xs shrink-0 tabular-nums text-muted-foreground/40" suppressHydrationWarning>
+                {formatTime(mtime)}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+      {recent.length > RECENT_FILES_LIMIT && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          aria-expanded={showAll}
+          className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer mt-2 ml-1"
+        >
+          <ChevronDown size={12} className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`} />
+          <span>{showAll ? t.home.showLess : t.home.showMore}</span>
+        </button>
+      )}
+    </section>
   );
 }

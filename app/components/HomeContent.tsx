@@ -1,623 +1,164 @@
 'use client';
 
-import Link from 'next/link';
-import { FileText, Table, Clock, Sparkles, ArrowRight, FilePlus, Search, ChevronDown, Folder, Brain, Plus, Trash2, Check, Loader2, X, FolderInput, History, Star } from 'lucide-react';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
-import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
+import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight } from 'lucide-react';
 import OnboardingView from './OnboardingView';
 import Logo from './Logo';
 import GuideCard from './GuideCard';
-import SystemPulse from './SystemPulse';
-import { InboxSection } from './home/InboxSection';
-import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
+import AskContent from '@/components/ask/AskContent';
 import type { SpaceInfo } from '@/app/page';
-import RecentActivityFeed from '@/components/agents/RecentActivityFeed';
 
 interface RecentFile {
   path: string;
   mtime: number;
 }
 
-interface SpaceGroup {
-  space: string;
-  spacePath: string;
-  files: RecentFile[];
-  latestMtime: number;
-  totalFiles: number;
+function injectAskInput(text: string) {
+  window.dispatchEvent(new CustomEvent('mindos:home-suggestion', { detail: { text } }));
 }
 
-function triggerSearch() {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
-}
-
-function triggerAsk() {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }));
-}
-
-/** Group recent files by their top-level directory (Space) */
-function groupBySpace(recent: RecentFile[], spaces: SpaceInfo[]): { groups: SpaceGroup[]; rootFiles: RecentFile[] } {
-  const groupMap = new Map<string, SpaceGroup>();
-  const rootFiles: RecentFile[] = [];
-
-  for (const file of recent) {
-    const parts = file.path.split('/');
-    if (parts.length < 2) {
-      rootFiles.push(file);
-      continue;
-    }
-    const spaceName = parts[0];
-    const spaceInfo = spaces.find(s => s.name === spaceName);
-
-    if (!groupMap.has(spaceName)) {
-      groupMap.set(spaceName, {
-        space: spaceName,
-        spacePath: spaceName + '/',
-        files: [],
-        latestMtime: 0,
-        totalFiles: spaceInfo?.fileCount ?? 0,
-      });
-    }
-    const g = groupMap.get(spaceName)!;
-    g.files.push(file);
-    g.latestMtime = Math.max(g.latestMtime, file.mtime);
-  }
-
-  const groups = [...groupMap.values()].sort((a, b) => b.latestMtime - a.latestMtime);
-  return { groups, rootFiles };
-}
-
-/* ── Shared small components ── */
-
-interface SectionTitleProps {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  count?: number;
-  action?: React.ReactNode;
-}
-
-function SectionTitle({ icon, children, count, action }: SectionTitleProps) {
-  return (
-    <div className="flex items-center gap-2.5 mb-5">
-      <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-        {icon}
-      </div>
-      <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
-        {children}
-      </h2>
-      {count != null && count > 0 && (
-        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-muted text-muted-foreground tabular-nums">{count}</span>
-      )}
-      {action ? <div className="ml-auto">{action}</div> : null}
-    </div>
-  );
-}
-
-/** Reusable "Show more / Show less" toggle */
-function ToggleButton({ expanded, onToggle, showLabel, hideLabel, className = '' }: {
-  expanded: boolean;
-  onToggle: () => void;
-  showLabel: string;
-  hideLabel: string;
-  className?: string;
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      aria-expanded={expanded}
-      className={`flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer ${className}`}
-    >
-      <ChevronDown size={12} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-      <span>{expanded ? hideLabel : showLabel}</span>
-    </button>
-  );
-}
-
-/** Reusable file row for recent-file lists */
-function FileRow({ filePath, mtime, formatTime, subPath }: {
-  filePath: string;
-  mtime: number;
-  formatTime: (t: number) => string;
-  subPath?: string;
-}) {
-  const isCSV = filePath.endsWith('.csv');
-  const name = filePath.split('/').pop() || filePath;
-  return (
-    <Link
-      href={`/view/${encodePath(filePath)}`}
-      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group overflow-hidden"
-    >
-      {isCSV
-        ? <Table size={12} className="shrink-0 text-success" />
-        : <FileText size={12} className="shrink-0 text-muted-foreground" />
-      }
-      <div className="flex-1 min-w-0">
-        <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
-        {subPath && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{subPath}</span>}
-      </div>
-      <span className="text-xs shrink-0 tabular-nums text-muted-foreground/40" suppressHydrationWarning>
-        {formatTime(mtime)}
-      </span>
-    </Link>
-  );
-}
-
-const FILES_PER_GROUP = 3;
-const SPACES_PER_ROW = 6;
+const TAB_ICONS = [FolderSync, PenLine, BarChart3, Sparkles];
 
 export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
   const { t } = useLocale();
-  const [showAll, setShowAll] = useState(false);
-  const [showAllSpaces, setShowAllSpaces] = useState(false);
-  const [suggestionIdx, setSuggestionIdx] = useState(0);
+  const [activeTab, setActiveTab] = useState(0);
+  const [maximized, setMaximized] = useState(false);
 
-  const suggestions = t.ask?.suggestions ?? [
-    'Summarize this document',
-    'List all action items and TODOs',
-    'What are the key points?',
-    'Find related notes on this topic',
-  ];
+  const toggleMaximize = useCallback(() => setMaximized(v => !v), []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSuggestionIdx(i => (i + 1) % suggestions.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [suggestions.length]);
-
-  const spaceList = spaces ?? [];
-  const { groups, rootFiles } = useMemo(() => groupBySpace(recent, spaceList), [recent, spaceList]);
+  // Auto-fullscreen when user sends the first message in a session
+  const handleFirstMessage = useCallback(() => {
+    setMaximized(true);
+  }, []);
 
   if (recent.length === 0) {
     return <OnboardingView />;
   }
 
-  const formatTime = (mtime: number) => relativeTime(mtime, t.home.relativeTime);
+  const categories: { label: string; items: { label: string; desc: string; prompt: string }[] }[] =
+    (t.ask as Record<string, unknown>)?.homeCategories as typeof categories ?? [];
 
-  const lastFile = recent[0];
+  const current = categories[activeTab];
 
+  /*
+   * Single render tree — AskContent is always mounted in the same position.
+   * Normal vs fullscreen is purely a CSS layout change, so chat state is preserved.
+   */
   return (
-    <div className="content-width px-4 md:px-6 py-10 md:py-14">
-      <GuideCard />
-      <ExampleCleanupBanner />
+    <div className="flex flex-col h-[100dvh]">
 
-      {/* ══════════ Hero ══════════ */}
-      <div className="mb-14">
-        {/* Brand mark */}
-        <div className="flex items-center gap-5 mb-1">
-          <Logo id="home-hero" className="w-14 h-7 opacity-90" />
-          <h1 className="text-[2rem] font-brand leading-none">
-            <span className="text-foreground">Mind</span><span className="text-[var(--amber)]">OS</span>
-          </h1>
-        </div>
-        <p className="text-sm text-muted-foreground/50 mt-3 max-w-md leading-relaxed">
-          {t.app.tagline}
-        </p>
-
-        {/* Command bar — the single most important action */}
-        <div className="w-full max-w-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-8">
-          <button
-            onClick={triggerAsk}
-            title="⌘/"
-            data-walkthrough="ask-button"
-            className="flex-1 flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border/50 shadow-sm bg-card/80 backdrop-blur-sm transition-all duration-200 hover:border-[var(--amber)]/40 hover:shadow-md hover:-translate-y-0.5 group"
-          >
-            <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
-            <div className="flex-1 min-h-[1.5rem] flex items-center">
-              <span 
-                key={suggestionIdx}
-                className="text-sm text-left text-muted-foreground animate-in fade-in duration-300"
-              >
-                {suggestions[suggestionIdx]}
-              </span>
+      {/* ── Landing chrome: hidden when maximized ── */}
+      {!maximized && (
+        <>
+          {/* Guide Card */}
+          <div className="flex-shrink-0 px-4 md:px-6 pt-4 pb-6">
+            <div className="max-w-4xl mx-auto">
+              <GuideCard />
             </div>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
-              ⌘/
-            </kbd>
-          </button>
-          <button
-            onClick={triggerSearch}
-            title="⌘K"
-            className="flex items-center gap-2 px-3.5 py-3.5 rounded-xl border border-border/50 text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:bg-muted/60 hover:shadow-sm hover:-translate-y-0.5"
-          >
-            <Search size={14} />
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
-              ⌘K
-            </kbd>
-          </button>
-        </div>
-
-        {/* Quick actions — only 2: New + Continue */}
-        <div className="flex items-center gap-3 mt-5">
-          <Link
-            href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 bg-[var(--amber)] text-[var(--amber-foreground)]"
-          >
-            <FilePlus size={14} />
-            <span>{t.home.newNote}</span>
-          </Link>
-          {lastFile && (
-            <Link
-              href={`/view/${encodePath(lastFile.path)}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <ArrowRight size={14} className="text-[var(--amber)]/60" />
-              <span>{t.home.continueEditing}</span>
-              <span className="text-xs opacity-40 truncate max-w-32" suppressHydrationWarning>
-                {lastFile.path.split('/').pop()}
-              </span>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* ══════════ Knowledge Pulse ══════════ */}
-      <SystemPulse />
-
-      {/* ══════════ Recent Agent Activity ══════════ */}
-      <div className="mb-10">
-        <RecentActivityFeed />
-      </div>
-
-      {/* ── Visual divider ── */}
-      <div className="border-t border-border/30 mb-10" />
-
-      {/* ══════════ Inbox ══════════ */}
-      <InboxSection />
-
-      {/* ══════════ Spaces ══════════ */}
-      {(spaceList.length > 0 || true) && (
-        <section className="mb-12">
-          <SectionTitle
-            icon={<Brain size={14} />}
-            count={spaceList.length > 0 ? spaceList.length : undefined}
-            action={<CreateSpaceButton t={t} />}
-          >
-            {t.home.spaces}
-          </SectionTitle>
-          {spaceList.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {(showAllSpaces ? spaceList : spaceList.slice(0, SPACES_PER_ROW)).map(s => {
-                  const emoji = extractEmoji(s.name);
-                  const label = stripEmoji(s.name);
-                  const isEmpty = s.fileCount === 0;
-                  return (
-                    <Link
-                      key={s.name}
-                      href={`/view/${encodePath(s.path)}`}
-                      className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-200 ${
-                        isEmpty
-                          ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                          : 'border-border/60 hover:border-[var(--amber)]/30 hover:shadow-md hover:-translate-y-0.5 bg-card/40'
-                      }`}
-                    >
-                      {emoji ? (
-                        <span className="text-lg leading-none shrink-0 mt-0.5" suppressHydrationWarning>{emoji}</span>
-                      ) : (
-                        <Folder size={16} className="shrink-0 text-[var(--amber)] mt-0.5" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate block text-foreground">{label}</span>
-                        {s.description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>{s.description}</span>
-                        )}
-                        <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
-                          {t.home.nFiles(s.fileCount)}
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-              {spaceList.length > SPACES_PER_ROW && (
-                <ToggleButton
-                  expanded={showAllSpaces}
-                  onToggle={() => setShowAllSpaces(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-2"
-                />
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground py-2">
-              {t.home.noSpacesYet ?? 'No spaces yet. Create one to organize your knowledge.'}
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* ══════════ Pinned Files ══════════ */}
-      <PinnedFilesSection formatTime={formatTime} />
-
-      {/* ── Visual divider ── */}
-      <div className="border-t border-border/30 mb-10" />
-
-      {/* ══════════ Recently Edited ══════════ */}
-      {recent.length > 0 && (
-        <section className="mb-12">
-          <SectionTitle
-            icon={<Clock size={14} />}
-            count={recent.length}
-            action={
-              <Link
-                href="/changes"
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80"
-              >
-                <History size={12} />
-                <span>{t.home.changeHistory}</span>
-              </Link>
-            }
-          >
-            {t.home.recentlyEdited}
-          </SectionTitle>
-
-          {groups.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {groups.map((group) => {
-                const visibleFiles = showAll ? group.files : group.files.slice(0, FILES_PER_GROUP);
-                const hasMoreFiles = group.files.length > FILES_PER_GROUP;
-                return (
-                  <div key={group.space}>
-                    <Link
-                      href={`/view/${encodePath(group.spacePath)}`}
-                      className="flex items-center gap-2 px-1 py-1.5 rounded-lg group transition-colors hover:bg-muted/50"
-                    >
-                      <Folder size={14} className="shrink-0 text-[var(--amber)]" />
-                      <span className="text-xs font-semibold text-foreground group-hover:text-[var(--amber)] transition-colors" suppressHydrationWarning>
-                        {group.space}
-                      </span>
-                      <span className="text-xs text-muted-foreground/50 tabular-nums" suppressHydrationWarning>
-                        {t.home.nFiles(group.totalFiles)} · {formatTime(group.latestMtime)}
-                      </span>
-                      {hasMoreFiles && !showAll && (
-                        <span className="text-xs text-muted-foreground/30 tabular-nums">
-                          +{group.files.length - FILES_PER_GROUP}
-                        </span>
-                      )}
-                    </Link>
-                    <div className="flex flex-col gap-0.5 ml-2 border-l-2 border-border/20 pl-3">
-                      {visibleFiles.map(({ path: filePath, mtime }) => (
-                        <FileRow
-                          key={filePath}
-                          filePath={filePath}
-                          mtime={mtime}
-                          formatTime={formatTime}
-                          subPath={filePath.split('/').slice(1, -1).join('/')}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {rootFiles.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 px-1 py-1.5">
-                    <FileText size={14} className="shrink-0 text-muted-foreground/50" />
-                    <span className="text-xs font-semibold text-muted-foreground/60">
-                      {t.home.other}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 ml-2 border-l-2 border-border/20 pl-3">
-                    {rootFiles.map(({ path: filePath, mtime }) => (
-                      <FileRow key={filePath} filePath={filePath} mtime={mtime} formatTime={formatTime} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {groups.some(g => g.files.length > FILES_PER_GROUP) && (
-                <ToggleButton
-                  expanded={showAll}
-                  onToggle={() => setShowAll(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-1 ml-1"
-                />
-              )}
-            </div>
-          ) : (
-            <div className="relative pl-4">
-              <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-gradient-to-b from-[var(--amber)]/20 via-border/30 to-transparent" />
-              <div className="flex flex-col gap-0.5">
-                {(showAll ? recent : recent.slice(0, 5)).map(({ path: filePath, mtime }, idx) => {
-                  const isCSV = filePath.endsWith('.csv');
-                  const name = filePath.split('/').pop() || filePath;
-                  const dir = filePath.split('/').slice(0, -1).join('/');
-                  return (
-                    <div key={filePath} className="relative group">
-                      <div
-                        aria-hidden="true"
-                        className={`absolute -left-[5px] top-1/2 -translate-y-1/2 rounded-full transition-all duration-200 group-hover:scale-125 ${
-                          idx === 0
-                            ? 'w-2.5 h-2.5 bg-[var(--amber)] ring-[3px] ring-[var(--amber)]/15 shadow-sm shadow-[var(--amber)]/20'
-                            : 'w-1.5 h-1.5 bg-muted-foreground/25 group-hover:bg-[var(--amber)]/50'
-                        }`}
-                      />
-                      <Link
-                        href={`/view/${encodePath(filePath)}`}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 group-hover:translate-x-0.5 hover:bg-muted overflow-hidden"
-                      >
-                        {isCSV
-                          ? <Table size={12} className="shrink-0 text-success" />
-                          : <FileText size={12} className="shrink-0 text-muted-foreground/50" />
-                        }
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
-                          {dir && <span className="text-xs truncate block text-muted-foreground/40" suppressHydrationWarning>{dir}</span>}
-                        </div>
-                        <span className="text-xs shrink-0 tabular-nums text-muted-foreground/40" suppressHydrationWarning>
-                          {formatTime(mtime)}
-                        </span>
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-              {recent.length > 5 && (
-                <ToggleButton
-                  expanded={showAll}
-                  onToggle={() => setShowAll(v => !v)}
-                  showLabel={t.home.showMore}
-                  hideLabel={t.home.showLess}
-                  className="mt-2 ml-3"
-                />
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Footer */}
-      <div className="mt-6 py-8 border-t border-border/20 flex items-center justify-center gap-2 text-[11px] text-muted-foreground/25">
-        <Logo id="home-footer" className="w-5 h-2.5 opacity-30" />
-        <span>{t.app.footer}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Pinned Files Section ── */
-function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string }) {
-  const { t } = useLocale();
-  const { pinnedFiles, removePin } = usePinnedFiles();
-
-  if (pinnedFiles.length === 0) {
-    return (
-      <section className="mb-12">
-        <SectionTitle icon={<Star size={14} />}>
-          {t.pinnedFiles.title}
-        </SectionTitle>
-        <div className="py-8 px-6 rounded-xl border border-border/40 bg-card/30 text-center">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--amber-subtle)] mb-3">
-            <Star size={18} className="text-[var(--amber)]/60" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground/70 mb-1">
-            {t.pinnedFiles.empty ?? 'No pinned files'}
-          </p>
-          <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto leading-relaxed">
-            {t.pinnedFiles.emptyHint ?? 'Click the star icon on any file to pin it here'}
-          </p>
-        </div>
-      </section>
-    );
-  }
 
-  return (
-    <section className="mb-12">
-      <SectionTitle icon={<Star size={14} />} count={pinnedFiles.length}>
-        {t.pinnedFiles.title}
-      </SectionTitle>
-      <div className="flex flex-col gap-0.5">
-        {pinnedFiles.map((filePath) => {
-          const name = filePath.split('/').pop() || filePath;
-          const dir = filePath.split('/').slice(0, -1).join('/');
-          const isCSV = filePath.endsWith('.csv');
-          return (
-            <div key={filePath} className="group/pin relative">
-              <Link
-                href={`/view/${encodePath(filePath)}`}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted overflow-hidden"
-              >
-                <Star size={12} className="shrink-0 fill-[var(--amber)] text-[var(--amber)]" />
-                {isCSV
-                  ? <Table size={12} className="shrink-0 text-success" />
-                  : <FileText size={12} className="shrink-0 text-muted-foreground" />
-                }
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm truncate block text-foreground" suppressHydrationWarning>{name}</span>
-                  {dir && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{dir}</span>}
-                </div>
-              </Link>
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removePin(filePath); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/pin:flex p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={t.pinnedFiles.removedToast}
-              >
-                <X size={12} />
-              </button>
+          {/* Spacer top */}
+          <div className="flex-1 min-h-0" />
+
+          {/* Hero */}
+          <div className="flex-shrink-0 flex flex-col items-center text-center px-4 md:px-6 pb-8">
+            <div className="flex items-center gap-4 mb-3">
+              <Logo id="home-hero" className="w-10 h-5 opacity-90" />
+              <h1 className="text-2xl font-brand leading-none">
+                <span className="text-foreground">Mind</span><span className="text-[var(--amber)]">OS</span>
+              </h1>
             </div>
-          );
-        })}
+            <p className="text-sm text-muted-foreground/50 max-w-sm leading-relaxed">
+              {t.app.tagline}
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* ── Chatbot area: always mounted, layout changes with maximized ── */}
+      <div className={
+        maximized
+          ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+          : 'flex-shrink-0 px-4 md:px-6 flex justify-center'
+      }>
+        <div className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'w-full max-w-4xl'}>
+          <div className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'rounded-xl border border-border/50 shadow-sm overflow-hidden flex flex-col max-h-[50vh]'}>
+            <AskContent
+              visible={true}
+              variant="home"
+              maximized={maximized}
+              onMaximize={toggleMaximize}
+              onFirstMessage={handleFirstMessage}
+            />
+          </div>
+        </div>
       </div>
-    </section>
-  );
-}
 
-/* ── Create Space: title-bar button ── */
-function CreateSpaceButton({ t }: { t: ReturnType<typeof useLocale>['t'] }) {
-  return (
-    <button
-      onClick={() => window.dispatchEvent(new Event('mindos:create-space'))}
-      className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80 cursor-pointer"
-    >
-      <Plus size={12} />
-      <span>{t.home.newSpace}</span>
-    </button>
-  );
-}
+      {/* ── Bottom chrome: hidden when maximized ── */}
+      {!maximized && (
+        <>
+          {/* Tabs + Prompt Grid */}
+          {categories.length > 0 && current && (
+            <div className="flex-shrink-0 flex justify-center px-4 md:px-6 pt-6">
+              <div className="w-full max-w-4xl">
 
-/* ── Example files cleanup banner ── */
-function ExampleCleanupBanner() {
-  const { t } = useLocale();
-  const [count, setCount] = useState<number | null>(null);
-  const [cleaning, setCleaning] = useState(false);
-  const [done, setDone] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+                {/* Pill Tabs */}
+                <div className="flex items-center justify-center gap-1.5 mb-5">
+                  {categories.map((cat, i) => {
+                    const Icon = TAB_ICONS[i % TAB_ICONS.length];
+                    const isActive = i === activeTab;
+                    return (
+                      <button
+                        key={cat.label}
+                        type="button"
+                        onClick={() => setActiveTab(i)}
+                        className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-full transition-all duration-150 ${
+                          isActive
+                            ? 'bg-[var(--amber)]/12 text-[var(--amber)]'
+                            : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/40'
+                        }`}
+                      >
+                        <Icon size={13} />
+                        <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-  useEffect(() => {
-    scanExampleFilesAction().then(r => {
-      if (r.files.length > 0) setCount(r.files.length);
-    }).catch((err) => { console.warn("[HomeContent] scanExampleFilesAction failed:", err); });
-  }, []);
+                {/* Prompt Cards — 2x2 grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {current.items.map((item, i) => (
+                    <button
+                      key={`${activeTab}-${i}`}
+                      type="button"
+                      onClick={() => injectAskInput(item.prompt)}
+                      className="group relative text-left px-4 py-3.5 rounded-xl border border-border/30 hover:border-border/60 transition-all duration-150 hover:shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-foreground/90 leading-snug mb-0.5">{item.label}</div>
+                          <div className="text-xs text-muted-foreground/60 leading-relaxed">{item.desc}</div>
+                        </div>
+                        <ArrowUpRight size={14} className="shrink-0 mt-0.5 text-muted-foreground/20 group-hover:text-[var(--amber)] transition-colors" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-  const handleCleanup = useCallback(async () => {
-    if (count === null) return;
-    setCleaning(true);
-    try {
-      const r = await cleanupExamplesAction();
-      if (r.success) {
-        setDone(true);
-        setTimeout(() => setDismissed(true), 2500);
-      }
-    } catch { /* silent — banner stays, user can retry */ }
-    setCleaning(false);
-  }, [count]);
+          {/* Spacer bottom */}
+          <div className="flex-1 min-h-0" />
 
-  if (dismissed || count === null || count === 0) return null;
-
-  if (done) {
-    return (
-      <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl border border-success/30 bg-success/5 animate-in fade-in duration-300">
-        <Check size={14} className="text-success shrink-0" />
-        <span className="text-xs text-success">{t.home.cleanupExamplesDone}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-muted/30 animate-in fade-in duration-300">
-      <span className="text-sm leading-none shrink-0">🧪</span>
-      <span className="text-xs text-muted-foreground flex-1">
-        {t.home.cleanupExamples(count)}
-      </span>
-      <button
-        onClick={handleCleanup}
-        disabled={cleaning}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80"
-      >
-        {cleaning ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-        {t.home.cleanupExamplesButton}
-      </button>
-      <button
-        onClick={() => setDismissed(true)}
-        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground shrink-0"
-      >
-        <X size={12} />
-      </button>
+          {/* Footer */}
+          <div className="flex-shrink-0 py-4 flex items-center justify-center gap-2 text-[11px] text-muted-foreground/20">
+            <Logo id="home-footer" className="w-4 h-2 opacity-20" />
+            <span>{t.app.footer}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -119,7 +119,7 @@ export default function RightAskPanel({
     <aside
       className={`
         hidden md:flex fixed top-0 right-0 h-screen z-40
-        flex-col bg-card border-l border-border/30 shadow-[-4px_0_16px_rgba(0,0,0,0.04)]
+        flex-col bg-background border-l border-border/40 shadow-[-4px_0_16px_rgba(0,0,0,0.04)]
         transition-[width,transform] duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}

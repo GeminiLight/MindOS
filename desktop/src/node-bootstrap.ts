@@ -19,7 +19,8 @@ export const NODE_VERSION = '22.16.0';
 
 const MINDOS_DIR = path.join(app.getPath('home'), '.mindos');
 const NODE_DIR = path.join(MINDOS_DIR, 'node');
-const PATH_SEP = process.platform === 'win32' ? ';' : ':';
+const IS_WIN = process.platform === 'win32';
+const PATH_SEP = IS_WIN ? ';' : ':';
 
 /** Path to the bundled Node.js shipped inside the packaged app (resources/mindos-runtime/node/) */
 export function getBundledNodePath(): string {
@@ -92,11 +93,16 @@ export async function downloadNode(
   if (format === 'tar.gz') {
     await spawnAsync('tar', ['xzf', tmpFile, '-C', NODE_DIR, '--strip-components=1'], 60000);
   } else {
-    // Windows: PowerShell extract
-    await spawnAsync('powershell', [
-      '-Command',
-      `Expand-Archive -Path '${tmpFile}' -DestinationPath '${path.join(tmpDir, 'node-extract')}' -Force`,
-    ], 60000);
+    // Windows: PowerShell extract — use -NoProfile and -ExecutionPolicy Bypass
+    // to avoid user profile interference and restrictive execution policies.
+    // Use -LiteralPath with single-quotes (escape embedded single-quotes by doubling)
+    // to prevent PowerShell variable interpolation on paths containing $.
+    const psTmpFile = tmpFile.replace(/'/g, "''");
+    const psExtractDir = path.join(tmpDir, 'node-extract').replace(/'/g, "''");
+    await spawnAsync('powershell.exe', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+      `Expand-Archive -LiteralPath '${psTmpFile}' -DestinationPath '${psExtractDir}' -Force`,
+    ], 120000);
     // Find extracted folder name and copy contents using Node.js API (xcopy is deprecated)
     const extractDir = path.join(tmpDir, 'node-extract');
     const entries = require('fs').readdirSync(extractDir);
@@ -198,9 +204,10 @@ function downloadFile(
 /** Spawn a process and wait for exit. Rejects on non-zero exit or timeout. */
 function spawnAsync(cmd: string, args: string[], timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(cmd, args, { stdio: 'ignore' });
+    // On Windows, .cmd/.bat files require shell:true for spawn to execute them.
+    const proc = spawn(cmd, args, { stdio: 'ignore', shell: IS_WIN });
     const timer = setTimeout(() => {
-      proc.kill('SIGKILL');
+      proc.kill(); // No signal arg — Node.js uses SIGTERM on Unix, TerminateProcess on Windows
       reject(new Error(`${cmd} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
@@ -225,7 +232,7 @@ export async function installMindosWithPrivateNode(
   onProgress?: (status: string) => void,
 ): Promise<string> {
   const binDir = path.dirname(nodePath);
-  const npmBin = path.join(binDir, 'npm');
+  const npmBin = path.join(binDir, IS_WIN ? 'npm.cmd' : 'npm');
   if (!existsSync(npmBin)) {
     throw new Error(`npm not found at ${npmBin}`);
   }
@@ -236,13 +243,14 @@ export async function installMindosWithPrivateNode(
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(npmBin, ['install', '-g', '@geminilight/mindos@latest'], {
       stdio: 'ignore',
+      shell: IS_WIN, // .cmd files require shell on Windows
       env: {
         ...process.env,
         PATH: `${binDir}${PATH_SEP}${process.env.PATH || ''}`,
       },
     });
     const timer = setTimeout(() => {
-      proc.kill('SIGKILL');
+      proc.kill();
       reject(new Error('npm install timed out after 5 minutes'));
     }, 300000);
 
@@ -262,6 +270,7 @@ export async function installMindosWithPrivateNode(
     let out = '';
     const proc = spawn(npmBin, ['root', '-g'], {
       stdio: ['ignore', 'pipe', 'ignore'],
+      shell: IS_WIN, // .cmd files require shell on Windows
       env: {
         ...process.env,
         PATH: `${binDir}${PATH_SEP}${process.env.PATH || ''}`,

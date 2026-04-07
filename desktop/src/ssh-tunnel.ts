@@ -51,7 +51,7 @@ export function cleanupOrphanedSshTunnel(): void {
       console.warn(`[MindOS] Killing orphaned SSH tunnel (PID ${pid})`);
       process.kill(pid, 'SIGTERM');
       setTimeout(() => {
-        try { process.kill(pid, 0); process.kill(pid, 'SIGKILL'); } catch { /* already dead */ }
+        try { process.kill(pid, 0); process.kill(pid); } catch { /* already dead */ }
       }, 2000);
     } catch {
       // Process already dead — just clean up the PID file
@@ -212,7 +212,7 @@ export class SshTunnel {
         '-o', 'BatchMode=yes',                   // Never prompt for password/passphrase
       ];
 
-      this.process = spawn('ssh', args, {
+      this.process = spawn(process.platform === 'win32' ? 'ssh.exe' : 'ssh', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
@@ -297,7 +297,7 @@ export class SshTunnel {
 
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
-        try { this.process?.kill('SIGKILL'); } catch { /* dead */ }
+        try { this.process?.kill(); } catch { /* dead */ }
         resolve();
       }, 3000);
 

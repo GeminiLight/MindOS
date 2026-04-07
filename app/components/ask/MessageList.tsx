@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, memo, useState, useCallback } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FileText, Search, Lightbulb } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, ImagePart } from '@/lib/types';
@@ -62,7 +62,7 @@ function UserMessageContent({ content, skillName, images }: { content: string; s
       )}
       {/* Skill capsule + text */}
       {resolved && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-[var(--amber)]/15 text-[var(--amber)] mr-1 align-middle">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-white/20 text-white/90 mr-1 align-middle">
           <Zap size={10} className="shrink-0" />
           {resolved}
         </span>
@@ -158,7 +158,7 @@ interface MessageListProps {
   loadingPhase: 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
   emptyPrompt: string;
   emptyHint?: string;
-  suggestions: readonly string[];
+  suggestions: readonly { label: string; prompt: string }[];
   onSuggestionClick: (text: string) => void;
   labels: {
     connecting: string;
@@ -184,7 +184,9 @@ export default memo(function MessageList({
   const [showScrollDown, setShowScrollDown] = useState(false);
 
   const scrollToBottom = useCallback(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
@@ -203,12 +205,12 @@ export default memo(function MessageList({
   }, []);
 
   return (
-    <div ref={scrollContainerRef} role="log" aria-live="polite" className="relative flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-5 min-h-0">
+    <div ref={scrollContainerRef} role="log" aria-live="polite" className="relative flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 space-y-5 min-h-0">
       {messages.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 min-h-[260px] px-6 pt-10 pb-4">
           {/* Brand anchor — refined presence */}
-          <div className="relative w-12 h-12 rounded-2xl bg-[var(--amber)]/8 flex items-center justify-center mb-6">
-            <div className="absolute inset-0 rounded-2xl bg-[var(--amber)]/4 scale-[1.35]" />
+          <div className="relative w-12 h-12 rounded-2xl bg-[var(--amber)]/10 flex items-center justify-center mb-6">
+            <div className="absolute inset-0 rounded-2xl bg-[var(--amber)]/5 scale-[1.4]" />
             <Sparkles size={22} className="text-[var(--amber)] relative z-10" />
           </div>
           <p className="text-center text-[15px] font-semibold text-foreground tracking-tight mb-2">{emptyPrompt}</p>
@@ -218,20 +220,20 @@ export default memo(function MessageList({
           {/* Suggestion chips — refined single column */}
           <div className="flex flex-col gap-2.5 max-w-[280px] w-full">
             {suggestions.map((s, i) => {
-              const icons = [FileText, Search, Lightbulb];
+              const icons = [FolderInput, Search, PenLine, Lightbulb];
               const SugIcon = icons[i % icons.length];
               return (
                 <button
                   key={i}
                   type="button"
-                  onClick={() => onSuggestionClick(s)}
+                  onClick={() => onSuggestionClick(s.prompt)}
                   className="group/sug flex items-center gap-3 text-left text-[13px] px-3.5 py-3 rounded-xl border border-border/40 bg-transparent text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30 hover:bg-[var(--amber)]/5 transition-all leading-snug"
-                  aria-label={s}
+                  aria-label={s.prompt}
                 >
                   <span className="shrink-0 w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center group-hover/sug:bg-[var(--amber)]/10 transition-colors">
                     <SugIcon size={15} className="text-muted-foreground/70 group-hover/sug:text-[var(--amber)] transition-colors" />
                   </span>
-                  <span className="flex-1">{s}</span>
+                  <span className="flex-1">{s.label}</span>
                 </button>
               );
             })}
@@ -279,7 +281,8 @@ export default memo(function MessageList({
                   ) : (
                     <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
                   )}
-                  <span className="text-xs text-muted-foreground animate-pulse">
+                  <span className="text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
                     {loadingPhase === 'reconnecting'
                       ? (labels.reconnecting ?? 'Reconnecting...')
                       : loadingPhase === 'connecting'
@@ -287,6 +290,12 @@ export default memo(function MessageList({
                         : loadingPhase === 'thinking'
                           ? labels.thinking
                           : labels.generating}
+                    <span className="inline-flex gap-0.5">
+                      <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:0ms]"></span>
+                      <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:150ms]"></span>
+                      <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:300ms]"></span>
+                    </span>
+                    </span>
                   </span>
                 </div>
               ) : null}

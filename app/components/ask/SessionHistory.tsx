@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, Pencil } from 'lucide-react';
+import { Trash2, Pencil, Pin, PinOff } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
 
@@ -11,6 +11,7 @@ interface SessionHistoryProps {
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
+  onTogglePin: (id: string) => void;
   onClearAll: () => void;
   labels: { title: string; clearAll: string; confirmClear: string; noSessions: string; rename: string };
 }
@@ -28,7 +29,7 @@ function formatRelativeTime(date: Date): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export default function SessionHistory({ sessions, activeSessionId, onLoad, onDelete, onRename, onClearAll, labels }: SessionHistoryProps) {
+export default function SessionHistory({ sessions, activeSessionId, onLoad, onDelete, onRename, onTogglePin, onClearAll, labels }: SessionHistoryProps) {
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
           const isActive = activeSessionId === s.id;
           return (
             <div key={s.id} className="group flex items-center gap-0.5">
+              {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/50 -rotate-45 ml-1" />}
               <button
                 type="button"
                 onClick={() => onLoad(s.id)}
@@ -128,6 +130,14 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
                 {editingId !== s.id && (
                   <div className="text-2xs text-muted-foreground/50 mt-0.5">{formatRelativeTime(new Date(s.updatedAt))}</div>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onTogglePin(s.id)}
+                className={`p-1.5 rounded-lg transition-opacity opacity-0 group-hover:opacity-100 ${s.pinned ? 'text-[var(--amber)] hover:text-muted-foreground' : 'text-muted-foreground hover:text-[var(--amber)]'}`}
+                title={s.pinned ? 'Unpin' : 'Pin'}
+              >
+                {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
               </button>
               <button
                 type="button"

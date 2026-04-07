@@ -8,12 +8,14 @@
  * with an enriched PATH that includes the discovered node's bin directory.
  */
 import { app } from 'electron';
-import { exec } from 'child_process';
+import { exec, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { getPrivateNodePath, isPrivateNodeInstalled, getBundledNodePath, isBundledNodeInstalled } from './node-bootstrap';
 import { getAppConfigStore } from './app-config-store';
+
+const IS_WIN = process.platform === 'win32';
 
 const execAsync = promisify(exec);
 
@@ -25,8 +27,7 @@ const MIN_NODE_MAJOR = 18;
  */
 function checkNodeVersion(nodePath: string): boolean {
   try {
-    const { execSync } = require('child_process');
-    const ver = execSync(`"${nodePath}" --version`, { encoding: 'utf-8', timeout: 3000 }).trim();
+    const ver = execFileSync(nodePath, ['--version'], { encoding: 'utf-8', timeout: 3000 }).trim();
     // ver looks like "v22.16.0"
     const match = ver.match(/^v(\d+)\./);
     if (!match) return false;
@@ -151,9 +152,11 @@ export async function getNodePath(): Promise<string | null> {
     if (existsSync(p) && checkNodeVersion(p)) return p;
   }
 
-  // 6. `which node` with enriched PATH (fast, ~100ms + version check)
+  // 6. `which`/`where` node with enriched PATH (fast, ~100ms + version check)
   try {
-    const result = await execWithPath('which node', { timeout: 3000 });
+    const raw = await execWithPath(IS_WIN ? 'where node' : 'which node', { timeout: 3000 });
+    // `where` on Windows may return multiple lines; take the first match.
+    const result = raw.split(/\r?\n/)[0].trim();
     if (result && existsSync(result) && checkNodeVersion(result)) {
       try { getAppConfigStore().set('cachedNodePath', result); } catch { /* best-effort */ }
       return result;
@@ -193,7 +196,7 @@ export async function getMindosInstallPath(nodePath?: string | null): Promise<st
 
   // Strategy 1: Use npm from the same bin directory as node (most reliable)
   if (binDir) {
-    const npmBin = path.join(binDir, 'npm');
+    const npmBin = getNpmPath(binDir);
     if (existsSync(npmBin)) {
       try {
         const globalRoot = await execWithPath(`"${npmBin}" root -g`, { timeout: 5000, extraBinDir: binDir });
@@ -229,15 +232,31 @@ export async function getMindosInstallPath(nodePath?: string | null): Promise<st
 }
 
 /**
+ * Resolve npm absolute path from a bin directory.
+ * On Windows, npm ships as npm.cmd; on Unix it's a plain script.
+ */
+export function getNpmPath(binDir: string): string {
+  return path.join(binDir, IS_WIN ? 'npm.cmd' : 'npm');
+}
+
+/**
  * Resolve npx absolute path from node path.
  * npx lives in the same bin/ directory as node.
  */
 export function getNpxPath(nodePath: string): string {
   const binDir = path.dirname(nodePath);
-  const npx = path.join(binDir, 'npx');
+  const npx = path.join(binDir, IS_WIN ? 'npx.cmd' : 'npx');
   if (existsSync(npx)) return npx;
   // Fallback: bare 'npx' — let PATH resolve it. Don't return npm (different CLI args).
   return 'npx';
+}
+
+/**
+ * Resolve a local .bin executable path (e.g. "next").
+ * On Windows, .bin stubs are .cmd files.
+ */
+export function getLocalBinPath(baseDir: string, name: string): string {
+  return path.join(baseDir, 'node_modules', '.bin', IS_WIN ? `${name}.cmd` : name);
 }
 
 /**

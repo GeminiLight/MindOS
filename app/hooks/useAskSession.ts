@@ -227,6 +227,20 @@ export function useAskSession(currentFile?: string) {
     });
   }, []);
 
+  /** Toggle pin/unpin a session. Pinned sessions sort to top. */
+  const togglePinSession = useCallback((id: string) => {
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx < 0) return prev;
+      const updated = { ...prev[idx], pinned: !prev[idx].pinned };
+      const next = [...prev];
+      next[idx] = updated;
+      // Only persist if session has messages
+      if (updated.messages.length > 0) void upsertSession(updated);
+      return next;
+    });
+  }, []);
+
   const clearAllSessions = useCallback(() => {
     // Only delete sessions that have messages (were persisted)
     const persistedIds = sessions.filter(s => s.messages.length > 0).map(s => s.id);
@@ -239,10 +253,17 @@ export function useAskSession(currentFile?: string) {
     // No upsertSession — memory only
   }, [currentFile, sessions]);
 
+  /** Sessions sorted: pinned first, then by updatedAt desc */
+  const sortedSessions = [...sessions].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
+
   return {
     messages,
     setMessages,
-    sessions,
+    sessions: sortedSessions,
     activeSessionId,
     initSessions,
     persistSession,
@@ -251,6 +272,7 @@ export function useAskSession(currentFile?: string) {
     loadSession,
     deleteSession,
     renameSession,
+    togglePinSession,
     clearAllSessions,
   };
 }

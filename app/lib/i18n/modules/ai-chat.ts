@@ -41,9 +41,49 @@ export const aiChatEn = {
     proxyCompatAlsoFailed: (err: string) => `Compatibility mode also failed: ${err}. Please check your Base URL, API key, and model name.`,
     retry: 'Retry',
     suggestions: [
-      'Summarize this document',
-      'Organize my recent notes',
-      'Find related notes',
+      { label: 'Organize inbox', prompt: 'Organize my inbox files into the right spaces' },
+      { label: 'Research a topic', prompt: 'Research the latest trends in AI agents' },
+      { label: 'Draft weekly review', prompt: 'Draft a weekly review based on my recent notes' },
+      { label: 'Brainstorm ideas', prompt: 'Brainstorm 3 creative ideas for my next project' },
+    ],
+    /** Categorized prompts for homepage explore section */
+    homeCategories: [
+      {
+        label: 'Knowledge',
+        items: [
+          { label: 'Organize into Spaces', desc: 'Sort scattered notes by topic', prompt: 'Help me organize my recent unstructured notes into appropriate spaces with proper tags' },
+          { label: 'Sync & Deduplicate', desc: 'Clean up cross-platform overlap', prompt: 'Find duplicate or overlapping content across my spaces and help me consolidate them' },
+          { label: 'Auto-tag & Categorize', desc: 'Add structure to raw notes', prompt: 'Review my untagged notes and suggest categories and tags for each' },
+          { label: 'Weekly Digest', desc: 'Summarize this week\'s changes', prompt: 'Summarize everything I added or changed this week across all spaces' },
+        ],
+      },
+      {
+        label: 'Writing',
+        items: [
+          { label: 'Blog from Notes', desc: 'Turn drafts into polished posts', prompt: 'Turn my draft notes into a polished blog post with clear structure' },
+          { label: 'Product Copy', desc: 'Landing page & descriptions', prompt: 'Write compelling product description and landing page copy based on my notes' },
+          { label: 'Polish & Refine', desc: 'Improve clarity and tone', prompt: 'Review this document for clarity, tone, and structure, then rewrite the weak parts' },
+          { label: 'Slide Deck Outline', desc: 'Presentation structure from notes', prompt: 'Create a slide deck outline from my notes on this topic' },
+        ],
+      },
+      {
+        label: 'Analysis',
+        items: [
+          { label: 'Competitive Overview', desc: 'Compare products & differentiators', prompt: 'Compare the products in my research notes and identify key differentiators' },
+          { label: 'Extract Insights', desc: 'Patterns across reading notes', prompt: 'What are the most important insights and patterns across my reading notes?' },
+          { label: 'Decision Framework', desc: 'Pros, cons, recommendation', prompt: 'Help me structure this decision with pros, cons, risks, and a recommendation' },
+          { label: 'GTM Strategy', desc: 'Go-to-market from research', prompt: 'Help me build a go-to-market plan based on my product and market research notes' },
+        ],
+      },
+      {
+        label: 'Innovation',
+        items: [
+          { label: 'Challenge My Assumptions', desc: 'Find blind spots in my thinking', prompt: 'Review my notes and challenge the key assumptions I\'m making. What am I missing?' },
+          { label: 'What If Scenarios', desc: 'Explore alternative futures', prompt: 'Based on my research, generate 3 contrarian "what if" scenarios I haven\'t considered' },
+          { label: 'Combine & Remix Ideas', desc: 'Cross-pollinate across domains', prompt: 'Find unexpected connections between ideas in different spaces and suggest novel combinations' },
+          { label: 'Spot the Opportunity', desc: 'Gaps others are missing', prompt: 'Analyze my market research notes and identify underserved niches or emerging opportunities' },
+        ],
+      },
     ],
     modeChat: 'Chat',
     modeAgent: 'Agent',
@@ -184,9 +224,48 @@ export const aiChatZh = {
     proxyCompatAlsoFailed: (err: string) => `兼容模式也失败了：${err}。请检查 Base URL、API Key 和模型名称。`,
     retry: '重试',
     suggestions: [
-      '总结这篇文档',
-      '整理最近的笔记',
-      '查找相关笔记',
+      { label: '整理收件箱', prompt: '把收件箱的文件整理到对应空间' },
+      { label: '调研一个话题', prompt: '调研一下 AI Agent 的最新趋势' },
+      { label: '起草周报', prompt: '根据最近的笔记起草一份周报' },
+      { label: '想新 idea', prompt: '为我的下一个项目想 3 个新 idea' },
+    ],
+    homeCategories: [
+      {
+        label: '知识管理',
+        items: [
+          { label: '整理到 Space', desc: '按主题归类零散笔记', prompt: '帮我把最近的零散笔记整理到合适的 Space，并打好标签' },
+          { label: '同步去重', desc: '清理跨平台重复内容', prompt: '找出我各个 Space 中重复或重叠的内容，帮我合并整理' },
+          { label: '自动打标签', desc: '给未分类笔记加结构', prompt: '检查我未标记的笔记，建议合适的分类和标签' },
+          { label: '每周摘要', desc: '汇总本周变更', prompt: '总结我这周在所有 Space 中新增和修改的内容' },
+        ],
+      },
+      {
+        label: '内容创作',
+        items: [
+          { label: '笔记变博客', desc: '草稿变成精修文章', prompt: '把我的草稿笔记改写成一篇结构清晰的博客文章' },
+          { label: '产品文案', desc: '落地页与产品描述', prompt: '根据我的笔记写一段有吸引力的产品描述和落地页文案' },
+          { label: '润色优化', desc: '提升清晰度和语气', prompt: '审阅这篇文档的清晰度、语气和结构，重写不好的部分' },
+          { label: '演示大纲', desc: '从笔记生成演讲结构', prompt: '根据我关于这个主题的笔记，创建一个演示文稿大纲' },
+        ],
+      },
+      {
+        label: '分析洞察',
+        items: [
+          { label: '竞品对比', desc: '比较产品差异化', prompt: '对比我调研笔记中的产品，找出关键差异点' },
+          { label: '提炼洞察', desc: '发现阅读笔记中的规律', prompt: '我的阅读笔记中有哪些最重要的见解和规律？' },
+          { label: '决策框架', desc: '利弊分析与建议', prompt: '帮我用利弊、风险和建议来结构化这个决策' },
+          { label: 'GTM 策略', desc: '从调研到上市方案', prompt: '根据我的产品和市场调研笔记，帮我制定一份上市计划' },
+        ],
+      },
+      {
+        label: '启发创新',
+        items: [
+          { label: '挑战假设', desc: '找出思维盲点', prompt: '审视我的笔记，挑战我正在做的关键假设。我遗漏了什么？' },
+          { label: '反常识探索', desc: '探索替代可能性', prompt: '根据我的调研，生成 3 个我没考虑过的反常识场景' },
+          { label: '跨域融合', desc: '不同领域的创意碰撞', prompt: '在我不同 Space 的想法中找到意想不到的联系，并建议新颖的组合' },
+          { label: '发现机会', desc: '别人没看到的空白', prompt: '分析我的市场调研笔记，找出未被充分服务的小众市场或新兴机会' },
+        ],
+      },
     ],
     modeChat: '对话',
     modeAgent: 'Agent',

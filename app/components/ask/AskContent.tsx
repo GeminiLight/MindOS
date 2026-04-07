@@ -15,7 +15,6 @@ import MessageList from '@/components/ask/MessageList';
 import MentionPopover from '@/components/ask/MentionPopover';
 import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistory from '@/components/ask/SessionHistory';
-import SessionTabBar from '@/components/ask/SessionTabBar';
 import AskHeader from '@/components/ask/AskHeader';
 import FileChip from '@/components/ask/FileChip';
 import AgentSelectorCapsule from '@/components/ask/AgentSelectorCapsule';
@@ -161,6 +160,20 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     return () => window.removeEventListener('mindos:inject-ask-files', handler);
   }, []);
 
+  // Home suggestion chip click — inject text into input
+  useEffect(() => {
+    if (!isHome) return;
+    const handler = (e: Event) => {
+      const text = (e as CustomEvent).detail?.text;
+      if (typeof text === 'string') {
+        setInput(text);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    };
+    window.addEventListener('mindos:home-suggestion', handler);
+    return () => window.removeEventListener('mindos:home-suggestion', handler);
+  }, [isHome]);
+
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
   const prevFileRef = useRef(currentFile);
@@ -174,14 +187,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
     if (justOpened) {
       setTimeout(() => inputRef.current?.focus(), 50);
+      // Home variant: also load sessions so user can switch
       void session.initSessions();
       setInput(initialMessage || '');
       chat.firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
-    upload.clearAttachments();
-    imageUpload.clearImages();
-    mention.resetMention();
-    slash.resetSlash();
+      upload.clearAttachments();
+      imageUpload.clearImages();
+      mention.resetMention();
+      slash.resetSlash();
     setSelectedSkill(null);
     setSelectedAcpAgent(initialAcpAgent ?? null);
     setShowHistory(false);
@@ -381,6 +395,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     setSelectedSkill(null);
     setSelectedAcpAgent(null);
     setShowHistory(false);
+    chat.firstMessageFired.current = false;
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [currentFile]);
 
@@ -448,31 +463,25 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   return (
     <>
-      {/* Header — home variant hides title, keeps history + new session buttons */}
+      {/* Header — home variant shows session switcher + new/history/fullscreen buttons */}
       <AskHeader
         isPanel={isPanel || isHome}
-        hideTitle={isHome}
         showHistory={showHistory}
         onToggleHistory={toggleHistory}
         onReset={handleResetSession}
         isLoading={isLoading}
-        maximized={isHome ? undefined : maximized}
-        onMaximize={isHome ? undefined : onMaximize}
+        maximized={maximized}
+        onMaximize={isHome ? onMaximize : onMaximize}
         askMode={isHome ? undefined : askMode}
         onModeSwitch={isHome ? undefined : onModeSwitch}
         onClose={isHome ? undefined : onClose}
+        sessions={session.sessions}
+        activeSessionId={session.activeSessionId}
+        onLoadSession={handleLoadSession}
+        onDeleteSession={session.deleteSession}
+        onRenameSession={session.renameSession}
+        onTogglePinSession={session.togglePinSession}
       />
-
-      {/* Session tabs — panel variant only */}
-      {isPanel && session.sessions.length > 0 && (
-        <SessionTabBar
-          sessions={session.sessions}
-          activeSessionId={session.activeSessionId}
-          onLoad={handleLoadSession}
-          onDelete={session.deleteSession}
-          onNew={handleResetSession}
-        />
-      )}
 
       {showHistory && (
         <SessionHistory
@@ -481,6 +490,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           onLoad={handleLoadSession}
           onDelete={session.deleteSession}
           onRename={session.renameSession}
+          onTogglePin={session.togglePinSession}
           onClearAll={session.clearAllSessions}
           labels={{
             title: t.ask.sessionHistory ?? 'Session History',
@@ -493,16 +503,31 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       )}
 
       {/* Messages */}
-      <MessageList
-        messages={session.messages}
-        isLoading={isLoading}
-        loadingPhase={loadingPhase}
-        emptyPrompt={t.ask.emptyPrompt}
-        emptyHint={t.ask.emptyHint}
-        suggestions={t.ask.suggestions}
-        onSuggestionClick={setInput}
-        labels={messageLabels}
-      />
+      {/* Messages — home variant hides empty state (suggestions rendered externally) */}
+      {!isHome && (
+        <MessageList
+          messages={session.messages}
+          isLoading={isLoading}
+          loadingPhase={loadingPhase}
+          emptyPrompt={t.ask.emptyPrompt}
+          emptyHint={t.ask.emptyHint}
+          suggestions={t.ask.suggestions}
+          onSuggestionClick={setInput}
+          labels={messageLabels}
+        />
+      )}
+      {isHome && session.messages.length > 0 && (
+        <MessageList
+          messages={session.messages}
+          isLoading={isLoading}
+          loadingPhase={loadingPhase}
+          emptyPrompt={t.ask.emptyPrompt}
+          emptyHint={t.ask.emptyHint}
+          suggestions={[]}
+          onSuggestionClick={setInput}
+          labels={messageLabels}
+        />
+      )}
 
       {/* Popovers — flex children so they stay within overflow boundary (absolute positioning would be clipped by RightAskPanel's overflow-hidden) */}
       {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
@@ -527,11 +552,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         </div>
       )}
 
-      {/* Composer card — unified input area with rounded container */}
-      <div className="shrink-0 px-3 pb-3 pt-1">
+      {/* Composer card — unified input area */}
+      <div className="shrink-0 px-3 pb-2.5 pt-1">
         <div
           className={cn(
-            'rounded-2xl border border-border/40 bg-card shadow-md transition-all focus-within:border-[var(--amber)]/30 focus-within:shadow-lg',
+            'rounded-xl bg-muted/40 transition-all focus-within:bg-muted/60',
             isDragOver && 'ring-2 ring-[var(--amber)] bg-[var(--amber-dim)]',
           )}
           onDragOver={handleDragOver}
@@ -576,7 +601,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="flex items-end gap-1.5 px-2.5 py-2"
+            className="flex items-end gap-1.5 px-3 py-2"
           >
             {/* + attach button with mini menu */}
             <div className="relative shrink-0">
@@ -589,7 +614,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 <Plus size={inputIconSize} />
               </button>
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-1.5 py-1.5 rounded-xl border border-border bg-card shadow-lg z-50 min-w-[150px]">
+                <div className="absolute bottom-full left-0 mb-1.5 py-1 rounded-xl border border-border/60 bg-card shadow-lg z-50 min-w-[150px] animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
                   <button
                     type="button"
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left rounded-lg"
@@ -653,15 +678,16 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
               </button>
             ) : (
-              <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-2 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20">
+              <button type="submit" disabled={!input.trim() && imageUpload.images.length === 0} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
                 <Send size={14} />
               </button>
             )}
           </form>
 
-          {/* Mode + Agent + Provider selector row — inside card bottom */}
-          <div className="flex items-center gap-2 px-3 pb-2.5 pt-1.5 border-t border-border/15">
-            <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
+          {/* Mode + Agent + Provider selector row + keyboard hint */}
+          <div className="flex items-center justify-between px-3 pb-2 pt-1.5 border-t border-border/10">
+            <div className="flex items-center gap-2">
+              <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
             {mounted && acpDetection.installedAgents.length > 0 && (
               <AgentSelectorCapsule
                 selectedAgent={selectedAcpAgent}
@@ -677,6 +703,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 disabled={isLoading}
               />
             )}
+            </div>
+            {/* Keyboard hint */}
+            <span className="hidden md:inline text-2xs text-muted-foreground/40 select-none">
+              <kbd className="font-mono">Enter</kbd> {t.ask.send} · <kbd className="font-mono">Shift+Enter</kbd> {t.ask.newlineHint}
+            </span>
           </div>
         </div>
       </div>

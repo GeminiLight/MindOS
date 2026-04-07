@@ -180,7 +180,7 @@ body {
 }
 
 .prose {
-  font-family: var(--prose-font-override, 'Lora', Georgia, serif);
+  font-family: var(--prose-font-override, 'IBM Plex Sans', system-ui, sans-serif);
   color: var(--prose-body);
   line-height: 1.85;
   font-size: var(--prose-font-size-override, 0.95rem);
@@ -238,6 +238,7 @@ body {
 
 /* Ask Panel — compact prose for side panel chat bubbles */
 .prose.prose-panel {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   font-size: 0.8125rem !important;
   line-height: 1.6;
 }

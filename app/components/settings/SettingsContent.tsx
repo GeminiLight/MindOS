@@ -66,7 +66,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
 
     if (justOpened) {
       apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
-      setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'lora');
+      setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'ibm-plex-sans');
       setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
       setContentWidth(localStorage.getItem('content-width') ?? '780px');
       const stored = localStorage.getItem('theme');
