@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Cable,
   ChevronDown,
   Globe,
+  MoreHorizontal,
+  Plus,
   Server,
   Zap,
 } from 'lucide-react';
@@ -66,6 +68,9 @@ export default function AgentsOverviewSection({
   allAgents,
   pulseCopy,
   a2aCount,
+  onAddCustomAgent,
+  onEditCustomAgent,
+  onRemoveCustomAgent,
 }: {
   copy: OverviewCopy;
   buckets: AgentBuckets;
@@ -78,6 +83,9 @@ export default function AgentsOverviewSection({
   allAgents: AgentInfo[];
   pulseCopy: PulseCopy;
   a2aCount?: number;
+  onAddCustomAgent?: () => void;
+  onEditCustomAgent?: (agent: AgentInfo) => void;
+  onRemoveCustomAgent?: (agent: AgentInfo) => void;
 }) {
   const allHealthy = riskQueue.length === 0 && (!mcpEnabled || mcpRunning);
   const [riskOpen, setRiskOpen] = useState(false);
@@ -85,7 +93,7 @@ export default function AgentsOverviewSection({
   const sortedAgents = useMemo(
     () =>
       [...allAgents]
-        .filter(a => a.present) // hide not-found agents from overview
+        .filter(a => a.present || a.isCustom) // custom agents always visible
         .sort((a, b) => {
           const rank = (x: AgentInfo) => (x.installed ? 0 : 1);
           return rank(a) - rank(b) || a.name.localeCompare(b.name);
@@ -216,8 +224,36 @@ export default function AgentsOverviewSection({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sortedAgents.map((agent, i) => (
-              <AgentCard key={agent.key} agent={agent} copy={copy} index={i} mcpEnabled={mcpEnabled} />
+              <AgentCard
+                key={agent.key}
+                agent={agent}
+                copy={copy}
+                index={i}
+                mcpEnabled={mcpEnabled}
+                onEdit={agent.isCustom ? onEditCustomAgent : undefined}
+                onRemove={agent.isCustom ? onRemoveCustomAgent : undefined}
+              />
             ))}
+            {onAddCustomAgent && (
+              <button
+                type="button"
+                onClick={onAddCustomAgent}
+                className="group rounded-xl border-2 border-dashed border-border/60 bg-transparent p-3.5
+                  hover:border-[var(--amber)]/30 hover:bg-muted/20
+                  active:scale-[0.98]
+                  transition-all duration-150
+                  flex flex-col items-center justify-center gap-2 min-h-[100px]
+                  cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={copy.addCustomAgent as string}
+              >
+                <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center group-hover:border-[var(--amber)]/50 transition-colors duration-150">
+                  <Plus size={16} className="text-muted-foreground/50 group-hover:text-[var(--amber)] transition-colors duration-150" />
+                </div>
+                <span className="text-xs text-muted-foreground/60 group-hover:text-muted-foreground transition-colors duration-150">
+                  {copy.addCustomAgent as string}
+                </span>
+              </button>
+            )}
           </div>
         </section>
       ) : (
@@ -298,16 +334,23 @@ function AgentCard({
   copy,
   index,
   mcpEnabled = true,
+  onEdit,
+  onRemove,
 }: {
   agent: AgentInfo;
   copy: OverviewCopy;
   index: number;
   mcpEnabled?: boolean;
+  onEdit?: (agent: AgentInfo) => void;
+  onRemove?: (agent: AgentInfo) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const status = resolveAgentStatus(agent);
   const mcpCount = agent.configuredMcpServerCount ?? agent.configuredMcpServers?.length ?? 0;
   const skillCount = agent.installedSkillCount ?? agent.installedSkillNames?.length ?? 0;
   const hasRuntime = agent.runtimeConversationSignal || agent.runtimeUsageSignal;
+  const isCustom = agent.isCustom;
 
   const statusLabel =
     status === 'connected' ? copy.connected : status === 'detected' ? copy.detected : copy.notFound;
@@ -318,15 +361,64 @@ function AgentCard({
         ? 'bg-[var(--amber-dim)] text-[var(--amber-text)]'
         : 'bg-error/10 text-error';
 
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
   return (
     <Link
       href={`/agents/${encodeURIComponent(agent.key)}`}
-      className={`group rounded-xl border border-border bg-card p-3.5
-        hover:border-[var(--amber)]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]
-        active:scale-[0.98]
-        transition-all duration-150
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      className={cn(
+        'group relative rounded-xl border border-border bg-card p-3.5',
+        'hover:border-[var(--amber)]/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]',
+        'active:scale-[0.98]',
+        'transition-all duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isCustom && 'border-l-2 border-l-[var(--amber)]/40',
+      )}
     >
+      {/* Custom agent "..." menu */}
+      {isCustom && (onEdit || onRemove) && (
+        <div ref={menuRef} className="absolute top-2.5 right-2.5 z-10">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(!menuOpen); }}
+            className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100"
+            aria-label="Agent options"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-32 bg-card border border-border rounded-lg shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); onEdit(agent); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors duration-100 cursor-pointer"
+                >
+                  {copy.customAgentEdit as string}
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); onRemove(agent); }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors duration-100 cursor-pointer"
+                >
+                  {copy.customAgentRemove as string}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top row: avatar + name + status */}
       <div className="flex items-center gap-2.5 mb-3">
         <AgentAvatar name={agent.name} status={status} size="sm" />

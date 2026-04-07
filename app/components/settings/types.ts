@@ -106,6 +106,10 @@ export interface AgentInfo {
   installedSkillNames?: string[];
   installedSkillCount?: number;
   installedSkillSourcePath?: string;
+  /** True for user-defined agents (not built-in). */
+  isCustom?: boolean;
+  /** Base directory for custom agents (used for UI display). */
+  customBaseDir?: string;
 }
 
 export interface SkillInfo {

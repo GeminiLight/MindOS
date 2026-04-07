@@ -9,6 +9,7 @@ import { useState, useCallback } from 'react';
 import { Copy, Check, X } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
+import { resolveImagePath } from '@/lib/image';
 import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
@@ -118,8 +119,9 @@ const components: Components = {
   img({ src, alt, node, ...rest }) {
     void node;
     if (!src) return null;
+    const resolvedSrc = typeof src === 'string' ? resolveImagePath(src) : src;
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt ?? ''} {...stripNonDom(rest)} />;
+    return <img src={resolvedSrc} alt={alt ?? ''} {...stripNonDom(rest)} />;
   },
 };
 

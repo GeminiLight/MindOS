@@ -58,6 +58,8 @@ export interface ServerSettings {
     cli: boolean;   // Always true (CLI is mandatory)
     mcp: boolean;   // User's explicit choice during onboarding
   };
+  /** User-defined agents not built into MindOS. */
+  customAgents?: import('./custom-agents').CustomAgentDef[];
 }
 
 const DEFAULTS: ServerSettings = {
@@ -216,6 +218,7 @@ export function readSettings(): ServerSettings {
         return Object.keys(result).length > 0 ? result : undefined;
       })(),
       connectionMode: inferConnectionMode(parsed),
+      customAgents: Array.isArray(parsed.customAgents) ? parsed.customAgents as import('./custom-agents').CustomAgentDef[] : undefined,
     };
   } catch {
     // Config file missing or corrupt → force setup wizard
@@ -246,6 +249,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.acpAgents !== undefined) merged.acpAgents = settings.acpAgents;
   if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
+  if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;

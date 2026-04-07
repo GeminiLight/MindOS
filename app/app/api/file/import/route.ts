@@ -15,6 +15,19 @@ import { invalidateCache } from '@/lib/fs';
 const MAX_FILES = 20;
 const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
 
+/** File extensions that are binary and should be written as raw buffers, not text. */
+const BINARY_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico',
+  '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac',
+  '.mp4', '.webm', '.mov', '.mkv',
+  '.pdf',
+]);
+
+function isBinaryFile(name: string): boolean {
+  const ext = path.extname(name).toLowerCase();
+  return BINARY_EXTENSIONS.has(ext);
+}
+
 type ConflictMode = 'skip' | 'rename' | 'overwrite';
 
 interface ImportRequest {
@@ -136,6 +149,35 @@ export async function POST(req: NextRequest) {
 
       const sanitized = sanitizeFileName(entry.name);
       const encoding = entry.encoding === 'base64' ? 'base64' : 'text';
+
+      // Binary files (images, audio, video, PDF): write raw buffer, skip text conversion
+      if (encoding === 'base64' && isBinaryFile(sanitized)) {
+        const buf = Buffer.from(entry.content, 'base64');
+
+        let relPath = targetSpaceNorm
+          ? path.posix.join(targetSpaceNorm, sanitized)
+          : sanitized;
+
+        const { relPath: finalRel, resolved, skipped: skipReason } = resolveUniquePath(
+          mindRoot,
+          relPath,
+          conflict,
+        );
+
+        if (skipReason) {
+          skipped.push({ name: entry.name, reason: skipReason });
+          continue;
+        }
+
+        fs.mkdirSync(path.dirname(resolved), { recursive: true });
+        fs.writeFileSync(resolved, buf);
+
+        created.push({ original: entry.name, path: finalRel });
+        createdPaths.push(finalRel);
+        continue;
+      }
+
+      // Text files: decode and convert to markdown
       const raw = decodeFileContent(encoding, entry.content, sanitized);
       const convertResult = convertToMarkdown(sanitized, raw);
 

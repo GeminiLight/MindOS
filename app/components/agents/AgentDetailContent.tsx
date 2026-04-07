@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Activity, Globe, Key, Loader2, Server, Search,
+  ArrowLeft, Activity, Globe, Key, Loader2, MoreHorizontal, Pencil, Server, Search,
   Shield, ShieldCheck, Trash2, Wifi, WifiOff, Zap,
   FileEdit, FilePlus, Clock, Terminal, CheckCircle2, AlertCircle, ChevronDown, BookOpen,
 } from 'lucide-react';
@@ -25,6 +25,7 @@ import {
 } from './agents-content-model';
 import { AgentAvatar, ActionButton, ConfirmDialog, PillButton } from './AgentsPrimitives';
 import SkillDetailPopover from './SkillDetailPopover';
+import CustomAgentModal from './CustomAgentModal';
 
 export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const { t } = useLocale();
@@ -48,6 +49,33 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
   const [mcpHint, setMcpHint] = useState<string | null>(null);
   const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
+
+  // Custom agent actions
+  const [customEditOpen, setCustomEditOpen] = useState(false);
+  const [confirmCustomRemove, setConfirmCustomRemove] = useState(false);
+
+  const handleCustomRemoveConfirmed = useCallback(async () => {
+    if (!agent?.isCustom) return;
+    try {
+      const res = await fetch('/api/agents/custom', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: agent.key }),
+      });
+      if (res.ok) {
+        toast.success(a.overview.customAgentRemoved(agent.name));
+        mcp.refresh();
+        window.location.href = '/agents';
+      } else {
+        const data = await res.json();
+        toast.error(data.error || a.overview.customAgentFailedRemove);
+      }
+    } catch {
+      toast.error(a.overview.customAgentNetworkError);
+    } finally {
+      setConfirmCustomRemove(false);
+    }
+  }, [agent, a.overview, mcp]);
 
   const filteredSkills = useMemo(
     () =>
@@ -263,6 +291,28 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
               <span>{agent.skillMode ?? a.na}</span>
             </div>
           </div>
+          {agent.isCustom && (
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCustomEditOpen(true)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={a.overview.customAgentEdit as string}
+                title={a.overview.customAgentEdit as string}
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmCustomRemove(true)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={a.overview.customAgentRemove as string}
+                title={a.overview.customAgentRemove as string}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-muted-foreground/50 px-5 py-2 border-t border-border/40">
           <span>{agent.format} <span className="text-muted-foreground/30">·</span> {formatRelativeTime(agent.runtimeLastActivityAt)}</span>
@@ -601,6 +651,29 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         onToggle={mcp.toggleSkill}
         onDelete={handleDeleteSkillFromPopover}
         onRefresh={mcp.refresh}
+      />
+
+      {/* Custom agent edit modal */}
+      {agent?.isCustom && (
+        <CustomAgentModal
+          open={customEditOpen}
+          onClose={() => setCustomEditOpen(false)}
+          onSuccess={() => { mcp.refresh(); setCustomEditOpen(false); }}
+          existingAgents={mcp.agents}
+          editAgent={agent}
+        />
+      )}
+
+      {/* Custom agent remove confirmation */}
+      <ConfirmDialog
+        open={confirmCustomRemove}
+        title={agent ? a.overview.customAgentRemoveTitle(agent.name) : ''}
+        message={a.overview.customAgentRemoveMessage as string}
+        confirmLabel={a.overview.customAgentRemoveConfirm as string}
+        cancelLabel={a.detail.skillCancel}
+        onConfirm={handleCustomRemoveConfirmed}
+        onCancel={() => setConfirmCustomRemove(false)}
+        variant="destructive"
       />
     </div>
   );

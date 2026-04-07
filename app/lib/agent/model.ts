@@ -84,6 +84,12 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
     };
   }
 
+  // 2.5. Apply preset fixedBaseUrl when registry lookup succeeded but needs endpoint override
+  // (zai-cn: domestic endpoint, deepseek: fixed baseUrl, ollama: localhost)
+  if (preset.fixedBaseUrl && !hasCustomBase) {
+    model = { ...model, baseUrl: preset.fixedBaseUrl };
+  }
+
   // 3. Apply user's custom baseUrl
   if (hasCustomBase) {
     model = { ...model, baseUrl };
@@ -93,7 +99,7 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
     }
   }
 
-  // 4. For deepseek or any custom endpoint, apply conservative compat
+  // 4. For deepseek/zai-cn/ollama or any custom endpoint, apply conservative compat
   if (hasCustomBase || preset.fixedBaseUrl) {
     model = {
       ...model,

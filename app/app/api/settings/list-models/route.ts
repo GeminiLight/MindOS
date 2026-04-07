@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { getModels as piGetModels } from '@mariozechner/pi-ai';
 import { effectiveAiConfig } from '@/lib/settings';
-import { type ProviderId, isProviderId, PROVIDER_PRESETS, getDefaultBaseUrl } from '@/lib/agent/providers';
+import { type ProviderId, isProviderId, PROVIDER_PRESETS, toPiProvider, getDefaultBaseUrl } from '@/lib/agent/providers';
 
 const TIMEOUT = 10_000;
 
@@ -19,8 +20,11 @@ export async function POST(req: NextRequest) {
     }
 
     const preset = PROVIDER_PRESETS[provider as ProviderId];
+
+    // Providers without remote list-models API: return static list from pi-ai registry
     if (!preset.supportsListModels) {
-      return NextResponse.json({ ok: false, error: 'This provider does not support listing models' });
+      const models = getRegistryModels(provider as ProviderId);
+      return NextResponse.json({ ok: true, models });
     }
 
     const cfg = effectiveAiConfig(provider as ProviderId);
@@ -49,6 +53,16 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+  }
+}
+
+/** Return model IDs from pi-ai's static registry for providers without a remote /models API. */
+function getRegistryModels(provider: ProviderId): string[] {
+  try {
+    const models = piGetModels(toPiProvider(provider) as any);
+    return models.map((m: any) => m.id as string).filter(Boolean).sort();
+  } catch {
+    return [];
   }
 }
 

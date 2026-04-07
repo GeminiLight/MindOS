@@ -16,8 +16,8 @@ import {
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'groq'
   | 'xai' | 'openrouter' | 'mistral' | 'deepseek'
-  | 'zai' | 'kimi-coding'
-  | 'cerebras' | 'minimax' | 'huggingface'
+  | 'zai' | 'zai-cn' | 'kimi-coding'
+  | 'cerebras' | 'minimax' | 'minimax-cn' | 'huggingface'
   | 'ollama';
 
 /**
@@ -135,11 +135,24 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
   zai: {
     id: 'zai',
     name: 'ZhipuAI (GLM)',
-    nameZh: '智谱 AI (GLM)',
+    nameZh: '智谱 AI (GLM 国际版)',
     defaultModel: 'glm-4-plus',
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
+    category: 'more',
+  },
+  'zai-cn': {
+    id: 'zai-cn',
+    name: 'ZhipuAI (GLM China)',
+    nameZh: '智谱 AI (GLM 国内版)',
+    defaultModel: 'glm-4-plus',
+    piProviderOverride: 'zai' as KnownProvider,
+    fixedBaseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    supportsBaseUrl: false,
+    supportsThinking: true,
+    supportsListModels: false,
+    signupUrl: 'https://open.bigmodel.cn/',
     category: 'more',
   },
   'kimi-coding': {
@@ -165,10 +178,20 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
   minimax: {
     id: 'minimax',
     name: 'MiniMax',
-    nameZh: 'MiniMax',
-    defaultModel: 'MiniMax-M1',
+    nameZh: 'MiniMax (国际版)',
+    defaultModel: 'MiniMax-M2.5',
     supportsBaseUrl: false,
-    supportsThinking: false,
+    supportsThinking: true,
+    supportsListModels: false,
+    category: 'more',
+  },
+  'minimax-cn': {
+    id: 'minimax-cn',
+    name: 'MiniMax (China)',
+    nameZh: 'MiniMax (国内版)',
+    defaultModel: 'MiniMax-M2.5',
+    supportsBaseUrl: false,
+    supportsThinking: true,
     supportsListModels: false,
     category: 'more',
   },
@@ -288,8 +311,10 @@ const PI_ENV_MAP: Record<string, string> = {
   xai: 'XAI_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
   zai: 'ZAI_API_KEY',
+  'zai-cn': 'ZAI_API_KEY',
   mistral: 'MISTRAL_API_KEY',
   minimax: 'MINIMAX_API_KEY',
+  'minimax-cn': 'MINIMAX_API_KEY',
   huggingface: 'HF_TOKEN',
   'kimi-coding': 'KIMI_API_KEY',
 };

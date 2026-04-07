@@ -49,7 +49,7 @@ export function getMindRoot(): string {
   return effectiveSopRoot();
 }
 
-const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store']);
+const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store', '.media', 'mcp']);
 const ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.json', '.pdf',
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -18,6 +18,9 @@ import AgentsSkillsSection from './AgentsSkillsSection';
 import AgentsPanelA2aTab from './AgentsPanelA2aTab';
 import AgentsPanelSessionsTab from './AgentsPanelSessionsTab';
 import AgentActivitySection from './AgentActivitySection';
+import CustomAgentModal from './CustomAgentModal';
+import { ConfirmDialog } from './AgentsPrimitives';
+import type { AgentInfo } from '@/components/settings/types';
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
   const { t } = useLocale();
@@ -80,6 +83,54 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
     [mcp.skills],
   );
 
+  /* ─── Custom Agent Modal State ─── */
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentInfo | null>(null);
+  const [removeAgent, setRemoveAgent] = useState<AgentInfo | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const handleAddCustomAgent = useCallback(() => {
+    setEditingAgent(null);
+    setCustomModalOpen(true);
+  }, []);
+
+  const handleEditCustomAgent = useCallback((agent: AgentInfo) => {
+    setEditingAgent(agent);
+    setCustomModalOpen(true);
+  }, []);
+
+  const handleRemoveCustomAgent = useCallback((agent: AgentInfo) => {
+    setRemoveAgent(agent);
+  }, []);
+
+  const handleConfirmRemove = useCallback(async () => {
+    if (!removeAgent) return;
+    setRemoving(true);
+    try {
+      const res = await fetch('/api/agents/custom', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: removeAgent.key }),
+      });
+      if (res.ok) {
+        toast.success(a.overview.customAgentRemoved(removeAgent.name));
+        mcp.refresh();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || a.overview.customAgentFailedRemove);
+      }
+    } catch {
+      toast.error(a.overview.customAgentNetworkError);
+    } finally {
+      setRemoving(false);
+      setRemoveAgent(null);
+    }
+  }, [removeAgent, mcp, a.overview]);
+
+  const handleCustomAgentSuccess = useCallback(() => {
+    mcp.refresh();
+  }, [mcp]);
+
   const copySnippet = async (agentKey: string) => {
     const agent = mcp.agents.find((item) => item.key === agentKey);
     if (!agent) return;
@@ -111,6 +162,9 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           allAgents={mcp.agents}
           pulseCopy={a.workspacePulse}
           a2aCount={a2a.agents.length}
+          onAddCustomAgent={handleAddCustomAgent}
+          onEditCustomAgent={handleEditCustomAgent}
+          onRemoveCustomAgent={handleRemoveCustomAgent}
         />
       )}
 
@@ -147,6 +201,27 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       {tab === 'activity' && (
         <AgentActivitySection />
       )}
+
+      {/* Custom Agent Modal */}
+      <CustomAgentModal
+        open={customModalOpen}
+        onClose={() => { setCustomModalOpen(false); setEditingAgent(null); }}
+        onSuccess={handleCustomAgentSuccess}
+        existingAgents={mcp.agents}
+        editAgent={editingAgent}
+      />
+
+      {/* Remove Confirmation */}
+      <ConfirmDialog
+        open={!!removeAgent}
+        title={removeAgent ? a.overview.customAgentRemoveTitle(removeAgent.name) : ''}
+        message={a.overview.customAgentRemoveMessage as string}
+        confirmLabel={a.overview.customAgentRemoveConfirm as string}
+        cancelLabel={a.overview.customAgentCancel as string}
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setRemoveAgent(null)}
+        variant="destructive"
+      />
     </div>
   );
 }

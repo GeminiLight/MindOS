@@ -14,7 +14,7 @@ const STOP_WORDS = new Set([
   'readme', 'instruction', 'md',
 ]);
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', '.DS_Store']);
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', '.DS_Store', '.media', 'mcp']);
 
 function extractKeywords(filePath: string): string[] {
   const stem = path.basename(filePath, path.extname(filePath));
