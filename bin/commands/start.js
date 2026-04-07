@@ -59,7 +59,11 @@ export const meta = {
  * @returns {Promise<void>}
  */
 export const run = async (args, flags) => {
-  const isDaemon = Boolean(flags.daemon) || isDaemonMode();
+  // Must be checked BEFORE isDaemon — when a daemon manager has already launched
+  // us, re-entering the daemon installation path causes a recursive loop.
+  const launchedByDaemon =
+    process.env.LAUNCHED_BY_LAUNCHD === '1' || !!process.env.INVOCATION_ID;
+  const isDaemon = !launchedByDaemon && (Boolean(flags.daemon) || isDaemonMode());
   const isVerbose = Boolean(flags.verbose);
   const extra = args.join(' ');
 
@@ -212,9 +216,6 @@ export const run = async (args, flags) => {
   // When launched by a daemon manager (launchd/systemd), wait for ports to
   // free instead of exiting immediately — the previous instance may still be
   // shutting down after a restart/update.
-  const launchedByDaemon =
-    process.env.LAUNCHED_BY_LAUNCHD === '1' || !!process.env.INVOCATION_ID; /* systemd sets INVOCATION_ID */
-
   if (launchedByDaemon) {
     const { waitForPortFree } = await import('../lib/gateway.js');
     const webOk = await waitForPortFree(Number(webPort), { retries: 60, intervalMs: 500 });

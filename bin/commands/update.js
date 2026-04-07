@@ -8,7 +8,7 @@ import { execSync, spawn as nodeSpawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { ROOT, BUILD_STAMP, CONFIG_PATH, LOG_PATH } from '../lib/constants.js';
+import { ROOT, BUILD_STAMP, CONFIG_PATH, LOG_PATH, MINDOS_DIR } from '../lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { execInherited } from '../lib/shell.js';
 import { EXIT } from '../lib/command.js';
@@ -21,15 +21,19 @@ import { stripBom } from '../lib/jsonc.js';
 /**
  * Dynamically resolve the new ROOT after `npm install -g`.
  * This is needed because constants are evaluated at module load time.
+ *
+ * Skips ~/.mindos/bin/ — that directory contains our own shell shim
+ * (not a JS file); resolving ROOT from it yields ~/.mindos/ which is wrong.
  */
 function getUpdatedRoot() {
+  const shimBinDir = resolve(MINDOS_DIR, 'bin');
   try {
     const whichCmd = process.platform === 'win32' ? 'where mindos' : 'which mindos';
     const mindosBin = execSync(whichCmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim().split(/\r?\n/)[0];
     if (mindosBin) {
       let cliPath;
       try { cliPath = realpathSync(mindosBin); } catch { cliPath = mindosBin; }
-      if (cliPath) {
+      if (cliPath && resolve(dirname(cliPath)) !== shimBinDir) {
         return resolve(dirname(cliPath), '..');
       }
     }
