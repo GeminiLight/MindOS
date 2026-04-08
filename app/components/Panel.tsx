@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { ChevronsDownUp, ChevronsUpDown, Plus, Import, FileText, Layers, MoreHorizontal, Eye, EyeOff, Trash2, Inbox } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
 import type { FileNode } from '@/lib/types';
@@ -73,6 +73,8 @@ export default function Panel({
 
   const { t } = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
+  const isInboxActive = pathname === '/view/Inbox' || pathname === '/view/Inbox/';
 
   // File tree depth control: null = manual (no override), number = forced max open depth
   const [maxOpenDepth, setMaxOpenDepth] = useState<number | null>(null);
@@ -298,7 +300,7 @@ export default function Panel({
                     <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
                     <span className="flex-1">{t.sidebar.capture}</span>
                     {inboxCount > 0 && (
-                      <span className="text-xs font-medium text-[var(--amber)] tabular-nums">{inboxCount}</span>
+                      <span className="text-2xs font-medium tabular-nums px-1.5 py-px rounded-full bg-[var(--amber)]/10 text-[var(--amber)]/70">{inboxCount}</span>
                     )}
                   </button>
                   <button
@@ -328,14 +330,30 @@ export default function Panel({
         <button
           type="button"
           onClick={() => router.push('/view/Inbox/')}
-          className="flex items-center gap-2 mx-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted group border-t border-border/40 shrink-0"
+          className={`flex items-center gap-2 mx-2 px-2 py-1.5 text-sm rounded-lg transition-all duration-150 group shrink-0 ${
+            isInboxActive
+              ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
+              : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+          }`}
         >
-          <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
-          <span className="flex-1 text-left text-muted-foreground group-hover:text-foreground transition-colors text-xs">
+          <div className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
+            isInboxActive ? 'bg-[var(--amber)]/15' : 'bg-transparent'
+          }`}>
+            <Inbox size={13} className={`shrink-0 transition-colors ${
+              isInboxActive ? 'text-[var(--amber)]' : 'text-[var(--amber)]/60 group-hover:text-[var(--amber)]'
+            }`} />
+          </div>
+          <span className={`flex-1 text-left text-xs transition-colors ${
+            isInboxActive ? 'font-medium text-[var(--amber)]' : 'text-muted-foreground group-hover:text-foreground'
+          }`}>
             {t.sidebar.capture}
           </span>
           {inboxCount > 0 && (
-            <span className="text-xs font-medium text-[var(--amber)] tabular-nums">{inboxCount}</span>
+            <span className={`text-2xs font-medium tabular-nums px-1.5 py-px rounded-full transition-colors ${
+              isInboxActive
+                ? 'bg-[var(--amber)]/15 text-[var(--amber)]'
+                : 'bg-[var(--amber)]/10 text-[var(--amber)]/70'
+            }`}>{inboxCount}</span>
           )}
         </button>
         <SyncStatusBar collapsed={false} onOpenSyncSettings={onOpenSyncSettings} />

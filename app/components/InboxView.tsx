@@ -7,13 +7,13 @@ import {
   Inbox,
   Sparkles,
   FileText,
+  FileCode,
   Table,
   AlertCircle,
   Loader2,
   Upload,
   FolderInput,
   Check,
-  Clock,
   ChevronDown,
   X,
   ExternalLink,
@@ -37,6 +37,24 @@ interface InboxFile {
 }
 
 const HISTORY_VISIBLE = 5;
+
+const EXT_STYLES: Record<string, { bg: string; text: string }> = {
+  md:   { bg: 'bg-blue-500/10',    text: 'text-blue-500/70' },
+  txt:  { bg: 'bg-muted/50',       text: 'text-muted-foreground/60' },
+  csv:  { bg: 'bg-emerald-500/10', text: 'text-emerald-500/70' },
+  json: { bg: 'bg-violet-500/10',  text: 'text-violet-500/70' },
+  pdf:  { bg: 'bg-red-500/10',     text: 'text-red-500/60' },
+};
+
+function getFileExt(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+function getFileBaseName(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
 
 export default function InboxView() {
   const { t } = useLocale();
@@ -66,7 +84,7 @@ export default function InboxView() {
     setHistory(loadHistory());
   }, []);
 
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const debouncedRefresh = useCallback(() => {
     clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
@@ -142,6 +160,12 @@ export default function InboxView() {
   const agingCount = useMemo(() => files.filter(f => f.isAging).length, [files]);
   const hasFiles = files.length > 0;
   const visibleHistory = useMemo(() => history.slice(0, HISTORY_VISIBLE), [history]);
+  const [animateList, setAnimateList] = useState(true);
+  const prevFileCountRef = useRef(0);
+  useEffect(() => {
+    if (prevFileCountRef.current > 0 && files.length > 0) setAnimateList(false);
+    prevFileCountRef.current = files.length;
+  }, [files.length]);
 
   if (loading) {
     return (
@@ -198,7 +222,7 @@ export default function InboxView() {
                 </h1>
                 {hasFiles && (
                   <p className="text-2xs text-muted-foreground/60 leading-tight mt-0.5">
-                    {files.length} {files.length === 1 ? 'file' : 'files'}
+                    {t.inbox.fileCount(files.length)}
                     {agingCount > 0 && (
                       <span className="text-[var(--amber)]/70"> · {agingCount} {t.inbox.agingHint}</span>
                     )}
@@ -248,7 +272,7 @@ export default function InboxView() {
               dragOver
                 ? 'border-[var(--amber)] bg-[var(--amber-subtle)] scale-[1.01]'
                 : hasFiles
-                  ? 'border-border/50 hover:border-[var(--amber)]/40 px-4 py-4'
+                  ? 'border-border/40 hover:border-[var(--amber)]/30 bg-[var(--amber-subtle)]/30 hover:bg-[var(--amber-subtle)]/50 px-4 py-3.5'
                   : 'border-border hover:border-[var(--amber)]/40 px-4 py-10'
             } ${dragOver ? 'px-4 py-6' : ''}`}
             role="button"
@@ -284,19 +308,26 @@ export default function InboxView() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[var(--amber-subtle)]">
-                  <FolderInput size={24} className={dragOver ? 'text-[var(--amber)]' : 'text-[var(--amber)]/40'} />
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className={`flex items-center justify-center w-14 h-14 rounded-2xl transition-colors duration-200 ${
+                  dragOver ? 'bg-[var(--amber)]/15' : 'bg-[var(--amber-subtle)]'
+                }`}>
+                  <FolderInput size={26} className={`transition-colors duration-200 ${dragOver ? 'text-[var(--amber)]' : 'text-[var(--amber)]/35'}`} />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground/70">
                     {t.inbox.emptyTitle}
                   </p>
-                  <p className="text-xs text-muted-foreground/50 mt-1">
+                  <p className="text-xs text-muted-foreground/50 mt-1.5 max-w-[280px] mx-auto leading-relaxed">
                     {t.inbox.emptyDesc}
                   </p>
                 </div>
-                <p className="text-2xs text-muted-foreground/30">{t.inbox.dropOverlayFormats}</p>
+                <div className="flex items-center gap-1.5">
+                  {['md', 'txt', 'pdf', 'csv', 'json'].map(e => {
+                    const s = EXT_STYLES[e] ?? { bg: 'bg-muted/50', text: 'text-muted-foreground/50' };
+                    return <span key={e} className={`text-2xs font-mono px-1.5 py-px rounded ${s.bg} ${s.text}`}>.{e}</span>;
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -304,19 +335,13 @@ export default function InboxView() {
           {/* ─── File List ─── */}
           {hasFiles && (
             <div className="mb-8">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xs font-medium text-muted-foreground/50 uppercase tracking-wider">
-                  {t.inbox.title}
-                </span>
-                <span className="text-2xs text-muted-foreground/40 tabular-nums">
-                  {t.inbox.count(files.length)}
-                </span>
-              </div>
               <div className="rounded-xl border border-border overflow-hidden divide-y divide-border/50">
-                {files.map((file) => (
+                {files.map((file, idx) => (
                   <InboxFileRow
                     key={file.path}
                     file={file}
+                    index={idx}
+                    animate={animateList}
                     onDelete={handleDeleteFile}
                   />
                 ))}
@@ -349,11 +374,21 @@ export default function InboxView() {
             </div>
           )}
 
-          {/* ─── Empty + No History ─── */}
+          {/* ─── Tip: when files exist but no history yet ─── */}
+          {hasFiles && visibleHistory.length === 0 && (
+            <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-[var(--amber-subtle)]/50 border border-[var(--amber)]/10 animate-[fadeSlideUp_0.22s_ease_both]">
+              <Sparkles size={14} className="text-[var(--amber)]/60 shrink-0 mt-0.5" />
+              <p className="text-xs text-foreground/60 leading-relaxed">
+                {t.inbox.viewOrganizeTip}
+              </p>
+            </div>
+          )}
+
+          {/* ─── Empty + No History — additional guidance ─── */}
           {!hasFiles && visibleHistory.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-4 text-center">
-              <p className="text-xs text-muted-foreground/40">
-                {t.inbox.dropOverlayFormats}
+            <div className="flex flex-col items-center gap-1.5 py-2 text-center">
+              <p className="text-2xs text-muted-foreground/30">
+                {t.inbox.viewEmptyGuide}
               </p>
             </div>
           )}
@@ -365,15 +400,23 @@ export default function InboxView() {
 
 /* ─── File Row ─── */
 
-function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: string) => void }) {
+function InboxFileRow({ file, onDelete, index, animate }: { file: InboxFile; onDelete: (name: string) => void; index: number; animate: boolean }) {
   const { t } = useLocale();
   const router = useRouter();
-  const isCSV = file.name.endsWith('.csv');
-  const isPDF = file.name.endsWith('.pdf');
+  const ext = getFileExt(file.name);
+  const baseName = getFileBaseName(file.name);
+  const extStyle = EXT_STYLES[ext];
   const age = formatRelativeTime(file.modifiedAt, t.home.relativeTime);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
-
   const sizeLabel = formatSize(file.size);
+
+  const FileIcon = ext === 'csv' ? Table
+    : ext === 'json' ? FileCode
+    : FileText;
+  const iconColor = ext === 'csv' ? 'text-emerald-500/70'
+    : ext === 'json' ? 'text-violet-500/70'
+    : ext === 'pdf' ? 'text-red-500/60'
+    : 'text-muted-foreground/60';
 
   return (
     <>
@@ -383,54 +426,44 @@ function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: st
         onClick={() => router.push(`/view/${encodePath(file.path)}`)}
         onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/view/${encodePath(file.path)}`); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
-        className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent transition-colors duration-100 cursor-pointer group"
+        className={`flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent transition-colors duration-100 cursor-pointer group${animate ? ' animate-[fadeSlideUp_0.22s_ease_both]' : ''}`}
+        style={animate ? { animationDelay: `${index * 30}ms` } : undefined}
       >
-        {/* Status dot */}
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 transition-colors ${
-            file.isAging ? 'bg-[var(--amber)]/50' : 'bg-[var(--amber)]'
-          }`}
-        />
-
         {/* File icon */}
-        {isCSV ? (
-          <Table size={14} className="shrink-0 text-success" />
-        ) : isPDF ? (
-          <FileText size={14} className="shrink-0 text-[var(--error)]/60" />
-        ) : (
-          <FileText size={14} className="shrink-0 text-muted-foreground" />
-        )}
+        <FileIcon size={15} className={`shrink-0 ${iconColor}`} />
 
-        {/* File name */}
-        <span
-          className="text-sm text-foreground truncate flex-1 min-w-0"
-          title={file.name}
-          suppressHydrationWarning
-        >
-          {file.name}
-        </span>
-
-        {/* Meta — hidden on hover, replaced by delete */}
-        <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0 group-hover:hidden">
-          {sizeLabel}
-        </span>
-        <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0 group-hover:hidden">
-          {age}
-        </span>
-        {file.isAging && (
-          <span title={t.inbox.agingHint} className="group-hover:hidden shrink-0">
-            <AlertCircle size={12} className="text-[var(--amber)]/50" />
-          </span>
-        )}
+        {/* Name + meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-foreground truncate" title={file.name}>
+              {baseName}
+            </span>
+            {extStyle && (
+              <span className={`text-2xs font-mono px-1.5 py-px rounded shrink-0 ${extStyle.bg} ${extStyle.text}`}>
+                .{ext}
+              </span>
+            )}
+            {file.isAging && (
+              <span className="text-2xs px-1.5 py-px rounded shrink-0 bg-[var(--amber)]/10 text-[var(--amber)]/70" title={t.inbox.agingHint}>
+                {t.inbox.agingHint}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-2xs text-muted-foreground/40 tabular-nums">{sizeLabel}</span>
+            <span className="text-2xs text-muted-foreground/30">·</span>
+            <span className="text-2xs text-muted-foreground/40 tabular-nums">{age}</span>
+          </div>
+        </div>
 
         {/* Hover: delete */}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(file.name); }}
-          className="hidden group-hover:flex items-center justify-center w-6 h-6 rounded shrink-0 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+          className="hidden group-hover:flex items-center justify-center w-7 h-7 rounded-md shrink-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
           title={t.inbox.removeFile}
         >
-          <X size={13} />
+          <X size={14} />
         </button>
       </div>
 
@@ -493,16 +526,12 @@ function FileContextMenu({ x, y, file, onDelete, onClose }: {
 /* ─── History Row ─── */
 
 function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const isUndone = entry.status === 'undone';
   const sourceBadge = getSourceBadge(entry.source);
   const duration = entry.durationMs ? formatDuration(entry.durationMs) : null;
-  const age = formatRelativeTime(new Date(entry.timestamp).toISOString(), {
-    justNow: 'just now',
-    minutesAgo: (n: number) => `${n}m ago`,
-    hoursAgo: (n: number) => `${n}h ago`,
-    daysAgo: (n: number) => `${n}d ago`,
-  });
+  const age = formatRelativeTime(new Date(entry.timestamp).toISOString(), t.home.relativeTime);
   const successCount = entry.files.filter(f => f.ok && !f.undone).length;
 
   return (
@@ -510,6 +539,7 @@ function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
         className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-muted/20 transition-colors"
       >
         {isUndone ? (
@@ -519,7 +549,7 @@ function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
         )}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <span className={`text-xs truncate ${isUndone ? 'text-muted-foreground/50 line-through' : 'text-foreground/80'}`}>
-            {entry.sourceFiles.length === 1 ? entry.sourceFiles[0] : `${entry.sourceFiles.length} files`}
+            {entry.sourceFiles.length === 1 ? entry.sourceFiles[0] : t.importHistory.nFiles(entry.sourceFiles.length)}
           </span>
           {sourceBadge && (
             <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${sourceBadge.className}`}>
@@ -528,7 +558,7 @@ function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
           )}
           {successCount > 0 && (
             <span className="text-2xs text-muted-foreground/40 shrink-0">
-              → {successCount} {successCount === 1 ? 'change' : 'changes'}
+              {t.importHistory.changesSummary(successCount)}
             </span>
           )}
         </div>
@@ -559,7 +589,7 @@ function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
                   <span className={f.undone ? '' : 'text-foreground/70'}>{fileName}</span>
                 </span>
                 <span className="text-muted-foreground/40 shrink-0">
-                  {f.undone ? 'undone' : f.action === 'create' ? 'created' : 'updated'}
+                  {f.undone ? t.importHistory.statusUndone : f.action === 'create' ? t.importHistory.statusCreated : t.importHistory.statusUpdated}
                 </span>
               </>
             );
