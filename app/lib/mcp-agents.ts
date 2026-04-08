@@ -262,6 +262,14 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
     presenceCli: 'workbuddy',
     presenceDirs: ['~/.workbuddy/'],
   },
+  'lingma': {
+    name: 'Lingma',
+    project: null,
+    global: '~/.lingma/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceDirs: ['~/.lingma/'],
+  },
 };
 
 /**
@@ -291,6 +299,7 @@ export const SKILL_AGENT_REGISTRY: Record<string, SkillAgentRegistration> = {
   'antigravity': { mode: 'additional', skillAgentName: 'antigravity' },
   'qclaw': { mode: 'unsupported' },
   'workbuddy': { mode: 'unsupported' },
+  'lingma': { mode: 'unsupported' },
 };
 
 export interface SkillWorkspaceProfile {

@@ -1,6 +1,10 @@
 /**
  * Shared MCP agent definitions for CLI tools.
- * Mirrors app/lib/mcp-agents.ts — keep in sync manually.
+ *
+ * ⚠️  KEEP IN SYNC WITH:
+ *   - app/lib/mcp-agents.ts          (TypeScript source of truth)
+ *   - bin/lib/toml.js                 (TOML format support for agents with format: 'toml')
+ *   - app/app/api/mcp/install/route.ts (server-side install with TOML merge)
  *
  * Each agent entry includes presenceCli / presenceDirs for detecting
  * whether the agent is installed on the user's machine. To add a new
@@ -226,6 +230,32 @@ export const MCP_AGENTS = {
     presenceCli: 'agy',
     presenceDirs: ['~/.gemini/antigravity/'],
   },
+  'qclaw': {
+    name: 'QClaw',
+    project: null,
+    global: '~/.qclaw/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'qclaw',
+    presenceDirs: ['~/.qclaw/'],
+  },
+  'workbuddy': {
+    name: 'WorkBuddy',
+    project: null,
+    global: '~/.workbuddy/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceCli: 'workbuddy',
+    presenceDirs: ['~/.workbuddy/'],
+  },
+  'lingma': {
+    name: 'Lingma',
+    project: null,
+    global: '~/.lingma/mcp.json',
+    key: 'mcpServers',
+    preferredTransport: 'stdio',
+    presenceDirs: ['~/.lingma/'],
+  },
 };
 
 /**
@@ -253,6 +283,9 @@ export const SKILL_AGENT_REGISTRY = {
   'github-copilot': { mode: 'universal' },
   'codex': { mode: 'universal' },
   'antigravity': { mode: 'additional', skillAgentName: 'antigravity' },
+  'qclaw': { mode: 'unsupported' },
+  'workbuddy': { mode: 'unsupported' },
+  'lingma': { mode: 'unsupported' },
 };
 
 export function detectAgentPresence(agentKey) {

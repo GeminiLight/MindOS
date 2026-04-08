@@ -1,10 +1,62 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { CONFIG_PATH } from './constants.js';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { CONFIG_PATH, ROOT } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { expandHome } from './path-expand.js';
 import { parseJsonc } from './jsonc.js';
-import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
+import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from './mcp-agents.js';
+import { mergeTomlEntry } from './toml.js';
+
+/**
+ * Recursively copy a directory using pure Node.js (cross-platform).
+ * Uses cpSync on Node >=16.7, falls back to manual walk otherwise.
+ */
+function copyDirSync(src, dst) {
+  mkdirSync(dst, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const s = join(src, entry.name);
+    const d = join(dst, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(s, d);
+    } else {
+      copyFileSync(s, d);
+    }
+  }
+}
+
+/**
+ * Auto-copy skill folder for agents with mode 'unsupported'.
+ * Called after MCP config is written. Best-effort, never throws.
+ */
+function autoInstallSkillForAgent(agentKey, skillName) {
+  const reg = SKILL_AGENT_REGISTRY[agentKey];
+  if (!reg || reg.mode !== 'unsupported') return null;
+
+  const agent = MCP_AGENTS[agentKey];
+  if (!agent) return null;
+
+  // Resolve skill source: project skills/ or app/data/skills/
+  const candidates = [
+    join(ROOT, 'skills', skillName),
+    join(ROOT, 'app', 'data', 'skills', skillName),
+  ];
+  const skillSrc = candidates.find(p => existsSync(p));
+  if (!skillSrc) return null;
+
+  // Resolve target: agent's presenceDirs[0]/skills/<skillName>
+  const agentRoot = (agent.presenceDirs ?? []).map(d => expandHome(d)).find(d => existsSync(d))
+    || resolve(expandHome(agent.global), '..');
+  const targetDir = join(agentRoot, 'skills', skillName);
+
+  if (existsSync(targetDir)) return 'exists';
+
+  try {
+    copyDirSync(skillSrc, targetDir);
+    return 'copied';
+  } catch {
+    return null;
+  }
+}
 
 export { MCP_AGENTS };
 
@@ -195,8 +247,15 @@ export async function mcpInstall() {
           const abs = expandHome(cfgPath);
           if (!existsSync(abs)) continue;
           try {
-            const config = parseJsonc(readFileSync(abs, 'utf-8'));
-            if (config[agent.key]?.mindos) { installed = true; break; }
+            const content = readFileSync(abs, 'utf-8');
+            if (agent.format === 'toml') {
+              // TOML: look for [section.mindos] header
+              installed = content.includes(`[${agent.key}.mindos]`);
+            } else {
+              const config = parseJsonc(content);
+              if (config[agent.key]?.mindos) installed = true;
+            }
+            if (installed) break;
           } catch {}
         }
         const hint = installed ? 'configured' : present ? 'detected' : 'not found';
@@ -312,24 +371,39 @@ export async function mcpInstall() {
 
     // read + merge — resolve to absolute path for cross-platform safety
     const absPath = resolve(expandHome(configPath));
-    let config = {};
-    if (existsSync(absPath)) {
-      try { config = parseJsonc(readFileSync(absPath, 'utf-8')); } catch {
-        console.error(red(`  Failed to parse existing config: ${absPath} — skipping.`));
-        continue;
-      }
-    }
-
-    if (!config[agent.key]) config[agent.key] = {};
-    const existed = !!config[agent.key].mindos;
-    config[agent.key].mindos = entry;
-
-    // write
     const dir = resolve(absPath, '..');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+
+    let existed = false;
+
+    if (agent.format === 'toml') {
+      // TOML format (e.g. Codex): line-based merge preserving existing content
+      const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
+      existed = existing.includes(`[${agent.key}.mindos]`);
+      const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry);
+      writeFileSync(absPath, merged, 'utf-8');
+    } else {
+      // JSON format (default)
+      let config = {};
+      if (existsSync(absPath)) {
+        try { config = parseJsonc(readFileSync(absPath, 'utf-8')); } catch {
+          console.error(red(`  Failed to parse existing config: ${absPath} — skipping.`));
+          continue;
+        }
+      }
+      if (!config[agent.key]) config[agent.key] = {};
+      existed = !!config[agent.key].mindos;
+      config[agent.key].mindos = entry;
+      writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    }
 
     console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);
+
+    // Auto-copy skill for unsupported agents
+    const skillResult = autoInstallSkillForAgent(agentKey, 'mindos');
+    if (skillResult === 'copied') {
+      console.log(`${green('✔')} Copied MindOS Skill for ${bold(agent.name)}`);
+    }
   }
 
   console.log(`\n${green('Done!')} ${agentKeys.length} agent(s) configured.`);

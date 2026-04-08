@@ -324,6 +324,20 @@ export default function Panel({
         >
           <FileTree nodes={fileTree} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         </div>
+        {/* Inbox quick entry — always visible above sync bar */}
+        <button
+          type="button"
+          onClick={() => router.push('/view/Inbox/')}
+          className="flex items-center gap-2 mx-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-muted group border-t border-border/40 shrink-0"
+        >
+          <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
+          <span className="flex-1 text-left text-muted-foreground group-hover:text-foreground transition-colors text-xs">
+            {t.sidebar.capture}
+          </span>
+          {inboxCount > 0 && (
+            <span className="text-xs font-medium text-[var(--amber)] tabular-nums">{inboxCount}</span>
+          )}
+        </button>
         <SyncStatusBar collapsed={false} onOpenSyncSettings={onOpenSyncSettings} />
       </div>
 

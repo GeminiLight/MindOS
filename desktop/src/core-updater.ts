@@ -222,8 +222,9 @@ function extractTarGz(tarball: string, destDir: string): Promise<void> {
 
 /**
  * Pure-JS tar.gz extraction using Node built-in zlib.
- * Handles the POSIX tar format (512-byte header blocks) which is what
- * `tar czf` produces. Supports regular files and directories.
+ * Handles both POSIX ustar and GNU tar formats (512-byte header blocks).
+ * GNU tar uses @LongLink (typeflag 'L') / @LongName (typeflag 'K') extensions
+ * for paths exceeding the 100-byte name field. POSIX pax uses typeflag 'x'.
  * Uses \\?\ long-path prefix on Windows to bypass 260-char limit.
  */
 async function extractTarGzJs(tarball: string, destDir: string): Promise<void> {
@@ -232,6 +233,11 @@ async function extractTarGzJs(tarball: string, destDir: string): Promise<void> {
   const buf = await decompressGzip(tarball);
 
   let offset = 0;
+  // GNU long-name extensions: the next entry's name/link is stored in a preceding
+  // pseudo-entry with typeflag 'L' (long name) or 'K' (long link target).
+  let gnuLongName: string | null = null;
+  let gnuLongLink: string | null = null;
+
   while (offset + 512 <= buf.length) {
     const header = buf.subarray(offset, offset + 512);
     offset += 512;
@@ -239,17 +245,56 @@ async function extractTarGzJs(tarball: string, destDir: string): Promise<void> {
     // Two consecutive zero blocks = end of archive
     if (header.every(b => b === 0)) break;
 
-    // Parse tar header fields (POSIX ustar format)
+    // Parse tar header fields
     const nameRaw = readTarString(header, 0, 100);
     const sizeOctal = readTarString(header, 124, 12);
     const typeflag = header[156];
     const prefix = readTarString(header, 345, 155);
 
-    const entryName = prefix ? `${prefix}/${nameRaw}` : nameRaw;
     const fileSize = parseInt(sizeOctal, 8) || 0;
 
     // Data blocks (rounded up to 512-byte boundary)
     const dataBlocks = Math.ceil(fileSize / 512) * 512;
+
+    // ── GNU typeflag 'L' (0x4c): long file name for the next entry ──
+    if (typeflag === 0x4c) {
+      gnuLongName = buf.subarray(offset, offset + fileSize).toString('utf-8').replace(/\0+$/, '');
+      offset += dataBlocks;
+      continue;
+    }
+
+    // ── GNU typeflag 'K' (0x4b): long symlink target for the next entry ──
+    if (typeflag === 0x4b) {
+      gnuLongLink = buf.subarray(offset, offset + fileSize).toString('utf-8').replace(/\0+$/, '');
+      offset += dataBlocks;
+      continue;
+    }
+
+    // ── POSIX pax extended header (typeflag 'x' = 0x78): skip data, may set name ──
+    if (typeflag === 0x78 || typeflag === 0x67) {
+      // Parse pax headers to extract path if present
+      const paxData = buf.subarray(offset, offset + fileSize).toString('utf-8');
+      const pathMatch = paxData.match(/\d+ path=(.+)\n/);
+      if (pathMatch) {
+        gnuLongName = pathMatch[1];
+      }
+      offset += dataBlocks;
+      continue;
+    }
+
+    // ── Global pax header (typeflag 'g' = 0x67) — skip ──
+    // (already handled above alongside 'x')
+
+    // Determine final entry name: GNU long name takes priority, then POSIX prefix+name
+    let entryName: string;
+    if (gnuLongName) {
+      entryName = gnuLongName;
+      gnuLongName = null; // Consumed — applies only to the immediately following entry
+    } else {
+      entryName = prefix ? `${prefix}/${nameRaw}` : nameRaw;
+    }
+    // Consume gnuLongLink (we don't create symlinks, but must reset state)
+    gnuLongLink = null;
 
     if (!entryName || entryName === '.' || entryName === './') {
       offset += dataBlocks;
@@ -307,6 +352,9 @@ function winLongPath(p: string): string {
   if (p.startsWith('\\\\?\\') || !path.isAbsolute(p)) return p;
   return `\\\\?\\${p}`;
 }
+
+/** Exported for testing. */
+export { extractTarGzJs as _extractTarGzJs_forTest };
 
 // ── CoreUpdater ──
 

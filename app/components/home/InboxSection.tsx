@@ -15,7 +15,13 @@ import {
   Check,
   Clock,
   ChevronDown,
+  X,
+  ExternalLink,
+  Copy,
+  Trash2,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { quickDropToInbox } from '@/lib/inbox-upload';
@@ -54,6 +60,22 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
       new CustomEvent('mindos:inbox-organize', { detail: { files } }),
     );
   }, [files, isOrganizing]);
+
+  const handleDeleteFile = useCallback(async (name: string) => {
+    try {
+      const res = await fetch('/api/inbox', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names: [name] }),
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setFiles(prev => prev.filter(f => f.name !== name));
+      window.dispatchEvent(new Event('mindos:inbox-updated'));
+      toast.success(t.inbox.fileRemoved);
+    } catch {
+      toast.error(t.inbox.fileRemoveFailed);
+    }
+  }, [t]);
 
   const handleUpload = useCallback((selected: FileList | null) => {
     if (!selected || selected.length === 0) return;
@@ -208,7 +230,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
         <>
           <div className="flex flex-col gap-0.5 mb-3">
             {visibleFiles.map((file) => (
-              <InboxFileRow key={file.path} file={file} />
+              <InboxFileRow key={file.path} file={file} onDelete={handleDeleteFile} />
             ))}
           </div>
           {overflowCount > 0 && (
@@ -312,45 +334,139 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   );
 }
 
-function InboxFileRow({ file }: { file: InboxFile }) {
+function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: string) => void }) {
   const { t } = useLocale();
+  const router = useRouter();
   const isCSV = file.name.endsWith('.csv');
   const age = formatRelativeTime(file.modifiedAt, t.home.relativeTime);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const handleNavigate = () => {
+    router.push(`/view/${encodePath(file.path)}`);
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onDelete(file.name);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  };
 
   return (
-    <Link
-      href={`/view/${encodePath(file.path)}`}
-      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group"
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-          file.isAging ? 'bg-[var(--amber)]/60' : 'bg-[var(--amber)]'
-        }`}
-      />
-      {isCSV ? (
-        <Table size={12} className="shrink-0 text-success" />
-      ) : (
-        <FileText size={12} className="shrink-0 text-muted-foreground" />
-      )}
-      <span
-        className="text-sm truncate flex-1 text-foreground"
-        title={file.name}
-        suppressHydrationWarning
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleNavigate}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleNavigate(); }}
+        onContextMenu={handleContextMenu}
+        className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted group cursor-pointer"
       >
-        {file.name}
-      </span>
-      <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0">
-        {age}
-      </span>
-      {file.isAging && (
-        <span title="7+ days">
-          <AlertCircle
-            size={11}
-            className="shrink-0 text-[var(--amber)]/60"
-          />
+        <span
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+            file.isAging ? 'bg-[var(--amber)]/60' : 'bg-[var(--amber)]'
+          }`}
+        />
+        {isCSV ? (
+          <Table size={12} className="shrink-0 text-success" />
+        ) : (
+          <FileText size={12} className="shrink-0 text-muted-foreground" />
+        )}
+        <span
+          className="text-sm truncate flex-1 text-foreground"
+          title={file.name}
+          suppressHydrationWarning
+        >
+          {file.name}
         </span>
+        <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0 group-hover:hidden">
+          {age}
+        </span>
+        {file.isAging && (
+          <span title="7+ days" className="group-hover:hidden">
+            <AlertCircle
+              size={11}
+              className="shrink-0 text-[var(--amber)]/60"
+            />
+          </span>
+        )}
+        {/* Hover delete button */}
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded shrink-0 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+          title={t.inbox.removeFile}
+        >
+          <X size={12} />
+        </button>
+      </div>
+      {ctxMenu && (
+        <InboxFileContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          file={file}
+          onDelete={() => { setCtxMenu(null); onDelete(file.name); }}
+          onClose={() => setCtxMenu(null)}
+        />
       )}
-    </Link>
+    </>
+  );
+}
+
+/** Right-click context menu for Inbox file items */
+function InboxFileContextMenu({ x, y, file, onDelete, onClose }: {
+  x: number; y: number; file: InboxFile; onDelete: () => void; onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { t } = useLocale();
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
+  }, [onClose]);
+
+  const adjX = typeof window !== 'undefined' ? Math.min(x, window.innerWidth - 200) : x;
+  const adjY = typeof window !== 'undefined' ? Math.min(y, window.innerHeight - 120) : y;
+
+  const menuItemClass = 'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left';
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-lg py-1"
+      style={{ top: adjY, left: adjX }}
+    >
+      <button
+        className={menuItemClass}
+        onClick={() => { router.push(`/view/${encodePath(file.path)}`); onClose(); }}
+      >
+        <ExternalLink size={14} className="shrink-0" /> {t.inbox.openFile}
+      </button>
+      <button
+        className={menuItemClass}
+        onClick={() => { navigator.clipboard.writeText(file.name); toast.copy(); onClose(); }}
+      >
+        <Copy size={14} className="shrink-0" /> {t.inbox.copyName}
+      </button>
+      <div className="border-t border-border my-1" />
+      <button
+        className={`${menuItemClass} text-destructive hover:text-destructive`}
+        onClick={onDelete}
+      >
+        <Trash2 size={14} className="shrink-0" /> {t.inbox.removeFile}
+      </button>
+    </div>
   );
 }
 

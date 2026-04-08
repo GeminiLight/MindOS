@@ -60,7 +60,11 @@ cp package.json "$WORK/"
 
 # ── Package (flat, no outer directory) ──
 echo "  Creating archive..."
-tar czf "$ARCHIVE" -C "$WORK" .
+# Use POSIX format to avoid GNU @LongLink extensions that our Windows JS
+# tar parser must handle. --posix uses pax headers for paths > 100 chars,
+# which the parser also supports, but keeping paths representable in ustar
+# prefix+name (up to 255 chars) is preferred for maximum compatibility.
+tar czf "$ARCHIVE" --posix -C "$WORK" .
 
 # ── Self-validation ──
 echo "  Validating..."

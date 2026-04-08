@@ -128,6 +128,9 @@ export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
   'qwen-code':       { binary: 'qwen-code',       cmd: 'qwen-code', args: [], installCmd: 'npm install -g @qwen-code/qwen-code',
     displayName: 'Qwen Code',
     description: '阿里通义千问 Qwen 编程智能体。基于 Qwen 大模型，支持代码生成、审查和多语言编程，深度适配中文开发场景。' },
+  'lingma':          { binary: 'lingma',           cmd: 'lingma',    args: [],
+    displayName: 'Lingma',
+    description: '阿里通义灵码智能编程助手。提供代码补全、智能问答、多文件修改和编程智能体能力，支持 MCP 工具扩展。' },
 };
 
 /* ── Resolution ────────────────────────────────────────────────────────── */

@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { MCP_AGENTS, expandHome, resolveSkillWorkspaceProfile } from '@/lib/mcp-agents';
+import { MCP_AGENTS, SKILL_AGENT_REGISTRY, expandHome, resolveSkillWorkspaceProfile } from '@/lib/mcp-agents';
 import { readSettings, recordSkillInstall } from '@/lib/settings';
+import { copyDir, dirExists } from '@/lib/file-ops';
 
 /** Parse JSONC — strips comments before JSON.parse. Returns {} for empty/whitespace-only input. */
 function parseJsonc(text: string): Record<string, unknown> {
@@ -213,6 +214,21 @@ export async function POST(req: NextRequest) {
           const activeSkill = settings.disabledSkills?.includes('mindos') ? 'mindos-zh' : 'mindos';
           const skillPath = path.join(skillProfile.workspacePath, activeSkill, 'SKILL.md');
           recordSkillInstall(key, activeSkill, skillPath);
+
+          // Auto-copy skill for unsupported agents (QClaw, WorkBuddy, Lingma, etc.)
+          const reg = SKILL_AGENT_REGISTRY[key];
+          if (reg?.mode === 'unsupported') {
+            const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
+            const candidates = [
+              path.join(projectRoot, 'skills', activeSkill),
+              path.join(projectRoot, 'app', 'data', 'skills', activeSkill),
+            ];
+            const skillSrc = candidates.find(p => dirExists(p));
+            const targetDir = path.join(skillProfile.workspacePath, activeSkill);
+            if (skillSrc && !dirExists(targetDir)) {
+              await copyDir(skillSrc, targetDir);
+            }
+          }
         } catch { /* best-effort, don't fail the install */ }
 
         // Verify http connections

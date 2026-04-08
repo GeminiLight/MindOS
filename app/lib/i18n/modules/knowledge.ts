@@ -119,6 +119,11 @@ export const knowledgeEn = {
     noMindRoot: 'Please configure your knowledge base first',
     saveFailed: 'Failed to save files. Check disk space and permissions.',
     organizeFailed: 'Could not read files for organizing. Check file permissions.',
+    removeFile: 'Remove from Inbox',
+    openFile: 'Open',
+    copyName: 'Copy Name',
+    fileRemoved: 'File removed from Inbox',
+    fileRemoveFailed: 'Failed to remove file',
   },
   pulse: {
     title: 'Your Agents',
@@ -498,6 +503,11 @@ export const knowledgeZh = {
     noMindRoot: '请先配置知识库路径',
     saveFailed: '保存文件失败，请检查磁盘空间和权限。',
     organizeFailed: '无法读取文件进行整理，请检查文件权限。',
+    removeFile: '从暂存台移除',
+    openFile: '打开',
+    copyName: '复制文件名',
+    fileRemoved: '文件已从暂存台移除',
+    fileRemoveFailed: '移除文件失败',
   },
   pulse: {
     title: '你的 Agent',

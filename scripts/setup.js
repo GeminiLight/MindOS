@@ -823,6 +823,25 @@ function runSkillInstallStep(template, selectedAgents) {
       return [reg.skillAgentName || key];
     });
 
+  // Direct-copy skill for 'unsupported' agents (e.g., QClaw, WorkBuddy, Lingma)
+  const unsupportedAgents = selectedAgents.filter((key) => {
+    const reg = SKILL_AGENT_REGISTRY[key];
+    return reg?.mode === 'unsupported';
+  });
+  for (const key of unsupportedAgents) {
+    const agent = MCP_AGENTS[key];
+    if (!agent) continue;
+    const skillSourceDir = resolve(ROOT, 'skills', skillName);
+    if (!existsSync(skillSourceDir)) continue;
+    const targetDir = expandHomePath(agent.presenceDirs?.[0] ?? agent.global.replace(/\/[^/]+$/, '/'));
+    const targetSkillDir = resolve(targetDir, 'skills', skillName);
+    try {
+      if (!existsSync(targetSkillDir)) {
+        cpSync(skillSourceDir, targetSkillDir, { recursive: true });
+      }
+    } catch { /* best-effort copy for unsupported agents */ }
+  }
+
   const agentFlags = additionalAgents.length > 0
     ? additionalAgents.map(a => `-a ${a}`).join(' ')
     : '-a universal';
