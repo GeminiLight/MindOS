@@ -5,7 +5,7 @@ import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X
 import type { ProviderConfig, AiTabProps } from './types';
 import { Field, Select, Input, PasswordInput, EnvBadge, Toggle, SettingCard, SettingRow } from './Primitives';
 import { useLocale } from '@/lib/stores/locale-store';
-import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
+import { type ProviderId, PROVIDER_PRESETS, ALL_PROVIDER_IDS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import ModelInput from '@/components/shared/ModelInput';
 import { type CustomProvider, isCustomProviderId } from '@/lib/custom-endpoints';
@@ -133,6 +133,12 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
   }, [data.ai.providers, provider, updateAi]);
 
   const customProviders = data.customProviders ?? [];
+  const currentCustom = isCustomProviderId(provider) ? customProviders.find(p => p.id === provider) : null;
+
+  const patchCustomProvider = useCallback((id: string, patch: Partial<CustomProvider>) => {
+    updateCustomProviders(customProviders.map(p => p.id === id ? { ...p, ...patch } : p));
+  }, [customProviders, updateCustomProviders]);
+
   const editingCustomProvider = useMemo(
     () => customEditingId ? customProviders.find(p => p.id === customEditingId) : null,
     [customEditingId, customProviders],
@@ -164,15 +170,8 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
           value={provider}
           onChange={id => {
             if (id !== 'skip') updateAi({ provider: id });
-            // Custom provider → auto-open edit form so user sees its config
-            if (typeof id === 'string' && isCustomProviderId(id)) {
-              setCustomEditingId(id);
-              setCustomFormTemplate(undefined);
-              setCustomFormOpen(true);
-            } else {
-              setCustomFormOpen(false);
-              setCustomEditingId(null);
-            }
+            setCustomFormOpen(false);
+            setCustomEditingId(null);
           }}
           compact
           configuredProviders={configuredProviders}
@@ -199,14 +198,13 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
           }}
         />
 
-        {/* Inline custom provider form */}
+        {/* Add new provider form (card only for NEW, not for editing existing) */}
         {customFormOpen && (
           <CustomProviderForm
             key={customEditingId ?? customFormTemplate?.baseProviderId ?? 'new'}
             initial={editingCustomProvider ?? customFormTemplate ?? undefined}
             onSave={handleSaveCustom}
             onCancel={() => { setCustomFormOpen(false); setCustomEditingId(null); }}
-            onDelete={customEditingId ? () => handleDeleteCustom(customEditingId) : undefined}
             t={t}
             existingNames={customProviders
               .filter(p => p.id !== customEditingId)
@@ -214,20 +212,49 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
           />
         )}
 
-        {/* Provider configuration fields — hidden when custom form is open */}
-        {preset && !customFormOpen && (
+        {/* ── Inline config fields for the selected provider ── */}
+        {!customFormOpen && (preset || currentCustom) && (
           <div className="space-y-3 pt-3 border-t border-border">
-            {/* 1. API Key — most essential, enter first */}
+            {/* Custom provider: Name + Protocol (inline, auto-save) */}
+            {currentCustom && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={locale === 'zh' ? '名称' : 'Name'}>
+                    <Input
+                      value={currentCustom.name}
+                      onChange={e => patchCustomProvider(currentCustom.id, { name: e.target.value })}
+                      placeholder={locale === 'zh' ? '输入名称' : 'Enter name'}
+                    />
+                  </Field>
+                  <Field label={locale === 'zh' ? '协议' : 'Protocol'}>
+                    <Select
+                      value={currentCustom.baseProviderId}
+                      onChange={e => patchCustomProvider(currentCustom.id, { baseProviderId: e.target.value as ProviderId })}
+                    >
+                      {ALL_PROVIDER_IDS.map(id => (
+                        <option key={id} value={id}>
+                          {locale === 'zh' ? PROVIDER_PRESETS[id].nameZh : PROVIDER_PRESETS[id].name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+              </>
+            )}
+
+            {/* API Key */}
             <Field
               label={<>{t.settings.ai.apiKey} {envKeyName && <EnvBadge overridden={env[envKeyName]} />}</>}
-              hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : hasFallbackKey ? t.settings.ai.keyOptionalHint : t.settings.ai.keyHint}
+              hint={preset && activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : preset && hasFallbackKey ? t.settings.ai.keyOptionalHint : undefined}
             >
               <PasswordInput
-                value={currentConfig.apiKey}
-                onChange={v => patchProvider(provider, { apiKey: v })}
+                value={currentCustom ? currentCustom.apiKey : currentConfig.apiKey}
+                onChange={v => currentCustom
+                  ? patchCustomProvider(currentCustom.id, { apiKey: v })
+                  : patchProvider(provider, { apiKey: v })}
                 placeholder="sk-..."
               />
-              {preset.signupUrl && !currentConfig.apiKey && !activeEnvKey && (
+              {preset?.signupUrl && !currentConfig.apiKey && !activeEnvKey && (
                 <a
                   href={preset.signupUrl}
                   target="_blank"
@@ -243,48 +270,68 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
               )}
             </Field>
 
-            {/* 2. Base URL — before Model so "List Models" uses the correct endpoint */}
-            {preset.supportsBaseUrl && (
-              <Field
-                label={t.settings.ai.baseUrl}
-                hint={t.settings.ai.baseUrlHint}
-              >
+            {/* Base URL */}
+            {(currentCustom || preset?.supportsBaseUrl) && (
+              <Field label="Base URL">
                 <Input
-                  value={currentConfig.baseUrl ?? ''}
-                  onChange={e => patchProvider(provider, { baseUrl: e.target.value })}
-                  placeholder={preset.fixedBaseUrl || getDefaultBaseUrl(provider) || 'https://api.openai.com/v1'}
+                  value={currentCustom ? currentCustom.baseUrl : (currentConfig.baseUrl ?? '')}
+                  onChange={e => currentCustom
+                    ? patchCustomProvider(currentCustom.id, { baseUrl: e.target.value })
+                    : patchProvider(provider, { baseUrl: e.target.value })}
+                  placeholder={currentCustom
+                    ? (PROVIDER_PRESETS[currentCustom.baseProviderId]?.fixedBaseUrl || 'https://api.example.com/v1')
+                    : (preset?.fixedBaseUrl || getDefaultBaseUrl(provider) || 'https://api.openai.com/v1')}
                 />
               </Field>
             )}
 
-            {/* 3. Model — after Base URL so "List Models" queries the right endpoint */}
-            <Field label={t.settings.ai.model}>
+            {/* Model */}
+            <Field label={locale === 'zh' ? '模型' : 'Model'}>
               <ModelInput
-                value={currentConfig.model}
-                onChange={v => patchProvider(provider, { model: v })}
-                placeholder={preset.defaultModel}
-                provider={provider}
-                apiKey={currentConfig.apiKey}
-                envKey={!!activeEnvKey}
-                baseUrl={currentConfig.baseUrl}
-                supportsListModels={preset.supportsListModels}
+                value={currentCustom ? currentCustom.model : currentConfig.model}
+                onChange={v => currentCustom
+                  ? patchCustomProvider(currentCustom.id, { model: v })
+                  : patchProvider(provider, { model: v })}
+                placeholder={currentCustom
+                  ? PROVIDER_PRESETS[currentCustom.baseProviderId]?.defaultModel
+                  : preset?.defaultModel}
+                provider={currentCustom ? currentCustom.baseProviderId : provider}
+                apiKey={currentCustom ? currentCustom.apiKey : currentConfig.apiKey}
+                envKey={!currentCustom && !!activeEnvKey}
+                baseUrl={currentCustom ? currentCustom.baseUrl : currentConfig.baseUrl}
+                supportsListModels={currentCustom ? !!currentCustom.baseUrl?.trim() : !!preset?.supportsListModels}
+                allowNoKey={!!currentCustom}
                 browseLabel={t.settings.ai.listModels}
                 noModelsLabel={t.settings.ai.noModelsFound}
               />
             </Field>
 
-            {/* 4. Test & Reset — after all fields */}
-            <ProviderActions
-              provider={provider}
-              result={testResult[provider] ?? { state: 'idle' }}
-              hasKey={!!currentConfig.apiKey}
-              hasEnv={!!activeEnvKey}
-              hasConfig={!!(currentConfig.apiKey || currentConfig.model || currentConfig.baseUrl)}
-              onTest={() => handleTestKey(provider)}
-              onReset={() => resetProvider(provider)}
-              onDelete={() => deleteBuiltinProvider(provider)}
-              t={t}
-            />
+            {/* Test & Reset & Delete */}
+            {preset && (
+              <ProviderActions
+                provider={provider}
+                result={testResult[provider] ?? { state: 'idle' }}
+                hasKey={!!currentConfig.apiKey}
+                hasEnv={!!activeEnvKey}
+                hasConfig={!!(currentConfig.apiKey || currentConfig.model || currentConfig.baseUrl)}
+                onTest={() => handleTestKey(provider)}
+                onReset={() => resetProvider(provider)}
+                onDelete={() => deleteBuiltinProvider(provider)}
+                t={t}
+              />
+            )}
+            {currentCustom && (
+              <ProviderActions
+                provider={currentCustom.baseProviderId}
+                result={testResult[currentCustom.id] ?? { state: 'idle' }}
+                hasKey={!!currentCustom.apiKey}
+                hasEnv={false}
+                hasConfig={!!(currentCustom.apiKey || currentCustom.model || currentCustom.baseUrl)}
+                onTest={() => handleTestKey(currentCustom.baseProviderId)}
+                onDelete={() => handleDeleteCustom(currentCustom.id)}
+                t={t}
+              />
+            )}
           </div>
         )}
 
@@ -397,7 +444,7 @@ function ProviderActions({
   hasEnv: boolean;
   hasConfig: boolean;
   onTest: () => void;
-  onReset: () => void;
+  onReset?: () => void;
   onDelete?: () => void;
   t: AiTabProps['t'];
 }) {
@@ -410,7 +457,7 @@ function ProviderActions({
 
   const startConfirm = (action: 'reset' | 'delete') => {
     if (confirmAction === action) {
-      if (action === 'reset') onReset(); else onDelete?.();
+      if (action === 'reset') onReset?.(); else onDelete?.();
       setConfirmAction(null);
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     } else {
@@ -429,7 +476,7 @@ function ProviderActions({
 
         <div className="flex items-center gap-1">
           {/* Reset */}
-          {hasConfig && (
+          {onReset && hasConfig && (
             <button
               type="button"
               onClick={() => startConfirm('reset')}
