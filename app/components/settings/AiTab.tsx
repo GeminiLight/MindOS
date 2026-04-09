@@ -1,35 +1,17 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { AlertCircle, Loader2, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Check, Zap, X } from 'lucide-react';
-import type { AiSettings, AgentSettings, ProviderConfig, SettingsData, AiTabProps } from './types';
-import { Field, Select, Input, PasswordInput, EnvBadge, ApiKeyInput, Toggle, SettingCard, SettingRow } from './Primitives';
+import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, X } from 'lucide-react';
+import type { ProviderConfig, AiTabProps } from './types';
+import { Field, Select, Input, PasswordInput, EnvBadge, Toggle, SettingCard, SettingRow } from './Primitives';
 import { useLocale } from '@/lib/stores/locale-store';
 import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import ModelInput from '@/components/shared/ModelInput';
-import { type CustomProvider, generateCustomProviderId } from '@/lib/custom-endpoints';
-import { ALL_PROVIDER_IDS } from '@/lib/agent/providers';
-
-type TestState = 'idle' | 'testing' | 'ok' | 'error';
-type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
-
-interface TestResult {
-  state: TestState;
-  latency?: number;
-  error?: string;
-  code?: ErrorCode;
-}
-
-function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
-  switch (code) {
-    case 'auth_error': return t.settings.ai.testKeyAuthError;
-    case 'model_not_found': return t.settings.ai.testKeyModelNotFound;
-    case 'rate_limited': return t.settings.ai.testKeyRateLimited;
-    case 'network_error': return t.settings.ai.testKeyNetworkError;
-    default: return t.settings.ai.testKeyUnknown;
-  }
-}
+import { type CustomProvider } from '@/lib/custom-endpoints';
+import { useCustomProviderForm, type TestResult } from './useCustomProviderForm';
+import CustomProviderFields from './CustomProviderFields';
+import { TestButton } from './TestButton';
 
 export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }: AiTabProps) {
   const { locale } = useLocale();
@@ -193,9 +175,10 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
               label={<>{t.settings.ai.apiKey} {envKeyName && <EnvBadge overridden={env[envKeyName]} />}</>}
               hint={activeEnvKey ? t.settings.ai.envFieldNote(envKeyName!) : hasFallbackKey ? t.settings.ai.keyOptionalHint : t.settings.ai.keyHint}
             >
-              <ApiKeyInput
+              <PasswordInput
                 value={currentConfig.apiKey}
                 onChange={v => patchProvider(provider, { apiKey: v })}
+                placeholder="sk-..."
               />
               {preset.signupUrl && !currentConfig.apiKey && !activeEnvKey && (
                 <a
@@ -355,53 +338,6 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
   );
 }
 
-/* ── Test Button (shared between built-in and custom providers) ── */
-
-function TestButton({
-  result, disabled, onTest, t,
-}: {
-  result: TestResult;
-  disabled: boolean;
-  onTest: () => void;
-  t: AiTabProps['t'];
-}) {
-  const isTesting = result.state === 'testing';
-  const isOk = result.state === 'ok';
-  const isError = result.state === 'error';
-
-  return (
-    <button
-      type="button"
-      disabled={disabled || isTesting}
-      onClick={onTest}
-      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 disabled:cursor-not-allowed ${
-        isOk
-          ? 'bg-success/10 text-success border border-success/20'
-          : isError
-            ? 'bg-destructive/8 text-destructive border border-destructive/20 hover:bg-destructive/12'
-            : 'border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 disabled:opacity-40'
-      }`}
-    >
-      {isTesting ? (
-        <Loader2 size={13} className="animate-spin" />
-      ) : isOk ? (
-        <Check size={13} />
-      ) : isError ? (
-        <AlertCircle size={13} />
-      ) : (
-        <Zap size={13} />
-      )}
-      {isTesting
-        ? t.settings.ai.testKeyTesting
-        : isOk && result.latency != null
-          ? t.settings.ai.testKeyOk(result.latency)
-          : isError
-            ? errorMessage(t, result.code)
-            : t.settings.ai.testKey}
-    </button>
-  );
-}
-
 /* ── Provider Actions: Test + Reset ── */
 
 function ProviderActions({
@@ -460,7 +396,7 @@ function ProviderActions({
   );
 }
 
-/* ── Inline Custom Provider Form (replaces modal) ── */
+/* ── Inline Custom Provider Form (uses shared hook + fields) ── */
 
 function CustomProviderForm({
   initial, onSave, onCancel, t,
@@ -471,57 +407,16 @@ function CustomProviderForm({
   t: AiTabProps['t'];
 }) {
   const { locale } = useLocale();
-  const [name, setName] = useState(initial?.name ?? '');
-  const [baseProviderId, setBaseProviderId] = useState<ProviderId>(initial?.baseProviderId ?? 'openai');
-  const [apiKey, setApiKey] = useState(initial?.apiKey === '***set***' ? '' : initial?.apiKey ?? '');
-  const [model, setModel] = useState(initial?.model ?? '');
-  const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
-  const [testResult, setTestResult] = useState<TestResult>({ state: 'idle' });
-
-  const basePreset = PROVIDER_PRESETS[baseProviderId];
-  const canSave = name.trim() && baseUrl.trim() && model.trim();
-
-  const handleTest = useCallback(async () => {
-    if (!canSave) { setTestResult({ state: 'error', error: locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required' }); return; }
-    setTestResult({ state: 'testing' });
-    try {
-      const res = await fetch('/api/settings/test-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          initial?.id
-            ? { provider: initial.id, apiKey, model, baseUrl }
-            : { baseProviderId, apiKey, model, baseUrl },
-        ),
-      });
-      const json = await res.json();
-      if (json.ok) setTestResult({ state: 'ok', latency: json.latency });
-      else setTestResult({ state: 'error', error: json.error || 'Test failed', code: json.code });
-    } catch {
-      setTestResult({ state: 'error', code: 'network_error', error: 'Network error' });
-    }
-  }, [canSave, apiKey, model, baseUrl, baseProviderId, locale, initial?.id]);
-
-  const handleSave = () => {
-    if (!canSave) { setTestResult({ state: 'error', error: locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required' }); return; }
-    onSave({
-      id: initial?.id || generateCustomProviderId(),
-      name: name.trim(),
-      baseProviderId,
-      apiKey,
-      model: model.trim(),
-      baseUrl: baseUrl.trim(),
-    });
-  };
+  const form = useCustomProviderForm({ initial, onSave, locale });
 
   const formTitle = initial
     ? (locale === 'zh' ? '编辑自定义 Provider' : 'Edit Custom Provider')
     : (locale === 'zh' ? '添加自定义 Provider' : 'Add Custom Provider');
 
   const missingFields: string[] = [];
-  if (!name.trim()) missingFields.push(locale === 'zh' ? '名称' : 'Name');
-  if (!baseUrl.trim()) missingFields.push(locale === 'zh' ? '接口地址' : 'Base URL');
-  if (!model.trim()) missingFields.push(locale === 'zh' ? '模型' : 'Model');
+  if (!form.name.trim()) missingFields.push(locale === 'zh' ? '名称' : 'Name');
+  if (!form.baseUrl.trim()) missingFields.push(locale === 'zh' ? '接口地址' : 'Base URL');
+  if (!form.model.trim()) missingFields.push(locale === 'zh' ? '模型' : 'Model');
 
   return (
     <div className="mt-3 rounded-lg border border-border overflow-hidden">
@@ -539,78 +434,15 @@ function CustomProviderForm({
       </div>
 
       {/* Form body */}
-      <div className="space-y-3 p-4">
-        {/* Row 1: Name + Protocol side by side */}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'}>
-            <Input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder={locale === 'zh' ? '公司 GPT-4' : 'Company GPT-4'}
-              autoFocus
-            />
-          </Field>
-          <Field
-            label={t.settings?.customProviders?.modal?.fieldProtocol ?? 'Protocol'}
-          >
-            <Select
-              value={baseProviderId}
-              onChange={e => setBaseProviderId(e.target.value as ProviderId)}
-            >
-              {ALL_PROVIDER_IDS.map(id => (
-                <option key={id} value={id}>
-                  {locale === 'zh' ? PROVIDER_PRESETS[id].nameZh : PROVIDER_PRESETS[id].name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        {/* Base URL */}
-        <Field
-          label={t.settings?.customProviders?.modal?.fieldBaseUrl ?? 'Base URL'}
-          hint={t.settings?.customProviders?.modal?.fieldBaseUrlHint}
-        >
-          <Input
-            value={baseUrl}
-            onChange={e => setBaseUrl(e.target.value)}
-            placeholder={basePreset.fixedBaseUrl || 'https://api.example.com/v1'}
-          />
-        </Field>
-
-        {/* API Key */}
-        <Field
-          label={<>{t.settings?.customProviders?.modal?.fieldApiKey ?? 'API Key'} <span className="text-muted-foreground/50 font-normal">{locale === 'zh' ? '(可选)' : '(optional)'}</span></>}
-        >
-          <PasswordInput
-            value={apiKey}
-            onChange={setApiKey}
-            placeholder="sk-..."
-          />
-        </Field>
-
-        {/* Model */}
-        <Field label={t.settings?.customProviders?.modal?.fieldModel ?? 'Model'}>
-          <ModelInput
-            value={model}
-            onChange={setModel}
-            placeholder={basePreset.defaultModel}
-            provider={baseProviderId}
-            apiKey={apiKey}
-            baseUrl={baseUrl}
-            supportsListModels={!!baseUrl.trim()}
-            allowNoKey
-            browseLabel={t.settings.ai.listModels}
-            noModelsLabel={t.settings.ai.noModelsFound}
-          />
-        </Field>
+      <div className="p-4">
+        <CustomProviderFields form={form} t={t} locale={locale} layout="compact" />
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-1">
-          <TestButton result={testResult} disabled={!canSave} onTest={handleTest} t={t} />
+        <div className="flex items-center gap-2 pt-4">
+          <TestButton result={form.testResult} disabled={!form.canSave} onTest={form.handleTest} t={t} />
 
           <div className="flex-1">
-            {!canSave && missingFields.length > 0 && (
+            {!form.canSave && missingFields.length > 0 && (
               <span className="text-2xs text-muted-foreground/60 pl-2">
                 {locale === 'zh' ? `需要: ${missingFields.join('、')}` : `Required: ${missingFields.join(', ')}`}
               </span>
@@ -626,8 +458,8 @@ function CustomProviderForm({
           </button>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={!canSave}
+            onClick={form.handleSave}
+            disabled={!form.canSave}
             className="px-4 py-1.5 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:bg-[var(--amber)]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {locale === 'zh' ? '保存' : 'Save'}
