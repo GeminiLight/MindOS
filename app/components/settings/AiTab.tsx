@@ -489,9 +489,9 @@ function CustomProviderForm({
 
   useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
 
-  const formTitle = initial
-    ? (locale === 'zh' ? '编辑自定义 Provider' : 'Edit Custom Provider')
-    : (locale === 'zh' ? '添加自定义 Provider' : 'Add Custom Provider');
+  const formTitle = initial?.id
+    ? (locale === 'zh' ? '编辑 Provider' : 'Edit Provider')
+    : (locale === 'zh' ? '添加 Provider' : 'Add Provider');
 
   const missingFields: string[] = [];
   if (!form.name.trim()) missingFields.push(locale === 'zh' ? '名称' : 'Name');

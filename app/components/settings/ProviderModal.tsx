@@ -45,8 +45,8 @@ function ProviderModalInner({
   const form = useCustomProviderForm({ initial: initialProvider, onSave, locale, existingNames });
 
   const title = initialProvider
-    ? t.settings?.customProviders?.modal?.titleEdit
-    : t.settings?.customProviders?.modal?.titleAdd;
+    ? (locale === 'zh' ? '编辑 Provider' : 'Edit Provider')
+    : (locale === 'zh' ? '添加 Provider' : 'Add Provider');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>

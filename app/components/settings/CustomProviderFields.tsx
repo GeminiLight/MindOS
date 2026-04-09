@@ -15,14 +15,17 @@ interface CustomProviderFieldsProps {
 }
 
 /**
- * Shared form fields for custom provider editing.
+ * Shared form fields for provider editing.
  * Renders: Name, Protocol, Base URL, API Key, Model.
- * Used by both the inline form (AiTab) and the modal (ProviderModal).
  */
 export default function CustomProviderFields({
   form, t, locale, layout = 'full',
 }: CustomProviderFieldsProps) {
   const basePreset = PROVIDER_PRESETS[form.baseProviderId];
+
+  const nameLabel = locale === 'zh' ? '名称' : 'Name';
+  const protocolLabel = locale === 'zh' ? '协议' : 'Protocol';
+  const namePlaceholder = locale === 'zh' ? '输入名称' : 'Enter name';
 
   const nameHint = form.isDuplicateName
     ? (locale === 'zh' ? '名称已存在' : 'Name already exists')
@@ -33,15 +36,15 @@ export default function CustomProviderFields({
       {/* Name + Protocol */}
       {layout === 'compact' ? (
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'} hint={nameHint} hintError={form.isDuplicateName}>
+          <Field label={nameLabel} hint={nameHint} hintError={form.isDuplicateName}>
             <Input
               value={form.name}
               onChange={e => form.setName(e.target.value)}
-              placeholder={locale === 'zh' ? '公司 GPT-4' : 'Company GPT-4'}
+              placeholder={namePlaceholder}
               autoFocus
             />
           </Field>
-          <Field label={t.settings?.customProviders?.modal?.fieldProtocol ?? 'Protocol'}>
+          <Field label={protocolLabel}>
             <Select
               value={form.baseProviderId}
               onChange={e => form.setBaseProviderId(e.target.value as ProviderId)}
@@ -56,18 +59,14 @@ export default function CustomProviderFields({
         </div>
       ) : (
         <>
-          <Field
-            label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'}
-            hint={nameHint ?? t.settings?.customProviders?.modal?.fieldNameHint}
-            hintError={form.isDuplicateName}
-          >
+          <Field label={nameLabel} hint={nameHint} hintError={form.isDuplicateName}>
             <Input
               value={form.name}
               onChange={e => form.setName(e.target.value)}
-              placeholder={locale === 'zh' ? '公司 GPT-4' : 'Company GPT-4'}
+              placeholder={namePlaceholder}
             />
           </Field>
-          <Field label={t.settings?.customProviders?.modal?.fieldProtocol ?? 'Protocol'}>
+          <Field label={protocolLabel}>
             <Select
               value={form.baseProviderId}
               onChange={e => form.setBaseProviderId(e.target.value as ProviderId)}
@@ -83,10 +82,7 @@ export default function CustomProviderFields({
       )}
 
       {/* Base URL */}
-      <Field
-        label={t.settings?.customProviders?.modal?.fieldBaseUrl ?? 'Base URL'}
-        hint={t.settings?.customProviders?.modal?.fieldBaseUrlHint}
-      >
+      <Field label="Base URL">
         <Input
           value={form.baseUrl}
           onChange={e => form.setBaseUrl(e.target.value)}
@@ -96,8 +92,7 @@ export default function CustomProviderFields({
 
       {/* API Key */}
       <Field
-        label={<>{t.settings?.customProviders?.modal?.fieldApiKey ?? 'API Key'} <span className="text-muted-foreground/50 font-normal">{locale === 'zh' ? '(可选)' : '(optional)'}</span></>}
-        hint={t.settings?.customProviders?.modal?.fieldApiKeyHint}
+        label={<>API Key <span className="text-muted-foreground/50 font-normal">{locale === 'zh' ? '(可选)' : '(optional)'}</span></>}
       >
         <PasswordInput
           value={form.apiKey}
@@ -107,10 +102,7 @@ export default function CustomProviderFields({
       </Field>
 
       {/* Model */}
-      <Field
-        label={t.settings?.customProviders?.modal?.fieldModel ?? 'Model'}
-        hint={t.settings?.customProviders?.modal?.fieldModelHint}
-      >
+      <Field label={locale === 'zh' ? '模型' : 'Model'}>
         <ModelInput
           value={form.model}
           onChange={form.setModel}

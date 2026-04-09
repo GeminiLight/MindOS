@@ -33,6 +33,8 @@ export function useAskPanel(): AskPanelState {
   const [desktopAskPopupOpen, setDesktopAskPopupOpen] = useState(false);
   const [askInitialMessage, setAskInitialMessage] = useState('');
   const [askMaximized, setAskMaximized] = useState(false);
+  const askMaximizedRef = useRef(false);
+  askMaximizedRef.current = askMaximized;
   const [askOpenSource, setAskOpenSource] = useState<'user' | 'guide' | 'guide-next'>('user');
   const [askAcpAgent, setAskAcpAgent] = useState<AcpAgentSelection | null>(null);
   const prevWidthRef = useRef(RIGHT_ASK_DEFAULT_WIDTH);

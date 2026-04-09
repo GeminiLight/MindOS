@@ -34,6 +34,7 @@ interface UseAskChatOpts {
   refs: AskChatRefs;
   errorLabels: { noResponse: string; stopped: string };
   resetInputState: () => void;
+  onRestoreInput?: (userMessage: Message) => void;
 }
 
 export function useAskChat({
@@ -45,6 +46,7 @@ export function useAskChat({
   refs,
   errorLabels,
   resetInputState,
+  onRestoreInput,
 }: UseAskChatOpts) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('connecting');
@@ -53,7 +55,50 @@ export function useAskChat({
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
 
-  const stop = useCallback(() => { abortRef.current?.abort(); }, []);
+  // Track the pending message so it can be retracted on stop
+  const pendingMessageRef = useRef<{
+    messageIndex: number;
+    userMessage: Message;
+  } | null>(null);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    
+    // Retract the pending message if it hasn't been replied to yet
+    const pending = pendingMessageRef.current;
+    if (pending) {
+      refs.sessionRef.current?.setMessages(prev => {
+        const updated = [...prev];
+        
+        // Check if there's an assistant message after the user message
+        const assistantMsgAtIndex = updated[pending.messageIndex + 1];
+        const assistantHasContent = assistantMsgAtIndex?.role === 'assistant' && 
+          (assistantMsgAtIndex.content.trim() || (assistantMsgAtIndex.parts && assistantMsgAtIndex.parts.length > 0));
+        
+        // Only retract if assistant message is empty (no response yet)
+        if (!assistantHasContent) {
+          // Remove the user message at messageIndex
+          if (updated[pending.messageIndex]?.role === 'user') {
+            updated.splice(pending.messageIndex, 1);
+          }
+          // Remove the empty assistant placeholder if it's now at messageIndex
+          if (updated[pending.messageIndex]?.role === 'assistant' && 
+              !updated[pending.messageIndex].content.trim() &&
+              (!updated[pending.messageIndex].parts || updated[pending.messageIndex].parts!.length === 0)) {
+            updated.splice(pending.messageIndex, 1);
+          }
+        }
+        
+        return updated;
+      });
+      
+      // Restore input with the original message content
+      onRestoreInput?.(pending.userMessage);
+      
+      // Clear pending message ref
+      pendingMessageRef.current = null;
+    }
+  }, [refs, onRestoreInput]);
 
   const submit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +132,11 @@ export function useAskChat({
     };
     img.clearImages();
     const requestMessages = [...sess.messages, userMsg];
+    
+    // Track the message index for potential retraction on stop
+    const messageIndex = requestMessages.length;
+    pendingMessageRef.current = { messageIndex, userMessage: userMsg };
+    
     sess.setMessages([...requestMessages, { role: 'assistant', content: '', timestamp: Date.now() }]);
 
     resetInputState();
@@ -198,6 +248,8 @@ export function useAskChat({
               return updated;
             });
           }
+          // Successfully received response, clear pending message
+          pendingMessageRef.current = null;
           return;
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
