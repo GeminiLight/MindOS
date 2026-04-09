@@ -355,6 +355,53 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
   );
 }
 
+/* ── Test Button (shared between built-in and custom providers) ── */
+
+function TestButton({
+  result, disabled, onTest, t,
+}: {
+  result: TestResult;
+  disabled: boolean;
+  onTest: () => void;
+  t: AiTabProps['t'];
+}) {
+  const isTesting = result.state === 'testing';
+  const isOk = result.state === 'ok';
+  const isError = result.state === 'error';
+
+  return (
+    <button
+      type="button"
+      disabled={disabled || isTesting}
+      onClick={onTest}
+      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 disabled:cursor-not-allowed ${
+        isOk
+          ? 'bg-success/10 text-success border border-success/20'
+          : isError
+            ? 'bg-destructive/8 text-destructive border border-destructive/20 hover:bg-destructive/12'
+            : 'border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 disabled:opacity-40'
+      }`}
+    >
+      {isTesting ? (
+        <Loader2 size={13} className="animate-spin" />
+      ) : isOk ? (
+        <Check size={13} />
+      ) : isError ? (
+        <AlertCircle size={13} />
+      ) : (
+        <Zap size={13} />
+      )}
+      {isTesting
+        ? t.settings.ai.testKeyTesting
+        : isOk && result.latency != null
+          ? t.settings.ai.testKeyOk(result.latency)
+          : isError
+            ? errorMessage(t, result.code)
+            : t.settings.ai.testKey}
+    </button>
+  );
+}
+
 /* ── Provider Actions: Test + Reset ── */
 
 function ProviderActions({
@@ -373,9 +420,6 @@ function ProviderActions({
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasFallback = !!PROVIDER_PRESETS[provider]?.apiKeyFallback;
   const canTest = hasKey || hasEnv || hasFallback;
-  const isTesting = result.state === 'testing';
-  const isOk = result.state === 'ok';
-  const isError = result.state === 'error';
 
   useEffect(() => () => { if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current); }, []);
 
@@ -393,36 +437,7 @@ function ProviderActions({
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-between">
-        {/* Left: Test button */}
-        <button
-          type="button"
-          disabled={!canTest || isTesting}
-          onClick={onTest}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 disabled:cursor-not-allowed ${
-            isOk
-              ? 'bg-success/10 text-success border border-success/20'
-              : isError
-                ? 'bg-destructive/8 text-destructive border border-destructive/20 hover:bg-destructive/12'
-                : 'border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 disabled:opacity-40'
-          }`}
-        >
-          {isTesting ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : isOk ? (
-            <Check size={13} />
-          ) : isError ? (
-            <AlertCircle size={13} />
-          ) : (
-            <Zap size={13} />
-          )}
-          {isTesting
-            ? t.settings.ai.testKeyTesting
-            : isOk && result.latency != null
-              ? t.settings.ai.testKeyOk(result.latency)
-              : isError
-                ? errorMessage(t, result.code)
-                : t.settings.ai.testKey}
-        </button>
+        <TestButton result={result} disabled={!canTest} onTest={onTest} t={t} />
 
         {/* Right: Reset — subtle, icon-first, inline confirm */}
         {hasConfig && (
@@ -461,16 +476,14 @@ function CustomProviderForm({
   const [apiKey, setApiKey] = useState(initial?.apiKey === '***set***' ? '' : initial?.apiKey ?? '');
   const [model, setModel] = useState(initial?.model ?? '');
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
-  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
-  const [testError, setTestError] = useState('');
+  const [testResult, setTestResult] = useState<TestResult>({ state: 'idle' });
 
   const basePreset = PROVIDER_PRESETS[baseProviderId];
   const canSave = name.trim() && baseUrl.trim() && model.trim();
 
   const handleTest = useCallback(async () => {
-    if (!canSave) { setTestError(locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required'); return; }
-    setTestState('testing');
-    setTestError('');
+    if (!canSave) { setTestResult({ state: 'error', error: locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required' }); return; }
+    setTestResult({ state: 'testing' });
     try {
       const res = await fetch('/api/settings/test-key', {
         method: 'POST',
@@ -482,16 +495,15 @@ function CustomProviderForm({
         ),
       });
       const json = await res.json();
-      if (json.ok) setTestState('ok');
-      else { setTestState('error'); setTestError(json.error || 'Test failed'); }
+      if (json.ok) setTestResult({ state: 'ok', latency: json.latency });
+      else setTestResult({ state: 'error', error: json.error || 'Test failed', code: json.code });
     } catch {
-      setTestState('error');
-      setTestError('Network error');
+      setTestResult({ state: 'error', code: 'network_error', error: 'Network error' });
     }
-  }, [canSave, apiKey, model, baseUrl, baseProviderId, locale]);
+  }, [canSave, apiKey, model, baseUrl, baseProviderId, locale, initial?.id]);
 
   const handleSave = () => {
-    if (!canSave) { setTestError(locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required'); return; }
+    if (!canSave) { setTestResult({ state: 'error', error: locale === 'zh' ? '名称、接口地址和模型为必填' : 'Name, base URL, and model are required' }); return; }
     onSave({
       id: initial?.id || generateCustomProviderId(),
       name: name.trim(),

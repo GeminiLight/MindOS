@@ -296,14 +296,27 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
     ? '••••••••••••'
     : (placeholder ?? 'sk-...');
 
-  // Show eye when there's actually visible content to toggle
-  const showEye = editing ? !!localValue : (!isMasked && !!value);
+  // Show eye: always when there's saved/typed content
+  const showEye = isMasked || (editing && !!localValue) || (!isMasked && !!value);
 
   const handleFocus = () => {
     if (isMasked && !editing) {
       setEditing(true);
       setLocalValue('');
       setShowPassword(false);
+    }
+  };
+
+  // Eye click: if masked and not editing, enter edit mode (same as focus).
+  // Otherwise toggle show/hide.
+  const handleEyeClick = () => {
+    if (isMasked && !editing) {
+      setEditing(true);
+      setLocalValue('');
+      setShowPassword(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else {
+      setShowPassword(v => !v);
     }
   };
 
@@ -354,7 +367,7 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
           data-apikey-eye
           tabIndex={-1}
           onMouseDown={e => e.preventDefault()}
-          onClick={() => setShowPassword(v => !v)}
+          onClick={handleEyeClick}
           disabled={disabled}
           className="shrink-0 p-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           title={showPassword ? 'Hide' : 'Show'}
