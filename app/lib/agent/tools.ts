@@ -10,8 +10,6 @@ import {
 import { readSkillContentByName } from '@/lib/pi-integration/skills';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
-import { getIMTools } from '@/lib/im/tools';
-import { hasAnyIMConfig } from '@/lib/im/config';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 import { extractRelevantContent } from '@/lib/agent/paragraph-extract';
 import { computeDiffAsync } from '@/lib/agent/diff-async';
@@ -254,10 +252,8 @@ export function getChatTools(): AgentTool<any>[] {
 export function getRequestScopedTools(): AgentTool<any>[] {
   const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
 
-  // IM tools: only loaded when at least one platform is configured
-  if (hasAnyIMConfig()) {
-    try { baseTools.push(...getIMTools()); } catch { /* graceful degradation */ }
-  }
+  // IM tools are now provided by the im extension (app/lib/im/index.ts)
+  // registered via pi.registerTool() and loaded by DefaultResourceLoader.
 
   // MCP tools are now provided by pi-mcp-adapter extension (registered via pi.registerTool)
   // and automatically included by the framework — no manual discovery needed here.
@@ -711,6 +707,50 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     execute: safeExecute(async (_id, params: Static<typeof CsvAppendParams>) => {
       const result = appendCsvRow(params.path, params.row);
       return textResult(`Row appended to ${params.path} (now ${result.newRowCount} rows)`);
+    }),
+  },
+
+  {
+    name: 'lint',
+    label: 'Knowledge Base Health Check',
+    description: 'Run a health check on the knowledge base. Detects orphan files, stale files, broken links, and empty files. Returns a health score (0-100) and detailed issue lists.',
+    parameters: Type.Object({
+      space: Type.Optional(Type.String({ description: 'Optional space name to scope the analysis (e.g. "Projects"). Omit for full KB scan.' })),
+    }),
+    execute: safeExecute(async (_id, params: { space?: string }) => {
+      const { runLint } = await import('@/lib/lint');
+      const report = runLint(getMindRoot(), params.space);
+      const lines: string[] = [
+        `## KB Health Check — Score: ${report.healthScore}/100`,
+        `Scope: ${report.scope} | Files: ${report.stats.totalFiles}`,
+        '',
+      ];
+      if (report.orphans.length > 0) {
+        lines.push(`### Orphan Files (${report.orphans.length})`);
+        for (const o of report.orphans.slice(0, 20)) lines.push(`- ${o.path}`);
+        if (report.orphans.length > 20) lines.push(`... and ${report.orphans.length - 20} more`);
+        lines.push('');
+      }
+      if (report.brokenLinks.length > 0) {
+        lines.push(`### Broken Links (${report.brokenLinks.length})`);
+        for (const b of report.brokenLinks.slice(0, 20)) lines.push(`- ${b.source}:${b.line} → [[${b.target}]]`);
+        if (report.brokenLinks.length > 20) lines.push(`... and ${report.brokenLinks.length - 20} more`);
+        lines.push('');
+      }
+      if (report.stale.length > 0) {
+        lines.push(`### Stale Files (${report.stale.length})`);
+        for (const s of report.stale.slice(0, 20)) lines.push(`- ${s.path} (${s.daysSinceUpdate}d ago)`);
+        if (report.stale.length > 20) lines.push(`... and ${report.stale.length - 20} more`);
+        lines.push('');
+      }
+      if (report.empty.length > 0) {
+        lines.push(`### Empty Files (${report.empty.length})`);
+        for (const e of report.empty.slice(0, 20)) lines.push(`- ${e}`);
+        if (report.empty.length > 20) lines.push(`... and ${report.empty.length - 20} more`);
+        lines.push('');
+      }
+      if (report.healthScore === 100) lines.push('All clear — your knowledge base is in great shape!');
+      return textResult(lines.join('\n'));
     }),
   },
 ];

@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     // when the project is inside node_modules (global npm install).
     ...(inNodeModules ? ['@geminilight/mindos'] : []),
   ],
-  serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'mcporter'],
+  serverExternalPackages: ['chokidar', 'openai', 'discord.js', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'pi-mcp-adapter'],
   output: 'standalone',
   outputFileTracingRoot: projectDir,
   outputFileTracingIncludes: {

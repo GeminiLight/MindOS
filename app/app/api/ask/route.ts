@@ -652,6 +652,8 @@ export async function POST(req: NextRequest) {
         ...scanExtensionPaths(),
         // pi-mcp-adapter: token-efficient MCP proxy tool (~200 tokens vs N*150 full tool defs)
         path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
+        // IM extension: 8-platform IM integration (Telegram, Feishu, Discord, Slack, etc.)
+        path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
       ],
     });
     await resourceLoader.reload();
