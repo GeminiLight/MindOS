@@ -41,6 +41,12 @@ export function useResizeDrag({
   const latestWidthRef = useRef(width);
   latestWidthRef.current = width;
 
+  // Use refs for callbacks to avoid stale closures in mousemove/mouseup
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  const onResizeEndRef = useRef(onResizeEnd);
+  onResizeEndRef.current = onResizeEnd;
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (disabled) return;
     e.preventDefault();
@@ -58,21 +64,21 @@ export function useResizeDrag({
         : startX.current - ev.clientX;
       const maxW = Math.min(maxWidth, window.innerWidth * maxWidthRatio);
       const newWidth = Math.round(Math.max(minWidth, Math.min(maxW, startWidth.current + delta)));
-      onResize(newWidth);
+      onResizeRef.current(newWidth);
     };
 
     const onMouseUp = () => {
       dragging.current = false;
       document.body.classList.remove('select-none');
       document.body.style.cursor = '';
-      onResizeEnd(latestWidthRef.current);
+      onResizeEndRef.current(latestWidthRef.current);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [width, minWidth, maxWidth, maxWidthRatio, direction, disabled, onResize, onResizeEnd]);
+  }, [width, minWidth, maxWidth, maxWidthRatio, direction, disabled]);
 
   return handleMouseDown;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import AskContent from '@/components/ask/AskContent';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -46,6 +46,8 @@ export default function RightAskPanel({
     ? window.innerWidth - sidebarOffset
     : 1200;
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleResize = useCallback((w: number) => {
     if (snapFiredRef.current) return;
     const clamped = Math.min(w, maxAvailable);
@@ -81,6 +83,7 @@ export default function RightAskPanel({
   }, [maxAvailable, sidebarOffset, onMaximize, maximized, onWidthChange]);
 
   const handleResizeEnd = useCallback((w: number) => {
+    setIsDragging(false);
     if (snapFiredRef.current) return;
     onWidthCommit(w);
   }, [onWidthCommit]);
@@ -97,6 +100,7 @@ export default function RightAskPanel({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     snapFiredRef.current = false;
+    setIsDragging(true);
     // Only re-enable content-based snap once the panel has been shrunk enough
     // that content is comfortably above minimum. This prevents the bounce:
     // exit fullscreen → new drag → immediately re-snap because panel still wide.
@@ -120,7 +124,7 @@ export default function RightAskPanel({
       className={`
         hidden md:flex fixed top-0 right-0 h-screen z-40
         flex-col bg-background border-l border-border/40 shadow-[-4px_0_16px_rgba(0,0,0,0.04)]
-        transition-[width,transform] duration-200 ease-out
+        ${isDragging ? '' : 'transition-[width,transform] duration-200 ease-out'}
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}
       style={{ width: effectiveWidth, minWidth: `${MIN_WIDTH}px` }}
