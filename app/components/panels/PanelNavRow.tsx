@@ -38,31 +38,33 @@ export function PanelNavRow({
     </>
   );
 
-  const showRail = Boolean(active && href);
+  const showRail = Boolean(active);
 
   const className = cn(
     'relative flex items-center gap-3 py-2.5 transition-[background-color] duration-150 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     showRail ? 'bg-[var(--amber-dim)]/40 pl-3.5 pr-4 text-foreground' : 'px-4',
-    href && !showRail && 'cursor-pointer hover:bg-muted/50',
+    !showRail && 'cursor-pointer hover:bg-muted/50',
     showRail && 'cursor-default',
-    !href && 'cursor-pointer hover:bg-muted/50',
   );
+
+  const rail = showRail ? (
+    <span
+      className="pointer-events-none absolute bottom-[22%] left-0 top-[22%] w-0.5 rounded-r-full bg-[var(--amber)]"
+      aria-hidden
+    />
+  ) : null;
 
   if (href) {
     return (
       <Link href={href} className={className} aria-current={active ? 'page' : undefined}>
-        {showRail ? (
-          <span
-            className="pointer-events-none absolute bottom-[22%] left-0 top-[22%] w-0.5 rounded-r-full bg-[var(--amber)]"
-            aria-hidden
-          />
-        ) : null}
+        {rail}
         {content}
       </Link>
     );
   }
   return (
     <button type="button" onClick={onClick} className={cn(className, 'w-full')}>
+      {rail}
       {content}
     </button>
   );
