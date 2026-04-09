@@ -4,6 +4,31 @@
 
 ## Unreleased (after v0.6.7)
 
+### 架构重构：巨型文件拆分
+
+> 8 个 700+ 行组件/路由模块化拆分，新建 22 个专职模块。
+
+**后端 API 路由：**
+- **ask/route.ts** 1,524 → 1,050 行 (-31%)：提取 `sse/events`、`skill-resolver`、`non-streaming`、`file-context`、`request-utils` 5 个模块
+- **file/route.ts** 451 → 159 行 (-65%)：提取 `file/handlers` 模块（read/write/rename/delete/list/create）
+- **sync/route.ts** 295 → 233 行 (-21%)：提取 `sync-config` 辅助模块
+
+**前端组件：**
+- **TodoRenderer** 889 → 137 行 (-85%)：提取 `parse-todos.ts`（325 行纯逻辑）、`FilterBar.tsx`（106 行）、`SectionCard.tsx`（354 行）
+- **AgentDetailContent** 1,188 → 741 行 (-38%)：提取 6 个子组件（Header/SkillSection/McpSection/SpaceSection/ConfigSection/SkillEditor）
+- **UpdateTab** 868 → 357 行 (-59%)：提取 `DesktopUpdateCards.tsx`（DesktopCoreCard + DesktopShellCard）
+- **McpTab** 713 → 293 行 (-59%)：提取 `McpConnectGuides.tsx`（ConnectCard + CliGuide + McpGuide）
+- **AgentsPanelA2aTab** 746 → 297 行 (-60%)：提取 `AcpRegistrySection.tsx`（AcpRegistrySection + AcpAgentCard）
+- **FileTree** 861 → 619 行 (-28%)：提取 `hidden-files.ts`（store）、`FileTreeContextMenus.tsx`（3 个菜单组件）、`useDirectoryDragDrop.ts`（hook）
+- **SyncTab** 775 → 556 行 (-28%)：提取 `SyncEmptyState.tsx`（初始化向导）
+- **AgentsSkillsSection** 869 → 655 行 (-25%)：提取 `AgentsSkillsByAgent.tsx`（ByAgentView + AgentCard）+ 导出 `SkillsSectionCopy` 类型
+- **AskContent** 771 行保持不变（hook 编排型组件，拆分反增复杂度）
+
+**新建共享模块：**
+- `lib/stores/hidden-files.ts` — localStorage 隐藏文件 store + hook
+- `lib/hooks/useDirectoryDragDrop.ts` — 文件拖放 state + 5 个 handler
+- `lib/parsing/parse-todos.ts` — TODO 解析器、行操作、日期、样式、计数（纯函数）
+
 ### 构建优化
 - **生产构建切换到 webpack**：Turbopack 16.1.x 的 `serverExternalPackages` 不影响 standalone trace（[#88842](https://github.com/vercel/next.js/discussions/88842)），切换后 standalone 从 200MB 降至 110MB（-45%），koffi 87MB 被正确排除。dev 模式仍用 Turbopack
 - **清理过期 mcp/node_modules**：Desktop runtime 中 73MB 的 mcp/node_modules 是 v0.6.6 esbuild 方案落地前的旧产物，重跑 prepare 脚本后替换为 1.2MB 的 dist/index.cjs

@@ -115,6 +115,18 @@ create_file → move_file → create_space → rename_space → append_csv
   lib/agent/non-streaming.ts      = 非流式回退逻辑
 ```
 
+### ✅ 修复状态（2026-04-10）
+
+已完成拆分，提取 7 个模块：
+
+| 文件 | 原始 → 现在 | 减少 |
+|------|------------|------|
+| ask/route.ts | 1,524 → 1,050 | -31% |
+| file/route.ts | 451 → 159 | -65% |
+| sync/route.ts | 295 → 233 | -21% |
+
+新模块：`sse/events`、`skill-resolver`、`non-streaming`、`file-context`、`request-utils`、`file/handlers`、`sync-config`
+
 ---
 
 ## 问题 #2: 巨型前端组件
@@ -173,6 +185,22 @@ function ActivitySection(...) {...}
   hooks/useAgentDetail.ts (200 行)     — 数据获取 + 状态
   hooks/useAgentSkillCrud.ts (80 行)   — Skill CRUD 操作
 ```
+
+### ✅ 修复状态（2026-04-10）
+
+8 个组件中 7 个已完成拆分，新建 15 个子组件/hook/纯逻辑模块：
+
+| 组件 | 原始 → 现在 | 减少 | 提取物 |
+|------|------------|------|--------|
+| TodoRenderer | 889 → 137 | **-85%** | parse-todos.ts / FilterBar / SectionCard |
+| UpdateTab | 868 → 357 | -59% | DesktopUpdateCards.tsx |
+| McpTab | 713 → 293 | -59% | McpConnectGuides.tsx |
+| AgentsPanelA2aTab | 746 → 297 | -60% | AcpRegistrySection.tsx |
+| AgentDetailContent | 1,188 → 741 | -38% | 6 个子组件 (Header/Skills/Mcp/Space/Config/SkillEditor) |
+| FileTree | 861 → 619 | -28% | hidden-files.ts / FileTreeContextMenus / useDirectoryDragDrop |
+| SyncTab | 775 → 556 | -28% | SyncEmptyState.tsx |
+| AgentsSkillsSection | 869 → 655 | -25% | AgentsSkillsByAgent.tsx + SkillsSectionCopy type |
+| AskContent | 771 → 771 | 跳过 | hook 编排型组件，拆分反增复杂度 |
 
 ---
 
