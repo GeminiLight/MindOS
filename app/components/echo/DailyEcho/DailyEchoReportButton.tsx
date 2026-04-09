@@ -4,12 +4,10 @@
  * Daily Echo Report Generate Button
  *
  * Triggers client-side report generation and shows loading/error states.
- * All data sources (localStorage, IndexedDB, fetch) are browser-only,
- * so generation runs entirely on the client.
  */
 
 import { useState, useCallback } from 'react';
-import { Zap, AlertCircle } from 'lucide-react';
+import { Zap, AlertCircle, Loader2 } from 'lucide-react';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
 import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
 import { loadDailyEchoConfig } from '@/lib/daily-echo/config';
@@ -52,7 +50,7 @@ export default function DailyEchoReportButton({
       <button
         onClick={handleGenerate}
         disabled={isLoading}
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5 font-sans text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-2 font-sans text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         type="button"
         title={error}
       >
@@ -70,13 +68,13 @@ export default function DailyEchoReportButton({
     <button
       onClick={handleGenerate}
       disabled={isLoading}
-      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] px-4 py-2.5 font-sans text-sm font-medium transition-all duration-150 hover:bg-[var(--amber)]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] px-4 py-2 font-sans text-sm font-medium transition-all duration-150 hover:bg-[var(--amber)]/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       type="button"
       aria-busy={isLoading}
     >
       {isLoading ? (
         <>
-          <div className="inline-flex h-4 w-4 animate-spin rounded-full border-2 border-[var(--amber-foreground)]/30 border-t-[var(--amber-foreground)]" />
+          <Loader2 size={16} className="animate-spin shrink-0" />
           <span>{t.dailyReportGenerating || '生成中...'}</span>
         </>
       ) : (

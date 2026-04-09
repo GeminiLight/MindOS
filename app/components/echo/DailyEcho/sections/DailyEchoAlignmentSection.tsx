@@ -15,24 +15,24 @@ export function DailyEchoAlignmentSection({
   const score = alignment.alignmentScore;
   const percentage = Math.round(score);
 
-  let colorClass = 'bg-destructive/20 text-destructive';
+  let colorClass = 'bg-destructive/25 text-destructive';
   let barColorClass = 'bg-destructive';
   let labelText = t.alignmentMisaligned || '偏离';
 
   if (score >= 70) {
-    colorClass = 'bg-success/20 text-success';
+    colorClass = 'bg-success/25 text-success';
     barColorClass = 'bg-success';
     labelText = t.alignmentAligned || '对齐';
   } else if (score >= 40) {
-    colorClass = 'bg-[var(--amber)]/20 text-[var(--amber)]';
+    colorClass = 'bg-[var(--amber)]/25 text-[var(--amber)]';
     barColorClass = 'bg-[var(--amber)]';
     labelText = t.alignmentPartial || '部分对齐';
   }
 
   return (
     <section className="mb-8">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-4">
-        {t.alignmentTitle || '✅ 对齐度分析'}
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">
+        {t.alignmentTitle || '对齐度分析'}
       </h3>
 
       <div className="rounded-lg border border-border bg-card/50 p-4 space-y-4">
@@ -42,13 +42,13 @@ export function DailyEchoAlignmentSection({
             <span className="text-sm font-medium text-foreground">
               {t.alignmentScore || '对齐度'}
             </span>
-            <span className={`inline-flex px-2.5 py-1 rounded text-sm font-semibold ${colorClass}`}>
+            <span className={`inline-flex px-2.5 py-0.5 rounded text-sm font-semibold ${colorClass}`}>
               {percentage}/100
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-muted rounded-sm overflow-hidden">
             <div
               className={`h-full ${barColorClass} transition-all duration-300`}
               style={{ width: `${percentage}%` }}
@@ -59,18 +59,14 @@ export function DailyEchoAlignmentSection({
             />
           </div>
 
-          <p className="text-xs text-muted-foreground mt-1">
-            {labelText}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{labelText}</p>
         </div>
 
         {/* Analysis Text */}
-        <div className="text-sm text-muted-foreground leading-relaxed">
-          {alignment.analysis}
-        </div>
+        <div className="text-sm text-muted-foreground leading-relaxed">{alignment.analysis}</div>
 
         {alignment.reasoning && (
-          <div className="text-xs text-muted-foreground italic border-l-2 border-muted pl-3">
+          <div className="text-xs text-muted-foreground italic border-l-2 border-border pl-3">
             {alignment.reasoning}
           </div>
         )}

@@ -596,6 +596,63 @@ server.registerTool("mindos_get_file_at_version", {
   } catch (e) { return error(String(e)); }
 });
 
+// ── mindos_lint ─────────────────────────────────────────────────────────────
+
+server.registerTool("mindos_lint", {
+  title: "Knowledge Base Health Check",
+  description: "Run a health check on the knowledge base. Detects orphan files (no inbound links), stale files (not modified in 90+ days), broken links, and empty/stub files. Returns a health score (0-100) and detailed issue lists.",
+  inputSchema: z.object({
+    space: z.string().optional().describe("Optional space name to scope the analysis (e.g. 'Projects'). Omit for full KB scan."),
+  }),
+  annotations: { readOnlyHint: true },
+}, async ({ space }) => {
+  try {
+    const params: Record<string, string> = {};
+    if (space) params.space = space;
+    const report = await _get("/api/lint", params) as Record<string, unknown>;
+    const stats = report.stats as Record<string, number>;
+    const score = report.healthScore as number;
+    const orphans = report.orphans as Array<Record<string, unknown>>;
+    const brokenLinks = report.brokenLinks as Array<Record<string, unknown>>;
+    const stale = report.stale as Array<Record<string, unknown>>;
+    const empty = report.empty as string[];
+
+    const lines: string[] = [
+      `## KB Health Check — Score: ${score}/100`,
+      `Scope: ${report.scope} | Files: ${stats.totalFiles}`,
+      '',
+    ];
+    if (orphans?.length > 0) {
+      lines.push(`### Orphan Files (${orphans.length})`);
+      for (const o of orphans.slice(0, 20)) lines.push(`- ${o.path}`);
+      if (orphans.length > 20) lines.push(`... and ${orphans.length - 20} more`);
+      lines.push('');
+    }
+    if (brokenLinks?.length > 0) {
+      lines.push(`### Broken Links (${brokenLinks.length})`);
+      for (const b of brokenLinks.slice(0, 20)) lines.push(`- ${b.source}:${b.line} → [[${b.target}]]`);
+      if (brokenLinks.length > 20) lines.push(`... and ${brokenLinks.length - 20} more`);
+      lines.push('');
+    }
+    if (stale?.length > 0) {
+      lines.push(`### Stale Files (${stale.length})`);
+      for (const s of stale.slice(0, 20)) lines.push(`- ${s.path} (${s.daysSinceUpdate}d ago)`);
+      if (stale.length > 20) lines.push(`... and ${stale.length - 20} more`);
+      lines.push('');
+    }
+    if (empty?.length > 0) {
+      lines.push(`### Empty Files (${empty.length})`);
+      for (const e of empty.slice(0, 20)) lines.push(`- ${e}`);
+      if (empty.length > 20) lines.push(`... and ${empty.length - 20} more`);
+      lines.push('');
+    }
+    if (score === 100) lines.push('All clear — your knowledge base is in great shape!');
+
+    _logOp("mindos_lint", { space }, "ok", `score=${score}, files=${stats.totalFiles}`);
+    return ok(lines.join('\n'));
+  } catch (e) { _logOp("mindos_lint", { space }, "error", String(e)); return error(String(e)); }
+});
+
 } // end registerTools
 
 // ─── Server Factory ──────────────────────────────────────────────────────────

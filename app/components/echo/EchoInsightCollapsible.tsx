@@ -12,7 +12,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 const proseInsight =
   'prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground ' +
   'prose-p:my-1 prose-p:leading-relaxed ' +
-  'prose-headings:font-semibold prose-headings:my-2 prose-headings:text-[13px] ' +
+  'prose-headings:font-semibold prose-headings:my-2 prose-headings:text-sm ' +
   'prose-ul:my-1 prose-li:my-0.5 prose-ol:my-1 ' +
   'prose-code:text-[0.8em] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none ' +
   'prose-pre:bg-muted prose-pre:text-foreground prose-pre:text-xs ' +
@@ -105,7 +105,7 @@ export function EchoInsightCollapsible({
   const generateDisabled = aiLoading || !aiReady || streaming;
 
   return (
-    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/15 hover:shadow">
+    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/25 hover:shadow">
       <button
         id={btnId}
         type="button"
@@ -114,11 +114,11 @@ export function EchoInsightCollapsible({
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
       >
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-dim)] text-[var(--amber)]"
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-dim)] text-[var(--amber)]"
           aria-hidden
         >
-          <Sparkles size={17} strokeWidth={1.75} />
+          <Sparkles size={16} strokeWidth={1.75} />
         </span>
         <span className="flex-1 font-sans text-sm font-medium text-foreground">{title}</span>
         <ChevronDown
@@ -136,7 +136,7 @@ export function EchoInsightCollapsible({
         role="region"
         aria-labelledby={btnId}
         className={cn(
-          'grid transition-[grid-template-rows] duration-250 ease-out',
+          'grid transition-[grid-template-rows] duration-200 ease-out',
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
@@ -149,7 +149,7 @@ export function EchoInsightCollapsible({
                 disabled={generateDisabled}
                 title={generateDisabled ? t.hints.aiNotConfigured : undefined}
                 onClick={runGenerate}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--amber)] px-3 py-2 font-sans text-sm font-medium text-[var(--amber-foreground)] transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--amber)] px-3 py-2 font-sans text-sm font-medium text-[var(--amber-foreground)] transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 {streaming ? (
                   <Loader2 size={16} className="animate-spin shrink-0" aria-hidden />
@@ -171,7 +171,7 @@ export function EchoInsightCollapsible({
               ) : null}
             </div>
             {!aiLoading && !aiReady ? (
-              <p className="mt-2 font-sans text-2xs text-muted-foreground">{noAiHint}</p>
+              <p className="mt-2 font-sans text-xs text-muted-foreground">{noAiHint}</p>
             ) : null}
             {err ? (
               <p className="mt-3 font-sans text-sm text-error" role="alert">
@@ -179,7 +179,7 @@ export function EchoInsightCollapsible({
               </p>
             ) : null}
             {insightMd ? (
-              <div className={cn(proseInsight, 'mt-4 border-t border-border/60 pt-4')}>
+              <div className={cn(proseInsight, 'mt-4 border-t border-border/50 pt-4')}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{insightMd}</ReactMarkdown>
                 {streaming ? (
                   <span

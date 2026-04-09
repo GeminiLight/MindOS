@@ -13,15 +13,15 @@ function segmentMeta(
 ): { label: string; icon: ReactNode } {
   switch (segment) {
     case 'about-you':
-      return { label: echo.aboutYouTitle, icon: <UserRound size={13} /> };
+      return { label: echo.aboutYouTitle, icon: <UserRound size={14} /> };
     case 'continued':
-      return { label: echo.continuedTitle, icon: <Bookmark size={13} /> };
+      return { label: echo.continuedTitle, icon: <Bookmark size={14} /> };
     case 'daily':
-      return { label: echo.dailyEchoTitle, icon: <Sun size={13} /> };
+      return { label: echo.dailyEchoTitle, icon: <Sun size={14} /> };
     case 'past-you':
-      return { label: echo.pastYouTitle, icon: <History size={13} /> };
+      return { label: echo.pastYouTitle, icon: <History size={14} /> };
     case 'growth':
-      return { label: echo.intentGrowthTitle, icon: <Brain size={13} /> };
+      return { label: echo.intentGrowthTitle, icon: <Brain size={14} /> };
   }
 }
 
@@ -31,8 +31,8 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
   const aria = t.echoPages.segmentNavAria;
 
   return (
-    <nav aria-label={aria} className="mt-5 border-t border-border/30 pt-4 font-sans">
-      <ul className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+    <nav aria-label={aria} className="mt-5 border-t border-border/25 pt-4 font-sans">
+      <ul className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
         {ECHO_SEGMENT_ORDER.map((segment) => {
           const href = ECHO_SEGMENT_HREF[segment];
           const { label, icon } = segmentMeta(segment, echo);
@@ -43,10 +43,10 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'inline-flex min-h-9 max-w-[11rem] items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex min-h-9 max-w-44 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActive
-                    ? 'border-[var(--amber)]/45 bg-[var(--amber-dim)]/50 font-medium text-foreground'
-                    : 'border-transparent bg-muted/35 text-muted-foreground hover:bg-muted/55 hover:text-foreground',
+                    ? 'border-[var(--amber)]/50 bg-[var(--amber-dim)]/50 font-medium text-foreground'
+                    : 'border-transparent bg-muted/25 text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                 )}
               >
                 <span className="shrink-0" aria-hidden>{icon}</span>

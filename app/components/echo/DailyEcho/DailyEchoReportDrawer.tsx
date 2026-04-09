@@ -6,7 +6,7 @@
  * Main UI component for displaying generated daily echo reports
  */
 
-import { X, RotateCw } from 'lucide-react';
+import { X, RotateCw, Loader2 } from 'lucide-react';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
 import { DailyEchoSnapshotSection } from './sections/DailyEchoSnapshotSection';
 import { DailyEchoThemesSection } from './sections/DailyEchoThemesSection';
@@ -34,57 +34,44 @@ export default function DailyEchoReportDrawer({
 }: DailyEchoReportDrawerProps) {
   const t = locale?.t || {};
 
-  // Use the existing design tokens from Echo
-  const drawerClass =
-    'fixed inset-y-0 right-0 z-40 flex w-full max-w-2xl flex-col bg-background border-l border-border shadow-lg transition-transform duration-200 ease-out';
-
-  const drawerOpenClass = isOpen ? 'translate-x-0' : 'translate-x-full';
-  const overlayClass = isOpen
-    ? 'fixed inset-0 z-30 bg-black/20 transition-opacity duration-200'
-    : 'hidden';
-
-  if (!isOpen && !report) {
-    return null;
-  }
+  if (!isOpen && !report) return null;
 
   return (
     <>
       {/* Overlay */}
       <div
-        className={overlayClass}
+        className={isOpen ? 'fixed inset-0 z-30 bg-black/25 transition-opacity duration-200' : 'hidden'}
         onClick={onClose}
         role="presentation"
       />
 
       {/* Drawer */}
       <div
-        className={`${drawerClass} ${drawerOpenClass}`}
+        className={`fixed inset-y-0 right-0 z-40 flex w-full max-w-2xl flex-col bg-background border-l border-border shadow-lg transition-transform duration-200 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="daily-echo-drawer-title"
       >
         {/* Header */}
-        <div className="sticky top-0 z-50 border-b border-border bg-background px-6 py-4">
+        <div className="border-b border-border bg-background px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h2
                 id="daily-echo-drawer-title"
-                className="text-lg font-semibold text-foreground"
+                className="font-display text-lg font-semibold text-foreground"
               >
                 {t.dailyReportTitle || '每日回响'}
               </h2>
               {report && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t.dailyReportGenerated || '生成于'}{' '}
-                  {new Date(
-                    report.generatedAt
-                  ).toLocaleTimeString()}
+                  {new Date(report.generatedAt).toLocaleTimeString()}
                 </p>
               )}
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 hover:bg-muted transition-colors"
+              className="rounded-lg p-2 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label="Close"
               type="button"
             >
@@ -95,66 +82,40 @@ export default function DailyEchoReportDrawer({
 
         {/* Content */}
         {isGenerating ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <div className="inline-flex h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-[var(--amber)] mb-4" />
+              <Loader2 size={24} className="mx-auto mb-4 animate-spin text-[var(--amber)]" />
               <p className="text-sm text-muted-foreground">
-                {t.dailyReportGenerating ||
-                  '生成中...'}
+                {t.dailyReportGenerating || '生成中...'}
               </p>
             </div>
           </div>
         ) : report ? (
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {/* Snapshot Section */}
-            <DailyEchoSnapshotSection
-              snapshot={report.snapshot}
-              locale={locale}
-            />
-
-            {/* Themes Section */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            <DailyEchoSnapshotSection snapshot={report.snapshot} locale={locale} />
             {report.themes && report.themes.length > 0 && (
-              <DailyEchoThemesSection
-                themes={report.themes}
-                locale={locale}
-              />
+              <DailyEchoThemesSection themes={report.themes} locale={locale} />
             )}
-
-            {/* Alignment Section */}
-            <DailyEchoAlignmentSection
-              alignment={report.alignment}
-              locale={locale}
-            />
-
-            {/* Reflection Section */}
-            {report.reflectionPrompts &&
-              report.reflectionPrompts.prompts.length > 0 && (
-                <DailyEchoReflectionSection
-                  prompts={report.reflectionPrompts.prompts}
-                  locale={locale}
-                />
-              )}
+            <DailyEchoAlignmentSection alignment={report.alignment} locale={locale} />
+            {report.reflectionPrompts && report.reflectionPrompts.prompts.length > 0 && (
+              <DailyEchoReflectionSection prompts={report.reflectionPrompts.prompts} locale={locale} />
+            )}
           </div>
         ) : null}
 
         {/* Footer */}
         {report && (
-          <div className="sticky bottom-0 border-t border-border bg-background px-6 py-4 flex gap-3">
+          <div className="border-t border-border bg-background px-6 py-4 flex gap-3">
             <button
-              onClick={() =>
-                onContinueAgent(
-                  report.alignment.analysis
-                )
-              }
-              className="flex-1 rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--amber)]/90"
+              onClick={() => onContinueAgent(report.alignment.analysis)}
+              className="flex-1 rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               type="button"
             >
-              {t.dailyReportContinueAgent ||
-                '继续与 Agent'}
+              {t.dailyReportContinueAgent || '继续与 Agent'}
             </button>
             <button
               onClick={onRegenerate}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              className="rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               type="button"
               title="Regenerate report"
             >
