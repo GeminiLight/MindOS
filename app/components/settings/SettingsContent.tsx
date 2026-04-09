@@ -230,7 +230,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           {tab === 'ai' && data?.ai && <AiTab data={data} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
           {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
-          {tab === 'sync' && <SyncTab t={t} />}
+          {tab === 'sync' && <SyncTab t={t} visible={visible} />}
           {tab === 'mcp' && <McpTab t={t} />}
           {tab === 'update' && <UpdateTab />}
           {tab === 'uninstall' && <UninstallTab />}

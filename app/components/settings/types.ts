@@ -170,6 +170,7 @@ export interface PluginsTabProps {
 
 export interface SyncTabProps {
   t: Messages;
+  visible?: boolean;
 }
 
 export interface McpServerStatusProps {

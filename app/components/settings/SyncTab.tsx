@@ -483,7 +483,7 @@ function SyncEmptyState({ t, onInitComplete }: { t: Messages; onInitComplete: ()
 
 /* ── Main SyncTab ──────────────────────────────────────────────── */
 
-export function SyncTab({ t }: SyncTabProps) {
+export function SyncTab({ t, visible }: SyncTabProps) {
   const syncT = t.settings?.sync as Record<string, unknown> | undefined;
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -505,6 +505,15 @@ export function SyncTab({ t }: SyncTabProps) {
   }, []);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  // Refresh sync status when the tab becomes visible again (after being hidden via display:none)
+  const prevVisible = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisible.current && status !== null) {
+      fetchStatus();
+    }
+    prevVisible.current = visible;
+  }, [visible, status, fetchStatus]);
 
   const handleSyncNow = async () => {
     setSyncing(true);
