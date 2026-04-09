@@ -36,7 +36,6 @@ export const panelsEn = {
       // Footer
       advancedConfig: 'Advanced Config →',
       channels: 'Channels',
-      backToAgents: '← Back to Agents',
       // Hub nav (aligned with Discover panel rows)
       navOverview: 'Overview',
       navMcp: 'MCP',
@@ -731,7 +730,6 @@ export const panelsZh = {
       // Footer
       advancedConfig: '高级配置 →',
       channels: '频道',
-      backToAgents: '← 返回智能体',
       navOverview: '总览',
       navMcp: 'MCP',
       navSkills: '技能',
