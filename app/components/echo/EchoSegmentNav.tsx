@@ -45,7 +45,7 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
                     : 'border-transparent bg-muted/25 text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                 )}
               >
-                <span className="shrink-0" aria-hidden>{icon}</span>
+                <span className={cn('shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} aria-hidden>{icon}</span>
                 <span className="truncate">{label}</span>
               </Link>
             </li>

@@ -26,7 +26,7 @@ export function PanelNavRow({
 }) {
   const content = (
     <>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">{icon}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">{icon}</span>
       <span className="flex-1 min-w-0">
         <span className="block text-left text-sm font-medium text-foreground truncate" title={title}>{title}</span>
         {subtitle ? (
