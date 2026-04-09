@@ -50,7 +50,27 @@ async function getAdapter(platform: IMPlatform): Promise<IMAdapter> {
       adapter = new DiscordAdapter(dcConfig);
       break;
     }
-    // Phase 3: slack, wecom, dingtalk
+    case 'slack': {
+      const slConfig = getPlatformConfig('slack');
+      if (!slConfig) throw new Error('Platform "slack" not configured. Add credentials to ~/.mindos/im.json');
+      const { SlackAdapter } = await import('./adapters/slack');
+      adapter = new SlackAdapter(slConfig);
+      break;
+    }
+    case 'wecom': {
+      const wcConfig = getPlatformConfig('wecom');
+      if (!wcConfig) throw new Error('Platform "wecom" not configured. Add credentials to ~/.mindos/im.json');
+      const { WeComAdapter } = await import('./adapters/wecom');
+      adapter = new WeComAdapter(wcConfig);
+      break;
+    }
+    case 'dingtalk': {
+      const dtConfig = getPlatformConfig('dingtalk');
+      if (!dtConfig) throw new Error('Platform "dingtalk" not configured. Add credentials to ~/.mindos/im.json');
+      const { DingTalkAdapter } = await import('./adapters/dingtalk');
+      adapter = new DingTalkAdapter(dtConfig);
+      break;
+    }
     default:
       throw new Error(`Platform "${platform}" adapter not yet implemented`);
   }
