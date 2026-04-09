@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bookmark, Brain, Check, History, Sun, UserRound } from 'lucide-react';
+import { ArrowUpRight, Brain, Check, Eye, Footprints } from 'lucide-react';
 import type { EchoSegment } from '@/lib/echo-segments';
 import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
 import type { Locale, Messages } from '@/lib/i18n';
@@ -11,7 +11,7 @@ import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
-import { EchoContinuedGroups, EchoFactSnapshot } from './EchoPageSections';
+import { EchoFactSnapshot } from './EchoPageSections';
 import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
 import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
@@ -23,40 +23,30 @@ const STORAGE_GROWTH = 'mindos-echo-growth-intent';
 
 function segmentTitle(segment: EchoSegment, echo: ReturnType<typeof useLocale>['t']['panels']['echo']): string {
   switch (segment) {
-    case 'about-you':
-      return echo.aboutYouTitle;
-    case 'continued':
-      return echo.continuedTitle;
-    case 'daily':
-      return echo.dailyEchoTitle;
-    case 'past-you':
-      return echo.pastYouTitle;
+    case 'imprint':
+      return echo.imprintTitle;
     case 'growth':
-      return echo.intentGrowthTitle;
+      return echo.growthTitle;
+    case 'self':
+      return echo.selfTitle;
   }
 }
 
 function segmentLead(segment: EchoSegment, p: ReturnType<typeof useLocale>['t']['echoPages']): string {
   switch (segment) {
-    case 'about-you':
-      return p.aboutYouLead;
-    case 'continued':
-      return p.continuedLead;
-    case 'daily':
-      return p.dailyLead;
-    case 'past-you':
-      return p.pastYouLead;
+    case 'imprint':
+      return p.imprintLead;
     case 'growth':
       return p.growthLead;
+    case 'self':
+      return p.selfLead;
   }
 }
 
 const SEGMENT_ICON: Record<EchoSegment, ReactNode> = {
-  'about-you': <UserRound size={16} strokeWidth={1.75} />,
-  continued: <Bookmark size={16} strokeWidth={1.75} />,
-  daily: <Sun size={16} strokeWidth={1.75} />,
-  'past-you': <History size={16} strokeWidth={1.75} />,
+  imprint: <Footprints size={16} strokeWidth={1.75} />,
   growth: <Brain size={16} strokeWidth={1.75} />,
+  self: <Eye size={16} strokeWidth={1.75} />,
 };
 
 const fieldLabelClass =
@@ -68,16 +58,12 @@ const cardSectionClass =
 
 function echoSnapshotCopy(segment: EchoSegment, p: Messages['echoPages']): { title: string; body: string } {
   switch (segment) {
-    case 'about-you':
-      return { title: p.snapshotAboutYouTitle, body: p.snapshotAboutYouBody };
-    case 'continued':
-      return { title: p.snapshotContinuedTitle, body: p.snapshotContinuedBody };
-    case 'daily':
-      return { title: p.snapshotDailyTitle, body: p.snapshotDailyBody };
-    case 'past-you':
-      return { title: p.snapshotPastYouTitle, body: p.snapshotPastYouBody };
+    case 'imprint':
+      return { title: p.snapshotImprintTitle, body: p.snapshotImprintBody };
     case 'growth':
       return { title: p.snapshotGrowthTitle, body: p.snapshotGrowthBody };
+    case 'self':
+      return { title: p.snapshotSelfTitle, body: p.snapshotSelfBody };
   }
 }
 
@@ -140,7 +126,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     growthSavedTimer.current = setTimeout(() => setGrowthSaved(false), 1800);
   }, [growthIntent]);
 
-  const openDailyAsk = useCallback(() => {
+  const openImprintAsk = useCallback(() => {
     persistDaily();
     openAskModal(p.dailyAskPrefill(dailyLine), 'user');
   }, [dailyLine, p, persistDaily]);
@@ -163,7 +149,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       const report = await generateDailyEchoReport(new Date(), config, true);
       setDailyEchoReport(report);
     } catch (err) {
-      console.error('[EchoDaily] Regenerate failed:', err);
+      console.error('[EchoImprint] Regenerate failed:', err);
     } finally {
       setIsDailyEchoGenerating(false);
     }
@@ -183,28 +169,12 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         factsHeading: p.factsHeading,
         emptyTitle: snapshot.title,
         emptyBody: snapshot.body,
-        continuedDrafts: p.continuedDrafts,
-        continuedTodos: p.continuedTodos,
-        subEmptyHint: p.subEmptyHint,
         dailyLineLabel: p.dailyLineLabel,
         dailyLine,
         growthIntentLabel: p.growthIntentLabel,
         growthIntent,
       }),
-    [
-      locale,
-      segment,
-      title,
-      p.factsHeading,
-      snapshot,
-      p.continuedDrafts,
-      p.continuedTodos,
-      p.subEmptyHint,
-      p.dailyLineLabel,
-      dailyLine,
-      p.growthIntentLabel,
-      growthIntent,
-    ],
+    [locale, segment, title, p.factsHeading, snapshot, p.dailyLineLabel, dailyLine, p.growthIntentLabel, growthIntent],
   );
 
   const secondaryBtnClass =
@@ -231,29 +201,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         <EchoSegmentNav activeSegment={segment} />
       </EchoHero>
 
-      {segment !== 'daily' && (
-        <div className="mt-8 space-y-6">
-          <EchoFactSnapshot
-            headingId={factsHeadingId}
-            heading={p.factsHeading}
-            snapshotBadge={p.snapshotBadge}
-            emptyTitle={snapshot.title}
-            emptyBody={snapshot.body}
-            icon={SEGMENT_ICON[segment]}
-            actions={segment === 'about-you' ? agentBtn(openSegmentAsk) : undefined}
-          />
-          {segment === 'continued' ? (
-            <EchoContinuedGroups
-              draftsLabel={p.continuedDrafts}
-              todosLabel={p.continuedTodos}
-              subEmptyHint={p.subEmptyHint}
-              footer={agentBtn(openSegmentAsk)}
-            />
-          ) : null}
-        </div>
-      )}
-
-      {segment === 'daily' ? (
+      {/* Imprint: daily line + report generation */}
+      {segment === 'imprint' && (
         <>
           <section className={`${cardSectionClass} mt-8`}>
             <label htmlFor="echo-daily-line" className={fieldLabelClass}>
@@ -277,10 +226,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             <div className="mt-4 grid grid-cols-2 gap-3">
               <DailyEchoReportButton
                 onGenerated={handleDailyEchoGenerated}
-                onError={(err) => console.error('[EchoDaily]', err)}
+                onError={(err) => console.error('[EchoImprint]', err)}
                 locale={{ t: p }}
               />
-              {agentBtn(openDailyAsk)}
+              {agentBtn(openImprintAsk)}
             </div>
           </section>
           <DailyEchoReportDrawer
@@ -293,9 +242,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             locale={{ t: p }}
           />
         </>
-      ) : null}
+      )}
 
-      {segment === 'growth' ? (
+      {/* Growth: intent textarea + agent */}
+      {segment === 'growth' && (
         <section className={`${cardSectionClass} mt-8`}>
           <label htmlFor="echo-growth-intent" className={fieldLabelClass}>
             {p.growthIntentLabel}
@@ -319,24 +269,25 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             {agentBtn(openSegmentAsk)}
           </div>
         </section>
-      ) : null}
+      )}
 
-      {segment === 'past-you' ? (
-        <section className={`${cardSectionClass} mt-8`}>
-          <div className="flex items-center gap-3">
-            <span className={fieldLabelClass}>{p.pastYouDrawLabel}</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 font-sans text-xs font-medium text-muted-foreground">
-              {p.pastYouComingSoon}
-            </span>
-          </div>
-          <p className="mt-3 font-sans text-sm leading-relaxed text-muted-foreground">{p.pastYouDisabledHint}</p>
-          <div className="mt-4 border-t border-border/50 pt-4">
-            {agentBtn(openSegmentAsk)}
-          </div>
-        </section>
-      ) : null}
+      {/* Self: snapshot + insight */}
+      {segment === 'self' && (
+        <div className="mt-8 space-y-6">
+          <EchoFactSnapshot
+            headingId={factsHeadingId}
+            heading={p.factsHeading}
+            snapshotBadge={p.snapshotBadge}
+            emptyTitle={snapshot.title}
+            emptyBody={snapshot.body}
+            icon={SEGMENT_ICON[segment]}
+            actions={agentBtn(openSegmentAsk)}
+          />
+        </div>
+      )}
 
-      {segment !== 'daily' && (
+      {/* Insight collapsible — for growth and self segments */}
+      {segment !== 'imprint' && (
         <EchoInsightCollapsible
           title={p.insightTitle}
           showLabel={p.insightShow}

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { UserRound, Bookmark, Sun, History, Brain } from 'lucide-react';
+import { Footprints, Brain, Eye } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
@@ -12,16 +12,12 @@ function segmentMeta(
   echo: ReturnType<typeof useLocale>['t']['panels']['echo'],
 ): { label: string; icon: ReactNode } {
   switch (segment) {
-    case 'about-you':
-      return { label: echo.aboutYouTitle, icon: <UserRound size={14} /> };
-    case 'continued':
-      return { label: echo.continuedTitle, icon: <Bookmark size={14} /> };
-    case 'daily':
-      return { label: echo.dailyEchoTitle, icon: <Sun size={14} /> };
-    case 'past-you':
-      return { label: echo.pastYouTitle, icon: <History size={14} /> };
+    case 'imprint':
+      return { label: echo.imprintTitle, icon: <Footprints size={14} /> };
     case 'growth':
-      return { label: echo.intentGrowthTitle, icon: <Brain size={14} /> };
+      return { label: echo.growthTitle, icon: <Brain size={14} /> };
+    case 'self':
+      return { label: echo.selfTitle, icon: <Eye size={14} /> };
   }
 }
 
