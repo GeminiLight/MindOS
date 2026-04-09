@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Globe, Loader2, RefreshCw, Settings, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -72,6 +72,7 @@ export default function AgentsPanel({
     navOverview: p.navOverview,
     navMcp: p.navMcp,
     navSkills: p.navSkills,
+    navChannels: p.channels,
     navNetwork: p.navNetwork,
     navSessions: p.navSessions,
     navActivity: p.navActivity,
@@ -82,6 +83,8 @@ export default function AgentsPanel({
       copy={hubCopy}
       connectedCount={connected.length}
       mcpEnabled={mcp.status?.connectionMode?.mcp ?? false}
+      channelsActive={view === 'channels'}
+      onChannelsClick={() => setView(view === 'channels' ? 'agents' : 'channels')}
     />
   );
 
@@ -162,43 +165,22 @@ export default function AgentsPanel({
       </div>
 
       <div className="px-3 py-2 border-t border-border shrink-0 space-y-1">
-        {view === 'channels' ? (
-          <button
-            type="button"
-            onClick={() => setView('agents')}
-            className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-          >
-            <ArrowLeft size={11} />
-            {p.backToAgents}
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setView('channels')}
-              className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-            >
-              <MessageSquare size={11} />
-              {p.channels}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDiscoverModal(true)}
-              className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-            >
-              <Globe size={11} />
-              {p.a2aDiscover}
-            </button>
-            <button
-              type="button"
-              onClick={openAdvancedConfig}
-              className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-            >
-              <Settings size={11} />
-              {p.advancedConfig}
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={() => setShowDiscoverModal(true)}
+          className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+        >
+          <Globe size={11} />
+          {p.a2aDiscover}
+        </button>
+        <button
+          type="button"
+          onClick={openAdvancedConfig}
+          className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+        >
+          <Settings size={11} />
+          {p.advancedConfig}
+        </button>
       </div>
 
       <DiscoverAgentModal

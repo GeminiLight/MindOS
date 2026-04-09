@@ -1,13 +1,14 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Globe, History, LayoutDashboard, Server, Zap } from 'lucide-react';
+import { Globe, History, LayoutDashboard, MessageSquare, Server, Zap } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
   navOverview: string;
   navMcp: string;
   navSkills: string;
+  navChannels: string;
   navNetwork: string;
   navSessions: string;
   navActivity?: string;
@@ -17,10 +18,14 @@ export function AgentsPanelHubNav({
   copy,
   connectedCount,
   mcpEnabled = true,
+  channelsActive = false,
+  onChannelsClick,
 }: {
   copy: HubCopy;
   connectedCount: number;
   mcpEnabled?: boolean;
+  channelsActive?: boolean;
+  onChannelsClick?: () => void;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -49,6 +54,12 @@ export function AgentsPanelHubNav({
         title={copy.navSkills}
         href="/agents?tab=skills"
         active={inAgentsRoute && tab === 'skills'}
+      />
+      <PanelNavRow
+        icon={<MessageSquare size={14} className={channelsActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navChannels}
+        onClick={onChannelsClick}
+        active={channelsActive}
       />
       <PanelNavRow
         icon={<Globe size={14} className={inAgentsRoute && tab === 'a2a' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
