@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { effectiveSopRoot } from '@/lib/settings';
 import { listInboxFiles, saveToInbox } from '@/lib/core/inbox';
 import { invalidateCache } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 export async function GET() {
   const mindRoot = effectiveSopRoot().trim();
@@ -17,10 +18,7 @@ export async function GET() {
     const files = listInboxFiles(mindRoot);
     return NextResponse.json({ files });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message },
-      { status: 500 },
-    );
+    return handleRouteErrorSimple(err);
   }
 }
 
@@ -53,10 +51,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message },
-      { status: 500 },
-    );
+    return handleRouteErrorSimple(err);
   }
 }
 
@@ -89,9 +84,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message },
-      { status: 500 },
-    );
+    return handleRouteErrorSimple(err);
   }
 }

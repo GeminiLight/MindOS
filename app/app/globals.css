@@ -53,7 +53,9 @@
 
 body {
   font-family: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  scrollbar-gutter: stable;
 }
+
 
 :root {
   --background: #f8f6f1;

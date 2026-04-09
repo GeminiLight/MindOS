@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { searchFiles } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q') || '';
@@ -12,6 +13,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(results);
   } catch (err) {
     console.error('Search error:', err);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    return handleRouteErrorSimple(err);
   }
 }

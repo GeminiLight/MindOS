@@ -5,6 +5,7 @@ import { Readable, PassThrough } from 'stream';
 import { getMindRoot } from '@/lib/fs';
 import { readFile } from '@/lib/core/fs-ops';
 import { markdownToHTML, collectExportFiles } from '@/lib/core/export';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -104,7 +105,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: `Unsupported format: ${format}` }, { status: 400 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Export failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteErrorSimple(err);
   }
 }

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { findBacklinks } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 // GET /api/backlinks?path=Profile/Identity.md
 // Returns: Array<{ filePath: string; snippets: string[] }>
@@ -17,6 +18,6 @@ export async function GET(req: NextRequest) {
       snippets: [b.context],
     })));
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return handleRouteErrorSimple(e);
   }
 }

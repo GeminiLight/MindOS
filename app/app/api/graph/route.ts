@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { collectAllFiles, getLinkIndex } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 export interface GraphNode {
   id: string;    // relative file path
@@ -37,6 +38,6 @@ export async function GET() {
     return NextResponse.json({ nodes, edges } satisfies GraphData);
   } catch (err) {
     console.error('[graph] Error building graph:', err);
-    return NextResponse.json({ error: 'Failed to build graph' }, { status: 500 });
+    return handleRouteErrorSimple(err);
   }
 }

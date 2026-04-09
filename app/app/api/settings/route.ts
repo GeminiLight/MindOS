@@ -4,6 +4,7 @@ import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { invalidateCache } from '@/lib/fs';
 import { ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
 import { parseProviders } from '@/lib/custom-endpoints';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 function maskToken(token: string | undefined): string {
   if (!token) return '';
@@ -108,6 +109,6 @@ export async function POST(req: NextRequest) {
     if (next.mindRoot !== current.mindRoot) invalidateCache();
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return handleRouteErrorSimple(err);
   }
 }

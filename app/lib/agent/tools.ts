@@ -7,7 +7,7 @@ import {
   moveToTrashFile, renameFile, moveFile, findBacklinks, gitLog, gitShowFile, appendCsvRow,
   getMindRoot,
 } from '@/lib/fs';
-import { readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
+import { readSkillContentByName } from '@/lib/pi-integration/skills';
 import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
@@ -202,8 +202,6 @@ const CsvAppendParams = Type.Object({
   path: Type.String({ description: 'Relative path to .csv file' }),
   row: Type.Array(Type.String(), { description: 'Array of cell values for the new row' }),
 });
-
-const ListSkillsParams = Type.Object({});
 
 const LoadSkillParams = Type.Object({
   name: Type.String({ description: 'Skill name, e.g. "mindos" or "context7"' }),

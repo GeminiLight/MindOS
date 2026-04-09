@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import YAML from 'js-yaml';
 import { getMindRoot } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 const WORKFLOWS_DIR = '.mindos/workflows';
 
@@ -92,10 +93,7 @@ export async function GET() {
     const workflows = listWorkflows();
     return NextResponse.json({ workflows });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to list workflows' },
-      { status: 500 },
-    );
+    return handleRouteErrorSimple(err);
   }
 }
 
@@ -148,9 +146,6 @@ export async function POST(req: Request) {
     const relativePath = path.join(WORKFLOWS_DIR, fileName);
     return NextResponse.json({ path: relativePath });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to create workflow' },
-      { status: 500 },
-    );
+    return handleRouteErrorSimple(err);
   }
 }
