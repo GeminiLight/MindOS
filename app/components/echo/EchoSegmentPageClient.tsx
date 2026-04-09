@@ -7,6 +7,7 @@ import type { EchoSegment } from '@/lib/echo-segments';
 import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
 import type { Locale, Messages } from '@/lib/i18n';
 import { useLocale } from '@/lib/stores/locale-store';
+import { cn } from '@/lib/utils';
 import { openAskModal } from '@/hooks/useAskModal';
 import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';
@@ -180,9 +181,13 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const secondaryBtnClass =
     'inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 font-sans text-sm font-medium text-foreground transition-[background-color,border-color] duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-  const agentBtn = (onClick: () => void) => (
-    <button type="button" onClick={onClick} className={secondaryBtnClass}>
-      {p.continueAgent}
+  const chatLabel = segment === 'imprint' ? p.imprintChatLabel
+    : segment === 'growth' ? p.growthChatLabel
+    : p.selfChatLabel;
+
+  const agentBtn = (onClick: () => void, disabled?: boolean) => (
+    <button type="button" onClick={onClick} disabled={disabled} className={cn(secondaryBtnClass, disabled && 'opacity-40 pointer-events-none')}>
+      {chatLabel}
       <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
     </button>
   );
@@ -193,7 +198,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       aria-labelledby={pageTitleId}
     >
       <EchoHero
-        heroKicker={p.heroKicker}
         pageTitle={title}
         lead={lead}
         titleId={pageTitleId}
@@ -229,7 +233,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
                 onError={(err) => console.error('[EchoImprint]', err)}
                 locale={{ t: p }}
               />
-              {agentBtn(openImprintAsk)}
+              {agentBtn(openImprintAsk, !dailyLine.trim())}
             </div>
           </section>
           <DailyEchoReportDrawer
@@ -265,8 +269,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
               {growthSaved ? <><Check size={14} aria-hidden /> {p.savedFlash}</> : null}
             </span>
           </p>
-          <div className="mt-4 border-t border-border/50 pt-4">
-            {agentBtn(openSegmentAsk)}
+          <div className="mt-4">
+            {agentBtn(openSegmentAsk, !growthIntent.trim())}
           </div>
         </section>
       )}
@@ -277,11 +281,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           <EchoFactSnapshot
             headingId={factsHeadingId}
             heading={p.factsHeading}
-            snapshotBadge={p.snapshotBadge}
             emptyTitle={snapshot.title}
             emptyBody={snapshot.body}
             icon={SEGMENT_ICON[segment]}
-            actions={agentBtn(openSegmentAsk)}
+            actions={agentBtn(openSegmentAsk, true)}
           />
         </div>
       )}

@@ -27,7 +27,7 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
   const aria = t.echoPages.segmentNavAria;
 
   return (
-    <nav aria-label={aria} className="mt-5 border-t border-border/25 pt-4 font-sans">
+    <nav aria-label={aria} className="mt-5 border-t border-border/50 pt-4 font-sans">
       <ul className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
         {ECHO_SEGMENT_ORDER.map((segment) => {
           const href = ECHO_SEGMENT_HREF[segment];

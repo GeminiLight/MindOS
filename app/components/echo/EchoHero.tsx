@@ -3,17 +3,15 @@
 import type { ReactNode } from 'react';
 
 /**
- * Echo page hero: kicker, h1, lead, and optional embedded children (e.g. segment nav).
+ * Echo page hero: h1, lead, and optional embedded children (e.g. segment nav).
  * The accent bar highlights the text zone; children sit below it inside the card.
  */
 export function EchoHero({
-  heroKicker,
   pageTitle,
   lead,
   titleId,
   children,
 }: {
-  heroKicker: string;
   pageTitle: string;
   lead: string;
   titleId: string;
@@ -26,9 +24,6 @@ export function EchoHero({
         aria-hidden
       />
       <div className="relative pl-4 sm:pl-5">
-        <p className="mb-3 font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {heroKicker}
-        </p>
         <h1 id={titleId} className="font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
           {pageTitle}
         </h1>

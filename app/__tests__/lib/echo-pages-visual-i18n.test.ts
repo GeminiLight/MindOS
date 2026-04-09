@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { en } from '@/lib/i18n';
 import { zh } from '@/lib/i18n';
 
-/** Visual polish strings; en/zh must stay in sync (see spec-echo-visual-polish.md). */
+/** Visual polish strings; en/zh must stay in sync. */
 const VISUAL_KEYS = [
-  'heroKicker',
   'segmentNavAria',
-  'snapshotBadge',
   'generateInsightNoAi',
   'insightGenerating',
   'insightErrorPrefix',
   'insightRetry',
+  'imprintChatLabel',
+  'growthChatLabel',
+  'selfChatLabel',
 ] as const;
 
 describe('echoPages visual polish i18n', () => {
@@ -26,10 +27,5 @@ describe('echoPages visual polish i18n', () => {
     for (const k of VISUAL_KEYS) {
       expect((p as Record<string, unknown>)[k], k).toBeTruthy();
     }
-  });
-
-  it('snapshotBadge is short label (boundary: not empty, not paragraph)', () => {
-    expect(en.echoPages.snapshotBadge.length).toBeGreaterThan(0);
-    expect(en.echoPages.snapshotBadge.length).toBeLessThan(80);
   });
 });

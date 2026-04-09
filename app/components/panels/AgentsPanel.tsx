@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -30,15 +30,11 @@ export default function AgentsPanel({
   const mcp = useMcpData();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const isChannelsTab = pathname === '/agents' && searchParams.get('tab') === 'channels';
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
-  const [view, setView] = useState<'agents' | 'channels'>('agents');
   const a2a = useA2aRegistry();
-
-  // Reset to agents view when URL changes (pathname or search params)
-  const tab = searchParams.get('tab');
-  useEffect(() => { setView('agents'); }, [pathname, tab]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -88,8 +84,6 @@ export default function AgentsPanel({
       copy={hubCopy}
       connectedCount={connected.length}
       mcpEnabled={mcp.status?.connectionMode?.mcp ?? false}
-      channelsActive={view === 'channels'}
-      onChannelsClick={() => setView(view === 'channels' ? 'agents' : 'channels')}
     />
   );
 
@@ -123,7 +117,7 @@ export default function AgentsPanel({
           <div className="flex justify-center py-8">
             <Loader2 size={16} className="animate-spin text-muted-foreground" />
           </div>
-        ) : mcp.agents.length === 0 && mcp.skills.length === 0 && view !== 'channels' ? (
+        ) : mcp.agents.length === 0 && mcp.skills.length === 0 ? (
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
             <div className="mx-4 border-t border-border" />
@@ -145,11 +139,11 @@ export default function AgentsPanel({
 
             <div className="mx-4 border-t border-border" />
 
-            {view === 'channels' ? (
+            {isChannelsTab ? (
               <IMChannelsView />
             ) : (
-              <div className="px-3 py-3 space-y-4">
-                <AgentsPanelAgentGroups
+            <div className="px-3 py-3 space-y-4">
+              <AgentsPanelAgentGroups
                 connected={connected}
                 detected={detected}
                 notFound={notFound}
