@@ -204,50 +204,84 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
 }) {
   const isMasked = value === '***set***';
   const [showPassword, setShowPassword] = useState(false);
+  // localValue holds the user's draft when replacing a masked key.
+  // We need this because we can't show the real key (server sends ***set***).
   const [localValue, setLocalValue] = useState('');
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const prevValueRef = useRef(value);
 
-  // Reset when external value changes (e.g. provider switch)
+  // Reset when provider changes: value goes from one ***set*** to another,
+  // or from a key to ***set***, etc. We detect this by tracking the previous
+  // masked state. If isMasked changes, reset.
+  const wasMaskedRef = useRef(isMasked);
   useEffect(() => {
-    if (prevValueRef.current !== value) {
-      prevValueRef.current = value;
+    if (wasMaskedRef.current !== isMasked) {
+      wasMaskedRef.current = isMasked;
+      // Value changed from masked→unmasked means parent accepted our edit,
+      // OR from unmasked→masked means provider switched. Either way, reset.
+      if (isMasked) {
+        setEditing(false);
+        setLocalValue('');
+        setShowPassword(false);
+      }
+    }
+  }, [isMasked]);
+
+  // When value becomes masked again after we submitted an edit, 
+  // it means the server saved and returned ***set***. Stop editing.
+  useEffect(() => {
+    if (isMasked && editing) {
       setEditing(false);
       setLocalValue('');
       setShowPassword(false);
     }
-  }, [value]);
+  }, [isMasked, editing]);
 
-  const displayValue = editing ? localValue : (isMasked ? '' : value);
-  const displayPlaceholder = isMasked && !editing ? '••••••••••••' : (placeholder ?? 'sk-...');
-  const hasContent = isMasked || !!value || (editing && !!localValue);
+  /*
+   * What the input shows:
+   * - Masked, not editing: empty string with "••••••••" placeholder
+   * - Masked, editing: localValue (user's new draft)
+   * - Not masked: value directly from parent
+   */
+  const displayValue = isMasked
+    ? (editing ? localValue : '')
+    : value;
+
+  const displayPlaceholder = isMasked && !editing
+    ? '••••••••••••'
+    : (placeholder ?? 'sk-...');
+
+  // Show eye when there's actually visible content to toggle
+  const showEye = editing ? !!localValue : (!isMasked && !!value);
 
   const handleFocus = () => {
     if (isMasked && !editing) {
-      // User clicked into a masked field — enter edit mode but keep it empty
-      // so they can type a new key. The old key is preserved on server until they save.
       setEditing(true);
       setLocalValue('');
+      setShowPassword(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
-    if (isMasked || editing) {
+    if (isMasked) {
+      // Editing a masked field — use local draft
       setEditing(true);
       setLocalValue(v);
-      if (v.trim()) {
-        onChange(v);
-      }
+      // Propagate to parent so the value gets saved.
+      // Even empty string is propagated — parent decides if it's valid.
+      onChange(v);
     } else {
+      // Normal field — pass through directly
       onChange(v);
     }
   };
 
-  const handleBlur = () => {
-    // If user focused a masked field but typed nothing, exit edit mode
-    if (editing && !localValue.trim()) {
+  const handleBlur = (e: React.FocusEvent) => {
+    // Don't reset if clicking the eye button (it has onMouseDown preventDefault)
+    if (e.relatedTarget?.closest('[data-apikey-eye]')) return;
+    // If user focused a masked field but typed nothing, revert to masked display
+    if (isMasked && editing && !localValue.trim()) {
       setEditing(false);
       setLocalValue('');
       setShowPassword(false);
@@ -269,9 +303,11 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
           isMasked && !editing ? 'placeholder:text-muted-foreground placeholder:tracking-widest' : 'placeholder:text-muted-foreground'
         }`}
       />
-      {hasContent && (
+      {showEye && (
         <button
           type="button"
+          data-apikey-eye
+          tabIndex={-1}
           onMouseDown={e => e.preventDefault()}
           onClick={() => setShowPassword(v => !v)}
           disabled={disabled}
