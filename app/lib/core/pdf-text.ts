@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { execFileSync } from 'child_process';
+import { resolveScript } from './resolve-script';
 
 /**
  * Extract text from a PDF file via pdfjs-dist (child process).
@@ -9,11 +8,8 @@ import { execFileSync } from 'child_process';
  */
 export function extractPdfText(absolutePath: string): string {
   try {
-    const appDir = process.env.MINDOS_PROJECT_ROOT
-      ? path.join(process.env.MINDOS_PROJECT_ROOT, 'app')
-      : path.resolve(process.cwd());
-    const scriptPath = path.join(appDir, 'scripts', 'extract-pdf.cjs');
-    if (!fs.existsSync(scriptPath)) return '';
+    const scriptPath = resolveScript('extract-pdf.cjs');
+    if (!scriptPath) return '';
 
     const stdout = execFileSync('node', [scriptPath, absolutePath], {
       encoding: 'utf-8',

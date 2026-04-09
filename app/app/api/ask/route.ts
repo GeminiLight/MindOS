@@ -56,6 +56,33 @@ import { runNonStreamingFallback } from '@/lib/agent/non-streaming';
 
 const MAX_DIR_FILES = 30;
 
+function escapeXml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/**
+ * Generate <available_skills> XML for third-party skills.
+ * Instructs the LLM to use `load_skill` (not the framework's `read` tool).
+ * Omits <location> since load_skill resolves by name.
+ */
+export function generateSkillsXml(skills: Array<{ name: string; description: string }>): string {
+  const lines = [
+    'The following skills provide specialized instructions for specific tasks.',
+    'Use the load_skill tool to load a skill\'s full content when a task matches its description.',
+    '',
+    '<available_skills>',
+  ];
+  for (const skill of skills) {
+    lines.push('  <skill>');
+    lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+    lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+    lines.push('  </skill>');
+  }
+  lines.push('</available_skills>');
+  return lines.join('\n');
+}
+
 /**
  * Load attached and current files into context parts for the system prompt.
  * Returns the context parts array and a list of file paths that failed to load.
@@ -619,11 +646,17 @@ export async function POST(req: NextRequest) {
       ...(contextStrategy === 'off' ? { compaction: { enabled: false } } : {}),
     });
 
+    const CORE_SKILL_NAMES = new Set(['mindos', 'mindos-zh', 'mindos-max', 'mindos-max-zh']);
     const resourceLoader = new DefaultResourceLoader({
       cwd: projectRoot,
       settingsManager,
       systemPromptOverride: () => systemPrompt,
       appendSystemPromptOverride: () => [],
+      agentsFilesOverride: () => ({ agentsFiles: [] }),
+      skillsOverride: (result: any) => ({
+        ...result,
+        skills: result.skills.filter((s: any) => !CORE_SKILL_NAMES.has(s.name)),
+      }),
       additionalSkillPaths: [
         path.join(projectRoot, 'app', 'data', 'skills'),
         path.join(projectRoot, 'skills'),
@@ -632,6 +665,19 @@ export async function POST(req: NextRequest) {
       additionalExtensionPaths: scanExtensionPaths(),
     });
     await resourceLoader.reload();
+
+    // Inject third-party skill list into system prompt (agent mode only).
+    // Core skills are already injected as full content; third-party skills
+    // get a name+description summary so the LLM can discover and load them.
+    if (askMode === 'agent') {
+      const { skills: discoveredSkills } = resourceLoader.getSkills();
+      const thirdPartySkills = discoveredSkills.filter(
+        (s: any) => !s.disableModelInvocation
+      );
+      if (thirdPartySkills.length > 0) {
+        systemPrompt += '\n\n---\n\n' + generateSkillsXml(thirdPartySkills);
+      }
+    }
 
     const { session } = await createAgentSession({
       cwd: projectRoot,

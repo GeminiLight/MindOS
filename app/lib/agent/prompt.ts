@@ -36,7 +36,7 @@ When the user greets you ("你好", "hi", "你是谁", "what can you do", etc.) 
 
 - **Auto-loaded**: Configs, instructions, and SKILL.md are already in your context. Do not search for them unless explicitly asked.
 - **Uploaded Files**: Local files attached by the user appear in the "⚠️ USER-UPLOADED FILES" section below. Use this content directly. Do NOT use tools to read/search them.
-- **Skills**: Use the list_skills and load_skill tools to discover available skills on demand.
+- **Skills**: Available skills are listed at the end of this prompt. Use the load_skill tool to load a skill's full content when a task matches its description.
 - **MCP**: The MindOS MCP server is built-in. Use list_mcp_tools and call_mcp_tool to inspect and invoke additional MCP tools configured in ~/.mindos/mcp.json.
 
 ## Output

@@ -1,5 +1,6 @@
 ---
 name: mindos-zh
+disable-model-invocation: true
 description: >
   用户的共享知识库——跨会话、跨 Agent 持久存在。MindOS 存储决策记录、会议纪要、SOP、
   排错经验、架构选型、调研结论和偏好设置。

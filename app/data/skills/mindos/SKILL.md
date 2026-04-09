@@ -1,5 +1,6 @@
 ---
 name: mindos
+disable-model-invocation: true
 description: >
   The user's shared knowledge base — persistent across sessions and agents. MindOS stores decisions,
   meeting notes, SOPs, debugging lessons, architecture choices, research findings, and preferences.

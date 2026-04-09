@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['chokidar', 'openai', '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'mcporter'],
   output: 'standalone',
   outputFileTracingRoot: projectDir,
+  outputFileTracingIncludes: {
+    // extract-pdf.cjs is spawned at runtime (not bundled) — ensure it's
+    // copied into .next/standalone/scripts/ so standalone builds work.
+    '/api/extract-pdf': ['./scripts/extract-pdf.cjs'],
+  },
   turbopack: {
     root: projectDir,
   },

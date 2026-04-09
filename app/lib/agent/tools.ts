@@ -380,22 +380,9 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   },
 
   {
-    name: 'list_skills',
-    label: 'List Skills',
-    description: 'List available MindOS skills discovered from app/data/skills, skills, {mindRoot}/.skills, and ~/.mindos/skills. Use this before load_skill when you need a skill by name.',
-    parameters: ListSkillsParams,
-    execute: safeExecute(async () => {
-      const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-      const skills = await scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
-      if (skills.length === 0) return textResult('No skills found.');
-      return textResult(skills.map((skill) => `- **${skill.name}** [${skill.origin}]${skill.enabled ? '' : ' (disabled)'} — ${skill.description || 'No description'}\n  Path: ${skill.path}`).join('\n'));
-    }),
-  },
-
-  {
     name: 'load_skill',
     label: 'Load Skill',
-    description: 'Load the full content of a specific skill by name. Use list_skills first if you do not know the exact skill name.',
+    description: 'Load the full content of a specific skill by name. Available skills are listed in the system prompt under <available_skills>.',
     parameters: LoadSkillParams,
     execute: safeExecute(async (_id, params: Static<typeof LoadSkillParams>) => {
       const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');

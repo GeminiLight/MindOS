@@ -3,7 +3,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { parseSkillMd, readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
+import { parseSkillMd, readSkillContentByName } from '@/lib/pi-integration/skills';
+import { generateSkillsXml } from '@/app/api/ask/route';
 
 let tempRoot: string;
 let projectRoot: string;
@@ -38,29 +39,16 @@ describe('pi skill integration', () => {
     expect(result).toEqual({ name: 'test-skill', description: 'useful helper' });
   });
 
-  it('scans MindOS skill directories with precedence and metadata', async () => {
-    writeSkill(path.join(projectRoot, 'app', 'data', 'skills'), 'mindos', '---\nname: mindos\ndescription: builtin\n---\n');
-    writeSkill(path.join(projectRoot, 'skills'), 'project-helper', '---\nname: project-helper\ndescription: project builtin\n---\n');
-    writeSkill(path.join(mindRoot, '.skills'), 'user-helper', '---\nname: user-helper\ndescription: user custom\n---\n');
-    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'global-helper', '---\nname: global-helper\ndescription: global skill\n---\n');
-
-    const skills = await scanSkillDirs({ projectRoot, mindRoot, disabledSkills: ['project-helper'] });
-
-    expect(skills.map((skill) => skill.name)).toEqual(['mindos', 'project-helper', 'user-helper', 'global-helper']);
-    expect(skills.find((skill) => skill.name === 'mindos')).toMatchObject({ source: 'builtin', editable: false, origin: 'app-builtin', enabled: true });
-    expect(skills.find((skill) => skill.name === 'user-helper')).toMatchObject({ source: 'user', editable: true, origin: 'mindos-user', enabled: true });
-    expect(skills.find((skill) => skill.name === 'project-helper')).toMatchObject({ source: 'builtin', editable: false, origin: 'project-builtin', enabled: false });
-    expect(skills.find((skill) => skill.name === 'global-helper')).toMatchObject({ source: 'user', editable: true, origin: 'mindos-global', enabled: true });
+  it('parses block scalar description', () => {
+    const result = parseSkillMd('---\nname: test-skill\ndescription: >\n  multi line\n  description here\n---\n');
+    expect(result.name).toBe('test-skill');
+    expect(result.description).toContain('multi line');
+    expect(result.description).toContain('description here');
   });
 
-  it('knowledge base skill takes precedence over global skill with same name', async () => {
-    writeSkill(path.join(mindRoot, '.skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from kb\n---\n');
-    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from global\n---\n');
-
-    const skills = await scanSkillDirs({ projectRoot, mindRoot });
-    const matched = skills.filter((s) => s.name === 'shared-skill');
-    expect(matched).toHaveLength(1);
-    expect(matched[0].origin).toBe('mindos-user');
+  it('returns empty for content without frontmatter', () => {
+    const result = parseSkillMd('No frontmatter here');
+    expect(result).toEqual({ name: '', description: '' });
   });
 
   it('reads skill content by name across skill directories', () => {
@@ -75,5 +63,55 @@ describe('pi skill integration', () => {
 
     const content = readSkillContentByName('global-skill', { projectRoot, mindRoot });
     expect(content).toContain('Hello from global');
+  });
+
+  it('returns null for non-existent skill', () => {
+    const content = readSkillContentByName('nonexistent', { projectRoot, mindRoot });
+    expect(content).toBeNull();
+  });
+
+  it('prefers app/data/skills over ~/.mindos/skills for same name', () => {
+    writeSkill(path.join(projectRoot, 'app', 'data', 'skills'), 'shared', '---\nname: shared\ndescription: builtin\n---\n\nBuiltin version');
+    writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'shared', '---\nname: shared\ndescription: global\n---\n\nGlobal version');
+
+    const content = readSkillContentByName('shared', { projectRoot, mindRoot });
+    expect(content).toContain('Builtin version');
+  });
+});
+
+describe('generateSkillsXml', () => {
+  it('generates valid XML for skill list', () => {
+    const xml = generateSkillsXml([
+      { name: 'context7', description: 'Look up library docs' },
+      { name: 'test-skill', description: 'Run tests' },
+    ]);
+
+    expect(xml).toContain('<available_skills>');
+    expect(xml).toContain('</available_skills>');
+    expect(xml).toContain('<name>context7</name>');
+    expect(xml).toContain('<description>Look up library docs</description>');
+    expect(xml).toContain('<name>test-skill</name>');
+    expect(xml).toContain('load_skill');
+    expect(xml).not.toContain('<location>');
+  });
+
+  it('escapes XML entities in skill content', () => {
+    const xml = generateSkillsXml([
+      { name: 'test&skill', description: 'handles <special> "chars" & \'quotes\'' },
+    ]);
+
+    expect(xml).toContain('&amp;');
+    expect(xml).toContain('&lt;');
+    expect(xml).toContain('&gt;');
+    expect(xml).toContain('&quot;');
+    expect(xml).toContain('&apos;');
+    expect(xml).not.toContain('<special>');
+  });
+
+  it('returns empty available_skills block for empty array', () => {
+    const xml = generateSkillsXml([]);
+    expect(xml).toContain('<available_skills>');
+    expect(xml).toContain('</available_skills>');
+    expect(xml).not.toContain('<skill>');
   });
 });

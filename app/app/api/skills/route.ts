@@ -4,7 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { readSettings, writeSettings } from '@/lib/settings';
-import { parseSkillMd, readSkillContentByName, scanSkillDirs } from '@/lib/pi-integration/skills';
+import { parseSkillMd, readSkillContentByName } from '@/lib/pi-integration/skills';
+import { loadSkills, type Skill } from '@mariozechner/pi-coding-agent';
 
 const PROJECT_ROOT = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 
@@ -17,11 +18,43 @@ export async function GET() {
   try {
     const settings = readSettings();
     const disabledSkills = settings.disabledSkills ?? [];
-    const skills = await scanSkillDirs({
-      projectRoot: PROJECT_ROOT,
-      mindRoot: getMindRoot(),
-      disabledSkills,
+    const mindRoot = getMindRoot();
+
+    const { skills: frameworkSkills } = loadSkills({
+      cwd: PROJECT_ROOT,
+      skillPaths: [
+        path.join(PROJECT_ROOT, 'app', 'data', 'skills'),
+        path.join(PROJECT_ROOT, 'skills'),
+        path.join(mindRoot, '.skills'),
+        path.join(os.homedir(), '.mindos', 'skills'),
+      ],
+      includeDefaults: false,
     });
+
+    const userSkillsDir = path.join(mindRoot, '.skills');
+    const globalSkillsDir = path.join(os.homedir(), '.mindos', 'skills');
+    const appBuiltinDir = path.join(PROJECT_ROOT, 'app', 'data', 'skills');
+
+    const skills = frameworkSkills.map((s: Skill) => {
+      const fp = s.filePath;
+      const isUserKb = fp.startsWith(userSkillsDir);
+      const isGlobal = fp.startsWith(globalSkillsDir);
+      const isAppBuiltin = fp.startsWith(appBuiltinDir);
+
+      return {
+        name: s.name,
+        description: s.description,
+        path: fp,
+        source: (isUserKb || isGlobal) ? 'user' as const : 'builtin' as const,
+        enabled: !disabledSkills.includes(s.name),
+        editable: isUserKb || isGlobal,
+        origin: isAppBuiltin ? 'app-builtin' as const
+          : isUserKb ? 'mindos-user' as const
+          : isGlobal ? 'mindos-global' as const
+          : 'project-builtin' as const,
+      };
+    });
+
     return NextResponse.json({ skills });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

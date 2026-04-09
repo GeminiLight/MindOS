@@ -1,5 +1,6 @@
 ---
 name: mindos-max-zh
+disable-model-invocation: true
 description: >
   用户的第二大脑——持久化、跨 Agent 共享的全局知识库。
   决策记录、会议纪要、SOP、排错经验、架构选型、调研结论、偏好设置、对话摘要全部存在这里。

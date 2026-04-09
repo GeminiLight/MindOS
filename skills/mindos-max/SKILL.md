@@ -1,5 +1,6 @@
 ---
 name: mindos-max
+disable-model-invocation: true
 description: >
   The user's second brain — a persistent, shared knowledge base that ALL agents read from and write to.
   MindOS is the global memory layer: decisions, meeting notes, SOPs, debugging lessons, architecture
