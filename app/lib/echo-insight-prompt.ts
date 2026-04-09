@@ -7,9 +7,6 @@ export function buildEchoInsightUserPrompt(opts: {
   factsHeading: string;
   emptyTitle: string;
   emptyBody: string;
-  continuedDrafts: string;
-  continuedTodos: string;
-  subEmptyHint: string;
   dailyLineLabel: string;
   dailyLine: string;
   growthIntentLabel: string;
@@ -22,10 +19,7 @@ export function buildEchoInsightUserPrompt(opts: {
     opts.emptyBody,
   ];
 
-  if (opts.segment === 'continued') {
-    lines.push(`${opts.continuedDrafts} — ${opts.subEmptyHint}`, `${opts.continuedTodos} — ${opts.subEmptyHint}`);
-  }
-  if (opts.segment === 'daily' && opts.dailyLine.trim()) {
+  if (opts.segment === 'imprint' && opts.dailyLine.trim()) {
     lines.push(`${opts.dailyLineLabel}: ${opts.dailyLine.trim()}`);
   }
   if (opts.segment === 'growth' && opts.growthIntent.trim()) {

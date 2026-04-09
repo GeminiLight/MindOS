@@ -11,7 +11,7 @@ const STORAGE_KEY = 'mindos-echo-daily-line';
  * Echo Spotlight on the homepage.
  * - If user has a daily line → shows it with a subtle edit-in-place
  * - If no daily line → shows a warm invite to record one
- * - Always links to /echo/daily for deeper reflection
+ * - Always links to /echo/imprint for deeper reflection
  */
 export default function EchoSpotlight() {
   const { t } = useLocale();
@@ -48,7 +48,7 @@ export default function EchoSpotlight() {
           <h2 className="text-[13px] font-semibold text-foreground tracking-wide">{echo.title}</h2>
           <span className="text-xs text-muted-foreground/50">{echo.dailyLine}</span>
           <Link
-            href="/echo/daily"
+            href="/echo/imprint"
             className="ml-auto text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity"
           >
             {echo.goToEcho}
@@ -103,7 +103,7 @@ export default function EchoSpotlight() {
           <p className="text-xs text-muted-foreground/40 mt-1">{echo.inviteDesc}</p>
         </div>
         <Link
-          href="/echo/daily"
+          href="/echo/imprint"
           className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-opacity"
         >
           {echo.goToEcho}

@@ -8,14 +8,8 @@ import {
 } from '@/lib/echo-segments';
 
 describe('echo-segments', () => {
-  it('lists five segments in product order', () => {
-    expect(ECHO_SEGMENT_IDS).toEqual([
-      'about-you',
-      'continued',
-      'daily',
-      'past-you',
-      'growth',
-    ]);
+  it('lists three segments in product order', () => {
+    expect(ECHO_SEGMENT_IDS).toEqual(['imprint', 'growth', 'self']);
     expect(ECHO_SEGMENT_ORDER).toBe(ECHO_SEGMENT_IDS);
   });
 
@@ -25,27 +19,30 @@ describe('echo-segments', () => {
     }
   });
 
-  it('rejects invalid slugs (normal path)', () => {
-    expect(isEchoSegment('about-me')).toBe(false);
+  it('rejects old segment slugs', () => {
+    expect(isEchoSegment('about-you')).toBe(false);
+    expect(isEchoSegment('continued')).toBe(false);
+    expect(isEchoSegment('daily')).toBe(false);
+    expect(isEchoSegment('past-you')).toBe(false);
   });
 
-  it('rejects empty and malformed slugs (boundary)', () => {
+  it('rejects empty and malformed slugs', () => {
     expect(isEchoSegment('')).toBe(false);
     expect(isEchoSegment(' ')).toBe(false);
-    expect(isEchoSegment('ABOUT-YOU')).toBe(false);
+    expect(isEchoSegment('IMPRINT')).toBe(false);
   });
 
-  it('defaultEchoSegment matches first nav item', () => {
-    expect(defaultEchoSegment()).toBe('about-you');
+  it('defaultEchoSegment returns imprint', () => {
+    expect(defaultEchoSegment()).toBe('imprint');
   });
 
-  it('index redirect path is /echo/<default>', () => {
-    expect(`/echo/${defaultEchoSegment()}`).toBe('/echo/about-you');
+  it('index redirect path is /echo/imprint', () => {
+    expect(`/echo/${defaultEchoSegment()}`).toBe('/echo/imprint');
   });
 
   it('ECHO_SEGMENT_HREF covers every segment with /echo/ prefix', () => {
     for (const id of ECHO_SEGMENT_IDS) {
-      expect(ECHO_SEGMENT_HREF[id]).toMatch(new RegExp(`^/echo/${id.replace(/-/g, '\\-')}$`));
+      expect(ECHO_SEGMENT_HREF[id]).toBe(`/echo/${id}`);
     }
   });
 });
