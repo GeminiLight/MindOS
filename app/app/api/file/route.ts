@@ -30,10 +30,14 @@ import {
 } from '@/lib/fs';
 import { createSpaceFilesystem } from '@/lib/core/create-space';
 import { appendAgentAuditEvent, parseAgentAuditJsonLines } from '@/lib/core/agent-audit-log';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 function err(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
 }
+
+// Alias for consistency with central error handling
+const handleError = handleRouteErrorSimple;
 
 /** Recursively collect all directory paths from the file tree. */
 function collectDirectories(nodes: import('@/lib/types').FileNode[]): string[] {

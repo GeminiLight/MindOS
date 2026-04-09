@@ -51,6 +51,8 @@ let recentConnections: Array<{ address: string; label?: string }> = [];
 let sshPendingAuth: { sshHost: string; sshRemotePort: number; tunnelUrl: string } | null = null;
 // SSH passphrase flow state — when SSH key needs passphrase
 let sshPassphraseNeeded = false;
+let sshPassphraseHost = '';  // host that triggered passphrase prompt
+let sshPassphrasePort = 0;   // port that triggered passphrase prompt
 // SSH connect phase and cancel flag — used instead of btn.onclick to avoid listener conflicts
 let sshConnectPhase: 'idle' | 'connecting' = 'idle';
 let sshConnectCancelled = false;
@@ -835,7 +837,8 @@ async function handleSshConnect(): Promise<void> {
   if (!host) { hostInput?.focus(); return; }
 
   // ── Passphrase entry mode: user entered passphrase, submit to add key + retry ──
-  if (sshPassphraseNeeded) {
+  // Only if host/port still matches what triggered the passphrase prompt
+  if (sshPassphraseNeeded && sshPassphraseHost === host && sshPassphrasePort === port) {
     const passphrase = ppInput?.value;
     if (!passphrase) { ppInput?.focus(); return; }
 
@@ -986,6 +989,8 @@ async function handleSshConnect(): Promise<void> {
     } else if ((result as any).passphraseNeeded) {
       // SSH key needs passphrase — show passphrase input
       sshPassphraseNeeded = true;
+      sshPassphraseHost = host;
+      sshPassphrasePort = port;
       status.className = 'status-bar info';
       status.textContent = t('sshPassphraseNeeded');
       ppSection?.classList.remove('hidden');

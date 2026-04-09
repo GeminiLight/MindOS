@@ -196,7 +196,9 @@ export async function addKeyToAgent(keyPath: string, passphrase: string): Promis
     // On Windows, use a temporary script that echoes the passphrase
     const tmpScript = path.join(app.getPath('temp'), `mindos-askpass-${Date.now()}.bat`);
     try {
-      writeFileSync(tmpScript, `@echo off\necho ${passphrase}`, 'utf-8');
+      // Escape batch special characters in passphrase
+      const escaped = passphrase.replace(/([&|<>^%!])/g, '^$1').replace(/"/g, '\\"');
+      writeFileSync(tmpScript, `@echo off\necho ${escaped}`, 'utf-8');
       await execAsync(`ssh-add "${resolvedKey}"`, {
         timeout: 10000,
         env: { ...process.env, SSH_ASKPASS: tmpScript, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' },
@@ -229,9 +231,22 @@ export async function addKeyToAgent(keyPath: string, passphrase: string): Promis
 
 /**
  * Check if ssh-agent is running and accessible.
+ * On Unix/macOS: checks SSH_AUTH_SOCK env var.
+ * On Windows: checks if the OpenSSH Authentication Agent service is running.
  */
 export function isSshAgentRunning(): boolean {
-  return !!(process.env.SSH_AUTH_SOCK || process.platform === 'win32');
+  if (process.env.SSH_AUTH_SOCK) return true;
+  if (process.platform === 'win32') {
+    // On Windows, check if the OpenSSH agent service is running
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync('sc query ssh-agent', { encoding: 'utf-8', timeout: 3000 });
+      return out.includes('RUNNING');
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /** Check if the `ssh` command is available on this system */

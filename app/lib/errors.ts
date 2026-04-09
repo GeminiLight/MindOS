@@ -106,3 +106,13 @@ export function handleRouteError(err: unknown): NextResponse<ApiErrorResponse> {
   }
   return apiError(ErrorCodes.INTERNAL_ERROR, 'Internal server error', 500);
 }
+
+/**
+ * Legacy: catch an unknown error and return simple { error: string } response.
+ * Used for backwards-compatible routes that haven't migrated to structured errors.
+ * New routes should use handleRouteError() instead.
+ */
+export function handleRouteErrorSimple(err: unknown, status = 500): NextResponse<{ error: string }> {
+  const message = toErrorMessage(err);
+  return NextResponse.json({ error: message }, { status });
+}
