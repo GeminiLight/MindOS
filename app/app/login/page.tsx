@@ -69,7 +69,7 @@ function LoginForm() {
             MindOS
           </h1>
           <p className="text-xs text-muted-foreground/70 italic">
-            {loginT?.tagline ?? 'You think here, Agents act there.'}
+            {loginT?.tagline ?? 'You think here, Agents act there'}
           </p>
           <p className="text-sm text-muted-foreground">
             {loginT?.subtitle ?? 'Enter your password to continue'}

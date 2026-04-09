@@ -5,11 +5,11 @@ export const commonEn = {
     relatedFiles: 'Related Files',
   },
   app: {
-    tagline: 'You think here, Agents act there.',
+    tagline: 'You think here, Agents act there',
     footer: 'MindOS · human-agent collaborative mind system',
   },
   login: {
-    tagline: 'You think here, Agents act there.',
+    tagline: 'You think here, Agents act there',
     subtitle: 'Enter your password to continue',
     passwordLabel: 'Password',
     passwordPlaceholder: 'Enter password',
@@ -40,11 +40,11 @@ export const commonZh = {
     relatedFiles: '关联视图',
   },
   app: {
-    tagline: '你在此思考，Agent 依此行动。',
+    tagline: '你在此思考，Agent 依此行动',
     footer: 'MindOS · 人机共生知识系统',
   },
   login: {
-    tagline: '人类在此思考，Agent 依此行动。',
+    tagline: '人类在此思考，Agent 依此行动',
     subtitle: '请输入密码以继续',
     passwordLabel: '密码',
     passwordPlaceholder: '输入密码',
