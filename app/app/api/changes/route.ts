@@ -4,6 +4,7 @@ import {
   getContentChangeSummary,
   markContentChangesSeen,
 } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     return err(`unknown op: ${op}`);
   } catch (error) {
-    return err((error as Error).message, 500);
+    return handleRouteErrorSimple(error);
   }
 }
 
@@ -58,6 +59,6 @@ export async function POST(req: NextRequest) {
     }
     return err(`unknown op: ${op}`);
   } catch (error) {
-    return err((error as Error).message, 500);
+    return handleRouteErrorSimple(error);
   }
 }
