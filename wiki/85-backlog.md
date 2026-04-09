@@ -74,7 +74,7 @@
 
 - [x] **Feature 3: Bootstrap 增强（Smart Index）** — `buildFileIndex` 生成目录树 + 文件数 + 深度限制，`/api/bootstrap` 增加 `file_index` 字段。[spec](./specs/spec-llm-wiki-spike.md)
 - [x] **Feature 1: 查询回流（Save Insight）** — Ask 面板中 AI 回答气泡 hover 出现 Save 按钮，点击展开 inline 保存表单（路径/模式/预览），一键保存到知识库。Provider/Trigger 分离架构，13 个纯逻辑测试。红队修复 4 项。[spec](./specs/spec-save-insight.md)
-- [ ] Feature 2: 知识体检（KB Lint）— P1
+- [x] Feature 2: 知识体检（KB Lint）— P1。核心静态分析模块 `lib/lint.ts`（findOrphans/findStaleFiles/findBrokenLinks/findEmptyFiles/computeHealthScore/runLint），API route `/api/lint`，Agent 工具 `lint`，MCP 工具 `mindos_lint`。28 个单元测试。二进制内容检测 + URL 解码链接解析。[spec](./specs/spec-kb-lint.md)
 - [ ] Feature 4: 深度摄入（Ingest Ripple）— P2
 - [ ] Feature 5: 知识编译（Space Overview）— P3
 
