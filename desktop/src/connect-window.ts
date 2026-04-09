@@ -303,8 +303,23 @@ function registerSshHandlers(
     try {
       if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop(); activeTunnel = null; }
 
+      // Check if we have a cached passphrase — try to preload it into ssh-agent
+      const cachedPassphrase = loadSshPassphrase(host);
+      if (cachedPassphrase && isSshAgentRunning()) {
+        // Try to add the default key to ssh-agent with cached passphrase
+        const home = app.getPath('home');
+        const defaultKeys = ['id_ed25519', 'id_rsa', 'id_ecdsa'].map(k => path.join(home, '.ssh', k));
+        for (const keyPath of defaultKeys) {
+          if (existsSync(keyPath)) {
+            await addKeyToAgent(keyPath, cachedPassphrase);
+            break; // Only need to add one
+          }
+        }
+      }
+
       // Retry up to 3 times to handle transient failures and port collisions
       let lastError = '';
+      let passphraseNeeded = false;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const localPort = await findAvailablePort(remotePort + attempt);
@@ -344,6 +359,12 @@ function registerSshHandlers(
           lastError = retryErr.message || 'SSH tunnel failed';
           if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
 
+          // Detect passphrase needed
+          if (lastError === PASSPHRASE_NEEDED) {
+            passphraseNeeded = true;
+            break;
+          }
+
           // Don't retry non-transient SSH errors — they'll fail identically every time
           const errLower = lastError.toLowerCase();
           const nonRetryable =
@@ -351,25 +372,83 @@ function registerSshHandlers(
             errLower.includes('host key verification failed') ||
             errLower.includes('no such identity') ||
             errLower.includes('connection refused');
-          if (nonRetryable) {
-            // Enhance error message for passphrase-related failures
-            if (errLower.includes('permission denied') && !errLower.includes('password')) {
-              const keyPath = process.platform === 'win32' ? '%USERPROFILE%\\.ssh\\id_ed25519' : '~/.ssh/id_ed25519';
-              const hint = process.platform === 'win32'
-                ? 'If using Git Bash, run: ssh-add /c/Users/YourName/.ssh/id_ed25519'
-                : `If your SSH key has a passphrase, run: ssh-add ${keyPath}`;
-              lastError += `\n\n${hint}`;
-            }
-            break;
-          }
+          if (nonRetryable) break;
 
           if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         }
+      }
+
+      if (passphraseNeeded) {
+        return { ok: false, error: lastError, passphraseNeeded: true };
       }
       return { ok: false, error: lastError };
 
     } catch (err: any) {
       return { ok: false, error: err.message || 'SSH tunnel failed' };
+    }
+  });
+
+  /** Add SSH key to agent with passphrase, then retry tunnel connection */
+  safeHandle('connect:ssh-add-key', async (_: unknown, host: string, remotePort: number, passphrase: string, remember: boolean) => {
+    try {
+      // Find the SSH key for this host
+      const home = app.getPath('home');
+      const defaultKeys = ['id_ed25519', 'id_rsa', 'id_ecdsa'].map(k => path.join(home, '.ssh', k));
+      let keyAdded = false;
+
+      for (const keyPath of defaultKeys) {
+        if (existsSync(keyPath)) {
+          const result = await addKeyToAgent(keyPath, passphrase);
+          if (result.ok) {
+            keyAdded = true;
+            break;
+          }
+        }
+      }
+
+      if (!keyAdded) {
+        return { ok: false, error: 'Failed to add key to ssh-agent. The passphrase may be incorrect.' };
+      }
+
+      // Save passphrase if requested
+      if (remember) {
+        saveSshPassphrase(host, passphrase);
+      }
+
+      // Now retry the SSH connection (tunnel should work with the key in agent)
+      if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop(); activeTunnel = null; }
+
+      const localPort = await findAvailablePort(remotePort);
+      const tunnel = new SshTunnel(host, localPort, remotePort);
+      await tunnel.start();
+      activeTunnel = tunnel;
+
+      const testResult = await testConnection(`http://localhost:${localPort}`);
+      if (testResult.status === 'online') {
+        const url = `http://localhost:${localPort}`;
+
+        if (testResult.authRequired) {
+          return { ok: true, url, authRequired: true, sshHost: host, sshRemotePort: remotePort };
+        }
+
+        saveConnection({
+          address: `ssh://${host}:${remotePort}`,
+          label: `${host} (SSH)`,
+          lastConnected: new Date().toISOString(),
+          authMethod: 'token',
+        });
+        setActiveRemoteConnection(url);
+        resolvedRef.value = true;
+        resolve(resolveOverride ?? url);
+        safeClose();
+        return { ok: true, url, authRequired: false };
+      }
+
+      await tunnel.stop();
+      activeTunnel = null;
+      return { ok: false, error: 'Tunnel established but MindOS not reachable' };
+    } catch (err: any) {
+      return { ok: false, error: err.message || 'Failed to connect' };
     }
   });
 }
@@ -378,7 +457,7 @@ function registerSshHandlers(
 const REMOTE_CHANNELS = [
   'connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect',
   'connect:remove', 'connect:switch-local', 'connect:ssh-hosts', 'connect:ssh-connect',
-  'connect:ssh-complete',
+  'connect:ssh-complete', 'connect:ssh-add-key',
 ];
 
 /**
