@@ -109,9 +109,12 @@ function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
 
     // Handle Include directive — resolve paths relative to ~/.ssh/
     if (k === 'include') {
-      const pattern = value.replace(/^~\//, home + '/').replace(/^~(?=[/\\])/, home);
+      // Expand tilde and normalize path separators for this platform
+      let expandedPath = value.startsWith('~')
+        ? value === '~' ? home : path.join(home, value.slice(2))
+        : value;
       // If not absolute, resolve relative to the directory of the current config file
-      const absPattern = path.isAbsolute(pattern) ? pattern : path.join(path.dirname(resolved), pattern);
+      const absPattern = path.isAbsolute(expandedPath) ? expandedPath : path.join(path.dirname(resolved), expandedPath);
       try {
         // Simple glob: if pattern contains *, expand with readdirSync; otherwise treat as literal
         if (absPattern.includes('*')) {
@@ -145,7 +148,12 @@ function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
         case 'hostname': current.hostname = value; break;
         case 'user': current.user = value; break;
         case 'port': current.port = parseInt(value, 10) || 22; break;
-        case 'identityfile': current.identityFile = value.replace(/^~/, home); break;
+        case 'identityfile':
+          // Expand tilde and normalize path separators for this platform
+          current.identityFile = value.startsWith('~')
+            ? value === '~' ? home : path.join(home, value.slice(2))
+            : value;
+          break;
       }
     }
   }
@@ -155,6 +163,29 @@ function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
 
 /** Check if the `ssh` command is available on this system */
 export async function isSshAvailable(): Promise<boolean> {
+  // On Windows, try to find ssh.exe in common locations if not in PATH
+  if (process.platform === 'win32') {
+    const sshCandidates = [
+      'ssh.exe', // Already in PATH
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'OpenSSH', 'ssh.exe')] : []),
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'usr', 'bin', 'ssh.exe')] : []),
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'bin', 'ssh.exe')] : []),
+      ...(process.env.USERPROFILE ? [path.join(process.env.USERPROFILE, 'scoop', 'shims', 'ssh.exe')] : []),
+    ];
+
+    for (const candidate of sshCandidates) {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`"${candidate}" -V`, { stdio: 'ignore', timeout: 3000 });
+        return true;
+      } catch {
+        // Try next candidate
+      }
+    }
+    return false;
+  }
+
+  // Unix/macOS: simple check
   try {
     await execAsync('ssh -V 2>&1', { timeout: 3000 });
     return true;
@@ -196,8 +227,36 @@ export class SshTunnel {
    * Start the SSH tunnel. Resolves when the tunnel is established
    * (port forwarding active) or rejects on failure.
    */
-  start(): Promise<void> {
+  async start(): Promise<void> {
     this.stopped = false;
+
+    // On Windows, try to find ssh.exe before spawning
+    let sshCmd = process.platform === 'win32' ? 'ssh.exe' : 'ssh';
+    if (process.platform === 'win32') {
+      const sshCandidates = [
+        'ssh.exe',
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'OpenSSH', 'ssh.exe')] : []),
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'usr', 'bin', 'ssh.exe')] : []),
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'bin', 'ssh.exe')] : []),
+        ...(process.env.USERPROFILE ? [path.join(process.env.USERPROFILE, 'scoop', 'shims', 'ssh.exe')] : []),
+      ];
+
+      let foundSsh = false;
+      for (const candidate of sshCandidates) {
+        try {
+          const { execSync } = require('child_process');
+          execSync(`"${candidate}" -V`, { stdio: 'ignore', timeout: 2000 });
+          sshCmd = candidate;
+          foundSsh = true;
+          break;
+        } catch {
+          // Try next candidate
+        }
+      }
+      if (!foundSsh) {
+        throw new Error('SSH not found. Please install OpenSSH (e.g., via Git for Windows or Windows 10+ built-in OpenSSH).');
+      }
+    }
 
     return new Promise((resolve, reject) => {
       const args = [
@@ -212,8 +271,9 @@ export class SshTunnel {
         '-o', 'BatchMode=yes',                   // Never prompt for password/passphrase
       ];
 
-      this.process = spawn(process.platform === 'win32' ? 'ssh.exe' : 'ssh', args, {
+      this.process = spawn(sshCmd, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',  // Use shell on Windows for path resolution
       });
 
       // Write PID to disk for orphan cleanup on next launch

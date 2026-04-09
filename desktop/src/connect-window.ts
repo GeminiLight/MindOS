@@ -335,7 +335,11 @@ function registerSshHandlers(
           if (nonRetryable) {
             // Enhance error message for passphrase-related failures
             if (errLower.includes('permission denied') && !errLower.includes('password')) {
-              lastError += '\n\nIf your SSH key has a passphrase, run: ssh-add ~/.ssh/id_ed25519 (or your key path)';
+              const keyPath = process.platform === 'win32' ? '%USERPROFILE%\\.ssh\\id_ed25519' : '~/.ssh/id_ed25519';
+              const hint = process.platform === 'win32'
+                ? 'If using Git Bash, run: ssh-add /c/Users/YourName/.ssh/id_ed25519'
+                : `If your SSH key has a passphrase, run: ssh-add ${keyPath}`;
+              lastError += `\n\n${hint}`;
             }
             break;
           }
