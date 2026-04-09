@@ -111,7 +111,7 @@ export default function DailyEchoReportDrawer({
               className="flex-1 rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               type="button"
             >
-              {t.dailyReportContinueAgent || '继续与 Agent'}
+              {t.dailyReportContinueAgent || '聊聊这个'}
             </button>
             <button
               onClick={onRegenerate}
