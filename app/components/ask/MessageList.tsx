@@ -9,6 +9,7 @@ import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
+import { SaveInsightProvider, SaveInsightTrigger } from './SaveInsightInline';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
 
@@ -27,7 +28,7 @@ function CopyMessageButton({ text, label }: { text: string; label?: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="absolute -bottom-1 right-1 p-1 rounded-md bg-card border border-border/60 shadow-sm text-muted-foreground hover:text-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+      className="p-1 rounded-md bg-card border border-border/60 shadow-sm text-muted-foreground hover:text-foreground transition-colors"
       title={label ?? 'Copy'}
     >
       {copied ? <Check size={11} className="text-success" /> : <Copy size={11} />}
@@ -299,15 +300,18 @@ export default memo(function MessageList({
           ) : (
             <div className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-bl-lg bg-card border border-border/30 shadow-sm text-foreground text-sm">
               {(m.parts && m.parts.length > 0) || stripThinkingTags(m.content) ? (
-                <>
+                <SaveInsightProvider text={m.content}>
                   <AssistantMessageWithParts message={m} isStreaming={isLoading && i === messages.length - 1} />
                   {isLoading && i === messages.length - 1 && (
                     <StepCounter parts={m.parts} />
                   )}
                   {!(isLoading && i === messages.length - 1) && stripThinkingTags(m.content) && (
-                    <CopyMessageButton text={stripThinkingTags(m.content)} label={labels.copyMessage} />
+                    <div className="absolute -bottom-1 right-1 z-10 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <SaveInsightTrigger text={m.content} />
+                      <CopyMessageButton text={stripThinkingTags(m.content)} label={labels.copyMessage} />
+                    </div>
                   )}
-                </>
+                </SaveInsightProvider>
               ) : isLoading && i === messages.length - 1 ? (
                 <div className="flex items-center gap-2.5 py-1">
                   {loadingPhase === 'reconnecting' ? (

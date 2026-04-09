@@ -1,21 +1,25 @@
 'use client';
 
-import { useState, useCallback, useRef, useTransition, useEffect, useSyncExternalStore } from 'react';
+import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { ICON_SIZES } from '@/lib/config/icon-scale';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
-  Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, MoreHorizontal, Star, Inbox,
+  Trash2, Pencil, Layers, Copy, MoreHorizontal, Star, Inbox,
 } from 'lucide-react';
-import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, convertToSpaceAction, deleteFolderAction, undoDeleteAction } from '@/lib/actions';
+import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, deleteFolderAction, undoDeleteAction } from '@/lib/actions';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
-import { quickDropToDirectory } from '@/lib/inbox-upload';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
-import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
+import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib/stores/hidden-files';
+
+// Re-export for backward compatibility (Panel.tsx, KnowledgeTab.tsx import from FileTree)
+export { setShowHiddenFiles, useShowHiddenFiles };
+import { ContextMenuShell, SpaceContextMenu, FolderContextMenu, MENU_ITEM, MENU_DANGER, MENU_DIVIDER } from '@/components/file-tree/FileTreeContextMenus';
+import { useDirectoryDragDrop } from '@/lib/hooks/useDirectoryDragDrop';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
@@ -23,33 +27,6 @@ function notifyFilesChanged() {
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
-}
-
-const HIDDEN_FILES_KEY = 'show-hidden-files';
-
-function subscribeHiddenFiles(cb: () => void) {
-  const handler = (e: StorageEvent) => { if (e.key === HIDDEN_FILES_KEY) cb(); };
-  const custom = () => cb();
-  window.addEventListener('storage', handler);
-  window.addEventListener('mindos:hidden-files-changed', custom);
-  return () => {
-    window.removeEventListener('storage', handler);
-    window.removeEventListener('mindos:hidden-files-changed', custom);
-  };
-}
-
-function getShowHiddenFiles() {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem(HIDDEN_FILES_KEY) === 'true';
-}
-
-export function setShowHiddenFiles(value: boolean) {
-  localStorage.setItem(HIDDEN_FILES_KEY, String(value));
-  window.dispatchEvent(new Event('mindos:hidden-files-changed'));
-}
-
-export function useShowHiddenFiles() {
-  return useSyncExternalStore(subscribeHiddenFiles, getShowHiddenFiles, () => false);
 }
 
 interface FileTreeProps {
@@ -77,153 +54,6 @@ function getCurrentFilePath(pathname: string): string {
 function countContentFiles(node: FileNode): number {
   if (node.type === 'file') return SYSTEM_FILES.has(node.name) ? 0 : 1;
   return (node.children ?? []).reduce((sum, c) => sum + countContentFiles(c), 0);
-}
-
-/** Filter out hidden entries (dot-files at root, system files) when show-hidden is off. */
-function filterHiddenNodes(nodes: FileNode[], isRoot: boolean): FileNode[] {
-  return nodes.filter(node => {
-    if (isRoot && node.name.startsWith('.')) return false;
-    if (node.type === 'file' && SYSTEM_FILES.has(node.name)) return false;
-    if (node.type === 'directory' && node.name.startsWith('.')) return false;
-    return true;
-  });
-}
-
-// ─── Context Menu Shell ───────────────────────────────────────────────────────
-
-function ContextMenuShell({ x, y, onClose, menuHeight, children }: {
-  x: number;
-  y: number;
-  onClose: () => void;
-  menuHeight?: number;
-  children: React.ReactNode;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
-    };
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', keyHandler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', keyHandler);
-    };
-  }, [onClose]);
-
-  const adjustedY = Math.min(y, window.innerHeight - (menuHeight ?? 160));
-  const adjustedX = Math.min(x, window.innerWidth - 200);
-
-  return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 min-w-[180px] bg-card border border-border rounded-lg shadow-lg py-1"
-      style={{ top: adjustedY, left: adjustedX }}
-    >
-      {children}
-    </div>
-  );
-}
-
-const MENU_ITEM = "w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors text-left";
-const MENU_DANGER = "w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left";
-const MENU_DIVIDER = "my-1 border-t border-border/50";
-
-// ─── SpaceContextMenu ─────────────────────────────────────────────────────────
-
-function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onImport, onDelete }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onNewFile: () => void; onImport?: (space: string) => void; onDelete: () => void;
-}) {
-  const router = useRouter();
-  const { t } = useLocale();
-  const { isPinned, togglePin } = usePinnedFiles();
-  const pinned = isPinned(node.path);
-
-  return (
-    <ContextMenuShell x={x} y={y} onClose={onClose}>
-      <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
-        <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
-      </button>
-      <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
-        <ScrollText size={14} className="shrink-0" /> {t.fileTree.viewRules}
-      </button>
-      {onImport && (
-        <button className={MENU_ITEM} onClick={() => { onImport(node.path); onClose(); }}>
-          <FolderInput size={14} className="shrink-0" /> {t.fileTree.importFile}
-        </button>
-      )}
-      <div className={MENU_DIVIDER} />
-      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
-        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
-        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
-      </button>
-      <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
-        <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
-      </button>
-      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
-        <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
-      </button>
-      <div className={MENU_DIVIDER} />
-      <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
-        <Trash2 size={14} className="shrink-0" />
-        {t.fileTree.deleteSpace}
-      </button>
-    </ContextMenuShell>
-  );
-}
-
-// ─── FolderContextMenu ────────────────────────────────────────────────────────
-
-function FolderContextMenu({ x, y, node, onClose, onRename, onNewFile, onDelete }: {
-  x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onNewFile: () => void; onDelete: () => void;
-}) {
-  const router = useRouter();
-  const { t } = useLocale();
-  const [isPending, startTransition] = useTransition();
-  const { isPinned, togglePin } = usePinnedFiles();
-  const pinned = isPinned(node.path);
-
-  return (
-    <ContextMenuShell x={x} y={y} onClose={onClose} menuHeight={220}>
-      <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
-        <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
-      </button>
-      <div className={MENU_DIVIDER} />
-      <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
-        <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
-        {pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
-      </button>
-      <button className={MENU_ITEM} disabled={isPending} onClick={() => {
-        startTransition(async () => {
-          const result = await convertToSpaceAction(node.path);
-          if (result.success) {
-            router.refresh();
-            notifyFilesChanged();
-            const spaceName = node.name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || node.name;
-            checkAiAvailable().then(ok => {
-              if (ok) triggerSpaceAiInit(spaceName, node.path);
-            });
-          }
-          onClose();
-        });
-      }}>
-        <Layers size={14} className="shrink-0 text-[var(--amber)]" /> {t.fileTree.convertToSpace}
-      </button>
-      <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
-        <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
-      </button>
-      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
-        <Pencil size={14} className="shrink-0" /> {t.fileTree.rename}
-      </button>
-      <div className={MENU_DIVIDER} />
-      <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
-        <Trash2 size={14} className="shrink-0" />
-        {t.fileTree.deleteFolder}
-      </button>
-    </ContextMenuShell>
-  );
 }
 
 // ─── NewFileInline ────────────────────────────────────────────────────────────
@@ -319,80 +149,8 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   const [deleteConfirm, setDeleteConfirm] = useState<null | 'space' | 'folder'>(null);
   const [isPendingDelete, startDeleteTransition] = useTransition();
 
-  // ── External file drop target ──
-  const [isDragTarget, setIsDragTarget] = useState(false);
-  const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearAutoExpand = useCallback(() => {
-    if (autoExpandTimerRef.current) {
-      clearTimeout(autoExpandTimerRef.current);
-      autoExpandTimerRef.current = null;
-    }
-  }, []);
-
-  // Use dragOver (fires continuously while hovering) for highlight.
-  // Clear highlight with a short delay on dragLeave — if dragOver fires again
-  // within the delay, the highlight stays. This avoids flicker from nested elements.
-  const handleRowDragOver = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'copy';
-    if (dragLeaveTimerRef.current) {
-      clearTimeout(dragLeaveTimerRef.current);
-      dragLeaveTimerRef.current = null;
-    }
-    if (!isDragTarget) setIsDragTarget(true);
-  }, [isDragTarget]);
-
-  const handleRowDragEnter = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragTarget(true);
-    // Auto-expand collapsed directory after 500ms hover
-    clearAutoExpand();
-    if (!open) {
-      autoExpandTimerRef.current = setTimeout(() => {
-        setOpen(true);
-        autoExpandTimerRef.current = null;
-      }, 500);
-    }
-  }, [open, clearAutoExpand]);
-
-  const handleRowDragLeave = useCallback((e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
-    e.stopPropagation();
-    // Delay clearing so dragOver on the same row can cancel it
-    dragLeaveTimerRef.current = setTimeout(() => {
-      setIsDragTarget(false);
-      clearAutoExpand();
-      dragLeaveTimerRef.current = null;
-    }, 50);
-  }, [clearAutoExpand]);
-
-  const handleRowDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragTarget(false);
-    clearAutoExpand();
-    if (dragLeaveTimerRef.current) {
-      clearTimeout(dragLeaveTimerRef.current);
-      dragLeaveTimerRef.current = null;
-    }
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      void quickDropToDirectory(Array.from(files), node.path, t);
-    }
-  }, [node.path, t, clearAutoExpand]);
-
-  useEffect(() => {
-    return () => {
-      clearAutoExpand();
-      if (dragLeaveTimerRef.current) clearTimeout(dragLeaveTimerRef.current);
-    };
-  }, [clearAutoExpand]);
+  // ── External file drop target (from hook) ──
+  const { isDragTarget, handleRowDragOver, handleRowDragEnter, handleRowDragLeave, handleRowDrop } = useDirectoryDragDrop(node, open, setOpen, t);
 
   const toggle = useCallback(() => setOpen(v => !v), []);
 

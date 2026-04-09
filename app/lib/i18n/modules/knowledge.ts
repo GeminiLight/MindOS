@@ -83,6 +83,35 @@ export const knowledgeEn = {
     goToEcho: 'Open Echo',
     savedLocally: 'Saved locally on this device',
   },
+  dailyEcho: {
+    // Report generation
+    title: 'Daily Echo Report',
+    generate: 'Generate today\'s report',
+    generating: 'Generating...',
+    generated: 'Generated {time}',
+    regenerate: 'Regenerate',
+    download: 'Download PDF',
+    continueAgent: 'Continue in Agent',
+    error: 'Generation failed',
+    retry: 'Retry',
+    // Snapshot
+    snapshotTitle: '📊 Today\'s Motion',
+    snapshotFilesEdited: 'Files edited',
+    snapshotFilesCreated: 'Files created',
+    snapshotSessions: 'Chat sessions',
+    snapshotKbGrowth: 'KB growth',
+    // Themes
+    themesTitle: '🎯 Today\'s Themes',
+    themeFiles: 'files',
+    // Alignment
+    alignmentTitle: '✅ Alignment',
+    alignmentScore: 'Score',
+    alignmentMisaligned: 'Misaligned',
+    alignmentPartial: 'Partially aligned',
+    alignmentAligned: 'Well aligned',
+    // Reflection
+    reflectionTitle: '❓ For Tomorrow',
+  },
   suggestion: {
     title: 'You might want to',
     staleFiles: (n: number) => `${n} file${n !== 1 ? 's' : ''} not updated in 30+ days`,
@@ -474,6 +503,35 @@ export const knowledgeZh = {
     inviteDesc: '一行就够。回响会沉淀你的思维模式。',
     goToEcho: '打开回响',
     savedLocally: '保存在本设备',
+  },
+  dailyEcho: {
+    // Report generation
+    title: '每日回响报告',
+    generate: '生成今日报告',
+    generating: '生成中...',
+    generated: '生成于 {time}',
+    regenerate: '重新生成',
+    download: '下载 PDF',
+    continueAgent: '继续与 Agent',
+    error: '生成失败',
+    retry: '重试',
+    // Snapshot
+    snapshotTitle: '📊 今日动向',
+    snapshotFilesEdited: '文件编辑',
+    snapshotFilesCreated: '新建文件',
+    snapshotSessions: '聊天会话',
+    snapshotKbGrowth: '知识库增长',
+    // Themes
+    themesTitle: '🎯 今日主题',
+    themeFiles: '个文件',
+    // Alignment
+    alignmentTitle: '✅ 对齐度',
+    alignmentScore: '评分',
+    alignmentMisaligned: '偏离',
+    alignmentPartial: '部分对齐',
+    alignmentAligned: '充分对齐',
+    // Reflection
+    reflectionTitle: '❓ 明天思考',
   },
   suggestion: {
     title: '你可能想',
