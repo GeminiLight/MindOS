@@ -1,5 +1,5 @@
 import type { Messages } from '@/lib/i18n';
-import type { ProviderId } from '@/lib/agent/providers';
+import type { Provider } from '@/lib/custom-endpoints';
 
 // ─── i18n type aliases ───────────────────────────────────────────────────────
 export type SetupMessages = Messages['setup'];
@@ -8,20 +8,16 @@ export type McpMessages = Messages['settings']['mcp'];
 // ─── Template ────────────────────────────────────────────────────────────────
 export type Template = 'en' | 'zh' | 'empty' | '';
 
-// ─── Per-provider config stored in setup state ───────────────────────────────
-export interface ProviderSetupConfig {
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-  apiKeyMask?: string;
-}
-
 // ─── Setup state ─────────────────────────────────────────────────────────────
+
+/** Provider with optional apiKeyMask for displaying masked existing keys */
+export type SetupProvider = Provider & { apiKeyMask?: string };
+
 export interface SetupState {
   mindRoot: string;
   template: Template;
-  provider: ProviderId | 'skip';
-  providerConfigs: Partial<Record<ProviderId, ProviderSetupConfig>>;
+  activeProvider: string;       // Provider.id ("p_...") or 'skip'
+  providers: SetupProvider[];   // Unified Provider[] format (same as config.json)
   webPort: number;
   mcpPort: number;
   authToken: string;
