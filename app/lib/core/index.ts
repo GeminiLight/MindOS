@@ -35,8 +35,9 @@ export {
   getFileTree,
   collectAllFiles,
   renderTree,
+  buildFileIndex,
 } from './tree';
-export type { TreeOptions } from './tree';
+export type { TreeOptions, FileIndexOptions } from './tree';
 
 // Search
 export { searchFiles, invalidateSearchIndex, updateSearchIndexFile, addSearchIndexFile, removeSearchIndexFile } from './search';

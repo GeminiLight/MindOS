@@ -176,10 +176,11 @@ export function buildFileIndex(
 
     for (const dir of dirs) {
       const total = countFiles(dir.children ?? []);
+      const label = total === 1 ? '1 file' : `${total} files`;
       if (depth >= maxDepth) {
-        lines.push(`${indent}${dir.name}/ (${total} files)`);
+        lines.push(`${indent}${dir.name}/ (${label})`);
       } else {
-        lines.push(`${indent}${dir.name}/ (${total} files)`);
+        lines.push(`${indent}${dir.name}/ (${label})`);
         walk(dir.children ?? [], depth + 1);
       }
     }

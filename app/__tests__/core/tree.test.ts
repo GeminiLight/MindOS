@@ -124,7 +124,7 @@ describe('tree', () => {
       // depth 0: A/, depth 1: B/, depth 2: C/ collapsed
       expect(index).toContain('A/ (2 files)');
       expect(index).toContain('  B/ (2 files)');
-      expect(index).toContain('    C/ (1 files)');
+      expect(index).toContain('    C/ (1 file)');
       expect(index).toContain('    mid.md');
       expect(index).not.toContain('deep.md');
     });
@@ -151,9 +151,9 @@ describe('tree', () => {
     it('handles deeply nested directories at depth limit', () => {
       seedFile(mindRoot, 'L1/L2/L3/L4/L5/deep.md', '');
       const index = buildFileIndex(mindRoot, { maxDepth: 2 });
-      expect(index).toContain('L1/ (1 files)');
-      expect(index).toContain('  L2/ (1 files)');
-      expect(index).toContain('    L3/ (1 files)');
+      expect(index).toContain('L1/ (1 file)');
+      expect(index).toContain('  L2/ (1 file)');
+      expect(index).toContain('    L3/ (1 file)');
       expect(index).not.toContain('L4');
     });
   });

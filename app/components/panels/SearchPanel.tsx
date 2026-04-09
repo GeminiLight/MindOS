@@ -122,8 +122,8 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
       {/* Header */}
       <PanelHeader title="Search" maximized={maximized} onMaximize={onMaximize} />
 
-      {/* Search input — IMPROVED: 16px font, proper spacing */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
+      {/* Search input */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0 overflow-hidden">
         <Search size={16} className="text-muted-foreground shrink-0 flex-none" />
         <input
           ref={inputRef}
@@ -133,16 +133,16 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
           onKeyDown={handleKeyDown}
           placeholder={t.search.placeholder}
           aria-label={t.search.placeholder}
-          className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
+          className="flex-1 min-w-0 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
         />
         {loading && (
           <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
         )}
         {!loading && query && (
-          <button 
+          <button
             onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
             className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Clear search"
+            aria-label={t.search.clear}
           >
             <X size={16} />
           </button>
@@ -157,9 +157,9 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
               <Search size={20} className="text-muted-foreground/60" />
             </div>
-            <h3 className="text-sm font-medium text-foreground mb-1">快速查找你的笔记</h3>
+            <h3 className="text-sm font-medium text-foreground mb-1">{t.search.emptyTitle}</h3>
             <p className="text-xs text-muted-foreground/70">
-              开始输入文件名或内容关键词
+              {t.search.emptyHint}
             </p>
           </div>
         )}
@@ -170,9 +170,9 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
               <Search size={20} className="text-muted-foreground/60" />
             </div>
-            <h3 className="text-sm font-medium text-foreground mb-1">未找到匹配的文件</h3>
+            <h3 className="text-sm font-medium text-foreground mb-1">{t.search.noResults}</h3>
             <p className="text-xs text-muted-foreground/70">
-              尝试其他关键词
+              {t.search.noResultsHint}
             </p>
           </div>
         )}
@@ -215,6 +215,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
                   onMouseEnter={() => setSelectedIndex(i)}
                   className={`
                     w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
+                    border-b border-border/50
                     ${isSelected ? 'bg-[var(--amber-dim)] border-l-2 border-[var(--amber)]' : 'border-l-2 border-transparent'}
                     ${isDragging ? 'bg-muted/70' : isSelected ? '' : 'hover:bg-muted/60'}
                   `}
@@ -263,7 +264,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
                 </button>
               );
             }}
-            itemClassName="border-b border-border/50"
+
           />
         )}
       </div>
@@ -274,7 +275,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
           <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↑↓</kbd> {t.search.navigate}</span>
           <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↵</kbd> {t.search.open}</span>
           <span className="text-muted-foreground/40 mx-0.5">•</span>
-          <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">Drag</kbd> to chat</span>
+          <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">Drag</kbd> {t.search.dragToChat}</span>
         </div>
       )}
     </>

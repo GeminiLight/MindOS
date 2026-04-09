@@ -56,7 +56,7 @@ describe('GET /api/bootstrap', () => {
     const body = await res.json();
     expect(body.file_index).toBeDefined();
     expect(body.file_index).toContain('Projects/ (2 files)');
-    expect(body.file_index).toContain('Journal/ (1 files)');
+    expect(body.file_index).toContain('Journal/ (1 file)');
     expect(body.file_index).toContain('notes.md');
   });
 

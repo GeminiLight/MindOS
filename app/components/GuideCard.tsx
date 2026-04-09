@@ -16,8 +16,8 @@ export default function GuideCard() {
 
   const [guideState, setGuideState] = useState<GuideState | null>(null);
   const [expanded, setExpanded] = useState<'import' | 'ai' | 'agent' | null>(null);
-  const [isFirstVisit, setIsFirstVisit] = useState(false);
   const [step3Done, setStep3Done] = useState(false);
+  const hasAutoExpanded = useRef(false);
 
   const fetchGuideState = useCallback(() => {
     fetch('/api/setup')
@@ -37,13 +37,10 @@ export default function GuideCard() {
 
   useEffect(() => {
     fetchGuideState();
-    const handleFirstVisit = () => { setIsFirstVisit(true); };
-    window.addEventListener('mindos:first-visit', handleFirstVisit);
     const handleGuideUpdate = () => fetchGuideState();
     window.addEventListener('focus', handleGuideUpdate);
     window.addEventListener('guide-state-updated', handleGuideUpdate);
     return () => {
-      window.removeEventListener('mindos:first-visit', handleFirstVisit);
       window.removeEventListener('focus', handleGuideUpdate);
       window.removeEventListener('guide-state-updated', handleGuideUpdate);
     };
