@@ -11,6 +11,8 @@ import { readSkillContentByName } from '@/lib/pi-integration/skills';
 import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
+import { getIMTools } from '@/lib/im/tools';
+import { hasAnyIMConfig } from '@/lib/im/config';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 import { extractRelevantContent } from '@/lib/agent/paragraph-extract';
 import { computeDiffAsync } from '@/lib/agent/diff-async';
@@ -261,6 +263,12 @@ export function getChatTools(): AgentTool<any>[] {
 
 export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
   const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
+
+  // IM tools: only loaded when at least one platform is configured
+  if (hasAnyIMConfig()) {
+    try { baseTools.push(...getIMTools()); } catch { /* graceful degradation */ }
+  }
+
   try {
     const result = await listMcporterServers();
     const okServers = (result.servers ?? []).filter((server) => server.status === 'ok');
