@@ -13,6 +13,7 @@ import { acpTools } from '@/lib/acp/acp-tools';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 import { extractRelevantContent } from '@/lib/agent/paragraph-extract';
 import { computeDiffAsync } from '@/lib/agent/diff-async';
+import { webSearch, formatSearchResults } from '@/lib/agent/web-search';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -374,56 +375,12 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
   {
     name: 'web_search',
     label: 'Web Search',
-    description: 'Search the internet for up-to-date information. Uses DuckDuckGo HTML search. Returns top search results with titles, snippets, and URLs.',
+    description: 'Search the internet for up-to-date information. Uses multiple search engines with automatic fallback (DuckDuckGo → Bing → Google). Returns top search results with titles, snippets, and URLs.',
     parameters: WebSearchParams,
     execute: safeExecute(async (_id, params: Static<typeof WebSearchParams>) => {
       try {
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`;
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-          signal: AbortSignal.timeout(10000)
-        });
-        
-        if (!res.ok) {
-          return textResult(`Failed to search: HTTP ${res.status}`);
-        }
-        
-        const html = await res.text();
-        const results: string[] = [];
-        
-        // Simple regex parsing for DuckDuckGo HTML results
-        const resultBlocks = html.split('class="result__body"').slice(1);
-        
-        for (let i = 0; i < Math.min(resultBlocks.length, 5); i++) {
-          const block = resultBlocks[i];
-          
-          const titleMatch = block.match(/class="result__title"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-          const snippetMatch = block.match(/class="result__snippet[^>]*>([\s\S]*?)(?:<\/a>|<\/div>)/i);
-          
-          if (titleMatch) {
-            let link = titleMatch[1];
-            // Decode DuckDuckGo redirect URL if necessary
-            if (link.startsWith('//duckduckgo.com/l/?uddg=')) {
-              const urlParam = new URL('https:' + link).searchParams.get('uddg');
-              if (urlParam) link = decodeURIComponent(urlParam);
-            }
-            
-            // Clean up tags
-            const title = titleMatch[2].replace(/<[^>]+>/g, '').trim();
-            const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
-            
-            results.push(`### ${i+1}. ${title}\n**URL:** ${link}\n**Snippet:** ${snippet}\n`);
-          }
-        }
-        
-        if (results.length === 0) {
-          return textResult(`No web search results found for: ${params.query}`);
-        }
-        
-        return textResult(`## Web Search Results for: "${params.query}"\n\n${results.join('\n')}\n\n*Note: Use web_fetch tool with any of the URLs above to read the full page content.*`);
+        const response = await webSearch(params.query);
+        return textResult(formatSearchResults(params.query, response));
       } catch (err) {
         return textResult(`Web search failed: ${formatToolError(err)}`);
       }
