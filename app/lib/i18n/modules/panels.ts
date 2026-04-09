@@ -220,7 +220,9 @@ export const panelsEn = {
       statsReady: 'Ready',
       statsNotConfigured: 'Not configured',
       platformsTitle: 'Platforms',
-      configHint: 'Use the sidebar to configure and test each platform.',
+      backToChannels: 'Back to Channels',
+      setupGuide: 'Setup Guide',
+      disconnectHint: 'Remove credentials and disconnect this platform.',
     },
   },
   echoPages: {
@@ -946,7 +948,9 @@ export const panelsZh = {
       statsReady: '就绪',
       statsNotConfigured: '未配置',
       platformsTitle: '平台列表',
-      configHint: '在左侧面板中配置和测试各平台。',
+      backToChannels: '返回频道',
+      setupGuide: '配置指南',
+      disconnectHint: '移除凭证并断开此平台的连接。',
     },
   },
   echoPages: {

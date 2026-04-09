@@ -1,32 +1,31 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Loader2, CheckCircle2, Circle, RefreshCw, AlertCircle } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type PlatformStatus = {
-  platform: string;
-  connected: boolean;
-  botName?: string;
-  capabilities: string[];
-};
-
-const ALL_PLATFORMS = [
-  { id: 'telegram', name: 'Telegram', icon: '📱' },
-  { id: 'feishu', name: 'Feishu', icon: '🐦' },
-  { id: 'discord', name: 'Discord', icon: '💬' },
-  { id: 'slack', name: 'Slack', icon: '💼' },
-  { id: 'wecom', name: 'WeCom', icon: '🏢' },
-  { id: 'dingtalk', name: 'DingTalk', icon: '🔔' },
-  { id: 'wechat', name: 'WeChat', icon: '💚' },
-  { id: 'qq', name: 'QQ', icon: '🐧' },
-] as const;
-
-// ─── Component ────────────────────────────────────────────────────────────────
+import { PLATFORMS, type PlatformStatus } from '@/lib/im/platforms';
+import AgentsContentChannelDetail from './AgentsContentChannelDetail';
 
 export default function AgentsContentChannels() {
+  const { t } = useLocale();
+  const im = t.panels.im;
+  const searchParams = useSearchParams();
+  const platformId = searchParams.get('platform');
+
+  // If a specific platform is selected, show detail page
+  if (platformId) {
+    return <AgentsContentChannelDetail platformId={platformId} />;
+  }
+
+  // Otherwise show overview
+  return <ChannelsOverview />;
+}
+
+// ─── Overview ─────────────────────────────────────────────────────────────────
+
+function ChannelsOverview() {
   const { t } = useLocale();
   const im = t.panels.im;
 
@@ -62,7 +61,7 @@ export default function AgentsContentChannels() {
 
   if (error) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-16 text-center">
+      <div className="text-center py-16">
         <AlertCircle size={24} className="mx-auto mb-3 text-muted-foreground" />
         <p className="text-sm text-muted-foreground mb-3">{im.fetchError}</p>
         <button
@@ -77,15 +76,11 @@ export default function AgentsContentChannels() {
   }
 
   const connected = statuses.filter(s => s.connected).length;
-  const total = ALL_PLATFORMS.length;
+  const total = PLATFORMS.length;
   const getStatus = (id: string) => statuses.find(s => s.platform === id);
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-6">
-      {/* Header */}
-      <h1 className="text-lg font-semibold text-foreground mb-1">{im.title}</h1>
-      <p className="text-sm text-muted-foreground mb-6">{im.emptyDesc}</p>
-
+    <div className="max-w-3xl">
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="rounded-lg border border-border bg-card p-4">
@@ -112,17 +107,18 @@ export default function AgentsContentChannels() {
         </div>
       </div>
 
-      {/* Platform overview */}
+      {/* Platform grid — clickable */}
       <h2 className="text-sm font-medium text-foreground mb-3">{im.platformsTitle}</h2>
       <div className="grid grid-cols-2 gap-3">
-        {ALL_PLATFORMS.map(({ id, name, icon }) => {
+        {PLATFORMS.map(({ id, name, icon }) => {
           const status = getStatus(id);
           const isConnected = status?.connected ?? false;
 
           return (
-            <div
+            <Link
               key={id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
+              href={`/agents?tab=channels&platform=${id}`}
+              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-[var(--amber)]/40 hover:bg-card/80 transition-colors"
             >
               <span className="text-lg">{icon}</span>
               <div className="flex-1 min-w-0">
@@ -145,15 +141,10 @@ export default function AgentsContentChannels() {
               ) : (
                 <Circle size={16} className="text-border shrink-0" />
               )}
-            </div>
+            </Link>
           );
         })}
       </div>
-
-      {/* Hint to use sidebar for configuration */}
-      <p className="text-2xs text-muted-foreground/60 mt-6 text-center">
-        {im.configHint}
-      </p>
     </div>
   );
 }
