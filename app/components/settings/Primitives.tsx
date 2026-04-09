@@ -262,25 +262,15 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
   useEffect(() => {
     if (wasMaskedRef.current !== isMasked) {
       wasMaskedRef.current = isMasked;
-      // Value changed from masked→unmasked means parent accepted our edit,
-      // OR from unmasked→masked means provider switched. Either way, reset.
+      // Transitioning to masked (e.g. server saved, provider switch): full reset
+      // Transitioning to unmasked (e.g. user typed new key, parent accepted): clear local draft state
+      setEditing(false);
+      setLocalValue('');
       if (isMasked) {
-        setEditing(false);
-        setLocalValue('');
         setShowPassword(false);
       }
     }
   }, [isMasked]);
-
-  // When value becomes masked again after we submitted an edit, 
-  // it means the server saved and returned ***set***. Stop editing.
-  useEffect(() => {
-    if (isMasked && editing) {
-      setEditing(false);
-      setLocalValue('');
-      setShowPassword(false);
-    }
-  }, [isMasked, editing]);
 
   /*
    * What the input shows:
