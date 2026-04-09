@@ -12,6 +12,9 @@ import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import { EchoContinuedGroups, EchoFactSnapshot } from './EchoPageSections';
+import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
+import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
+import type { DailyEchoReport } from '@/lib/daily-echo/types';
 
 const STORAGE_DAILY = 'mindos-echo-daily-line';
 const STORAGE_GROWTH = 'mindos-echo-growth-intent';
@@ -89,6 +92,8 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const [growthIntent, setGrowthIntent] = useState('');
   const [dailySaved, setDailySaved] = useState(false);
   const [growthSaved, setGrowthSaved] = useState(false);
+  const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
+  const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
   const dailySavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const growthSavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -140,6 +145,16 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const openSegmentAsk = useCallback(() => {
     openAskModal(`${p.parent} / ${title}\n\n`, 'user');
   }, [p.parent, title]);
+
+  const handleDailyEchoGenerated = useCallback((report: DailyEchoReport) => {
+    setDailyEchoReport(report);
+    setIsDailyEchoOpen(true);
+  }, []);
+
+  const handleDailyEchoContinueAgent = useCallback((content: string) => {
+    setIsDailyEchoOpen(false);
+    openAskModal(content, 'user');
+  }, []);
 
   const insightUserPrompt = useMemo(
     () =>
@@ -219,29 +234,47 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       </div>
 
       {segment === 'daily' ? (
-        <section className={`${cardSectionClass} mt-6`}>
-          <label htmlFor="echo-daily-line" className={fieldLabelClass}>
-            {p.dailyLineLabel}
-          </label>
-          <textarea
-            id="echo-daily-line"
-            value={dailyLine}
-            onChange={(e) => setDailyLine(e.target.value)}
-            onBlur={persistDaily}
-            rows={3}
-            placeholder={p.dailyLinePlaceholder}
-            className={inputClass}
+        <>
+          <section className={`${cardSectionClass} mt-6`}>
+            <label htmlFor="echo-daily-line" className={fieldLabelClass}>
+              {p.dailyLineLabel}
+            </label>
+            <textarea
+              id="echo-daily-line"
+              value={dailyLine}
+              onChange={(e) => setDailyLine(e.target.value)}
+              onBlur={persistDaily}
+              rows={3}
+              placeholder={p.dailyLinePlaceholder}
+              className={inputClass}
+            />
+            <p className="mt-3 flex items-center gap-2 font-sans text-2xs text-muted-foreground">
+              <span>{p.dailySavedNote}</span>
+              <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
+                {dailySaved ? <><Check size={12} aria-hidden /> {p.savedFlash}</> : null}
+              </span>
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <DailyEchoReportButton
+                onGenerated={handleDailyEchoGenerated}
+                onError={(err) => console.error('[EchoDaily]', err)}
+                locale={{ t: p }}
+              />
+              {agentBtn(openDailyAsk)}
+            </div>
+          </section>
+          <DailyEchoReportDrawer
+            isOpen={isDailyEchoOpen}
+            report={dailyEchoReport}
+            isGenerating={false}
+            onClose={() => setIsDailyEchoOpen(false)}
+            onRegenerate={() => {
+              setDailyEchoReport(null);
+            }}
+            onContinueAgent={handleDailyEchoContinueAgent}
+            locale={{ t: p }}
           />
-          <p className="mt-3 flex items-center gap-2 font-sans text-2xs text-muted-foreground">
-            <span>{p.dailySavedNote}</span>
-            <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
-              {dailySaved ? <><Check size={12} aria-hidden /> {p.savedFlash}</> : null}
-            </span>
-          </p>
-          <div className="mt-4">
-            {agentBtn(openDailyAsk)}
-          </div>
-        </section>
+        </>
       ) : null}
 
       {segment === 'growth' ? (
