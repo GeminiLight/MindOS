@@ -231,25 +231,27 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         <EchoSegmentNav activeSegment={segment} />
       </EchoHero>
 
-      <div className="mt-6 space-y-6 sm:mt-8">
-        <EchoFactSnapshot
-          headingId={factsHeadingId}
-          heading={p.factsHeading}
-          snapshotBadge={p.snapshotBadge}
-          emptyTitle={snapshot.title}
-          emptyBody={snapshot.body}
-          icon={SEGMENT_ICON[segment]}
-          actions={segment === 'about-you' ? agentBtn(openSegmentAsk) : undefined}
-        />
-        {segment === 'continued' ? (
-          <EchoContinuedGroups
-            draftsLabel={p.continuedDrafts}
-            todosLabel={p.continuedTodos}
-            subEmptyHint={p.subEmptyHint}
-            footer={agentBtn(openSegmentAsk)}
+      {segment !== 'daily' && (
+        <div className="mt-6 space-y-6 sm:mt-8">
+          <EchoFactSnapshot
+            headingId={factsHeadingId}
+            heading={p.factsHeading}
+            snapshotBadge={p.snapshotBadge}
+            emptyTitle={snapshot.title}
+            emptyBody={snapshot.body}
+            icon={SEGMENT_ICON[segment]}
+            actions={segment === 'about-you' ? agentBtn(openSegmentAsk) : undefined}
           />
-        ) : null}
-      </div>
+          {segment === 'continued' ? (
+            <EchoContinuedGroups
+              draftsLabel={p.continuedDrafts}
+              todosLabel={p.continuedTodos}
+              subEmptyHint={p.subEmptyHint}
+              footer={agentBtn(openSegmentAsk)}
+            />
+          ) : null}
+        </div>
+      )}
 
       {segment === 'daily' ? (
         <>
@@ -334,18 +336,20 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         </section>
       ) : null}
 
-      <EchoInsightCollapsible
-        title={p.insightTitle}
-        showLabel={p.insightShow}
-        hideLabel={p.insightHide}
-        hint={p.insightHint}
-        generateLabel={p.generateInsight}
-        noAiHint={p.generateInsightNoAi}
-        generatingLabel={p.insightGenerating}
-        errorPrefix={p.insightErrorPrefix}
-        retryLabel={p.insightRetry}
-        userPrompt={insightUserPrompt}
-      />
+      {segment !== 'daily' && (
+        <EchoInsightCollapsible
+          title={p.insightTitle}
+          showLabel={p.insightShow}
+          hideLabel={p.insightHide}
+          hint={p.insightHint}
+          generateLabel={p.generateInsight}
+          noAiHint={p.generateInsightNoAi}
+          generatingLabel={p.insightGenerating}
+          errorPrefix={p.insightErrorPrefix}
+          retryLabel={p.insightRetry}
+          userPrompt={insightUserPrompt}
+        />
+      )}
     </article>
   );
 }
