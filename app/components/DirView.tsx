@@ -2,7 +2,8 @@
 
 import { useSyncExternalStore, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, X, Settings, Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, Sparkles, Loader2 } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode, SYSTEM_FILES } from '@/lib/types';
@@ -83,19 +84,21 @@ function useDirViewPref() {
 
 // ─── Space Preview Cards ──────────────────────────────────────────────────────
 
-function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel }: {
+function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel, trailing }: {
   icon: React.ReactNode;
   title: string;
   lines: string[];
   viewAllHref: string;
   viewAllLabel: string;
+  trailing?: React.ReactNode;
 }) {
   if (lines.length === 0) return null;
   return (
     <div className="bg-muted/30 border border-border/40 rounded-lg px-4 py-3">
       <div className="flex items-center gap-1.5 mb-2">
         {icon}
-        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        <span className="text-sm font-medium text-muted-foreground flex-1">{title}</span>
+        {trailing}
       </div>
       <div className="space-y-1">
         {lines.map((line, i) => (
@@ -116,6 +119,225 @@ function SpacePreviewCard({ icon, title, lines, viewAllHref, viewAllLabel }: {
   );
 }
 
+// ─── AI Overview Generation ───────────────────────────────────────────────────
+
+type OverviewState = 'idle' | 'loading' | 'error';
+
+function useSpaceFileCount(dirPath: string) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`/api/space-overview?space=${encodeURIComponent(dirPath)}`)
+      .then(r => r.json())
+      .then(d => setCount(d.fileCount ?? 0))
+      .catch(() => setCount(null));
+  }, [dirPath]);
+  return count;
+}
+
+function OverviewCtaCard({ dirPath }: { dirPath: string }) {
+  const { t } = useLocale();
+  const router = useRouter();
+  const [state, setState] = useState<OverviewState>('idle');
+  const [error, setError] = useState('');
+  const fileCount = useSpaceFileCount(dirPath);
+
+  const handleGenerate = async () => {
+    setState('loading');
+    setError('');
+    try {
+      const res = await fetch('/api/space-overview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ space: dirPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Unknown error');
+        setState('error');
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+      setState('error');
+    }
+  };
+
+  return (
+    <div className="bg-muted/30 border border-border/40 rounded-lg px-4 py-4">
+      <div className="flex items-center gap-1.5 mb-3">
+        <BookOpen size={14} className="text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium text-muted-foreground">{t.fileTree.about}</span>
+      </div>
+
+      {state === 'loading' ? (
+        <div className="flex flex-col items-center gap-2 py-3">
+          <Loader2 size={20} className="text-[var(--amber)] animate-spin" />
+          <p className="text-sm text-muted-foreground">{t.dirView.overviewGenerating}</p>
+          {fileCount != null && fileCount > 0 && (
+            <p className="text-xs text-muted-foreground/60">{t.dirView.overviewScanningFiles(fileCount)}</p>
+          )}
+        </div>
+      ) : state === 'error' ? (
+        <div className="flex flex-col items-center gap-2 py-3">
+          <AlertTriangle size={18} className="text-error" />
+          <p className="text-sm text-muted-foreground">{t.dirView.overviewError}</p>
+          <p className="text-xs text-muted-foreground/60 text-center max-w-[280px]">{error}</p>
+          <div className="flex items-center gap-3 mt-1">
+            <button
+              onClick={handleGenerate}
+              className="text-xs text-[var(--amber)] hover:underline"
+            >
+              {t.dirView.overviewRetry}
+            </button>
+            <Link href="/settings" className="text-xs text-muted-foreground hover:text-foreground">
+              {t.dirView.uninitSettings}
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2.5 py-2">
+          {fileCount != null && fileCount > 0 ? (
+            <>
+              <p className="text-sm text-muted-foreground text-center">
+                {t.dirView.overviewCtaHint(fileCount)}
+              </p>
+              <button
+                onClick={handleGenerate}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90"
+              >
+                <Sparkles size={14} />
+                {t.dirView.overviewCta}
+              </button>
+            </>
+          ) : fileCount === 0 ? (
+            <p className="text-sm text-muted-foreground">{t.dirView.overviewNoFiles}</p>
+          ) : null}
+          <Link
+            href={`/view/${encodePath(`${dirPath}/README.md`)}`}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {t.dirView.overviewOrEdit}
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AboutCardWithRegenerate({ dirPath, preview }: {
+  dirPath: string;
+  preview: SpacePreview;
+}) {
+  const { t } = useLocale();
+  const router = useRouter();
+  const [state, setState] = useState<OverviewState>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleRegenerate = async () => {
+    setShowConfirm(false);
+    setState('loading');
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/space-overview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ space: dirPath }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErrorMsg(data.error || 'Unknown error');
+        setState('error');
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Network error');
+      setState('error');
+    }
+  };
+
+  if (state === 'loading') {
+    return (
+      <div className="bg-muted/30 border border-border/40 rounded-lg px-4 py-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <BookOpen size={14} className="text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium text-muted-foreground flex-1">{t.fileTree.about}</span>
+        </div>
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 size={14} className="text-[var(--amber)] animate-spin" />
+          <span className="text-sm text-muted-foreground">{t.dirView.overviewGenerating}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="bg-muted/30 border border-border/40 rounded-lg px-4 py-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <BookOpen size={14} className="text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium text-muted-foreground flex-1">{t.fileTree.about}</span>
+        </div>
+        <div className="flex flex-col items-center gap-1.5 py-2">
+          <p className="text-xs text-error">{t.dirView.overviewError}</p>
+          {errorMsg && <p className="text-xs text-muted-foreground/60 text-center">{errorMsg}</p>}
+          <button onClick={handleRegenerate} className="text-xs text-[var(--amber)] hover:underline mt-1">
+            {t.dirView.overviewRetry}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const regenerateBtn = (
+    <div className="relative">
+      <button
+        onClick={() => setShowConfirm(true)}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-muted-foreground/60 hover:text-[var(--amber)] hover:bg-[var(--amber)]/10 transition-colors"
+        title={t.dirView.overviewRegenerate}
+      >
+        <Sparkles size={13} />
+        <span className="hidden sm:inline">{t.dirView.overviewRegenerateLabel}</span>
+      </button>
+      {showConfirm && (
+        <div className="absolute right-0 top-full mt-1.5 z-30 w-[260px] bg-card border border-border rounded-lg shadow-lg p-3">
+          <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+            {t.dirView.overviewRegenerateConfirm}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="px-2.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {t.dirView.overviewRegenerateCancel}
+            </button>
+            <button
+              onClick={handleRegenerate}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-colors"
+            >
+              <Sparkles size={11} />
+              {t.dirView.overviewRegenerateStart}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <SpacePreviewCard
+      icon={<BookOpen size={14} className="text-muted-foreground shrink-0" />}
+      title={t.fileTree.about}
+      lines={preview.readmeLines}
+      viewAllHref={`/view/${encodePath(`${dirPath}/README.md`)}`}
+      viewAllLabel={t.fileTree.viewAll}
+      trailing={regenerateBtn}
+    />
+  );
+}
+
 function SpacePreviewSection({ preview, dirPath }: {
   preview: SpacePreview;
   dirPath: string;
@@ -123,7 +345,7 @@ function SpacePreviewSection({ preview, dirPath }: {
   const { t } = useLocale();
   const hasRules = preview.instructionLines.length > 0;
   const hasAbout = preview.readmeLines.length > 0;
-  if (!hasRules && !hasAbout) return null;
+  const isReadmeTemplate = !hasAbout || preview.readmeIsTemplate || preview.isTemplate;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -136,14 +358,10 @@ function SpacePreviewSection({ preview, dirPath }: {
           viewAllLabel={t.fileTree.viewAll}
         />
       )}
-      {hasAbout && (
-        <SpacePreviewCard
-          icon={<BookOpen size={14} className="text-muted-foreground shrink-0" />}
-          title={t.fileTree.about}
-          lines={preview.readmeLines}
-          viewAllHref={`/view/${encodePath(`${dirPath}/README.md`)}`}
-          viewAllLabel={t.fileTree.viewAll}
-        />
+      {isReadmeTemplate ? (
+        <OverviewCtaCard dirPath={dirPath} />
+      ) : (
+        <AboutCardWithRegenerate dirPath={dirPath} preview={preview} />
       )}
     </div>
   );
@@ -187,66 +405,6 @@ function DirContextMenu({ x, y, path, label, onClose }: {
   );
 }
 
-// ─── Space Uninitialized Banner ───────────────────────────────────────────────
-
-const DISMISS_KEY_PREFIX = 'mindos-space-uninit-dismissed:';
-
-function SpaceUninitBanner({ dirPath }: { dirPath: string }) {
-  const { t } = useLocale();
-  const storageKey = DISMISS_KEY_PREFIX + dirPath;
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (localStorage.getItem(storageKey) === '1') setDismissed(true);
-  }, [storageKey]);
-
-  if (dismissed) return null;
-
-  const handleDismiss = () => {
-    localStorage.setItem(storageKey, '1');
-    setDismissed(true);
-  };
-
-  return (
-    <div className="mb-4 rounded-lg border border-error/40 bg-error/5 px-4 py-3">
-      <div className="flex items-start gap-3">
-        <AlertTriangle size={18} className="text-error shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground">{t.dirView.uninitTitle}</p>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t.dirView.uninitDesc}</p>
-          <div className="flex items-center gap-3 mt-2.5">
-            <Link
-              href={`/view/${encodePath(`${dirPath}/README.md`)}`}
-              className="inline-flex items-center gap-1 text-xs text-[var(--amber)] hover:underline"
-            >
-              <Pencil size={12} /> {t.dirView.uninitEditReadme}
-            </Link>
-            <Link
-              href={`/view/${encodePath(`${dirPath}/INSTRUCTION.md`)}`}
-              className="inline-flex items-center gap-1 text-xs text-[var(--amber)] hover:underline"
-            >
-              <Pencil size={12} /> {t.dirView.uninitEditInstruction}
-            </Link>
-            <Link
-              href="/settings"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Settings size={12} /> {t.dirView.uninitSettings}
-            </Link>
-          </div>
-        </div>
-        <button
-          onClick={handleDismiss}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 shrink-0"
-          aria-label="Dismiss"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── DirView ──────────────────────────────────────────────────────────────────
 
 export default function DirView({ dirPath, entries, spacePreview }: DirViewProps) {
@@ -275,8 +433,8 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
   return (
     <div className="flex flex-col min-h-screen">
       {/* Topbar */}
-      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 py-2.5 bg-background">
-        <div className="max-w-[860px] mx-auto flex items-center justify-between gap-2">
+      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center bg-background">
+        <div className="max-w-[860px] mx-auto flex items-center justify-between gap-2 w-full">
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={dirPath} />
           </div>
@@ -311,13 +469,8 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
       {/* Content */}
       <div className="flex-1 px-4 md:px-6 py-6">
         <div className="max-w-[860px] mx-auto">
-          {/* Uninitialized space warning */}
-          {spacePreview?.isTemplate && (
-            <SpaceUninitBanner dirPath={dirPath} />
-          )}
-
-          {/* Space preview cards */}
-          {spacePreview && !spacePreview.isTemplate && (
+          {/* Space preview cards (always shown when there's a spacePreview) */}
+          {spacePreview && (
             <SpacePreviewSection preview={spacePreview} dirPath={dirPath} />
           )}
 
