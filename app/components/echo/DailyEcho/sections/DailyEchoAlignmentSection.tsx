@@ -4,7 +4,7 @@ import type { AlignmentAnalysis } from '@/lib/daily-echo/types';
 
 interface DailyEchoAlignmentSectionProps {
   alignment: AlignmentAnalysis;
-  locale?: { t: Record<string, string> };
+  locale?: { t: Record<string, any> };
 }
 
 export function DailyEchoAlignmentSection({

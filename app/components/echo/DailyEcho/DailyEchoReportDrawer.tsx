@@ -6,17 +6,8 @@
  * Main UI component for displaying generated daily echo reports
  */
 
-import {
-  useEffect,
-  useState,
-  useCallback,
-  ReactNode,
-} from 'react';
-import { X, RotateCw, Share2 } from 'lucide-react';
-import type {
-  DailyEchoReport,
-  DailyEchoUIState,
-} from '@/lib/daily-echo/types';
+import { X, RotateCw } from 'lucide-react';
+import type { DailyEchoReport } from '@/lib/daily-echo/types';
 import { DailyEchoSnapshotSection } from './sections/DailyEchoSnapshotSection';
 import { DailyEchoThemesSection } from './sections/DailyEchoThemesSection';
 import { DailyEchoAlignmentSection } from './sections/DailyEchoAlignmentSection';
@@ -29,7 +20,7 @@ interface DailyEchoReportDrawerProps {
   onClose: () => void;
   onRegenerate: () => void;
   onContinueAgent: (content: string) => void;
-  locale?: { t: Record<string, string> };
+  locale?: { t: Record<string, any> };
 }
 
 export default function DailyEchoReportDrawer({
@@ -45,7 +36,7 @@ export default function DailyEchoReportDrawer({
 
   // Use the existing design tokens from Echo
   const drawerClass =
-    'fixed inset-y-0 right-0 z-40 w-full max-w-2xl bg-background border-l border-border shadow-lg transition-transform duration-200 ease-out';
+    'fixed inset-y-0 right-0 z-40 flex w-full max-w-2xl flex-col bg-background border-l border-border shadow-lg transition-transform duration-200 ease-out';
 
   const drawerOpenClass = isOpen ? 'translate-x-0' : 'translate-x-full';
   const overlayClass = isOpen
@@ -114,7 +105,7 @@ export default function DailyEchoReportDrawer({
             </div>
           </div>
         ) : report ? (
-          <div className="overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {/* Snapshot Section */}
             <DailyEchoSnapshotSection
               snapshot={report.snapshot}

@@ -1,6 +1,8 @@
 /**
  * Tests for Daily Echo data aggregation
  * Tests the raw data collection from API endpoints and localStorage
+ *
+ * @vitest-environment jsdom
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';

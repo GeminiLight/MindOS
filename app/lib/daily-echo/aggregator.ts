@@ -7,7 +7,7 @@
  * - User intentions from localStorage
  */
 
-import { apiFetch, ApiError } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import type {
   DailyEchoRawData,
   ContentChangeEvent,

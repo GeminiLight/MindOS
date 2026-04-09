@@ -1,6 +1,8 @@
 /**
  * Tests for Daily Echo configuration management
  * Load/save/reset config from localStorage
+ *
+ * @vitest-environment jsdom
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -233,12 +235,19 @@ describe('DailyEcho Config', () => {
     });
 
     it('should reject invalid schedule time format', () => {
-      // Given: invalid time strings
-      const invalidTimes = ['25:00', '12:60', '1:00', '12-00'];
+      // Given: invalid time strings (format or out-of-range)
+      const invalidTimes = ['1:00', '12-00'];
 
-      // Then: should not match time format
+      // Then: should not match HH:MM format
       for (const time of invalidTimes) {
         expect(time).not.toMatch(/^\d{2}:\d{2}$/);
+      }
+
+      // Semantic validation (range): 25:00, 12:60 match format but are out of range
+      const outOfRange = ['25:00', '12:60'];
+      const validTimeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+      for (const time of outOfRange) {
+        expect(time).not.toMatch(validTimeRegex);
       }
     });
   });

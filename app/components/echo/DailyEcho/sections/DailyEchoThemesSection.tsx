@@ -4,7 +4,7 @@ import type { DailyTheme } from '@/lib/daily-echo/types';
 
 interface DailyEchoThemesSectionProps {
   themes: DailyTheme[];
-  locale?: { t: Record<string, string> };
+  locale?: { t: Record<string, any> };
 }
 
 export function DailyEchoThemesSection({

@@ -15,6 +15,8 @@ import { EchoContinuedGroups, EchoFactSnapshot } from './EchoPageSections';
 import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
 import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
+import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
+import { loadDailyEchoConfig } from '@/lib/daily-echo/config';
 
 const STORAGE_DAILY = 'mindos-echo-daily-line';
 const STORAGE_GROWTH = 'mindos-echo-growth-intent';
@@ -94,6 +96,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const [growthSaved, setGrowthSaved] = useState(false);
   const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
   const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
+  const [isDailyEchoGenerating, setIsDailyEchoGenerating] = useState(false);
   const dailySavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const growthSavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -149,6 +152,21 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const handleDailyEchoGenerated = useCallback((report: DailyEchoReport) => {
     setDailyEchoReport(report);
     setIsDailyEchoOpen(true);
+    setIsDailyEchoGenerating(false);
+  }, []);
+
+  const handleDailyEchoRegenerate = useCallback(async () => {
+    setDailyEchoReport(null);
+    setIsDailyEchoGenerating(true);
+    try {
+      const config = loadDailyEchoConfig();
+      const report = await generateDailyEchoReport(new Date(), config, true);
+      setDailyEchoReport(report);
+    } catch (err) {
+      console.error('[EchoDaily] Regenerate failed:', err);
+    } finally {
+      setIsDailyEchoGenerating(false);
+    }
   }, []);
 
   const handleDailyEchoContinueAgent = useCallback((content: string) => {
@@ -266,11 +284,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           <DailyEchoReportDrawer
             isOpen={isDailyEchoOpen}
             report={dailyEchoReport}
-            isGenerating={false}
+            isGenerating={isDailyEchoGenerating}
             onClose={() => setIsDailyEchoOpen(false)}
-            onRegenerate={() => {
-              setDailyEchoReport(null);
-            }}
+            onRegenerate={handleDailyEchoRegenerate}
             onContinueAgent={handleDailyEchoContinueAgent}
             locale={{ t: p }}
           />

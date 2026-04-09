@@ -2,7 +2,7 @@
 
 interface DailyEchoReflectionSectionProps {
   prompts: string[];
-  locale?: { t: Record<string, string> };
+  locale?: { t: Record<string, any> };
 }
 
 export function DailyEchoReflectionSection({
