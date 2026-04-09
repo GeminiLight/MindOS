@@ -139,20 +139,26 @@ export default function ProviderModelCapsule({
     [settingsData],
   );
 
-  // Auto-clear stale override — only when settings load/change, not on callback identity changes
+  // Stable refs for callbacks — avoids stale closures in effects and handlers
   const onProviderChangeRef = useRef(onProviderChange);
   onProviderChangeRef.current = onProviderChange;
   const onModelChangeRef = useRef(onModelChange);
   onModelChangeRef.current = onModelChange;
+
+  // Auto-clear stale override — only if the persisted provider no longer exists in settings.
+  // Use a one-time check on settingsData load, not on every providerValue change,
+  // to avoid interfering with in-flight selections.
+  const staleClearedRef = useRef(false);
   useEffect(() => {
-    if (!settingsData || !providerValue) return;
-    if (!configuredProviders.includes(providerValue)) {
+    if (!settingsData || staleClearedRef.current) return;
+    staleClearedRef.current = true;
+    if (providerValue && !configuredProviders.includes(providerValue)) {
       onProviderChangeRef.current(null);
       onModelChangeRef.current(null);
       persistProviderModel(null, null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsData, providerValue, configuredProviders]);
+  }, [settingsData]);
 
   // Resolve active display
   const activeProvider = providerValue ?? defaultProvider;
@@ -325,16 +331,18 @@ export default function ProviderModelCapsule({
 
   /* ── Selection handlers ── */
   const handleSelectProvider = useCallback((provider: ProviderSelection) => {
-    onProviderChange(provider); onModelChange(null);
+    onProviderChangeRef.current(provider);
+    onModelChangeRef.current(null);
     persistProviderModel(provider, null);
     setOpen(false); setHoveredProvider(null); setModelSearch('');
-  }, [onProviderChange, onModelChange]);
+  }, []);
 
   const handleSelectModel = useCallback((provider: ProviderSelection, model: string) => {
-    onProviderChange(provider); onModelChange(model);
+    onProviderChangeRef.current(provider);
+    onModelChangeRef.current(model);
     persistProviderModel(provider, model);
     setOpen(false); setHoveredProvider(null); setModelSearch('');
-  }, [onProviderChange, onModelChange]);
+  }, []);
 
   /* ── Filtered models ── */
   const filteredModels = useMemo(() => {
