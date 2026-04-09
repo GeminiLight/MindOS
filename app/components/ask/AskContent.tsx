@@ -552,7 +552,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         />
       )}
 
-      {/* Messages — home variant hides empty state (suggestions rendered externally) */}
+      {/* Messages — home variant hides empty state unless maximized (suggestions rendered externally in normal mode) */}
       <div className="flex-1 min-h-0 flex flex-col">
         {!isHome && (
           <MessageList
@@ -566,14 +566,14 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             labels={messageLabels}
           />
         )}
-        {isHome && session.messages.length > 0 && (
+        {isHome && (session.messages.length > 0 || maximized) && (
           <MessageList
             messages={session.messages}
             isLoading={isLoading}
             loadingPhase={loadingPhase}
             emptyPrompt={t.ask.emptyPrompt}
             emptyHint={t.ask.emptyHint}
-            suggestions={[]}
+            suggestions={maximized && session.messages.length === 0 ? t.ask.suggestions : []}
             onSuggestionClick={setInput}
             labels={messageLabels}
           />
