@@ -155,12 +155,20 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     : undefined;
 
   // Auto-exit Ask panel maximize when navigating to a different page
-  // or when left panel opens (content needs to be visible)
+  // or when left panel opens (content needs to be visible).
+  // NOTE: the useEffect serves as a fallback for programmatic navigation;
+  // the primary (synchronous) exit happens in exitAskMaximized() below.
   useEffect(() => {
     if (ap.askMaximized) ap.toggleAskMaximized();
   // Only react to pathname / left-panel changes, not askMaximized changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, lp.panelOpen]);
+
+  // Synchronous helper — call in click handlers that activate content pages,
+  // so the Ask panel exits maximized in the same render (no flicker).
+  const exitAskMaximized = useCallback(() => {
+    if (ap.askMaximized) ap.toggleAskMaximized();
+  }, [ap.askMaximized, ap.toggleAskMaximized]);
 
   // Close right Ask panel when entering home page — home has its own embedded Ask
   useEffect(() => {
@@ -418,6 +426,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         activePanel={railActivePanel}
         onPanelChange={lp.setActivePanel}
         onEchoClick={() => {
+          exitAskMaximized();
           const wasActive = lp.activePanel === 'echo';
           const onEchoRoute = pathname?.startsWith('/echo');
           if (!wasActive) {
@@ -430,6 +439,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           }
         }}
         onAgentsClick={() => {
+          exitAskMaximized();
           const wasActive = lp.activePanel === 'agents';
           const onAgentsRoute = pathname?.startsWith('/agents');
           if (!wasActive) {
@@ -443,6 +453,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           setAgentDetailKey(null);
         }}
         onDiscoverClick={() => {
+          exitAskMaximized();
           const wasActive = lp.activePanel === 'discover';
           const onDiscoverRoute = pathname?.startsWith('/explore');
           if (!wasActive) {
@@ -455,6 +466,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           }
         }}
         onSpacesClick={() => {
+          exitAskMaximized();
           const wasActive = lp.activePanel === 'files';
           const onFilesRoute = pathname === '/' || pathname === '/wiki' || pathname?.startsWith('/view/') || pathname?.startsWith('/wiki/');
           if (!wasActive) {
