@@ -5,8 +5,9 @@ import { Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
-import type { SetupState, PortStatus, AgentEntry, AgentInstallStatus, ProviderSetupConfig, ConnectionMode } from './types';
+import type { SetupState, SetupProvider, PortStatus, AgentEntry, AgentInstallStatus, ConnectionMode } from './types';
 import { type ProviderId, isProviderId, PROVIDER_PRESETS } from '@/lib/agent/providers';
+import { generateProviderId } from '@/lib/custom-endpoints';
 import { TOTAL_STEPS, STEP_KB, STEP_AI, STEP_AGENTS, STEP_REVIEW } from './constants';
 import StepKB from './StepKB';
 import StepAI from './StepAI';
@@ -48,18 +49,10 @@ function parseInstallResult(
 
 /** Phase 1: Save setup config. Returns whether restart is needed. Throws on failure. */
 async function saveConfig(state: SetupState, connectionMode?: { cli: boolean; mcp: boolean }): Promise<boolean> {
-  // Build providers dict from dynamic providerConfigs
-  const providers: Record<string, { apiKey: string; model: string; baseUrl?: string }> = {};
-  if (state.provider !== 'skip') {
-    for (const [id, cfg] of Object.entries(state.providerConfigs)) {
-      if (!cfg) continue;
-      providers[id] = {
-        apiKey: cfg.apiKey,
-        model: cfg.model,
-        ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}),
-      };
-    }
-  }
+  const isSkip = state.activeProvider === 'skip' || state.providers.length === 0;
+
+  // Strip apiKeyMask (UI-only field) before sending to server
+  const cleanProviders = state.providers.map(({ apiKeyMask, ...rest }) => rest);
 
   const payload = {
     mindRoot: state.mindRoot,
@@ -68,9 +61,9 @@ async function saveConfig(state: SetupState, connectionMode?: { cli: boolean; mc
     mcpPort: state.mcpPort,
     authToken: state.authToken,
     webPassword: state.webPassword,
-    ai: state.provider === 'skip' ? undefined : {
-      provider: state.provider,
-      providers,
+    ai: isSkip ? undefined : {
+      activeProvider: state.activeProvider,
+      providers: cleanProviders,
     },
     connectionMode: connectionMode ?? { cli: true, mcp: false },
   };
@@ -148,11 +141,8 @@ export default function SetupWizard() {
   const [state, setState] = useState<SetupState>({
     mindRoot: '~/MindOS/mind',
     template: 'en',
-    provider: 'anthropic',
-    providerConfigs: {
-      anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
-      openai: { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
-    },
+    activeProvider: 'skip',
+    providers: [],
     webPort: 3456,
     mcpPort: 8781,
     authToken: '',
@@ -186,23 +176,21 @@ export default function SetupWizard() {
         if (data.homeDir) setHomeDir(data.homeDir);
 
         setState(prev => {
-          const provConfigs: Partial<Record<ProviderId, ProviderSetupConfig>> = { ...prev.providerConfigs };
-
-          // Load dynamic providers format from server
-          if (data.providerConfigs && typeof data.providerConfigs === 'object') {
-            for (const [id, cfg] of Object.entries(data.providerConfigs as Record<string, any>)) {
-              if (isProviderId(id) && cfg) {
-                provConfigs[id] = {
-                  apiKey: provConfigs[id]?.apiKey ?? '',
-                  model: cfg.model || PROVIDER_PRESETS[id].defaultModel,
-                  baseUrl: cfg.baseUrl ?? '',
-                  apiKeyMask: cfg.apiKeyMask || '',
-                };
-              }
-            }
+          // Load providers from server (new unified Provider[] format)
+          let loadedProviders: SetupProvider[] = prev.providers;
+          if (Array.isArray(data.providerConfigs) && data.providerConfigs.length > 0) {
+            loadedProviders = data.providerConfigs.map((p: any) => ({
+              id: p.id,
+              name: p.name || '',
+              protocol: p.protocol as ProviderId,
+              apiKey: '',         // Never sent from server; user re-enters or leaves blank to keep existing
+              model: p.model || '',
+              baseUrl: p.baseUrl || '',
+              apiKeyMask: p.apiKeyMask || '',
+            }));
           }
 
-          const resolvedProvider = data.provider && isProviderId(data.provider) ? data.provider : prev.provider;
+          const resolvedActive = data.activeProvider || prev.activeProvider;
 
           return {
             ...prev,
@@ -211,8 +199,8 @@ export default function SetupWizard() {
             mcpPort: typeof data.mcpPort === 'number' ? data.mcpPort : prev.mcpPort,
             authToken: data.authToken || prev.authToken,
             webPassword: data.webPassword || prev.webPassword,
-            provider: resolvedProvider,
-            providerConfigs: provConfigs,
+            activeProvider: resolvedActive,
+            providers: loadedProviders,
           };
         });
         // Generate a new token only if none exists yet

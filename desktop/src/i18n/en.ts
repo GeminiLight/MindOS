@@ -75,6 +75,12 @@ export const en: Record<I18nKeys, string> = {
   sshNoSsh: 'SSH not available',
   sshSelectHost: 'user@hostname or SSH alias',
   cancel: 'Cancel',
+  sshPassphrase: 'SSH Key Passphrase',
+  sshEnterPassphrase: 'Enter SSH key passphrase',
+  sshRememberPassphrase: 'Remember passphrase',
+  sshPassphraseNeeded: 'Key passphrase required',
+  sshPassphraseWrong: 'Incorrect passphrase, try again',
+  sshAddingKey: 'Verifying passphrase...',
   // Toolbar (theme / language)
   themeTooltipLight: 'Theme: light',
   themeTooltipDark: 'Theme: dark',

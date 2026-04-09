@@ -45,7 +45,7 @@ export type TurnEndEvent = {
 
 export type AgentEndEvent = {
   type: 'agent_end';
-  messages?: Array<{ role: string; content?: Array<{ type: string; text?: string }> }>;
+  messages?: Array<{ role: string; content?: Array<{ type: string; text?: string }>; stopReason?: string; errorMessage?: string }>;
 };
 
 /**

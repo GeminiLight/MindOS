@@ -106,8 +106,36 @@ export async function POST(req: NextRequest) {
     if (ai) {
       const mergedProviders = [...current.ai.providers];
 
-      // Merge each provider's config from the incoming payload
-      if (ai.providers && typeof ai.providers === 'object') {
+      if (Array.isArray(ai.providers)) {
+        // ── New format: Provider[] array (from unified onboarding/settings) ──
+        for (const incoming of ai.providers as Array<Record<string, any>>) {
+          if (!incoming || typeof incoming !== 'object' || !incoming.id) continue;
+          if (!isProviderId(incoming.protocol)) continue;
+
+          const existingIdx = mergedProviders.findIndex(p => p.id === incoming.id);
+          const existing = existingIdx >= 0 ? mergedProviders[existingIdx] : null;
+
+          const merged: Provider = {
+            id: incoming.id,
+            name: incoming.name || existing?.name || incoming.protocol,
+            protocol: incoming.protocol,
+            apiKey: incoming.apiKey || existing?.apiKey || '',
+            model: incoming.model || existing?.model || PROVIDER_PRESETS[incoming.protocol as ProviderId]?.defaultModel || '',
+            baseUrl: incoming.baseUrl !== undefined ? incoming.baseUrl : (existing?.baseUrl ?? ''),
+          };
+
+          if (existingIdx >= 0) {
+            mergedProviders[existingIdx] = merged;
+          } else {
+            mergedProviders.push(merged);
+          }
+        }
+
+        // Active provider: use the ID directly from the new format
+        const newActiveProvider = ai.activeProvider || current.ai.activeProvider;
+        mergedAi = { activeProvider: newActiveProvider, providers: mergedProviders };
+      } else if (ai.providers && typeof ai.providers === 'object') {
+        // ── Legacy format: Record<ProviderId, config> (backward compat) ──
         for (const [id, inCfg] of Object.entries(ai.providers as Record<string, any>)) {
           if (!isProviderId(id) || !inCfg) continue;
           const preset = PROVIDER_PRESETS[id];
@@ -129,16 +157,15 @@ export async function POST(req: NextRequest) {
             mergedProviders.push(merged);
           }
         }
-      }
 
-      // Determine active provider
-      let newActiveProvider = current.ai.activeProvider;
-      if (ai.provider && isProviderId(ai.provider)) {
-        const match = mergedProviders.find(p => p.protocol === ai.provider);
-        if (match) newActiveProvider = match.id;
+        // Legacy: determine active by protocol match
+        let newActiveProvider = current.ai.activeProvider;
+        if (ai.provider && isProviderId(ai.provider)) {
+          const match = mergedProviders.find(p => p.protocol === ai.provider);
+          if (match) newActiveProvider = match.id;
+        }
+        mergedAi = { activeProvider: newActiveProvider, providers: mergedProviders };
       }
-
-      mergedAi = { activeProvider: newActiveProvider, providers: mergedProviders };
     }
 
     const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];

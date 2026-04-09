@@ -11,6 +11,9 @@ import { app } from 'electron';
 
 const execAsync = promisify(exec);
 
+/** Sentinel error message indicating passphrase is needed */
+export const PASSPHRASE_NEEDED = '__PASSPHRASE_NEEDED__';
+
 // PID file for SSH tunnel — allows cleanup of orphaned tunnels on next launch
 const SSH_TUNNEL_PID_FILE = path.join(app.getPath('home'), '.mindos', 'ssh-tunnel.pid');
 
@@ -161,6 +164,76 @@ function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
   return hosts;
 }
 
+/**
+ * Check if ssh-agent has the key for `host` loaded.
+ * Returns true if ssh-agent is running and the key test passes.
+ */
+export async function isSshAgentLoaded(host: string, sshCmd: string = 'ssh'): Promise<boolean> {
+  try {
+    // Try a quick connection with BatchMode=yes — if it doesn't fail with permission denied,
+    // the key is loaded in ssh-agent
+    await execAsync(
+      `"${sshCmd}" -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new ${host} exit 2>&1`,
+      { timeout: 8000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add an SSH key to ssh-agent using ssh-add with a passphrase.
+ * Uses SSH_ASKPASS mechanism to feed the passphrase non-interactively.
+ * Returns true on success, false on failure.
+ */
+export async function addKeyToAgent(keyPath: string, passphrase: string): Promise<{ ok: boolean; error?: string }> {
+  const home = app.getPath('home');
+  // Resolve keyPath if relative
+  const resolvedKey = path.isAbsolute(keyPath) ? keyPath : path.join(home, '.ssh', keyPath);
+
+  if (process.platform === 'win32') {
+    // On Windows, use a temporary script that echoes the passphrase
+    const tmpScript = path.join(app.getPath('temp'), `mindos-askpass-${Date.now()}.bat`);
+    try {
+      writeFileSync(tmpScript, `@echo off\necho ${passphrase}`, 'utf-8');
+      await execAsync(`ssh-add "${resolvedKey}"`, {
+        timeout: 10000,
+        env: { ...process.env, SSH_ASKPASS: tmpScript, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' },
+      });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    } finally {
+      try { unlinkSync(tmpScript); } catch { /* best effort */ }
+    }
+  }
+
+  // Unix/macOS: use a temporary script as SSH_ASKPASS
+  const tmpScript = path.join(app.getPath('temp'), `mindos-askpass-${Date.now()}.sh`);
+  try {
+    // Create a script that outputs the passphrase
+    writeFileSync(tmpScript, `#!/bin/sh\necho '${passphrase.replace(/'/g, "'\\''")}'
+`, { mode: 0o700 });
+    await execAsync(`ssh-add "${resolvedKey}"`, {
+      timeout: 10000,
+      env: { ...process.env, SSH_ASKPASS: tmpScript, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' },
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    try { unlinkSync(tmpScript); } catch { /* best effort */ }
+  }
+}
+
+/**
+ * Check if ssh-agent is running and accessible.
+ */
+export function isSshAgentRunning(): boolean {
+  return !!(process.env.SSH_AUTH_SOCK || process.platform === 'win32');
+}
+
 /** Check if the `ssh` command is available on this system */
 export async function isSshAvailable(): Promise<boolean> {
   // On Windows, try to find ssh.exe in common locations if not in PATH
@@ -223,12 +296,19 @@ export class SshTunnel {
   get localPort(): number { return this._localPort; }
   get remotePort(): number { return this._remotePort; }
 
+  /** The last error message from a failed start() attempt */
+  lastError = '';
+
   /**
    * Start the SSH tunnel. Resolves when the tunnel is established
    * (port forwarding active) or rejects on failure.
+   *
+   * If the SSH key requires a passphrase and none is cached in ssh-agent,
+   * rejects with an Error whose message is PASSPHRASE_NEEDED.
    */
   async start(): Promise<void> {
     this.stopped = false;
+    this.lastError = '';
 
     // On Windows, try to find ssh.exe before spawning
     let sshCmd = process.platform === 'win32' ? 'ssh.exe' : 'ssh';
@@ -274,6 +354,7 @@ export class SshTunnel {
       this.process = spawn(sshCmd, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: process.platform === 'win32',  // Use shell on Windows for path resolution
+        env: process.env,  // Inherit env so SSH_AUTH_SOCK is available for ssh-agent
       });
 
       // Write PID to disk for orphan cleanup on next launch
@@ -329,7 +410,19 @@ export class SshTunnel {
         if (!settled) {
           settled = true;
           const msg = stderr.trim() || `SSH exited with code ${code}`;
-          reject(new Error(msg));
+          this.lastError = msg;
+          // Detect passphrase-needed errors
+          const lower = msg.toLowerCase();
+          if (
+            (lower.includes('permission denied') && !lower.includes('password')) ||
+            lower.includes('no identities') ||
+            lower.includes('identity file') ||
+            lower.includes('load key')
+          ) {
+            reject(new Error(PASSPHRASE_NEEDED));
+          } else {
+            reject(new Error(msg));
+          }
         }
         this.process = null;
         // Notify if tunnel died after successful start (not during startup or explicit stop)

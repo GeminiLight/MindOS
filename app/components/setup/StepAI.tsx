@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { Field, Input, PasswordInput } from '@/components/settings/Primitives';
-import type { SetupState, SetupMessages, PortStatus, ProviderSetupConfig } from './types';
+import type { SetupState, SetupProvider, SetupMessages, PortStatus } from './types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { PROVIDER_PRESETS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
+import { generateProviderId } from '@/lib/custom-endpoints';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import ModelInput from '@/components/shared/ModelInput';
 import StepPorts from './StepPorts';
@@ -35,50 +36,98 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
     }
   }, [portConflict, portsOpen]);
 
-  const currentProvider = state.provider !== 'skip' && isProviderId(state.provider) ? state.provider : null;
-  const currentPreset = currentProvider ? PROVIDER_PRESETS[currentProvider] : null;
-  const currentConfig = currentProvider ? (state.providerConfigs[currentProvider] ?? { apiKey: '', model: currentPreset?.defaultModel ?? '' }) : null;
+  // ── Current provider from unified Provider[] ──
+  const isSkip = state.activeProvider === 'skip';
+  const current = !isSkip ? state.providers.find(p => p.id === state.activeProvider) : null;
+  const currentPreset = current ? PROVIDER_PRESETS[current.protocol] : null;
 
-  const patchConfig = (patch: Partial<ProviderSetupConfig>) => {
-    if (!currentProvider) return;
-    const prev = state.providerConfigs[currentProvider] ?? { apiKey: '', model: currentPreset?.defaultModel ?? '' };
-    update('providerConfigs', {
-      ...state.providerConfigs,
-      [currentProvider]: { ...prev, ...patch },
-    });
-  };
+  // ── Patch a field on the current provider ──
+  const patchProvider = useCallback((patch: Partial<SetupProvider>) => {
+    if (!current) return;
+    update('providers', state.providers.map(p =>
+      p.id === current.id ? { ...p, ...patch } : p
+    ));
+  }, [current, state.providers, update]);
 
+  // ── Handle provider selection from ProviderSelect ──
+  // When user picks a protocol (e.g. "anthropic"), we find-or-create a Provider for it.
+  const handleSelectProvider = useCallback((selectedId: string) => {
+    if (selectedId === 'skip') {
+      update('activeProvider', 'skip');
+      return;
+    }
+
+    // Check if the selected value is an existing provider ID (p_xxx)
+    const existing = state.providers.find(p => p.id === selectedId);
+    if (existing) {
+      update('activeProvider', existing.id);
+      return;
+    }
+
+    // It's a protocol ID (e.g., "anthropic") — find existing provider with that protocol,
+    // or create a new one
+    if (isProviderId(selectedId)) {
+      const byProtocol = state.providers.find(p => p.protocol === selectedId);
+      if (byProtocol) {
+        update('activeProvider', byProtocol.id);
+        return;
+      }
+
+      // Create new provider for this protocol
+      const preset = PROVIDER_PRESETS[selectedId];
+      const newProvider: SetupProvider = {
+        id: generateProviderId(),
+        name: locale === 'zh' ? preset.nameZh : preset.name,
+        protocol: selectedId,
+        apiKey: '',
+        model: preset.defaultModel,
+        baseUrl: preset.fixedBaseUrl ?? '',
+      };
+
+      // Add to providers array and set as active
+      const newProviders = [...state.providers, newProvider];
+      update('providers', newProviders);
+      update('activeProvider', newProvider.id);
+    }
+  }, [state.providers, update, locale]);
+
+  // ── Build configuredProviders set for the ProviderSelect UI ──
+  // Shows green checkmark for providers that have been configured (have apiKey or apiKeyMask or fallback)
   const configuredProviders = new Set(
-    Object.entries(state.providerConfigs)
-      .filter(([id, cfg]) => (cfg && (cfg.apiKey || cfg.apiKeyMask)) || PROVIDER_PRESETS[id as ProviderId]?.apiKeyFallback)
-      .map(([id]) => id as ProviderId),
+    state.providers
+      .filter(p => p.apiKey || p.apiKeyMask || PROVIDER_PRESETS[p.protocol]?.apiKeyFallback)
+      .map(p => p.protocol),
   );
+
+  // ── Map activeProvider ID to protocol ID for ProviderSelect value ──
+  // ProviderSelect expects a ProviderId string or 'skip'
+  const selectValue = isSkip ? 'skip' : (current?.protocol ?? 'skip');
 
   return (
     <div className="space-y-5">
       <ProviderSelect
-        value={state.provider}
-        onChange={id => update('provider', id as ProviderId | 'skip')}
+        value={selectValue}
+        onChange={handleSelectProvider}
         showSkip
         compact
         configuredProviders={configuredProviders}
       />
 
-      {currentProvider && currentPreset && currentConfig && (
+      {current && currentPreset && (
         <div className="space-y-4 pt-2">
           {/* API Key */}
           <Field label={s.apiKey}>
             <PasswordInput
-              value={currentConfig.apiKey}
-              onChange={v => patchConfig({ apiKey: v })}
-              placeholder={currentConfig.apiKeyMask || `${getApiKeyEnvVar(currentProvider as ProviderId) ?? 'API Key'}...`}
+              value={current.apiKey}
+              onChange={v => patchProvider({ apiKey: v })}
+              placeholder={current.apiKeyMask || `${getApiKeyEnvVar(current.protocol) ?? 'API Key'}...`}
             />
-            {currentConfig.apiKeyMask && !currentConfig.apiKey && (
+            {current.apiKeyMask && !current.apiKey && (
               <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
                 {s.apiKeyExisting ?? 'Existing key configured. Leave blank to keep it.'}
               </p>
             )}
-            {currentPreset.signupUrl && !currentConfig.apiKey && !currentConfig.apiKeyMask && (
+            {currentPreset.signupUrl && !current.apiKey && !current.apiKeyMask && (
               <a
                 href={currentPreset.signupUrl}
                 target="_blank"
@@ -98,9 +147,9 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
           {currentPreset.supportsBaseUrl && (
             <Field label={s.baseUrl} hint={s.baseUrlHint}>
               <Input
-                value={currentConfig.baseUrl ?? ''}
-                onChange={e => patchConfig({ baseUrl: e.target.value })}
-                placeholder={currentPreset.fixedBaseUrl || getDefaultBaseUrl(currentProvider as ProviderId) || 'https://api.openai.com/v1'}
+                value={current.baseUrl ?? ''}
+                onChange={e => patchProvider({ baseUrl: e.target.value })}
+                placeholder={currentPreset.fixedBaseUrl || getDefaultBaseUrl(current.protocol) || 'https://api.openai.com/v1'}
               />
             </Field>
           )}
@@ -108,12 +157,12 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
           {/* Model */}
           <Field label={s.model}>
             <ModelInput
-              value={currentConfig.model}
-              onChange={v => patchConfig({ model: v })}
+              value={current.model}
+              onChange={v => patchProvider({ model: v })}
               placeholder={currentPreset.defaultModel}
-              provider={currentProvider}
-              apiKey={currentConfig.apiKey}
-              baseUrl={currentConfig.baseUrl}
+              provider={current.protocol}
+              apiKey={current.apiKey}
+              baseUrl={current.baseUrl}
               supportsListModels={currentPreset.supportsListModels}
               browseLabel={s.listModels}
               noModelsLabel={s.noModelsFound}
@@ -136,7 +185,7 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
           <div className="mt-3 space-y-5">
             <div className="space-y-1.5">
               <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>
-                🔑 {s.tokenSectionTitle}
+                {s.tokenSectionTitle}
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 truncate text-xs font-mono px-3 py-2 rounded-lg"

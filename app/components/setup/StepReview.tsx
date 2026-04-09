@@ -8,7 +8,7 @@ import {
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import type { SetupState, SetupMessages, AgentInstallStatus } from './types';
-import { PROVIDER_PRESETS, isProviderId } from '@/lib/agent/providers';
+import { PROVIDER_PRESETS } from '@/lib/agent/providers';
 import { useLocale } from '@/lib/stores/locale-store';
 
 // ─── Restart Block ────────────────────────────────────────────────────────────
@@ -273,20 +273,22 @@ function HealthCheckView({ state, selectedAgents, agentStatuses, needsRestart, s
 
   // Derive health check statuses
   const kbOk = !!state.mindRoot;
-  const aiOk = state.provider !== 'skip';
+  const aiOk = state.activeProvider !== 'skip' && state.providers.length > 0;
   const successAgents = Object.values(agentStatuses).filter(a => a.state === 'ok').length;
   const agentsOk = successAgents > 0;
   const hasToken = !!state.authToken;
   const skillsOk = skillInstallStatus === 'ok';
 
-  // Resolve provider display name and model from dynamic config
+  // Resolve provider display name and model from unified Provider[]
   let providerDisplayName = '';
   let providerModelName = '';
-  if (aiOk && isProviderId(state.provider as string)) {
-    const preset = PROVIDER_PRESETS[state.provider as keyof typeof PROVIDER_PRESETS];
-    providerDisplayName = locale === 'zh' ? preset.nameZh : preset.name;
-    const cfg = state.providerConfigs[state.provider as keyof typeof PROVIDER_PRESETS];
-    providerModelName = cfg?.model || preset.defaultModel;
+  if (aiOk) {
+    const activeP = state.providers.find(p => p.id === state.activeProvider);
+    if (activeP) {
+      const preset = PROVIDER_PRESETS[activeP.protocol];
+      providerDisplayName = locale === 'zh' ? preset.nameZh : preset.name;
+      providerModelName = activeP.model || preset.defaultModel;
+    }
   }
 
   const checks: Array<{

@@ -495,6 +495,15 @@
           <input id="ssh-port" type="number" value="3456" min="1" max="65535" style="font-family:ui-monospace,'SF Mono',monospace" />
         </div>
         <div id="ssh-status" class="status-bar hidden"></div>
+        <!-- SSH Key Passphrase (shown when key needs passphrase) -->
+        <div id="ssh-passphrase-section" class="field hidden">
+          <label for="ssh-passphrase" data-i18n="sshPassphrase"></label>
+          <input id="ssh-passphrase" type="password" data-i18n-placeholder="sshEnterPassphrase" placeholder="" />
+          <label class="checkbox-label" style="margin-top:6px; display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
+            <input id="ssh-remember-passphrase" type="checkbox" checked />
+            <span data-i18n="sshRememberPassphrase"></span>
+          </label>
+        </div>
         <!-- SSH Password (shown when tunnel established but authRequired) -->
         <div id="ssh-password-section" class="field hidden">
           <label for="ssh-password" data-i18n="password"></label>

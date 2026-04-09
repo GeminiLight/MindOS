@@ -73,6 +73,12 @@ export const zh = {
   sshNoSsh: '未检测到 SSH',
   sshSelectHost: 'user@hostname 或 SSH Host 别名',
   cancel: '取消',
+  sshPassphrase: 'SSH 密钥口令',
+  sshEnterPassphrase: '输入 SSH 密钥口令',
+  sshRememberPassphrase: '记住口令',
+  sshPassphraseNeeded: '密钥需要口令',
+  sshPassphraseWrong: '口令错误，请重试',
+  sshAddingKey: '正在验证口令...',
   // Toolbar (theme / language)
   themeTooltipLight: '主题：浅色',
   themeTooltipDark: '主题：深色',

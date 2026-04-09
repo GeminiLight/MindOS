@@ -31,8 +31,9 @@ function getIpc() {
     switchToLocal: () => Promise<void>;
     // SSH
     getSshHosts: () => Promise<{ available: boolean; hosts: Array<{ name: string; hostname?: string; user?: string }> }>;
-    connectSsh: (host: string, remotePort: number) => Promise<{ ok: boolean; url?: string; error?: string; authRequired?: boolean; sshHost?: string; sshRemotePort?: number }>;
+    connectSsh: (host: string, remotePort: number) => Promise<{ ok: boolean; url?: string; error?: string; authRequired?: boolean; passphraseNeeded?: boolean; sshHost?: string; sshRemotePort?: number }>;
     completeSshWithPassword: (sshHost: string, sshRemotePort: number, tunnelUrl: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+    sshAddKey: (host: string, remotePort: number, passphrase: string, remember: boolean) => Promise<{ ok: boolean; url?: string; error?: string; authRequired?: boolean; sshHost?: string; sshRemotePort?: number }>;
   } | undefined;
 }
 
@@ -48,6 +49,8 @@ let recentConnections: Array<{ address: string; label?: string }> = [];
 
 // SSH password flow state — when SSH tunnel is established but server needs password
 let sshPendingAuth: { sshHost: string; sshRemotePort: number; tunnelUrl: string } | null = null;
+// SSH passphrase flow state — when SSH key needs passphrase
+let sshPassphraseNeeded = false;
 // SSH connect phase and cancel flag — used instead of btn.onclick to avoid listener conflicts
 let sshConnectPhase: 'idle' | 'connecting' = 'idle';
 let sshConnectCancelled = false;
@@ -706,9 +709,11 @@ function init(): void {
     $('tab-ssh')?.classList.remove('active');
     $('http-panel')?.classList.remove('hidden');
     $('ssh-panel')?.classList.add('hidden');
-    // Clear stale SSH password state when switching tabs
+    // Clear stale SSH password/passphrase state when switching tabs
     sshPendingAuth = null;
+    sshPassphraseNeeded = false;
     $('ssh-password-section')?.classList.add('hidden');
+    $('ssh-passphrase-section')?.classList.add('hidden');
     void loadRecentConnections();
   });
 
@@ -723,6 +728,9 @@ function init(): void {
     if ((e as KeyboardEvent).key === 'Enter') void handleSshConnect();
   });
   $('ssh-password')?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void handleSshConnect();
+  });
+  $('ssh-passphrase')?.addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key === 'Enter') void handleSshConnect();
   });
 
@@ -818,13 +826,70 @@ async function handleSshConnect(): Promise<void> {
   const status = $('ssh-status') as HTMLElement;
   const pwSection = $('ssh-password-section');
   const pwInput = $('ssh-password') as HTMLInputElement;
+  const ppSection = $('ssh-passphrase-section');
+  const ppInput = $('ssh-passphrase') as HTMLInputElement;
+  const ppRemember = $('ssh-remember-passphrase') as HTMLInputElement;
 
   const host = hostInput?.value.trim();
   const port = parseInt(portInput?.value || '3456', 10);
   if (!host) { hostInput?.focus(); return; }
 
-  // If we're in password entry mode (tunnel already established, waiting for password)
-  // Verify the pending auth matches current inputs (user didn't change host/port)
+  // ── Passphrase entry mode: user entered passphrase, submit to add key + retry ──
+  if (sshPassphraseNeeded) {
+    const passphrase = ppInput?.value;
+    if (!passphrase) { ppInput?.focus(); return; }
+
+    btn.disabled = true;
+    btn.textContent = t('sshAddingKey');
+    status.className = 'status-bar info';
+    status.textContent = t('sshAddingKey');
+
+    try {
+      const result = await ipc.sshAddKey(host, port, passphrase, ppRemember?.checked ?? true);
+
+      if (result.ok) {
+        sshPassphraseNeeded = false;
+        ppSection?.classList.add('hidden');
+        if (ppInput) ppInput.value = '';
+
+        if (result.authRequired && result.url) {
+          // Tunnel OK, but MindOS server needs password
+          sshPendingAuth = {
+            sshHost: result.sshHost || host,
+            sshRemotePort: result.sshRemotePort || port,
+            tunnelUrl: result.url,
+          };
+          status.className = 'status-bar success';
+          status.textContent = `${t('sshSuccess')} · ${t('passwordRequired')}`;
+          pwSection?.classList.remove('hidden');
+          pwInput?.focus();
+          btn.textContent = t('connect');
+          btn.disabled = false;
+        } else {
+          // Success — window will close
+          status.className = 'status-bar success';
+          status.textContent = t('sshSuccess');
+          btn.textContent = t('connected');
+          btn.disabled = true;
+        }
+      } else {
+        status.className = 'status-bar error';
+        status.textContent = result.error || t('sshPassphraseWrong');
+        btn.disabled = false;
+        btn.textContent = t('connect');
+        ppInput?.focus();
+        ppInput?.select();
+      }
+    } catch (err) {
+      status.className = 'status-bar error';
+      status.textContent = `${t('sshFailed')}: ${err instanceof Error ? err.message : String(err)}`;
+      btn.disabled = false;
+      btn.textContent = t('connect');
+    }
+    return;
+  }
+
+  // ── Password entry mode (tunnel established, MindOS server needs password) ──
   if (sshPendingAuth && sshPendingAuth.sshHost === host && sshPendingAuth.sshRemotePort === port) {
     const password = pwInput?.value;
     if (!password) { pwInput?.focus(); return; }
@@ -847,7 +912,6 @@ async function handleSshConnect(): Promise<void> {
         status.textContent = t('connected');
         btn.textContent = t('connected');
         sshPendingAuth = null;
-        // Window will close automatically
       } else {
         status.className = 'status-bar error';
         status.textContent = result.error || t('incorrectPassword');
@@ -864,14 +928,19 @@ async function handleSshConnect(): Promise<void> {
     return;
   }
 
-  // If host/port changed while in pending auth, clear stale state
+  // ── Clear stale state ──
   if (sshPendingAuth) {
     sshPendingAuth = null;
     pwSection?.classList.add('hidden');
     if (pwInput) pwInput.value = '';
   }
+  if (sshPassphraseNeeded) {
+    sshPassphraseNeeded = false;
+    ppSection?.classList.add('hidden');
+    if (ppInput) ppInput.value = '';
+  }
 
-  // Initial SSH connection — establish tunnel
+  // ── Initial SSH connection — establish tunnel ──
   sshConnectCancelled = false;
   btn.disabled = false;
   btn.innerHTML = `<span class="spinner"></span> ${t('cancel')}`;
@@ -884,7 +953,6 @@ async function handleSshConnect(): Promise<void> {
     const result = await ipc.connectSsh(host, port);
 
     if (sshConnectCancelled) {
-      // User cancelled during the await — restore UI
       sshConnectPhase = 'idle';
       status.className = 'status-bar';
       status.textContent = '';
@@ -898,7 +966,6 @@ async function handleSshConnect(): Promise<void> {
 
     if (result.ok) {
       if (result.authRequired && result.url) {
-        // Tunnel established but server needs password
         sshPendingAuth = {
           sshHost: result.sshHost || host,
           sshRemotePort: result.sshRemotePort || port,
@@ -911,13 +978,20 @@ async function handleSshConnect(): Promise<void> {
         btn.textContent = t('connect');
         btn.disabled = false;
       } else {
-        // No auth needed — connection complete
         status.className = 'status-bar success';
         status.textContent = t('sshSuccess');
         btn.textContent = t('connected');
         btn.disabled = true;
-        // Window will close automatically (IPC handler calls resolve + close)
       }
+    } else if ((result as any).passphraseNeeded) {
+      // SSH key needs passphrase — show passphrase input
+      sshPassphraseNeeded = true;
+      status.className = 'status-bar info';
+      status.textContent = t('sshPassphraseNeeded');
+      ppSection?.classList.remove('hidden');
+      ppInput?.focus();
+      btn.textContent = t('connect');
+      btn.disabled = false;
     } else {
       status.className = 'status-bar error';
       status.textContent = `${t('sshFailed')}: ${result.error}`;
