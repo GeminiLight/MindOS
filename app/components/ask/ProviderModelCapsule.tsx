@@ -374,10 +374,14 @@ export default function ProviderModelCapsule({
 
   const modelShort = (displayModel || '').length > 20
     ? (displayModel || '').slice(0, 18) + '…' : displayModel;
-  // For built-in providers, use shortLabel; for custom, truncate if too long
-  const providerDisplay = (displayName || '').length > 12
-    ? (displayName || '').slice(0, 10) + '…'
-    : (activePreset?.shortLabel || displayName);
+  // Capsule shows the user-given provider name, truncated if too long.
+  // Only falls back to protocol shortLabel if the provider has no custom name.
+  const providerDisplay = (() => {
+    const name = activeEntry?.name || '';
+    if (name && name.length > 12) return name.slice(0, 10) + '…';
+    if (name) return name;
+    return activePreset?.shortLabel || displayName;
+  })();
   const capsuleTooltip = `${displayName} · ${displayModel}`;
   const providerIds = configuredProviders;
   const hasModelOverride = !!(modelValue && modelValue !== defaultModel);
