@@ -41,9 +41,8 @@ export default function ProviderSelect({
     ? ALL_PROVIDER_IDS.filter(id => configuredProviders!.has(id))
     : [];
 
-  // Providers available in add panel (not yet configured)
-  const unconfiguredPrimary = groups.primary.filter(id => !configuredProviders?.has(id));
-  const unconfiguredMore = groups.more.filter(id => !configuredProviders?.has(id));
+  // Add panel shows ALL providers as protocol templates (can add multiple of the same type)
+  const { primary: primaryItems, more: moreItems } = groups;
 
   const handleAddSelect = (id: ProviderId) => {
     if (onAddFromPreset) {
@@ -223,15 +222,13 @@ export default function ProviderSelect({
               </button>
             </div>
             <div className="p-3 space-y-2">
-              {/* Unconfigured primary providers */}
-              {unconfiguredPrimary.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {unconfiguredPrimary.map(id => renderCompactTab(id, { inPanel: true }))}
-                </div>
-              )}
+              {/* Protocol templates — primary */}
+              <div className="flex flex-wrap gap-2">
+                {primaryItems.map(id => renderCompactTab(id, { inPanel: true }))}
+              </div>
 
               {/* More toggle */}
-              {unconfiguredMore.length > 0 && (
+              {moreItems.length > 0 && (
                 <>
                   <button
                     type="button"
@@ -241,11 +238,11 @@ export default function ProviderSelect({
                     <ChevronDown size={12} className={`transition-transform ${showMoreInPanel ? 'rotate-180' : ''}`} />
                     {showMoreInPanel
                       ? (locale === 'zh' ? '收起' : 'Less')
-                      : (locale === 'zh' ? `更多 (${unconfiguredMore.length})` : `More (${unconfiguredMore.length})`)}
+                      : (locale === 'zh' ? `更多 (${moreItems.length})` : `More (${moreItems.length})`)}
                   </button>
                   {showMoreInPanel && (
                     <div className="flex flex-wrap gap-2">
-                      {unconfiguredMore.map(id => renderCompactTab(id, { inPanel: true }))}
+                      {moreItems.map(id => renderCompactTab(id, { inPanel: true }))}
                     </div>
                   )}
                 </>
@@ -285,7 +282,6 @@ export default function ProviderSelect({
    *  MODE 2: Full list (setup wizard / no configured providers)
    *  Original behavior preserved
    * ════════════════════════════════════════════ */
-  const { primary: primaryItems, more: moreItems } = groups;
 
   return (
     <div className="space-y-2">
