@@ -206,7 +206,7 @@ export default function ActivityBar({
               router.push('/');
             }
           }}
-          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[45px] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
+          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[46px] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />
