@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -34,6 +34,9 @@ export default function AgentsPanel({
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
   const [view, setView] = useState<'agents' | 'channels'>('agents');
   const a2a = useA2aRegistry();
+
+  // Reset to agents view when navigating via HubNav links
+  useEffect(() => { setView('agents'); }, [pathname]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -114,13 +117,11 @@ export default function AgentsPanel({
       </PanelHeader>
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        {view === 'channels' ? (
-          <IMChannelsView />
-        ) : mcp.loading ? (
+        {mcp.loading ? (
           <div className="flex justify-center py-8">
             <Loader2 size={16} className="animate-spin text-muted-foreground" />
           </div>
-        ) : mcp.agents.length === 0 && mcp.skills.length === 0 ? (
+        ) : mcp.agents.length === 0 && mcp.skills.length === 0 && view !== 'channels' ? (
           <div className="flex flex-col gap-2 py-4 px-0">
             {hub}
             <div className="mx-4 border-t border-border" />
@@ -142,8 +143,11 @@ export default function AgentsPanel({
 
             <div className="mx-4 border-t border-border" />
 
-            <div className="px-3 py-3 space-y-4">
-              <AgentsPanelAgentGroups
+            {view === 'channels' ? (
+              <IMChannelsView />
+            ) : (
+              <div className="px-3 py-3 space-y-4">
+                <AgentsPanelAgentGroups
                 connected={connected}
                 detected={detected}
                 notFound={notFound}
@@ -160,6 +164,7 @@ export default function AgentsPanel({
                 }}
               />
             </div>
+            )}
           </div>
         )}
       </div>
