@@ -120,7 +120,7 @@ export class WeComAdapter implements IMAdapter {
     }
 
     const url = `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${this.config.corp_id}&corpsecret=${this.config.corp_secret}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
     const data = await res.json() as { errcode: number; errmsg: string; access_token?: string; expires_in?: number };
 
     if (data.errcode !== 0 || !data.access_token) {

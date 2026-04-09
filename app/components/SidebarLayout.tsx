@@ -233,6 +233,20 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     return () => window.removeEventListener('mindos:inbox-organize', handler);
   }, [aiOrganize, t]);
 
+  // ── Session/Message: AI organize conversation content ──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { content: string; name: string } | undefined;
+      if (!detail?.content || aiOrganize.phase === 'organizing') return;
+
+      const attachment = { name: detail.name, content: detail.content };
+      const prompt = `Organize this conversation into well-structured notes in my knowledge base. Extract key insights, decisions, action items, and important details. Create appropriate files with clear titles. Write in the same language as the content.`;
+      aiOrganize.start([attachment], prompt, 'conversation');
+    };
+    window.addEventListener('mindos:session-organize', handler);
+    return () => window.removeEventListener('mindos:session-organize', handler);
+  }, [aiOrganize]);
+
   // Notify InboxSection when organize finishes + clean up source inbox files
   useEffect(() => {
     if (aiOrganize.phase === 'done') {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Send, ChevronDown, ChevronRight, CheckCircle2, XCircle,
-  Loader2, Trash2, Eye, EyeOff, Settings2, AlertTriangle,
+  Loader2, Trash2, Eye, EyeOff, Settings2, AlertTriangle, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 
@@ -98,6 +98,7 @@ export default function IMChannelsView() {
 
   const [statuses, setStatuses] = useState<PlatformStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [expandedView, setExpandedView] = useState<ExpandedView>('status');
 
@@ -115,13 +116,18 @@ export default function IMChannelsView() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchStatuses = useCallback(async () => {
+    setError(false);
     try {
       const res = await fetch('/api/im/status');
       if (res.ok) {
         const data = await res.json();
         setStatuses(data.platforms ?? []);
+      } else {
+        setError(true);
       }
-    } catch { /* silent */ }
+    } catch {
+      setError(true);
+    }
     setLoading(false);
   }, []);
 
@@ -212,6 +218,22 @@ export default function IMChannelsView() {
     return (
       <div className="flex justify-center py-8">
         <Loader2 size={16} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-8 px-3">
+        <AlertCircle size={16} className="text-muted-foreground" />
+        <p className="text-2xs text-muted-foreground">{im.fetchError}</p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); fetchStatuses(); }}
+          className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RefreshCw size={11} /> {im.retry}
+        </button>
       </div>
     );
   }

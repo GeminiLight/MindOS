@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { Loader2, CheckCircle2, Circle, RefreshCw, AlertCircle } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,15 +32,21 @@ export default function AgentsContentChannels() {
 
   const [statuses, setStatuses] = useState<PlatformStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const fetchStatuses = useCallback(async () => {
+    setError(false);
     try {
       const res = await fetch('/api/im/status');
       if (res.ok) {
         const data = await res.json();
         setStatuses(data.platforms ?? []);
+      } else {
+        setError(true);
       }
-    } catch { /* silent */ }
+    } catch {
+      setError(true);
+    }
     setLoading(false);
   }, []);
 
@@ -54,6 +60,22 @@ export default function AgentsContentChannels() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto px-6 py-16 text-center">
+        <AlertCircle size={24} className="mx-auto mb-3 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground mb-3">{im.fetchError}</p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); fetchStatuses(); }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <RefreshCw size={12} /> {im.retry}
+        </button>
+      </div>
+    );
+  }
+
   const connected = statuses.filter(s => s.connected).length;
   const total = ALL_PLATFORMS.length;
   const getStatus = (id: string) => statuses.find(s => s.platform === id);
@@ -61,7 +83,7 @@ export default function AgentsContentChannels() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-6">
       {/* Header */}
-      <h1 className="text-lg font-semibold text-foreground mb-1">Channels</h1>
+      <h1 className="text-lg font-semibold text-foreground mb-1">{im.title}</h1>
       <p className="text-sm text-muted-foreground mb-6">{im.emptyDesc}</p>
 
       {/* Stats row */}
@@ -109,6 +131,13 @@ export default function AgentsContentChannels() {
                   <div className="text-2xs text-muted-foreground font-mono truncate">{status.botName}</div>
                 ) : (
                   <div className="text-2xs text-muted-foreground">{isConnected ? im.statusConnected : im.notConfigured}</div>
+                )}
+                {isConnected && status?.capabilities && status.capabilities.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {status.capabilities.slice(0, 3).map(cap => (
+                      <span key={cap} className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground/70">{cap}</span>
+                    ))}
+                  </div>
                 )}
               </div>
               {isConnected ? (

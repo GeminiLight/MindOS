@@ -12,7 +12,7 @@ export interface OrganizeHistoryFile {
   undone?: boolean;
 }
 
-export type OrganizeSource = 'upload' | 'drag-drop' | 'inbox-organize' | 'import-modal' | 'plugin' | 'web-clipper';
+export type OrganizeSource = 'upload' | 'drag-drop' | 'inbox-organize' | 'import-modal' | 'plugin' | 'web-clipper' | 'conversation';
 
 export interface OrganizeHistoryEntry {
   id: string;
