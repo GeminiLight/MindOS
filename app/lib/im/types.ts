@@ -8,7 +8,9 @@ export type IMPlatform =
   | 'feishu'
   | 'slack'
   | 'wecom'
-  | 'dingtalk';
+  | 'dingtalk'
+  | 'wechat'
+  | 'qq';
 
 export type IMMessageFormat = 'text' | 'markdown' | 'html';
 
@@ -80,6 +82,18 @@ export interface DingTalkConfig {
   webhook_secret?: string;
 }
 
+export interface WeChatConfig {
+  /** bot_token obtained via ClawBot QR code scan */
+  bot_token: string;
+}
+
+export interface QQConfig {
+  /** QQ 开放平台 AppID */
+  app_id: string;
+  /** QQ 开放平台 AppSecret (clientSecret) */
+  app_secret: string;
+}
+
 export interface IMConfig {
   providers: Partial<{
     telegram: TelegramConfig;
@@ -88,6 +102,8 @@ export interface IMConfig {
     slack: SlackConfig;
     wecom: WeComConfig;
     dingtalk: DingTalkConfig;
+    wechat: WeChatConfig;
+    qq: QQConfig;
   }>;
 }
 
@@ -108,6 +124,8 @@ export const PLATFORM_LIMITS: Record<IMPlatform, PlatformLimits> = {
   slack:     { maxTextLength: 4000,  supportsMarkdown: true,  supportsHtml: false, supportsThreads: true,  supportsAttachments: true },
   wecom:     { maxTextLength: 2048,  supportsMarkdown: true,  supportsHtml: false, supportsThreads: false, supportsAttachments: true },
   dingtalk:  { maxTextLength: 20000, supportsMarkdown: true,  supportsHtml: false, supportsThreads: false, supportsAttachments: true },
+  wechat:    { maxTextLength: 4096,  supportsMarkdown: false, supportsHtml: false, supportsThreads: false, supportsAttachments: true },
+  qq:        { maxTextLength: 4096,  supportsMarkdown: true,  supportsHtml: false, supportsThreads: false, supportsAttachments: true },
 };
 
 // ─── Recipient ID Validation ──────────────────────────────────────────────────
@@ -119,6 +137,8 @@ const RECIPIENT_ID_PATTERNS: Record<IMPlatform, RegExp> = {
   slack:     /^[A-Z0-9]{9,12}$/,                  // Slack channel/user ID
   wecom:     /^.{1,256}$/,                         // non-empty
   dingtalk:  /^.{1,256}$/,                         // non-empty
+  wechat:    /^.{1,256}$/,                         // non-empty (WeChat user/chat ID)
+  qq:        /^.{1,256}$/,                         // non-empty (QQ openid or group_openid)
 };
 
 export function isValidRecipientId(platform: IMPlatform, recipientId: string): boolean {

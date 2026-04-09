@@ -73,4 +73,25 @@ describe('IM Types - Recipient ID Validation', () => {
       expect(isValidRecipientId('dingtalk', '')).toBe(false);
     });
   });
+
+  describe('wechat', () => {
+    it('accepts any non-empty string', () => {
+      expect(isValidRecipientId('wechat', 'wxid_abc123')).toBe(true);
+    });
+    it('rejects empty string', () => {
+      expect(isValidRecipientId('wechat', '')).toBe(false);
+    });
+  });
+
+  describe('qq', () => {
+    it('accepts QQ openid', () => {
+      expect(isValidRecipientId('qq', 'ABCDEF123456')).toBe(true);
+    });
+    it('accepts group:prefix for group chat', () => {
+      expect(isValidRecipientId('qq', 'group:ABCDEF123456')).toBe(true);
+    });
+    it('rejects empty string', () => {
+      expect(isValidRecipientId('qq', '')).toBe(false);
+    });
+  });
 });

@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import type { IMConfig, IMPlatform, TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig, WeComConfig, DingTalkConfig } from './types';
+import type { IMConfig, IMPlatform, TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig, WeComConfig, DingTalkConfig, WeChatConfig, QQConfig } from './types';
 
 const IM_CONFIG_DIR = path.join(os.homedir(), '.mindos');
 const IM_CONFIG_PATH = path.join(IM_CONFIG_DIR, 'im.json');
@@ -96,6 +96,8 @@ export function getPlatformConfig(platform: 'discord'): DiscordConfig | undefine
 export function getPlatformConfig(platform: 'slack'): SlackConfig | undefined;
 export function getPlatformConfig(platform: 'wecom'): WeComConfig | undefined;
 export function getPlatformConfig(platform: 'dingtalk'): DingTalkConfig | undefined;
+export function getPlatformConfig(platform: 'wechat'): WeChatConfig | undefined;
+export function getPlatformConfig(platform: 'qq'): QQConfig | undefined;
 export function getPlatformConfig(platform: IMPlatform): unknown {
   const config = readIMConfig();
   return config.providers[platform];
@@ -126,6 +128,10 @@ export function validatePlatformConfig(
       // Either (client_id + client_secret) OR webhook_url
       if (typeof c.webhook_url === 'string' && c.webhook_url) return { valid: true };
       return checkFields(c, ['client_id', 'client_secret']);
+    case 'wechat':
+      return checkFields(c, ['bot_token']);
+    case 'qq':
+      return checkFields(c, ['app_id', 'app_secret']);
     default:
       return { valid: false, missing: ['(unknown platform)'] };
   }

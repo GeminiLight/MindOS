@@ -71,6 +71,20 @@ async function getAdapter(platform: IMPlatform): Promise<IMAdapter> {
       adapter = new DingTalkAdapter(dtConfig);
       break;
     }
+    case 'wechat': {
+      const wxConfig = getPlatformConfig('wechat');
+      if (!wxConfig) throw new Error('Platform "wechat" not configured. Add credentials to ~/.mindos/im.json');
+      const { WeChatAdapter } = await import('./adapters/wechat');
+      adapter = new WeChatAdapter(wxConfig);
+      break;
+    }
+    case 'qq': {
+      const qqConfig = getPlatformConfig('qq');
+      if (!qqConfig) throw new Error('Platform "qq" not configured. Add credentials to ~/.mindos/im.json');
+      const { QQAdapter } = await import('./adapters/qq');
+      adapter = new QQAdapter(qqConfig);
+      break;
+    }
     default:
       throw new Error(`Platform "${platform}" adapter not yet implemented`);
   }

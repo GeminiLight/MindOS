@@ -96,5 +96,19 @@ describe('IM Config Manager', () => {
       expect(validatePlatformConfig('dingtalk', { client_id: 'x', client_secret: 'y' })).toEqual({ valid: true });
       expect(validatePlatformConfig('dingtalk', {}).valid).toBe(false);
     });
+
+    it('validates wechat config (requires bot_token)', async () => {
+      const { validatePlatformConfig } = await import('@/lib/im/config');
+      expect(validatePlatformConfig('wechat', { bot_token: 'wx_abc123' })).toEqual({ valid: true });
+      expect(validatePlatformConfig('wechat', {}).valid).toBe(false);
+      expect(validatePlatformConfig('wechat', null).valid).toBe(false);
+    });
+
+    it('validates qq config (requires app_id + app_secret)', async () => {
+      const { validatePlatformConfig } = await import('@/lib/im/config');
+      expect(validatePlatformConfig('qq', { app_id: '123', app_secret: 'abc' })).toEqual({ valid: true });
+      expect(validatePlatformConfig('qq', { app_id: '123' }).valid).toBe(false);
+      expect(validatePlatformConfig('qq', {}).valid).toBe(false);
+    });
   });
 });
