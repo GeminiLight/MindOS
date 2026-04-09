@@ -440,13 +440,26 @@ const {
 
 ### 快速胜利（7 小时，立即可做）
 
+**✅ 已完成 (2026-04-10)**
+
+| 项目 | 状态 | 产出 |
+|------|------|------|
+| 抽取 JSON 解析为 `parseJsonBody()` | ✅ 完成 | `lib/api/request-utils.ts` |
+| 抽取 SSE 事件类型和守卫 | ✅ 完成 | `lib/sse/events.ts` |
+| 抽取 Skill 解析器 | ✅ 完成 | `lib/agent/skill-resolver.ts` |
+| 抽取文件上下文加载器 | ✅ 完成 | `lib/agent/file-context.ts` |
+| 抽取非流式回退逻辑 | ✅ 完成 | `lib/agent/non-streaming.ts` |
+
+**⏳ 计划继续**
+
 | 项目 | 耗时 | 效果 |
 |------|------|------|
 | 推广使用 `handleRouteError()` | 2h | 统一所有路由错误处理 |
-| 抽取 JSON 解析为 `parseJsonBody()` | 1h | 消除 15 处重复代码 |
 | 抽取 Provider 配置解析 | 1h | 消除 5 处重复代码 |
 | 添加请求关联 ID | 2h | 排错能力大幅提升 |
 | 标准化错误码使用 | 1h | 前端可统一错误处理 |
+
+> **验证**: 所有 107 个测试文件 / 1,239 个测试用例全部通过。TypeScript 编译 0 错误。
 
 ### 第一阶段：基础设施（第 1-2 周）
 
@@ -458,8 +471,10 @@ const {
    - withErrorBoundary, withValidation, withLogging
    - 优先改造 ask, file, sync 三个关键路由
 
-3. **抽取 SSE/流式逻辑**（6h）
-   - 从 ask/route 中提取 `lib/sse/events.ts`
+3. **抽取 SSE/流式逻辑**（6h）✅ 已完成
+   - `lib/sse/events.ts` 已创建
+   - `lib/agent/non-streaming.ts` 已创建
+   - 待完成: ask/route.ts 导入切换（原子操作）
 
 ### 第二阶段：业务逻辑层（第 3-4 周）
 
