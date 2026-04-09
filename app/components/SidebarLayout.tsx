@@ -162,6 +162,14 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, lp.panelOpen]);
 
+  // Close right Ask panel when entering home page — home has its own embedded Ask
+  useEffect(() => {
+    if (pathname === '/') {
+      if (ap.askPanelOpen) ap.closeAskPanel();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   const agentsContentActive = pathname?.startsWith('/agents');
   const railActivePanel = lp.activePanel ?? (agentsContentActive ? 'agents' : null);
 
