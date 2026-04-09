@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, X } from 'lucide-react';
+import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X } from 'lucide-react';
 import type { ProviderConfig, AiTabProps } from './types';
 import { Field, Select, Input, PasswordInput, EnvBadge, Toggle, SettingCard, SettingRow } from './Primitives';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -118,6 +118,20 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
     });
   }, [data.ai.providers, updateAi]);
 
+  const deleteBuiltinProvider = useCallback((name: ProviderId) => {
+    // Clear the config
+    const newProviders = { ...data.ai.providers };
+    delete newProviders[name];
+    // Switch to another configured provider if this was the active one
+    const remaining = Object.entries(newProviders).filter(([, cfg]) => cfg && cfg.apiKey);
+    const fallback = remaining.length > 0 ? remaining[0][0] : 'openai';
+    updateAi({
+      provider: provider === name ? fallback : provider,
+      providers: newProviders,
+    });
+    setTestResult(prev => { const n = { ...prev }; delete n[name]; return n; });
+  }, [data.ai.providers, provider, updateAi]);
+
   const customProviders = data.customProviders ?? [];
   const editingCustomProvider = useMemo(
     () => customEditingId ? customProviders.find(p => p.id === customEditingId) : null,
@@ -194,6 +208,7 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
             initial={editingCustomProvider ?? customFormTemplate ?? undefined}
             onSave={handleSaveCustom}
             onCancel={() => { setCustomFormOpen(false); setCustomEditingId(null); }}
+            onDelete={customEditingId ? () => handleDeleteCustom(customEditingId) : undefined}
             t={t}
             existingNames={customProviders
               .filter(p => p.id !== customEditingId)
@@ -269,6 +284,7 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
               hasConfig={!!(currentConfig.apiKey || currentConfig.model || currentConfig.baseUrl)}
               onTest={() => handleTestKey(provider)}
               onReset={() => resetProvider(provider)}
+              onDelete={() => deleteBuiltinProvider(provider)}
               t={t}
             />
           </div>
@@ -375,7 +391,7 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
 /* ── Provider Actions: Test + Reset ── */
 
 function ProviderActions({
-  provider, result, hasKey, hasEnv, hasConfig, onTest, onReset, t,
+  provider, result, hasKey, hasEnv, hasConfig, onTest, onReset, onDelete, t,
 }: {
   provider: ProviderId;
   result: TestResult;
@@ -384,47 +400,73 @@ function ProviderActions({
   hasConfig: boolean;
   onTest: () => void;
   onReset: () => void;
+  onDelete?: () => void;
   t: AiTabProps['t'];
 }) {
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'reset' | 'delete' | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hasFallback = !!PROVIDER_PRESETS[provider]?.apiKeyFallback;
   const canTest = hasKey || hasEnv || hasFallback;
 
   useEffect(() => () => { if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current); }, []);
 
-  const handleResetClick = () => {
-    if (confirmReset) {
-      onReset();
-      setConfirmReset(false);
+  const startConfirm = (action: 'reset' | 'delete') => {
+    if (confirmAction === action) {
+      if (action === 'reset') onReset(); else onDelete?.();
+      setConfirmAction(null);
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     } else {
-      setConfirmReset(true);
-      confirmTimerRef.current = setTimeout(() => setConfirmReset(false), 3000);
+      setConfirmAction(action);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = setTimeout(() => setConfirmAction(null), 3000);
     }
   };
+
+  const { locale } = useLocale();
 
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-between">
         <TestButton result={result} disabled={!canTest} onTest={onTest} t={t} />
 
-        {/* Right: Reset — subtle, icon-first, inline confirm */}
-        {hasConfig && (
-          <button
-            type="button"
-            onClick={handleResetClick}
-            onBlur={() => { setConfirmReset(false); if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current); }}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 ${
-              confirmReset
-                ? 'bg-destructive/10 text-destructive border border-destructive/25 font-medium'
-                : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
-            }`}
-          >
-            <RotateCcw size={12} />
-            {confirmReset ? t.settings.ai.resetProviderConfirm : t.settings.ai.resetProvider}
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Reset */}
+          {hasConfig && (
+            <button
+              type="button"
+              onClick={() => startConfirm('reset')}
+              onBlur={() => { if (confirmAction === 'reset') { setConfirmAction(null); if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current); } }}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                confirmAction === 'reset'
+                  ? 'bg-destructive/10 text-destructive border border-destructive/25 font-medium'
+                  : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
+              }`}
+            >
+              <RotateCcw size={12} />
+              {confirmAction === 'reset'
+                ? (locale === 'zh' ? '确认重置？' : 'Confirm?')
+                : (locale === 'zh' ? '重置' : 'Reset')}
+            </button>
+          )}
+          {/* Delete */}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => startConfirm('delete')}
+              onBlur={() => { if (confirmAction === 'delete') { setConfirmAction(null); if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current); } }}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                confirmAction === 'delete'
+                  ? 'bg-destructive/10 text-destructive border border-destructive/25 font-medium'
+                  : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
+              }`}
+            >
+              <Trash2 size={12} />
+              {confirmAction === 'delete'
+                ? (locale === 'zh' ? '确认删除？' : 'Confirm?')
+                : (locale === 'zh' ? '删除' : 'Delete')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -433,16 +475,21 @@ function ProviderActions({
 /* ── Inline Custom Provider Form (uses shared hook + fields) ── */
 
 function CustomProviderForm({
-  initial, onSave, onCancel, t, existingNames,
+  initial, onSave, onCancel, onDelete, t, existingNames,
 }: {
   initial?: CustomProvider;
   onSave: (provider: CustomProvider) => void;
   onCancel: () => void;
+  onDelete?: () => void;
   t: AiTabProps['t'];
   existingNames: string[];
 }) {
   const { locale } = useLocale();
   const form = useCustomProviderForm({ initial, onSave, locale, existingNames });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
 
   const formTitle = initial
     ? (locale === 'zh' ? '编辑自定义 Provider' : 'Edit Custom Provider')
@@ -475,6 +522,33 @@ function CustomProviderForm({
         {/* Actions */}
         <div className="flex items-center gap-2 pt-4">
           <TestButton result={form.testResult} disabled={!form.canSave} onTest={form.handleTest} t={t} />
+
+          {/* Delete — only when editing an existing provider */}
+          {onDelete && initial?.id && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirmDelete) {
+                  onDelete();
+                  if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+                } else {
+                  setConfirmDelete(true);
+                  deleteTimerRef.current = setTimeout(() => setConfirmDelete(false), 3000);
+                }
+              }}
+              onBlur={() => { setConfirmDelete(false); if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                confirmDelete
+                  ? 'bg-destructive/10 text-destructive border border-destructive/25 font-medium'
+                  : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
+              }`}
+            >
+              <Trash2 size={12} />
+              {confirmDelete
+                ? (locale === 'zh' ? '确认删除？' : 'Confirm?')
+                : (locale === 'zh' ? '删除' : 'Delete')}
+            </button>
+          )}
 
           <div className="flex-1">
             {form.isDuplicateName && (
