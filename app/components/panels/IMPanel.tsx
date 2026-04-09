@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   MessageSquare, Send, ChevronDown, ChevronRight, CheckCircle2, XCircle,
-  Loader2, Plus, Trash2, Eye, EyeOff, Settings2,
+  Loader2, Trash2, Eye, EyeOff, Settings2, AlertTriangle,
 } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -112,6 +112,7 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
 
   // Deleting state
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -187,7 +188,12 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
   // ── Delete Config ───────────────────────────────────────────────────────────
 
   const handleDelete = async (platformId: string) => {
+    if (confirmDelete !== platformId) {
+      setConfirmDelete(platformId);
+      return;
+    }
     setDeleting(platformId);
+    setConfirmDelete(null);
     try {
       const res = await fetch(`/api/im/config?platform=${platformId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -245,6 +251,24 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
           <div className="flex items-center justify-center h-32">
             <Loader2 size={20} className="animate-spin text-muted-foreground" />
           </div>
+        ) : statuses.length === 0 ? (
+          /* ── Empty State ── */
+          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4">
+              <MessageSquare size={24} className="text-muted-foreground" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground mb-1.5">{im.emptyTitle}</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mb-5">
+              {im.emptyDesc}
+            </p>
+            <button
+              type="button"
+              onClick={() => toggleExpand('telegram')}
+              className="h-8 px-4 text-xs rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity duration-150"
+            >
+              {im.getStarted}
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col gap-0.5 p-1.5">
             {PLATFORMS.map((platform) => {
@@ -282,11 +306,11 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
 
                   {/* ── Expanded Panel ── */}
                   {isExpanded && (
-                    <div className="px-3 pb-3 pt-1 ml-[22px] border-l-2 border-[var(--amber-dim)]">
+                    <div className="px-3 pb-3 pt-1 ml-5 border-l-2 border-[var(--amber-dim)] animate-in fade-in-0 slide-in-from-top-1 duration-150">
 
                       {/* Tab switcher for configured platforms */}
                       {configured && (
-                        <div className="flex gap-1 mb-3">
+                        <div className="flex gap-1 mb-3" role="tablist" aria-label={platform.name}>
                           <button
                             type="button"
                             onClick={() => setExpandedView('status')}
@@ -336,13 +360,16 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
                               placeholder={im.recipientPlaceholder}
                               value={testRecipient}
                               onChange={e => setTestRecipient(e.target.value)}
+                              aria-label={im.recipientPlaceholder}
                               className="h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
                             />
+                            <form onSubmit={e => { e.preventDefault(); handleTest(platform.id); }} className="contents">
                             <input
                               type="text"
                               placeholder={im.messagePlaceholder}
                               value={testMsg}
                               onChange={e => setTestMsg(e.target.value)}
+                              aria-label={im.messagePlaceholder}
                               className="h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
                             />
                             <div className="flex items-center gap-2">
@@ -350,7 +377,7 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
                                 type="button"
                                 onClick={() => handleTest(platform.id)}
                                 disabled={testStatus === 'sending' || !testRecipient.trim()}
-                                className="h-7 px-3 text-xs rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+                                className="h-7 px-3 text-xs rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-150"
                               >
                                 {testStatus === 'sending' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                                 {im.sendTest}
@@ -359,12 +386,23 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
                                 type="button"
                                 onClick={() => handleDelete(platform.id)}
                                 disabled={deleting === platform.id}
-                                className="h-7 px-2 text-xs rounded-md inline-flex items-center gap-1 text-muted-foreground hover:text-error border border-transparent hover:border-error/30 transition-colors"
-                                title={im.disconnect}
+                                className={`h-7 px-2 text-xs rounded-md inline-flex items-center gap-1 border transition-colors ${
+                                  confirmDelete === platform.id
+                                    ? 'text-error border-error/40 bg-error/5'
+                                    : 'text-muted-foreground hover:text-error border-transparent hover:border-error/30'
+                                }`}
+                                aria-label={im.disconnect}
                               >
-                                {deleting === platform.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                {deleting === platform.id ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : confirmDelete === platform.id ? (
+                                  <><AlertTriangle size={12} /> {im.confirmDisconnect}</>
+                                ) : (
+                                  <Trash2 size={12} />
+                                )}
                               </button>
                             </div>
+                            </form>
 
                             {testResult && (
                               <div className={`flex items-start gap-1.5 text-xs ${testStatus === 'success' ? 'text-success' : 'text-error'}`}>
@@ -394,8 +432,8 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
                                 <button
                                   type="button"
                                   onClick={() => setShowSecrets(!showSecrets)}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
-                                  title={showSecrets ? 'Hide' : 'Show'}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-sm"
+                                  aria-label={showSecrets ? im.hideSecret : im.showSecret}
                                 >
                                   {showSecrets ? <EyeOff size={12} /> : <Eye size={12} />}
                                 </button>
@@ -411,7 +449,7 @@ export default function IMPanel({ active, maximized, onMaximize }: IMPanelProps)
                               type="button"
                               onClick={() => handleSave(platform.id)}
                               disabled={saving || !isFormComplete(platform)}
-                              className="h-7 px-3 text-xs rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+                              className="h-7 px-3 text-xs rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-150"
                             >
                               {saving ? <Loader2 size={12} className="animate-spin" /> : <Settings2 size={12} />}
                               {im.saveConfig}
