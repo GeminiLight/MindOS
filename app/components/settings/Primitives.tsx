@@ -303,11 +303,11 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
     if (isMasked && !editing) {
       setEditing(true);
       setLocalValue('');
-      setShowPassword(false);
+      // Don't reset showPassword here — eye click sets it before focus
     }
   };
 
-  // Eye click: if masked and not editing, enter edit mode (same as focus).
+  // Eye click: if masked and not editing, enter edit mode with plaintext on.
   // Otherwise toggle show/hide.
   const handleEyeClick = () => {
     if (isMasked && !editing) {
@@ -335,9 +335,12 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
     }
   };
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const handleBlur = (e: React.FocusEvent) => {
-    // Don't reset if clicking the eye button (it has onMouseDown preventDefault)
-    if (e.relatedTarget?.closest('[data-apikey-eye]')) return;
+    // Ignore blur if focus stays within the same container (e.g. clicking eye button,
+    // or browser refocusing after input type change password→text)
+    if (containerRef.current?.contains(e.relatedTarget as Node)) return;
     // If user focused a masked field but typed nothing, revert to masked display
     if (isMasked && editing && !localValue.trim()) {
       setEditing(false);
@@ -347,7 +350,7 @@ export function ApiKeyInput({ value, onChange, placeholder, disabled }: {
   };
 
   return (
-    <div className="flex items-center border border-border rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
+    <div ref={containerRef} className="flex items-center border border-border rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
       <input
         ref={inputRef}
         type={showPassword ? 'text' : 'password'}

@@ -605,34 +605,9 @@ function CustomProviderForm({
           />
         </Field>
 
-        {/* Feedback — error only, success is shown in test button */}
-        {testError && testState !== 'ok' && (
-          <div className="flex items-start gap-2 text-xs text-destructive/80 bg-destructive/8 border border-destructive/20 rounded-lg px-3 py-2">
-            <AlertCircle size={13} className="shrink-0 mt-0.5" />
-            <span>{testError}</span>
-          </div>
-        )}
-
         {/* Actions */}
         <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleTest}
-            disabled={!canSave || testState === 'testing'}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-all duration-200 disabled:cursor-not-allowed ${
-              testState === 'ok'
-                ? 'bg-success/10 text-success border border-success/20'
-                : 'border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 disabled:opacity-40'
-            }`}
-          >
-            {testState === 'testing' ? <Loader2 size={12} className="animate-spin" />
-              : <Zap size={13} />}
-            {testState === 'testing'
-              ? t.settings.ai.testKeyTesting
-              : testState === 'ok'
-                ? (t.settings?.customProviders?.modal?.success ?? 'Connected')
-                : t.settings.ai.testKey}
-          </button>
+          <TestButton result={testResult} disabled={!canSave} onTest={handleTest} t={t} />
 
           <div className="flex-1">
             {!canSave && missingFields.length > 0 && (
