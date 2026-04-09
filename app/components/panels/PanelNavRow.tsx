@@ -41,7 +41,7 @@ export function PanelNavRow({
   const showRail = Boolean(active && href);
 
   const className = cn(
-    'relative flex items-center gap-3 py-2.5 transition-colors duration-150 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    'relative flex items-center gap-3 py-2.5 transition-[background-color] duration-150 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     showRail ? 'bg-[var(--amber-dim)]/40 pl-3.5 pr-4 text-foreground' : 'px-4',
     href && !showRail && 'cursor-pointer hover:bg-muted/50',
     showRail && 'cursor-default',

@@ -39,7 +39,7 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'inline-flex min-h-9 max-w-44 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'inline-flex min-h-9 max-w-44 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActive
                     ? 'border-[var(--amber)]/50 bg-[var(--amber-dim)]/50 font-medium text-foreground'
                     : 'border-transparent bg-muted/25 text-muted-foreground hover:bg-muted/50 hover:text-foreground',

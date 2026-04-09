@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Library, FileText, CircleCheck } from 'lucide-react';
+import { Library } from 'lucide-react';
 
 export function EchoFactSnapshot({
   headingId,
@@ -54,37 +54,5 @@ export function EchoFactSnapshot({
         <div className="mt-4 border-t border-border/50 pt-4">{actions}</div>
       ) : null}
     </section>
-  );
-}
-
-export function EchoContinuedGroups({
-  draftsLabel,
-  todosLabel,
-  subEmptyHint,
-  footer,
-}: {
-  draftsLabel: string;
-  todosLabel: string;
-  subEmptyHint: string;
-  footer?: ReactNode;
-}) {
-  const cell = (label: string, icon: ReactNode) => (
-    <div className="flex min-h-24 flex-col justify-center rounded-xl border border-border/50 bg-card/50 px-4 py-4 transition-colors duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/10">
-      <div className="flex items-center gap-2">
-        <span className="shrink-0 text-muted-foreground" aria-hidden>{icon}</span>
-        <h3 className="font-sans text-sm font-medium text-foreground">{label}</h3>
-      </div>
-      <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">{subEmptyHint}</p>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {cell(draftsLabel, <FileText size={15} strokeWidth={1.75} />)}
-        {cell(todosLabel, <CircleCheck size={15} strokeWidth={1.75} />)}
-      </div>
-      {footer ? <div className="border-t border-border/50 pt-4">{footer}</div> : null}
-    </div>
   );
 }

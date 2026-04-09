@@ -114,11 +114,9 @@ describe('i18n agents panel hub', () => {
 describe('i18n echo panel', () => {
   const echoKeys = [
     'title',
-    'aboutYouTitle',
-    'continuedTitle',
-    'dailyEchoTitle',
-    'pastYouTitle',
-    'intentGrowthTitle',
+    'imprintTitle',
+    'growthTitle',
+    'selfTitle',
   ] as const;
 
   it('en has all echo keys', () => {

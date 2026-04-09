@@ -178,7 +178,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   );
 
   const secondaryBtnClass =
-    'inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 font-sans text-sm font-medium text-foreground transition-colors duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+    'inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 font-sans text-sm font-medium text-foreground transition-[background-color,border-color] duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
   const agentBtn = (onClick: () => void) => (
     <button type="button" onClick={onClick} className={secondaryBtnClass}>

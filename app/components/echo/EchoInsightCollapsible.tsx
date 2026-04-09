@@ -109,7 +109,7 @@ export function EchoInsightCollapsible({
       <button
         id={btnId}
         type="button"
-        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-200 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-[background-color] duration-200 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
