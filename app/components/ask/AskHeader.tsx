@@ -108,14 +108,14 @@ export default memo(function AskHeader({
   useEffect(() => {
     if (!switcherOpen || !switcherRef.current) return;
     const rect = switcherRef.current.getBoundingClientRect();
-    setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 240) });
+    setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 280) });
   }, [switcherOpen]);
 
   const switcherDropdown = switcherOpen && dropPos && sessions ? createPortal(
     <div
       ref={dropdownRef}
       className="fixed z-50 rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
-      style={{ top: dropPos.top, left: dropPos.left, minWidth: dropPos.width, maxWidth: 320 }}
+      style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
       role="listbox"
     >
       {sessions.map((s) => {
@@ -150,7 +150,7 @@ export default memo(function AskHeader({
               role="option"
               aria-selected={isActive}
               onClick={() => handleSelectSession(s.id)}
-              className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors ${
+              className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 text-xs text-left transition-colors ${
                 isActive ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             >
