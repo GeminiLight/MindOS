@@ -167,7 +167,9 @@ function registerSshHandlers(
   });
 
   safeHandle('connect:get-saved-password', (_: unknown, address: string) => {
-    return loadPassword(address);
+    // Normalize address to match the key used when saving (connect:connect normalizes before savePassword)
+    const normalized = normalizeAddress(address);
+    return normalized ? loadPassword(normalized) : null;
   });
 
   safeHandle('connect:test', async (_: unknown, address: string) => {
