@@ -49,8 +49,6 @@ import {
   sanitizeToolArgs,
 } from '@/lib/sse/events';
 import {
-  skillDirCandidates,
-  readAbsoluteFile,
   resolveSkillFile,
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
