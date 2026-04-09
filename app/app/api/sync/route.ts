@@ -1,74 +1,22 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync, execFile } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join, resolve } from 'path';
-import { homedir } from 'os';
 import { handleRouteErrorSimple } from '@/lib/errors';
-
-const MINDOS_DIR = join(homedir(), '.mindos');
-const CONFIG_PATH = join(MINDOS_DIR, 'config.json');
-const SYNC_STATE_PATH = join(MINDOS_DIR, 'sync-state.json');
-
-function loadConfig() {
-  try { return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
-}
-
-/** Atomic write to prevent data corruption on crash/power loss */
-function atomicWriteJSON(filePath: string, data: unknown) {
-  const content = JSON.stringify(data, null, 2) + '\n';
-  const tmp = filePath + '.tmp';
-  writeFileSync(tmp, content, 'utf-8');
-  renameSync(tmp, filePath);
-}
-
-function saveConfig(config: Record<string, unknown>) {
-  atomicWriteJSON(CONFIG_PATH, config);
-}
-
-/** Validate that a file path is safely within mindRoot (prevents path traversal) */
-function isPathWithinMindRoot(mindRoot: string, filePath: string): boolean {
-  const normalizedPath = resolve(mindRoot, filePath);
-  // Must start with mindRoot + separator to prevent escape via symlinks or ../
-  return normalizedPath.startsWith(mindRoot + '/') || normalizedPath === mindRoot;
-}
-
-function loadSyncState() {
-  try { return JSON.parse(readFileSync(SYNC_STATE_PATH, 'utf-8')); } catch { return {}; }
-}
-
-function getRemoteUrl(cwd: string) {
-  try { return execSync('git remote get-url origin', { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return null; }
-}
-
-function getBranch(cwd: string) {
-  try { return execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return 'main'; }
-}
-
-function getUnpushedCount(cwd: string) {
-  try { return execSync('git rev-list --count @{u}..HEAD', { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return '?'; }
-}
-
-function isGitRepo(dir: string) {
-  return existsSync(join(dir, '.git'));
-}
-
-/** Resolve path to bin/cli.js — prefer env var set by CLI launcher, fall back to project root. */
-function getCliPath() {
-  return process.env.MINDOS_CLI_PATH || resolve(process.env.MINDOS_PROJECT_ROOT || process.cwd(), '..', 'bin', 'cli' + '.js');
-}
-
-/** Run CLI command via execFile — avoids shell injection by passing args as array */
-function runCli(args: string[], timeoutMs = 30000): Promise<void> {
-  const cliPath = getCliPath();
-  const nodeBin = process.env.MINDOS_NODE_BIN || process.execPath;
-  return new Promise((res, rej) => {
-    execFile(nodeBin, [cliPath, ...args], { timeout: timeoutMs }, (err, _stdout, stderr) => {
-      if (err) rej(new Error(stderr?.trim() || err.message));
-      else res();
-    });
-  });
-}
+import {
+  CONFIG_PATH,
+  SYNC_STATE_PATH,
+  atomicWriteJSON,
+  loadConfig,
+  saveConfig,
+  loadSyncState,
+  isGitRepo,
+  getRemoteUrl,
+  getBranch,
+  getUnpushedCount,
+  isPathWithinMindRoot,
+  runCli,
+} from '@/lib/sync-config';
 
 export async function GET() {
   const config = loadConfig();
@@ -146,11 +94,10 @@ export async function POST(req: NextRequest) {
 
         const branch = body.branch?.trim() || 'main';
 
-        // Call CLI's sync init — pass clean remote + token separately (never embed token in URL)
         try {
           const args = ['sync', 'init', '--non-interactive', '--remote', remote, '--branch', branch];
           if (body.token) args.push('--token', body.token);
-          await runCli(args, 120000); // git init + remote setup can take 60s+
+          await runCli(args, 120000);
           return NextResponse.json({ success: true, message: 'Sync initialized' });
         } catch (err: unknown) {
           return handleRouteErrorSimple(err, 400);
@@ -161,9 +108,8 @@ export async function POST(req: NextRequest) {
         if (!isGitRepo(mindRoot)) {
           return NextResponse.json({ error: 'Not a git repository' }, { status: 400 });
         }
-        // Delegate to CLI for unified conflict handling
         try {
-          await runCli(['sync', 'now'], 120000); // pull + push can take 60s+
+          await runCli(['sync', 'now'], 120000);
           return NextResponse.json({ ok: true });
         } catch (err: unknown) {
           return handleRouteErrorSimple(err);
@@ -185,10 +131,8 @@ export async function POST(req: NextRequest) {
       }
 
       case 'reset': {
-        // Clear sync config so user can re-configure from scratch
         delete config.sync;
         saveConfig(config);
-        // Clear sync state
         try { atomicWriteJSON(SYNC_STATE_PATH, {}); } catch {}
         return NextResponse.json({ ok: true, enabled: false });
       }
@@ -213,13 +157,11 @@ export async function POST(req: NextRequest) {
       }
 
       case 'resolve-conflict': {
-        // Resolve a single conflict: keep-local (default) or keep-remote
-        const file = body.remote; // reuse field: relative path of conflict file
-        const strategy = body.branch ?? 'keep-local'; // reuse field
+        const file = body.remote;
+        const strategy = body.branch ?? 'keep-local';
         if (!file || typeof file !== 'string') {
           return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
         }
-        // Security: prevent path traversal attacks
         if (!isPathWithinMindRoot(mindRoot, file)) {
           return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
         }
@@ -227,15 +169,12 @@ export async function POST(req: NextRequest) {
         const originalPath = resolve(mindRoot, file);
         try {
           if (strategy === 'keep-remote' && existsSync(conflictPath)) {
-            // Replace local with remote version
             const remoteContent = readFileSync(conflictPath, 'utf-8');
             writeFileSync(originalPath, remoteContent, 'utf-8');
           }
-          // Clean up .sync-conflict file
           if (existsSync(conflictPath)) {
             unlinkSync(conflictPath);
           }
-          // Remove this conflict from sync state
           const state = loadSyncState();
           if (state.conflicts) {
             state.conflicts = state.conflicts.filter((c: { file: string }) => c.file !== file);
@@ -252,7 +191,6 @@ export async function POST(req: NextRequest) {
         if (!file || typeof file !== 'string') {
           return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
         }
-        // Security: prevent path traversal attacks
         if (!isPathWithinMindRoot(mindRoot, file)) {
           return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
         }
