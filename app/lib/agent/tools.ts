@@ -8,7 +8,6 @@ import {
   getMindRoot,
 } from '@/lib/fs';
 import { readSkillContentByName } from '@/lib/pi-integration/skills';
-import { callMcporterTool, createMcporterAgentTools, listMcporterServers, listMcporterTools } from '@/lib/pi-integration/mcporter';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
 import { getIMTools } from '@/lib/im/tools';
@@ -209,15 +208,6 @@ const LoadSkillParams = Type.Object({
   name: Type.String({ description: 'Skill name, e.g. "mindos" or "context7"' }),
 });
 
-const ListMcpToolsParams = Type.Object({
-  server: Type.Optional(Type.String({ description: 'Optional MCP server name. Omit to list discovered servers only.' })),
-});
-
-const CallMcpToolParams = Type.Object({
-  server: Type.String({ description: 'MCP server name discovered via list_mcp_tools' }),
-  tool: Type.String({ description: 'Exact MCP tool name to invoke' }),
-  arguments_json: Type.Optional(Type.String({ description: 'Optional JSON object string of tool arguments. Example: {"query":"react hooks"}' })),
-});
 
 // ─── Tool Definitions (AgentTool interface) ─────────────────────────────────
 
@@ -261,7 +251,7 @@ export function getChatTools(): AgentTool<any>[] {
   return knowledgeBaseTools.filter(t => CHAT_TOOL_NAMES.has(t.name));
 }
 
-export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
+export function getRequestScopedTools(): AgentTool<any>[] {
   const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
 
   // IM tools: only loaded when at least one platform is configured
@@ -269,25 +259,10 @@ export async function getRequestScopedTools(): Promise<AgentTool<any>[]> {
     try { baseTools.push(...getIMTools()); } catch { /* graceful degradation */ }
   }
 
-  try {
-    const result = await listMcporterServers();
-    const okServers = (result.servers ?? []).filter((server) => server.status === 'ok');
-    if (okServers.length === 0) return baseTools;
+  // MCP tools are now provided by pi-mcp-adapter extension (registered via pi.registerTool)
+  // and automatically included by the framework — no manual discovery needed here.
 
-    const detailedServers = await Promise.all(okServers.map(async (server) => {
-      try {
-        return await listMcporterTools(server.name);
-      } catch {
-        return server;
-      }
-    }));
-
-    const dynamicMcpTools = createMcporterAgentTools(detailedServers);
-    if (dynamicMcpTools.length === 0) return baseTools;
-    return [...baseTools, ...dynamicMcpTools];
-  } catch {
-    return baseTools;
-  }
+  return baseTools;
 }
 
 export const knowledgeBaseTools: AgentTool<any>[] = [
@@ -397,45 +372,6 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
       const content = readSkillContentByName(params.name, { projectRoot, mindRoot: getMindRoot() });
       if (!content) return textResult(`Skill not found: ${params.name}`);
       return textResult(truncate(content));
-    }),
-  },
-
-  {
-    name: 'list_mcp_tools',
-    label: 'List MCP Tools',
-    description: 'List MCP servers configured in ~/.mindos/mcp.json. Without `server`, lists discovered servers and their health. With `server`, lists that server\'s tools and JSON schemas.',
-    parameters: ListMcpToolsParams,
-    execute: safeExecute(async (_id, params: Static<typeof ListMcpToolsParams>) => {
-      if (!params.server) {
-        const result = await listMcporterServers();
-        if (!result.servers || result.servers.length === 0) return textResult('No external MCP servers configured. The MindOS built-in MCP server is always available.');
-        return textResult(result.servers.map((server) => `- **${server.name}** — status: ${server.status}${server.transport ? ` | transport: ${server.transport}` : ''}${server.error ? ` | error: ${server.error}` : ''}`).join('\n'));
-      }
-
-      const server = await listMcporterTools(params.server);
-      if (!server.tools || server.tools.length === 0) {
-        return textResult(`No tools found for MCP server: ${params.server}`);
-      }
-      return textResult(server.tools.map((tool) => `## ${tool.name}\n${tool.description || 'No description'}\n\nSchema:\n${JSON.stringify(tool.inputSchema ?? {}, null, 2)}`).join('\n\n'));
-    }),
-  },
-
-  {
-    name: 'call_mcp_tool',
-    label: 'Call MCP Tool',
-    description: 'Call a specific MCP tool by server and tool name. Pass `arguments_json` as a JSON object string. Use list_mcp_tools first to discover names and schemas.',
-    parameters: CallMcpToolParams,
-    execute: safeExecute(async (_id, params: Static<typeof CallMcpToolParams>) => {
-      let parsedArgs: Record<string, unknown> = {};
-      if (params.arguments_json?.trim()) {
-        try {
-          parsedArgs = JSON.parse(params.arguments_json) as Record<string, unknown>;
-        } catch (error) {
-          return textResult(`Invalid arguments_json. Expected a JSON object string. Error: ${formatToolError(error)}`);
-        }
-      }
-      const output = await callMcporterTool(params.server, params.tool, parsedArgs);
-      return textResult(output || '(empty MCP response)');
     }),
   },
 

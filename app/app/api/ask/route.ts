@@ -36,6 +36,13 @@ import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { assertNotProtected } from '@/lib/core';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
+
+// Ensure pi-mcp-adapter reads MindOS's MCP config (~/.mindos/mcp.json) instead of its
+// default (~/.pi/agent/mcp.json). getConfigPathFromArgv() in the adapter checks process.argv
+// at module-load time, so this must run before DefaultResourceLoader.reload().
+if (!process.argv.includes('--mcp-config')) {
+  process.argv.push('--mcp-config', path.join(os.homedir(), '.mindos', 'mcp.json'));
+}
 import { createSession, promptStream, closeSession } from '@/lib/acp/session';
 import type { AcpSessionUpdate } from '@/lib/acp/types';
 import type { Message as FrontendMessage } from '@/lib/types';
@@ -612,7 +619,7 @@ export async function POST(req: NextRequest) {
     const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
     const requestTools = askMode === 'organize' ? getOrganizeTools()
       : askMode === 'chat' ? getChatTools()
-      : await getRequestScopedTools();
+      : getRequestScopedTools();
     const customTools = toPiCustomToolDefinitions(requestTools);
 
     const authStorage = AuthStorage.create();
@@ -641,7 +648,11 @@ export async function POST(req: NextRequest) {
         path.join(getMindRoot(), '.skills'),
         path.join(os.homedir(), '.mindos', 'skills'),
       ],
-      additionalExtensionPaths: scanExtensionPaths(),
+      additionalExtensionPaths: [
+        ...scanExtensionPaths(),
+        // pi-mcp-adapter: token-efficient MCP proxy tool (~200 tokens vs N*150 full tool defs)
+        path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
+      ],
     });
     await resourceLoader.reload();
 
