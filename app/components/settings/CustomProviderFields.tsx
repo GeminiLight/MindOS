@@ -24,12 +24,16 @@ export default function CustomProviderFields({
 }: CustomProviderFieldsProps) {
   const basePreset = PROVIDER_PRESETS[form.baseProviderId];
 
+  const nameHint = form.isDuplicateName
+    ? (locale === 'zh' ? '名称已存在' : 'Name already exists')
+    : undefined;
+
   return (
     <div className="space-y-3">
       {/* Name + Protocol */}
       {layout === 'compact' ? (
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'}>
+          <Field label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'} hint={nameHint} hintError={form.isDuplicateName}>
             <Input
               value={form.name}
               onChange={e => form.setName(e.target.value)}
@@ -54,7 +58,8 @@ export default function CustomProviderFields({
         <>
           <Field
             label={t.settings?.customProviders?.modal?.fieldName ?? 'Name'}
-            hint={t.settings?.customProviders?.modal?.fieldNameHint}
+            hint={nameHint ?? t.settings?.customProviders?.modal?.fieldNameHint}
+            hintError={form.isDuplicateName}
           >
             <Input
               value={form.name}

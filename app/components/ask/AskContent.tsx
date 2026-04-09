@@ -483,7 +483,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }), [t, reconnectAttempt]);
 
   return (
-    <>
+    <div className="flex min-h-0 w-full flex-col h-full">
       {/* Header — home variant shows session switcher + new/history/fullscreen buttons */}
       <AskHeader
         isPanel={isPanel || isHome}
@@ -523,32 +523,34 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         />
       )}
 
-      {/* Messages */}
       {/* Messages — home variant hides empty state (suggestions rendered externally) */}
-      {!isHome && (
-        <MessageList
-          messages={session.messages}
-          isLoading={isLoading}
-          loadingPhase={loadingPhase}
-          emptyPrompt={t.ask.emptyPrompt}
-          emptyHint={t.ask.emptyHint}
-          suggestions={t.ask.suggestions}
-          onSuggestionClick={setInput}
-          labels={messageLabels}
-        />
-      )}
-      {isHome && session.messages.length > 0 && (
-        <MessageList
-          messages={session.messages}
-          isLoading={isLoading}
-          loadingPhase={loadingPhase}
-          emptyPrompt={t.ask.emptyPrompt}
-          emptyHint={t.ask.emptyHint}
-          suggestions={[]}
-          onSuggestionClick={setInput}
-          labels={messageLabels}
-        />
-      )}
+      {/* Flex grow to push composer to bottom when MessageList hidden */}
+      <div className={`flex-1 min-h-0 ${!isHome ? 'flex' : ''}`}>
+        {!isHome && (
+          <MessageList
+            messages={session.messages}
+            isLoading={isLoading}
+            loadingPhase={loadingPhase}
+            emptyPrompt={t.ask.emptyPrompt}
+            emptyHint={t.ask.emptyHint}
+            suggestions={t.ask.suggestions}
+            onSuggestionClick={setInput}
+            labels={messageLabels}
+          />
+        )}
+        {isHome && session.messages.length > 0 && (
+          <MessageList
+            messages={session.messages}
+            isLoading={isLoading}
+            loadingPhase={loadingPhase}
+            emptyPrompt={t.ask.emptyPrompt}
+            emptyHint={t.ask.emptyHint}
+            suggestions={[]}
+            onSuggestionClick={setInput}
+            labels={messageLabels}
+          />
+        )}
+      </div>
 
       {/* Popovers — flex children so they stay within overflow boundary (absolute positioning would be clipped by RightAskPanel's overflow-hidden) */}
       {mention.mentionQuery !== null && mention.mentionResults.length > 0 && (
@@ -737,6 +739,6 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

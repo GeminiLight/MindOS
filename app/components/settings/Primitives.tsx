@@ -7,12 +7,12 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
 
-export function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
+export function Field({ label, hint, hintError, children }: { label: React.ReactNode; hint?: string; hintError?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="text-sm text-foreground font-medium">{label}</label>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className={`text-xs ${hintError ? 'text-destructive' : 'text-muted-foreground'}`}>{hint}</p>}
     </div>
   );
 }

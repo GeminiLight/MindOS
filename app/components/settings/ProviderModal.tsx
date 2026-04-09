@@ -13,6 +13,7 @@ interface ProviderModalProps {
   onClose: () => void;
   onSave: (provider: CustomProvider) => void;
   initialProvider?: CustomProvider;
+  existingNames?: string[];
   t: Messages;
 }
 
@@ -31,16 +32,17 @@ export default function ProviderModal({
       onClose={onClose}
       onSave={onSave}
       initialProvider={initialProvider}
+      existingNames={existingNames}
       t={t}
     />
   );
 }
 
 function ProviderModalInner({
-  onClose, onSave, initialProvider, t,
+  onClose, onSave, initialProvider, existingNames, t,
 }: Omit<ProviderModalProps, 'isOpen'>) {
   const { locale } = useLocale();
-  const form = useCustomProviderForm({ initial: initialProvider, onSave, locale });
+  const form = useCustomProviderForm({ initial: initialProvider, onSave, locale, existingNames });
 
   const title = initialProvider
     ? t.settings?.customProviders?.modal?.titleEdit

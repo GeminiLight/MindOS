@@ -159,9 +159,18 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
           onAddCustom={() => { setCustomEditingId(null); setCustomFormTemplate(undefined); setCustomFormOpen(true); }}
           onAddFromPreset={id => {
             const p = PROVIDER_PRESETS[id];
+            const baseName = locale === 'zh' ? p.nameZh : p.name;
+            // Auto-suffix to avoid duplicate: "OpenAI" → "OpenAI (2)" → "OpenAI (3)"
+            const names = new Set(customProviders.map(cp => cp.name.toLowerCase()));
+            let finalName = baseName;
+            if (names.has(finalName.toLowerCase())) {
+              let n = 2;
+              while (names.has(`${baseName} (${n})`.toLowerCase())) n++;
+              finalName = `${baseName} (${n})`;
+            }
             setCustomEditingId(null);
             setCustomFormTemplate({
-              id: '', name: locale === 'zh' ? p.nameZh : p.name,
+              id: '', name: finalName,
               baseProviderId: id, apiKey: '', model: p.defaultModel,
               baseUrl: p.fixedBaseUrl || getDefaultBaseUrl(id) || '',
             });
@@ -179,6 +188,9 @@ export function AiTab({ data, updateAi, updateAgent, updateCustomProviders, t }:
             onSave={handleSaveCustom}
             onCancel={() => { setCustomFormOpen(false); setCustomEditingId(null); }}
             t={t}
+            existingNames={customProviders
+              .filter(p => p.id !== customEditingId)
+              .map(p => p.name)}
           />
         )}
 
@@ -414,15 +426,16 @@ function ProviderActions({
 /* ── Inline Custom Provider Form (uses shared hook + fields) ── */
 
 function CustomProviderForm({
-  initial, onSave, onCancel, t,
+  initial, onSave, onCancel, t, existingNames,
 }: {
   initial?: CustomProvider;
   onSave: (provider: CustomProvider) => void;
   onCancel: () => void;
   t: AiTabProps['t'];
+  existingNames: string[];
 }) {
   const { locale } = useLocale();
-  const form = useCustomProviderForm({ initial, onSave, locale });
+  const form = useCustomProviderForm({ initial, onSave, locale, existingNames });
 
   const formTitle = initial
     ? (locale === 'zh' ? '编辑自定义 Provider' : 'Edit Custom Provider')
@@ -457,7 +470,12 @@ function CustomProviderForm({
           <TestButton result={form.testResult} disabled={!form.canSave} onTest={form.handleTest} t={t} />
 
           <div className="flex-1">
-            {!form.canSave && missingFields.length > 0 && (
+            {form.isDuplicateName && (
+              <span className="text-2xs text-destructive pl-2">
+                {locale === 'zh' ? '名称已存在' : 'Name already exists'}
+              </span>
+            )}
+            {!form.isDuplicateName && !form.canSave && missingFields.length > 0 && (
               <span className="text-2xs text-muted-foreground/60 pl-2">
                 {locale === 'zh' ? `需要: ${missingFields.join('、')}` : `Required: ${missingFields.join(', ')}`}
               </span>

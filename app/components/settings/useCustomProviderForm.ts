@@ -27,6 +27,7 @@ export interface CustomProviderFormState {
   setBaseUrl: (v: string) => void;
   testResult: TestResult;
   canSave: boolean;
+  isDuplicateName: boolean;
   handleTest: () => Promise<void>;
   handleSave: () => void;
 }
@@ -39,10 +40,12 @@ export function useCustomProviderForm({
   initial,
   onSave,
   locale,
+  existingNames,
 }: {
   initial?: CustomProvider;
   onSave: (provider: CustomProvider) => void;
   locale: string;
+  existingNames?: string[];
 }): CustomProviderFormState {
   const [name, setName] = useState(initial?.name ?? '');
   const [baseProviderId, setBaseProviderId] = useState<ProviderId>(initial?.baseProviderId ?? 'openai');
@@ -51,7 +54,13 @@ export function useCustomProviderForm({
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
   const [testResult, setTestResult] = useState<TestResult>({ state: 'idle' });
 
-  const canSave = !!(name.trim() && baseUrl.trim() && model.trim());
+  // Check for duplicate name (exclude the provider being edited)
+  const trimmedName = name.trim();
+  const isDuplicateName = !!(trimmedName && existingNames?.some(
+    n => n.toLowerCase() === trimmedName.toLowerCase(),
+  ));
+
+  const canSave = !!(trimmedName && baseUrl.trim() && model.trim() && !isDuplicateName);
 
   const handleTest = useCallback(async () => {
     if (!canSave) {
@@ -84,6 +93,13 @@ export function useCustomProviderForm({
   }, [canSave, apiKey, model, baseUrl, baseProviderId, locale, initial?.id]);
 
   const handleSave = useCallback(() => {
+    if (isDuplicateName) {
+      setTestResult({
+        state: 'error',
+        error: locale === 'zh' ? '名称已存在，请使用其他名称' : 'Name already exists, please use a different name',
+      });
+      return;
+    }
     if (!canSave) {
       setTestResult({
         state: 'error',
@@ -99,7 +115,7 @@ export function useCustomProviderForm({
       model: model.trim(),
       baseUrl: baseUrl.trim(),
     });
-  }, [canSave, name, baseProviderId, apiKey, model, baseUrl, initial?.id, onSave, locale]);
+  }, [canSave, isDuplicateName, name, baseProviderId, apiKey, model, baseUrl, initial?.id, onSave, locale]);
 
   return {
     name, setName,
@@ -109,6 +125,7 @@ export function useCustomProviderForm({
     baseUrl, setBaseUrl,
     testResult,
     canSave,
+    isDuplicateName,
     handleTest,
     handleSave,
   };
