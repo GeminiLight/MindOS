@@ -67,33 +67,29 @@ export async function generateDailyEchoReport(
     }
   }
 
-  // 4. Alignment analysis via LLM
+  // 4. Alignment analysis via LLM — always run
   let alignment: AlignmentAnalysis = {
     alignmentScore: 50,
-    analysis: config.language === 'zh'
-      ? '今日数据不足以进行对齐分析。'
-      : 'Insufficient data for alignment analysis.',
+    analysis: '',
   };
 
-  if (raw.dailyLine || raw.growthIntent) {
-    try {
-      const prompt = buildAlignmentPrompt({
-        dailyLine: raw.dailyLine,
-        growthIntent: raw.growthIntent,
-        themes,
-        language: config.language,
-      });
-      const parsed = await askLLMJSON<AlignmentAnalysis>(prompt);
-      if (parsed && typeof parsed.alignmentScore === 'number') {
-        alignment = {
-          alignmentScore: Math.max(0, Math.min(100, parsed.alignmentScore)),
-          analysis: parsed.analysis || alignment.analysis,
-          reasoning: parsed.reasoning,
-        };
-      }
-    } catch (err) {
-      console.warn('[DailyEcho] Alignment analysis failed:', err);
+  try {
+    const prompt = buildAlignmentPrompt({
+      dailyLine: raw.dailyLine,
+      growthIntent: raw.growthIntent,
+      themes,
+      language: config.language,
+    });
+    const parsed = await askLLMJSON<AlignmentAnalysis>(prompt);
+    if (parsed && typeof parsed.alignmentScore === 'number') {
+      alignment = {
+        alignmentScore: Math.max(0, Math.min(100, parsed.alignmentScore)),
+        analysis: parsed.analysis || alignment.analysis,
+        reasoning: parsed.reasoning,
+      };
     }
+  } catch (err) {
+    console.warn('[DailyEcho] Alignment analysis failed:', err);
   }
 
   // 5. Generate reflection prompts via LLM
