@@ -6,8 +6,11 @@ describe('isAiConfiguredForAsk', () => {
     expect(
       isAiConfiguredForAsk({
         ai: {
-          provider: 'anthropic',
-          providers: { anthropic: { apiKey: 'sk-ant-test' }, openai: { apiKey: '' } },
+          activeProvider: 'p_anthro01',
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: 'sk-ant-test', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
         envOverrides: {},
       }),
@@ -18,8 +21,11 @@ describe('isAiConfiguredForAsk', () => {
     expect(
       isAiConfiguredForAsk({
         ai: {
-          provider: 'anthropic',
-          providers: { anthropic: { apiKey: '' }, openai: { apiKey: '' } },
+          activeProvider: 'p_anthro01',
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
         envOverrides: { ANTHROPIC_API_KEY: true },
       }),
@@ -30,8 +36,11 @@ describe('isAiConfiguredForAsk', () => {
     expect(
       isAiConfiguredForAsk({
         ai: {
-          provider: 'anthropic',
-          providers: { anthropic: { apiKey: '' }, openai: { apiKey: 'sk-openai-test' } },
+          activeProvider: 'p_anthro01',
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: 'sk-openai-test', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
         envOverrides: {},
       }),
@@ -42,8 +51,11 @@ describe('isAiConfiguredForAsk', () => {
     expect(
       isAiConfiguredForAsk({
         ai: {
-          provider: 'openai',
-          providers: { anthropic: { apiKey: '' }, openai: { apiKey: 'sk-openai-test' } },
+          activeProvider: 'p_openai01',
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: 'sk-openai-test', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
         envOverrides: {},
       }),
@@ -54,18 +66,26 @@ describe('isAiConfiguredForAsk', () => {
     expect(
       isAiConfiguredForAsk({
         ai: {
-          provider: 'openai',
-          providers: { anthropic: { apiKey: '' }, openai: { apiKey: '' } },
+          activeProvider: 'p_openai01',
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
         envOverrides: { OPENAI_API_KEY: true },
       }),
     ).toBe(true);
   });
 
-  it('treats missing provider as anthropic (error path)', () => {
+  it('treats missing provider as first entry fallback (error path)', () => {
     expect(
       isAiConfiguredForAsk({
-        ai: { providers: { anthropic: { apiKey: '' }, openai: { apiKey: '' } } },
+        ai: {
+          providers: [
+            { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+          ],
+        },
         envOverrides: {},
       }),
     ).toBe(false);

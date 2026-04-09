@@ -20,7 +20,7 @@ import { readSettings } from '@/lib/settings';
 import { scanSkillDirs } from '@/lib/pi-integration/skills';
 import { getMindRoot } from '@/lib/fs';
 
-function enrichMindOsAgent(agent: Record<string, unknown>) {
+async function enrichMindOsAgent(agent: Record<string, unknown>) {
   agent.present = true;
   agent.installed = true;
   agent.scope = 'builtin';
@@ -35,7 +35,7 @@ function enrichMindOsAgent(agent: Record<string, unknown>) {
 
   try {
     const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-    const skills = scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
+    const skills = await scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
     const enabledSkills = skills.filter(s => s.enabled);
     agent.installedSkillNames = enabledSkills.map(s => s.name);
     agent.installedSkillCount = enabledSkills.length;
@@ -217,7 +217,7 @@ export async function GET() {
     });
 
     const mindos = agents.find(a => a.key === 'mindos');
-    if (mindos) enrichMindOsAgent(mindos as unknown as Record<string, unknown>);
+    if (mindos) await enrichMindOsAgent(mindos as unknown as Record<string, unknown>);
 
     // Runtime verification: for agents marked as installed with HTTP endpoint,
     // verify endpoint is reachable (1s timeout to avoid blocking)

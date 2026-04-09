@@ -7,15 +7,13 @@ import { useLocale } from '@/lib/stores/locale-store';
 import {
   type ProviderId,
   PROVIDER_PRESETS,
-  ALL_PROVIDER_IDS,
   isProviderId,
-  getApiKeyEnvVar,
 } from '@/lib/agent/providers';
-import { type CustomProvider, isCustomProviderId, findCustomProvider } from '@/lib/custom-endpoints';
+import { type Provider, isProviderEntryId, findProvider } from '@/lib/custom-endpoints';
 
 const STORAGE_KEY = 'mindos-provider-model';
 
-type ProviderSelection = ProviderId | `cp_${string}` | null;
+type ProviderSelection = ProviderId | `p_${string}` | null;
 
 interface ProviderModelCapsuleProps {
   providerValue: ProviderSelection;
@@ -27,10 +25,9 @@ interface ProviderModelCapsuleProps {
 
 interface SettingsData {
   ai?: {
-    provider?: string;
-    providers?: Record<string, { apiKey?: string; model?: string; baseUrl?: string }>;
+    activeProvider?: string;
+    providers?: Provider[];
   };
-  customProviders?: CustomProvider[];
   envOverrides?: Record<string, boolean>;
 }
 
@@ -42,11 +39,11 @@ export function getPersistedProviderModel(): { provider: ProviderSelection; mode
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       const old = localStorage.getItem('mindos-provider-override');
-      if (old && (isProviderId(old) || isCustomProviderId(old))) return { provider: old as any, model: null };
+      if (old && (isProviderId(old) || isProviderEntryId(old))) return { provider: old as any, model: null };
       return { provider: null, model: null };
     }
     const parsed = JSON.parse(raw);
-    const provider = parsed?.provider && (isProviderId(parsed.provider) || isCustomProviderId(parsed.provider))
+    const provider = parsed?.provider && (isProviderId(parsed.provider) || isProviderEntryId(parsed.provider))
       ? parsed.provider : null;
     const model = typeof parsed?.model === 'string' ? parsed.model : null;
     return { provider, model };
@@ -63,24 +60,8 @@ function persistProviderModel(provider: ProviderSelection, model: string | null)
 
 /* ── Configured providers ── */
 
-function getConfiguredProviders(data: SettingsData): (ProviderId | `cp_${string}`)[] {
-  const result: (ProviderId | `cp_${string}`)[] = [];
-  const providers = data.ai?.providers ?? {};
-  const customProviders = data.customProviders ?? [];
-  const env = data.envOverrides ?? {};
-  for (const id of ALL_PROVIDER_IDS) {
-    const preset = PROVIDER_PRESETS[id];
-    const hasKey = !!providers[id]?.apiKey;
-    const envVar = getApiKeyEnvVar(id);
-    const hasEnv = envVar ? !!env[envVar] : false;
-    if (hasKey || hasEnv) { result.push(id); }
-    else if (preset.apiKeyFallback) {
-      const cfg = providers[id];
-      if (data.ai?.provider === id || (cfg && (cfg.model || cfg.baseUrl))) result.push(id);
-    }
-  }
-  for (const cp of customProviders) result.push(cp.id as `cp_${string}`);
-  return result;
+function getConfiguredProviders(data: SettingsData): string[] {
+  return (data.ai?.providers ?? []).map(p => p.id);
 }
 
 /* ── Component ── */
@@ -101,7 +82,7 @@ export default function ProviderModelCapsule({
   // Flyout state
   const providerPanelRef = useRef<HTMLDivElement>(null);
   const hoveredRowRef = useRef<HTMLDivElement>(null);
-  const [hoveredProvider, setHoveredProvider] = useState<ProviderId | `cp_${string}` | null>(null);
+  const [hoveredProvider, setHoveredProvider] = useState<string | null>(null);
   const [flyoutStyle, setFlyoutStyle] = useState<React.CSSProperties>({});
   const [expandedModels, setExpandedModels] = useState<string[] | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -151,8 +132,7 @@ export default function ProviderModelCapsule({
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('mindos:settings-changed', onChange); };
   }, []);
 
-  const defaultProvider = (settingsData?.ai?.provider && isProviderId(settingsData.ai.provider))
-    ? settingsData.ai.provider as ProviderId : 'anthropic';
+  const defaultProvider = settingsData?.ai?.activeProvider || '';
 
   const configuredProviders = useMemo(
     () => settingsData ? getConfiguredProviders(settingsData) : [],
@@ -170,14 +150,12 @@ export default function ProviderModelCapsule({
 
   // Resolve active display
   const activeProvider = providerValue ?? defaultProvider;
-  const isCustomActive = isCustomProviderId(String(activeProvider));
-  const customProvider = isCustomActive ? findCustomProvider(settingsData?.customProviders ?? [], String(activeProvider)) : null;
-  const activePreset = !isCustomActive ? PROVIDER_PRESETS[activeProvider as ProviderId] : null;
-  const defaultModel = customProvider?.model
-    || settingsData?.ai?.providers?.[activeProvider as ProviderId]?.model
+  const activeEntry = findProvider(settingsData?.ai?.providers ?? [], String(activeProvider));
+  const activePreset = activeEntry ? PROVIDER_PRESETS[activeEntry.protocol] : null;
+  const defaultModel = activeEntry?.model
     || activePreset?.defaultModel || '';
   const displayModel = modelValue || defaultModel;
-  const displayName = customProvider?.name
+  const displayName = activeEntry?.name
     || (activePreset ? (locale === 'zh' ? activePreset.nameZh : activePreset.name) : String(activeProvider));
 
   /* ── Dropdown positioning ── */
@@ -244,7 +222,7 @@ export default function ProviderModelCapsule({
   }, [open, hoveredProvider]);
 
   /* ── Model fetching ── */
-  const fetchModels = useCallback(async (providerId: ProviderId | `cp_${string}`, force = false) => {
+  const fetchModels = useCallback(async (providerId: string, force = false) => {
     if (!force && modelsCacheRef.current[providerId]) {
       setExpandedModels(modelsCacheRef.current[providerId]);
       setModelsLoading(false);
@@ -254,14 +232,9 @@ export default function ProviderModelCapsule({
     setModelsLoading(true); setModelsError(''); setExpandedModels(null);
     const version = ++fetchVersionRef.current;
     try {
-      const isCustom = isCustomProviderId(String(providerId));
-      const body: Record<string, string> = isCustom 
-        ? { customProviderId: providerId }
-        : { provider: providerId };
-      
       const res = await fetch('/api/settings/list-models', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ provider: providerId }),
       });
       if (version !== fetchVersionRef.current) return;
       const json = await res.json();
@@ -277,19 +250,13 @@ export default function ProviderModelCapsule({
     }
   }, []);
 
-  const canCustomProviderExpand = useCallback((cpId: string) => {
-    if (!isCustomProviderId(cpId)) return false;
-    const cp = findCustomProvider(settingsData?.customProviders ?? [], cpId);
-    return !!cp; // All custom providers can now expand (they use their baseProviderId)
-  }, [settingsData]);
-
   // Determine if a provider can show model flyout
-  const canProviderExpand = useCallback((id: ProviderId | `cp_${string}`) => {
-    if (isCustomProviderId(String(id))) {
-      return canCustomProviderExpand(String(id));
-    }
-    return PROVIDER_PRESETS[id as ProviderId]?.supportsListModels ?? false;
-  }, [canCustomProviderExpand]);
+  const canProviderExpand = useCallback((id: string) => {
+    const entry = findProvider(settingsData?.ai?.providers ?? [], id);
+    if (!entry) return false;
+    const preset = PROVIDER_PRESETS[entry.protocol];
+    return preset?.supportsListModels ?? false;
+  }, [settingsData]);
 
   // Compute flyout position: anchored to right edge of provider panel, aligned to hovered row
   const computeFlyoutPosition = useCallback(() => {
@@ -323,7 +290,7 @@ export default function ProviderModelCapsule({
   }, []);
 
   // Open flyout for a provider (debounced to prevent flicker)
-  const openFlyout = useCallback((providerId: ProviderId | `cp_${string}`) => {
+  const openFlyout = useCallback((providerId: string) => {
     cancelCloseTimer();
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = setTimeout(() => {
@@ -378,7 +345,7 @@ export default function ProviderModelCapsule({
     if (e.key === 'ArrowDown') { e.preventDefault(); setModelHighlight(i => (i + 1) % filteredModels.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setModelHighlight(i => (i - 1 + filteredModels.length) % filteredModels.length); }
     else if (e.key === 'Enter' && modelHighlight >= 0 && modelHighlight < filteredModels.length && hoveredProvider) {
-      e.preventDefault(); handleSelectModel(hoveredProvider, filteredModels[modelHighlight]);
+      e.preventDefault(); handleSelectModel(hoveredProvider as ProviderSelection, filteredModels[modelHighlight]);
     } else if (e.key === 'Escape') { e.preventDefault(); setHoveredProvider(null); setModelSearch(''); }
   }, [filteredModels, modelHighlight, hoveredProvider, handleSelectModel]);
 
@@ -394,21 +361,19 @@ export default function ProviderModelCapsule({
   const modelShort = (displayModel || '').length > 20
     ? (displayModel || '').slice(0, 18) + '…' : displayModel;
   // For built-in providers, use shortLabel; for custom, truncate if too long
-  const providerDisplay = isCustomProviderId(String(activeProvider))
-    ? ((displayName || '').length > 12 ? (displayName || '').slice(0, 10) + '…' : displayName)
+  const providerDisplay = (displayName || '').length > 12
+    ? (displayName || '').slice(0, 10) + '…'
     : (activePreset?.shortLabel || displayName);
   const capsuleTooltip = `${displayName} · ${displayModel}`;
-  const builtInIds = configuredProviders.filter(id => !isCustomProviderId(String(id)));
-  const customIds = configuredProviders.filter(id => isCustomProviderId(String(id)));
+  const providerIds = configuredProviders;
   const hasModelOverride = !!(modelValue && modelValue !== defaultModel);
 
   /* ── Render: flyout (right panel) — positioned absolutely via portal ── */
   const renderFlyout = () => {
     if (!hoveredProvider) return null;
-    const isCustom = isCustomProviderId(String(hoveredProvider));
-    const preset = !isCustom ? PROVIDER_PRESETS[hoveredProvider as ProviderId] : null;
-    const customProvider = isCustom ? findCustomProvider(settingsData?.customProviders ?? [], String(hoveredProvider)) : null;
-    const displayName = customProvider?.name || (preset ? (locale === 'zh' ? preset.nameZh : preset.name) : String(hoveredProvider));
+    const hovEntry = findProvider(settingsData?.ai?.providers ?? [], hoveredProvider);
+    const preset = hovEntry ? PROVIDER_PRESETS[hovEntry.protocol] : null;
+    const displayName = hovEntry?.name || (preset ? (locale === 'zh' ? preset.nameZh : preset.name) : String(hoveredProvider));
     
     return createPortal(
       <div
@@ -467,11 +432,11 @@ export default function ProviderModelCapsule({
           )}
           {filteredModels.map((m, i) => {
             const isModelSelected = providerValue === hoveredProvider && modelValue === m;
-            const defModel = settingsData?.ai?.providers?.[hoveredProvider]?.model || preset?.defaultModel;
+            const defModel = hovEntry?.model || preset?.defaultModel;
             return (
               <button
                 key={m} type="button" data-model-item
-                onClick={() => handleSelectModel(hoveredProvider, m)}
+                onClick={() => handleSelectModel(hoveredProvider as ProviderSelection, m)}
                 className={`w-full text-left px-2 py-1 text-2xs rounded transition-colors flex items-center gap-1 ${
                   isModelSelected ? 'bg-[var(--amber)]/12 text-foreground font-medium'
                   : i === modelHighlight ? 'bg-accent' : 'hover:bg-accent/60'
@@ -507,26 +472,28 @@ export default function ProviderModelCapsule({
         className="w-[220px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
         style={{ maxHeight: '70vh', overflowY: 'auto' }}
       >
-        {builtInIds.map((id) => {
-          const preset = PROVIDER_PRESETS[id as ProviderId];
-          const provName = locale === 'zh' ? preset.nameZh : preset.name;
+        {providerIds.map((id) => {
+          const entry = findProvider(settingsData?.ai?.providers ?? [], id);
+          if (!entry) return null;
+          const preset = PROVIDER_PRESETS[entry.protocol];
+          const provName = entry.name || (locale === 'zh' ? preset?.nameZh : preset?.name) || id;
           const provModel = modelValue && providerValue === id ? modelValue
-            : settingsData?.ai?.providers?.[id as ProviderId]?.model || preset.defaultModel;
+            : entry.model || preset?.defaultModel || '';
           const isSelected = providerValue === id || (!providerValue && defaultProvider === id);
           const isHovered = hoveredProvider === id;
-          const canExpand = canProviderExpand(id as ProviderId);
+          const canExpand = canProviderExpand(id);
 
           return (
             <div
               key={id}
               ref={isHovered ? hoveredRowRef : undefined}
-              onMouseEnter={() => canExpand ? openFlyout(id as ProviderId) : closeFlyoutImmediate()}
+              onMouseEnter={() => canExpand ? openFlyout(id) : closeFlyoutImmediate()}
               onMouseLeave={startCloseTimer}
             >
               <div className={`flex w-full items-center text-xs transition-colors ${isHovered ? 'bg-accent/60' : 'hover:bg-muted/60'}`}>
                 <button
                   type="button" role="option" aria-selected={isSelected}
-                  onClick={() => handleSelectProvider(id as ProviderId)}
+                  onClick={() => handleSelectProvider(id as ProviderSelection)}
                   className="flex flex-1 items-center gap-2 px-3 py-1.5 min-w-0"
                 >
                   <div className="flex-1 min-w-0 truncate">
@@ -543,57 +510,7 @@ export default function ProviderModelCapsule({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (hoveredProvider === id) closeFlyoutImmediate();
-                      else openFlyout(id as ProviderId);
-                    }}
-                    className={`shrink-0 px-1.5 py-1.5 mr-1 rounded transition-colors ${
-                      isHovered ? 'text-foreground' : 'text-muted-foreground/40 hover:text-muted-foreground'
-                    }`}
-                    title={t.ask?.selectModel ?? 'Select model'}
-                  >
-                    <ChevronRight size={11} />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {customIds.map((id) => {
-          const cp = findCustomProvider(settingsData?.customProviders ?? [], String(id));
-          if (!cp) return null;
-          const cpModel = modelValue && providerValue === id ? modelValue : cp.model;
-          const isSelected = providerValue === id;
-          const isHovered = hoveredProvider === id;
-          const canExpand = canProviderExpand(id as `cp_${string}`);
-
-          return (
-            <div
-              key={id}
-              ref={isHovered ? hoveredRowRef : undefined}
-              onMouseEnter={() => canExpand ? openFlyout(id as `cp_${string}`) : closeFlyoutImmediate()}
-              onMouseLeave={startCloseTimer}
-            >
-              <div className={`flex w-full items-center text-xs transition-colors ${isHovered ? 'bg-accent/60' : 'hover:bg-muted/60'}`}>
-                <button
-                  type="button" role="option" aria-selected={isSelected}
-                  onClick={() => handleSelectProvider(id)}
-                  className="flex flex-1 items-center gap-2 px-3 py-1.5 min-w-0"
-                >
-                  <div className="flex-1 min-w-0 truncate">
-                    <span className={`text-xs ${isSelected ? 'font-medium text-foreground' : 'text-foreground/80'}`}>
-                      {cp.name}
-                    </span>
-                    <span className="text-2xs text-muted-foreground ml-1.5">{cpModel}</span>
-                  </div>
-                  {isSelected && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
-                </button>
-                {canExpand && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (hoveredProvider === id) closeFlyoutImmediate();
-                      else openFlyout(id as `cp_${string}`);
+                      else openFlyout(id);
                     }}
                     className={`shrink-0 px-1.5 py-1.5 mr-1 rounded transition-colors ${
                       isHovered ? 'text-foreground' : 'text-muted-foreground/40 hover:text-muted-foreground'

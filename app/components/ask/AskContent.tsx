@@ -105,7 +105,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const selectedAcpAgentRef = useRef(selectedAcpAgent);
   selectedAcpAgentRef.current = selectedAcpAgent;
   const [chatMode, setChatMode] = useState<AskMode>('agent');
-  const [providerOverride, setProviderOverride] = useState<ProviderId | `cp_${string}` | null>(null);
+  const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
 
   useEffect(() => {

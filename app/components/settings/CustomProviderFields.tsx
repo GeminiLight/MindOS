@@ -21,7 +21,7 @@ interface CustomProviderFieldsProps {
 export default function CustomProviderFields({
   form, t, locale, layout = 'full',
 }: CustomProviderFieldsProps) {
-  const basePreset = PROVIDER_PRESETS[form.baseProviderId];
+  const basePreset = PROVIDER_PRESETS[form.protocol];
 
   const nameLabel = locale === 'zh' ? '名称' : 'Name';
   const protocolLabel = locale === 'zh' ? '协议' : 'Protocol';
@@ -46,8 +46,8 @@ export default function CustomProviderFields({
           </Field>
           <Field label={protocolLabel}>
             <Select
-              value={form.baseProviderId}
-              onChange={e => form.setBaseProviderId(e.target.value as ProviderId)}
+              value={form.protocol}
+              onChange={e => form.setProtocol(e.target.value as ProviderId)}
             >
               {ALL_PROVIDER_IDS.map(id => (
                 <option key={id} value={id}>
@@ -68,8 +68,8 @@ export default function CustomProviderFields({
           </Field>
           <Field label={protocolLabel}>
             <Select
-              value={form.baseProviderId}
-              onChange={e => form.setBaseProviderId(e.target.value as ProviderId)}
+              value={form.protocol}
+              onChange={e => form.setProtocol(e.target.value as ProviderId)}
             >
               {ALL_PROVIDER_IDS.map(id => (
                 <option key={id} value={id}>
@@ -107,7 +107,7 @@ export default function CustomProviderFields({
           value={form.model}
           onChange={form.setModel}
           placeholder={basePreset.defaultModel}
-          provider={form.baseProviderId}
+          provider={form.protocol}
           apiKey={form.apiKey}
           baseUrl={form.baseUrl}
           supportsListModels={!!form.baseUrl.trim()}

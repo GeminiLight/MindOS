@@ -20,15 +20,14 @@ export async function GET() {
     const defaultMindRoot = s.mindRoot || [home, 'MindOS', 'mind'].join(sep);
 
     // Build providerConfigs for frontend (masked keys)
-    const providerConfigs: Record<string, { model: string; baseUrl?: string; apiKeyMask: string }> = {};
-    for (const [id, cfg] of Object.entries(s.ai.providers)) {
-      if (!cfg) continue;
-      providerConfigs[id] = {
-        model: cfg.model,
-        baseUrl: cfg.baseUrl,
-        apiKeyMask: maskApiKey(cfg.apiKey),
-      };
-    }
+    const providerConfigs = s.ai.providers.map(p => ({
+      id: p.id,
+      name: p.name,
+      protocol: p.protocol,
+      model: p.model,
+      baseUrl: p.baseUrl,
+      apiKeyMask: maskApiKey(p.apiKey),
+    }));
 
     return NextResponse.json({
       mindRoot: defaultMindRoot,
@@ -38,7 +37,7 @@ export async function GET() {
       mcpPort: s.mcpPort ?? 8781,
       authToken: s.authToken ?? '',
       webPassword: s.webPassword ?? '',
-      provider: s.ai.provider,
+      activeProvider: s.ai.activeProvider,
       providerConfigs,
       guideState: s.guideState ?? null,
     });

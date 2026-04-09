@@ -17,7 +17,7 @@ export async function GET() {
   try {
     const settings = readSettings();
     const disabledSkills = settings.disabledSkills ?? [];
-    const skills = scanSkillDirs({
+    const skills = await scanSkillDirs({
       projectRoot: PROJECT_ROOT,
       mindRoot: getMindRoot(),
       disabledSkills,

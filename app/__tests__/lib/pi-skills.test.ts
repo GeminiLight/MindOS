@@ -38,13 +38,13 @@ describe('pi skill integration', () => {
     expect(result).toEqual({ name: 'test-skill', description: 'useful helper' });
   });
 
-  it('scans MindOS skill directories with precedence and metadata', () => {
+  it('scans MindOS skill directories with precedence and metadata', async () => {
     writeSkill(path.join(projectRoot, 'app', 'data', 'skills'), 'mindos', '---\nname: mindos\ndescription: builtin\n---\n');
     writeSkill(path.join(projectRoot, 'skills'), 'project-helper', '---\nname: project-helper\ndescription: project builtin\n---\n');
     writeSkill(path.join(mindRoot, '.skills'), 'user-helper', '---\nname: user-helper\ndescription: user custom\n---\n');
     writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'global-helper', '---\nname: global-helper\ndescription: global skill\n---\n');
 
-    const skills = scanSkillDirs({ projectRoot, mindRoot, disabledSkills: ['project-helper'] });
+    const skills = await scanSkillDirs({ projectRoot, mindRoot, disabledSkills: ['project-helper'] });
 
     expect(skills.map((skill) => skill.name)).toEqual(['mindos', 'project-helper', 'user-helper', 'global-helper']);
     expect(skills.find((skill) => skill.name === 'mindos')).toMatchObject({ source: 'builtin', editable: false, origin: 'app-builtin', enabled: true });
@@ -53,11 +53,11 @@ describe('pi skill integration', () => {
     expect(skills.find((skill) => skill.name === 'global-helper')).toMatchObject({ source: 'user', editable: true, origin: 'mindos-global', enabled: true });
   });
 
-  it('knowledge base skill takes precedence over global skill with same name', () => {
+  it('knowledge base skill takes precedence over global skill with same name', async () => {
     writeSkill(path.join(mindRoot, '.skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from kb\n---\n');
     writeSkill(path.join(tempRoot, '.mindos', 'skills'), 'shared-skill', '---\nname: shared-skill\ndescription: from global\n---\n');
 
-    const skills = scanSkillDirs({ projectRoot, mindRoot });
+    const skills = await scanSkillDirs({ projectRoot, mindRoot });
     const matched = skills.filter((s) => s.name === 'shared-skill');
     expect(matched).toHaveLength(1);
     expect(matched[0].origin).toBe('mindos-user');

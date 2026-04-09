@@ -12,15 +12,19 @@ describe('GET /api/settings', () => {
     const body = await res.json();
 
     expect(body).toHaveProperty('ai');
-    expect(body.ai).toHaveProperty('provider');
+    expect(body.ai).toHaveProperty('activeProvider');
     expect(body.ai).toHaveProperty('providers');
-    expect(body.ai.providers).toHaveProperty('anthropic');
-    expect(body.ai.providers).toHaveProperty('openai');
-    expect(body.ai.providers.anthropic).toHaveProperty('apiKey');
-    expect(body.ai.providers.anthropic).toHaveProperty('model');
-    expect(body.ai.providers.openai).toHaveProperty('apiKey');
-    expect(body.ai.providers.openai).toHaveProperty('model');
-    expect(body.ai.providers.openai).toHaveProperty('baseUrl');
+    expect(Array.isArray(body.ai.providers)).toBe(true);
+    expect(body.ai.providers.length).toBeGreaterThanOrEqual(1);
+    const anthropic = body.ai.providers.find((p: any) => p.protocol === 'anthropic');
+    const openai = body.ai.providers.find((p: any) => p.protocol === 'openai');
+    expect(anthropic).toBeDefined();
+    expect(anthropic).toHaveProperty('apiKey');
+    expect(anthropic).toHaveProperty('model');
+    expect(openai).toBeDefined();
+    expect(openai).toHaveProperty('apiKey');
+    expect(openai).toHaveProperty('model');
+    expect(openai).toHaveProperty('baseUrl');
     expect(body).toHaveProperty('mindRoot');
     expect(body).toHaveProperty('envOverrides');
     expect(body).toHaveProperty('envValues');
@@ -33,10 +37,10 @@ describe('POST /api/settings', () => {
       method: 'POST',
       body: JSON.stringify({
         ai: {
-          provider: 'openai',
-          providers: {
-            openai: { apiKey: 'sk-test', model: 'gpt-5.4', baseUrl: '' },
-          },
+          activeProvider: 'p_openai01',
+          providers: [
+            { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: 'sk-test', model: 'gpt-5.4', baseUrl: '' },
+          ],
         },
       }),
       headers: { 'content-type': 'application/json' },

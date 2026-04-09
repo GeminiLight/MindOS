@@ -1,45 +1,34 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getModels as piGetModels } from '@mariozechner/pi-ai';
-import { effectiveAiConfig } from '@/lib/settings';
+import { effectiveAiConfig, readSettings } from '@/lib/settings';
 import { type ProviderId, isProviderId, PROVIDER_PRESETS, toPiProvider, getDefaultBaseUrl } from '@/lib/agent/providers';
-import { isCustomProviderId, parseCustomProviders } from '@/lib/custom-endpoints';
+import { isProviderEntryId, findProvider } from '@/lib/custom-endpoints';
 
 const TIMEOUT = 10_000;
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { provider, customProviderId, apiKey, baseUrl } = body as {
+    const { provider, apiKey, baseUrl } = body as {
       provider?: string;
-      customProviderId?: string;
       apiKey?: string;
       baseUrl?: string;
     };
 
-    // Handle custom provider
-    if (customProviderId) {
-      if (!isCustomProviderId(customProviderId)) {
-        return NextResponse.json({ ok: false, error: 'Invalid custom provider ID' }, { status: 400 });
+    // Handle provider entry ID (p_*) — look up from unified providers list
+    if (provider && isProviderEntryId(provider)) {
+      const settings = readSettings();
+      const entry = findProvider(settings.ai.providers, provider);
+      if (!entry) {
+        return NextResponse.json({ ok: false, error: 'Provider not found' }, { status: 404 });
       }
-      
-      // Fetch custom provider from settings
-      const settings = await fetch(new URL('/api/settings', req.url), {
-        headers: req.headers,
-      }).then(r => r.json() as Promise<any>);
-      
-      const customProviders = parseCustomProviders(settings.customProviders);
-      const cp = customProviders.find(p => p.id === customProviderId);
-      if (!cp) {
-        return NextResponse.json({ ok: false, error: 'Custom provider not found' }, { status: 404 });
-      }
-      
-      // Use the custom provider's base provider type to fetch models
+
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
-      
+
       try {
-        const models = await fetchModels(cp.baseProviderId as ProviderId, cp.apiKey, cp.baseUrl, ctrl.signal);
+        const models = await fetchModels(entry.protocol, apiKey || entry.apiKey, baseUrl || entry.baseUrl, ctrl.signal);
         return NextResponse.json({ ok: true, models });
       } catch (e: unknown) {
         if (e instanceof Error && e.name === 'AbortError') {
@@ -51,7 +40,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Handle built-in provider
+    // Handle built-in protocol ID (openai, anthropic, etc.)
     if (!provider || !isProviderId(provider)) {
       return NextResponse.json({ ok: false, error: 'Invalid provider' }, { status: 400 });
     }
@@ -64,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, models });
     }
 
-    const cfg = effectiveAiConfig(provider as ProviderId);
+    const cfg = effectiveAiConfig();
     let resolvedKey = apiKey || '';
     if (!resolvedKey) {
       resolvedKey = cfg.apiKey;

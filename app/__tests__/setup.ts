@@ -23,11 +23,11 @@ export function getTestMindRoot() {
 vi.mock('@/lib/settings', () => ({
   readSettings: () => ({
     ai: {
-      provider: 'anthropic' as const,
-      providers: {
-        anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
-        openai:    { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
-      },
+      activeProvider: 'p_anthro01',
+      providers: [
+        { id: 'p_anthro01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+        { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+      ],
     },
     mindRoot: '',
   }),

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { type ProviderId } from '@/lib/agent/providers';
-import { type CustomProvider, generateCustomProviderId } from '@/lib/custom-endpoints';
+import { type Provider, generateProviderId } from '@/lib/custom-endpoints';
 
 export type TestState = 'idle' | 'testing' | 'ok' | 'error';
 export type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
@@ -17,8 +17,8 @@ export interface TestResult {
 export interface CustomProviderFormState {
   name: string;
   setName: (v: string) => void;
-  baseProviderId: ProviderId;
-  setBaseProviderId: (v: ProviderId) => void;
+  protocol: ProviderId;
+  setProtocol: (v: ProviderId) => void;
   apiKey: string;
   setApiKey: (v: string) => void;
   model: string;
@@ -33,7 +33,7 @@ export interface CustomProviderFormState {
 }
 
 /**
- * Shared form state + test/save logic for custom provider forms.
+ * Shared form state + test/save logic for provider forms.
  * Used by both the inline form (AiTab) and the modal (ProviderModal).
  */
 export function useCustomProviderForm({
@@ -42,13 +42,13 @@ export function useCustomProviderForm({
   locale,
   existingNames,
 }: {
-  initial?: CustomProvider;
-  onSave: (provider: CustomProvider) => void;
+  initial?: Provider;
+  onSave: (provider: Provider) => void;
   locale: string;
   existingNames?: string[];
 }): CustomProviderFormState {
   const [name, setName] = useState(initial?.name ?? '');
-  const [baseProviderId, setBaseProviderId] = useState<ProviderId>(initial?.baseProviderId ?? 'openai');
+  const [protocol, setProtocol] = useState<ProviderId>(initial?.protocol ?? 'openai');
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? '');
   const [model, setModel] = useState(initial?.model ?? '');
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
@@ -78,7 +78,7 @@ export function useCustomProviderForm({
         body: JSON.stringify(
           initial?.id
             ? { provider: initial.id, apiKey, model, baseUrl }
-            : { baseProviderId, apiKey, model, baseUrl },
+            : { protocol, apiKey, model, baseUrl },
         ),
       });
       const json = await res.json();
@@ -90,7 +90,7 @@ export function useCustomProviderForm({
     } catch {
       setTestResult({ state: 'error', code: 'network_error', error: 'Network error' });
     }
-  }, [canSave, apiKey, model, baseUrl, baseProviderId, locale, initial?.id]);
+  }, [canSave, apiKey, model, baseUrl, protocol, locale, initial?.id]);
 
   const handleSave = useCallback(() => {
     if (isDuplicateName) {
@@ -108,18 +108,18 @@ export function useCustomProviderForm({
       return;
     }
     onSave({
-      id: initial?.id || generateCustomProviderId(),
+      id: initial?.id || generateProviderId(),
       name: name.trim(),
-      baseProviderId,
+      protocol,
       apiKey,
       model: model.trim(),
       baseUrl: baseUrl.trim(),
     });
-  }, [canSave, isDuplicateName, name, baseProviderId, apiKey, model, baseUrl, initial?.id, onSave, locale]);
+  }, [canSave, isDuplicateName, name, protocol, apiKey, model, baseUrl, initial?.id, onSave, locale]);
 
   return {
     name, setName,
-    baseProviderId, setBaseProviderId,
+    protocol, setProtocol,
     apiKey, setApiKey,
     model, setModel,
     baseUrl, setBaseUrl,

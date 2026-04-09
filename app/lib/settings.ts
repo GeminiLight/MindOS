@@ -3,10 +3,13 @@ import path from 'path';
 import os from 'os';
 import { parseAcpAgentOverrides } from './acp/agent-descriptors';
 import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyFromEnv } from './agent/providers';
-import { type CustomProvider, parseCustomProviders, isCustomProviderId, findCustomProvider } from './custom-endpoints';
+import { type Provider, parseProviders, findProvider, migrateProviders } from './custom-endpoints';
+// Backward compat re-exports for files still importing from settings
+export type { Provider };
 
 const SETTINGS_PATH = path.join(os.homedir(), '.mindos', 'config.json');
 
+/** @deprecated Use Provider from custom-endpoints.ts */
 export interface ProviderConfig {
   apiKey: string;
   model: string;
@@ -14,8 +17,8 @@ export interface ProviderConfig {
 }
 
 export interface AiConfig {
-  provider: ProviderId;
-  providers: Partial<Record<ProviderId, ProviderConfig>>;
+  activeProvider: string;    // provider entry ID (p_*)
+  providers: Provider[];     // unified provider list
 }
 
 export interface AgentConfig {
@@ -61,17 +64,13 @@ export interface ServerSettings {
   };
   /** User-defined agents not built into MindOS. */
   customAgents?: import('./custom-agents').CustomAgentDef[];
-  /** User-defined provider configurations (multiple keys/endpoints per provider type). */
-  customProviders?: CustomProvider[];
+  // customProviders is now merged into ai.providers — kept for migration only
 }
 
 const DEFAULTS: ServerSettings = {
   ai: {
-    provider: 'anthropic' as ProviderId,
-    providers: {
-      anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
-      openai:    { apiKey: '', model: 'gpt-5.4', baseUrl: '' },
-    },
+    activeProvider: '',
+    providers: [],
   },
   mindRoot: '',
 };
@@ -85,56 +84,27 @@ function str(obj: unknown, key: string, fallback: string): string {
   return fallback;
 }
 
-/** Parse a provider config from unknown input, filling missing/invalid fields with defaults */
-function parseProvider(raw: unknown, defaults: ProviderConfig): ProviderConfig {
-  return {
-    apiKey:   str(raw, 'apiKey',  defaults.apiKey),
-    model:    str(raw, 'model',   defaults.model),
-    ...(defaults.baseUrl !== undefined
-      ? { baseUrl: str(raw, 'baseUrl', defaults.baseUrl) }
-      : {}),
-  };
-}
-
 /** Migrate old flat ai structure to new providers dict, if needed */
 function migrateAi(parsed: Record<string, unknown>): AiConfig {
   const ai = parsed.ai as Record<string, unknown> | undefined;
   if (!ai) return { ...DEFAULTS.ai };
 
-  const providerField = typeof ai.provider === 'string' ? ai.provider : 'anthropic';
-  const provider: ProviderId = isProviderId(providerField) ? providerField : 'anthropic';
-
-  // Already new format — parse all known providers from disk
-  if (ai.providers && typeof ai.providers === 'object') {
-    const p = ai.providers as Record<string, unknown>;
-    const providers: Partial<Record<ProviderId, ProviderConfig>> = {};
-    for (const id of Object.keys(p)) {
-      if (!isProviderId(id)) continue;
-      const preset = PROVIDER_PRESETS[id];
-      const defaultCfg = DEFAULTS.ai.providers[id] ?? { apiKey: '', model: preset.defaultModel };
-      providers[id] = parseProvider(p[id], defaultCfg);
-    }
-    // Ensure at least anthropic and openai exist (backward compat)
-    if (!providers.anthropic) providers.anthropic = DEFAULTS.ai.providers.anthropic;
-    if (!providers.openai) providers.openai = DEFAULTS.ai.providers.openai;
-    return { provider, providers };
+  // ── New format: ai.providers is an array ──
+  if (Array.isArray(ai.providers)) {
+    const providers = parseProviders(ai.providers);
+    const activeProvider = typeof ai.activeProvider === 'string' ? ai.activeProvider : '';
+    return { activeProvider, providers };
   }
 
-  // Old flat format — migrate
-  return {
-    provider,
-    providers: {
-      anthropic: {
-        apiKey: str(ai, 'anthropicApiKey', ''),
-        model:  str(ai, 'anthropicModel',  'claude-sonnet-4-6'),
-      },
-      openai: {
-        apiKey:   str(ai, 'openaiApiKey',  ''),
-        model:    str(ai, 'openaiModel',   'gpt-5.4'),
-        baseUrl:  str(ai, 'openaiBaseUrl', ''),
-      },
-    },
-  };
+  // ── Old format: ai.providers is a dict (or missing) → auto-migrate ──
+  const migrated = migrateProviders(parsed);
+  if (migrated) {
+    return { activeProvider: migrated.activeProvider, providers: migrated.providers };
+  }
+
+  // Very old flat format (anthropicApiKey etc.) — also handled by migrateProviders
+  // but if it returns null, fall through to defaults
+  return { ...DEFAULTS.ai };
 }
 
 /** Parse agent config from unknown input */
@@ -222,13 +192,12 @@ export function readSettings(): ServerSettings {
       })(),
       connectionMode: inferConnectionMode(parsed),
       customAgents: Array.isArray(parsed.customAgents) ? parsed.customAgents as import('./custom-agents').CustomAgentDef[] : undefined,
-      customProviders: parseCustomProviders(parsed.customProviders),
     };
   } catch {
     // Config file missing or corrupt → force setup wizard
     return {
       ...DEFAULTS,
-      ai: { ...DEFAULTS.ai, providers: { ...DEFAULTS.ai.providers } },
+      ai: { ...DEFAULTS.ai, providers: [] },
       setupPending: true,
       connectionMode: { cli: true, mcp: false },
     };
@@ -254,7 +223,8 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
   if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;
-  if (settings.customProviders !== undefined) merged.customProviders = settings.customProviders;
+  // Remove legacy customProviders (now merged into ai.providers array)
+  delete merged.customProviders;
   // setupPending: false/undefined → remove the field (cleanup); true → set it
   if ('setupPending' in settings) {
     if (settings.setupPending) merged.setupPending = true;
@@ -302,8 +272,7 @@ export function recordSkillInstall(agentKey: string, skillName: string, installP
 
 /** Effective AI config — unified interface for all providers.
  *  Resolves: saved config → env var → preset default, in that priority order.
- *  When `providerOverride` is given, resolves that provider's config instead.
- *  Supports custom provider IDs (cp_*) — looks up from customProviders list. */
+ *  When `providerOverride` is given (a provider entry ID), resolves that provider's config. */
 export function effectiveAiConfig(providerOverride?: string): {
   provider: ProviderId;
   apiKey: string;
@@ -312,40 +281,33 @@ export function effectiveAiConfig(providerOverride?: string): {
 } {
   const s = readSettings();
 
-  // Custom provider override (cp_* ID)
-  if (providerOverride && isCustomProviderId(providerOverride)) {
-    const cp = findCustomProvider(s.customProviders ?? [], providerOverride);
-    if (cp) {
-      return {
-        provider: cp.baseProviderId,
-        apiKey: cp.apiKey,
-        model: cp.model,
-        baseUrl: cp.baseUrl,
-      };
-    }
-    // Custom provider not found — fall through to default
+  // Find the provider entry
+  const targetId = providerOverride || s.ai.activeProvider;
+  const entry = targetId ? findProvider(s.ai.providers, targetId) : undefined;
+
+  if (entry) {
+    // Resolve from the unified provider entry
+    const preset = PROVIDER_PRESETS[entry.protocol];
+    const apiKey = entry.apiKey
+      || getApiKeyFromEnv(entry.protocol)
+      || preset?.apiKeyFallback
+      || '';
+    const model = entry.model || preset?.defaultModel || '';
+    const baseUrl = entry.baseUrl || preset?.fixedBaseUrl || '';
+    return { provider: entry.protocol, apiKey, model, baseUrl };
   }
 
+  // Fallback: no matching entry — try env var or default
   const envProvider = process.env.AI_PROVIDER;
-  const providerRaw = providerOverride ?? s.ai.provider;
-  const provider: ProviderId = (typeof providerRaw === 'string' && isProviderId(providerRaw))
-    ? providerRaw
-    : (envProvider && isProviderId(envProvider) ? envProvider : 'anthropic');
+  const protocol: ProviderId = (envProvider && isProviderId(envProvider)) ? envProvider : 'anthropic';
+  const preset = PROVIDER_PRESETS[protocol] ?? PROVIDER_PRESETS.anthropic;
 
-  const preset = PROVIDER_PRESETS[provider] ?? PROVIDER_PRESETS.anthropic;
-  const provCfg = s.ai.providers[provider] ?? { apiKey: '', model: '' };
-
-  const apiKey = provCfg.apiKey
-    || getApiKeyFromEnv(provider)
-    || preset.apiKeyFallback
-    || '';
-  const model = provCfg.model
-    || preset.defaultModel;
-  const baseUrl = provCfg.baseUrl
-    || preset.fixedBaseUrl
-    || '';
-
-  return { provider, apiKey, model, baseUrl };
+  return {
+    provider: protocol,
+    apiKey: getApiKeyFromEnv(protocol) || preset.apiKeyFallback || '',
+    model: preset.defaultModel,
+    baseUrl: preset.fixedBaseUrl || '',
+  };
 }
 
 /** Effective MIND_ROOT — settings file can override, env var is fallback */

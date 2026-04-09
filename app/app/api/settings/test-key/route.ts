@@ -4,7 +4,7 @@ import { complete } from '@mariozechner/pi-ai';
 import { effectiveAiConfig, readBaseUrlCompat, writeSettings, readSettings } from '@/lib/settings';
 import { getModelConfig } from '@/lib/agent/model';
 import { type ProviderId, isProviderId } from '@/lib/agent/providers';
-import { isCustomProviderId, findCustomProvider } from '@/lib/custom-endpoints';
+import { isProviderEntryId, findProvider } from '@/lib/custom-endpoints';
 
 const TIMEOUT = 15_000;
 
@@ -81,19 +81,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Support custom provider IDs (cp_*)
-    if (provider && isCustomProviderId(provider)) {
+    // Support provider entry IDs (p_*) — look up from unified providers list
+    if (provider && isProviderEntryId(provider)) {
       const settings = readSettings();
-      const cp = findCustomProvider(settings.customProviders ?? [], provider);
-      if (!cp) {
+      const entry = findProvider(settings.ai.providers, provider);
+      if (!entry) {
         return NextResponse.json(
-          { ok: false, code: 'unknown', error: 'Custom provider not found' },
+          { ok: false, code: 'unknown', error: 'Provider not found' },
           { status: 400 },
         );
       }
-      const resolvedKey = apiKey || cp.apiKey;
-      const resolvedModel = model || cp.model;
-      const resolvedBaseUrl = baseUrl || cp.baseUrl;
+      const resolvedKey = apiKey || entry.apiKey;
+      const resolvedModel = model || entry.model;
+      const resolvedBaseUrl = baseUrl || entry.baseUrl;
       if (!resolvedKey) {
         return NextResponse.json({ ok: false, code: 'auth_error', error: 'No API key configured' });
       }
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
       try {
         const { model: piModel } = getModelConfig({
-          provider: cp.baseProviderId,
+          provider: entry.protocol,
           apiKey: resolvedKey,
           model: resolvedModel || undefined,
           baseUrl: resolvedBaseUrl || undefined,
@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Legacy: support raw protocol IDs (openai, anthropic, etc.)
     if (!provider || !isProviderId(provider)) {
       return NextResponse.json(
         { ok: false, code: 'unknown', error: 'Invalid provider' },

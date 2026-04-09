@@ -3,16 +3,17 @@
 import { useState } from 'react';
 import { CheckCircle2, ChevronDown, SkipForward, Plus } from 'lucide-react';
 import { type ProviderId, PROVIDER_PRESETS, groupedProviders, ALL_PROVIDER_IDS } from '@/lib/agent/providers';
-import { type CustomProvider } from '@/lib/custom-endpoints';
+import { type Provider } from '@/lib/custom-endpoints';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface ProviderSelectProps {
-  value: ProviderId | 'skip';
-  onChange: (id: ProviderId | 'skip') => void;
+  value: string | 'skip';
+  onChange: (id: string | 'skip') => void;
   showSkip?: boolean;
   compact?: boolean;
+  /** @deprecated Use customProviders (unified Provider[]) instead */
   configuredProviders?: Set<ProviderId>;
-  customProviders?: CustomProvider[];
+  customProviders?: Provider[];
   onAdd?: () => void;
 }
 
@@ -27,18 +28,20 @@ export default function ProviderSelect({
   const hasConfigured = configuredProviders && configuredProviders.size > 0;
   const hasCustom = customProviders && customProviders.length > 0;
 
-  // In compact settings mode with configured providers: show configured-only list + Add button
-  const useConfiguredMode = compact && hasConfigured && !showSkip;
+  // In compact settings mode: show provider list + Add button
+  // New model: customProviders IS the full list (unified Provider[])
+  // Legacy model: configuredProviders set + separate customProviders array
+  const useConfiguredMode = compact && (hasConfigured || hasCustom) && !showSkip;
 
-  // Sorted configured provider IDs
-  const configuredIds = useConfiguredMode
+  // Legacy: Sorted configured provider IDs (for backward compat with old callers)
+  const configuredIds = hasConfigured
     ? ALL_PROVIDER_IDS.filter(id => configuredProviders!.has(id))
     : [];
 
   // Add panel shows ALL providers as protocol templates (can add multiple of the same type)
   const { primary: primaryItems, more: moreItems } = groups;
 
-  /* ── Compact tab button ── */
+  /* ── Compact tab button (for legacy builtin-only mode) ── */
   const renderCompactTab = (id: ProviderId) => {
     const preset = PROVIDER_PRESETS[id];
     const displayName = locale === 'zh' ? preset.nameZh : preset.name;
@@ -108,24 +111,25 @@ export default function ProviderSelect({
   };
 
   /* ════════════════════════════════════════════
-   *  MODE 1: Configured-only list + Add button
-   *  (compact settings, has configured providers)
+   *  MODE 1: Provider list + Add button
+   *  (compact settings, has providers)
    * ════════════════════════════════════════════ */
   if (useConfiguredMode) {
     return (
       <div className="space-y-2">
-        {/* Configured providers row */}
+        {/* Providers row */}
         <div className="flex flex-wrap gap-2">
+          {/* Legacy: built-in configured providers */}
           {configuredIds.map(id => renderCompactTab(id))}
 
-          {/* Custom providers in the configured list */}
+          {/* Unified provider list (or legacy custom providers) */}
           {customProviders?.map(cp => {
             const isSelected = value === cp.id;
             return (
               <button
                 key={cp.id}
                 type="button"
-                onClick={() => onChange(cp.id as ProviderId)}
+                onClick={() => onChange(cp.id)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all text-sm ${
                   isSelected
                     ? 'border-[var(--amber)] bg-[var(--amber-subtle)] shadow-sm'

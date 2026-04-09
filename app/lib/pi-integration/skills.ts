@@ -83,7 +83,7 @@ export function getPiSkillSearchDirs(projectRoot: string, mindRoot: string) {
   ];
 }
 
-export function scanSkillDirs(options: ScanSkillOptions): PiSkillInfo[] {
+export async function scanSkillDirs(options: ScanSkillOptions): Promise<PiSkillInfo[]> {
   const { projectRoot, mindRoot, disabledSkills = [] } = options;
   const skills: PiSkillInfo[] = [];
   const seen = new Set<string>();
@@ -91,12 +91,24 @@ export function scanSkillDirs(options: ScanSkillOptions): PiSkillInfo[] {
   for (const sourceDef of getPiSkillSearchDirs(projectRoot, mindRoot)) {
     if (!fs.existsSync(sourceDef.dir)) continue;
 
-    for (const entry of fs.readdirSync(sourceDef.dir, { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(sourceDef.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const skillFile = path.join(sourceDef.dir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillFile)) continue;
+      
+      let content: string;
+      try {
+        content = await fs.promises.readFile(skillFile, 'utf-8');
+      } catch {
+        continue;
+      }
 
-      const content = fs.readFileSync(skillFile, 'utf-8');
       const { name, description } = parseSkillMd(content);
       const skillName = name || entry.name;
       if (!skillName || seen.has(skillName)) continue;

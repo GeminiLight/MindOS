@@ -28,7 +28,7 @@ export interface AskChatRefs {
 interface UseAskChatOpts {
   currentFile?: string;
   chatMode: AskMode;
-  providerOverride: ProviderId | `cp_${string}` | null;
+  providerOverride: ProviderId | `p_${string}` | null;
   modelOverride: string | null;
   onFirstMessage?: () => void;
   refs: AskChatRefs;
@@ -55,6 +55,11 @@ export function useAskChat({
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
 
+  // Cooldown guard: after stop+retract, briefly block re-submission so that
+  // the mouseup on the stop-button position doesn't accidentally trigger the
+  // send button that React swaps in at the same DOM position.
+  const submitCooldownRef = useRef(false);
+
   // Track the pending user message so we can retract it on stop.
   // `userMessageIndex` is the index of the *user* message inside the messages
   // array (the assistant placeholder sits at userMessageIndex + 1).
@@ -70,39 +75,27 @@ export function useAskChat({
   const stop = useCallback(() => {
     const pending = pendingMessageRef.current;
 
-    // Decide whether to retract *before* aborting so we can inspect
-    // the messages array while it is still in its pre-abort state.
-    let shouldRetract = false;
-    if (pending) {
-      const msgs = refs.sessionRef.current?.messages;
-      if (msgs) {
-        const assistantMsg = msgs[pending.userMessageIndex + 1];
-        const assistantHasContent = assistantMsg?.role === 'assistant' &&
-          (assistantMsg.content.trim() || (assistantMsg.parts && assistantMsg.parts.length > 0));
-        shouldRetract = !assistantHasContent;
-      }
-    }
-
-    // Now abort the fetch.
+    // Abort the fetch first.
     abortRef.current?.abort();
 
-    if (pending && shouldRetract) {
+    if (pending) {
       retractedRef.current = true;
 
-      // Remove user message + empty assistant placeholder from the messages array.
+      // Always remove the user message + assistant response (empty or partial)
+      // from the messages array. The user clicked stop — they don't want this
+      // exchange in the history at all.
       refs.sessionRef.current?.setMessages(prev => {
         const updated = [...prev];
         const idx = pending.userMessageIndex;
 
-        // Remove assistant placeholder first (it sits at idx + 1).
-        if (updated[idx + 1]?.role === 'assistant' &&
-            !updated[idx + 1].content.trim() &&
-            (!updated[idx + 1].parts || updated[idx + 1].parts!.length === 0)) {
+        // Remove assistant message first (at idx + 1) — may be empty placeholder
+        // or a partial streamed response.
+        if (idx + 1 < updated.length && updated[idx + 1]?.role === 'assistant') {
           updated.splice(idx + 1, 1);
         }
 
         // Remove the user message.
-        if (updated[idx]?.role === 'user') {
+        if (idx < updated.length && updated[idx]?.role === 'user') {
           updated.splice(idx, 1);
         }
 
@@ -113,11 +106,17 @@ export function useAskChat({
       onRestoreInput?.(pending.userMessage);
 
       pendingMessageRef.current = null;
+
+      // Block re-submission for a short window so the browser's mouseup
+      // doesn't hit the send button that replaces the stop button.
+      submitCooldownRef.current = true;
+      setTimeout(() => { submitCooldownRef.current = false; }, 300);
     }
   }, [refs, onRestoreInput]);
 
   const submit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitCooldownRef.current) return; // ignore accidental re-submit after stop
     const m = refs.mentionRef.current;
     const s = refs.slashRef.current;
     const img = refs.imageUploadRef.current;

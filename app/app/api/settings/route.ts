@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { invalidateCache } from '@/lib/fs';
-import { PROVIDER_PRESETS, ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
-import { parseCustomProviders, type CustomProvider } from '@/lib/custom-endpoints';
+import { ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
+import { parseProviders } from '@/lib/custom-endpoints';
 
 function maskToken(token: string | undefined): string {
   if (!token) return '';
@@ -35,21 +35,10 @@ export async function GET() {
     }
   }
 
-  // Return provider configs with real keys (local app — keys are already in config.json)
-  const providers: Record<string, { apiKey: string; model: string; baseUrl?: string }> = {};
-  for (const [id, cfg] of Object.entries(settings.ai.providers)) {
-    if (!cfg) continue;
-    providers[id] = {
-      apiKey: cfg.apiKey ?? '',
-      model: cfg.model ?? '',
-      ...(cfg.baseUrl !== undefined ? { baseUrl: cfg.baseUrl } : {}),
-    };
-  }
-
   return NextResponse.json({
     ai: {
-      provider: settings.ai.provider,
-      providers,
+      activeProvider: settings.ai.activeProvider,
+      providers: settings.ai.providers,
     },
     mindRoot: settings.mindRoot,
     webPassword: settings.webPassword ?? '',
@@ -58,7 +47,6 @@ export async function GET() {
     agent: settings.agent ?? {},
     envOverrides,
     envValues,
-    customProviders: settings.customProviders ?? [],
   });
 }
 
@@ -67,19 +55,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as Partial<ServerSettings>;
     const current = readSettings();
 
-    // Merge providers dynamically
-    const mergedProviders = { ...current.ai.providers };
-    if (body.ai?.providers) {
-      for (const [id, incoming] of Object.entries(body.ai.providers)) {
-        if (!incoming) continue;
-        const cur = mergedProviders[id as keyof typeof mergedProviders] ?? { apiKey: '', model: '' };
-        mergedProviders[id as keyof typeof mergedProviders] = {
-          ...cur,
-          ...incoming,
-          apiKey: incoming.apiKey ?? cur.apiKey ?? '',
-          model: incoming.model ?? cur.model ?? '',
-        };
-      }
+    // Resolve AI config
+    const resolvedAi = { ...current.ai };
+    if (body.ai) {
+      if (body.ai.activeProvider !== undefined) resolvedAi.activeProvider = body.ai.activeProvider;
+      if (body.ai.providers !== undefined) resolvedAi.providers = parseProviders(body.ai.providers);
     }
 
     const resolvedWebPassword = body.webPassword ?? current.webPassword;
@@ -103,17 +83,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Handle customProviders
-    let resolvedCustomProviders = current.customProviders ?? [];
-    if (body.customProviders !== undefined) {
-      resolvedCustomProviders = parseCustomProviders(body.customProviders);
-    }
-
     const next: ServerSettings = {
-      ai: {
-        provider: body.ai?.provider ?? current.ai.provider,
-        providers: mergedProviders,
-      },
+      ai: resolvedAi,
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
       webPassword: resolvedWebPassword,
@@ -122,7 +93,6 @@ export async function POST(req: NextRequest) {
       mcpPort: typeof body.mcpPort === 'number' ? body.mcpPort : current.mcpPort,
       startMode: body.startMode ?? current.startMode,
       connectionMode: resolvedConnectionMode,
-      customProviders: resolvedCustomProviders,
     };
 
     writeSettings(next);

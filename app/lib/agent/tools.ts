@@ -388,7 +388,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     parameters: ListSkillsParams,
     execute: safeExecute(async () => {
       const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-      const skills = scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
+      const skills = await scanSkillDirs({ projectRoot, mindRoot: getMindRoot() });
       if (skills.length === 0) return textResult('No skills found.');
       return textResult(skills.map((skill) => `- **${skill.name}** [${skill.origin}]${skill.enabled ? '' : ' (disabled)'} — ${skill.description || 'No description'}\n  Path: ${skill.path}`).join('\n'));
     }),
