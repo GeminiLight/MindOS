@@ -192,6 +192,15 @@ export const panelsEn = {
       creating: 'Creating...',
       exists: 'A workflow with this name already exists',
     },
+    im: {
+      title: 'CHANNELS',
+      emptyTitle: 'No channels configured',
+      emptyDesc: 'Connect messaging platforms to let MindOS Agent send messages on your behalf.',
+      testSend: 'Test Send',
+      recipientPlaceholder: 'Recipient ID',
+      messagePlaceholder: 'Hello from MindOS',
+      sendTest: 'Send Test',
+    },
   },
   echoPages: {
     parent: 'Echo',
@@ -879,6 +888,15 @@ export const panelsZh = {
       cancel: '取消',
       creating: '创建中...',
       exists: '已存在同名流程',
+    },
+    im: {
+      title: '频道',
+      emptyTitle: '尚未配置任何频道',
+      emptyDesc: '连接消息平台，让 MindOS Agent 代您发送消息。',
+      testSend: '测试发送',
+      recipientPlaceholder: '接收者 ID',
+      messagePlaceholder: '来自 MindOS 的问候',
+      sendTest: '发送测试',
     },
   },
   echoPages: {

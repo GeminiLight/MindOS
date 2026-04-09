@@ -2,13 +2,13 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap } from 'lucide-react';
+import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, MessageSquare } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
 import Logo from './Logo';
 
-export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
+export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows' | 'im';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -229,6 +229,7 @@ export default function ActivityBar({
             walkthroughId="agents-panel"
           />
           {labsWorkflows && <RailButton icon={<Zap size={18} />} label={t.sidebar.workflows ?? 'Flows'} active={activePanel === 'workflows'} expanded={expanded} onClick={() => onWorkflowsClick ? debounced(onWorkflowsClick) : toggle('workflows')} />}
+          <RailButton icon={<MessageSquare size={18} />} label={t.sidebar.channels} active={activePanel === 'im'} expanded={expanded} onClick={() => toggle('im')} walkthroughId="im-panel" />
         </div>
 
         {/* ── Spacer ── */}
