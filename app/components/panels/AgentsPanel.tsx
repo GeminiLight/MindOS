@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
@@ -29,14 +29,16 @@ export default function AgentsPanel({
   const p = t.panels.agents;
   const mcp = useMcpData();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
   const [view, setView] = useState<'agents' | 'channels'>('agents');
   const a2a = useA2aRegistry();
 
-  // Reset to agents view when navigating via HubNav links
-  useEffect(() => { setView('agents'); }, [pathname]);
+  // Reset to agents view when URL changes (pathname or search params)
+  const tab = searchParams.get('tab');
+  useEffect(() => { setView('agents'); }, [pathname, tab]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
