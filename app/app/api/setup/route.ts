@@ -6,6 +6,7 @@ import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
 import { applyTemplate } from '@/lib/template';
 import { expandSetupPathHome } from './path-utils';
 import { type ProviderId, isProviderId, PROVIDER_PRESETS } from '@/lib/agent/providers';
+import { type Provider, generateProviderId, findProvider } from '@/lib/custom-endpoints';
 
 function maskApiKey(key: string): string {
   if (!key || key.length < 6) return key ? '***' : '';
@@ -103,23 +104,41 @@ export async function POST(req: NextRequest) {
     // configured key with blank just because the user didn't re-enter it.
     let mergedAi = current.ai;
     if (ai) {
-      const newProvider = ai.provider && isProviderId(ai.provider) ? ai.provider : current.ai.provider;
-      const mergedProviders = { ...current.ai.providers };
+      const mergedProviders = [...current.ai.providers];
 
       // Merge each provider's config from the incoming payload
       if (ai.providers && typeof ai.providers === 'object') {
         for (const [id, inCfg] of Object.entries(ai.providers as Record<string, any>)) {
           if (!isProviderId(id) || !inCfg) continue;
-          const existing = mergedProviders[id] ?? { apiKey: '', model: PROVIDER_PRESETS[id].defaultModel };
-          mergedProviders[id] = {
-            apiKey: inCfg.apiKey || existing.apiKey,
-            model: inCfg.model || existing.model,
-            ...(inCfg.baseUrl !== undefined ? { baseUrl: inCfg.baseUrl } : existing.baseUrl ? { baseUrl: existing.baseUrl } : {}),
+          const preset = PROVIDER_PRESETS[id];
+          const existingIdx = mergedProviders.findIndex(p => p.protocol === id);
+          const existing = existingIdx >= 0 ? mergedProviders[existingIdx] : null;
+
+          const merged: Provider = {
+            id: existing?.id ?? generateProviderId(),
+            name: existing?.name ?? preset?.name ?? id,
+            protocol: id,
+            apiKey: inCfg.apiKey || existing?.apiKey || '',
+            model: inCfg.model || existing?.model || preset?.defaultModel || '',
+            baseUrl: inCfg.baseUrl !== undefined ? (inCfg.baseUrl || '') : (existing?.baseUrl ?? ''),
           };
+
+          if (existingIdx >= 0) {
+            mergedProviders[existingIdx] = merged;
+          } else {
+            mergedProviders.push(merged);
+          }
         }
       }
 
-      mergedAi = { provider: newProvider, providers: mergedProviders };
+      // Determine active provider
+      let newActiveProvider = current.ai.activeProvider;
+      if (ai.provider && isProviderId(ai.provider)) {
+        const match = mergedProviders.find(p => p.protocol === ai.provider);
+        if (match) newActiveProvider = match.id;
+      }
+
+      mergedAi = { activeProvider: newActiveProvider, providers: mergedProviders };
     }
 
     const disabledSkills = body.template === 'zh' ? ['mindos'] : ['mindos-zh'];

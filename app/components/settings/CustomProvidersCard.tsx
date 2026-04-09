@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { Trash2, Edit2, Layers } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { type CustomProvider, generateCustomProviderId, isValidCustomProvider } from '@/lib/custom-endpoints';
+import { type CustomProvider, generateCustomProviderId, isValidProvider } from '@/lib/custom-endpoints';
 import { SettingCard } from './Primitives';
 import ProviderModal from './ProviderModal';
 
@@ -76,7 +76,7 @@ export default function CustomProvidersCard({
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{provider.name}</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {provider.baseProviderId} · {provider.model}
+                    {provider.protocol} · {provider.model}
                   </div>
                   <div className="text-2xs text-muted-foreground/60 mt-1 truncate font-mono">
                     {provider.baseUrl}

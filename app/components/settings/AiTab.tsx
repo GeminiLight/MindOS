@@ -254,7 +254,7 @@ export function AiTab({ data, updateAi, updateAgent, t }: AiTabProps) {
               <ModelInput
                 value={current.model}
                 onChange={v => patchProvider({ model: v })}
-                placeholder={preset?.defaultModel}
+                placeholder={preset?.defaultModel ?? ''}
                 provider={current.protocol}
                 apiKey={current.apiKey}
                 envKey={!!activeEnvKey}

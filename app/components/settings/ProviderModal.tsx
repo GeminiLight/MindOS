@@ -22,7 +22,7 @@ interface ProviderModalProps {
  * on open so hook state resets cleanly.
  */
 export default function ProviderModal({
-  isOpen, onClose, onSave, initialProvider, t,
+  isOpen, onClose, onSave, initialProvider, existingNames, t,
 }: ProviderModalProps) {
   if (!isOpen) return null;
 

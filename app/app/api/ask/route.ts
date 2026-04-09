@@ -1022,11 +1022,11 @@ export async function POST(req: NextRequest) {
     if (body.providerOverride) {
       if (isCustomProviderId(body.providerOverride)) {
         const settings = readSettings();
-        const customProvider = findCustomProvider(settings.customProviders ?? [], body.providerOverride);
+        const customProvider = findCustomProvider(settings.ai.providers ?? [], body.providerOverride);
         if (!customProvider) {
           return apiError(ErrorCodes.INVALID_REQUEST, 'Custom provider not found', 400);
         }
-        provOverride = customProvider.baseProviderId;
+        provOverride = customProvider.protocol;
         customProviderConfig = {
           apiKey: customProvider.apiKey,
           model: customProvider.model,

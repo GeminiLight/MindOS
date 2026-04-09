@@ -58,7 +58,7 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
     <div className="space-y-5">
       <ProviderSelect
         value={state.provider}
-        onChange={id => update('provider', id)}
+        onChange={id => update('provider', id as ProviderId | 'skip')}
         showSkip
         compact
         configuredProviders={configuredProviders}
