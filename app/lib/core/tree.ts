@@ -121,6 +121,84 @@ export function renderTree(nodes: FileNode[], indent = ''): string {
 }
 
 // ---------------------------------------------------------------------------
+// File index — compact directory listing for agent bootstrap context
+// ---------------------------------------------------------------------------
+
+export interface FileIndexOptions extends TreeOptions {
+  /** Max depth to expand (0 = root only). Default 2. */
+  maxDepth?: number;
+  /** Max files to list per directory before truncating. Default 15. */
+  maxFilesPerDir?: number;
+}
+
+/**
+ * Builds a compact file index string for agent bootstrap context.
+ *
+ * Output format (Plan B):
+ *   Projects/ (12 files)
+ *     Products/
+ *       roadmap.md
+ *       pricing.md
+ *     Engineering/ (7 files)
+ *       ... (7 files)
+ *   Journal/ (30 files)
+ *     2026-04.md
+ *     2026-03.md
+ *     ... (28 more)
+ *
+ * Directories beyond maxDepth collapse to "DirName/ (N files)".
+ * Directories with more files than maxFilesPerDir show the first batch + "... (N more)".
+ */
+export function buildFileIndex(
+  mindRoot: string,
+  opts: FileIndexOptions = {},
+): string {
+  const maxDepth = opts.maxDepth ?? 2;
+  const maxFilesPerDir = opts.maxFilesPerDir ?? 15;
+  const tree = getFileTree(mindRoot, undefined, opts);
+  if (tree.length === 0) return '(empty knowledge base)';
+
+  const lines: string[] = [];
+
+  function countFiles(nodes: FileNode[]): number {
+    let count = 0;
+    for (const n of nodes) {
+      if (n.type === 'file') count++;
+      else if (n.children) count += countFiles(n.children);
+    }
+    return count;
+  }
+
+  function walk(nodes: FileNode[], depth: number) {
+    const indent = '  '.repeat(depth);
+    const files = nodes.filter(n => n.type === 'file');
+    const dirs = nodes.filter(n => n.type === 'directory');
+
+    for (const dir of dirs) {
+      const total = countFiles(dir.children ?? []);
+      if (depth >= maxDepth) {
+        lines.push(`${indent}${dir.name}/ (${total} files)`);
+      } else {
+        lines.push(`${indent}${dir.name}/ (${total} files)`);
+        walk(dir.children ?? [], depth + 1);
+      }
+    }
+
+    const shown = files.slice(0, maxFilesPerDir);
+    for (const f of shown) {
+      lines.push(`${indent}${f.name}`);
+    }
+    const remaining = files.length - shown.length;
+    if (remaining > 0) {
+      lines.push(`${indent}... (${remaining} more)`);
+    }
+  }
+
+  walk(tree, 0);
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Async variants — non-blocking for use in API routes / hot paths
 // ---------------------------------------------------------------------------
 

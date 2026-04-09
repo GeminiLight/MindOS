@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getFileContent } from '@/lib/fs';
+import { getFileContent, getMindRoot } from '@/lib/fs';
+import { buildFileIndex } from '@/lib/core/tree';
 import path from 'path';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
@@ -22,10 +23,10 @@ export async function GET(req: NextRequest) {
       index: tryRead('README.md'),
       config_json: tryRead('CONFIG.json'),
       user_skill_rules: tryRead('.mindos/user-preferences.md'),
+      file_index: buildFileIndex(getMindRoot()),
     };
 
     if (targetDir) {
-      // Reject path traversal attempts
       if (targetDir.includes('..') || path.isAbsolute(targetDir)) {
         return NextResponse.json({ error: 'invalid target_dir' }, { status: 400 });
       }

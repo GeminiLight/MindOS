@@ -42,4 +42,29 @@ describe('GET /api/bootstrap', () => {
     expect(body.target_readme).toBe('# Workflows');
     expect(body.target_instruction).toBe('# WF Instructions');
   });
+
+  it('includes file_index with directory structure and file counts', async () => {
+    seedFile('Projects/roadmap.md', '# Roadmap');
+    seedFile('Projects/pricing.md', '# Pricing');
+    seedFile('Journal/2026-04.md', '# April');
+    seedFile('notes.md', 'some notes');
+    invalidateCache();
+
+    const req = new NextRequest('http://localhost/api/bootstrap');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.file_index).toBeDefined();
+    expect(body.file_index).toContain('Projects/ (2 files)');
+    expect(body.file_index).toContain('Journal/ (1 files)');
+    expect(body.file_index).toContain('notes.md');
+  });
+
+  it('returns empty KB message for file_index when no files exist', async () => {
+    invalidateCache();
+    const req = new NextRequest('http://localhost/api/bootstrap');
+    const res = await GET(req);
+    const body = await res.json();
+    expect(body.file_index).toBe('(empty knowledge base)');
+  });
 });
