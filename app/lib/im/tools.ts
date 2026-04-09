@@ -2,7 +2,7 @@
 // Defines Agent tools for sending messages via IM platforms.
 // Tools are conditionally loaded: only when im.json has at least one provider.
 
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { getConfiguredPlatforms } from './config';
 import { sendIMMessage, listConfiguredIM } from './executor';
@@ -64,8 +64,9 @@ export function getIMTools(): AgentTool[] {
       label: 'Send IM',
       description: 'Send a message to a configured IM platform (Telegram, Discord, Feishu, Slack, etc.).',
       parameters: sendSchema,
-      execute: async (_toolCallId: string, params: Static<typeof sendSchema>, signal?: AbortSignal) => {
-        const p = params as unknown as SendParams;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      execute: async (_toolCallId: string, params: any, signal?: AbortSignal) => {
+        const p = params as SendParams;
 
         const result = await sendIMMessage(
           {
