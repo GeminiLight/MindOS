@@ -393,9 +393,9 @@ export default function ProviderModelCapsule({
 
   const modelShort = (displayModel || '').length > 20
     ? (displayModel || '').slice(0, 18) + '…' : displayModel;
-  // For built-in providers, use shortLabel; for custom, use truncated name
+  // For built-in providers, use shortLabel; for custom, truncate if too long
   const providerDisplay = isCustomProviderId(String(activeProvider))
-    ? ((displayName || '').length > 10 ? (displayName || '').slice(0, 8) + '…' : displayName)
+    ? ((displayName || '').length > 12 ? (displayName || '').slice(0, 10) + '…' : displayName)
     : (activePreset?.shortLabel || displayName);
   const capsuleTooltip = `${displayName} · ${displayModel}`;
   const builtInIds = configuredProviders.filter(id => !isCustomProviderId(String(id)));
@@ -625,7 +625,7 @@ export default function ProviderModelCapsule({
         disabled={disabled}
         className={`
           inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
-          text-2xs font-medium transition-colors select-none max-w-[220px]
+          text-2xs font-medium transition-colors select-none max-w-[260px]
           border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           disabled:opacity-40 disabled:cursor-not-allowed
           ${providerValue || hasModelOverride

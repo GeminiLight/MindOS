@@ -8,6 +8,7 @@ import { type CustomProvider, generateCustomProviderId } from '@/lib/custom-endp
 import { PROVIDER_PRESETS, type ProviderId, groupedProviders } from '@/lib/agent/providers';
 import { Field, Input, Select } from './Primitives';
 import ProviderSelect from '@/components/shared/ProviderSelect';
+import ModelInput from '@/components/shared/ModelInput';
 
 interface ProviderModalProps {
   isOpen: boolean;
@@ -70,11 +71,10 @@ export default function ProviderModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customProviderId: initialProvider?.id,
+          provider: initialProvider?.id ?? baseProviderId,
           apiKey,
           model,
           baseUrl,
-          baseProviderId,
         }),
       });
 
@@ -210,10 +210,15 @@ export default function ProviderModal({
             label={t.settings?.customProviders?.modal?.fieldModel ?? 'Model'}
             hint={t.settings?.customProviders?.modal?.fieldModelHint}
           >
-            <Input
+            <ModelInput
               value={model}
-              onChange={e => setModel(e.target.value)}
+              onChange={setModel}
               placeholder="gpt-4-turbo"
+              provider={baseProviderId}
+              apiKey={apiKey}
+              baseUrl={baseUrl}
+              supportsListModels={PROVIDER_PRESETS[baseProviderId]?.supportsListModels ?? false}
+              allowNoKey={!!PROVIDER_PRESETS[baseProviderId]?.apiKeyFallback}
             />
           </Field>
 
