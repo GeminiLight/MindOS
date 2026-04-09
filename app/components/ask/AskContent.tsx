@@ -529,6 +529,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         onDeleteSession={session.deleteSession}
         onRenameSession={session.renameSession}
         onTogglePinSession={session.togglePinSession}
+        messages={session.messages}
       />
 
       {showHistory && (

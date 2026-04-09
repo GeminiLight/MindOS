@@ -111,6 +111,9 @@ export const aiChatEn = {
     confirmSave: 'Save',
     saving: 'Saving...',
     fileExistsSwitch: 'File exists — switched to append mode',
+    saveSession: 'Save Session',
+    formatFull: 'Full conversation',
+    formatAiOnly: 'AI only',
   },
   changes: {
     unreadBanner: (n: number) => `${n} content change${n === 1 ? '' : 's'} unread`,
@@ -325,6 +328,9 @@ export const aiChatZh = {
     confirmSave: '保存',
     saving: '保存中...',
     fileExistsSwitch: '文件已存在，已切换为追加模式',
+    saveSession: '保存对话',
+    formatFull: '完整对话',
+    formatAiOnly: '仅 AI 回复',
   },
   changes: {
     unreadBanner: (n: number) => `${n} 条内容变更未读`,

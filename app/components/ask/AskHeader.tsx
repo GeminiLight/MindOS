@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
+import { SaveSessionButton } from './SaveSessionInline';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
@@ -26,16 +27,19 @@ interface AskHeaderProps {
   onDeleteSession?: (id: string) => void;
   onRenameSession?: (id: string, name: string) => void;
   onTogglePinSession?: (id: string) => void;
+  /** Current session messages — used by Save Session button */
+  messages?: import('@/lib/types').Message[];
 }
 
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
   maximized, onMaximize, askMode, onModeSwitch, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
+  messages,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const iconSize = 14;
-  const hasMultipleSessions = sessions && sessions.length >= 1;
+  const hasMultipleSessions = sessions && sessions.length >= 2;
   const activeSession = sessions?.find(s => s.id === activeSessionId);
   const activeTitle = activeSession ? sessionTitle(activeSession) : null;
 
@@ -238,6 +242,9 @@ export default memo(function AskHeader({
         <button type="button" onClick={(e) => { e.stopPropagation(); onToggleHistory(); }} aria-pressed={showHistory} className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
           <History size={iconSize} />
         </button>
+        {messages && messages.length > 0 && (
+          <SaveSessionButton messages={messages} disabled={isLoading} />
+        )}
         <button type="button" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={isLoading} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title={t.hints.newSession}>
           <SquarePen size={iconSize} />
         </button>
