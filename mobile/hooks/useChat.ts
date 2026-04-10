@@ -1,18 +1,11 @@
 /**
  * useChat — React hook for AI conversation with streaming support.
- *
- * Manages:
- * - Message history (user + assistant)
- * - SSE stream consumption
- * - Tool call tracking
- * - Session persistence
- * - Error recovery
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { useConnectionStore } from './connection-store';
-import { streamChat, MessageBuilder } from '../lib/sse-client';
-import type { Message, AskMode } from '../lib/types';
+import { useConnectionStore } from '@/lib/connection-store';
+import { streamChat, MessageBuilder } from '@/lib/sse-client';
+import type { Message, AskMode } from '@/lib/types';
 
 export interface UseChatOptions {
   sessionId: string;
@@ -28,16 +21,15 @@ export function useChat({ sessionId, mode = 'chat' }: UseChatOptions) {
 
   const cancelRef = useRef<(() => void) | null>(null);
   const builderRef = useRef<MessageBuilder | null>(null);
+  // Use a ref to always have latest messages in the closure
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
 
-  /**
-   * Send a message and stream the response.
-   */
   const send = useCallback(
-    async (userMessage: string, attachedFilePaths?: string[]) => {
+    (userMessage: string, attachedFilePaths?: string[]) => {
       setError('');
       setIsStreaming(true);
 
-      // Add user message to history
       const userMsg: Message = {
         role: 'user',
         content: userMessage,
@@ -45,102 +37,107 @@ export function useChat({ sessionId, mode = 'chat' }: UseChatOptions) {
         attachedFiles: attachedFilePaths,
       };
 
-      setMessages((prev) => [...prev, userMsg]);
-
-      // Create placeholder for assistant response
-      const assistantPlaceholder: Message = {
+      const placeholder: Message = {
         role: 'assistant',
         content: '',
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, assistantPlaceholder]);
+
+      setMessages((prev) => [...prev, userMsg, placeholder]);
 
       builderRef.current = new MessageBuilder();
 
-      try {
-        cancelRef.current = await streamChat(
-          baseUrl,
-          {
-            messages: [...messages, userMsg],
-            mode,
-            sessionId,
-            attachedFiles: attachedFilePaths,
-          },
-          {
-            onEvent: (event) => {
-              if (event.type === 'text_delta') {
-                builderRef.current?.addTextDelta(event.delta || '');
-              } else if (event.type === 'thinking_delta') {
-                builderRef.current?.addThinkingDelta(event.delta || '');
-              } else if (event.type === 'tool_start') {
-                builderRef.current?.addToolStart(
-                  event.toolCallId || '',
-                  event.toolName || '',
-                  event.args,
-                );
-              } else if (event.type === 'tool_end') {
-                builderRef.current?.addToolEnd(
-                  event.toolCallId || '',
-                  event.output || '',
-                  event.isError || false,
-                );
-              } else if (event.type === 'error') {
-                setError(event.message || 'Unknown error occurred');
-              }
+      // streamChat is synchronous — returns cancel fn immediately
+      cancelRef.current = streamChat(
+        baseUrl,
+        {
+          messages: [...messagesRef.current, userMsg],
+          mode,
+          sessionId,
+          attachedFiles: attachedFilePaths,
+        },
+        {
+          onEvent: (event) => {
+            const builder = builderRef.current;
+            if (!builder) return;
 
-              // Update UI incrementally
-              const builtMessage = builderRef.current?.build();
-              if (builtMessage) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = builtMessage;
-                  return updated;
-                });
-              }
-            },
-            onError: (err) => {
-              setError(err.message);
-              setIsStreaming(false);
-            },
-            onComplete: () => {
-              setIsStreaming(false);
-            },
+            switch (event.type) {
+              case 'text_delta':
+                builder.addTextDelta(event.delta || '');
+                break;
+              case 'thinking_delta':
+                builder.addThinkingDelta(event.delta || '');
+                break;
+              case 'tool_start':
+                builder.addToolStart(event.toolCallId || '', event.toolName || '', event.args);
+                break;
+              case 'tool_end':
+                builder.addToolEnd(event.toolCallId || '', event.output || '', event.isError || false);
+                break;
+              case 'error':
+                setError(event.message || 'Unknown error');
+                break;
+              case 'done':
+                break;
+            }
+
+            // Update UI with latest snapshot
+            const snapshot = builder.build();
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = snapshot;
+              return updated;
+            });
           },
-        );
-      } catch (err) {
-        setError((err as Error).message || 'Failed to send message');
-        setIsStreaming(false);
-      }
+          onError: (err) => {
+            // Finalize partial message
+            if (builderRef.current) {
+              const final = builderRef.current.finalize();
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = final;
+                return updated;
+              });
+            }
+            setError(err.message);
+            setIsStreaming(false);
+          },
+          onComplete: () => {
+            if (builderRef.current) {
+              const final = builderRef.current.finalize();
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = final;
+                return updated;
+              });
+            }
+            setIsStreaming(false);
+          },
+        },
+      );
     },
-    [baseUrl, messages, mode, sessionId],
+    [baseUrl, mode, sessionId],
   );
 
-  /**
-   * Cancel ongoing stream.
-   */
   const cancel = useCallback(() => {
-    if (cancelRef.current) {
-      cancelRef.current();
-      cancelRef.current = null;
+    cancelRef.current?.();
+    cancelRef.current = null;
+    if (builderRef.current) {
+      const final = builderRef.current.finalize();
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = final;
+        return updated;
+      });
     }
     setIsStreaming(false);
   }, []);
 
-  /**
-   * Clear conversation.
-   */
   const clear = useCallback(() => {
+    cancel();
     setMessages([]);
     setError('');
-    cancel();
   }, [cancel]);
 
-  return {
-    messages,
-    isStreaming,
-    error,
-    send,
-    cancel,
-    clear,
-  };
+  return { messages, isStreaming, error, send, cancel, clear };
 }

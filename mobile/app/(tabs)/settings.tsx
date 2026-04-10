@@ -87,13 +87,34 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
+          <View style={styles.row}>
+            <Text style={styles.aboutLogo}>◆</Text>
+            <View>
+              <Text style={styles.aboutName}>MindOS Mobile</Text>
+              <Text style={styles.aboutVersion}>v0.0.1</Text>
+            </View>
+          </View>
           <Text style={styles.aboutText}>
-            MindOS Mobile v0.0.1{'\n'}
             Human-Agent Collaborative Mind System
           </Text>
+          <View style={styles.featureList}>
+            <FeatureRow icon="folder-outline" text="Browse & search your knowledge base" />
+            <FeatureRow icon="chatbubble-outline" text="AI Chat with streaming responses" />
+            <FeatureRow icon="create-outline" text="Markdown editor with toolbar" />
+            <FeatureRow icon="cloud-upload-outline" text="Conflict detection on save" />
+          </View>
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+function FeatureRow({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View style={styles.featureRow}>
+      <Ionicons name={icon as any} size={16} color="#c8873a" />
+      <Text style={styles.featureText}>{text}</Text>
+    </View>
   );
 }
 
@@ -139,4 +160,10 @@ const styles = StyleSheet.create({
   },
   actionTextDanger: { fontSize: 13, color: '#ef4444', fontWeight: '500' },
   aboutText: { fontSize: 14, color: '#a8a29e', lineHeight: 22 },
+  aboutLogo: { fontSize: 24, color: '#c8873a', marginRight: 8 },
+  aboutName: { fontSize: 16, fontWeight: '700', color: '#fafaf9' },
+  aboutVersion: { fontSize: 12, color: '#78716c' },
+  featureList: { gap: 8, marginTop: 4 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featureText: { fontSize: 13, color: '#a8a29e' },
 });

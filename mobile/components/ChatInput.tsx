@@ -2,13 +2,13 @@
  * ChatInput — Message input field with send button and mode selector.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
+  Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
@@ -19,6 +19,7 @@ interface ChatInputProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: (message: string) => void;
+  onCancel?: () => void;
   isLoading?: boolean;
   canSend?: boolean;
   mode?: AskMode;
@@ -29,6 +30,7 @@ export default function ChatInput({
   value,
   onChangeText,
   onSend,
+  onCancel,
   isLoading = false,
   canSend = true,
   mode = 'chat',
@@ -37,25 +39,25 @@ export default function ChatInput({
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
 
+  const canSubmit = value.trim().length > 0 && !isLoading && canSend;
+
   const handleSend = () => {
-    if (value.trim() && !isLoading && canSend) {
+    if (canSubmit) {
       onSend(value.trim());
       onChangeText('');
     }
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <View>
       {/* Mode selector */}
       <View style={styles.modeRow}>
         {(['chat', 'agent'] as const).map((m) => (
           <Pressable
             key={m}
-            style={[
-              styles.modeButton,
-              mode === m && styles.modeButtonActive,
-            ]}
+            style={[styles.modeButton, mode === m && styles.modeButtonActive]}
             onPress={() => onModeChange?.(m)}
+            disabled={isLoading}
           >
             <Ionicons
               name={m === 'chat' ? 'chatbubble-outline' : 'sparkles'}
@@ -83,31 +85,25 @@ export default function ChatInput({
           editable={!isLoading && canSend}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          returnKeyType={Platform.OS === 'ios' ? 'default' : 'send'}
         />
 
-        <Pressable
-          style={[
-            styles.sendButton,
-            (!value.trim() || isLoading || !canSend) && styles.sendButtonDisabled,
-          ]}
-          onPress={handleSend}
-          disabled={!value.trim() || isLoading || !canSend}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
+        {isLoading ? (
+          <Pressable style={styles.cancelButton} onPress={onCancel}>
+            <Ionicons name="stop-circle" size={20} color="#ef4444" />
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[styles.sendButton, !canSubmit && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!canSubmit}
+          >
             <Ionicons name="send" size={16} color="#fff" />
-          )}
-        </Pressable>
+          </Pressable>
+        )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
-}
-
-// Simple Text component for missing import
-function Text({ children, style }: { children: React.ReactNode; style?: any }) {
-  const { Text: RNText } = require('react-native');
-  return <RNText style={style}>{children}</RNText>;
 }
 
 const styles = StyleSheet.create({
@@ -169,6 +165,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
+  },
+  cancelButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

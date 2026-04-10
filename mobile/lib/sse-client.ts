@@ -6,11 +6,11 @@
  *   data:{"type":"tool_start","toolCallId":"1","toolName":"search","args":{}}\n\n
  *   data:{"type":"done"}\n\n
  *
- * This implementation uses native fetch() with manual SSE parsing
- * (react-native-sse was unreliable; this is RN 0.76+ compatible).
+ * This implementation uses native fetch() with manual SSE parsing.
+ * No dependency on react-native-sse.
  */
 
-import type { Message, MessagePart, TextPart, ReasoningPart, ToolCallPart } from '../lib/types';
+import type { Message, MessagePart, TextPart, ReasoningPart, ToolCallPart } from './types';
 
 export type SSEEventType =
   | 'text_delta'
@@ -41,20 +41,25 @@ export interface StreamConsumerCallbacks {
 
 /**
  * Consume SSE stream from /api/ask.
- * Parses text/event-stream format and calls callbacks for each event.
- *
  * Returns a cancel function to abort the stream.
  */
-export async function streamChat(
+export function streamChat(
   baseUrl: string,
   body: Record<string, unknown>,
   callbacks: StreamConsumerCallbacks,
-  signal?: AbortSignal,
-): Promise<() => void> {
+  externalSignal?: AbortSignal,
+): () => void {
   const controller = new AbortController();
-  const cancelSignal = AbortSignal.any([controller.signal, signal || new AbortController().signal]);
-
   let isClosed = false;
+
+  // Forward external abort to our controller (AbortSignal.any() is not in RN)
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
 
   (async () => {
     try {
@@ -62,15 +67,16 @@ export async function streamChat(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-        signal: cancelSignal as AbortSignal,
+        signal: controller.signal,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const text = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
       }
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
+      if (!reader) throw new Error('No response body — streaming may not be supported');
 
       const decoder = new TextDecoder();
       let buffer = '';
@@ -80,29 +86,34 @@ export async function streamChat(
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
+        // SSE uses \n\n as event separator
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop() || '';
 
-          const dataStr = line.slice(5).trim();
-          if (!dataStr) continue;
+        for (const chunk of chunks) {
+          // Each SSE event can have multiple lines; we only care about data: lines
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data:')) continue;
 
-          try {
-            const event = JSON.parse(dataStr) as SSEEvent;
-            callbacks.onEvent(event);
+            const dataStr = line.slice(5).trim();
+            if (!dataStr) continue;
 
-            if (event.type === 'done' || event.type === 'error') {
-              isClosed = true;
+            try {
+              const event = JSON.parse(dataStr) as SSEEvent;
+              callbacks.onEvent(event);
+
+              if (event.type === 'done' || event.type === 'error') {
+                isClosed = true;
+              }
+            } catch {
+              // Skip unparseable lines
             }
-          } catch (parseError) {
-            console.warn('[SSE] Failed to parse event:', dataStr, parseError);
           }
         }
       }
 
-      callbacks.onComplete();
+      if (!isClosed) callbacks.onComplete();
     } catch (error) {
       if (!isClosed && !(error instanceof Error && error.name === 'AbortError')) {
         callbacks.onError(error instanceof Error ? error : new Error(String(error)));
@@ -120,12 +131,13 @@ export async function streamChat(
 
 /**
  * Build a Message from accumulated SSE events.
- * Merges text_delta events and structures tool calls into MessagePart[].
+ * Merges text_delta into content; structures tool calls into parts[].
  */
 export class MessageBuilder {
   private parts: MessagePart[] = [];
   private currentText = '';
-  private toolCalls: Map<string, ToolCallPart> = new Map();
+  private toolCalls = new Map<string, ToolCallPart>();
+  private startedAt = Date.now();
 
   addTextDelta(delta: string): void {
     this.currentText += delta;
@@ -134,7 +146,7 @@ export class MessageBuilder {
   addThinkingDelta(delta: string): void {
     const last = this.parts[this.parts.length - 1];
     if (last && last.type === 'reasoning') {
-      last.text += delta;
+      (last as ReasoningPart).text += delta;
     } else {
       this.parts.push({ type: 'reasoning', text: delta });
     }
@@ -146,38 +158,38 @@ export class MessageBuilder {
       toolCallId,
       toolName,
       input: args,
-      state: 'pending',
+      state: 'running',
     };
     this.toolCalls.set(toolCallId, toolCall);
     this.parts.push(toolCall);
   }
 
   addToolEnd(toolCallId: string, output: string, isError: boolean): void {
-    const toolCall = this.toolCalls.get(toolCallId);
-    if (toolCall) {
-      toolCall.output = output;
-      toolCall.state = isError ? 'error' : 'done';
+    const tc = this.toolCalls.get(toolCallId);
+    if (tc) {
+      tc.output = output;
+      tc.state = isError ? 'error' : 'done';
     }
   }
 
+  /** Build the current snapshot of the assistant message. */
   build(): Message {
-    // Finalize any pending tool calls
-    for (const tc of this.toolCalls.values()) {
-      if (tc.state === 'pending') {
-        tc.state = 'error';
-        tc.output = 'Stream ended before tool completed';
-      }
-    }
-
-    // Build text content from accumulated deltas + text parts
-    const textParts = this.parts.filter((p) => p.type === 'text') as TextPart[];
-    const combinedText = this.currentText + textParts.map((p) => p.text).join('');
-
     return {
       role: 'assistant',
-      content: combinedText,
-      parts: this.parts.length > 0 ? this.parts : undefined,
-      timestamp: Date.now(),
+      content: this.currentText,
+      parts: this.parts.length > 0 ? [...this.parts] : undefined,
+      timestamp: this.startedAt,
     };
+  }
+
+  /** Finalize: mark unfinished tool calls as errored. */
+  finalize(): Message {
+    for (const tc of this.toolCalls.values()) {
+      if (tc.state === 'running' || tc.state === 'pending') {
+        tc.state = 'error';
+        tc.output = tc.output || 'Stream ended before tool completed';
+      }
+    }
+    return this.build();
   }
 }
