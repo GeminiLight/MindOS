@@ -13,7 +13,7 @@ import {
   mkdirSync,
   chmodSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, delimiter } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { CLI_PATH } from './constants.js';
 
@@ -102,7 +102,7 @@ exit /b 127\r
  */
 function appendPathWindows() {
   const binDir = shimDir();
-  const dirs = (process.env.PATH || '').split(';');
+  const dirs = (process.env.PATH || '').split(delimiter);
   if (dirs.some(d => d === binDir)) return false;
 
   // Write a PowerShell profile snippet
@@ -225,7 +225,7 @@ export function ensureCliShim() {
 
 /** Check if ~/.mindos/bin is in the current PATH. */
 export function isShimInPath() {
-  const dirs = (process.env.PATH || '').split(platform() === 'win32' ? ';' : ':');
+  const dirs = (process.env.PATH || '').split(delimiter);
   const binDir = shimDir();
   return dirs.some(d => d === binDir || d === '$HOME/.mindos/bin' || d === '~/.mindos/bin');
 }

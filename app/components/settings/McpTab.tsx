@@ -11,6 +11,7 @@ import type { McpTabProps, McpStatus, AgentInfo, ConnectionMode } from './types'
 import AgentInstall from './McpAgentInstall';
 import SkillsSection from './McpSkillsSection';
 import McpExternalTools from './McpExternalTools';
+import ServerPortsCard from './ServerPortsCard';
 
 /* ── Main Connections Tab ────────────────────────────────────────── */
 
@@ -98,7 +99,10 @@ export function McpTab({ t }: McpTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* 0. Connection Mode Toggle */}
+      {/* 0. Server Ports */}
+      {m && <ServerPortsCard m={m} />}
+
+      {/* 1. Connection Mode Toggle */}
       <ConnectionModeCard
         mcpEnabled={mcpEnabled}
         onToggle={handleToggleMcp}
@@ -107,10 +111,10 @@ export function McpTab({ t }: McpTabProps) {
         m={m}
       />
 
-      {/* 1. Auth Token */}
+      {/* 2. Auth Token */}
       <AuthTokenCard status={mcp.status} m={m} />
 
-      {/* 2. Connect Agents (CLI/MCP guides + detected agents) */}
+      {/* 3. Connect Agents (CLI/MCP guides + detected agents) */}
       <ConnectCard
         mode={mode}
         onModeChange={setMode}
@@ -131,7 +135,7 @@ export function McpTab({ t }: McpTabProps) {
         t={t}
       />
 
-      {/* 3. External MCP Tools */}
+      {/* 4. External MCP Tools */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
           <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -147,7 +151,7 @@ export function McpTab({ t }: McpTabProps) {
         </div>
       </div>
 
-      {/* 4. Skills */}
+      {/* 5. Skills */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
           <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">

@@ -76,6 +76,8 @@ export type AcpSessionState = 'idle' | 'active' | 'error';
 export interface AcpSession {
   id: string;
   agentId: string;
+  /** Session ID assigned by the agent — used in all JSON-RPC calls to the agent. */
+  agentSessionId?: string;
   state: AcpSessionState;
   cwd?: string;
   createdAt: string;

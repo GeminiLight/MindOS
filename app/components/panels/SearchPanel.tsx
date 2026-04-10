@@ -208,7 +208,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
                   aria-selected={isSelected}
                   draggable
                   onDragStart={(e) => handleDragStart(e, result)}
-                  onDragEnd={(e) => handleDragEnd(e)}
+                  onDragEnd={handleDragEnd}
                   onDragEnter={() => setDraggedIndex(i)}
                   onDragLeave={() => setDraggedIndex(null)}
                   onClick={() => navigate(result)}

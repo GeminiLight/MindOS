@@ -44,6 +44,7 @@ export async function GET() {
     mindRoot: settings.mindRoot,
     webPassword: settings.webPassword ?? '',
     authToken: maskToken(settings.authToken),
+    port: Number(process.env.MINDOS_WEB_PORT) || settings.port || 3456,
     mcpPort: settings.mcpPort ?? 8781,
     agent: settings.agent ?? {},
     envOverrides,

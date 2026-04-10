@@ -120,8 +120,8 @@ export const aiChatEn = {
     organizeToNoteDesc: 'AI extracts key insights into a note',
     targetFolder: 'Folder',
     fileName: 'Filename',
-    generating: 'Generating summary...',
-    retry: 'Retry',
+    saveGenerating: 'Generating summary...',
+    saveRetry: 'Retry',
   },
   changes: {
     unreadBanner: (n: number) => `${n} content change${n === 1 ? '' : 's'} unread`,
@@ -345,8 +345,8 @@ export const aiChatZh = {
     organizeToNoteDesc: 'AI 提取关键内容整理为笔记',
     targetFolder: '文件夹',
     fileName: '文件名',
-    generating: '正在生成摘要...',
-    retry: '重试',
+    saveGenerating: '正在生成摘要...',
+    saveRetry: '重试',
   },
   changes: {
     unreadBanner: (n: number) => `${n} 条内容变更未读`,

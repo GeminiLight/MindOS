@@ -4,6 +4,13 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import SearchModal from '@/components/SearchModal';
 
+/** Trigger React-compatible change on a controlled input */
+function setInputValue(input: HTMLInputElement, value: string) {
+  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  nativeSetter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 // Mock dependencies
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
@@ -96,12 +103,13 @@ describe('SearchModal Drag-Drop Integration', () => {
       expect(input).toBeTruthy();
 
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for debounce (SearchModal uses 200ms debounce)
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Find draggable result items
       const resultButtons = host.querySelectorAll('[role="dialog"] button[draggable="true"]');
@@ -121,25 +129,26 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Type search query
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Find first result button
       const resultButton = host.querySelector('[role="dialog"] [draggable="true"]') as HTMLButtonElement;
       expect(resultButton).toBeTruthy();
 
       // Create drag event with DataTransfer
+      const dt = new DataTransfer();
       const dragEvent = new DragEvent('dragstart', {
         bubbles: true,
         cancelable: true,
-        dataTransfer: new DataTransfer(),
+        dataTransfer: dt,
       });
 
-      const setDataSpy = vi.spyOn(dragEvent.dataTransfer!, 'setData');
+      const setDataSpy = vi.spyOn(dt, 'setData');
 
       await act(async () => {
         resultButton.dispatchEvent(dragEvent);
@@ -178,12 +187,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Type search query
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Find result button and hover it
       const resultButton = host.querySelector('[role="dialog"] [draggable="true"]') as HTMLButtonElement;
@@ -210,12 +219,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Type search query
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Navigate with arrow keys
       await act(async () => {
@@ -263,12 +272,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Type search query
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Find all draggable results
       const resultButtons = host.querySelectorAll('[role="dialog"] [draggable="true"]');
@@ -315,12 +324,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Type search query
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Get first result
       const resultButton = host.querySelector('[role="dialog"] [draggable="true"]') as HTMLButtonElement;
@@ -369,12 +378,12 @@ describe('SearchModal Drag-Drop Integration', () => {
 
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'search';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'search');
       });
 
-      // Wait for search results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Get results
       const resultButtons = host.querySelectorAll('[draggable="true"]');
@@ -399,12 +408,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Search tab is active by default
       const searchInput = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        searchInput.value = 'search';
-        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(searchInput, 'search');
       });
 
-      // Wait for results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Switch to actions tab
       const actionsTab = host.querySelector('button:nth-of-type(2)') as HTMLButtonElement;
@@ -442,12 +451,12 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Search with no results
       const input = host.querySelector('input[type="text"]') as HTMLInputElement;
       await act(async () => {
-        input.value = 'nonexistentquery12345';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(input, 'nonexistentquery12345');
       });
 
-      // Wait for empty results
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      });
 
       // Should not have draggable items
       const resultButtons = host.querySelectorAll('[draggable="true"]');

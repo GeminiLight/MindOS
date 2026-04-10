@@ -20,6 +20,13 @@ export interface AcpIncomingRequest {
   params?: Record<string, unknown>;
 }
 
+/** JSON-RPC 2.0 notification from agent (no id → no response expected). */
+export interface AcpNotification {
+  jsonrpc: '2.0';
+  method: string;
+  params?: Record<string, unknown>;
+}
+
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
 export interface AcpProcess {
@@ -35,12 +42,14 @@ export interface AcpProcess {
 
 type MessageCallback = (msg: AcpJsonRpcResponse) => void;
 type RequestCallback = (req: AcpIncomingRequest) => void;
+type NotificationCallback = (notif: AcpNotification) => void;
 
 /* ── State ─────────────────────────────────────────────────────────────── */
 
 const processes = new Map<string, AcpProcess>();
 const messageListeners = new Map<string, Set<MessageCallback>>();
 const requestListeners = new Map<string, Set<RequestCallback>>();
+const notificationListeners = new Map<string, Set<NotificationCallback>>();
 let rpcIdCounter = 1;
 
 /* ── Public API ────────────────────────────────────────────────────────── */
@@ -68,6 +77,7 @@ export function spawnAcpAgent(
     stdio: ['pipe', 'pipe', 'pipe'],
     env: mergedEnv,
     shell: false,
+    detached: true,
     ...(options?.cwd ? { cwd: options.cwd } : {}),
   });
 
@@ -77,8 +87,13 @@ export function spawnAcpAgent(
   processes.set(id, acpProc);
   messageListeners.set(id, new Set());
   requestListeners.set(id, new Set());
+  notificationListeners.set(id, new Set());
 
-  // Parse newline-delimited JSON from stdout
+  // Parse newline-delimited JSON-RPC 2.0 from stdout.
+  // Three message types per spec:
+  //   1. Request  (has method + id)    → agent asking client for something
+  //   2. Notification (has method, NO id) → agent streaming updates
+  //   3. Response (has id, NO method)  → reply to our request
   let buffer = '';
   proc.stdout?.on('data', (chunk: Buffer) => {
     buffer += chunk.toString();
@@ -91,21 +106,17 @@ export function spawnAcpAgent(
       try {
         const msg = JSON.parse(trimmed);
 
-        // Distinguish incoming requests (agent → client) from responses (to our requests).
-        // Requests have `method` and `id` but no `result`/`error`.
-        const isRequest = msg.method && msg.id !== undefined
-          && !('result' in msg) && !('error' in msg);
-
-        if (isRequest) {
-          const reqListeners = requestListeners.get(id);
-          if (reqListeners) {
-            for (const cb of reqListeners) cb(msg as AcpIncomingRequest);
+        if (msg.method !== undefined) {
+          if (msg.id !== undefined) {
+            const reqCbs = requestListeners.get(id);
+            if (reqCbs) for (const cb of reqCbs) cb(msg as AcpIncomingRequest);
+          } else {
+            const notifCbs = notificationListeners.get(id);
+            if (notifCbs) for (const cb of notifCbs) cb(msg as AcpNotification);
           }
         } else {
-          const listeners = messageListeners.get(id);
-          if (listeners) {
-            for (const cb of listeners) cb(msg as AcpJsonRpcResponse);
-          }
+          const msgCbs = messageListeners.get(id);
+          if (msgCbs) for (const cb of msgCbs) cb(msg as AcpJsonRpcResponse);
         }
       } catch {
         // Not valid JSON — skip (could be agent debug output)
@@ -242,22 +253,29 @@ export function sendAndWait(
 }
 
 /**
- * Kill an ACP agent process.
+ * Kill an ACP agent process and its entire process tree.
+ * Uses negative PID to send signal to the process group (requires detached spawn).
  */
 export function killAgent(acpProc: AcpProcess): void {
-  if (acpProc.alive && acpProc.proc.pid) {
-    acpProc.proc.kill('SIGTERM');
-    // Force kill after 5s if still alive
+  const pid = acpProc.proc.pid;
+  if (pid) {
+    // Kill the entire process group via negative PID
+    try { process.kill(-pid, 'SIGTERM'); } catch { /* already dead */ }
+
+    // Force SIGKILL after 3s — use signal 0 probe instead of `alive` flag
+    // because `alive` is set to false below before the timeout fires.
     setTimeout(() => {
-      if (acpProc.alive) {
-        acpProc.proc.kill('SIGKILL');
-      }
-    }, 5000);
+      try {
+        process.kill(-pid, 0); // probe: throws if group is gone
+        process.kill(-pid, 'SIGKILL');
+      } catch { /* already dead — good */ }
+    }, 3000);
   }
   acpProc.alive = false;
   processes.delete(acpProc.id);
   messageListeners.delete(acpProc.id);
   requestListeners.delete(acpProc.id);
+  notificationListeners.delete(acpProc.id);
   // Clean up any terminals spawned by this process
   const terms = terminalMaps.get(acpProc.id);
   if (terms) {
@@ -289,6 +307,19 @@ export function killAllAgents(): void {
   for (const proc of processes.values()) {
     killAgent(proc);
   }
+}
+
+/**
+ * Register a callback for JSON-RPC notifications from the agent
+ * (e.g. session/update streaming updates during prompt processing).
+ * Returns an unsubscribe function.
+ */
+export function onNotification(acpProc: AcpProcess, callback: NotificationCallback): () => void {
+  const listeners = notificationListeners.get(acpProc.id);
+  if (!listeners) throw new Error(`ACP process ${acpProc.id} not found`);
+
+  listeners.add(callback);
+  return () => { listeners.delete(callback); };
 }
 
 /**

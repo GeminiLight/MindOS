@@ -55,6 +55,13 @@ vi.mock('react-virtuoso', () => ({
   },
 }));
 
+/** Trigger React-compatible change on a controlled input */
+function setInputValue(input: HTMLInputElement, value: string) {
+  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  nativeSetter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 describe('SearchPanel Drag-Drop Tests', () => {
   let host: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
@@ -91,12 +98,13 @@ describe('SearchPanel Drag-Drop Tests', () => {
 
     // Type search query
     await act(async () => {
-      input.value = 'test';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      setInputValue(input, 'test');
     });
 
-    // Wait for debounce and results
-    await new Promise(resolve => setTimeout(resolve, 400));
+    // Wait for debounce (300ms) and async search
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
 
     // Check for result items
     const resultItems = host.querySelectorAll('[data-testid^="result-item-"]');
@@ -123,11 +131,12 @@ describe('SearchPanel Drag-Drop Tests', () => {
 
     const input = host.querySelector('input[type="text"]') as HTMLInputElement;
     await act(async () => {
-      input.value = 'test';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      setInputValue(input, 'test');
     });
 
-    await new Promise(resolve => setTimeout(resolve, 400));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
 
     const resultItem = host.querySelector('[data-testid="result-item-0"] button') as HTMLButtonElement;
     expect(resultItem).toBeTruthy();
@@ -170,11 +179,12 @@ describe('SearchPanel Drag-Drop Tests', () => {
 
     const input = host.querySelector('input[type="text"]') as HTMLInputElement;
     await act(async () => {
-      input.value = 'test';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      setInputValue(input, 'test');
     });
 
-    await new Promise(resolve => setTimeout(resolve, 400));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
 
     // Test both result items
     const resultButtons = host.querySelectorAll('[data-testid^="result-item-"] button');
@@ -202,32 +212,31 @@ describe('SearchPanel Drag-Drop Tests', () => {
     });
 
     const input = host.querySelector('input[type="text"]') as HTMLInputElement;
+    
+    // Wrap setInputValue and its state updates
     await act(async () => {
-      input.value = 'test';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      setInputValue(input, 'test');
+      await new Promise(resolve => setTimeout(resolve, 450)); // debounce + buffer
     });
-
-    await new Promise(resolve => setTimeout(resolve, 400));
 
     const resultButtons = host.querySelectorAll('[data-testid^="result-item-"] button');
 
     for (const button of resultButtons) {
-      expect(() => {
-        (button as HTMLButtonElement).dispatchEvent(
-          new DragEvent('dragstart', {
-            bubbles: true,
-            dataTransfer: new DataTransfer(),
-          })
-        );
-      }).not.toThrow();
+      // Wrap each drag event to prevent "not wrapped in act" warning
+      await act(async () => {
+        const dragStart = new DragEvent('dragstart', {
+          bubbles: true,
+          dataTransfer: new DataTransfer(),
+        });
+        (button as HTMLButtonElement).dispatchEvent(dragStart);
+      });
 
-      expect(() => {
-        (button as HTMLButtonElement).dispatchEvent(
-          new DragEvent('dragend', {
-            bubbles: true,
-          })
-        );
-      }).not.toThrow();
+      await act(async () => {
+        const dragEnd = new DragEvent('dragend', {
+          bubbles: true,
+        });
+        (button as HTMLButtonElement).dispatchEvent(dragEnd);
+      });
     }
   });
 

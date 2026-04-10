@@ -452,14 +452,17 @@ describe('SearchPanel -> AskContent Drag-Drop Integration', () => {
 
       const searchInput = host.querySelector('[data-testid="search-input"]') as HTMLInputElement;
 
-      // Type search query
+      // Use native value setter + input event to trigger React's onChange
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
       await act(async () => {
-        searchInput.value = 'integration';
-        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+        nativeSetter.call(searchInput, 'integration');
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
       });
 
       // Wait for results to appear
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       // Get the search result
       const result = host.querySelector('[data-testid="result-0"]');

@@ -21,6 +21,7 @@ export interface SettingsData {
   mindRoot: string;
   webPassword?: string;
   authToken?: string;   // masked: first-xxxx-••••-last pattern
+  port?: number;
   mcpPort?: number;
   envOverrides?: Record<string, boolean>;
   envValues?: Record<string, string>;

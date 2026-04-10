@@ -344,7 +344,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                     key={result.path}
                     draggable
                     onDragStart={(e) => handleDragStart(e, result)}
-                    onDragEnd={(e) => handleDragEnd(e)}
+                    onDragEnd={handleDragEnd}
                     onDragEnter={() => setDraggedIndex(i)}
                     onDragLeave={() => setDraggedIndex(null)}
                     onClick={() => navigate(result)}

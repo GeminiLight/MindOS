@@ -3,6 +3,55 @@ import os from 'os';
 import path from 'path';
 import { vi, beforeEach, afterEach } from 'vitest';
 
+// --- JSDOM polyfills ---
+
+// JSDOM doesn't implement scrollIntoView
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function () {};
+}
+
+// JSDOM doesn't implement DataTransfer
+if (typeof globalThis.DataTransfer === 'undefined') {
+  class DataTransferPolyfill {
+    private _data: Record<string, string> = {};
+    dropEffect = 'none';
+    effectAllowed = 'uninitialized';
+    files: FileList = [] as unknown as FileList;
+    items: DataTransferItemList = [] as unknown as DataTransferItemList;
+    types: string[] = [];
+    setData(format: string, data: string) {
+      this._data[format] = data;
+      if (!this.types.includes(format)) this.types.push(format);
+    }
+    getData(format: string) {
+      return this._data[format] ?? '';
+    }
+    clearData(format?: string) {
+      if (format) {
+        delete this._data[format];
+        this.types = this.types.filter(t => t !== format);
+      } else {
+        this._data = {};
+        this.types = [];
+      }
+    }
+    setDragImage() {}
+  }
+  (globalThis as any).DataTransfer = DataTransferPolyfill;
+}
+
+// JSDOM doesn't implement DragEvent
+if (typeof globalThis.DragEvent === 'undefined' && typeof globalThis.MouseEvent !== 'undefined') {
+  class DragEventPolyfill extends MouseEvent {
+    readonly dataTransfer: DataTransfer | null;
+    constructor(type: string, init?: DragEventInit & { dataTransfer?: DataTransfer | null }) {
+      super(type, init);
+      this.dataTransfer = init?.dataTransfer ?? null;
+    }
+  }
+  (globalThis as any).DragEvent = DragEventPolyfill;
+}
+
 // Temp MIND_ROOT for each test
 export let testMindRoot: string;
 

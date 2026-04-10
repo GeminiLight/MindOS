@@ -37,7 +37,8 @@ export const run = () => {
       // Windows `start` treats the first quoted arg as a window title
       execSync(`start "" "${url}"`, { stdio: 'ignore' });
     } else {
-      execSync(`${cmd} ${url}`, { stdio: 'ignore' });
+      // Quote URL to prevent shell injection and handle special characters
+      execSync(`${cmd} '${url.replace(/'/g, "'\\''")}'`, { stdio: 'ignore' });
     }
     console.log(`${green('✔')} Opening ${cyan(url)}`);
   } catch {

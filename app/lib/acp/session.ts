@@ -23,6 +23,7 @@ import {
   sendAndWait,
   sendMessage,
   onMessage,
+  onNotification,
   killAgent,
   installAutoApproval,
   type AcpProcess,
@@ -117,6 +118,7 @@ export async function createSessionFromEntry(
   // Phase 3: session/new — create the conversation session
   let modes: AcpMode[] | undefined;
   let configOptions: AcpConfigOption[] | undefined;
+  let agentSessionId: string | undefined;
 
   try {
     const newResponse = await sendAndWait(proc, 'session/new', {
@@ -126,31 +128,35 @@ export async function createSessionFromEntry(
 
     if (newResponse.error) {
       const errMsg = newResponse.error.message ?? 'session/new failed';
-      // Authentication errors are fatal — agent cannot proceed without auth
       if (/auth/i.test(errMsg)) {
         unsubApproval();
         killAgent(proc);
         throw new Error(`${entry.id}: ${errMsg}`);
       }
-      // Other errors are non-fatal: some agents may not support explicit session/new
       console.warn(`ACP session/new warning for ${entry.id}: ${errMsg}`);
     } else {
       const newResult = newResponse.result as Record<string, unknown> | undefined;
       if (newResult) {
+        // The agent assigns its own sessionId — we MUST use it for all future RPC calls
+        if (typeof newResult.sessionId === 'string') {
+          agentSessionId = newResult.sessionId;
+        }
         modes = parseModes(newResult.modes);
         configOptions = parseConfigOptions(newResult.configOptions);
       }
     }
   } catch (sessionErr) {
-    // Re-throw auth errors — they are fatal
     if (sessionErr instanceof Error && /auth/i.test(sessionErr.message)) throw sessionErr;
-    // Non-fatal: agent may not support explicit session/new (backwards compat)
   }
+
+  // Reap stale sessions lazily on each new session creation
+  reapStaleSessions();
 
   const sessionId = `ses-${entry.id}-${Date.now()}`;
   const session: AcpSession = {
     id: sessionId,
     agentId: entry.id,
+    agentSessionId,
     state: 'idle',
     cwd: options?.cwd,
     createdAt: new Date().toISOString(),
@@ -248,10 +254,10 @@ export async function loadSession(
     throw err;
   }
 
-  // Use the original sessionId since we're resuming
   const session: AcpSession = {
     id: existingSessionId,
     agentId: entry.id,
+    agentSessionId: existingSessionId,
     state: 'idle',
     cwd: options?.cwd,
     createdAt: new Date().toISOString(),
@@ -311,6 +317,9 @@ export async function listSessions(
 
 /**
  * Send a prompt to an active session and collect the full response.
+ * Aggregates text from session/update notifications (primary content delivery mechanism
+ * for agents like Gemini CLI that send text via streaming notifications, not in the
+ * final JSON-RPC response).
  * For streaming, use promptStream() instead.
  */
 export async function prompt(
@@ -324,13 +333,27 @@ export async function prompt(
   }
 
   updateSessionState(session, 'active');
+  const wireSessionId = session.agentSessionId ?? sessionId;
+
+  // Collect text from streaming notifications while sendAndWait waits for the final response
+  let notificationText = '';
+  const unsubNotify = onNotification(proc, (notif) => {
+    if (notif.method !== 'session/update' || !notif.params) return;
+    const update = parseNotificationToUpdate(sessionId, notif.params);
+    if (!update) return;
+    if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
+      notificationText += update.text;
+    }
+  });
 
   try {
     const response = await sendAndWait(proc, 'session/prompt', {
-      sessionId,
+      sessionId: wireSessionId,
       prompt: [{ type: 'text', text }] satisfies AcpContentBlock[],
       ...(session.cwd ? { context: { cwd: session.cwd } } : {}),
-    }, 60_000);
+    }, 120_000);
+
+    unsubNotify();
 
     if (response.error) {
       updateSessionState(session, 'error');
@@ -339,15 +362,17 @@ export async function prompt(
 
     updateSessionState(session, 'idle');
     const result = response.result as Record<string, unknown>;
+    const responseText = typeof result?.text === 'string' ? result.text : '';
     return {
       sessionId,
-      text: String(result?.text ?? ''),
+      text: notificationText || responseText,
       done: true,
       stopReason: parseStopReason(result?.stopReason),
       toolCalls: result?.toolCalls as AcpPromptResponse['toolCalls'],
       metadata: result?.metadata as AcpPromptResponse['metadata'],
     };
   } catch (err) {
+    unsubNotify();
     updateSessionState(session, 'error');
     throw err;
   }
@@ -355,7 +380,9 @@ export async function prompt(
 
 /**
  * Send a prompt and receive streaming updates via callback.
- * Handles all 10 ACP session/update types.
+ * Handles both:
+ *   1. JSON-RPC notifications (session/update) — the standard ACP streaming mechanism
+ *   2. JSON-RPC responses with update data — backward compat for older agents
  * Returns the final aggregated response.
  */
 export async function promptStream(
@@ -370,86 +397,129 @@ export async function promptStream(
   }
 
   updateSessionState(session, 'active');
+  const wireSessionId = session.agentSessionId ?? sessionId;
 
   return new Promise((resolve, reject) => {
     let aggregatedText = '';
     let stopReason: AcpStopReason = 'end_turn';
+    let settled = false;
+    let promptRpcId: string;
 
-    const unsub = onMessage(proc, (msg) => {
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn();
+    };
+
+    // ── 1. Notifications: primary streaming channel ──
+    const unsubNotify = onNotification(proc, (notif) => {
+      if (settled) return;
+      if (notif.method !== 'session/update' || !notif.params) return;
+
+      const update = parseNotificationToUpdate(sessionId, notif.params);
+      if (!update) return;
+
+      onUpdate(update);
+
+      if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
+        aggregatedText += update.text;
+      }
+      if (update.type === 'config_option_update' && update.configOptions) {
+        session.configOptions = update.configOptions;
+      }
+      if (update.type === 'error') {
+        settle(() => {
+          updateSessionState(session, 'error');
+          reject(new Error(update.error ?? 'Unknown ACP error'));
+        });
+      }
+      if (update.type === 'done') {
+        settle(() => {
+          updateSessionState(session, 'idle');
+          resolve({ sessionId, text: aggregatedText, done: true, stopReason });
+        });
+      }
+    });
+
+    // ── 2. Responses: completion signal + legacy streaming fallback ──
+    const unsubMsg = onMessage(proc, (msg) => {
+      if (settled) return;
+
+      // Final response — matches the RPC ID of our prompt request
+      if (String(msg.id) === promptRpcId) {
+        if (msg.error) {
+          settle(() => {
+            updateSessionState(session, 'error');
+            reject(new Error(`session/prompt error: ${msg.error!.message}`));
+          });
+          return;
+        }
+        const result = msg.result as Record<string, unknown> | undefined;
+        if (result?.stopReason) stopReason = parseStopReason(result.stopReason);
+        const responseText = typeof result?.text === 'string' ? result.text : '';
+        if (responseText && !aggregatedText) aggregatedText = responseText;
+
+        onUpdate({ sessionId, type: 'done' });
+        settle(() => {
+          updateSessionState(session, 'idle');
+          resolve({ sessionId, text: aggregatedText, done: true, stopReason });
+        });
+        return;
+      }
+
+      // Legacy: responses with update-like result (for agents that stream via responses)
       if (msg.result && typeof msg.result === 'object') {
         const raw = msg.result as Record<string, unknown>;
         const update = parseSessionUpdate(sessionId, raw);
-
         onUpdate(update);
-
-        // Aggregate text from message chunk types
         if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
           aggregatedText += update.text;
         }
-
-        // Handle terminal states
         if (update.type === 'done') {
-          unsub();
-          if (raw.stopReason) {
-            stopReason = parseStopReason(raw.stopReason);
-          }
-          updateSessionState(session, 'idle');
-          resolve({
-            sessionId,
-            text: aggregatedText,
-            done: true,
-            stopReason,
+          if (raw.stopReason) stopReason = parseStopReason(raw.stopReason);
+          settle(() => {
+            updateSessionState(session, 'idle');
+            resolve({ sessionId, text: aggregatedText, done: true, stopReason });
           });
         }
-
         if (update.type === 'error') {
-          unsub();
-          updateSessionState(session, 'error');
-          reject(new Error(update.error ?? 'Unknown ACP error'));
-        }
-
-        // Update session metadata from config/mode updates
-        if (update.type === 'config_option_update' && update.configOptions) {
-          session.configOptions = update.configOptions;
-        }
-        if (update.type === 'current_mode_update' && update.currentModeId) {
-          // Track current mode
-          session.lastActivityAt = new Date().toISOString();
+          settle(() => {
+            updateSessionState(session, 'error');
+            reject(new Error(update.error ?? 'Unknown ACP error'));
+          });
         }
       }
     });
 
-    // Guard against agent process dying unexpectedly (OOM, SIGKILL, etc.)
-    // Without this, the Promise would hang forever if the process exits
-    // without sending a done/error notification.
+    // ── 3. Process exit guard ──
     const onExit = () => {
-      unsub();
-      updateSessionState(session, 'error');
-      reject(new Error(`ACP agent process exited unexpectedly during prompt`));
+      settle(() => {
+        updateSessionState(session, 'error');
+        reject(new Error('ACP agent process exited unexpectedly during prompt'));
+      });
     };
     proc.proc.once('exit', onExit);
 
-    // Clean up exit listener when Promise resolves/rejects normally
-    const cleanup = () => { proc.proc.removeListener('exit', onExit); };
-    // Wrap resolve/reject to include cleanup — but we already unsub in the message handler.
-    // The exit listener is a safety net; if done/error fires first, remove the exit listener.
-    const origResolve = resolve;
-    const origReject = reject;
-    resolve = ((val: AcpPromptResponse) => { cleanup(); origResolve(val); }) as typeof resolve;
-    reject = ((err: unknown) => { cleanup(); origReject(err); }) as typeof reject;
+    const cleanup = () => {
+      unsubNotify();
+      unsubMsg();
+      proc.proc.removeListener('exit', onExit);
+    };
 
-    // Send the prompt with ContentBlock format
+    // ── 4. Send the prompt ──
     try {
-      sendMessage(proc, 'session/prompt', {
-        sessionId,
+      promptRpcId = sendMessage(proc, 'session/prompt', {
+        sessionId: wireSessionId,
         prompt: [{ type: 'text', text }] satisfies AcpContentBlock[],
         stream: true,
         ...(session.cwd ? { context: { cwd: session.cwd } } : {}),
       });
     } catch (err) {
-      unsub();
-      updateSessionState(session, 'error');
-      reject(err);
+      settle(() => {
+        updateSessionState(session, 'error');
+        reject(err);
+      });
     }
   });
 }
@@ -464,10 +534,11 @@ export async function cancelPrompt(sessionId: string): Promise<void> {
 
   if (session.state !== 'active') return;
 
+  const wireSessionId = session.agentSessionId ?? sessionId;
   try {
-    await sendAndWait(proc, 'session/cancel', { sessionId }, 10_000);
+    await sendAndWait(proc, 'session/cancel', { sessionId: wireSessionId }, 10_000);
   } catch {
-    // Best-effort cancel — don't throw if the agent doesn't support it
+    // Best-effort cancel
   }
 
   updateSessionState(session, 'idle');
@@ -479,8 +550,9 @@ export async function cancelPrompt(sessionId: string): Promise<void> {
 export async function setMode(sessionId: string, modeId: string): Promise<void> {
   const { session, proc } = getSessionAndProc(sessionId);
 
+  const wireSessionId = session.agentSessionId ?? sessionId;
   const response = await sendAndWait(proc, 'session/set_mode', {
-    sessionId,
+    sessionId: wireSessionId,
     modeId,
   }, 10_000);
 
@@ -501,8 +573,9 @@ export async function setConfigOption(
 ): Promise<AcpConfigOption[]> {
   const { session, proc } = getSessionAndProc(sessionId);
 
+  const wireSessionId = session.agentSessionId ?? sessionId;
   const response = await sendAndWait(proc, 'session/set_config_option', {
-    sessionId,
+    sessionId: wireSessionId,
     configId,
     value,
   }, 10_000);
@@ -525,13 +598,15 @@ export async function setConfigOption(
  * Close a session and terminate the subprocess.
  */
 export async function closeSession(sessionId: string): Promise<void> {
+  const session = sessions.get(sessionId);
   const proc = sessionProcesses.get(sessionId);
 
   if (proc?.alive) {
+    const wireSessionId = session?.agentSessionId ?? sessionId;
     try {
-      await sendAndWait(proc, 'session/close', { sessionId }, 5_000);
+      await sendAndWait(proc, 'session/close', { sessionId: wireSessionId }, 5_000);
     } catch {
-      // Best-effort close
+      // Best-effort close — many agents (e.g. Gemini) don't support this method
     }
     killAgent(proc);
   }
@@ -620,6 +695,13 @@ function parseAuthMethods(raw: unknown): AcpAuthMethod[] | undefined {
 }
 
 function parseModes(raw: unknown): AcpMode[] | undefined {
+  // Handle nested format: { availableModes: [...], currentModeId: "..." }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.availableModes)) {
+      return parseModes(obj.availableModes);
+    }
+  }
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   return raw
     .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
@@ -670,7 +752,6 @@ function parseSessionUpdate(sessionId: string, raw: Record<string, unknown>): Ac
       if (raw.toolCall && typeof raw.toolCall === 'object') {
         base.toolCall = raw.toolCall as AcpSessionUpdate['toolCall'];
       } else {
-        // Top-level tool call fields
         base.toolCall = {
           toolCallId: String(raw.toolCallId ?? ''),
           title: typeof raw.title === 'string' ? raw.title : undefined,
@@ -714,7 +795,6 @@ function parseSessionUpdate(sessionId: string, raw: Record<string, unknown>): Ac
       break;
 
     case 'done':
-      // Terminal state — no extra fields
       break;
 
     case 'tool_result':
@@ -723,4 +803,100 @@ function parseSessionUpdate(sessionId: string, raw: Record<string, unknown>): Ac
   }
 
   return base;
+}
+
+/**
+ * Parse a JSON-RPC notification's `params` into a typed AcpSessionUpdate.
+ * Gemini CLI notification format:
+ *   { sessionId: "...", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "..." } } }
+ */
+function parseNotificationToUpdate(
+  sessionId: string,
+  params: Record<string, unknown>,
+): AcpSessionUpdate | null {
+  const updateObj = params.update as Record<string, unknown> | undefined;
+  if (!updateObj) return null;
+
+  const updateType = (updateObj.sessionUpdate ?? updateObj.type) as AcpSessionUpdate['type'] | undefined;
+  if (!updateType) return null;
+
+  const base: AcpSessionUpdate = { sessionId, type: updateType };
+
+  // Extract text from content block
+  const content = updateObj.content as Record<string, unknown> | undefined;
+  if (content) {
+    if (content.type === 'text' && typeof content.text === 'string') {
+      base.text = content.text;
+    } else if (content.type === 'thinking' && typeof content.text === 'string') {
+      base.text = content.text;
+    }
+  }
+
+  // Direct text fields (some agents use flat format)
+  if (!base.text) {
+    if (typeof updateObj.text === 'string') base.text = updateObj.text;
+    else if (typeof updateObj.content === 'string') base.text = updateObj.content;
+  }
+
+  switch (updateType) {
+    case 'tool_call':
+    case 'tool_call_update':
+      if (updateObj.toolCall && typeof updateObj.toolCall === 'object') {
+        base.toolCall = updateObj.toolCall as AcpSessionUpdate['toolCall'];
+      } else {
+        base.toolCall = {
+          toolCallId: String(updateObj.toolCallId ?? ''),
+          title: typeof updateObj.title === 'string' ? updateObj.title : undefined,
+          status: (updateObj.status as 'pending' | 'in_progress' | 'completed' | 'failed') ?? 'pending',
+        };
+      }
+      break;
+
+    case 'plan':
+      if (updateObj.plan && typeof updateObj.plan === 'object') {
+        base.plan = updateObj.plan as AcpSessionUpdate['plan'];
+      } else if (Array.isArray(updateObj.entries)) {
+        base.plan = { entries: updateObj.entries as AcpSessionUpdate['plan'] extends { entries: infer E } ? E : never };
+      }
+      break;
+
+    case 'error':
+      base.error = typeof updateObj.error === 'string'
+        ? updateObj.error
+        : typeof updateObj.message === 'string'
+          ? updateObj.message
+          : 'Unknown error';
+      break;
+
+    case 'config_option_update':
+      base.configOptions = parseConfigOptions(updateObj.configOptions);
+      break;
+
+    case 'current_mode_update':
+      base.currentModeId = typeof updateObj.currentModeId === 'string' ? updateObj.currentModeId : undefined;
+      break;
+
+    case 'session_info_update':
+      base.sessionInfo = {
+        title: typeof updateObj.title === 'string' ? updateObj.title : undefined,
+        updatedAt: typeof updateObj.updatedAt === 'string' ? updateObj.updatedAt : undefined,
+      };
+      break;
+  }
+
+  return base;
+}
+
+/* ── Internal — Session reaping ───────────────────────────────────────── */
+
+const STALE_SESSION_MS = 30 * 60 * 1000; // 30 minutes
+
+function reapStaleSessions(): void {
+  const now = Date.now();
+  for (const [id, session] of sessions) {
+    const lastActivity = new Date(session.lastActivityAt).getTime();
+    if (now - lastActivity > STALE_SESSION_MS && session.state !== 'active') {
+      closeSession(id).catch(() => {});
+    }
+  }
 }
