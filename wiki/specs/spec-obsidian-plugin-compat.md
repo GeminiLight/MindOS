@@ -94,7 +94,7 @@ MindOS 作为知识库产品，兼容 Obsidian 插件生态可以：
 **关键设计决策**：
 
 1. **Shim 层是纯 TypeScript 适配器** — 不修改 MindOS 核心代码
-2. **插件运行在浏览器沙箱中** — Web Worker 或 iframe 隔离
+2. **插件运行在受控运行时中** — 第一阶段以主线程受控 runtime 为主，后续可演进为 iframe 隔离
 3. **插件通过 REST API 或内部函数调用访问 MindOS** — 而非直接访问文件系统
 4. **渐进式兼容** — 按 API 层次逐步实现，优先高频 API
 
@@ -112,7 +112,7 @@ MindOS 作为知识库产品，兼容 Obsidian 插件生态可以：
 | **L4** | Settings UI (PluginSettingTab, Setting) | 70% | 中 | Phase 1 |
 | **L5** | MetadataCache (frontmatter/tags/links) | 60% | 中 | Phase 1 |
 | **L6** | Notice / Modal | 70% | 低 | Phase 1 |
-| **L7** | Ribbon Icon / Status Bar | 40% | 低 | Phase 1 |
+| **L7** | Ribbon Icon / Status Bar | 40% | 低 | Phase 2 |
 | **L8** | Markdown Post-Processor | 20% | 中 | Phase 2 |
 | **L9** | 自定义 View (ItemView) | 25% | 中高 | Phase 2 |
 | **L10** | Editor API (CM6 扩展) | 30% | 高 | Phase 2 |

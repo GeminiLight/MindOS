@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, XCircle, Loader2, Send,
-  Eye, EyeOff, Settings2, Trash2, AlertTriangle, AlertCircle, RefreshCw,
+  Eye, EyeOff, Settings2, Trash2, AlertTriangle, AlertCircle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { getPlatform, type PlatformDef, type PlatformStatus } from '@/lib/im/platforms';
@@ -189,7 +189,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
         /* ─── Connected View ─── */
         <div className="flex flex-col gap-6">
           {/* Status info */}
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-4 shadow-sm">
             <h3 className="text-sm font-medium text-foreground mb-3">{im.tabStatus}</h3>
             {status?.botName && (
               <div className="flex items-center gap-2 mb-3">
@@ -207,16 +207,16 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
           </div>
 
           {/* Credential update */}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <h3 className="text-sm font-medium text-foreground mb-2">{im.editCredentials}</h3>
-            <p className="text-xs text-muted-foreground mb-4">{platform.editHint || im.editCredentialsHint}</p>
+            <p className="text-sm text-muted-foreground leading-6 mb-4 max-w-prose">{platform.editHint || im.editCredentialsHint}</p>
             {hasExistingCredentials && (
-              <p className="text-xs text-muted-foreground/80 mb-4">{im.savedValuesHint}</p>
+              <p className="text-xs text-muted-foreground/80 leading-5 mb-4 max-w-prose">{im.savedValuesHint}</p>
             )}
             <div className="flex flex-col gap-4">
               {platform.fields.map(field => (
                 <div key={field.key} className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                  <label className="text-xs font-medium text-muted-foreground">
                     {field.label}
                     <span className="text-muted-foreground/50 font-normal"> ({im.required})</span>
                   </label>
@@ -251,7 +251,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !isFormComplete}
-                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   aria-label={saving ? im.saving : im.saveConfig}
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Settings2 size={14} />}
@@ -272,11 +272,11 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
           </div>
 
           {/* Test send */}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <h3 className="text-sm font-medium text-foreground mb-3">{im.testSend}</h3>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-xs font-medium text-foreground block mb-1.5">{im.recipientPlaceholder}</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">{im.recipientPlaceholder}</label>
                 <input
                   type="text"
                   placeholder={im.recipientPlaceholder}
@@ -285,10 +285,10 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                   className="h-11 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   aria-label={im.recipientPlaceholder}
                 />
-                <p className="text-xs text-muted-foreground mt-1.5">{im.recipientHint}</p>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-5">{im.recipientHint}</p>
               </div>
               <div>
-                <label className="text-xs font-medium text-foreground block mb-1.5">{im.messagePlaceholder}</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">{im.messagePlaceholder}</label>
                 <input
                   type="text"
                   placeholder={im.messagePlaceholder}
@@ -303,7 +303,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                   type="button"
                   onClick={handleTest}
                   disabled={testStatus === 'sending' || !testRecipient.trim()}
-                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   aria-label={im.sendTest}
                 >
                   {testStatus === 'sending' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
@@ -324,7 +324,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
           </div>
 
           {/* Disconnect */}
-          <div className="rounded-lg border border-error/20 bg-card p-4">
+          <div className="rounded-lg border border-error/20 bg-card p-4 shadow-sm">
             <h3 className="text-sm font-medium text-foreground mb-2">{im.disconnect}</h3>
             <p className="text-xs text-muted-foreground mb-3">{im.disconnectHint}</p>
             <button
@@ -350,7 +350,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
         <div className="flex flex-col gap-6">
           {/* Guide */}
           {platform.guide && (
-            <div className="rounded-lg border border-border border-l-4 border-l-[var(--amber)] bg-card p-4">
+            <div className="rounded-lg border border-border border-l-4 border-l-[var(--amber)] bg-card p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <h3 className="text-sm font-medium text-foreground">{im.setupGuide}</h3>
                 {platform.guideUrl && (
@@ -358,13 +358,14 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                     href={platform.guideUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-[var(--amber)] hover:underline shrink-0"
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs bg-[var(--amber-dim)] text-[var(--amber)] hover:bg-[var(--amber-dim)]/80 shrink-0 transition-colors"
                   >
                     {im.guideLink}
+                    <ExternalLink size={12} />
                   </Link>
                 )}
               </div>
-              <div className="text-sm text-muted-foreground leading-relaxed space-y-1">
+              <div className="text-sm text-muted-foreground leading-7 space-y-1.5 max-w-prose">
                 {platform.guide.split('\n').map((line, idx) => (
                   <div key={idx}>{line}</div>
                 ))}
@@ -373,12 +374,12 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
           )}
 
           {/* Credential form */}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <h3 className="text-sm font-medium text-foreground mb-4">{im.tabConfigure}</h3>
             <div className="flex flex-col gap-4">
               {platform.fields.map(field => (
                 <div key={field.key} className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                  <label className="text-xs font-medium text-muted-foreground">
                     {field.label}
                     <span className="text-muted-foreground/50 font-normal"> ({im.required})</span>
                   </label>
@@ -413,7 +414,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !isFormComplete}
-                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="h-11 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   aria-label={saving ? im.saving : im.saveConfig}
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Settings2 size={14} />}

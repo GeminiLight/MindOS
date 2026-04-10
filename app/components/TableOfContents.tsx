@@ -34,7 +34,7 @@ function parseHeadings(content: string): Heading[] {
   return headings;
 }
 
-const TOPBAR_H = 44;
+const TOPBAR_H = 46;
 const SCROLL_OFFSET = TOPBAR_H + 12;
 const NAV_W = 212;
 
@@ -122,7 +122,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
       {/* Collapse / expand toggle — separate from aside so it stays visible */}
       <button
         onClick={() => setCollapsed(v => !v)}
-        className="hidden xl:flex fixed z-10 top-[50px] flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
+        className="hidden xl:flex fixed z-10 top-[46px] flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
         style={{
           right: `calc(var(--right-panel-width, 0px) + ${collapsed ? 0 : NAV_W}px)`,
           background: 'var(--background)',
@@ -149,17 +149,17 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
           transition: 'transform 200ms ease-in-out, right 200ms ease-out',
         }}
       >
+      <div className="flex items-center h-[46px] px-4 border-l border-b border-border" style={{ background: 'var(--background)' }}>
+        <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/55 shrink-0">
+          {t.view.tocTitle}
+        </p>
+      </div>
       <nav
         ref={navRef}
         aria-label={t.view.tocTitle}
-        className="flex flex-col gap-0.5 overflow-y-auto min-h-0 flex-1 py-5 pl-2 pr-3 border-l border-border"
+        className="flex flex-col gap-0.5 overflow-y-auto min-h-0 flex-1 pt-3 pb-5 pl-2 pr-3 border-l border-border"
         style={{ background: 'var(--background)' }}
       >
-        <p
-          className="text-2xs font-semibold uppercase tracking-wider px-2 mb-1 text-muted-foreground/50 shrink-0"
-        >
-          {t.view.tocTitle}
-        </p>
         {headings.map((heading, i) => {
           const indent = (heading.level - minLevel) * 14;
           const isActive = activeId === heading.id;

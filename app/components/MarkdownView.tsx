@@ -102,6 +102,10 @@ const components: Components = {
     void node;
     return <p {...stripNonDom(rest)} suppressHydrationWarning>{children}</p>;
   },
+  span({ children, node, ...rest }) {
+    void node;
+    return <span {...stripNonDom(rest)} suppressHydrationWarning>{children}</span>;
+  },
   a({ href, children, node, ...rest }) {
     void node;
     const isExternal = href?.startsWith('http');

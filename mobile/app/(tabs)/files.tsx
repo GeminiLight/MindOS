@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { mindosClient } from '@/lib/api-client';
+import TextInputModal from '@/components/TextInputModal';
 import type { FileNode } from '@/lib/types';
 
 export default function FilesScreen() {
@@ -28,6 +29,10 @@ export default function FilesScreen() {
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Android rename modal state
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<FileNode | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -133,11 +138,9 @@ export default function FilesScreen() {
               item.name.replace(/\.md$/, ''),
             );
           } else {
-            // Android: no Alert.prompt, suggest desktop
-            Alert.alert(
-              'Rename',
-              'Renaming is available on iOS. On Android, please rename from the desktop app.',
-            );
+            // Android: use custom TextInputModal
+            setRenameTarget(item);
+            setRenameModalVisible(true);
           }
           break;
         case 1: // Delete
@@ -189,6 +192,18 @@ export default function FilesScreen() {
       );
     }
   }, [load]);
+
+  const handleRenameSubmit = useCallback(async (newName: string) => {
+    if (!renameTarget) return;
+    setRenameModalVisible(false);
+    try {
+      await mindosClient.renameFile(renameTarget.path, newName);
+      await load();
+    } catch (e) {
+      Alert.alert('Error', (e as Error).message);
+    }
+    setRenameTarget(null);
+  }, [renameTarget, load]);
 
   function iconForNode(node: FileNode) {
     if (node.type === 'directory') {
@@ -281,6 +296,18 @@ export default function FilesScreen() {
           <Ionicons name="add" size={24} color="#fff" />
         </Pressable>
       )}
+
+      {/* Android rename modal */}
+      <TextInputModal
+        visible={renameModalVisible}
+        title="Rename File"
+        message={`Enter new name for "${renameTarget?.name ?? ''}"`}
+        placeholder="New file name"
+        defaultValue={renameTarget?.name.replace(/\.md$/, '') ?? ''}
+        onSubmit={handleRenameSubmit}
+        onCancel={() => { setRenameModalVisible(false); setRenameTarget(null); }}
+        submitText="Rename"
+      />
     </SafeAreaView>
   );
 }

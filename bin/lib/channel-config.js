@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { CHANNEL_FIELD_PATTERNS, CHANNEL_REQUIRED_FIELDS } from './channel-constants.js';
 
 const IM_CONFIG_DIR = path.join(os.homedir(), '.mindos');
 const IM_CONFIG_PATH = path.join(IM_CONFIG_DIR, 'im.json');
@@ -63,7 +64,14 @@ export function readChannelConfig() {
  * Sets 0o600 permissions on Unix
  * @param {Record<string, any>} config
  */
-export function writeChannelConfig(config) {
+export function writeChannelConfig(config, options = {}) {
+  const expectedMtime = options.expectedMtime ?? null;
+  const currentMtime = getChannelConfigMtime();
+
+  if (expectedMtime !== null && currentMtime !== expectedMtime) {
+    throw new Error('Configuration changed on disk. Retry your command.');
+  }
+
   fs.mkdirSync(IM_CONFIG_DIR, { recursive: true });
   const content = JSON.stringify(config, null, 2) + '\n';
   const tmpPath = IM_CONFIG_PATH + '.tmp';
@@ -76,6 +84,13 @@ export function writeChannelConfig(config) {
       // best effort
     }
   }
+
+  const writtenRaw = fs.readFileSync(IM_CONFIG_PATH, 'utf-8');
+  const writtenConfig = JSON.parse(writtenRaw);
+  if (JSON.stringify(writtenConfig) !== JSON.stringify(config)) {
+    throw new Error('Config write validation failed. Retry your command.');
+  }
+
   cachedConfig = config;
   cachedMtime = fs.statSync(IM_CONFIG_PATH).mtimeMs;
 }
@@ -94,36 +109,30 @@ export function validateChannelConfig(platform, config) {
 
   const c = config;
 
-  // Platform-specific required fields
-  const required = {
-    telegram: ['bot_token'],
-    discord: ['bot_token'],
-    feishu: ['app_id', 'app_secret'],
-    slack: ['bot_token'],
-    wecom: [], // optional: webhook_key OR corp_id+corp_secret
-    dingtalk: [], // optional: client_id+client_secret OR webhook_url
-    wechat: ['bot_token'],
-    qq: ['app_id', 'app_secret'],
-  }[platform];
+  const required = CHANNEL_REQUIRED_FIELDS[platform];
 
   if (!required) {
     return { valid: false, missing: ['(unknown platform)'] };
   }
 
+  if (platform === 'wecom') {
+    if (typeof c.webhook_key === 'string' && c.webhook_key) return { valid: true };
+    const missing = ['corp_id', 'corp_secret'].filter((f) => typeof c[f] !== 'string' || !String(c[f]).trim());
+    return missing.length === 0 ? { valid: true } : { valid: false, missing };
+  }
+
+  if (platform === 'dingtalk') {
+    if (typeof c.webhook_url === 'string' && c.webhook_url) return { valid: true };
+    const missing = ['client_id', 'client_secret'].filter((f) => typeof c[f] !== 'string' || !String(c[f]).trim());
+    return missing.length === 0 ? { valid: true } : { valid: false, missing };
+  }
+
+  const platformPatterns = CHANNEL_FIELD_PATTERNS[platform] || {};
   const missing = required.filter((f) => {
     const val = c[f];
     if (typeof val !== 'string' || !val.trim()) return true;
-    
-    // Telegram token format check: 123456:ABC-DEF...
-    if (platform === 'telegram' && f === 'bot_token') {
-      if (!/^\d+:[A-Za-z0-9_-]{25,}$/.test(val)) return true;
-    }
-    
-    // Slack bot token format check: xoxb-...
-    if (platform === 'slack' && f === 'bot_token') {
-      if (!val.startsWith('xoxb-')) return true;
-    }
-
+    const pattern = platformPatterns[f];
+    if (pattern && !pattern.test(val)) return true;
     return false;
   });
 
@@ -140,6 +149,14 @@ export function getConfiguredPlatforms() {
     const validation = validateChannelConfig(platform, config.providers[platform]);
     return validation.valid;
   });
+}
+
+export function getChannelConfigMtime() {
+  try {
+    return fs.statSync(IM_CONFIG_PATH).mtimeMs;
+  } catch {
+    return 0;
+  }
 }
 
 /**

@@ -2,43 +2,12 @@
  * Channel Validation - Field and Format Validation
  */
 
-// Platform-specific validation patterns
-/** @type {Record<string, {required: string[], patterns?: Record<string, RegExp>}>} */
-const VALIDATION_PATTERNS = {
-  telegram: {
-    required: ['bot_token'],
-    patterns: {
-      bot_token: /^\d+:[A-Za-z0-9_-]{25,}$/, // e.g., 123456:ABC-DEF_123
-    },
-  },
-  discord: {
-    required: ['bot_token'],
-    patterns: {
-      bot_token: /^[A-Za-z0-9_-]{60,}$/, // Long token
-    },
-  },
-  feishu: {
-    required: ['app_id', 'app_secret'],
-  },
-  slack: {
-    required: ['bot_token'],
-    patterns: {
-      bot_token: /^xoxb-/, // Must start with xoxb-
-    },
-  },
-  wecom: {
-    required: ['webhook_key'], // OR corp_id + corp_secret
-  },
-  dingtalk: {
-    required: ['client_id', 'client_secret'], // OR webhook_url
-  },
-  wechat: {
-    required: ['bot_token'],
-  },
-  qq: {
-    required: ['app_id', 'app_secret'],
-  },
-};
+import {
+  CHANNEL_FIELD_EXAMPLES,
+  CHANNEL_FIELD_PATTERNS,
+  CHANNEL_PLATFORM_HELP,
+  CHANNEL_REQUIRED_FIELDS,
+} from './channel-constants.js';
 
 /**
  * Validate field format
@@ -52,10 +21,16 @@ export function validateFieldFormat(platform, field, value) {
     return { valid: false, error: `${field} cannot be empty` };
   }
 
-  const patterns = VALIDATION_PATTERNS[platform]?.patterns;
+  const patterns = CHANNEL_FIELD_PATTERNS[platform];
   if (patterns && patterns[field]) {
     if (!patterns[field].test(value)) {
-      return { valid: false, error: `Invalid ${field} format for ${platform}` };
+      const example = CHANNEL_FIELD_EXAMPLES[platform]?.[field];
+      return {
+        valid: false,
+        error: example
+          ? `Invalid ${field} format for ${platform}. Expected like: ${example}`
+          : `Invalid ${field} format for ${platform}`,
+      };
     }
   }
 
@@ -68,7 +43,7 @@ export function validateFieldFormat(platform, field, value) {
  * @returns {string[]}
  */
 export function getRequiredFields(platform) {
-  return VALIDATION_PATTERNS[platform]?.required || [];
+  return CHANNEL_REQUIRED_FIELDS[platform] || [];
 }
 
 /**
@@ -78,36 +53,5 @@ export function getRequiredFields(platform) {
  * @returns {string}
  */
 export function getFieldHelp(platform, field) {
-  /** @type {Record<string, Record<string, string>>} */
-  const helpTexts = {
-    telegram: {
-      bot_token: 'Get from @BotFather on Telegram (https://core.telegram.org/bots)',
-    },
-    discord: {
-      bot_token: 'Get from Discord Developer Portal (https://discord.com/developers)',
-    },
-    feishu: {
-      app_id: 'Get from Feishu Admin Console',
-      app_secret: 'Get from Feishu Admin Console',
-    },
-    slack: {
-      bot_token: 'Get from Slack API settings (https://api.slack.com/apps)',
-    },
-    wecom: {
-      webhook_key: 'Get from WeChat Enterprise admin panel',
-    },
-    dingtalk: {
-      client_id: 'Get from DingTalk Developer Console',
-      client_secret: 'Get from DingTalk Developer Console',
-    },
-    wechat: {
-      bot_token: 'Get via ClawBot QR scan',
-    },
-    qq: {
-      app_id: 'Get from QQ Open Platform',
-      app_secret: 'Get from QQ Open Platform',
-    },
-  };
-
-  return helpTexts[platform]?.[field] || '';
+  return CHANNEL_PLATFORM_HELP[platform]?.[field] || '';
 }

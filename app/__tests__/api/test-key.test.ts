@@ -99,16 +99,16 @@ describe('POST /api/settings/test-key', () => {
     expect(body.code).toBe('auth_error');
   });
 
-  it('classifies model not found errors', async () => {
+  it('classifies endpoint mismatch errors separately from missing models', async () => {
     (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error('404 Model not found: nonexistent-model does not exist'),
+      new Error('404 page not found'),
     );
 
     const res = await POST(makeReq({ provider: 'anthropic', apiKey: 'sk-test', model: 'nonexistent-model' }));
     const body = await res.json();
 
     expect(body.ok).toBe(false);
-    expect(body.code).toBe('model_not_found');
+    expect(body.code).toBe('endpoint_error');
   });
 
   it('classifies rate limit errors', async () => {
@@ -159,5 +159,17 @@ describe('POST /api/settings/test-key', () => {
       provider: 'google',
       apiKey: 'AI-key-test',
     }));
+  });
+
+  it('classifies explicit model missing errors as model_not_found', async () => {
+    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('Model not found: nonexistent-model does not exist'),
+    );
+
+    const res = await POST(makeReq({ provider: 'anthropic', apiKey: 'sk-test', model: 'nonexistent-model' }));
+    const body = await res.json();
+
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe('model_not_found');
   });
 });

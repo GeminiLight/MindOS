@@ -1,5 +1,6 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { MindOSSSEvent } from '@/lib/sse/events';
+import { buildCompatEndpointCandidates } from './providers';
 
 /**
  * Reassemble SSE chunks (from proxies that ignore stream:false) into a
@@ -173,32 +174,48 @@ export async function runNonStreamingFallback(opts: NonStreamingOptions): Promis
   ];
 
   const toolMap = new Map(tools.map(t => [t.name, t]));
-  const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const endpoints = buildCompatEndpointCandidates(baseUrl, '/chat/completions', 'openai-completions');
+  const attemptedEndpoints = endpoints.join(' , ');
   let step = 0;
 
   while (step < maxSteps) {
     if (signal.aborted) throw new Error('Request aborted');
     step++;
 
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        tools: openaiTools.length > 0 ? openaiTools : undefined,
-        tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
-        stream: true,
-      }),
-      signal,
-    });
+    let resp: Response | null = null;
+    let lastEndpointError = '';
 
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
-      throw new Error(`Non-streaming API error ${resp.status}: ${errText.slice(0, 200)}`);
+    for (const endpoint of endpoints) {
+      const attempt = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          tools: openaiTools.length > 0 ? openaiTools : undefined,
+          tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
+          stream: true,
+        }),
+        signal,
+      });
+
+      if (attempt.ok) {
+        resp = attempt;
+        break;
+      }
+
+      const errText = await attempt.text().catch(() => '');
+      lastEndpointError = `HTTP ${attempt.status} @ ${endpoint}: ${errText.slice(0, 200)}`;
+      if (attempt.status !== 404) {
+        throw new Error(`Non-streaming API error ${lastEndpointError}`);
+      }
+    }
+
+    if (!resp) {
+      throw new Error(`Non-streaming API error ${lastEndpointError || 'all endpoint candidates failed'}; tried ${attemptedEndpoints}`);
     }
 
     const rawText = await resp.text();

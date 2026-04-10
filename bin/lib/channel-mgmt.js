@@ -1,41 +1,24 @@
 /**
  * Channel Management - Business Logic
- * Handles: list, add, remove, verify operations for IM platforms
- * 
- * Architecture:
- * - Pure JavaScript, no TypeScript imports (CLI safety)
- * - Config read/write via channel-config.js
- * - Credential verification via HTTP API (optional app endpoint)
- * - All tests passing
+ * Handles: list, add, remove, verify operations for IM platforms.
  */
 
-import { 
-  readChannelConfig, 
-  writeChannelConfig, 
-  validateChannelConfig, 
-  getConfiguredPlatforms 
+import {
+  readChannelConfig,
+  writeChannelConfig,
+  validateChannelConfig,
+  getChannelConfigMtime,
 } from './channel-config.js';
+import { CHANNEL_PLATFORMS, CHANNEL_PLATFORM_EMOJIS } from './channel-constants.js';
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CORE OPERATIONS
-// ──────────────────────────────────────────────────────────────────────────────
+const DEFAULT_WEB_PORT = process.env.MINDOS_WEB_PORT || '3456';
 
-/**
- * List all platforms with their configuration status
- * @returns {Promise<{platforms: Array}>}
- */
 export async function channelList() {
   const config = readChannelConfig();
-  const allPlatforms = ['telegram', 'discord', 'feishu', 'slack', 'wecom', 'dingtalk', 'wechat', 'qq'];
-  
-  const platforms = allPlatforms.map((platform) => {
+  const platforms = CHANNEL_PLATFORMS.map((platform) => {
     const providerConfig = config.providers?.[platform];
-    
     if (!providerConfig) {
-      return {
-        platform,
-        status: 'not_configured',
-      };
+      return { platform, status: 'not_configured' };
     }
 
     const validation = validateChannelConfig(platform, providerConfig);
@@ -59,74 +42,63 @@ export async function channelList() {
   return { platforms };
 }
 
-/**
- * Add or update a platform configuration
- * Validates credentials format locally; verification deferred to app API
- * @param {string} platform
- * @param {Record<string, string>} credentials
- * @param {Object} [options]
- * @returns {Promise<{ok: boolean, message: string, details?: Object, error?: string}>}
- */
-export async function channelAdd(platform, credentials, options) {
-  // Validate platform exists
-  if (!['telegram', 'discord', 'feishu', 'slack', 'wecom', 'dingtalk', 'wechat', 'qq'].includes(platform)) {
-    return {
-      ok: false,
-      message: `Unknown platform: ${platform}`,
-      error: `Supported platforms: telegram, discord, feishu, slack, wecom, dingtalk, wechat, qq`,
-    };
+export async function channelAdd(platform, credentials, options = {}) {
+  if (!CHANNEL_PLATFORMS.includes(platform)) {
+    return unsupportedPlatform(platform);
   }
 
-  // Validate credentials format
   const validation = validateChannelConfig(platform, credentials);
   if (!validation.valid) {
     return {
       ok: false,
       message: `Invalid ${platform} configuration`,
-      error: `Missing required fields: ${validation.missing?.join(', ') || 'unknown'}`,
+      error: `Missing or invalid fields: ${validation.missing?.join(', ') || 'unknown'}`,
     };
   }
 
-  // Save configuration (local verification happens, full verify is optional)
+  let verifyResult = { ok: true, botName: undefined, botId: undefined };
+  if (!options.skipVerify) {
+    verifyResult = await verifyCredentialsRemotely(platform, credentials);
+    if (!verifyResult.ok) {
+      return {
+      ok: false,
+      message: `Failed to verify ${platform} credentials`,
+      error: `${verifyResult.error}${options.skipVerify ? '' : ' Use --skip-verify to save format-valid credentials without a remote check.'}`,
+    };
+    }
+  }
+
   try {
     const config = readChannelConfig();
-    if (!config.providers) config.providers = {};
-    
+    const expectedMtime = getChannelConfigMtime();
+    config.providers ??= {};
     config.providers[platform] = {
       ...credentials,
-      _botName: undefined,
-      _botId: undefined,
+      _botName: verifyResult.botName,
+      _botId: verifyResult.botId,
       _lastVerified: new Date().toISOString(),
     };
-
-    writeChannelConfig(config);
+    writeChannelConfig(config, { expectedMtime });
 
     return {
       ok: true,
-      message: `✔ ${platform} configuration saved successfully`,
+      message: `${platform} configuration saved successfully${options.skipVerify ? ' (verification skipped)' : ''}`,
       details: {
-        botName: undefined,
-        botId: undefined,
+        botName: verifyResult.botName,
+        botId: verifyResult.botId,
+        verified: !options.skipVerify,
       },
     };
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
       message: `Failed to save ${platform} configuration`,
-      error: errorMsg,
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }
 
-/**
- * Remove a platform configuration
- * @param {string} platform
- * @param {Object} [options]
- * @returns {Promise<{ok: boolean, message: string, error?: string}>}
- */
-export async function channelRemove(platform, options) {
-  // Check platform exists in config
+export async function channelRemove(platform) {
   const config = readChannelConfig();
   if (!config.providers || !config.providers[platform]) {
     return {
@@ -137,32 +109,27 @@ export async function channelRemove(platform, options) {
   }
 
   try {
-    // Remove from config
+    const expectedMtime = getChannelConfigMtime();
     delete config.providers[platform];
-    writeChannelConfig(config);
-
+    writeChannelConfig(config, { expectedMtime });
     return {
       ok: true,
-      message: `✔ ${platform} configuration removed`,
+      message: `${platform} configuration removed`,
     };
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
       message: `Failed to remove ${platform} configuration`,
-      error: errorMsg,
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }
 
-/**
- * Verify a platform configuration is valid (local format check only)
- * Full credential verification would require calling app API
- * @param {string} platform
- * @returns {Promise<{ok: boolean, message: string, valid: boolean, error?: string}>}
- */
-export async function channelVerify(platform) {
-  // Check platform exists in config
+export async function channelVerify(platform, options = {}) {
+  if (!CHANNEL_PLATFORMS.includes(platform)) {
+    return { ok: false, valid: false, message: `Invalid platform: ${platform}`, error: 'Unsupported platform' };
+  }
+
   const config = readChannelConfig();
   if (!config.providers || !config.providers[platform]) {
     return {
@@ -173,41 +140,52 @@ export async function channelVerify(platform) {
     };
   }
 
-  const platformConfig = config.providers[platform];
-  
-  // Check config completeness
-  const validation = validateChannelConfig(platform, platformConfig);
+  const credentials = config.providers[platform];
+  const validation = validateChannelConfig(platform, credentials);
   if (!validation.valid) {
     return {
       ok: false,
       message: `${platform} configuration is incomplete`,
       valid: false,
-      error: `Missing required fields: ${validation.missing?.join(', ') || 'unknown'}`,
+      error: `Missing or invalid fields: ${validation.missing?.join(', ') || 'unknown'}`,
     };
   }
 
-  // Success (local validation only)
+  if (options.skipVerify) {
+    return {
+      ok: true,
+      valid: true,
+      message: `${platform} configuration format is valid`,
+      details: {
+        botName: credentials._botName,
+        botId: credentials._botId,
+        status: 'Format valid only',
+      },
+    };
+  }
+
+  const result = await verifyCredentialsRemotely(platform, credentials);
+  if (!result.ok) {
+    return {
+      ok: false,
+      valid: false,
+      message: `Failed to verify ${platform} configuration`,
+      error: `${result.error} Use --skip-verify to run format-only validation.`,
+    };
+  }
+
   return {
     ok: true,
-    message: `✔ ${platform} configuration format is valid`,
     valid: true,
+    message: `${platform} credentials verified successfully`,
     details: {
-      botName: platformConfig._botName,
-      botId: platformConfig._botId,
-      status: 'Ready',
+      botName: result.botName,
+      botId: result.botId,
+      status: 'Verified',
     },
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Format platform status for display
- * @param {string} status
- * @returns {string}
- */
 export function formatPlatformStatus(status) {
   switch (status) {
     case 'configured':
@@ -221,31 +199,46 @@ export function formatPlatformStatus(status) {
   }
 }
 
-/**
- * Mask sensitive token in display (show first 6 chars + ****)
- * @param {string} token
- * @returns {string}
- */
 export function maskToken(token) {
   if (!token || token.length <= 6) return '****';
   return token.slice(0, 6) + '****';
 }
 
-/**
- * Get platform display name with emoji
- * @param {string} platform
- * @returns {string}
- */
 export function getPlatformEmoji(platform) {
-  const emojis = {
-    telegram: '✈️',
-    discord: '🟣',
-    feishu: '🎎',
-    slack: '#️⃣',
-    wecom: '💼',
-    dingtalk: '🔔',
-    wechat: '💬',
-    qq: '🐧',
+  return CHANNEL_PLATFORM_EMOJIS[platform] || '📱';
+}
+
+function unsupportedPlatform(platform) {
+  return {
+    ok: false,
+    message: `Unknown platform: ${platform}`,
+    error: `Supported platforms: ${CHANNEL_PLATFORMS.join(', ')}`,
   };
-  return emojis[platform] || '📱';
+}
+
+async function verifyCredentialsRemotely(platform, credentials) {
+  const response = await fetch(buildVerifyUrl(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ platform, credentials }),
+  }).catch((err) => ({ ok: false, status: 0, json: async () => ({ error: err instanceof Error ? err.message : String(err) }) }));
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: payload.error || `Verification request failed (${response.status}). Is MindOS web running on ${buildVerifyUrl()}?`,
+    };
+  }
+
+  return {
+    ok: true,
+    botName: payload.botName,
+    botId: payload.botId,
+  };
+}
+
+function buildVerifyUrl() {
+  const base = process.env.MINDOS_URL || `http://127.0.0.1:${DEFAULT_WEB_PORT}`;
+  return `${base.replace(/\/$/, '')}/api/channels/verify`;
 }

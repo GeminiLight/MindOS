@@ -9,20 +9,17 @@
  */
 
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
-import { printCommandHelp } from '../lib/command.js';
 import {
   channelList,
   channelAdd,
   channelRemove,
   channelVerify,
   formatPlatformStatus,
-  maskToken,
   getPlatformEmoji,
 } from '../lib/channel-mgmt.js';
 import {
   promptHidden,
   promptConfirm,
-  promptChoice,
   closePrompts,
 } from '../lib/channel-prompts.js';
 import {
@@ -30,15 +27,20 @@ import {
   getRequiredFields,
   getFieldHelp,
 } from '../lib/channel-validate.js';
+import { CHANNEL_PLATFORMS } from '../lib/channel-constants.js';
 
 export const meta = {
   name: 'channel',
   group: 'IM Integration',
   summary: 'Manage IM platform configurations',
   usage: 'mindos channel [command]',
+  flags: {
+    '--skip-verify': 'Skip remote credential verification and only save/validate format',
+  },
   examples: [
     'mindos channel list',
     'mindos channel add telegram',
+    'mindos channel add telegram --skip-verify',
     'mindos channel verify discord',
     'mindos channel remove feishu',
   ],
@@ -159,10 +161,9 @@ async function handleAdd(platform, flags) {
     process.exit(1);
   }
 
-  const validPlatforms = ['telegram', 'discord', 'feishu', 'slack', 'wecom', 'dingtalk', 'wechat', 'qq'];
-  if (!validPlatforms.includes(platform)) {
+  if (!CHANNEL_PLATFORMS.includes(platform)) {
     console.error(red(`Unknown platform: ${platform}`));
-    console.log(dim(`  Supported: ${validPlatforms.join(', ')}`));
+    console.log(dim(`  Supported: ${CHANNEL_PLATFORMS.join(', ')}`));
     process.exit(1);
   }
 
@@ -210,7 +211,7 @@ async function handleAdd(platform, flags) {
   console.log();
   console.log(`${yellow('⏳')} Verifying ${platform} credentials...`);
 
-  const result = await channelAdd(platform, credentials);
+  const result = await channelAdd(platform, credentials, { skipVerify: flags['skip-verify'] === true });
 
   console.log();
   if (result.ok) {
@@ -283,7 +284,7 @@ async function handleVerify(platform, flags) {
   console.log();
   console.log(`${yellow('⏳')} Verifying ${platform} configuration...`);
 
-  const result = await channelVerify(platform);
+  const result = await channelVerify(platform, { skipVerify: flags['skip-verify'] === true });
 
   console.log();
   if (result.valid) {
@@ -326,16 +327,15 @@ ${row('mindos channel remove <platform>', 'Remove platform config')}
 ${row('mindos channel verify <platform>', 'Test platform credentials')}
 
 ${bold('PLATFORMS SUPPORTED')}
-  telegram, discord, feishu, slack, wecom, dingtalk, wechat, qq
+  ${CHANNEL_PLATFORMS.join(', ')}
 
 ${bold('EXAMPLES')}
   ${dim('mindos channel list')}
   ${dim('mindos channel add telegram')}
+  ${dim('mindos channel add telegram --skip-verify')}
   ${dim('mindos channel verify discord')}
+  ${dim('mindos channel verify discord --skip-verify')}
   ${dim('mindos channel remove feishu')}
-
-${bold('ENVIRONMENT VARIABLES')}
-  ${dim('TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, etc. for non-interactive setup')}
 
 ${dim('Run "mindos channel <command> --help" for details on any command.')}
 `);

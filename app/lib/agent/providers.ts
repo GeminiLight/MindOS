@@ -323,6 +323,37 @@ export function getDefaultApi(id: ProviderId): string {
   }
 }
 
+/** Return the effective API type used by a provider (openai-completions, anthropic-messages, etc.). */
+export function getProviderApiType(id: ProviderId): string {
+  return getDefaultApi(id);
+}
+
+/**
+ * Build endpoint candidates for compatible providers.
+ *
+ * We do not assume whether the user-supplied baseUrl already includes a version
+ * prefix. For OpenAI- and Anthropic-compatible gateways we try both forms:
+ *   1. base + path
+ *   2. base + /v1 + path (if base does not already contain /vN)
+ *
+ * This avoids breaking providers like GLM/Kimi/MiniMax that may use custom path
+ * prefixes, while still handling common OpenAI-compatible gateways that expect /v1.
+ */
+export function buildCompatEndpointCandidates(baseUrl: string, path: string, apiType: string): string[] {
+  const base = baseUrl.replace(/\/+$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const hasVersionPrefix = /\/v\d+(?:$|\/)/.test(base);
+  const candidates = new Set<string>();
+
+  candidates.add(`${base}${cleanPath}`);
+
+  if (!hasVersionPrefix && (apiType === 'openai-completions' || apiType === 'openai-responses' || apiType === 'anthropic-messages')) {
+    candidates.add(`${base}/v1${cleanPath}`);
+  }
+
+  return Array.from(candidates);
+}
+
 // ---------------------------------------------------------------------------
 // Internal: reverse-engineer pi-ai's env var name mapping (for UI display)
 // ---------------------------------------------------------------------------

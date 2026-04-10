@@ -9,7 +9,7 @@ import { handleRouteErrorSimple } from '@/lib/errors';
 
 const TIMEOUT = 15_000;
 
-type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
+type ErrorCode = 'auth_error' | 'model_not_found' | 'endpoint_error' | 'rate_limited' | 'network_error' | 'unknown';
 
 function classifyPiAiError(err: unknown): { code: ErrorCode; error: string } {
   const msg = err instanceof Error ? err.message : String(err);
@@ -24,7 +24,10 @@ function classifyPiAiError(err: unknown): { code: ErrorCode; error: string } {
     || lower.includes('api key') && (lower.includes('not valid') || lower.includes('incorrect')))
     return { code: 'auth_error', error: 'Invalid API key' };
 
-  if (lower.includes('404') || lower.includes('not found') || lower.includes('does not exist'))
+  if (lower.includes('404') || lower.includes('page not found') || lower.includes('invalid url'))
+    return { code: 'endpoint_error', error: `Endpoint or protocol mismatch: ${msg.slice(0, 200)}` };
+
+  if (lower.includes('model') && (lower.includes('not found') || lower.includes('does not exist')))
     return { code: 'model_not_found', error: `Model not found: ${msg.slice(0, 200)}` };
 
   if (lower.includes('429') || lower.includes('rate') || lower.includes('quota'))

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
-import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical, Search } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, SectionLabel, Toggle, SettingCard, SettingRow, PasswordInput } from './Primitives';
@@ -96,6 +96,16 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
       })
       .catch(err => console.error('Failed to restart walkthrough:', err));
   }, []);
+
+  // Embedding config
+  const embeddingData = data.embedding ?? { enabled: false, baseUrl: '', apiKey: '', model: '' };
+  const embeddingStatus = data.embeddingStatus ?? { enabled: false, ready: false, building: false, docCount: 0 };
+
+  const EMBEDDING_PRESETS = [
+    { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
+    { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-embed' },
+    { label: 'Ollama', baseUrl: 'http://localhost:11434/v1', model: 'nomic-embed-text' },
+  ];
 
   const origin = useSyncExternalStore(
     () => () => {},
@@ -284,6 +294,87 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </button>
         </SettingCard>
       )}
+
+      {/* ── Card: Embedding Search (optional RAG) ── */}
+      <SettingCard
+        icon={<Search size={15} />}
+        title="Embedding Search"
+        description="Enable semantic search with vector embeddings. Complements keyword search — finds notes by meaning, not just exact words."
+      >
+        <SettingRow label="Enable embedding search" hint="When enabled, search results combine keyword matching (BM25) with semantic similarity. Requires an embedding API.">
+          <Toggle
+            checked={embeddingData.enabled}
+            onChange={() => {
+              setData(d => d ? { ...d, embedding: { ...embeddingData, enabled: !embeddingData.enabled } } : d);
+            }}
+          />
+        </SettingRow>
+
+        {embeddingData.enabled && (
+          <>
+            {/* Preset buttons */}
+            <div className="flex gap-2 flex-wrap">
+              {EMBEDDING_PRESETS.map(p => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: p.baseUrl, model: p.model } } : d);
+                  }}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                    embeddingData.baseUrl === p.baseUrl
+                      ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
+                      : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <Field label="Base URL" hint="OpenAI-compatible embedding endpoint">
+              <Input
+                value={embeddingData.baseUrl}
+                onChange={e => setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: e.target.value } } : d)}
+                placeholder="https://api.openai.com/v1"
+              />
+            </Field>
+
+            <Field label="API Key" hint="Leave empty for local providers (e.g., Ollama)">
+              <PasswordInput
+                value={embeddingData.apiKey}
+                onChange={v => setData(d => d ? { ...d, embedding: { ...embeddingData, apiKey: v } } : d)}
+                placeholder="sk-..."
+              />
+            </Field>
+
+            <Field label="Model" hint="Embedding model name">
+              <Input
+                value={embeddingData.model}
+                onChange={e => setData(d => d ? { ...d, embedding: { ...embeddingData, model: e.target.value } } : d)}
+                placeholder="text-embedding-3-small"
+              />
+            </Field>
+
+            {/* Status indicator */}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+              {embeddingStatus.building ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Building embedding index...</span>
+                </>
+              ) : embeddingStatus.ready ? (
+                <>
+                  <Check size={12} className="text-success" />
+                  <span>{embeddingStatus.docCount} documents indexed</span>
+                </>
+              ) : (
+                <span>Index will be built on first search</span>
+              )}
+            </div>
+          </>
+        )}
+      </SettingCard>
 
       {/* ── Card 4: Labs — experimental features ── */}
       <SettingCard icon={<FlaskConical size={15} />} title={a.labsTitle ?? 'Labs'} description={a.labsDesc ?? 'Experimental features that are still in development.'}>

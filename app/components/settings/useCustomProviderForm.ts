@@ -5,7 +5,7 @@ import { type ProviderId } from '@/lib/agent/providers';
 import { type Provider, generateProviderId } from '@/lib/custom-endpoints';
 
 export type TestState = 'idle' | 'testing' | 'ok' | 'error';
-export type ErrorCode = 'auth_error' | 'model_not_found' | 'rate_limited' | 'network_error' | 'unknown';
+export type ErrorCode = 'auth_error' | 'model_not_found' | 'endpoint_error' | 'rate_limited' | 'network_error' | 'unknown';
 
 export interface TestResult {
   state: TestState;
@@ -78,7 +78,7 @@ export function useCustomProviderForm({
         body: JSON.stringify(
           initial?.id
             ? { provider: initial.id, apiKey, model, baseUrl }
-            : { protocol, apiKey, model, baseUrl },
+            : { provider: protocol, apiKey, model, baseUrl, baseProviderId: protocol },
         ),
       });
       const json = await res.json();

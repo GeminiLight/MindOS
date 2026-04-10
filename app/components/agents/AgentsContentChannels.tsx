@@ -118,7 +118,7 @@ function ChannelsOverview() {
             <Link
               key={id}
               href={`/agents?tab=channels&platform=${id}`}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-[var(--amber)]/50 hover:bg-card/80 transition-colors"
+              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm hover:border-[var(--amber)]/50 hover:bg-card/80 hover:shadow transition-all"
             >
               <span className="text-xl shrink-0">{icon}</span>
               <div className="flex-1 min-w-0">
@@ -131,7 +131,7 @@ function ChannelsOverview() {
                 {isConnected && status?.capabilities && status.capabilities.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {status.capabilities.slice(0, 3).map(cap => (
-                      <span key={cap} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{cap}</span>
+                      <span key={cap} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{cap}</span>
                     ))}
                   </div>
                 )}

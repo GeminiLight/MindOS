@@ -18,6 +18,18 @@ export interface AgentSettings {
 export interface SettingsData {
   ai: AiSettings;
   agent?: AgentSettings;
+  embedding?: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  };
+  embeddingStatus?: {
+    enabled: boolean;
+    ready: boolean;
+    building: boolean;
+    docCount: number;
+  };
   mindRoot: string;
   webPassword?: string;
   authToken?: string;   // masked: first-xxxx-••••-last pattern

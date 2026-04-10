@@ -20,6 +20,20 @@
 
 ## Agent / LLM API
 
+### Plain JS CLI 直接 import app/*.ts 会在运行时炸掉 (2026-04-10)
+
+**症状**：`node bin/cli.js channel --help` 或其他 bin 命令在启动阶段直接报 `ERR_MODULE_NOT_FOUND` / `Unexpected token`，指向 `app/lib/**.ts`。
+
+**根因**：仓库根部的 CLI 运行在原生 Node ESM 下，`bin/*.js` 不经过 Next / tsx / ts-node 装载链；直接从 plain JS CLI import TypeScript 源文件会在运行时失败。
+
+**规则**：
+- `bin/` 层优先保持纯 JS，可直接做文件 I/O、参数解析、轻量校验。
+- 复杂 TypeScript 业务逻辑通过 app 内 API route / 子进程边界调用，不要从 `bin/*.js` 直接 import `app/**/*.ts`。
+- 若 CLI 与 app 需要共享规则，优先抽数据常量或协议边界，避免共享需要 TS loader 的实现文件。
+
+**修复**：本次 `mindos channel` 采用 `bin/lib/channel-config.js` + `/api/channels/verify` 的分层方式：CLI 负责配置和 UX，app 负责真实凭证校验。
+
+
 ### DefaultResourceLoader.systemPromptOverride 闭包缓存陷阱 (2026-04-10)
 
 **症状**：修改 `systemPrompt` 变量后追加内容（如 `<available_skills>` XML），但 LLM 始终看不到追加的内容。

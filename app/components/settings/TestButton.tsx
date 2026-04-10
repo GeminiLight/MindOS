@@ -8,6 +8,7 @@ function errorMessage(t: AiTabProps['t'], code?: ErrorCode): string {
   switch (code) {
     case 'auth_error': return t.settings.ai.testKeyAuthError;
     case 'model_not_found': return t.settings.ai.testKeyModelNotFound;
+    case 'endpoint_error': return t.settings.ai.testKeyEndpointError;
     case 'rate_limited': return t.settings.ai.testKeyRateLimited;
     case 'network_error': return t.settings.ai.testKeyNetworkError;
     default: return t.settings.ai.testKeyUnknown;

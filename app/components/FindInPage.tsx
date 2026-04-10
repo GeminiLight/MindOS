@@ -163,7 +163,7 @@ export default function FindInPage({ containerRef, onClose }: FindInPageProps) {
           outline: 2px solid rgba(250, 204, 21, 0.5);
         }
       `}</style>
-      <div className="sticky top-[96px] md:top-[44px] z-30 flex justify-end px-4 md:px-6 pointer-events-none" data-find-in-page>
+      <div className="sticky top-[98px] md:top-[46px] z-30 flex justify-end px-4 md:px-6 pointer-events-none" data-find-in-page>
         <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card shadow-lg">
           <input
             ref={inputRef}

@@ -3,20 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('ViewPageClient header scroll stability', () => {
-  it('applies responsive right padding to Header for scrollbar width compensation', () => {
+  it('does not duplicate right-side panel compensation already applied by main-content', () => {
     const filePath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const source = fs.readFileSync(filePath, 'utf8');
 
-    // Header must include right-panel-width, right-agent-detail-width, toc-extra-right CSS variables
-    // to prevent horizontal shift when scrollbar appears/disappears during TOC scroll
-    const headerStyleWithRightPadding = source.includes(
-      "paddingRight: 'calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + var(--toc-extra-right, 0px))'"
-    );
-
-    expect(headerStyleWithRightPadding).toBe(true);
+    // #main-content already compensates for Ask panel / agent detail / TOC.
+    // Header must not apply a second right-padding, or breadcrumb/actions get squeezed.
+    expect(source).not.toContain('var(--right-panel-width, 0px)');
+    expect(source).not.toContain('var(--right-agent-detail-width, 0px)');
   });
 
-  it('does not have hardcoded px-6 on Header right padding', () => {
+  it('does not depend on TOC width or any inline Header right padding', () => {
     const filePath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const source = fs.readFileSync(filePath, 'utf8');
 
@@ -27,7 +24,10 @@ describe('ViewPageClient header scroll stability', () => {
            l.includes('sticky') && l.includes('px-4') && l.includes('top-[52px]')
     );
 
-    if (headerLine && headerLine.includes('paddingRight')) {
+    expect(source).not.toContain('var(--toc-extra-right, 0px)');
+
+    if (headerLine) {
+      expect(headerLine).not.toContain('paddingRight');
       expect(headerLine).not.toMatch(/paddingRight:\s*['"].*1\.5rem.*['"]|paddingRight:\s*['"].*24px.*['"]/);
     }
   });

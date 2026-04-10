@@ -13,6 +13,18 @@ function ensureVisionCapable(model: Model<any>): Model<any> {
   return { ...model, input: [...inputs, 'image'] as any };
 }
 
+/**
+ * Normalize a user-provided baseUrl without changing its semantic path.
+ *
+ * We only trim whitespace and trailing slashes. We intentionally do not
+ * rewrite path segments like `/1` or `/v1`, because some gateways may use
+ * custom prefixes and mutating them could break valid configurations.
+ */
+export function normalizeBaseUrl(url: string): string {
+  if (!url) return url;
+  return url.trim().replace(/\/+$/, '');
+}
+
 export interface ModelConfigOverrides {
   provider?: ProviderId;
   apiKey?: string;
@@ -44,13 +56,14 @@ export function getModelConfig(options?: ModelConfigOverrides): {
   };
 
   const modelName = cfg.model;
-  let model = resolveModel(cfg.provider, modelName, cfg.baseUrl);
+  const normalizedBaseUrl = normalizeBaseUrl(cfg.baseUrl);
+  let model = resolveModel(cfg.provider, modelName, normalizedBaseUrl);
 
   if (options?.hasImages) {
     model = ensureVisionCapable(model);
   }
 
-  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider, baseUrl: cfg.baseUrl };
+  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider, baseUrl: normalizedBaseUrl };
 }
 
 /**
@@ -61,7 +74,10 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
   const piProvider = toPiProvider(providerId);
   const preset = getPreset(providerId);
   let model: Model<any>;
-  const hasCustomBase = !!baseUrl;
+
+  // Normalize user-provided baseUrl before use
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const hasCustomBase = !!normalizedBaseUrl;
 
   // 1. Try pi-ai registry lookup
   try {
@@ -92,7 +108,7 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
 
   // 3. Apply user's custom baseUrl
   if (hasCustomBase) {
-    model = { ...model, baseUrl };
+    model = { ...model, baseUrl: normalizedBaseUrl };
 
     if (model.api === 'openai-responses') {
       model = { ...model, api: 'openai-completions' as any };

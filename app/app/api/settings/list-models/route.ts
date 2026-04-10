@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getModels as piGetModels } from '@mariozechner/pi-ai';
 import { effectiveAiConfig, readSettings } from '@/lib/settings';
-import { type ProviderId, isProviderId, PROVIDER_PRESETS, toPiProvider, getDefaultBaseUrl } from '@/lib/agent/providers';
+import { type ProviderId, isProviderId, PROVIDER_PRESETS, toPiProvider, getDefaultBaseUrl, getProviderApiType, buildCompatEndpointCandidates } from '@/lib/agent/providers';
 import { isProviderEntryId, findProvider } from '@/lib/custom-endpoints';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
@@ -96,63 +96,59 @@ function getRegistryModels(provider: ProviderId): string[] {
 }
 
 async function fetchModels(provider: ProviderId, apiKey: string, baseUrl: string, signal: AbortSignal): Promise<string[]> {
-  if (provider === 'anthropic') {
-    return fetchAnthropicModels(apiKey, signal);
-  }
-
-  const endpoint = resolveListModelsUrl(provider, baseUrl);
-  return fetchOpenAICompatModels(endpoint, apiKey, signal);
+  const apiType = getProviderApiType(provider);
+  const endpoints = resolveListModelsUrls(provider, baseUrl, apiType);
+  return fetchCompatModels(endpoints, apiKey, apiType, signal);
 }
 
-function resolveListModelsUrl(provider: ProviderId, baseUrl: string): string {
+function resolveListModelsUrls(provider: ProviderId, baseUrl: string, apiType: string): string[] {
   if (baseUrl) {
-    return baseUrl.replace(/\/+$/, '') + '/models';
+    return buildCompatEndpointCandidates(baseUrl, '/models', apiType);
   }
 
   const base = getDefaultBaseUrl(provider);
   if (base) {
-    return base.replace(/\/+$/, '') + '/models';
+    return buildCompatEndpointCandidates(base, '/models', apiType);
   }
 
-  return 'https://api.openai.com/v1/models';
+  return ['https://api.openai.com/v1/models'];
 }
 
-async function fetchAnthropicModels(apiKey: string, signal: AbortSignal): Promise<string[]> {
-  const res = await fetch('https://api.anthropic.com/v1/models', {
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    signal,
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    throw new Error(`Failed to list models: HTTP ${res.status} ${errBody.slice(0, 200)}`);
-  }
-
-  const json = await res.json();
-  if (Array.isArray(json?.data)) {
-    return json.data.map((m: any) => m.id as string).filter(Boolean).sort();
-  }
-  return [];
-}
-
-async function fetchOpenAICompatModels(
-  endpoint: string, apiKey: string, signal: AbortSignal,
+async function fetchCompatModels(
+  endpoints: string[], apiKey: string, apiType: string, signal: AbortSignal,
 ): Promise<string[]> {
-  const headers: Record<string, string> = {};
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  const res = await fetch(endpoint, { headers, signal });
+  let lastError = 'No endpoint candidates';
+  const attempted: string[] = [];
 
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    throw new Error(`Failed to list models: HTTP ${res.status} ${errBody.slice(0, 200)}`);
+  for (const endpoint of endpoints) {
+    attempted.push(endpoint);
+    const headers: Record<string, string> = {};
+    if (apiType === 'anthropic-messages') {
+      if (apiKey) headers['x-api-key'] = apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    } else if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const res = await fetch(endpoint, { headers, signal });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      lastError = `HTTP ${res.status} @ ${endpoint}: ${errBody.slice(0, 200)}`;
+      if (res.status === 404) continue;
+      throw new Error(`Failed to list models: ${lastError}`);
+    }
+
+    const json = await res.json();
+    if (Array.isArray(json?.data)) {
+      return json.data.map((m: any) => m.id as string).filter(Boolean).sort();
+    }
+
+    if (Array.isArray(json?.models)) {
+      return json.models.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean).sort();
+    }
+
+    throw new Error(`Failed to list models: incompatible response shape from ${endpoint}; tried ${attempted.join(' , ')}`);
   }
 
-  const json = await res.json();
-  if (Array.isArray(json?.data)) {
-    return json.data.map((m: any) => m.id as string).filter(Boolean).sort();
-  }
-  return [];
+  throw new Error(`Failed to list models: ${lastError}; tried ${attempted.join(' , ')}`);
 }
