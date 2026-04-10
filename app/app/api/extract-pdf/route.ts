@@ -73,7 +73,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'PDF is too large (max 12MB)' }, { status: 400 });
     }
 
-    const { text: rawText, pages } = extractPdf(raw);
+    const { text: rawText, pages, error: extractError } = extractPdf(raw);
+    
+    // If extraction failed, return error state
+    if (extractError) {
+      return NextResponse.json({
+        name,
+        text: '',
+        extracted: 'error' as const,
+        extractionError: extractError,
+        truncated: false,
+        totalChars: 0,
+        pagesParsed: pages ?? 0,
+      });
+    }
+    
     const text = rawText.replace(/\u0000/g, '').trim();
     const totalChars = text.length;
     const { result: finalText, truncated } = truncateText(text);
@@ -81,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       name,
       text: finalText,
-      extracted: text.length > 0,
+      extracted: text.length > 0 ? 'success' : 'empty',
       truncated,
       totalChars,
       pagesParsed: pages,

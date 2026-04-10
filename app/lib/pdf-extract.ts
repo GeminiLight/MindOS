@@ -18,7 +18,7 @@ export async function extractPdfText(file: File): Promise<string> {
     body: JSON.stringify({ name: file.name, dataBase64 }),
   });
 
-  let payload: { text?: string; extracted?: boolean; error?: string } = {};
+  let payload: { text?: string; extracted?: 'success' | 'empty' | 'error'; extractionError?: string; error?: string } = {};
   try {
     payload = await res.json();
   } catch {
@@ -29,5 +29,9 @@ export async function extractPdfText(file: File): Promise<string> {
     throw new Error(payload.error || `PDF extraction failed (${res.status})`);
   }
 
-  return payload.extracted ? (payload.text || '') : '';
+  if (payload.extracted === 'error') {
+    throw new Error(payload.extractionError || 'Failed to parse PDF');
+  }
+
+  return payload.extracted === 'success' ? (payload.text || '') : '';
 }

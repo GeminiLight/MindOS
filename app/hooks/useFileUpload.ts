@@ -22,10 +22,6 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/**
- * Extract text from a PDF file via the backend API.
- * Returns a LocalAttachment with `status` reflecting the outcome.
- */
 async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
   const name = file.name;
 
@@ -41,7 +37,8 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
 
     let payload: {
       text?: string;
-      extracted?: boolean;
+      extracted?: 'success' | 'empty' | 'error';
+      extractionError?: string;
       error?: string;
       truncated?: boolean;
       totalChars?: number;
@@ -57,27 +54,37 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
       throw new Error(payload.error || `PDF extraction failed (${res.status})`);
     }
 
-    const extracted = payload.extracted ? (payload.text || '') : '';
+    // Handle extraction error state
+    if (payload.extracted === 'error') {
+      return {
+        name,
+        content: `[PDF: ${name}] Failed to extract text from this PDF.`,
+        status: 'error',
+        error: payload.extractionError || 'PDF extraction failed (unable to parse PDF)',
+      };
+    }
 
-    if (!extracted) {
+    // Handle empty PDF (no extraction error, but no text)
+    const text = payload.extracted === 'success' ? (payload.text || '') : '';
+    if (!text) {
       return {
         name,
         content: `[PDF: ${name}] Could not extract readable text (possibly scanned/image PDF).`,
         status: 'error',
-        error: 'Scanned or image-only PDF — no extractable text',
+        error: 'No extractable text found — PDF may be scanned, image-only, or have no text content',
       };
     }
 
     const att: LocalAttachment = {
       name,
-      content: `[PDF TEXT EXTRACTED: ${name}]\n\n${extracted}`,
+      content: `[PDF TEXT EXTRACTED: ${name}]\n\n${text}`,
       status: 'success',
     };
 
     if (payload.truncated && payload.totalChars) {
       att.truncatedInfo = {
         totalChars: payload.totalChars,
-        includedChars: extracted.length,
+        includedChars: text.length,
         totalPages: payload.pagesParsed ?? 0,
       };
     }

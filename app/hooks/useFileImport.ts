@@ -57,8 +57,13 @@ async function extractPdfText(file: File): Promise<string> {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { error?: string }).error || 'PDF extraction failed');
   }
-  const data = await res.json() as { text?: string; extracted?: boolean };
-  if (!data.extracted || !data.text) throw new Error('No text extracted from PDF');
+  const data = await res.json() as { text?: string; extracted?: 'success' | 'empty' | 'error'; extractionError?: string };
+  if (data.extracted === 'error') {
+    throw new Error(data.extractionError || 'Failed to parse PDF');
+  }
+  if (data.extracted !== 'success' || !data.text) {
+    throw new Error('No text extracted from PDF');
+  }
   return data.text;
 }
 
