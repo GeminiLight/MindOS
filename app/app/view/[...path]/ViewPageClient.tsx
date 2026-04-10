@@ -358,7 +358,7 @@ export default function ViewPageClient({
   return (
     <div className="flex flex-col min-h-screen">
       {/* Top bar */}
-      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center" style={{ background: 'var(--background)' }}>
+      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center" style={{ background: 'var(--background)', paddingRight: 'calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + var(--toc-extra-right, 0px))' }}>
         <div className="w-full min-w-0 flex items-center justify-between gap-3 h-full">
           <div className="min-w-0 flex-1 flex items-center gap-1.5">
             <button
