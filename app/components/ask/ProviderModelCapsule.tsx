@@ -561,7 +561,7 @@ export default function ProviderModelCapsule({
         className={`
           inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
           text-2xs font-medium transition-colors select-none max-w-[260px]
-          border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
           disabled:opacity-40 disabled:cursor-not-allowed
           ${providerValue || hasModelOverride
             ? 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'

@@ -215,11 +215,11 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
     <div className="relative h-full w-full flex flex-col">
       {/* Image insert button for markdown mode */}
       {isMarkdown && (
-        <div className="px-2 py-1.5 border-b border-zinc-800 bg-zinc-900/50 flex items-center gap-1">
+        <div className="px-2 py-1.5 border-b border-border bg-card/50 flex items-center gap-1">
           <button
             onClick={handlePickImages}
             disabled={isUploading}
-            className="p-1.5 rounded hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="p-1.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             title="Insert images (Ctrl+V or drag & drop)"
           >
             <ImageIcon size={14} />
@@ -234,7 +234,7 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
       {/* Editor container */}
       <div
         ref={containerRef}
-        className="h-full w-full overflow-hidden rounded-lg border border-zinc-800"
+        className="h-full w-full overflow-hidden rounded-lg border border-border"
         style={{ minHeight: '400px' }}
       />
     </div>

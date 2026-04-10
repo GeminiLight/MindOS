@@ -123,7 +123,7 @@ export default function CustomProvidersCard({
       />
 
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop">
           <div className="bg-card border border-border rounded-lg shadow-lg p-4 max-w-sm mx-4">
             <p className="text-sm font-medium">
               {t.settings?.customProviders?.deleteConfirm?.(

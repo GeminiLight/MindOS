@@ -152,7 +152,7 @@ export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
   return (
     <div className="wysiwyg-wrapper h-full overflow-y-auto px-8 py-6">
       {isUploading && (
-        <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
+        <div className="fixed inset-0 overlay-backdrop flex items-center justify-center z-50">
           <div className="bg-card border border-border rounded-lg px-6 py-4 text-center shadow-lg">
             <div className="animate-spin inline-block w-5 h-5 border-2 border-primary border-t-transparent rounded-full" />
             <p className="mt-2 text-sm text-muted-foreground">Uploading images...</p>

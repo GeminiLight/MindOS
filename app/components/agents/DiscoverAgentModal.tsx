@@ -46,7 +46,7 @@ export default function DiscoverAgentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" onClick={handleClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center overlay-backdrop" onClick={handleClose}>
       <div
         className="bg-popover border border-border rounded-xl shadow-lg w-full max-w-md mx-4 p-5"
         onClick={e => e.stopPropagation()}
@@ -62,7 +62,7 @@ export default function DiscoverAgentModal({
           <button
             type="button"
             onClick={handleClose}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close"
           >
             <X size={14} />
@@ -86,7 +86,7 @@ export default function DiscoverAgentModal({
             type="button"
             onClick={handleDiscover}
             disabled={discovering || !url.trim()}
-            className="px-3 py-2 text-xs font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-1.5 shrink-0"
+            className="px-3 py-2 text-xs font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-1.5 shrink-0"
           >
             {discovering && <Loader2 size={12} className="animate-spin" />}
             {discovering ? p.a2aDiscovering : p.a2aDiscover}

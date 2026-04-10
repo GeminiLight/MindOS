@@ -1309,6 +1309,36 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
   - `ask/ToolCallBlock.tsx:150+` — 可展开的工具调用区块
 - **设计规则：** 任何非 `<button>` / `<a>` / `<Link>` 元素如果有 `onClick`，必须加 `cursor-pointer`。更好的做法是直接用语义正确的 `<button>` 元素。
 
+### backdrop-filter 创建 containing block 导致 fixed dropdown 错位 (2026-04-10)
+
+**症状**：`ModelInput` 组件在 `ProviderModal` 内使用时，下拉列表位置错误（飘到页面顶部或被遮挡）。
+
+**根因**：CSS `backdrop-filter: blur()` 会创建新的 containing block，导致 `position: fixed` 的子元素相对于该 containing block 定位，而非 viewport。`modal-backdrop` 和 `overlay-backdrop` CSS class 都包含 `backdrop-filter`。
+
+**规则**：
+- 如果 modal 内部有使用 `position: fixed` 的下拉组件（如 `ModelInput`、`CustomSelect`、`DirPicker`），**禁止**在该 modal 的 backdrop 上使用 `backdrop-filter`
+- `ProviderModal` 必须保持 `bg-black/40`（无 blur），不能换成 `modal-backdrop` 或 `overlay-backdrop`
+- 新增 modal 时，先检查内部是否有 fixed-positioned dropdown 组件
+
+### UI/UX 批量审计发现的系统性问题 (2026-04-10)
+
+**审计范围**：全站 45 个 .tsx 文件
+
+**系统性问题及修复**：
+1. **Editor.tsx 使用 Zinc/Blue 冷色调**（10 处硬编码 hex）→ 全部改为 CSS var tokens（`--background`、`--amber`、`--card` 等）
+2. **focus: 与 focus-visible: 混用**（11 处）→ 输入框保留 `focus:outline-none` 去除原生轮廓，ring 改为 `focus-visible:ring-*` 仅在键盘导航时显示
+3. **z-[9999] 滥用**（5 处）→ 改为 z-50，符合项目 z-index 五层约束
+4. **Modal backdrop 不统一**（7 处）→ 核心 modal 用 `modal-backdrop`，轻量 dialog/overlay 用 `overlay-backdrop`
+5. **amber-500 Tailwind class**（9 处）→ 改为 `var(--amber)` token，确保 dark mode 正确
+6. **text-white 硬编码**（8 处）→ 改为 `text-[var(--amber-foreground)]` 或 `text-destructive-foreground`
+7. **重复 hardcoded hex (#8ab4d8/#c8a0d8)**（6 处跨 3 个文件）→ 新增 `--tool-read`/`--tool-search` CSS 变量
+8. **HomeContent tab 缺少 ARIA**→ 添加 `role="tablist"`/`role="tab"`/`aria-selected`/`role="tabpanel"`
+
+**关键教训**：
+- `focus:outline-none` 和 `focus-visible:ring-*` 是互补关系，不是替代关系。前者去除 mouse-click 时的原生轮廓，后者在 keyboard 时显示自定义 ring
+- 批量查找替换 `focus:` → `focus-visible:` 时，必须保留 `focus:outline-none`
+- 任何含 `backdrop-filter` 的元素都会成为 containing block，影响子元素 `position: fixed`
+
 
 
 ## Agent 重试 / Retry

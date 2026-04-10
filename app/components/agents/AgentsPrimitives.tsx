@@ -92,7 +92,7 @@ export function ActionButton({
   const base = 'inline-flex items-center justify-center gap-1.5 text-2xs min-h-[28px] px-2.5 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150';
   const variants = {
     default: 'border border-border hover:bg-muted',
-    primary: 'bg-[var(--amber)] text-background hover:bg-[var(--amber)]/90',
+    primary: 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:bg-[var(--amber)]/90',
   };
   return (
     <button
@@ -284,7 +284,7 @@ export function ConfirmDialog({
             className={`px-3 min-h-[32px] text-sm rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors duration-150 ${
               variant === 'destructive'
                 ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                : 'bg-[var(--amber)] text-background hover:bg-[var(--amber)]/90'
+                : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:bg-[var(--amber)]/90'
             }`}
           >
             {confirmLabel}
