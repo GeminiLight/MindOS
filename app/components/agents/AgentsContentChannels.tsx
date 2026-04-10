@@ -80,21 +80,21 @@ function ChannelsOverview() {
   const getStatus = (id: string) => statuses.find(s => s.platform === id);
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xs text-muted-foreground uppercase tracking-wider mb-1">{im.statsConnected}</div>
-          <div className="text-2xl font-semibold text-foreground tabular-nums">
-            {connected}<span className="text-sm text-muted-foreground font-normal">/{total}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{im.statsConnected}</div>
+          <div className="text-3xl font-semibold text-foreground tabular-nums">
+            {connected}<span className="text-sm text-muted-foreground font-normal ml-1">/ {total}</span>
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xs text-muted-foreground uppercase tracking-wider mb-1">{im.statsSupported}</div>
-          <div className="text-2xl font-semibold text-foreground tabular-nums">{total}</div>
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{im.statsSupported}</div>
+          <div className="text-3xl font-semibold text-foreground tabular-nums">{total}</div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xs text-muted-foreground uppercase tracking-wider mb-1">{im.statsStatus}</div>
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{im.statsStatus}</div>
           <div className="text-sm text-foreground mt-1">
             {connected > 0 ? (
               <span className="inline-flex items-center gap-1.5 text-success">
@@ -108,8 +108,8 @@ function ChannelsOverview() {
       </div>
 
       {/* Platform grid — clickable */}
-      <h2 className="text-sm font-medium text-foreground mb-3">{im.platformsTitle}</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <h2 className="text-sm font-medium text-foreground mb-4">{im.platformsTitle}</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {PLATFORMS.map(({ id, name, icon }) => {
           const status = getStatus(id);
           const isConnected = status?.connected ?? false;
@@ -118,28 +118,28 @@ function ChannelsOverview() {
             <Link
               key={id}
               href={`/agents?tab=channels&platform=${id}`}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-[var(--amber)]/40 hover:bg-card/80 transition-colors"
+              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-[var(--amber)]/50 hover:bg-card/80 transition-colors"
             >
-              <span className="text-lg">{icon}</span>
+              <span className="text-xl shrink-0">{icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground">{name}</div>
                 {isConnected && status?.botName ? (
-                  <div className="text-2xs text-muted-foreground font-mono truncate">{status.botName}</div>
+                  <div className="text-xs text-muted-foreground font-mono truncate">{status.botName}</div>
                 ) : (
-                  <div className="text-2xs text-muted-foreground">{isConnected ? im.statusConnected : im.notConfigured}</div>
+                  <div className="text-xs text-muted-foreground">{isConnected ? im.statusConnected : im.notConfigured}</div>
                 )}
                 {isConnected && status?.capabilities && status.capabilities.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-wrap gap-1 mt-1.5">
                     {status.capabilities.slice(0, 3).map(cap => (
-                      <span key={cap} className="text-2xs px-1 py-0.5 rounded bg-muted text-muted-foreground/70">{cap}</span>
+                      <span key={cap} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{cap}</span>
                     ))}
                   </div>
                 )}
               </div>
               {isConnected ? (
-                <CheckCircle2 size={16} className="text-success shrink-0" />
+                <CheckCircle2 size={18} className="text-success shrink-0" />
               ) : (
-                <Circle size={16} className="text-border shrink-0" />
+                <Circle size={18} className="text-border shrink-0" />
               )}
             </Link>
           );

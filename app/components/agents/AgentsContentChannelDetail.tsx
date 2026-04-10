@@ -25,6 +25,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
   const [showSecrets, setShowSecrets] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [touched, setTouched] = useState<Set<string>>(new Set());
 
   // Test send
   const [testRecipient, setTestRecipient] = useState('');
@@ -166,19 +167,19 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
       </Link>
 
       {/* Platform header */}
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-2xl">{platform.icon}</span>
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{platform.name}</h2>
-          <p className="text-sm text-muted-foreground">
-            {isConnected ? (
-              <span className="inline-flex items-center gap-1.5 text-success">
-                <CheckCircle2 size={14} /> {im.statusConnected}
-              </span>
-            ) : (
-              im.notConfigured
-            )}
-          </p>
+      <div className="flex items-start gap-3 mb-6">
+        <span className="text-3xl shrink-0">{platform.icon}</span>
+        <div className="flex-1">
+          <h2 className="text-xl font-semibold text-foreground">{platform.name}</h2>
+          {isConnected ? (
+            <span className="inline-flex items-center gap-1.5 mt-1 text-xs font-medium px-2 py-0.5 rounded-md bg-success/10 text-success">
+              <CheckCircle2 size={14} /> {im.statusConnected}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 mt-1 text-xs font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+              {im.notConfigured}
+            </span>
+          )}
         </div>
       </div>
 
@@ -186,18 +187,18 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
         /* ─── Connected View ─── */
         <div className="flex flex-col gap-6">
           {/* Status info */}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
             <h3 className="text-sm font-medium text-foreground mb-3">{im.tabStatus}</h3>
             {status?.botName && (
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xs text-muted-foreground uppercase tracking-wider">Bot</span>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-medium text-muted-foreground">Bot</span>
                 <span className="text-sm text-foreground font-mono">{status.botName}</span>
               </div>
             )}
             {status?.capabilities && status.capabilities.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {status.capabilities.map(cap => (
-                  <span key={cap} className="text-2xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{cap}</span>
+                  <span key={cap} className="text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground">{cap}</span>
                 ))}
               </div>
             )}
@@ -208,38 +209,45 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
             <h3 className="text-sm font-medium text-foreground mb-3">{im.testSend}</h3>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-2xs text-muted-foreground uppercase tracking-wider mb-1 block">{im.recipientPlaceholder}</label>
+                <label className="text-xs font-medium text-foreground block mb-1.5">{im.recipientPlaceholder}</label>
                 <input
                   type="text"
                   placeholder={im.recipientPlaceholder}
                   value={testRecipient}
                   onChange={e => setTestRecipient(e.target.value)}
-                  className="h-8 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  aria-label={im.recipientPlaceholder}
                 />
               </div>
               <div>
-                <label className="text-2xs text-muted-foreground uppercase tracking-wider mb-1 block">{im.messagePlaceholder}</label>
+                <label className="text-xs font-medium text-foreground block mb-1.5">{im.messagePlaceholder}</label>
                 <input
                   type="text"
                   placeholder={im.messagePlaceholder}
                   value={testMsg}
                   onChange={e => setTestMsg(e.target.value)}
-                  className="h-8 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  aria-label={im.messagePlaceholder}
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 pt-1">
                 <button
                   type="button"
                   onClick={handleTest}
                   disabled={testStatus === 'sending' || !testRecipient.trim()}
-                  className="h-8 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="h-9 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  aria-label={im.sendTest}
                 >
                   {testStatus === 'sending' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   {im.sendTest}
                 </button>
               </div>
               {testResult && (
-                <div className={`flex items-start gap-1.5 text-sm ${testStatus === 'success' ? 'text-success' : 'text-error'}`}>
+                <div 
+                  role="alert" 
+                  aria-live="polite"
+                  className={`flex items-start gap-1.5 text-sm ${testStatus === 'success' ? 'text-success' : 'text-error'}`}
+                >
                   {testStatus === 'success' ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <XCircle size={16} className="shrink-0 mt-0.5" />}
                   <span className="break-all">{testResult}</span>
                 </div>
@@ -250,16 +258,17 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
           {/* Disconnect */}
           <div className="rounded-lg border border-error/20 bg-card p-4">
             <h3 className="text-sm font-medium text-foreground mb-2">{im.disconnect}</h3>
-            <p className="text-2xs text-muted-foreground mb-3">{im.disconnectHint}</p>
+            <p className="text-xs text-muted-foreground mb-3">{im.disconnectHint}</p>
             <button
               type="button"
               onClick={handleDisconnect}
               disabled={deleting}
-              className={`h-8 px-4 text-sm rounded-md inline-flex items-center gap-1.5 border transition-colors ${
+              className={`h-9 px-4 text-sm rounded-md inline-flex items-center gap-1.5 border transition-colors ${
                 confirmDelete
                   ? 'text-error border-error/40 bg-error/5 hover:bg-error/10'
                   : 'text-muted-foreground border-border hover:text-error hover:border-error/30'
               }`}
+              aria-label={im.disconnect}
             >
               {deleting ? <Loader2 size={14} className="animate-spin" />
                 : confirmDelete ? <><AlertTriangle size={14} /> {im.confirmDisconnect}</>
@@ -270,60 +279,85 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
         </div>
       ) : (
         /* ─── Not Configured View ─── */
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           {/* Guide */}
           {platform.guide && (
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="text-sm font-medium text-foreground mb-2">{im.setupGuide}</h3>
-              <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                {platform.guide}
+            <div className="rounded-lg border border-border border-l-4 border-l-[var(--amber)] bg-card p-4">
+              <h3 className="text-sm font-medium text-foreground mb-3">{im.setupGuide}</h3>
+              <div className="text-sm text-muted-foreground leading-relaxed space-y-1">
+                {platform.guide.split('\n').map((line, idx) => (
+                  <div key={idx}>{line}</div>
+                ))}
               </div>
             </div>
           )}
 
           {/* Credential form */}
           <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="text-sm font-medium text-foreground mb-3">{im.tabConfigure}</h3>
-            <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium text-foreground mb-4">{im.tabConfigure}</h3>
+            <div className="flex flex-col gap-4">
               {platform.fields.map(field => (
-                <div key={field.key} className="flex flex-col gap-1">
-                  <label className="text-2xs text-muted-foreground uppercase tracking-wider">{field.label}</label>
+                <div key={field.key} className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    {field.label}
+                    <span className="text-muted-foreground/50 font-normal"> (required)</span>
+                  </label>
                   <div className="relative">
                     <input
                       type={showSecrets ? 'text' : 'password'}
                       placeholder={field.placeholder}
                       value={formValues[field.key] ?? ''}
                       onChange={e => setFormValues(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      className="h-8 w-full px-3 pr-8 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      onBlur={() => setTouched(prev => new Set([...prev, field.key]))}
+                      className="h-9 w-full px-3 pr-10 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       autoComplete="off"
+                      aria-required="true"
+                      aria-describedby={field.hint ? `hint-${field.key}` : undefined}
                     />
                     <button
                       type="button"
                       onClick={() => setShowSecrets(!showSecrets)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground rounded-sm"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
                       aria-label={showSecrets ? im.hideSecret : im.showSecret}
+                      title={showSecrets ? im.hideSecret : im.showSecret}
                     >
-                      {showSecrets ? <EyeOff size={14} /> : <Eye size={14} />}
+                      {showSecrets ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  {field.hint && <span className="text-2xs text-muted-foreground/60">{field.hint}</span>}
+                  {field.hint && (
+                    <span id={`hint-${field.key}`} className="text-xs text-muted-foreground">{field.hint}</span>
+                  )}
                 </div>
               ))}
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !isFormComplete}
-                  className="h-8 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="h-9 px-4 text-sm rounded-md inline-flex items-center gap-1.5 bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  aria-label={saving ? "Saving..." : im.saveConfig}
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Settings2 size={14} />}
-                  {im.saveConfig}
+                  {saving ? 'Saving...' : im.saveConfig}
                 </button>
               </div>
               {saveResult && (
-                <div className={`flex items-start gap-1.5 text-sm ${saveResult.ok ? 'text-success' : 'text-error'}`}>
-                  {saveResult.ok ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <XCircle size={16} className="shrink-0 mt-0.5" />}
-                  <span className="break-all">{saveResult.msg}</span>
+                <div 
+                  role="alert" 
+                  aria-live="polite"
+                  className={`flex items-start gap-1.5 text-sm ${saveResult.ok ? 'text-success' : 'text-error'}`}
+                >
+                  {saveResult.ok ? (
+                    <>
+                      <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+                      <span className="break-all">{saveResult.msg}</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={16} className="shrink-0 mt-0.5" />
+                      <span className="break-all">{saveResult.msg}</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

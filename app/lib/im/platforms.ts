@@ -34,8 +34,8 @@ export const PLATFORMS: PlatformDef[] = [
     id: 'feishu', name: 'Feishu', icon: '🐦',
     guide: '1. open.feishu.cn → Create App\n2. Credentials page → copy App ID & Secret\n3. Enable Bot capability + add permissions',
     fields: [
-      { key: 'app_id', label: 'App ID', placeholder: 'cli_a5xxxxxxxxxxxxx' },
-      { key: 'app_secret', label: 'App Secret', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxx' },
+      { key: 'app_id', label: 'App ID', placeholder: 'CLI_XXXXXXXXXXXXXXXXX', hint: 'From Credentials page on open.feishu.cn' },
+      { key: 'app_secret', label: 'App Secret', placeholder: 'XXXXXXXXXXXXXXXXXXXXXXXX', hint: 'Keep this secret — do not share' },
     ],
   },
   {
