@@ -29,19 +29,11 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install MCP build dependencies
-        run: cd mcp && npm install
-
-      - name: Build standalone package
-        run: |
-          cd mcp && npm install --include=dev && npm run build && cd ..
-          cd app && npm install --no-workspaces && ./node_modules/.bin/next build --webpack && cd ..
-          node scripts/prepare-standalone.mjs
+        run: cd mcp && npm install --include=dev && npm run build
 
       - name: Clean build artifacts before publish
         run: |
-          rm -rf app/node_modules app/.next mcp/node_modules _standalone/node_modules node_modules
-          echo "=== Verifying _standalone exists ==="
-          ls -la _standalone/server.js
+          rm -rf mcp/node_modules node_modules
           echo "=== Checking tarball size ==="
           npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 
