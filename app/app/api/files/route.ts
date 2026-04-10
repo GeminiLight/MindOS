@@ -3,7 +3,7 @@ import { collectAllFiles } from '@/lib/fs';
 import { NextResponse, NextRequest } from 'next/server';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
-export async function GET(req?: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const files = collectAllFiles();
     
