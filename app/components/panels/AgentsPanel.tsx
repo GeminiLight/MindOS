@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
@@ -27,6 +27,7 @@ export default function AgentsPanel({
 }: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
+  const router = useRouter();
   const mcp = useMcpData();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -40,6 +41,10 @@ export default function AgentsPanel({
     setRefreshing(true);
     await mcp.refresh();
     setRefreshing(false);
+  };
+
+  const handleChannelsClick = () => {
+    router.push('/agents?tab=channels');
   };
 
   const openAdvancedConfig = () => {
@@ -84,6 +89,8 @@ export default function AgentsPanel({
       copy={hubCopy}
       connectedCount={connected.length}
       mcpEnabled={mcp.status?.connectionMode?.mcp ?? false}
+      channelsActive={isChannelsTab}
+      onChannelsClick={handleChannelsClick}
     />
   );
 
