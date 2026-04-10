@@ -29,9 +29,13 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   const handleLongPress = () => {
     if (!message.content) return;
-    Clipboard.setStringAsync(message.content).then(() => {
-      Alert.alert('Copied', 'Message copied to clipboard');
-    });
+    Clipboard.setStringAsync(message.content)
+      .then(() => {
+        Alert.alert('Copied', 'Message copied to clipboard');
+      })
+      .catch(() => {
+        Alert.alert('Error', 'Failed to copy to clipboard');
+      });
   };
 
   return (

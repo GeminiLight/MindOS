@@ -19,4 +19,12 @@ describe('buildDefaultProviderName', () => {
   it('uses localized protocol name in Chinese', () => {
     expect(buildDefaultProviderName('minimax-cn', [], undefined, 'zh')).toBe('MiniMax (国内版)');
   });
+
+  it('uses LM Studio as the default generated name', () => {
+    expect(buildDefaultProviderName('lm-studio', [], undefined, 'en')).toBe('LM Studio');
+  });
+
+  it('uses vLLM as the default generated name', () => {
+    expect(buildDefaultProviderName('vllm', [], undefined, 'en')).toBe('vLLM');
+  });
 });

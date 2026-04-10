@@ -5,7 +5,7 @@ import { sendIMMessage } from '@/lib/im/executor';
 import type { Message } from '@/lib/types';
 import type {
   FeishuConfig,
-  FeishuWebhookChallengeBody,
+  FeishuSdkMessageEvent,
   FeishuWebhookEventEnvelope,
   IMWebhookStatus,
   IncomingIMMessage,
@@ -102,12 +102,6 @@ export function normalizeFeishuIncomingMessage(event: FeishuWebhookEventEnvelope
   };
 }
 
-export type FeishuWebhookResult = {
-  kind: 'challenge' | 'accepted';
-  status: number;
-  body: Record<string, unknown>;
-};
-
 function buildFallbackReply(): string {
   return 'I received your message, but I could not generate a reply just now. Please try again from MindOS or send another message.';
 }
@@ -163,53 +157,29 @@ export async function processFeishuIncomingMessage(incoming: IncomingIMMessage):
   });
 }
 
-export async function handleFeishuWebhook(params: {
-  config: FeishuConfig;
-  body: unknown;
-}): Promise<FeishuWebhookResult> {
-  const challengeBody = params.body as FeishuWebhookChallengeBody;
-  if (typeof challengeBody?.challenge === 'string' && challengeBody.challenge) {
-    const expectedToken = params.config.conversation?.verification_token;
-    if (expectedToken && challengeBody.token && challengeBody.token !== expectedToken) {
-      return {
-        kind: 'accepted',
-        status: 401,
-        body: { ok: false, error: 'Invalid verification token' },
-      };
-    }
-    return {
-      kind: 'challenge',
-      status: 200,
-      body: { challenge: challengeBody.challenge },
-    };
+export async function handleFeishuMessageReceiveEvent(event: FeishuSdkMessageEvent): Promise<Record<string, unknown>> {
+  if (!event.message?.chat_id || !event.message?.message_id || !event.sender?.sender_id) {
+    return { ok: true, ignored: true, reason: 'invalid_event_payload' };
   }
 
-  const status = buildFeishuWebhookStatus(params.config);
-  if (status.state !== 'ready') {
-    return {
-      kind: 'accepted',
-      status: 202,
-      body: { ok: false, ignored: true, reason: status.lastError ?? 'Webhook is not ready' },
-    };
-  }
+  const envelope: FeishuWebhookEventEnvelope = {
+    header: {
+      event_type: event.event_type ?? 'im.message.receive_v1',
+    },
+    event: {
+      message: event.message,
+      sender: event.sender,
+    },
+  };
 
-  const event = params.body as FeishuWebhookEventEnvelope;
-  const decision = shouldProcessFeishuEvent(event);
+  const decision = shouldProcessFeishuEvent(envelope);
   if (!decision.ok) {
-    return {
-      kind: 'accepted',
-      status: 202,
-      body: { ok: true, ignored: true, reason: decision.reason },
-    };
+    return { ok: true, ignored: true, reason: decision.reason };
   }
 
-  const incoming = normalizeFeishuIncomingMessage(event);
+  const incoming = normalizeFeishuIncomingMessage(envelope);
   if (!incoming.text.trim()) {
-    return {
-      kind: 'accepted',
-      status: 202,
-      body: { ok: true, ignored: true, reason: 'empty_text' },
-    };
+    return { ok: true, ignored: true, reason: 'empty_text' };
   }
 
   void processFeishuIncomingMessage(incoming).catch((error) => {
@@ -217,13 +187,9 @@ export async function handleFeishuWebhook(params: {
   });
 
   return {
-    kind: 'accepted',
-    status: 202,
-    body: {
-      ok: true,
-      queued: true,
-      reason: decision.reason,
-      incoming,
-    },
+    ok: true,
+    queued: true,
+    reason: decision.reason,
+    incoming,
   };
 }

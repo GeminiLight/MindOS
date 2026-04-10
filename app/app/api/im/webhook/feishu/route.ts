@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformConfig } from '@/lib/im/config';
-import { handleFeishuWebhook } from '@/lib/im/webhook/feishu';
+import { dispatchFeishuWebhook } from '@/lib/im/feishu-dispatcher';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,9 +10,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const result = await handleFeishuWebhook({
+    const headers = Object.fromEntries(req.headers.entries());
+    const result = await dispatchFeishuWebhook({
       config,
       body,
+      headers,
     });
 
     return NextResponse.json(result.body, { status: result.status });

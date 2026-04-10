@@ -100,4 +100,43 @@ describe('/api/im/config Feishu conversation', () => {
       }),
     }));
   });
+
+  it('stores transport mode for Feishu conversation settings', async () => {
+    readIMConfig.mockReturnValue({
+      providers: {
+        feishu: {
+          app_id: 'cli_xxx',
+          app_secret: 'secret',
+          conversation: {
+            enabled: true,
+            transport: 'webhook',
+            allow_group_mentions: true,
+          },
+        },
+      },
+    });
+    const { PUT } = await importRoute();
+    const req = new NextRequest('http://localhost/api/im/config', {
+      method: 'PUT',
+      body: JSON.stringify({
+        platform: 'feishu',
+        conversation: {
+          enabled: true,
+          transport: 'long_connection',
+        },
+      }),
+    });
+
+    const res = await PUT(req);
+    expect(res.status).toBe(200);
+    expect(writeIMConfig).toHaveBeenCalledWith(expect.objectContaining({
+      providers: expect.objectContaining({
+        feishu: expect.objectContaining({
+          conversation: expect.objectContaining({
+            transport: 'long_connection',
+          }),
+        }),
+      }),
+    }));
+  });
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, memo, useState, useCallback } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, ImagePart } from '@/lib/types';
@@ -111,7 +111,7 @@ function AssistantAgentBadge({ agentName }: { agentName?: string }) {
   if (!agentName) return null;
   return (
     <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-[var(--amber)]/15 bg-[var(--amber)]/8 px-2 py-0.5 text-[10px] font-medium tracking-wide text-[var(--amber)]">
-      <Sparkles size={10} className="shrink-0" />
+      <Bot size={10} className="shrink-0" />
       <span>{agentName}</span>
     </div>
   );

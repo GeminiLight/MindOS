@@ -98,7 +98,7 @@ export default function MarkdownEditor({
         );
       }
     })();
-  }, [filePath, initialContent]);
+  }, [filePath, initialContent, setDirty]);
 
   // --- Toolbar actions ---
 

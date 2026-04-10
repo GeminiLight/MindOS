@@ -1,14 +1,35 @@
-import { describe, it, expect } from 'vitest';
-import type { FeishuConfig, FeishuWebhookEventEnvelope } from '@/lib/im/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FeishuConfig, FeishuSdkMessageEvent, FeishuWebhookEventEnvelope } from '@/lib/im/types';
 
-import {
-  buildFeishuWebhookStatus,
-  normalizeFeishuIncomingMessage,
-  shouldProcessFeishuEvent,
-} from '@/lib/im/webhook/feishu';
+vi.mock('@/lib/im/executor', () => ({
+  sendIMMessage: vi.fn().mockResolvedValue({ ok: true, messageId: 'msg_1', timestamp: '2026-04-10T00:00:00.000Z' }),
+}));
+
+vi.mock('@/lib/agent/headless', () => ({
+  runHeadlessAgent: vi.fn().mockResolvedValue({ text: 'Hello from MindOS', thinking: '', toolCalls: [] }),
+}));
+
+vi.mock('@/lib/im/conversation-store', () => ({
+  appendConversationTurn: vi.fn(),
+  getConversationHistory: vi.fn(() => ({ sessionId: 'session', messages: [] })),
+}));
+
+vi.mock('@/lib/im/activity', () => ({
+  recordActivity: vi.fn(),
+}));
+
+async function importModule() {
+  return await import('@/lib/im/webhook/feishu');
+}
 
 describe('Feishu webhook helpers', () => {
-  it('builds pending status when conversation is enabled but public url is missing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('builds pending status when conversation is enabled but public url is missing', async () => {
+    const { buildFeishuWebhookStatus } = await importModule();
     const config: FeishuConfig = {
       app_id: 'cli_xxx',
       app_secret: 'secret',
@@ -27,7 +48,8 @@ describe('Feishu webhook helpers', () => {
     });
   });
 
-  it('builds ready status when conversation is enabled and callback URL is available', () => {
+  it('builds ready status when conversation is enabled and callback URL is available', async () => {
+    const { buildFeishuWebhookStatus } = await importModule();
     const config: FeishuConfig = {
       app_id: 'cli_xxx',
       app_secret: 'secret',
@@ -47,27 +69,8 @@ describe('Feishu webhook helpers', () => {
     });
   });
 
-  it('rejects challenge with wrong verification token', async () => {
-    const { handleFeishuWebhook } = await import('@/lib/im/webhook/feishu');
-    const result = await handleFeishuWebhook({
-      config: {
-        app_id: 'cli_xxx',
-        app_secret: 'secret',
-        conversation: {
-          enabled: true,
-          encrypt_key: 'encrypt',
-          public_base_url: 'https://mindos.example.com',
-          verification_token: 'expected-token',
-        },
-      },
-      body: { challenge: 'challenge-token', token: 'wrong-token' },
-    });
-
-    expect(result.status).toBe(401);
-    expect(result.body).toEqual({ ok: false, error: 'Invalid verification token' });
-  });
-
-  it('normalizes a dm text message into the shared incoming message shape', () => {
+  it('normalizes a dm text message into the shared incoming message shape', async () => {
+    const { normalizeFeishuIncomingMessage } = await importModule();
     const payload: FeishuWebhookEventEnvelope = {
       header: {
         event_type: 'im.message.receive_v1',
@@ -99,7 +102,8 @@ describe('Feishu webhook helpers', () => {
     });
   });
 
-  it('processes direct messages even without mentions', () => {
+  it('processes direct messages even without mentions', async () => {
+    const { shouldProcessFeishuEvent } = await importModule();
     const payload: FeishuWebhookEventEnvelope = {
       event: {
         message: {
@@ -112,7 +116,8 @@ describe('Feishu webhook helpers', () => {
     expect(shouldProcessFeishuEvent(payload)).toEqual({ ok: true, reason: 'direct_message' });
   });
 
-  it('ignores group messages without bot mentions', () => {
+  it('ignores group messages without bot mentions', async () => {
+    const { shouldProcessFeishuEvent } = await importModule();
     const payload: FeishuWebhookEventEnvelope = {
       event: {
         message: {
@@ -126,34 +131,57 @@ describe('Feishu webhook helpers', () => {
     expect(shouldProcessFeishuEvent(payload)).toEqual({ ok: false, reason: 'group_without_mention' });
   });
 
-  it('ignores events with empty text after normalization', async () => {
-    const { handleFeishuWebhook } = await import('@/lib/im/webhook/feishu');
-    const result = await handleFeishuWebhook({
-      config: {
-        app_id: 'cli_xxx',
-        app_secret: 'secret',
-        conversation: {
-          enabled: true,
-          encrypt_key: 'encrypt',
-          public_base_url: 'https://mindos.example.com',
-        },
+  it('queues processing for direct message sdk events', async () => {
+    const { handleFeishuMessageReceiveEvent } = await importModule();
+    const payload: FeishuSdkMessageEvent = {
+      event_type: 'im.message.receive_v1',
+      sender: {
+        sender_id: { open_id: 'ou_sender_1' },
       },
-      body: {
-        event: {
-          message: {
-            chat_type: 'p2p',
-            chat_id: 'oc_chat_001',
-            message_id: 'om_001',
-            content: JSON.stringify({ text: '   ' }),
-          },
-          sender: {
-            sender_id: { open_id: 'ou_sender_1' },
-          },
-        },
+      message: {
+        message_id: 'om_001',
+        chat_id: 'oc_chat_001',
+        chat_type: 'p2p',
+        content: JSON.stringify({ text: '你好' }),
+      },
+    };
+
+    const result = await handleFeishuMessageReceiveEvent(payload);
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, queued: true, reason: 'direct_message' }));
+  });
+
+  it('ignores sdk events with empty text after normalization', async () => {
+    const { handleFeishuMessageReceiveEvent } = await importModule();
+    const result = await handleFeishuMessageReceiveEvent({
+      event_type: 'im.message.receive_v1',
+      sender: {
+        sender_id: { open_id: 'ou_sender_1' },
+      },
+      message: {
+        chat_type: 'p2p',
+        chat_id: 'oc_chat_001',
+        message_id: 'om_001',
+        content: JSON.stringify({ text: '   ' }),
       },
     });
 
-    expect(result.status).toBe(202);
-    expect(result.body).toEqual({ ok: true, ignored: true, reason: 'empty_text' });
+    expect(result).toEqual({ ok: true, ignored: true, reason: 'empty_text' });
+  });
+
+  it('ignores sdk events missing required message identifiers', async () => {
+    const { handleFeishuMessageReceiveEvent } = await importModule();
+    const result = await handleFeishuMessageReceiveEvent({
+      event_type: 'im.message.receive_v1',
+      sender: {
+        sender_id: { open_id: 'ou_sender_1' },
+      },
+      message: {
+        chat_type: 'p2p',
+        content: JSON.stringify({ text: 'hello' }),
+      },
+    });
+
+    expect(result).toEqual({ ok: true, ignored: true, reason: 'invalid_event_payload' });
   });
 });

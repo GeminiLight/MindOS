@@ -102,7 +102,7 @@ export default function HomeScreen() {
                       <Ionicons name="layers-outline" size={20} color="#c8873a" />
                       <Text style={styles.spaceName} numberOfLines={1}>{space.name}</Text>
                       <Text style={styles.spaceCount}>
-                        {space.children?.length ?? 0} files
+                        {space.children?.length ?? 0} items
                       </Text>
                     </Pressable>
                   ))}

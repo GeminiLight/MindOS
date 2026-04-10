@@ -19,14 +19,13 @@ const nextConfig: NextConfig = {
     'chokidar', 'openai', 'discord.js',
     '@mariozechner/pi-ai', '@mariozechner/pi-agent-core', '@mariozechner/pi-coding-agent', 'pi-mcp-adapter',
     // Heavy packages excluded from bundle — dynamically imported at runtime.
-    '@huggingface/transformers', 'onnxruntime-node',
+    '@huggingface/transformers', 'onnxruntime-web',
     'sharp', '@img/sharp-linux-x64', '@img/sharp-darwin-arm64', '@img/sharp-win32-x64',
   ],
   output: 'standalone',
   outputFileTracingRoot: projectDir,
   // Exclude heavy native packages from standalone trace to reduce runtime archive.
-  // onnxruntime-node (355MB) is only needed for local embedding and will be
-  // installed on-demand. @img/sharp-* (33MB) is optional for image processing.
+  // @img/sharp-* (33MB) is optional for image processing.
   outputFileTracingExcludes: {
     '*': [
       './node_modules/onnxruntime-node/**',
@@ -48,11 +47,20 @@ const nextConfig: NextConfig = {
     },
   },
   webpack: (config) => {
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = config.resolve.alias ?? {};
+    const alias = config.resolve.alias as Record<string, string>;
+
     if (inNodeModules) {
-      config.resolve = config.resolve ?? {};
-      config.resolve.alias = config.resolve.alias ?? {};
-      (config.resolve.alias as Record<string, string>)['@'] = projectDir;
+      alias['@'] = projectDir;
     }
+
+    // Replace onnxruntime-node (355MB native binary) with onnxruntime-web (WASM).
+    // @huggingface/transformers statically imports onnxruntime-node in its Node.js
+    // entry. This alias makes it resolve to the lightweight WASM version instead,
+    // reducing the runtime archive from ~250MB to ~35MB with no code changes needed.
+    alias['onnxruntime-node'] = 'onnxruntime-web';
+
     return config;
   },
 };

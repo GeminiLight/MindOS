@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const getPlatformConfig = vi.fn();
-const handleFeishuWebhook = vi.fn();
+const dispatchFeishuWebhook = vi.fn();
 
 vi.mock('@/lib/im/config', () => ({
   getPlatformConfig,
 }));
 
-vi.mock('@/lib/im/webhook/feishu', () => ({
-  handleFeishuWebhook,
+vi.mock('@/lib/im/feishu-dispatcher', () => ({
+  dispatchFeishuWebhook,
 }));
 
 async function importRoute() {
@@ -36,15 +36,14 @@ describe('POST /api/im/webhook/feishu', () => {
     expect(await res.json()).toEqual({ error: 'Feishu is not configured' });
   });
 
-  it('returns challenge response when webhook helper resolves a challenge', async () => {
+  it('delegates webhook protocol handling to the SDK dispatcher wrapper', async () => {
     getPlatformConfig.mockReturnValue({
       app_id: 'cli_xxx',
       app_secret: 'secret',
       conversation: { enabled: true, encrypt_key: 'encrypt', public_base_url: 'https://mindos.example.com' },
     });
 
-    handleFeishuWebhook.mockResolvedValue({
-      kind: 'challenge',
+    dispatchFeishuWebhook.mockResolvedValue({
       body: { challenge: 'challenge-token' },
       status: 200,
     });
@@ -53,24 +52,34 @@ describe('POST /api/im/webhook/feishu', () => {
     const req = new NextRequest('http://localhost/api/im/webhook/feishu', {
       method: 'POST',
       body: JSON.stringify({ challenge: 'challenge-token' }),
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-lark-request-timestamp': '1',
+      },
     });
 
     const res = await POST(req);
+    expect(dispatchFeishuWebhook).toHaveBeenCalledWith({
+      config: expect.objectContaining({ app_id: 'cli_xxx' }),
+      body: { challenge: 'challenge-token' },
+      headers: expect.objectContaining({
+        'content-type': 'application/json',
+        'x-lark-request-timestamp': '1',
+      }),
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ challenge: 'challenge-token' });
   });
 
-  it('returns accepted when webhook helper accepts an inbound event for async processing', async () => {
+  it('returns accepted when dispatcher queues an inbound event', async () => {
     getPlatformConfig.mockReturnValue({
       app_id: 'cli_xxx',
       app_secret: 'secret',
       conversation: { enabled: true, encrypt_key: 'encrypt', public_base_url: 'https://mindos.example.com' },
     });
 
-    handleFeishuWebhook.mockResolvedValue({
-      kind: 'accepted',
-      body: { ok: true },
+    dispatchFeishuWebhook.mockResolvedValue({
+      body: { ok: true, queued: true },
       status: 202,
     });
 
@@ -83,6 +92,6 @@ describe('POST /api/im/webhook/feishu', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(202);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await res.json()).toEqual({ ok: true, queued: true });
   });
 });

@@ -44,9 +44,9 @@
 | Feishu 凭证存储 | ✅ 已实现 | `~/.mindos/im.json` |
 | Feishu 活动记录 | ✅ 已实现 | `app/lib/im/activity.ts` |
 | Feishu Channel 详情页 | ✅ 已实现 | `app/components/agents/AgentsContentChannelDetail.tsx` |
-| Feishu 入站 Webhook | ❌ 未实现 | `wiki/specs/spec-im-webhook.md` (设计稿) |
-| Feishu 签名验证 | ❌ 未实现 | — |
-| Feishu 会话映射 | ❌ 未实现 | — |
+| Feishu 入站 Webhook | ✅ 已实现 | `app/app/api/im/webhook/feishu/route.ts` |
+| Feishu 协议层校验/解密 | ✅ 已接入官方 SDK | `app/lib/im/feishu-dispatcher.ts` |
+| Feishu 会话映射 | ✅ 已实现 | `app/lib/im/conversation-store.ts` |
 
 ### 核心问题
 
@@ -71,14 +71,13 @@
                              │
                              ▼
                    ┌─────────────────────────────────────────────────────┐
-                   │  POST /api/im/webhook/feishu                        │
-                   │  ├─ 1. 验证签名 (Encrypt Key + HMAC-SHA256)         │
-                   │  ├─ 2. 处理 challenge 验证（首次配置）               │
-                   │  ├─ 3. 解密消息体 (AES-256-CBC)                      │
-                   │  ├─ 4. 过滤：私聊 or @bot？群聊非 @bot → 忽略        │
-                   │  ├─ 5. 标准化 → IncomingMessage                      │
-                   │  ├─ 6. 查找/创建 session（按 platform + chatId）     │
-                   │  └─ 7. 立即返回 HTTP 200（飞书要求 <5s）             │
+│  POST /api/im/webhook/feishu                        │
+│  ├─ 1. SDK EventDispatcher 验签 / decrypt           │
+│  ├─ 2. SDK generateChallenge 处理 challenge         │
+│  ├─ 3. 过滤：私聊 or @bot？群聊非 @bot → 忽略        │
+│  ├─ 4. 标准化 → IncomingMessage                      │
+│  ├─ 5. 查找/创建 session（按 platform + chatId）     │
+│  └─ 6. 立即返回 HTTP 200/202                         │
                    └─────────────────────────────────────────────────────┘
                              │
                              ▼ (异步)
@@ -120,9 +119,10 @@
 
 | 组件 | 改动类型 |
 |------|---------|
-| `app/app/api/im/webhook/feishu/route.ts` | **新增** — Webhook 入口 |
-| `app/lib/im/webhook/feishu.ts` | **新增** — 签名验证、解密、标准化 |
-| `app/lib/im/session.ts` | **新增** — IM 会话管理 |
+| `app/app/api/im/webhook/feishu/route.ts` | Webhook 入口（委托 SDK dispatcher） |
+| `app/lib/im/feishu-dispatcher.ts` | **新增** — SDK challenge / 验签 / decrypt wrapper |
+| `app/lib/im/webhook/feishu.ts` | 业务层：过滤、标准化、Agent 编排 |
+| `app/lib/im/conversation-store.ts` | IM 会话管理 |
 | `app/lib/im/types.ts` | 扩展 — 入站消息类型 |
 | `app/lib/im/activity.ts` | 扩展 — 记录入站对话活动 |
 | `app/lib/im/platforms.ts` | 扩展 — 对话能力元数据 |

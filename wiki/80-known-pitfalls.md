@@ -258,6 +258,14 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
   2. 增加 `Status summary`，展示最近活动、最近成功/失败、能力摘要
   3. 增加 `Recent activity`，让用户知道系统真的在工作
   4. 把凭证维护下沉到 `Settings`，不要让配置表单成为页面主角
+
+### 飞书 webhook 协议层不要手搓，优先交给官方 SDK（2026-04-11）
+- **现象：** 业务代码里手写 challenge 返回、verification token 比较、payload 解密和验签，导致逻辑重复、可测但偏离官方集成模式
+- **原因：** 把协议层和业务层混在一起了；官方 `@larksuiteoapi/node-sdk` 已提供 `EventDispatcher`、`generateChallenge`、decrypt 和验签能力
+- **规则：** Feishu 集成优先分两层：
+  1. **SDK 接入层**：challenge / 验签 / decrypt / event dispatch
+  2. **MindOS 业务层**：@mention 过滤、标准化、会话历史、Agent 编排、回复发送
+- **修复：** 将 `/api/im/webhook/feishu` 改为委托 `app/lib/im/feishu-dispatcher.ts`，保留 `app/lib/im/webhook/feishu.ts` 作为业务层
 - **文件参考：** `app/components/agents/AgentsContentChannelDetail.tsx`, `app/lib/im/platforms.ts`, `app/lib/im/activity.ts`
 
 ### Secret 输入框不能用占位符回写真实值（2026-04-11）

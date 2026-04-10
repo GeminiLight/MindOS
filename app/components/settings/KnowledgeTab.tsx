@@ -104,66 +104,38 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
 
   const [localModelDownloaded, setLocalModelDownloaded] = useState<boolean | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [onnxAvailable, setOnnxAvailable] = useState<boolean | null>(null);
-  const [onnxInstalling, setOnnxInstalling] = useState(false);
-  const [onnxError, setOnnxError] = useState<string | null>(null);
 
-  // Check local model + runtime status when Local mode is selected
+  // Check local model status when Local mode is selected
   useEffect(() => {
     if (embeddingData.enabled && embeddingProvider === 'local') {
-      apiFetch<{ downloaded: boolean; onnxAvailable: boolean; onnxInstalling?: boolean; onnxInstallError?: string | null }>('/api/embedding')
-        .then(d => {
-          setLocalModelDownloaded(d.downloaded);
-          setOnnxAvailable(d.onnxAvailable);
-          if (d.onnxInstalling) setOnnxInstalling(true);
-          if (d.onnxInstallError) setOnnxError(d.onnxInstallError);
-        })
-        .catch(() => {
-          setLocalModelDownloaded(false);
-          setOnnxAvailable(null);
-        });
+      apiFetch<{ downloaded: boolean }>('/api/embedding')
+        .then(d => setLocalModelDownloaded(d.downloaded))
+        .catch(() => setLocalModelDownloaded(false));
     }
   }, [embeddingData.enabled, embeddingProvider]);
 
-  // Poll download + install status
+  // Poll download status
   useEffect(() => {
-    if (!downloading && !onnxInstalling) return;
+    if (!downloading) return;
     const id = setInterval(() => {
-      apiFetch<{
-        downloading: boolean; downloaded: boolean; error: string | null;
-        onnxAvailable: boolean; onnxInstalling: boolean; onnxInstallError: string | null;
-      }>('/api/embedding', {
+      apiFetch<{ downloading: boolean; downloaded: boolean; error: string | null }>('/api/embedding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'status' }),
       }).then(d => {
-        // Onnx runtime install tracking
-        if (d.onnxAvailable && onnxInstalling) {
-          setOnnxAvailable(true);
-          setOnnxInstalling(false);
-          setOnnxError(null);
-          toast.success?.('Inference runtime installed') ?? toast('Inference runtime installed');
-        }
-        if (d.onnxInstallError && onnxInstalling) {
-          setOnnxInstalling(false);
-          setOnnxError(d.onnxInstallError);
-          toast.error?.(d.onnxInstallError) ?? toast(d.onnxInstallError);
-        }
-
-        // Model download tracking
-        if (d.downloaded && downloading) {
+        if (d.downloaded) {
           setLocalModelDownloaded(true);
           setDownloading(false);
           toast.success?.('Model downloaded successfully') ?? toast('Model downloaded');
         }
-        if (d.error && downloading) {
+        if (d.error) {
           setDownloading(false);
           toast.error?.(d.error) ?? toast(d.error);
         }
       }).catch(() => {});
     }, 3000);
     return () => clearInterval(id);
-  }, [downloading, onnxInstalling]);
+  }, [downloading]);
 
   const handleDownloadModel = useCallback(() => {
     setDownloading(true);
@@ -173,19 +145,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
       body: JSON.stringify({ action: 'download', model: embeddingData.model || undefined }),
     }).catch(() => setDownloading(false));
   }, [embeddingData.model]);
-
-  const handleInstallRuntime = useCallback(() => {
-    setOnnxInstalling(true);
-    setOnnxError(null);
-    apiFetch('/api/embedding', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'install-runtime' }),
-    }).catch(() => {
-      setOnnxInstalling(false);
-      setOnnxError('Failed to start installation');
-    });
-  }, []);
 
   const API_PRESETS = [
     { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
@@ -435,46 +394,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             {/* ── Local provider UI ── */}
             {embeddingProvider === 'local' && (
               <>
-                {/* Onnx runtime check — show install prompt if missing */}
-                {onnxAvailable === false && !onnxInstalling && (
-                  <div className="rounded-lg border border-[var(--amber)]/30 bg-[var(--amber)]/5 p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Cpu size={14} className="text-[var(--amber)] shrink-0" />
-                      <span className="font-medium">Inference runtime not installed</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Local embedding requires the ONNX inference engine (~35 MB). This is a one-time download.
-                    </p>
-                    {onnxError && (
-                      <p className="text-xs text-destructive">{onnxError}</p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleInstallRuntime}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
-                    >
-                      <Download size={14} />
-                      {onnxError ? 'Retry' : 'Install Runtime'}
-                    </button>
-                  </div>
-                )}
-
-                {onnxInstalling && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
-                      <span>Installing inference runtime...</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This may take a minute depending on your network.
-                    </p>
-                  </div>
-                )}
-
-                {/* Model selector — only show when runtime is available */}
-                {(onnxAvailable === true || onnxAvailable === null) && (
-                  <>
-                    {/* Model selector */}
+                {/* Model selector */}
                 <Field label="Model" hint="Choose a model. Smaller models are faster.">
                   <div className="space-y-1.5">
                     {LOCAL_MODELS.map(m => (
@@ -524,8 +444,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
                     <Check size={12} />
                     <span>Model ready</span>
                   </div>
-                )}
-                  </>
                 )}
               </>
             )}

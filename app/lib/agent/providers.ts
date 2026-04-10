@@ -18,7 +18,7 @@ export type ProviderId =
   | 'xai' | 'openrouter' | 'mistral' | 'deepseek'
   | 'zai' | 'zai-cn' | 'kimi-coding'
   | 'cerebras' | 'minimax' | 'minimax-cn' | 'huggingface'
-  | 'ollama';
+  | 'ollama' | 'lm-studio' | 'vllm';
 
 /**
  * UI/UX metadata for each provider.
@@ -44,7 +44,7 @@ export interface ProviderPreset {
   supportsThinking: boolean;
   supportsListModels: boolean;
   signupUrl?: string;
-  category: 'primary' | 'more';
+  category: 'primary' | 'local' | 'more';
 }
 
 export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
@@ -242,7 +242,41 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsThinking: false,
     supportsListModels: true,
     signupUrl: 'https://ollama.com/download',
-    category: 'more',
+    category: 'local',
+  },
+  'lm-studio': {
+    id: 'lm-studio',
+    name: 'LM Studio',
+    nameZh: 'LM Studio (本地)',
+    shortLabel: 'LM Studio',
+    description: 'Local OpenAI-compatible server',
+    descriptionZh: '本地 OpenAI 兼容服务',
+    defaultModel: 'local-model',
+    piProviderOverride: 'openai' as KnownProvider,
+    fixedBaseUrl: 'http://localhost:1234/v1',
+    apiKeyFallback: 'lm-studio',
+    supportsBaseUrl: true,
+    supportsThinking: false,
+    supportsListModels: true,
+    signupUrl: 'https://lmstudio.ai/',
+    category: 'local',
+  },
+  vllm: {
+    id: 'vllm',
+    name: 'vLLM',
+    nameZh: 'vLLM (本地)',
+    shortLabel: 'vLLM',
+    description: 'Local OpenAI-compatible server',
+    descriptionZh: '本地 OpenAI 兼容服务',
+    defaultModel: 'local-model',
+    piProviderOverride: 'openai' as KnownProvider,
+    fixedBaseUrl: 'http://localhost:8000/v1',
+    apiKeyFallback: 'vllm',
+    supportsBaseUrl: true,
+    supportsThinking: false,
+    supportsListModels: true,
+    signupUrl: 'https://docs.vllm.ai/',
+    category: 'local',
   },
 };
 
@@ -256,15 +290,19 @@ export function getPreset(id: ProviderId): ProviderPreset {
   return PROVIDER_PRESETS[id] ?? PROVIDER_PRESETS.anthropic;
 }
 
-export function groupedProviders(): { primary: ProviderId[]; more: ProviderId[] } {
+export function groupedProviders(): { primary: ProviderId[]; local: ProviderId[]; more: ProviderId[] } {
   const primary: ProviderId[] = [];
+  const local: ProviderId[] = [];
   const more: ProviderId[] = [];
   for (const id of ALL_PROVIDER_IDS) {
-    if (PROVIDER_PRESETS[id].category === 'primary') primary.push(id);
+    const category = PROVIDER_PRESETS[id].category;
+    if (category === 'primary') primary.push(id);
+    else if (category === 'local') local.push(id);
     else more.push(id);
   }
+  local.sort((a, b) => PROVIDER_PRESETS[a].name.localeCompare(PROVIDER_PRESETS[b].name));
   more.sort((a, b) => PROVIDER_PRESETS[a].name.localeCompare(PROVIDER_PRESETS[b].name));
-  return { primary, more };
+  return { primary, local, more };
 }
 
 // ---------------------------------------------------------------------------

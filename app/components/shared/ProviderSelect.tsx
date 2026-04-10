@@ -39,7 +39,8 @@ export default function ProviderSelect({
     : [];
 
   // Add panel shows ALL providers as protocol templates (can add multiple of the same type)
-  const { primary: primaryItems, more: moreItems } = groups;
+  const { primary: primaryItems, local: localItems, more: moreItems } = groups;
+  const secondaryItems = [...localItems, ...moreItems];
 
   /* ── Compact tab button (for legacy builtin-only mode) ── */
   const renderCompactTab = (id: ProviderId) => {
@@ -175,7 +176,7 @@ export default function ProviderSelect({
       </div>
 
       {/* More toggle */}
-      {moreItems.length > 0 && (
+      {secondaryItems.length > 0 && (
         <>
           <button
             type="button"
@@ -186,13 +187,13 @@ export default function ProviderSelect({
             {showMore
               ? (locale === 'zh' ? '收起' : 'Show less')
               : (locale === 'zh'
-                  ? `更多 (${moreItems.length})`
-                  : `More (${moreItems.length})`)}
+                  ? `更多 (${secondaryItems.length})`
+                  : `More (${secondaryItems.length})`)}
           </button>
 
           {showMore && (
             <div className={compact ? 'flex flex-wrap gap-2' : 'grid grid-cols-1 gap-2'}>
-              {moreItems.map(id => compact ? renderCompactTab(id) : renderCard(id))}
+              {secondaryItems.map(id => compact ? renderCompactTab(id) : renderCard(id))}
             </div>
           )}
         </>

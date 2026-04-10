@@ -249,3 +249,14 @@ export interface FeishuWebhookEventEnvelope {
   };
 }
 
+export interface FeishuSdkMessageEvent {
+  event_type?: string;
+  message?: NonNullable<FeishuWebhookEventEnvelope['event']>['message'];
+  sender?: NonNullable<FeishuWebhookEventEnvelope['event']>['sender'];
+}
+
+export interface FeishuWebhookDispatchResult {
+  status: number;
+  body: Record<string, unknown>;
+}
+

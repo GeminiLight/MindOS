@@ -648,6 +648,8 @@ export async function POST(req: NextRequest) {
         path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
         // IM extension: 8-platform IM integration (Telegram, Feishu, Discord, Slack, etc.)
         path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
+        // pi-subagents: task delegation to subagents with chains, parallel, async support
+        path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
       ],
     });
     await resourceLoader.reload();

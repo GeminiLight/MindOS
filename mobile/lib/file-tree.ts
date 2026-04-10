@@ -2,7 +2,6 @@ import type { FileNode } from '@/lib/types';
 
 export interface RelativeTimeOptions {
   now?: Date;
-  locale?: string;
 }
 
 export const flattenFiles = (nodes: FileNode[]): FileNode[] => {
@@ -40,5 +39,5 @@ export const formatRelativeTime = (mtimeMs: number, options: RelativeTimeOptions
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(mtimeMs).toLocaleDateString(options.locale ?? undefined);
+  return new Date(mtimeMs).toLocaleDateString();
 };

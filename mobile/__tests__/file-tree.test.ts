@@ -60,6 +60,6 @@ describe('file-tree', () => {
     expect(formatRelativeTime(new Date('2026-04-11T09:52:00').getTime(), { now })).toBe('8m ago');
     expect(formatRelativeTime(new Date('2026-04-11T07:00:00').getTime(), { now })).toBe('3h ago');
     expect(formatRelativeTime(new Date('2026-04-09T10:00:00').getTime(), { now })).toBe('2d ago');
-    expect(formatRelativeTime(new Date('2026-03-30T10:00:00').getTime(), { now, locale: 'en-US' })).toBe('3/30/2026');
+    expect(formatRelativeTime(new Date('2026-03-30T10:00:00').getTime(), { now })).toBe('3/30/2026');
   });
 });

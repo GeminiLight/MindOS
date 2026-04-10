@@ -29,7 +29,7 @@ const VARIANT_ICON = {
   upload: { icon: Paperclip, cls: 'text-muted-foreground' },
   image: { icon: ImageIcon, cls: 'text-muted-foreground' },
   skill: { icon: Zap, cls: 'text-[var(--amber)]' },
-  agent: { icon: Bot, cls: 'text-muted-foreground' },
+  agent: { icon: Bot, cls: 'text-[var(--amber)]' },
 } as const;
 
 const VARIANT_STYLE = {

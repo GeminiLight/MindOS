@@ -20,6 +20,19 @@
   - 当日 `inbox/YYYY-MM-DD.md` 自动追加
   - 异步保存测试覆盖（正常/边界/错误路径）
   - Quick Capture 读失败明确报错，避免静默覆盖
+- [x] Mobile Architecture Foundations
+  - 抽取共享 file-tree domain（flattenFiles, findNode, sortFileNodes, formatRelativeTime）
+  - 抽取共享 markdown-styles presentation module（document / bubble）
+  - 消除 3 处重复 flattenFiles + 3 处重复 markdownStyles
+  - 新增 10 条领域层测试覆盖
+- [x] Feishu conversation SDK-first ingress refactor
+  - 用 `@larksuiteoapi/node-sdk` 接管 challenge / 验签 / decrypt
+  - 保留 MindOS 业务层：过滤、标准化、会话历史、Agent 编排
+  - 新增 dispatcher 测试，收敛 API route 到 SDK wrapper
+- [x] 内置 pi-subagents 扩展
+  - 添加 `pi-subagents` 到 dependencies
+  - 在 `additionalExtensionPaths` 注册扩展入口
+  - 新增 7 条测试覆盖（安装、路径注册、导出结构）
 
 ## Next
 
