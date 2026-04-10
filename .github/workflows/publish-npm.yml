@@ -31,9 +31,20 @@ jobs:
       - name: Install MCP build dependencies
         run: cd mcp && npm install --include=dev && npm run build
 
+      - name: Build standalone package
+        run: |
+          cd app && npm install --no-workspaces
+          NODE_OPTIONS="--max-old-space-size=8192" npx next build --webpack
+          cd ..
+          node scripts/prepare-standalone.mjs
+
       - name: Clean build artifacts before publish
         run: |
-          rm -rf mcp/node_modules node_modules
+          rm -rf app/node_modules app/.next mcp/node_modules node_modules
+          # Remove symlinks inside _standalone/node_modules (cause infinite recursion)
+          find _standalone/node_modules -type l -delete 2>/dev/null || true
+          echo "=== Verifying _standalone exists ==="
+          ls -la _standalone/server.js
           echo "=== Checking tarball size ==="
           npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 

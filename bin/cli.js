@@ -40,6 +40,7 @@ import * as logsCmd from './commands/logs.js';
 import * as apiCmd from './commands/api.js';
 import * as initSkillsCmd from './commands/init-skills.js';
 import * as channelCmd from './commands/channel.js';
+import * as feishuWsCmd from './commands/feishu-ws.js';
 
 // ── Command registry ──────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const modules = [
   mcpCmd, tokenCmd,
   syncCmd,
   gatewayCmd,
-  onboardCmd, configCmd, channelCmd, doctorCmd, updateCmd, uninstallCmd, logsCmd, apiCmd,
+  onboardCmd, configCmd, channelCmd, feishuWsCmd, doctorCmd, updateCmd, uninstallCmd, logsCmd, apiCmd,
   initSkillsCmd,
 ];
 
@@ -90,6 +91,7 @@ const coreEntries = [
   ['init',   onboardCmd],
   ['config', configCmd],
   ['channel', channelCmd],
+  ['feishu-ws', feishuWsCmd],
   ['doctor', doctorCmd],
   ['update', updateCmd],
 ];

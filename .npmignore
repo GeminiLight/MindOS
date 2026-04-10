@@ -12,8 +12,9 @@ app/package-lock.json
 app/.claude/
 app/.claude-internal/
 
-# Standalone build artifacts (too large for npm, only for Desktop runtime archive)
-_standalone/
+# Standalone build artifacts — keep _standalone/ in npm for zero-build install.
+# Only exclude node_modules symlinks (standalone has its own traced deps).
+_standalone/node_modules/node_modules
 
 # MCP build artifacts
 mcp/node_modules/

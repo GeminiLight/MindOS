@@ -2,6 +2,7 @@ import { runHeadlessAgent } from '@/lib/agent/headless';
 import { appendConversationTurn, getConversationHistory } from '@/lib/im/conversation-store';
 import { recordActivity } from '@/lib/im/activity';
 import { sendIMMessage } from '@/lib/im/executor';
+import { getFeishuWSClientStatus } from '@/lib/im/feishu-ws-client';
 import type { Message } from '@/lib/types';
 import type {
   FeishuConfig,
@@ -10,6 +11,10 @@ import type {
   IMWebhookStatus,
   IncomingIMMessage,
 } from '@/lib/im/types';
+
+function getFeishuTransport(config?: FeishuConfig): 'webhook' | 'long_connection' {
+  return config?.conversation?.transport ?? 'webhook';
+}
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -32,6 +37,7 @@ function hasBotMention(event: FeishuWebhookEventEnvelope): boolean {
 
 export function buildFeishuWebhookStatus(config?: FeishuConfig): IMWebhookStatus {
   const conversation = config?.conversation;
+  const transport = getFeishuTransport(config);
   const publicBaseUrl = conversation?.public_base_url?.trim();
   const normalizedBaseUrl = publicBaseUrl ? trimTrailingSlash(publicBaseUrl) : undefined;
   const webhookUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/api/im/webhook/feishu` : undefined;
@@ -42,6 +48,23 @@ export function buildFeishuWebhookStatus(config?: FeishuConfig): IMWebhookStatus
       state: 'disabled',
       publicBaseUrl: normalizedBaseUrl,
       webhookUrl,
+    };
+  }
+
+  if (transport === 'long_connection') {
+    const wsStatus = getFeishuWSClientStatus();
+    if (!config?.app_id || !config?.app_secret) {
+      return {
+        platform: 'feishu',
+        state: 'error',
+        lastError: 'Feishu App ID and App Secret are required for long connection mode.',
+      };
+    }
+
+    return {
+      platform: 'feishu',
+      state: wsStatus.running ? 'ready' : 'pending',
+      lastError: wsStatus.running ? undefined : (wsStatus.lastError ?? 'Start the Feishu long connection client to receive events locally.'),
     };
   }
 

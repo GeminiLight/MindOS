@@ -55,8 +55,11 @@ export interface TelegramConfig {
   bot_token: string;
 }
 
+export type FeishuConversationTransport = 'webhook' | 'long_connection';
+
 export interface FeishuConversationConfig {
   enabled?: boolean;
+  transport?: FeishuConversationTransport;
   encrypt_key?: string;
   verification_token?: string;
   public_base_url?: string;

@@ -35,6 +35,7 @@ export async function PUT(req: NextRequest) {
       credentials?: Record<string, string>;
       conversation?: {
         enabled?: boolean;
+        transport?: 'webhook' | 'long_connection';
         encrypt_key?: string;
         verification_token?: string;
         public_base_url?: string;
@@ -69,6 +70,7 @@ export async function PUT(req: NextRequest) {
       merged.conversation = {
         ...(merged.conversation ?? {}),
         enabled: Boolean(conversation.enabled),
+        transport: conversation.transport ?? merged.conversation?.transport ?? 'webhook',
         encrypt_key: conversation.encrypt_key ?? merged.conversation?.encrypt_key,
         verification_token: conversation.verification_token ?? merged.conversation?.verification_token,
         public_base_url: conversation.public_base_url ?? merged.conversation?.public_base_url,
