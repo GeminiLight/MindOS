@@ -666,11 +666,14 @@ export default function ViewPageClient({
                 }}
               />
             ) : (
-              <MarkdownEditor
-                value={editContent}
-                onChange={setEditContent}
-                viewMode={mdViewMode}
-              />
+              <>
+                <MarkdownEditor
+                  value={editContent}
+                  onChange={setEditContent}
+                  viewMode={mdViewMode}
+                />
+                {isMarkdown && <TableOfContents content={editContent} />}
+              </>
             )}
           </div>
         ) : showRenderer && LazyComponent ? (
