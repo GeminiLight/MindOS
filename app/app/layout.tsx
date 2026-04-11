@@ -89,11 +89,18 @@ export default async function RootLayout({
       <head>
         <meta name="theme-color" content="#c8873a" />
         {/* Patch Node.removeChild/insertBefore to swallow errors caused by browser
-            extensions (translators, Grammarly, etc.) that mutate the DOM between SSR
-            and hydration. See: https://github.com/facebook/react/issues/17256 */}
+            extensions (translators, Grammarly, twemoji, etc.) that mutate the DOM between
+            SSR and hydration. See: https://github.com/facebook/react/issues/17256 */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){if(typeof Node!=='undefined'){var o=Node.prototype.removeChild;Node.prototype.removeChild=function(c){if(c.parentNode!==this){try{return o.call(c.parentNode,c)}catch(e){return c}}return o.call(this,c)};var i=Node.prototype.insertBefore;Node.prototype.insertBefore=function(n,r){if(r&&r.parentNode!==this){try{return i.call(r.parentNode,n,r)}catch(e){return i.call(this,n,null)}}return i.call(this,n,r)}}})();`,
+          }}
+        />
+        {/* Neutralize twemoji browser extensions that replace emoji text with <img> tags,
+            which breaks React hydration and ProseMirror state. Runs before React mounts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var re=/^https?:\\/\\/cdn\\.jsdelivr\\.net\\/gh\\/twitter\\/twemoji@[^/]+\\/assets\\/svg\\/([a-f0-9-]+)\\.svg$/;function fix(img){var m=img.src&&img.src.match(re);if(!m)return;try{var e=m[1].split('-').map(function(c){return String.fromCodePoint(parseInt(c,16))}).join('');img.replaceWith(document.createTextNode(e))}catch(x){}}var ob=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var ns=ms[i].addedNodes;for(var j=0;j<ns.length;j++){var n=ns[j];if(n.nodeName==='IMG')fix(n);else if(n.querySelectorAll){var imgs=n.querySelectorAll('img[src*="twemoji"]');for(var k=0;k<imgs.length;k++)fix(imgs[k])}}}});ob.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}})();`,
           }}
         />
         {/* Electron macOS: set data-electron-mac before first paint so sidebar clears traffic lights */}
