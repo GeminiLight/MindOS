@@ -11,6 +11,7 @@ import Backlinks from '@/components/Backlinks';
 import { useRendererState } from '@/lib/renderers/useRendererState';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
+import EditorWrapper from '@/components/EditorWrapper';
 import TableOfContents from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
 import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
@@ -642,55 +643,50 @@ export default function ViewPageClient({
 
       {/* Content */}
       <div className="flex-1 py-6 md:py-8">
-        {editing ? (
-          <div className="content-width">
-            {isDraft && showSaveAs && (
-              <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">{t.view?.saveDirectory ?? 'Directory'}</label>
-                  <div className="mt-1">
-                    <DirPicker
-                      dirPaths={draftDirectories}
-                      value={saveDir}
-                      onChange={setSaveDir}
-                      rootLabel={t.home?.rootLevel ?? 'Root'}
+        {isMarkdown && !showRenderer ? (
+          <>
+            {/* Markdown Edit — always mounted, hidden when in View mode */}
+            <div className="content-width" style={{ display: editing ? undefined : 'none' }}>
+              {isDraft && showSaveAs && (
+                <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">{t.view?.saveDirectory ?? 'Directory'}</label>
+                    <div className="mt-1">
+                      <DirPicker
+                        dirPaths={draftDirectories}
+                        value={saveDir}
+                        onChange={setSaveDir}
+                        rootLabel={t.home?.rootLevel ?? 'Root'}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">{t.view?.saveFileName ?? 'File name'}</label>
+                    <input
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
+                      className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="Untitled.md"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">{t.view?.saveFileName ?? 'File name'}</label>
-                  <input
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
-                    className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder="Untitled.md"
-                  />
-                </div>
-              </div>
-            )}
-            {isCsv ? (
-              <CsvView
-                content={editContent}
-                filePath={filePath}
-                appendAction={appendRowAction}
-                saveAction={async (c) => {
-                  await saveAction(c);
-                  setEditContent(c);
-                  setSavedContent(c);
-                }}
+              )}
+              <MarkdownEditor
+                value={editContent}
+                onChange={setEditContent}
+                viewMode={mdViewMode}
               />
-            ) : (
-              <>
-                <MarkdownEditor
-                  value={editContent}
-                  onChange={setEditContent}
-                  viewMode={mdViewMode}
-                />
-                {isMarkdown && mdViewMode !== 'source' && <TableOfContents content={editContent} />}
-              </>
-            )}
-          </div>
+              {mdViewMode !== 'source' && <TableOfContents content={editContent} />}
+            </div>
+            {/* Markdown View — always mounted, hidden when in Edit mode */}
+            <div ref={contentRef} className="content-width" style={{ display: editing ? 'none' : undefined }}>
+              {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
+              <MarkdownView content={twemojiToNative(savedContent)} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
+              <TableOfContents content={twemojiToNative(savedContent)} />
+              <Backlinks filePath={filePath} />
+            </div>
+          </>
         ) : showRenderer && LazyComponent ? (
           <div ref={contentRef} className="content-width">
             {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
@@ -704,6 +700,23 @@ export default function ViewPageClient({
             </Suspense>
             <Backlinks filePath={filePath} />
           </div>
+        ) : editing ? (
+          <div className="content-width">
+            {isCsv ? (
+              <CsvView
+                content={editContent}
+                filePath={filePath}
+                appendAction={appendRowAction}
+                saveAction={async (c) => {
+                  await saveAction(c);
+                  setEditContent(c);
+                  setSavedContent(c);
+                }}
+              />
+            ) : (
+              <EditorWrapper value={editContent} onChange={setEditContent} language="plain" />
+            )}
+          </div>
         ) : (
           <div ref={contentRef} className="content-width">
             {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
@@ -715,10 +728,7 @@ export default function ViewPageClient({
             ) : extension === 'json' ? (
               <JsonView content={savedContent} />
             ) : (
-              <>
-                <MarkdownView content={twemojiToNative(savedContent)} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
-                <TableOfContents content={twemojiToNative(savedContent)} />
-              </>
+              <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
             )}
             <Backlinks filePath={filePath} />
           </div>
