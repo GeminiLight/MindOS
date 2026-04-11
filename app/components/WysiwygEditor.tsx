@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { Crepe } from '@milkdown/crepe';
+import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
 import '@/styles/milkdown-overrides.css';
@@ -21,6 +21,13 @@ function InnerEditor({ value, onChange }: InnerEditorProps) {
     const crepe = new Crepe({
       root,
       defaultValue: value,
+      featureConfigs: {
+        [CrepeFeature.CodeMirror]: {
+          onCopy: (code: string) => {
+            navigator.clipboard.writeText(code).catch(() => {});
+          },
+        },
+      },
     });
 
     crepe.on((listener) => {

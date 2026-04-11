@@ -82,24 +82,50 @@
   margin: 0.5em 0 1.1em 0 !important;
   padding-left: 1.6em !important;
 }
+.milkdown .ProseMirror ul { list-style-type: disc !important; }
+.milkdown .ProseMirror ol { list-style-type: decimal !important; }
 .milkdown .ProseMirror li {
   margin-bottom: 0.3em !important;
   padding: 0 !important;
 }
 /* Crepe list-item-block uses flex layout with 32px label wrappers;
-   tighten the gap and height to match prose density */
-.milkdown .milkdown-list-item-block li {
-  gap: 4px !important;
+   tighten to match .prose density and align bullet/number properly */
+.milkdown .milkdown-list-item-block {
+  padding: 0 !important;
 }
-.milkdown .milkdown-list-item-block li .label-wrapper {
+.milkdown .milkdown-list-item-block > .list-item {
+  gap: 2px !important;
+  align-items: flex-start !important;
+}
+.milkdown .milkdown-list-item-block li {
+  gap: 2px !important;
+}
+.milkdown .milkdown-list-item-block .label-wrapper {
   height: auto !important;
   min-height: 1.85em !important;
-  width: 18px !important;
+  width: 16px !important;
+  color: var(--prose-muted) !important;
+  flex-shrink: 0 !important;
 }
-.milkdown .milkdown-list-item-block li .label-wrapper .label {
+.milkdown .milkdown-list-item-block .label-wrapper svg {
+  fill: var(--prose-muted) !important;
+}
+.milkdown .milkdown-list-item-block .label-wrapper .label {
   height: auto !important;
   padding: 0 !important;
-  width: 18px !important;
+  width: 16px !important;
+  font-size: 0.85em !important;
+  line-height: 1.85 !important;
+}
+.milkdown .milkdown-list-item-block .children {
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+/* Nested lists: reduce top margin */
+.milkdown .milkdown-list-item-block .children ul,
+.milkdown .milkdown-list-item-block .children ol {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
 }
 
 /* ─── Horizontal rule — override Crepe's complex bg/height/padding hr ─── */
@@ -154,6 +180,23 @@
 .milkdown .milkdown-code-block .cm-editor { background: transparent !important; }
 .milkdown .milkdown-code-block .cm-gutters { background: transparent !important; border-right: none !important; color: var(--prose-muted) !important; }
 .milkdown .milkdown-code-block .cm-content { font-family: var(--font-code) !important; font-size: 0.82em !important; color: var(--prose-pre-color) !important; }
+/* Code block tools — ensure copy button is visible and styled */
+.milkdown .milkdown-code-block .tools { padding: 4px 8px !important; }
+.milkdown .milkdown-code-block .tools-button-group button {
+  opacity: 0.7 !important;
+  background: var(--muted) !important;
+  color: var(--muted-foreground) !important;
+  border-radius: 4px !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+}
+.milkdown .milkdown-code-block:hover .tools-button-group button { opacity: 1 !important; }
+.milkdown .milkdown-code-block .tools-button-group button:hover {
+  background: var(--accent) !important;
+  color: var(--foreground) !important;
+}
+.milkdown .milkdown-code-block .tools-button-group button svg { fill: currentColor !important; width: 12px !important; height: 12px !important; }
 
 /* ─── Images ─── */
 .milkdown .ProseMirror img { max-width: 100% !important; border-radius: 6px; }
