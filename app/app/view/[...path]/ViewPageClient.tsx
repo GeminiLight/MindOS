@@ -497,22 +497,7 @@ export default function ViewPageClient({
               </div>
             )}
 
-            {/* Markdown editing: theme picker */}
-            {isMarkdown && editing && !isDraft && (
-              <div className="relative">
-                <select
-                  value={editorTheme}
-                  onChange={(e) => setEditorTheme(e.target.value as typeof EDITOR_THEMES[number]['id'])}
-                  className="appearance-none flex items-center gap-1 pl-2 pr-6 py-1 rounded-md text-[11px] font-medium bg-muted text-muted-foreground hover:text-foreground cursor-pointer border-none outline-none transition-colors"
-                  title="Editor theme"
-                >
-                  {EDITOR_THEMES.map(t => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-                <Palette size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
-              </div>
-            )}
+            {/* Editor theme picker — hidden for now, may move to Settings later */}
 
             {/* Edit button — shown in view mode for non-markdown editable file types */}
             {!editing && !showRenderer && !isDraft && !isBinaryFile && !isMarkdown && (
