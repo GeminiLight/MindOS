@@ -144,6 +144,17 @@
   line-height: inherit !important;
 }
 
+/* ─── CodeMirror code blocks — disable active line highlight ─── */
+/* basicSetup includes highlightActiveLine/highlightActiveLineGutter which
+   causes line 1 to always appear "selected" even when not editing */
+.milkdown .cm-activeLine { background-color: transparent !important; }
+.milkdown .cm-activeLineGutter { background-color: transparent !important; color: inherit !important; }
+/* Match code block background/color to .prose pre */
+.milkdown .milkdown-code-block { background: var(--prose-pre-bg) !important; border-radius: 8px !important; border: 1px solid var(--prose-code-border) !important; margin: 1.2em 0 !important; }
+.milkdown .milkdown-code-block .cm-editor { background: transparent !important; }
+.milkdown .milkdown-code-block .cm-gutters { background: transparent !important; border-right: none !important; color: var(--prose-muted) !important; }
+.milkdown .milkdown-code-block .cm-content { font-family: var(--font-code) !important; font-size: 0.82em !important; color: var(--prose-pre-color) !important; }
+
 /* ─── Images ─── */
 .milkdown .ProseMirror img { max-width: 100% !important; border-radius: 6px; }
 
