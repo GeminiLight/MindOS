@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, Columns2, PanelLeft } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -24,8 +24,7 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { buildLineDiff } from '@/components/changes/line-diff';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
-import { useEditorTheme, EDITOR_THEMES } from '@/lib/stores/editor-theme-store';
-import { Palette } from 'lucide-react';
+import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
 
 interface ViewPageClientProps {
@@ -56,7 +55,6 @@ export default function ViewPageClient({
   const pinned = isPinned(filePath);
   const [exportOpen, setExportOpen] = useState(false);
   const editorTheme = useEditorTheme(s => s.theme);
-  const setEditorTheme = useEditorTheme(s => s.setTheme);
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -73,9 +71,11 @@ export default function ViewPageClient({
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
   const isMarkdown = extension === 'md';
-  const persistedMode = typeof window !== 'undefined' ? localStorage.getItem('md-view-mode') : null;
-  const startsInPreview = isMarkdown && persistedMode === 'preview';
-  const [editing, setEditing] = useState(!isBinaryFile && !startsInPreview && (initialEditing || content === '' || isMarkdown));
+  const [editing, setEditing] = useState(() => {
+    if (isBinaryFile) return false;
+    if (isMarkdown && typeof window !== 'undefined' && localStorage.getItem('md-view-mode') === 'preview') return false;
+    return initialEditing || content === '' || isMarkdown;
+  });
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
 

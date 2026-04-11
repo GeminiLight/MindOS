@@ -87,10 +87,14 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         .map(h => document.getElementById(h.id))
         .filter(Boolean) as HTMLElement[];
       if (elements.length === 0) {
-        const allHeadings = document.querySelectorAll<HTMLElement>(
-          '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6,' +
-          '.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6'
-        );
+        // Only query headings inside visible containers (not display:none ones)
+        const visibleContainers = Array.from(
+          document.querySelectorAll<HTMLElement>('.ProseMirror, .prose')
+        ).filter(c => c.offsetParent !== null);
+        const allHeadings: HTMLElement[] = [];
+        for (const c of visibleContainers) {
+          allHeadings.push(...c.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
+        }
         elements = headings.map((_, i) => allHeadings[i]).filter(Boolean) as HTMLElement[];
       }
       if (elements.length === 0) return;
@@ -120,14 +124,18 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     e.preventDefault();
     // Try by id first (works in View mode with rehype-slug)
     let el = document.getElementById(id);
-    // Fallback: find heading by index (works in Edit mode where ids may not match)
+    // Fallback: find heading by index in the currently visible content area
     if (!el) {
       const idx = headings.findIndex(h => h.id === id);
       if (idx >= 0) {
-        const allHeadings = document.querySelectorAll<HTMLElement>(
-          '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6,' +
-          '.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6'
-        );
+        // Only query headings inside visible containers (not display:none ones)
+        const visibleContainers = Array.from(
+          document.querySelectorAll<HTMLElement>('.ProseMirror, .prose')
+        ).filter(c => c.offsetParent !== null);
+        const allHeadings: HTMLElement[] = [];
+        for (const c of visibleContainers) {
+          allHeadings.push(...c.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
+        }
         el = allHeadings[idx] ?? null;
       }
     }
