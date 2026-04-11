@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, Columns2, PanelLeft } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -23,6 +23,8 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { buildLineDiff } from '@/components/changes/line-diff';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
+import { useEditorTheme, EDITOR_THEMES } from '@/lib/stores/editor-theme-store';
+import { Palette } from 'lucide-react';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -51,6 +53,8 @@ export default function ViewPageClient({
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(filePath);
   const [exportOpen, setExportOpen] = useState(false);
+  const editorTheme = useEditorTheme(s => s.theme);
+  const setEditorTheme = useEditorTheme(s => s.setTheme);
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -66,7 +70,8 @@ export default function ViewPageClient({
     'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac',
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
-  const [editing, setEditing] = useState(!isBinaryFile && (initialEditing || content === ''));
+  const isMarkdown = extension === 'md';
+  const [editing, setEditing] = useState(!isBinaryFile && (initialEditing || content === '' || isMarkdown));
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
 
@@ -79,6 +84,46 @@ export default function ViewPageClient({
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Auto-save for Markdown files — debounce 1s after each change
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSavingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isMarkdown || !editing || isDraft || editContent === savedContent) {
+      return;
+    }
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (autoSavingRef.current) return;
+      autoSavingRef.current = true;
+      try {
+        if (!mountedRef.current) return;
+        setAutoSaveStatus('saving');
+        await saveAction(editContent);
+        if (!mountedRef.current) return;
+        setSavedContent(editContent);
+        setAutoSaveStatus('saved');
+        setTimeout(() => {
+          if (mountedRef.current) setAutoSaveStatus('idle');
+        }, 1500);
+      } catch {
+        if (mountedRef.current) setAutoSaveStatus('idle');
+      } finally {
+        autoSavingRef.current = false;
+      }
+    }, 1000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction]);
   const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -262,14 +307,17 @@ export default function ViewPageClient({
       try {
         await saveAction(editContent);
         setSavedContent(editContent);
-        setEditing(false);
+        // Markdown auto-save: Ctrl+S saves but stays in edit mode
+        if (!isMarkdown) {
+          setEditing(false);
+        }
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 2500);
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, isDraft, saveAction, editContent]);
+  }, [isCsv, isDraft, isMarkdown, saveAction, editContent]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
@@ -290,7 +338,7 @@ export default function ViewPageClient({
       if (e.key === 'e' && !editing && !isBinaryFile && document.activeElement?.tagName === 'BODY') {
         handleEdit();
       }
-      if (e.key === 'Escape' && editing) handleCancel();
+      if (e.key === 'Escape' && editing && !isMarkdown) handleCancel();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -378,7 +426,20 @@ export default function ViewPageClient({
                 <span className="hidden sm:inline">updated</span>
               </span>
             )}
-            {saveSuccess && (
+            {/* Auto-save status for Markdown */}
+            {isMarkdown && editing && autoSaveStatus === 'saving' && (
+              <span className="text-xs flex items-center gap-1.5 text-muted-foreground animate-in fade-in-0 duration-200">
+                <Loader2 size={12} className="animate-spin" />
+                <span className="hidden sm:inline">saving...</span>
+              </span>
+            )}
+            {isMarkdown && editing && autoSaveStatus === 'saved' && (
+              <span className="text-xs flex items-center gap-1.5 animate-in fade-in-0 duration-200" style={{ color: 'var(--success)' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
+                <span className="hidden sm:inline">saved</span>
+              </span>
+            )}
+            {saveSuccess && !isMarkdown && (
               <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
                 <span className="hidden sm:inline">saved</span>
@@ -404,7 +465,57 @@ export default function ViewPageClient({
               </button>
             )}
 
-            {!editing && !showRenderer && !isDraft && !isBinaryFile && (
+            {/* Markdown editing: mode switcher in header */}
+            {isMarkdown && !isDraft && (
+              <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-md">
+                {([
+                  { id: 'wysiwyg' as const, icon: <Pencil size={11} />, label: 'Edit' },
+                  { id: 'split' as const, icon: <Columns2 size={11} />, label: 'Split' },
+                  { id: 'source' as const, icon: <PanelLeft size={11} />, label: 'Source' },
+                  { id: 'preview' as const, icon: <Eye size={11} />, label: 'View' },
+                ] as const).map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setMdViewMode(m.id);
+                      if (m.id === 'preview') {
+                        setEditing(false);
+                      } else if (!editing) {
+                        setEditing(true);
+                      }
+                    }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      mdViewMode === m.id
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {m.icon}
+                    <span className="hidden md:inline">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Markdown editing: theme picker */}
+            {isMarkdown && editing && !isDraft && (
+              <div className="relative">
+                <select
+                  value={editorTheme}
+                  onChange={(e) => setEditorTheme(e.target.value as typeof EDITOR_THEMES[number]['id'])}
+                  className="appearance-none flex items-center gap-1 pl-2 pr-6 py-1 rounded-md text-[11px] font-medium bg-muted text-muted-foreground hover:text-foreground cursor-pointer border-none outline-none transition-colors"
+                  title="Editor theme"
+                >
+                  {EDITOR_THEMES.map(t => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+                <Palette size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+              </div>
+            )}
+
+            {/* Edit button — shown in view mode for non-markdown editable file types */}
+            {!editing && !showRenderer && !isDraft && !isBinaryFile && !isMarkdown && (
               <button
                 onClick={handleEdit}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
@@ -416,7 +527,9 @@ export default function ViewPageClient({
                 <span className="hidden sm:inline">Edit</span>
               </button>
             )}
-            {editing && (
+
+            {/* Non-markdown editing: original Cancel + Save buttons */}
+            {editing && !isMarkdown && (
               <>
                 <button
                   onClick={handleCancel}
@@ -431,6 +544,31 @@ export default function ViewPageClient({
                 </button>
                 <button
                   onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
+                  style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+                >
+                  {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  <span className="hidden sm:inline">Save</span>
+                </button>
+              </>
+            )}
+            {/* Draft markdown: keep Save/Cancel */}
+            {editing && isMarkdown && isDraft && (
+              <>
+                <button
+                  onClick={handleCancel}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                  style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
+                >
+                  <X size={13} />
+                  <span className="hidden sm:inline">Cancel</span>
+                </button>
+                <button
+                  onClick={showSaveAs ? handleConfirmDraftSave : handleSave}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
                   style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
@@ -494,7 +632,7 @@ export default function ViewPageClient({
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-4 md:px-6 py-6 md:py-8">
+      <div className="flex-1 py-6 md:py-8">
         {editing ? (
           <div className="content-width">
             {isDraft && showSaveAs && (
@@ -538,7 +676,6 @@ export default function ViewPageClient({
                 value={editContent}
                 onChange={setEditContent}
                 viewMode={mdViewMode}
-                onViewModeChange={setMdViewMode}
               />
             )}
           </div>
