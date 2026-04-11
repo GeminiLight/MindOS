@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Crepe } from '@milkdown/crepe';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
@@ -8,22 +8,43 @@ import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 
 /**
  * Convert twemoji image markdown back to native Unicode emoji.
- * Some OS emoji pickers insert `<img src="twemoji-cdn-url">` instead of
- * the actual Unicode character; ProseMirror serializes these as
+ * Some browser extensions / OS emoji pickers insert `<img src="twemoji-cdn-url">`
+ * instead of actual Unicode characters; ProseMirror serializes these as
  * `![](https://cdn.jsdelivr.net/gh/twitter/twemoji@.../CODEPOINTS.svg "")`
  */
-const TWEMOJI_RE = /!\[\]\(https?:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@[^/]+\/assets\/svg\/([a-f0-9-]+)\.svg\s*(?:"[^"]*")?\)/g;
+const TWEMOJI_MD_RE = /!\[\]\(https?:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@[^/]+\/assets\/svg\/([a-f0-9-]+)\.svg\s*(?:"[^"]*")?\)/g;
+const TWEMOJI_SRC_RE = /^https?:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@[^/]+\/assets\/svg\/([a-f0-9-]+)\.svg$/;
+
+function codepointsToEmoji(codepoints: string): string | null {
+  try {
+    return String.fromCodePoint(
+      ...codepoints.split('-').map((cp: string) => parseInt(cp, 16)),
+    );
+  } catch {
+    return null;
+  }
+}
 
 function twemojiToNative(markdown: string): string {
-  return markdown.replace(TWEMOJI_RE, (_match, codepoints: string) => {
-    try {
-      return String.fromCodePoint(
-        ...codepoints.split('-').map((cp: string) => parseInt(cp, 16)),
-      );
-    } catch {
-      return _match; // keep as-is if conversion fails
-    }
+  return markdown.replace(TWEMOJI_MD_RE, (_match, codepoints: string) => {
+    return codepointsToEmoji(codepoints) ?? _match;
   });
+}
+
+/**
+ * Replace twemoji <img> elements with native emoji text nodes in the DOM.
+ * This prevents the editor from even seeing them as images.
+ */
+function replaceTwemojiImgs(container: HTMLElement) {
+  const imgs = container.querySelectorAll<HTMLImageElement>('img[src*="twemoji"]');
+  for (const img of imgs) {
+    const match = img.src.match(TWEMOJI_SRC_RE);
+    if (!match) continue;
+    const emoji = codepointsToEmoji(match[1]);
+    if (emoji) {
+      img.replaceWith(document.createTextNode(emoji));
+    }
+  }
 }
 
 interface InnerEditorProps {
@@ -60,9 +81,40 @@ interface WysiwygEditorProps {
 
 export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
   const theme = useEditorTheme(s => s.theme);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Watch for twemoji <img> injected by browser extensions and replace with native emoji
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    // Initial sweep for any twemoji already in the DOM
+    replaceTwemojiImgs(el);
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLImageElement && node.src.includes('twemoji')) {
+            const match = node.src.match(TWEMOJI_SRC_RE);
+            if (match) {
+              const emoji = codepointsToEmoji(match[1]);
+              if (emoji) {
+                node.replaceWith(document.createTextNode(emoji));
+              }
+            }
+          } else if (node instanceof HTMLElement) {
+            replaceTwemojiImgs(node);
+          }
+        }
+      }
+    });
+
+    observer.observe(el, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="wysiwyg-wrapper h-full overflow-y-auto" data-editor-theme={theme}>
+    <div ref={wrapperRef} className="wysiwyg-wrapper h-full overflow-y-auto" data-editor-theme={theme}>
       <MilkdownProvider>
         <InnerEditor value={value} onChange={onChange} />
       </MilkdownProvider>
