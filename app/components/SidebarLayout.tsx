@@ -48,6 +48,8 @@ import { toast } from '@/lib/toast';
 import { quickDropToInbox } from '@/lib/inbox-upload';
 import type { Tab } from './settings/types';
 
+const noop = () => {};
+
 function collectDirPaths(nodes: FileNode[], prefix = ''): string[] {
   const result: string[] = [];
   for (const n of nodes) {
@@ -443,6 +445,8 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     setSyncPopoverOpen(false);
   }, [lp]);
 
+  const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
+
   return (
     <>
       <McpStoreInit />
@@ -524,7 +528,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       <Panel
         activePanel={lp.activePanel}
         fileTree={fileTree}
-        onNavigate={() => {}}
+        onNavigate={noop}
         onOpenSyncSettings={openSyncSettings}
         railWidth={lp.railWidth}
         panelWidth={lp.panelWidth ?? undefined}
@@ -644,7 +648,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           </button>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} onImport={handleOpenImport} />
+          <FileTree nodes={fileTree} onNavigate={handleMobileNavigate} onImport={handleOpenImport} />
         </div>
       </aside>
 

@@ -153,7 +153,12 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
   const [isPendingDelete, startDeleteTransition] = useTransition();
 
   // ── External file drop target (from hook) ──
-  const { isDragTarget, handleRowDragOver, handleRowDragEnter, handleRowDragLeave, handleRowDrop } = useDirectoryDragDrop(node, open, setOpen, t);
+  // Wrap setOpen so drag-expand also marks the directory as opened for lazy rendering
+  const setOpenWithTracking = useCallback((v: boolean) => {
+    setOpen(v);
+    if (v) setHasBeenOpened(true);
+  }, []);
+  const { isDragTarget, handleRowDragOver, handleRowDragEnter, handleRowDragLeave, handleRowDrop } = useDirectoryDragDrop(node, open, setOpenWithTracking, t);
 
   const toggle = useCallback(() => {
     setOpen(v => {
@@ -367,7 +372,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
-          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
+          onNewFile={() => { setOpen(true); setHasBeenOpened(true); setShowNewFile(true); }}
           onImport={onImport}
           onDelete={() => setDeleteConfirm('space')}
         />
@@ -378,7 +383,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
-          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
+          onNewFile={() => { setOpen(true); setHasBeenOpened(true); setShowNewFile(true); }}
           onDelete={() => setDeleteConfirm('folder')}
         />
       ))}
