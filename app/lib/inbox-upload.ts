@@ -24,7 +24,10 @@ async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
     return arrayBufferToBase64Sync(buf);
   }
 
-  return new Promise<string>((resolve, reject) => {
+  // Clone before transfer — the original buf becomes detached after postMessage with transfer
+  const syncFallbackBuf = buf.slice(0);
+
+  return new Promise<string>((resolve) => {
     const workerCode = `
       self.onmessage = function(e) {
         try {
@@ -43,34 +46,33 @@ async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
     const url = URL.createObjectURL(blob);
     const worker = new Worker(url);
 
-    const timeout = setTimeout(() => {
+    const cleanup = () => {
       worker.terminate();
       URL.revokeObjectURL(url);
-      // Fallback to sync on timeout
-      resolve(arrayBufferToBase64Sync(buf));
+    };
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(arrayBufferToBase64Sync(syncFallbackBuf));
     }, 10_000);
 
     worker.onmessage = (e: MessageEvent) => {
       clearTimeout(timeout);
-      worker.terminate();
-      URL.revokeObjectURL(url);
+      cleanup();
       if (typeof e.data === 'string') {
         resolve(e.data);
       } else {
-        // Worker returned error object — fallback
-        resolve(arrayBufferToBase64Sync(buf));
+        resolve(arrayBufferToBase64Sync(syncFallbackBuf));
       }
     };
 
     worker.onerror = () => {
       clearTimeout(timeout);
-      worker.terminate();
-      URL.revokeObjectURL(url);
-      // Fallback to sync
-      resolve(arrayBufferToBase64Sync(buf));
+      cleanup();
+      resolve(arrayBufferToBase64Sync(syncFallbackBuf));
     };
 
-    // Transfer the buffer to avoid copying
+    // Transfer the buffer to avoid copying (original buf is now detached)
     worker.postMessage(buf, [buf]);
   });
 }

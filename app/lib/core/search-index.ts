@@ -112,12 +112,23 @@ export class SearchIndex {
     const stop = telemetry.startTimer('search.index.rebuild.async');
     try {
       const { Worker } = await import('worker_threads');
-      const workerPath = require.resolve('./search-rebuild-worker');
+      const { existsSync } = await import('fs');
+
+      // Worker file is TypeScript — only works in dev with tsx/ts-node loader.
+      // In production (standalone), fall back to sync rebuild immediately.
+      let workerPath: string;
+      try {
+        workerPath = require.resolve('./search-rebuild-worker');
+        if (!existsSync(workerPath)) throw new Error('Worker file not found');
+      } catch {
+        this.rebuild(mindRoot);
+        stop({ fileCount: this.fileCount, tokenCount: this.invertedIndex?.size ?? 0, method: 'sync_no_worker' });
+        return;
+      }
 
       const result = await new Promise<PersistedIndex>((resolve, reject) => {
         const worker = new Worker(workerPath, {
           workerData: { mindRoot },
-          // tsx/ts-node may need the same loader in the worker
           execArgv: process.execArgv.filter(a => a.startsWith('--require') || a.startsWith('--loader')),
         });
         const timeout = setTimeout(() => {

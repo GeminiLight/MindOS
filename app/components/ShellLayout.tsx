@@ -14,16 +14,22 @@ import { FileNode } from '@/lib/types';
  */
 function shareFileTree(next: FileNode[], prev: FileNode[]): FileNode[] {
   if (next === prev) return prev;
-  if (next.length !== prev.length) return next.map((n, i) => shareFileNode(n, prev.find(p => p.path === n.path)));
+
+  // Build path→node index for O(1) lookup when arrays differ in length or order
+  const prevByPath = new Map<string, FileNode>();
+  for (const p of prev) prevByPath.set(p.path, p);
 
   let allSame = true;
   const result: FileNode[] = new Array(next.length);
   for (let i = 0; i < next.length; i++) {
-    const shared = shareFileNode(next[i], prev[i]?.path === next[i].path ? prev[i] : prev.find(p => p.path === next[i].path));
+    const prevNode = (i < prev.length && prev[i].path === next[i].path)
+      ? prev[i]
+      : prevByPath.get(next[i].path);
+    const shared = shareFileNode(next[i], prevNode);
     result[i] = shared;
     if (shared !== prev[i]) allSame = false;
   }
-  return allSame ? prev : result;
+  return allSame && next.length === prev.length ? prev : result;
 }
 
 function shareFileNode(next: FileNode, prev: FileNode | undefined): FileNode {
