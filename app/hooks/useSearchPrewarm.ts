@@ -55,9 +55,13 @@ export function useSearchPrewarm(active: boolean): SearchWarmState {
       .catch(() => {
         if (isMountedRef.current) setWarmState('fallback');
       });
+    // warmState is in deps but won't cause infinite loops because
+    // shouldStartSearchPrewarm returns false when warmState !== 'idle'
   }, [active, warmState]);
 
+  // Reset on mount (needed for React 18 StrictMode which unmounts then remounts)
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
