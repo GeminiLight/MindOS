@@ -198,7 +198,7 @@ describe('AskContent input behavior while running', () => {
     const submitButton = host.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(submitButton.disabled).toBe(true);
     expect(submitButton.title).toBe('Wait for uploaded files to finish processing before sending.');
-    expect(host.textContent).toContain('Wait for uploaded files to finish processing before sending.');
+    expect(host.textContent).not.toContain('Wait for uploaded files to finish processing before sending.');
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {

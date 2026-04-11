@@ -47,9 +47,10 @@ export function getModelConfig(options?: ModelConfigOverrides): {
   baseUrl: string;
 } {
   const saved = effectiveAiConfig(options?.provider);
+  const provider = options?.provider ?? saved.provider;
 
   const cfg = {
-    provider: saved.provider,
+    provider,
     apiKey: options?.apiKey ?? saved.apiKey,
     model: options?.model ?? saved.model,
     baseUrl: options?.baseUrl ?? saved.baseUrl,

@@ -590,6 +590,13 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 - **规则：** 所有传给 `pi-coding-agent` / `pi-ai` 的 provider 标识符必须经过 `toPiProvider()` 转换。MindOS ProviderId 仅用于 UI 层和 settings 层
 - **文件：** `app/app/api/ask/route.ts`
 
+### Provider override 传协议 ID 时误读 activeProvider（#24）
+- **现象：** Settings 页 Test Key 可通过，但聊天实际走错 provider，常见表现是自定义 OpenAI 兼容网关返回 `please auth first`、`auth first`，或者请求落到了当前 active provider 的模型/鉴权配置上
+- **原因：** `getModelConfig()` 把 `ProviderId`（如 `"openai"`）传给 `effectiveAiConfig()`，但后者原本只把参数当作 provider entry ID（`p_*`）查找。查找失败后会退回 `activeProvider` / 默认 provider，导致显式传入的 `apiKey`、`model`、`baseUrl` 与最终选中的 provider 不一致
+- **解决：** `effectiveAiConfig()` 同时支持 entry ID 和 protocol ID；`getModelConfig()` 明确保留 `options.provider` 作为最终 provider，不再被回退配置覆盖
+- **规则：** provider 解析层必须区分“配置项 ID（p_*）”与“协议 ID（openai/anthropic/...）”；接受两种输入时，禁止静默回退到 active provider
+- **文件：** `app/lib/settings.ts`、`app/lib/agent/model.ts`
+
 ### ACP sendAndWait 不感知进程死亡 — 30 秒盲等（#23，已通过 SDK 迁移彻底修复）
 - **现象：** 用户选择未安装的 ACP agent（如 Auggie），等待 30 秒后报错 "ACP Agent Error: ACP RPC timeout after 30000ms for method: initialize"
 - **原因：** 手写的 `sendAndWait()` 发送 JSON-RPC 后仅靠 `setTimeout` 等待响应，不监听进程 `close`/`error` 事件

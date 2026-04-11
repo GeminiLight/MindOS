@@ -310,7 +310,8 @@ export function recordSkillInstall(agentKey: string, skillName: string, installP
 
 /** Effective AI config — unified interface for all providers.
  *  Resolves: saved config → env var → preset default, in that priority order.
- *  When `providerOverride` is given (a provider entry ID), resolves that provider's config. */
+ *  When `providerOverride` is given, it may be either a provider entry ID (`p_*`)
+ *  or a protocol ID (`openai`, `anthropic`, etc.). */
 export function effectiveAiConfig(providerOverride?: string): {
   provider: ProviderId;
   apiKey: string;
@@ -319,9 +320,19 @@ export function effectiveAiConfig(providerOverride?: string): {
 } {
   const s = readSettings();
 
-  // Find the provider entry
+  // Find the provider entry.
+  // providerOverride may be either a concrete entry ID (p_*) or a protocol ID.
   const targetId = providerOverride || s.ai.activeProvider;
-  const entry = targetId ? findProvider(s.ai.providers, targetId) : undefined;
+  let entry = targetId ? findProvider(s.ai.providers, targetId) : undefined;
+
+  if (!entry && providerOverride && isProviderId(providerOverride)) {
+    const activeEntry = s.ai.activeProvider ? findProvider(s.ai.providers, s.ai.activeProvider) : undefined;
+    if (activeEntry?.protocol === providerOverride) {
+      entry = activeEntry;
+    } else {
+      entry = s.ai.providers.find((provider) => provider.protocol === providerOverride);
+    }
+  }
 
   if (entry) {
     // Resolve from the unified provider entry
@@ -335,8 +346,9 @@ export function effectiveAiConfig(providerOverride?: string): {
     return { provider: entry.protocol, apiKey, model, baseUrl };
   }
 
-  // Fallback: no matching entry — try env var or default
-  const envProvider = process.env.AI_PROVIDER;
+  // Fallback: no matching entry — if a protocol override was requested, honor it.
+  // Otherwise fall back to env var or default provider.
+  const envProvider = (providerOverride && isProviderId(providerOverride)) ? providerOverride : process.env.AI_PROVIDER;
   const protocol: ProviderId = (envProvider && isProviderId(envProvider)) ? envProvider : 'anthropic';
   const preset = PROVIDER_PRESETS[protocol] ?? PROVIDER_PRESETS.anthropic;
 

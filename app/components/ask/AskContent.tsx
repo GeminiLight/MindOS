@@ -183,7 +183,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     session.setSessionDefaultAcpAgent(agent);
   }, [session]);
   const hasLoadingAttachments = upload.localAttachments.some((f) => f.status === 'loading');
-  const composerStatusMessage = upload.uploadError || imageUpload.imageError || (hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : '');
+  const composerStatusMessage = upload.uploadError || imageUpload.imageError || '';
 
   useEffect(() => {
     const handler = (e: Event) => {
