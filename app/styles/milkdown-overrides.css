@@ -218,23 +218,49 @@
   margin: 0 0.05em !important;
 }
 
-/* ─── Tables — match .prose table ─── */
+/* ─── Tables — match .prose table density ─── */
 .milkdown .ProseMirror table {
   width: 100% !important;
   border-collapse: collapse !important;
   margin: 1.2em 0 !important;
   font-size: 0.85em !important;
 }
+.milkdown .milkdown-table-block { margin: 1.2em 0 !important; }
+.milkdown .milkdown-table-block th {
+  background: var(--prose-th-bg) !important;
+  color: var(--prose-heading) !important;
+  font-weight: 600 !important;
+  padding: 0.4em 0.9em !important;
+  border: 1px solid var(--prose-border) !important;
+  text-align: left !important;
+  font-size: 0.78em !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+.milkdown .milkdown-table-block td {
+  padding: 0.35em 0.9em !important;
+  border: 1px solid var(--prose-code-border) !important;
+  color: var(--prose-muted) !important;
+}
+.milkdown .milkdown-table-block tr:nth-child(even) {
+  background: var(--prose-th-bg) !important;
+}
+/* Remove paragraph margin inside table cells — it adds unwanted vertical space */
+.milkdown .milkdown-table-block th p,
+.milkdown .milkdown-table-block td p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
 .milkdown .ProseMirror thead th {
   background: var(--prose-th-bg) !important;
   color: var(--prose-heading) !important;
   font-weight: 600 !important;
-  padding: 0.6em 0.9em !important;
+  padding: 0.4em 0.9em !important;
   border: 1px solid var(--prose-border) !important;
   text-align: left !important;
 }
 .milkdown .ProseMirror tbody td {
-  padding: 0.55em 0.9em !important;
+  padding: 0.35em 0.9em !important;
   border: 1px solid var(--prose-code-border) !important;
   color: var(--prose-muted) !important;
 }
