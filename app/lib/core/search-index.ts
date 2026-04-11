@@ -104,6 +104,72 @@ export class SearchIndex {
   /** Reverse mapping: filePath → Set<token> for efficient removeFile. */
   private fileTokens = new Map<string, Set<string>>();
 
+  /**
+   * Async rebuild using worker_threads (non-blocking).
+   * Falls back to sync rebuild if worker fails.
+   */
+  async rebuildAsync(mindRoot: string): Promise<void> {
+    const stop = telemetry.startTimer('search.index.rebuild.async');
+    try {
+      const { Worker } = await import('worker_threads');
+      const workerPath = require.resolve('./search-rebuild-worker');
+
+      const result = await new Promise<PersistedIndex>((resolve, reject) => {
+        const worker = new Worker(workerPath, {
+          workerData: { mindRoot },
+          // tsx/ts-node may need the same loader in the worker
+          execArgv: process.execArgv.filter(a => a.startsWith('--require') || a.startsWith('--loader')),
+        });
+        const timeout = setTimeout(() => {
+          worker.terminate();
+          reject(new Error('Search rebuild worker timed out'));
+        }, 30_000);
+
+        worker.on('message', (msg: { ok: boolean; data?: PersistedIndex; error?: string }) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          if (msg.ok && msg.data) resolve(msg.data);
+          else reject(new Error(msg.error || 'Worker failed'));
+        });
+        worker.on('error', (err) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          reject(err);
+        });
+      });
+
+      // Restore from worker result (same as load() deserialization)
+      this.restoreFromPersisted(result);
+      stop({ fileCount: this.fileCount, tokenCount: this.invertedIndex?.size ?? 0, method: 'worker' });
+    } catch {
+      // Worker failed — fall back to sync rebuild
+      this.rebuild(mindRoot);
+      stop({ fileCount: this.fileCount, tokenCount: this.invertedIndex?.size ?? 0, method: 'sync_fallback' });
+    }
+  }
+
+  /** Restore index state from a persisted/worker result. */
+  private restoreFromPersisted(data: PersistedIndex): void {
+    this.builtForRoot = data.builtForRoot;
+    this.fileCount = data.fileCount;
+    this.totalChars = data.totalChars;
+    this.docLengths = new Map(Object.entries(data.docLengths).map(([k, v]) => [k, v as number]));
+
+    const inverted = new Map<string, Set<string>>();
+    const fileTokensMap = new Map<string, Set<string>>();
+    for (const [token, files] of Object.entries(data.invertedIndex)) {
+      const fileSet = new Set(files as string[]);
+      inverted.set(token, fileSet);
+      for (const f of fileSet) {
+        let tokens = fileTokensMap.get(f);
+        if (!tokens) { tokens = new Set(); fileTokensMap.set(f, tokens); }
+        tokens.add(token);
+      }
+    }
+    this.invertedIndex = inverted;
+    this.fileTokens = fileTokensMap;
+  }
+
   /** Full rebuild: read all files and build inverted index. */
   rebuild(mindRoot: string): void {
     const stop = telemetry.startTimer('search.index.rebuild');
@@ -461,25 +527,7 @@ export class SearchIndex {
     }
 
     // Restore state
-    this.builtForRoot = data.builtForRoot;
-    this.fileCount = data.fileCount;
-    this.totalChars = data.totalChars;
-    this.docLengths = new Map(Object.entries(data.docLengths).map(([k, v]) => [k, v as number]));
-
-    const inverted = new Map<string, Set<string>>();
-    const fileTokensMap = new Map<string, Set<string>>();
-    for (const [token, files] of Object.entries(data.invertedIndex)) {
-      const fileSet = new Set(files as string[]);
-      inverted.set(token, fileSet);
-      // Rebuild reverse mapping
-      for (const f of fileSet) {
-        let tokens = fileTokensMap.get(f);
-        if (!tokens) { tokens = new Set(); fileTokensMap.set(f, tokens); }
-        tokens.add(token);
-      }
-    }
-    this.invertedIndex = inverted;
-    this.fileTokens = fileTokensMap;
+    this.restoreFromPersisted(data);
 
     return true;
   }

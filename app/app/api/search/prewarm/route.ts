@@ -14,7 +14,7 @@ export async function GET() {
     let coreResult: { cacheState: string; fileCount: number } | undefined;
     try {
       const mindRoot = getMindRoot();
-      coreResult = prewarmCoreSearchIndex(mindRoot);
+      coreResult = await prewarmCoreSearchIndex(mindRoot);
     } catch {
       // Core prewarm failure is non-critical — UI search still works
     }

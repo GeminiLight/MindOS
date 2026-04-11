@@ -149,7 +149,7 @@ function countTermOccurrences(term: string, text: string): number {
  * Tries loading from disk first (fast path), falls back to full rebuild.
  * Returns the number of indexed files and whether the index was loaded or built.
  */
-export function prewarmCoreSearchIndex(mindRoot: string): { cacheState: 'hit' | 'loaded' | 'built'; fileCount: number } {
+export async function prewarmCoreSearchIndex(mindRoot: string): Promise<{ cacheState: 'hit' | 'loaded' | 'built'; fileCount: number }> {
   if (searchIndex.isBuiltFor(mindRoot)) {
     telemetry.track('search.core.prewarm', { cacheState: 'hit', fileCount: searchIndex.getFileCount() });
     return { cacheState: 'hit', fileCount: searchIndex.getFileCount() };
@@ -164,7 +164,8 @@ export function prewarmCoreSearchIndex(mindRoot: string): { cacheState: 'hit' | 
     return { cacheState: 'loaded', fileCount: searchIndex.getFileCount() };
   }
 
-  searchIndex.rebuild(mindRoot);
+  // Use async worker rebuild to avoid blocking the event loop
+  await searchIndex.rebuildAsync(mindRoot);
   try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
 
   telemetry.track('search.core.prewarm', { cacheState: 'built', fileCount: searchIndex.getFileCount() });
