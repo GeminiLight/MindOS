@@ -72,7 +72,9 @@ export default function ViewPageClient({
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
   const isMarkdown = extension === 'md';
-  const [editing, setEditing] = useState(!isBinaryFile && (initialEditing || content === '' || isMarkdown));
+  const persistedMode = typeof window !== 'undefined' ? localStorage.getItem('md-view-mode') : null;
+  const startsInPreview = isMarkdown && persistedMode === 'preview';
+  const [editing, setEditing] = useState(!isBinaryFile && !startsInPreview && (initialEditing || content === '' || isMarkdown));
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
 
@@ -130,7 +132,16 @@ export default function ViewPageClient({
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction]);
-  const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
+  const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
+    if (typeof window === 'undefined') return 'wysiwyg';
+    const stored = localStorage.getItem('md-view-mode');
+    if (stored === 'wysiwyg' || stored === 'source' || stored === 'preview') return stored;
+    return 'wysiwyg';
+  });
+  const setMdViewMode = (mode: MdViewMode) => {
+    setMdViewModeState(mode);
+    localStorage.setItem('md-view-mode', mode);
+  };
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
