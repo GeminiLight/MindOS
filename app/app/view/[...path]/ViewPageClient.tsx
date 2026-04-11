@@ -73,8 +73,10 @@ export default function ViewPageClient({
   const isMarkdown = extension === 'md';
   const [editing, setEditing] = useState(() => {
     if (isBinaryFile) return false;
+    // Always start in Edit for empty/new files regardless of persisted mode
+    if (initialEditing || content === '') return true;
     if (isMarkdown && typeof window !== 'undefined' && localStorage.getItem('md-view-mode') === 'preview') return false;
-    return initialEditing || content === '' || isMarkdown;
+    return isMarkdown;
   });
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
