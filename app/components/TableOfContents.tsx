@@ -82,9 +82,17 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
   useEffect(() => {
     if (headings.length === 0) return;
     const timer = setTimeout(() => {
-      const elements = headings
+      // Try by id first, then fallback to index-based heading lookup
+      let elements = headings
         .map(h => document.getElementById(h.id))
         .filter(Boolean) as HTMLElement[];
+      if (elements.length === 0) {
+        const allHeadings = document.querySelectorAll<HTMLElement>(
+          '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6,' +
+          '.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6'
+        );
+        elements = headings.map((_, i) => allHeadings[i]).filter(Boolean) as HTMLElement[];
+      }
       if (elements.length === 0) return;
       observerRef.current?.disconnect();
       observerRef.current = new IntersectionObserver(
@@ -110,7 +118,19 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
 
   const handleClick = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    const el = document.getElementById(id);
+    // Try by id first (works in View mode with rehype-slug)
+    let el = document.getElementById(id);
+    // Fallback: find heading by index (works in Edit mode where ids may not match)
+    if (!el) {
+      const idx = headings.findIndex(h => h.id === id);
+      if (idx >= 0) {
+        const allHeadings = document.querySelectorAll<HTMLElement>(
+          '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6,' +
+          '.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6'
+        );
+        el = allHeadings[idx] ?? null;
+      }
+    }
     if (!el) return;
     const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET;
     window.scrollTo({ top, behavior: 'smooth' });
