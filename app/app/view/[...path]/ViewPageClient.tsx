@@ -687,7 +687,7 @@ export default function ViewPageClient({
                   onChange={setEditContent}
                   viewMode={mdViewMode}
                 />
-                {isMarkdown && <TableOfContents content={editContent} />}
+                {isMarkdown && mdViewMode !== 'source' && <TableOfContents content={editContent} />}
               </>
             )}
           </div>
