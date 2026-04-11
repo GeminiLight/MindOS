@@ -25,6 +25,7 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
 import { useEditorTheme, EDITOR_THEMES } from '@/lib/stores/editor-theme-store';
 import { Palette } from 'lucide-react';
+import { twemojiToNative } from '@/lib/twemoji';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -107,9 +108,10 @@ export default function ViewPageClient({
       try {
         if (!mountedRef.current) return;
         setAutoSaveStatus('saving');
-        await saveAction(editContent);
+        const cleanContent = twemojiToNative(editContent);
+        await saveAction(cleanContent);
         if (!mountedRef.current) return;
-        setSavedContent(editContent);
+        setSavedContent(cleanContent);
         setAutoSaveStatus('saved');
         setTimeout(() => {
           if (mountedRef.current) setAutoSaveStatus('idle');
@@ -305,8 +307,9 @@ export default function ViewPageClient({
     setSaveError(null);
     startTransition(async () => {
       try {
-        await saveAction(editContent);
-        setSavedContent(editContent);
+        const cleanContent = twemojiToNative(editContent);
+        await saveAction(cleanContent);
+        setSavedContent(cleanContent);
         // Markdown auto-save: Ctrl+S saves but stays in edit mode
         if (!isMarkdown) {
           setEditing(false);
@@ -479,8 +482,15 @@ export default function ViewPageClient({
                     onClick={() => {
                       setMdViewMode(m.id);
                       if (m.id === 'preview') {
+                        // Save and sync content before switching to view
+                        const clean = twemojiToNative(editContent);
+                        setSavedContent(clean);
+                        if (clean !== savedContent) {
+                          saveAction(clean).catch(() => {});
+                        }
                         setEditing(false);
                       } else if (!editing) {
+                        setEditContent(savedContent);
                         setEditing(true);
                       }
                     }}

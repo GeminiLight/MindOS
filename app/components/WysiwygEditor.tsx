@@ -6,26 +6,7 @@ import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
 import '@/styles/milkdown-overrides.css';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
-
-/**
- * Convert twemoji image markdown back to native Unicode emoji.
- * Some browser extensions / OS emoji pickers insert `<img src="twemoji-cdn-url">`
- * instead of actual Unicode characters; ProseMirror serializes these as
- * `![](https://cdn.jsdelivr.net/gh/twitter/twemoji@.../CODEPOINTS.svg "")`
- */
-const TWEMOJI_MD_RE = /!\[\]\(https?:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@[^/]+\/assets\/svg\/([a-f0-9-]+)\.svg\s*(?:"[^"]*")?\)/g;
-
-function twemojiToNative(markdown: string): string {
-  return markdown.replace(TWEMOJI_MD_RE, (_match, codepoints: string) => {
-    try {
-      return String.fromCodePoint(
-        ...codepoints.split('-').map((cp: string) => parseInt(cp, 16)),
-      );
-    } catch {
-      return _match;
-    }
-  });
-}
+import { twemojiToNative } from '@/lib/twemoji';
 
 interface InnerEditorProps {
   value: string;
