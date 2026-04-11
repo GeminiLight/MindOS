@@ -856,8 +856,8 @@ async function healPreviousInstallation(): Promise<void> {
 
   // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
   splashStatus({ status: 'healing', message: 'Checking previous installation...' });
-  cleanupConflictingLaunchdService();
-  cleanupLinuxSystemdService();
+  await cleanupConflictingLaunchdService();
+  await cleanupLinuxSystemdService();
 
   // 2. Kill orphaned processes from BOTH Desktop and CLI pid files
   ProcessManager.cleanupOrphanedChildren();
@@ -1010,21 +1010,20 @@ function validateBuildCache(appDir: string): 'missing' | 'ok' | 'removed' {
  * Only acts on macOS. Only stops the service if it exists and conflicts with
  * Desktop's own startup (i.e. Desktop is about to manage its own processes).
  */
-function cleanupConflictingLaunchdService(): void {
+async function cleanupConflictingLaunchdService(): Promise<void> {
   if (process.platform !== 'darwin') return;
 
   try {
-    const { execSync: exec } = require('child_process');
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const execOpts = { encoding: 'utf-8' as const, timeout: 3000 };
 
     // Check if com.mindos.app service is registered with launchd
     let serviceExists = false;
     try {
-      const output = exec('launchctl list com.mindos.app', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
-      serviceExists = output.includes('com.mindos.app');
+      const { stdout } = await execAsync('launchctl list com.mindos.app', execOpts);
+      serviceExists = stdout.includes('com.mindos.app');
     } catch {
       // launchctl list exits non-zero if service doesn't exist — that's fine
       return;
@@ -1036,18 +1035,12 @@ function cleanupConflictingLaunchdService(): void {
 
     // Step 1: bootout the service so launchd stops restarting it
     try {
-      exec(`launchctl bootout gui/$(id -u)/com.mindos.app`, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
+      await execAsync(`launchctl bootout gui/$(id -u)/com.mindos.app`, { ...execOpts, timeout: 5000 });
       console.info('[MindOS] Stopped launchd service com.mindos.app');
     } catch (err) {
       // Try `launchctl remove` as fallback (works on some macOS versions)
       try {
-        exec('launchctl remove com.mindos.app', {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          timeout: 5000,
-        });
+        await execAsync('launchctl remove com.mindos.app', { ...execOpts, timeout: 5000 });
         console.info('[MindOS] Removed launchd service com.mindos.app via fallback');
       } catch {
         console.warn('[MindOS] Could not stop launchd service:', err instanceof Error ? err.message : err);
@@ -1068,17 +1061,11 @@ function cleanupConflictingLaunchdService(): void {
     // Step 3: Kill residual CLI mindos processes still holding ports.
     // Use full path pattern to avoid killing our own Desktop process.
     try {
-      exec('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
+      await execAsync('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', execOpts);
     } catch { /* no matching processes — fine */ }
     // Also kill Next.js workers spawned by the CLI
     try {
-      exec('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
+      await execAsync('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', execOpts);
     } catch { /* no matching processes — fine */ }
 
     // Note: no explicit wait needed — findAvailablePort will retry if ports haven't released yet
@@ -1096,29 +1083,31 @@ function cleanupConflictingLaunchdService(): void {
  * (which creates ~/.config/systemd/user/mindos.service), then deleted the app,
  * systemd keeps restarting the service and occupies all ports.
  */
-function cleanupLinuxSystemdService(): void {
+async function cleanupLinuxSystemdService(): Promise<void> {
   if (process.platform !== 'linux') return;
 
   try {
-    const { execSync: exec } = require('child_process');
-    const opts = { encoding: 'utf-8' as const, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const opts = { encoding: 'utf-8' as const, timeout: 5000 };
 
     // Check if the service is active or enabled
     let isActive = false;
     try {
-      const status = exec('systemctl --user is-active mindos 2>/dev/null || true', opts).trim();
-      isActive = status === 'active' || status === 'activating';
+      const { stdout } = await execAsync('systemctl --user is-active mindos 2>/dev/null || true', opts);
+      isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
     } catch { /* systemctl not available */ return; }
 
     if (!isActive) {
       // Also check by alternative service name com.mindos.app
       try {
-        const status = exec('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts).trim();
-        isActive = status === 'active' || status === 'activating';
+        const { stdout } = await execAsync('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts);
+        isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
         if (isActive) {
           console.warn('[MindOS] Detected conflicting systemd service com.mindos.app — stopping it');
-          try { exec('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
-          try { exec('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
+          try { await execAsync('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
+          try { await execAsync('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
           return;
         }
       } catch { /* ok */ }
@@ -1126,8 +1115,8 @@ function cleanupLinuxSystemdService(): void {
     }
 
     console.warn('[MindOS] Detected conflicting systemd service mindos — stopping it');
-    try { exec('systemctl --user stop mindos', opts); } catch { /* ok */ }
-    try { exec('systemctl --user disable mindos', opts); } catch { /* ok */ }
+    try { await execAsync('systemctl --user stop mindos', opts); } catch { /* ok */ }
+    try { await execAsync('systemctl --user disable mindos', opts); } catch { /* ok */ }
     console.info('[MindOS] Stopped systemd user service');
   } catch {
     // Non-critical
