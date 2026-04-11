@@ -443,27 +443,31 @@ a:focus-visible,
   font-weight: 600 !important;
   line-height: 1.3 !important;
   letter-spacing: -0.01em;
+  padding: 0 !important;
 }
 .milkdown .ProseMirror h1 { font-size: 1.85em !important; margin-top: 0 !important; margin-bottom: 0.6em !important; }
-.milkdown .ProseMirror h2 { font-size: 1.35em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
+.milkdown .ProseMirror h2 { font-size: 1.35em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; border-bottom: 1px solid var(--prose-border) !important; padding-bottom: 0.4em !important; }
 .milkdown .ProseMirror h3 { font-size: 1.15em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
 .milkdown .ProseMirror h4 { font-size: 1.05em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
-.milkdown .ProseMirror p { margin-top: 0; margin-bottom: 1.1em !important; }
-.milkdown .ProseMirror a { color: var(--amber) !important; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.35); }
+.milkdown .ProseMirror p { margin-top: 0 !important; margin-bottom: 1.1em !important; font-size: inherit !important; line-height: inherit !important; padding: 0 !important; }
+.milkdown .ProseMirror a { color: var(--amber) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.35) !important; }
 .milkdown .ProseMirror a:hover { text-decoration-color: var(--amber); }
-.milkdown .ProseMirror strong { color: var(--prose-heading) !important; font-weight: 600; }
-.milkdown .ProseMirror em { font-style: italic; color: var(--prose-muted); }
+.milkdown .ProseMirror strong { color: var(--prose-heading) !important; font-weight: 600 !important; }
+.milkdown .ProseMirror em { font-style: italic !important; color: var(--prose-muted) !important; }
 .milkdown .ProseMirror blockquote { border-left: 2px solid var(--amber) !important; padding-left: 1.1em !important; margin: 1.2em 0 !important; color: var(--prose-subtle) !important; font-style: italic; }
+.milkdown .ProseMirror blockquote::before { display: none !important; }
 .milkdown .ProseMirror ul, .milkdown .ProseMirror ol { margin: 0.5em 0 1.1em 0 !important; padding-left: 1.6em !important; }
-.milkdown .ProseMirror li { margin-bottom: 0.3em; }
-.milkdown .ProseMirror hr { border: none !important; border-top: 1px solid var(--prose-border) !important; margin: 2.5em 0 !important; }
+.milkdown .ProseMirror li { margin-bottom: 0.3em !important; padding: 0 !important; }
+.milkdown .ProseMirror hr { border: none !important; border-top: 1px solid var(--prose-border) !important; margin: 2.5em 0 !important; background: none !important; height: auto !important; padding: 0 !important; }
 .milkdown .ProseMirror code:not(pre code) {
   font-family: var(--font-code) !important;
   background: var(--prose-code-border) !important;
   color: var(--prose-heading) !important;
-  padding: 0.15em 0.45em;
-  border-radius: 4px;
-  font-size: 0.855em;
+  padding: 0.15em 0.45em !important;
+  border-radius: 4px !important;
+  font-size: 0.855em !important;
+  line-height: inherit !important;
+  display: inline !important;
 }
 .milkdown img[src*="twemoji"],
 .milkdown img[src*="emoji"],
