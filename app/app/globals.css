@@ -419,66 +419,8 @@ a:focus-visible,
   border-radius: 4px;
 }
 
-/* ─── Milkdown Crepe editor themes ─────────────────────────────────── */
-
-/* Base: font + heading sizes + emoji overrides that apply to ALL themes */
-.milkdown,
-.milkdown .ProseMirror,
-.milkdown .ProseMirror.editor,
-.milkdown [class*="editor"],
-.milkdown .editor {
-  font-family: var(--prose-font-override, var(--font-ui)) !important;
-  font-size: var(--prose-font-size-override, 1rem) !important;
-  caret-color: var(--amber);
-}
-/* Override Milkdown's huge default padding (60px 120px from reset.css) */
-.milkdown .ProseMirror {
-  padding: 1rem 0 !important;
-  line-height: 1.85 !important;
-  color: var(--prose-body) !important;
-}
-/* Typography — match our .prose scale across ALL editor themes */
-.milkdown .ProseMirror h1, .milkdown .ProseMirror h2, .milkdown .ProseMirror h3, .milkdown .ProseMirror h4 {
-  color: var(--prose-heading) !important;
-  font-weight: 600 !important;
-  line-height: 1.3 !important;
-  letter-spacing: -0.01em;
-  padding: 0 !important;
-}
-.milkdown .ProseMirror h1 { font-size: 1.85em !important; margin-top: 0 !important; margin-bottom: 0.6em !important; }
-.milkdown .ProseMirror h2 { font-size: 1.35em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; border-bottom: 1px solid var(--prose-border) !important; padding-bottom: 0.4em !important; }
-.milkdown .ProseMirror h3 { font-size: 1.15em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
-.milkdown .ProseMirror h4 { font-size: 1.05em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
-.milkdown .ProseMirror p { margin-top: 0 !important; margin-bottom: 1.1em !important; font-size: inherit !important; line-height: inherit !important; padding: 0 !important; }
-.milkdown .ProseMirror a { color: var(--amber) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.35) !important; }
-.milkdown .ProseMirror a:hover { text-decoration-color: var(--amber); }
-.milkdown .ProseMirror strong { color: var(--prose-heading) !important; font-weight: 600 !important; }
-.milkdown .ProseMirror em { font-style: italic !important; color: var(--prose-muted) !important; }
-.milkdown .ProseMirror blockquote { border-left: 2px solid var(--amber) !important; padding-left: 1.1em !important; margin: 1.2em 0 !important; color: var(--prose-subtle) !important; font-style: italic; }
-.milkdown .ProseMirror blockquote::before { display: none !important; }
-.milkdown .ProseMirror ul, .milkdown .ProseMirror ol { margin: 0.5em 0 1.1em 0 !important; padding-left: 1.6em !important; }
-.milkdown .ProseMirror li { margin-bottom: 0.3em !important; padding: 0 !important; }
-.milkdown .ProseMirror hr { border: none !important; border-top: 1px solid var(--prose-border) !important; margin: 2.5em 0 !important; background: none !important; height: auto !important; padding: 0 !important; }
-.milkdown .ProseMirror code:not(pre code) {
-  font-family: var(--font-code) !important;
-  background: var(--prose-code-border) !important;
-  color: var(--prose-heading) !important;
-  padding: 0.15em 0.45em !important;
-  border-radius: 4px !important;
-  font-size: 0.855em !important;
-  line-height: inherit !important;
-  display: inline !important;
-}
-.milkdown img[src*="twemoji"],
-.milkdown img[src*="emoji"],
-.milkdown img.emoji {
-  display: inline !important;
-  width: 1.2em !important;
-  height: 1.2em !important;
-  vertical-align: -0.1em;
-  border: none !important;
-  margin: 0 0.05em !important;
-}
+/* ─── Milkdown typography overrides are in styles/milkdown-overrides.css ─── */
+/* (loaded after Crepe's CSS in WysiwygEditor.tsx for correct cascade order) */
 
 /* ── Theme: System (match app design system) ── */
 [data-editor-theme="system"] .milkdown {

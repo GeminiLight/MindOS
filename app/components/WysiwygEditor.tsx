@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { Crepe } from '@milkdown/crepe';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
+import '@/styles/milkdown-overrides.css';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 
 /**
