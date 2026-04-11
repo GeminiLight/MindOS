@@ -38,6 +38,44 @@ const TOPBAR_H = 46;
 const SCROLL_OFFSET = TOPBAR_H + 12;
 const NAV_W = 212;
 
+/**
+ * Find the content heading elements in the DOM, trying multiple strategies.
+ * Returns an array aligned with the `headings` array (same length, same order).
+ */
+function findHeadingElements(headings: Heading[]): (HTMLElement | null)[] {
+  if (headings.length === 0) return [];
+
+  // Strategy 1: find by id (View mode with rehype-slug)
+  const byId = headings.map(h => document.getElementById(h.id));
+  if (byId.some(Boolean)) return byId;
+
+  // Strategy 2: find headings inside visible .ProseMirror (Edit mode)
+  // Use getComputedStyle to detect visibility — more reliable than offsetParent
+  const proseMirrors = document.querySelectorAll<HTMLElement>('.ProseMirror');
+  for (const pm of proseMirrors) {
+    const style = getComputedStyle(pm);
+    if (style.display === 'none' || style.visibility === 'hidden') continue;
+    // Get only direct content headings (exclude toolbar/menu headings)
+    const pmHeadings = pm.querySelectorAll<HTMLElement>(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
+    if (pmHeadings.length > 0) {
+      return headings.map((_, i) => pmHeadings[i] ?? null);
+    }
+  }
+
+  // Strategy 3: find headings inside visible .prose (fallback)
+  const proseEls = document.querySelectorAll<HTMLElement>('.prose');
+  for (const p of proseEls) {
+    const style = getComputedStyle(p);
+    if (style.display === 'none' || style.visibility === 'hidden') continue;
+    const proseHeadings = p.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+    if (proseHeadings.length > 0) {
+      return headings.map((_, i) => proseHeadings[i] ?? null);
+    }
+  }
+
+  return headings.map(() => null);
+}
+
 interface TableOfContentsProps {
   content: string;
 }
@@ -48,7 +86,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     const h = parseHeadings(content);
     return { headings: h, minLevel: h.length > 0 ? Math.min(...h.map(x => x.level)) : 1 };
   }, [content]);
-  const [activeId, setActiveId] = useState<string>('');
+  const [activeIdx, setActiveIdx] = useState(-1);
   const [collapsed, setCollapsed] = useState(false);
 
   // Broadcast TOC width to content area via CSS variables
@@ -64,10 +102,12 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
   }, [collapsed]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
-  const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const linkRefs = useRef<Map<number, HTMLAnchorElement>>(new Map());
+  // Cache heading elements for the current content
+  const headingElsRef = useRef<(HTMLElement | null)[]>([]);
 
-  const scrollActiveIntoView = useCallback((id: string) => {
-    const link = linkRefs.current.get(id);
+  const scrollActiveIntoView = useCallback((idx: number) => {
+    const link = linkRefs.current.get(idx);
     const nav = navRef.current;
     if (!link || !nav || !link.isConnected) return;
     const navRect = nav.getBoundingClientRect();
@@ -79,70 +119,50 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     }
   }, []);
 
+  // Set up IntersectionObserver to track which heading is visible
   useEffect(() => {
     if (headings.length === 0) return;
     const timer = setTimeout(() => {
-      // Try by id first, then fallback to index-based heading lookup
-      let elements = headings
-        .map(h => document.getElementById(h.id))
-        .filter(Boolean) as HTMLElement[];
-      if (elements.length === 0) {
-        // Only query headings inside visible containers (not display:none ones)
-        const visibleContainers = Array.from(
-          document.querySelectorAll<HTMLElement>('.ProseMirror, .prose')
-        ).filter(c => c.offsetParent !== null);
-        const allHeadings: HTMLElement[] = [];
-        for (const c of visibleContainers) {
-          allHeadings.push(...c.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
-        }
-        elements = headings.map((_, i) => allHeadings[i]).filter(Boolean) as HTMLElement[];
-      }
-      if (elements.length === 0) return;
+      const els = findHeadingElements(headings);
+      headingElsRef.current = els;
+      const validEls = els.filter(Boolean) as HTMLElement[];
+      if (validEls.length === 0) return;
+
       observerRef.current?.disconnect();
       observerRef.current = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
             if (entry.isIntersecting) {
-              setActiveId(entry.target.id);
-              scrollActiveIntoView(entry.target.id);
+              // Find index by element reference, not by id
+              const idx = els.indexOf(entry.target as HTMLElement);
+              if (idx >= 0) {
+                setActiveIdx(idx);
+                scrollActiveIntoView(idx);
+              }
               break;
             }
           }
         },
         { rootMargin: `-${SCROLL_OFFSET}px 0% -70% 0%`, threshold: 0 }
       );
-      elements.forEach(el => observerRef.current?.observe(el));
-    }, 150);
+      validEls.forEach(el => observerRef.current?.observe(el));
+    }, 300);
     return () => { clearTimeout(timer); observerRef.current?.disconnect(); };
-  // headings is derived from content via useMemo; scrollActiveIntoView is stable (no deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headings]);
 
   if (headings.length < 2) return null;
 
-  const handleClick = (e: React.MouseEvent, id: string) => {
+  const handleClick = (e: React.MouseEvent, idx: number) => {
     e.preventDefault();
-    // Try by id first (works in View mode with rehype-slug)
-    let el = document.getElementById(id);
-    // Fallback: find heading by index in the currently visible content area
-    if (!el) {
-      const idx = headings.findIndex(h => h.id === id);
-      if (idx >= 0) {
-        // Only query headings inside visible containers (not display:none ones)
-        const visibleContainers = Array.from(
-          document.querySelectorAll<HTMLElement>('.ProseMirror, .prose')
-        ).filter(c => c.offsetParent !== null);
-        const allHeadings: HTMLElement[] = [];
-        for (const c of visibleContainers) {
-          allHeadings.push(...c.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'));
-        }
-        el = allHeadings[idx] ?? null;
-      }
-    }
+    // Re-find elements in case DOM changed since observer setup
+    const els = findHeadingElements(headings);
+    headingElsRef.current = els;
+    const el = els[idx];
     if (!el) return;
     const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET;
     window.scrollTo({ top, behavior: 'smooth' });
-    setActiveId(id);
+    setActiveIdx(idx);
   };
 
   return (
@@ -190,17 +210,17 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
       >
         {headings.map((heading, i) => {
           const indent = (heading.level - minLevel) * 14;
-          const isActive = activeId === heading.id;
+          const isActive = activeIdx === i;
           const isNested = heading.level > minLevel;
           return (
             <a
               key={`${heading.id}-${i}`}
               ref={el => {
-                if (el) linkRefs.current.set(heading.id, el);
-                else linkRefs.current.delete(heading.id);
+                if (el) linkRefs.current.set(i, el);
+                else linkRefs.current.delete(i);
               }}
               href={`#${heading.id}`}
-              onClick={(e) => handleClick(e, heading.id)}
+              onClick={(e) => handleClick(e, i)}
               className={cn(
                 'block text-xs py-1 rounded transition-colors duration-100 leading-snug shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                 isActive && 'font-medium',
