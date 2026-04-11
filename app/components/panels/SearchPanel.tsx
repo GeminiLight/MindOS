@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table, ChevronRight } from 'lucide-react';
-import { SearchResult, SearchWarmState, SearchPrewarmResponse } from '@/lib/types';
+import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import PanelHeader from './PanelHeader';
 import { Virtuoso } from 'react-virtuoso';
+import { getSearchWarmHint, shouldStartSearchPrewarm, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
 /** Highlight matched text fragments in a snippet based on the query */
 function highlightSnippet(snippet: string, query: string): React.ReactNode {
@@ -39,31 +40,7 @@ interface SearchPanelProps {
   onMaximize?: () => void;
 }
 
-export function shouldStartSearchPrewarm({
-  active,
-  hasAttemptedPrewarm,
-  warmState,
-}: {
-  active: boolean;
-  hasAttemptedPrewarm: boolean;
-  warmState: SearchWarmState;
-}): boolean {
-  return active && !hasAttemptedPrewarm && warmState === 'idle';
-}
-
-export function getSearchWarmHint(
-  warmState: SearchWarmState,
-  query: string,
-  hints: { preparing: string; fallbackWarmHint: string } = {
-    preparing: 'Preparing search...',
-    fallbackWarmHint: 'Search will prepare on first query.',
-  },
-): string | null {
-  if (query.trim()) return null;
-  if (warmState === 'warming') return hints.preparing;
-  if (warmState === 'fallback') return hints.fallbackWarmHint;
-  return null;
-}
+export { getSearchWarmHint, shouldStartSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
 export default function SearchPanel({ active, onNavigate, maximized, onMaximize }: SearchPanelProps) {
   const [query, setQuery] = useState('');
@@ -71,10 +48,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [warmState, setWarmState] = useState<SearchWarmState>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
-  const hasAttemptedPrewarm = useRef(false);
-  const isMountedRef = useRef(true);
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
@@ -86,44 +60,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
     }
   }, [active]);
 
-  useEffect(() => {
-    if (!shouldStartSearchPrewarm({ active, hasAttemptedPrewarm: hasAttemptedPrewarm.current, warmState })) {
-      return;
-    }
-
-    hasAttemptedPrewarm.current = true;
-    setWarmState('warming');
-
-    void apiFetch<SearchPrewarmResponse>('/api/search/prewarm')
-      .then(() => {
-        if (isMountedRef.current) setWarmState('ready');
-      })
-      .catch(() => {
-        if (isMountedRef.current) setWarmState('fallback');
-      });
-  }, [active, warmState]);
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleFilesChanged = () => {
-      hasAttemptedPrewarm.current = false;
-      setWarmState('idle');
-    };
-    window.addEventListener('mindos:files-changed', handleFilesChanged);
-    return () => window.removeEventListener('mindos:files-changed', handleFilesChanged);
-  }, []);
-
-  useEffect(() => {
-    if (!active && warmState === 'fallback') {
-      hasAttemptedPrewarm.current = false;
-      setWarmState('idle');
-    }
-  }, [active, warmState]);
+  const warmState = useSearchPrewarm(active);
 
   // Debounced search
   const doSearch = useCallback((q: string) => {

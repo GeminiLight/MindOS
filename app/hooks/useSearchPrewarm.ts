@@ -20,7 +20,10 @@ export function shouldStartSearchPrewarm({
 export function getSearchWarmHint(
   warmState: SearchWarmState,
   query: string,
-  hints: SearchWarmHintMessages,
+  hints: SearchWarmHintMessages = {
+    preparing: 'Preparing search...',
+    fallbackWarmHint: 'Search will prepare on first query.',
+  },
 ): string | null {
   if (query.trim()) return null;
   if (warmState === 'warming') return hints.preparing;

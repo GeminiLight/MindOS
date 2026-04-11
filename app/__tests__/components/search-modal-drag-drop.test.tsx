@@ -17,19 +17,26 @@ vi.mock('@/lib/stores/locale-store', () => ({
     t: {
       search: {
         placeholder: 'Search files...',
+        emptyTitle: 'Find your notes fast',
+        emptyHint: 'Type a file name or keyword to begin',
         noResults: 'No results found',
+        noResultsHint: 'Try different keywords',
+        preparing: 'Preparing search...',
+        fallbackWarmHint: 'Search will prepare on first query.',
         prompt: 'Type to search',
         navigate: 'navigate',
         open: 'open',
         tabSearch: 'Search',
         tabActions: 'Actions',
         close: 'close',
+        clear: 'Clear search',
         openSettings: 'Settings',
         restartWalkthrough: 'Restart',
         toggleDarkMode: 'Dark mode',
         goToAgents: 'Agents',
         goToDiscover: 'Discover',
         goToHelp: 'Help',
+        walkthroughRestarted: 'Walkthrough restarted',
       },
     },
   }),
@@ -106,7 +113,7 @@ describe('SearchModal Drag-Drop Integration', () => {
         setInputValue(input, 'search');
       });
 
-      // Wait for debounce (SearchModal uses 200ms debounce)
+      // Wait for debounce (SearchModal uses 300ms debounce)
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 500));
       });

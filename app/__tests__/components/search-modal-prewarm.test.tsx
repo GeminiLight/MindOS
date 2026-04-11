@@ -105,4 +105,44 @@ describe('SearchModal prewarm', () => {
       resolvePrewarm?.({ warmed: true, cacheState: 'built', documentCount: 42 });
     });
   });
+
+  it('shows fallback hint when prewarm fails', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/search/prewarm') {
+        throw new Error('prewarm failed');
+      }
+      return [];
+    });
+
+    await act(async () => {
+      root.render(<SearchModal open={true} onClose={() => {}} />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Search will prepare on first query.');
+  });
+
+  it('retries prewarm after files change and reopening', async () => {
+    await act(async () => {
+      root.render(<SearchModal open={true} onClose={() => {}} />);
+    });
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('mindos:files-changed'));
+    });
+
+    await act(async () => {
+      root.render(<SearchModal open={false} onClose={() => {}} />);
+    });
+
+    await act(async () => {
+      root.render(<SearchModal open={true} onClose={() => {}} />);
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
 });

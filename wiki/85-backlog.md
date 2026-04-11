@@ -66,6 +66,10 @@
   - Search Panel 打开时后台预热 UI 搜索索引
   - 增加 warming / fallback 轻量状态文案与 i18n 文案
   - 补充 API 与 SearchPanel 纯函数测试覆盖
+- [x] Search 预热体验一致性
+  - SearchModal 与 SearchPanel 复用同一套预热状态机
+  - SearchModal 补齐 warming / fallback 提示与本地化空状态文案
+  - 增加 SearchModal prewarm / fallback / files-changed 回归测试
 
 ## Next
 
