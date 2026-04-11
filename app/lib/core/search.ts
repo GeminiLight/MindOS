@@ -145,6 +145,33 @@ function countTermOccurrences(term: string, text: string): number {
 }
 
 /**
+ * Prewarm the core search index for a given mindRoot.
+ * Tries loading from disk first (fast path), falls back to full rebuild.
+ * Returns the number of indexed files and whether the index was loaded or built.
+ */
+export function prewarmCoreSearchIndex(mindRoot: string): { cacheState: 'hit' | 'loaded' | 'built'; fileCount: number } {
+  if (searchIndex.isBuiltFor(mindRoot)) {
+    telemetry.track('search.core.prewarm', { cacheState: 'hit', fileCount: searchIndex.getFileCount() });
+    return { cacheState: 'hit', fileCount: searchIndex.getFileCount() };
+  }
+
+  const stopLoad = telemetry.startTimer('search.core.prewarm.load');
+  const loaded = searchIndex.load(getMindosDir(), mindRoot);
+  stopLoad({ loaded, fileCount: loaded ? searchIndex.getFileCount() : 0 });
+
+  if (loaded) {
+    telemetry.track('search.core.prewarm', { cacheState: 'loaded', fileCount: searchIndex.getFileCount() });
+    return { cacheState: 'loaded', fileCount: searchIndex.getFileCount() };
+  }
+
+  searchIndex.rebuild(mindRoot);
+  try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
+
+  telemetry.track('search.core.prewarm', { cacheState: 'built', fileCount: searchIndex.getFileCount() });
+  return { cacheState: 'built', fileCount: searchIndex.getFileCount() };
+}
+
+/**
  * Core literal search — used by MCP tools via REST API.
  *
  * Scoring: **BM25** (Best Matching 25) — the standard information retrieval
