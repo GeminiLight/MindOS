@@ -855,6 +855,7 @@ async function healPreviousInstallation(): Promise<void> {
   } catch { /* config read failure — run full heal */ }
 
   // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
+  splashStatus({ status: 'healing', message: 'Checking previous installation...' });
   cleanupConflictingLaunchdService();
   cleanupLinuxSystemdService();
 
@@ -874,6 +875,9 @@ async function healPreviousInstallation(): Promise<void> {
   const webInUse = await isPortInUse(webPort);
   const mcpInUse = await isPortInUse(mcpPort);
 
+  if (webInUse || mcpInUse) {
+    splashStatus({ status: 'healing', message: 'Freeing ports...' });
+  }
   if (webInUse) {
     ProcessManager.killProcessesOnPort(webPort);
   }
@@ -898,6 +902,7 @@ async function healPreviousInstallation(): Promise<void> {
 
   // 5. Validate private Node.js — if version too low or broken, remove it
   //    (startLocalMode → downloadNode will re-download a fresh copy)
+  splashStatus({ status: 'healing', message: 'Validating runtime...' });
   validatePrivateNode();
 
   // 6. Validate .next build cache — remove if corrupt (triggers rebuild in startLocalMode)
@@ -1803,8 +1808,9 @@ app.whenReady().then(async () => {
   try {
     ensureMindosCliShim();
     cleanupOrphanedSshTunnel();
-    await healPreviousInstallation();
 
+    // Show splash BEFORE healing so users see immediate visual feedback
+    // instead of staring at an empty desktop during port cleanup.
     if (needsDesktopModeSelectAtLaunch()) {
       const mode = await showModeSelectWindow();
       if (!mode) {
@@ -1821,6 +1827,7 @@ app.whenReady().then(async () => {
       splashWindow = createSplash();
     }
 
+    await healPreviousInstallation();
     await bootApp();
     stopBoot({ mode: currentMode, modeSelected: true, success: true });
   } catch (error) {
