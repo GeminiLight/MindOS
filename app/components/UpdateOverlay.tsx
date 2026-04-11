@@ -92,7 +92,7 @@ export default function UpdateOverlay() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+        fontFamily: "var(--font-ui)",
       }}
     >
       {done ? (

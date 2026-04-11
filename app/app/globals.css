@@ -54,12 +54,14 @@
 }
 
 body {
-  font-family: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  font-family: var(--font-ui), 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
   scrollbar-gutter: stable;
 }
 
 
 :root {
+  --font-ui: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif;
+  --font-code: 'IBM Plex Mono', var(--font-ibm-plex-mono), monospace;
   --background: #f8f6f1;
   --foreground: #1c1a17;
   --card: #f2efe9;
@@ -144,18 +146,18 @@ body {
 }
 
 /* Utility: IBM Plex Mono display heading font */
-.font-display { font-family: 'IBM Plex Mono', var(--font-ibm-plex-mono), monospace; }
+.font-display { font-family: var(--font-code); }
 
 /* Brand wordmark — premium sans with engineering precision */
 .font-brand {
-  font-family: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-weight: 700;
   letter-spacing: 0.03em;
 }
 
 /* Content width — controlled by Settings > Appearance */
-:root { --content-width: 780px; --toc-width: 0px; }
-.content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; }
+:root { --content-width: 80%; --toc-width: 0px; }
+.content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
 
 /* TOC offset — only on xl screens where TOC is visible.
    --toc-width is set by TableOfContents.tsx (212px when expanded, 0px when collapsed).
@@ -188,7 +190,7 @@ body {
 }
 
 .prose {
-  font-family: var(--prose-font-override, 'IBM Plex Sans', system-ui, sans-serif);
+  font-family: var(--prose-font-override, var(--font-ui));
   color: var(--prose-body);
   line-height: 1.85;
   font-size: var(--prose-font-size-override, 0.95rem);
@@ -197,7 +199,7 @@ body {
   .prose { font-size: var(--prose-font-size-override, 1rem); }
 }
 .prose h1, .prose h2, .prose h3, .prose h4 {
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: var(--prose-font-override, var(--font-ui));
   color: var(--prose-heading);
   font-weight: 600;
   line-height: 1.3;
@@ -211,10 +213,10 @@ body {
     margin-bottom: 0.75em;
   }
 }
-.prose h1 { font-size: 1.85rem; margin-top: 0; }
-.prose h2 { font-size: 1.35rem; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
-.prose h3 { font-size: 1.15rem; }
-.prose h4 { font-size: 1.05rem; }
+.prose h1 { font-size: 1.85em; margin-top: 0; }
+.prose h2 { font-size: 1.35em; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
+.prose h3 { font-size: 1.15em; }
+.prose h4 { font-size: 1.05em; }
 .prose p { margin-top: 0; margin-bottom: 1.1em; }
 .prose a { color: var(--amber); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.35); transition: text-decoration-color 0.15s; }
 .prose a:hover { text-decoration-color: var(--amber); }
@@ -225,16 +227,16 @@ body {
 .prose ol { list-style-type: decimal; }
 .prose li { margin-bottom: 0.3em; }
 .prose blockquote { border-left: 2px solid var(--amber); padding-left: 1.1em; margin: 1.2em 0; color: var(--prose-subtle); font-style: italic; }
-.prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: 'IBM Plex Mono', monospace; }
+.prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: var(--font-code); }
 .prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1.2em 0; color: var(--prose-pre-color); max-width: 100%; }
 @media (min-width: 640px) {
   .prose pre { padding: 1.1em 1.3em; }
 }
-.prose pre code { background: transparent; color: inherit; padding: 0; font-size: 0.82em; font-family: 'IBM Plex Mono', monospace; word-break: break-all; }
+.prose pre code { background: transparent; color: inherit; padding: 0; font-size: 0.82em; font-family: var(--font-code); word-break: break-all; }
 @media (min-width: 640px) {
   .prose pre code { font-size: 0.855em; word-break: normal; }
 }
-.prose table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.85em; font-family: 'IBM Plex Sans', sans-serif; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.prose table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.85em; font-family: var(--prose-font-override, var(--font-ui)); display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 @media (min-width: 640px) {
   .prose table { font-size: 0.9em; display: table; overflow-x: visible; }
 }
@@ -242,16 +244,31 @@ body {
 .prose tbody td { padding: 0.55em 0.9em; border: 1px solid var(--prose-code-border); color: var(--prose-muted); }
 .prose tbody tr:nth-child(even) { background: var(--prose-th-bg); }
 .prose img { max-width: 100%; border-radius: 6px; border: 1px solid var(--prose-code-border); }
+/* Emoji images (twemoji etc.) — keep inline-sized, not block-level */
+.prose img[src*="twemoji"],
+.prose img[src*="emoji"],
+.prose img.emoji,
+.wysiwyg-editor img[src*="twemoji"],
+.wysiwyg-editor img[src*="emoji"],
+.wysiwyg-editor img.emoji {
+  display: inline !important;
+  width: 1.2em !important;
+  height: 1.2em !important;
+  vertical-align: -0.1em;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 0.05em 0 0.1em !important;
+}
 .prose hr { border: none; border-top: 1px solid var(--prose-border); margin: 2.5em 0; }
 
 /* Ask Panel — compact prose for side panel chat bubbles */
 .prose.prose-panel {
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 0.8125rem !important;
+  font-family: var(--prose-font-override, var(--font-ui));
+  font-size: var(--prose-font-size-override, 0.8125rem) !important;
   line-height: 1.6;
 }
 .prose.prose-panel h1, .prose.prose-panel h2, .prose.prose-panel h3, .prose.prose-panel h4 {
-  font-size: 0.8125rem !important;
+  font-size: 1em !important;
   margin-top: 1em;
   margin-bottom: 0.4em;
 }
@@ -402,82 +419,171 @@ a:focus-visible,
   border-radius: 4px;
 }
 
-/* ─── Tiptap WYSIWYG editor ─────────────────────────────────────────── */
+/* ─── Milkdown Crepe editor themes ─────────────────────────────────── */
+
+/* Base: font + heading sizes + emoji overrides that apply to ALL themes */
+.milkdown,
+.milkdown .ProseMirror,
+.milkdown .ProseMirror.editor,
+.milkdown [class*="editor"],
+.milkdown .editor {
+  font-family: var(--prose-font-override, var(--font-ui)) !important;
+  font-size: var(--prose-font-size-override, 1rem) !important;
+  caret-color: var(--amber);
+}
+/* Override Milkdown's huge default padding (60px 120px from reset.css) */
+.milkdown .ProseMirror {
+  padding: 1rem 0 !important;
+}
+/* Heading sizes — match our prose scale, override Milkdown's oversized defaults */
+.milkdown .ProseMirror h1 { font-size: 1.85em !important; line-height: 1.3 !important; margin-top: 0 !important; margin-bottom: 0.6em !important; font-weight: 600 !important; }
+.milkdown .ProseMirror h2 { font-size: 1.35em !important; line-height: 1.3 !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; font-weight: 600 !important; }
+.milkdown .ProseMirror h3 { font-size: 1.15em !important; line-height: 1.3 !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; font-weight: 600 !important; }
+.milkdown .ProseMirror h4 { font-size: 1.05em !important; line-height: 1.3 !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; font-weight: 600 !important; }
+.milkdown .ProseMirror code:not(pre code) {
+  font-family: var(--font-code) !important;
+}
+.milkdown img[src*="twemoji"],
+.milkdown img[src*="emoji"],
+.milkdown img.emoji {
+  display: inline !important;
+  width: 1.2em !important;
+  height: 1.2em !important;
+  vertical-align: -0.1em;
+  border: none !important;
+  margin: 0 0.05em !important;
+}
+
+/* ── Theme: System (match app design system) ── */
+[data-editor-theme="system"] .milkdown {
+  --crepe-color-background: var(--background);
+  --crepe-color-on-background: var(--foreground);
+  --crepe-color-surface: var(--card);
+  --crepe-color-surface-low: var(--muted);
+  --crepe-color-on-surface: var(--foreground);
+  --crepe-color-on-surface-variant: var(--muted-foreground);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--amber);
+  --crepe-color-secondary: var(--muted);
+  --crepe-color-on-secondary: var(--foreground);
+  --crepe-color-inverse: var(--foreground);
+  --crepe-color-on-inverse: var(--background);
+  --crepe-color-inline-code: var(--prose-heading);
+  --crepe-color-hover: var(--muted);
+  --crepe-color-selected: var(--muted);
+  --crepe-color-inline-area: var(--muted);
+  --crepe-shadow-1: 0px 1px 3px 1px rgba(0,0,0,0.08), 0px 1px 2px 0px rgba(0,0,0,0.15);
+  --crepe-shadow-2: 0px 2px 6px 2px rgba(0,0,0,0.08), 0px 1px 2px 0px rgba(0,0,0,0.15);
+  background: transparent !important;
+  color: var(--foreground) !important;
+}
+[data-editor-theme="system"] .milkdown .ProseMirror {
+  background: transparent !important;
+  color: var(--prose-body) !important;
+  line-height: 1.85 !important;
+}
+[data-editor-theme="system"] .milkdown .ProseMirror h1,
+[data-editor-theme="system"] .milkdown .ProseMirror h2,
+[data-editor-theme="system"] .milkdown .ProseMirror h3,
+[data-editor-theme="system"] .milkdown .ProseMirror h4 {
+  color: var(--prose-heading) !important;
+  font-weight: 600;
+}
+[data-editor-theme="system"] .milkdown .ProseMirror h2 {
+  border-bottom: 1px solid var(--prose-border);
+  padding-bottom: 0.4em;
+}
+[data-editor-theme="system"] .milkdown .ProseMirror a { color: var(--amber) !important; }
+[data-editor-theme="system"] .milkdown .ProseMirror blockquote { border-left-color: var(--amber) !important; }
+
+/* ── Theme: Crepe (warm parchment) ── */
+[data-editor-theme="crepe"] .milkdown {
+  --crepe-color-background: #fffdfb; --crepe-color-on-background: #1f1b16;
+  --crepe-color-surface: #fff8f4; --crepe-color-surface-low: #fff1e5;
+  --crepe-color-on-surface: #201b13; --crepe-color-on-surface-variant: #4f4539;
+  --crepe-color-outline: #817567; --crepe-color-primary: #805610;
+  --crepe-color-secondary: #fbdebc; --crepe-color-on-secondary: #271904;
+  --crepe-color-inverse: #362f27; --crepe-color-on-inverse: #fcefe2;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #f9ecdf; --crepe-color-selected: #ede0d4;
+  --crepe-color-inline-area: #e4d8cc;
+  --crepe-font-title: Georgia, Cambria, serif;
+}
+
+/* ── Theme: Crepe Dark ── */
+[data-editor-theme="crepe-dark"] .milkdown {
+  --crepe-color-background: #1f1b16; --crepe-color-on-background: #eae1d9;
+  --crepe-color-surface: #18120b; --crepe-color-surface-low: #201b13;
+  --crepe-color-on-surface: #ede0d4; --crepe-color-on-surface-variant: #d3c4b4;
+  --crepe-color-outline: #9c8f80; --crepe-color-primary: #f4bd6f;
+  --crepe-color-secondary: #56442a; --crepe-color-on-secondary: #fbdebc;
+  --crepe-color-inverse: #ede0d4; --crepe-color-on-inverse: #362f27;
+  --crepe-color-inline-code: #ffb4ab; --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #251f17; --crepe-color-selected: #3b342b;
+  --crepe-color-inline-area: #3f3830;
+  --crepe-font-title: Georgia, Cambria, serif;
+}
+
+/* ── Theme: Nord ── */
+[data-editor-theme="nord"] .milkdown {
+  --crepe-color-background: #fdfcff; --crepe-color-on-background: #1b1c1d;
+  --crepe-color-surface: #f8f9ff; --crepe-color-surface-low: #f2f3fa;
+  --crepe-color-on-surface: #191c20; --crepe-color-on-surface-variant: #43474e;
+  --crepe-color-outline: #73777f; --crepe-color-primary: #37618e;
+  --crepe-color-secondary: #d7e3f8; --crepe-color-on-secondary: #101c2b;
+  --crepe-color-inverse: #2e3135; --crepe-color-on-inverse: #eff0f7;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #eceef4; --crepe-color-selected: #e1e2e8;
+  --crepe-color-inline-area: #d8dae0;
+  --crepe-font-title: Rubik, Cambria, serif;
+}
+
+/* ── Theme: Nord Dark ── */
+[data-editor-theme="nord-dark"] .milkdown {
+  --crepe-color-background: #1b1c1d; --crepe-color-on-background: #f8f9ff;
+  --crepe-color-surface: #111418; --crepe-color-surface-low: #191c20;
+  --crepe-color-on-surface: #e1e2e8; --crepe-color-on-surface-variant: #c3c6cf;
+  --crepe-color-outline: #8d9199; --crepe-color-primary: #a1c9fd;
+  --crepe-color-secondary: #3c4858; --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-inverse: #e1e2e8; --crepe-color-on-inverse: #2e3135;
+  --crepe-color-inline-code: #ffb4ab; --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #1d2024; --crepe-color-selected: #32353a;
+  --crepe-color-inline-area: #111418;
+  --crepe-font-title: Rubik, Cambria, serif;
+}
+
+/* ── Theme: Frame ── */
+[data-editor-theme="frame"] .milkdown {
+  --crepe-color-background: #ffffff; --crepe-color-on-background: #000000;
+  --crepe-color-surface: #f7f7f7; --crepe-color-surface-low: #ededed;
+  --crepe-color-on-surface: #1c1c1c; --crepe-color-on-surface-variant: #4d4d4d;
+  --crepe-color-outline: #a8a8a8; --crepe-color-primary: #333333;
+  --crepe-color-secondary: #cfcfcf; --crepe-color-on-secondary: #000000;
+  --crepe-color-inverse: #f0f0f0; --crepe-color-on-inverse: #1a1a1a;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #e0e0e0; --crepe-color-selected: #d5d5d5;
+  --crepe-color-inline-area: #cacaca;
+  --crepe-font-title: 'Noto Serif', Cambria, serif;
+}
+
+/* ── Theme: Frame Dark ── */
+[data-editor-theme="frame-dark"] .milkdown {
+  --crepe-color-background: #1a1a1a; --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #121212; --crepe-color-surface-low: #1c1c1c;
+  --crepe-color-on-surface: #d1d1d1; --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575; --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d; --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inverse: #e5e5e5; --crepe-color-on-inverse: #2a2a2a;
+  --crepe-color-inline-code: #ff6666; --crepe-color-error: #ff6666;
+  --crepe-color-hover: #232323; --crepe-color-selected: #2f2f2f;
+  --crepe-color-inline-area: #2b2b2b;
+  --crepe-font-title: 'Noto Serif', Cambria, serif;
+}
+
 .wysiwyg-wrapper {
   height: 100%;
   cursor: text;
 }
-
-/* Tiptap uses ProseMirror internally */
-.wysiwyg-editor {
-  min-height: 100%;
-  caret-color: var(--amber);
-  color: var(--foreground);
-}
-
-/* Placeholder */
-.wysiwyg-editor p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  color: var(--muted-foreground);
-  opacity: 0.45;
-  float: left;
-  pointer-events: none;
-  height: 0;
-}
-
-/* Selection */
-.wysiwyg-editor ::selection {
-  background: var(--amber);
-  color: var(--amber-foreground);
-  opacity: 0.35;
-}
-
-/* Task list */
-.wysiwyg-editor ul[data-type="taskList"] {
-  list-style: none;
-  padding: 0;
-}
-.wysiwyg-editor ul[data-type="taskList"] li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-.wysiwyg-editor ul[data-type="taskList"] li > label {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.wysiwyg-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
-  accent-color: var(--amber);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-.wysiwyg-editor ul[data-type="taskList"] li[data-checked="true"] > div {
-  text-decoration: line-through;
-  opacity: 0.5;
-}
-
-/* Tables */
-.wysiwyg-editor table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1.5rem 0;
-}
-.wysiwyg-editor th,
-.wysiwyg-editor td {
-  border: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
-  min-width: 60px;
-}
-.wysiwyg-editor th {
-  background: var(--muted);
-  font-weight: 600;
-}
-.wysiwyg-editor .selectedCell {
-  background: color-mix(in srgb, var(--amber) 12%, transparent);
-}
-
-/* Focus ring on the editor area */
 .wysiwyg-wrapper:focus-within {
   outline: none;
 }
