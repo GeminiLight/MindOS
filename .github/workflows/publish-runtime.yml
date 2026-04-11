@@ -31,6 +31,15 @@ jobs:
           cd app && npm install --no-workspaces
           cd ../mcp && npm install --include=dev && npm run build
 
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: app/.next/cache
+          key: nextjs-runtime-${{ hashFiles('app/package-lock.json') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx') }}
+          restore-keys: |
+            nextjs-runtime-${{ hashFiles('app/package-lock.json') }}-
+            nextjs-runtime-
+
       - name: Build Next.js standalone
         run: cd app && npx next build --webpack
         env:

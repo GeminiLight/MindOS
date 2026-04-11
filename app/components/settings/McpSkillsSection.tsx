@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2, ChevronDown, ChevronRight,
-  Plus, X, Search, Copy,
+  Plus, X, Search, Copy, FolderOpen, Trash2,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { apiFetch } from '@/lib/api';
@@ -363,6 +363,9 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
         </button>
       )}
 
+      {/* Skill Search Paths */}
+      <SkillSearchPathsSection m={m} />
+
       {/* CLI install hint with agent selector */}
       <SkillCliHint
         agents={mcp?.agents ?? []}
@@ -387,6 +390,120 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
         }}
         onCancel={() => setDeleteTarget(null)}
       />
+    </div>
+  );
+}
+
+/* ── Skill Search Paths ── */
+
+function SkillSearchPathsSection({ m }: { m: Record<string, any> | undefined }) {
+  const [enableAgentsDir, setEnableAgentsDir] = useState(true);
+  const [customPaths, setCustomPaths] = useState<string[]>([]);
+  const [newPath, setNewPath] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  // Load settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiFetch<{ skillPaths?: { enableAgentsDir?: boolean; custom?: string[] } }>('/api/settings');
+        setEnableAgentsDir(data.skillPaths?.enableAgentsDir !== false);
+        setCustomPaths(data.skillPaths?.custom ?? []);
+      } catch { /* ignore */ }
+      setLoaded(true);
+    })();
+  }, []);
+
+  const save = async (agentsDir: boolean, paths: string[]) => {
+    try {
+      await apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillPaths: { enableAgentsDir: agentsDir, custom: paths } }),
+      });
+    } catch (err) {
+      console.error('Failed to save skill paths:', err);
+    }
+  };
+
+  const handleToggleAgentsDir = async () => {
+    const next = !enableAgentsDir;
+    setEnableAgentsDir(next);
+    await save(next, customPaths);
+  };
+
+  const handleAddPath = async () => {
+    const trimmed = newPath.trim();
+    if (!trimmed || customPaths.includes(trimmed)) return;
+    const next = [...customPaths, trimmed];
+    setCustomPaths(next);
+    setNewPath('');
+    await save(enableAgentsDir, next);
+  };
+
+  const handleRemovePath = async (idx: number) => {
+    const next = customPaths.filter((_, i) => i !== idx);
+    setCustomPaths(next);
+    await save(enableAgentsDir, next);
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="border-t border-border pt-3 mt-3 space-y-2.5">
+      <p className="text-2xs font-medium text-muted-foreground">
+        {m?.skillSearchPaths ?? 'Skill Search Paths'}
+      </p>
+
+      {/* ~/.agents/skills toggle */}
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={enableAgentsDir}
+          onChange={handleToggleAgentsDir}
+          className="rounded border-border accent-[var(--amber)]"
+        />
+        <FolderOpen size={12} className="text-muted-foreground" />
+        <span className="text-foreground">
+          {m?.skillAgentsDir ?? 'External agent skills (~/.agents/skills)'}
+        </span>
+      </label>
+
+      {/* Custom paths */}
+      <div className="space-y-1.5">
+        <p className="text-2xs text-muted-foreground">{m?.skillCustomPaths ?? 'Custom Paths'}</p>
+        {customPaths.map((p, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <code className="flex-1 text-[10px] font-mono bg-muted/50 border border-border rounded px-2 py-1 text-muted-foreground truncate">
+              {p}
+            </code>
+            <button
+              onClick={() => handleRemovePath(i)}
+              className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+              title={m?.skillPathRemove ?? 'Remove'}
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={newPath}
+            onChange={e => setNewPath(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddPath()}
+            placeholder={m?.skillPathPlaceholder ?? 'Enter directory path...'}
+            className="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <button
+            onClick={handleAddPath}
+            disabled={!newPath.trim()}
+            className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

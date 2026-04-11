@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -28,6 +29,8 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const a = t.agentsContent;
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
+  const searchParams = useSearchParams();
+  const isChannelDetail = tab === 'channels' && !!searchParams.get('platform');
   const pageHeader = useMemo(() => {
     if (tab === 'channels') {
       return {
@@ -148,10 +151,12 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
 
   return (
     <div className="content-width px-4 md:px-6 py-8 md:py-10">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageHeader.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
-      </header>
+      {!isChannelDetail && (
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageHeader.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
+        </header>
+      )}
 
       {/* Loading skeleton — shown while initial data loads */}
       {mcp.loading && tab === 'overview' && <OverviewSkeleton />}

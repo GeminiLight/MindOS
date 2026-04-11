@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import type { ServerSettings } from '@/lib/settings';
+import { getSkillDirCandidates } from './skill-paths';
 
 /**
  * Candidate skill directories, ordered by priority.
@@ -9,13 +11,9 @@ export function skillDirCandidates(
   skillName: string,
   projectRoot: string,
   mindRoot: string,
+  settings?: Pick<ServerSettings, 'skillPaths'>,
 ): string[] {
-  return [
-    path.join(projectRoot, 'app', 'data', 'skills', skillName),
-    path.join(projectRoot, 'skills', skillName),
-    path.join(mindRoot, '.skills', skillName),
-    path.join(process.env.HOME || '/root', '.mindos', 'skills', skillName),
-  ];
+  return getSkillDirCandidates(skillName, projectRoot, mindRoot, settings);
 }
 
 /**
@@ -78,15 +76,16 @@ function truncateContent(content: string, maxChars = 20_000): string {
 
 /**
  * Resolve skill file from multiple fallback locations.
- * Tries in order: app/data/skills → skills → {mindRoot}/.skills → ~/.mindos/skills
+ * Tries in order: app/data/skills → skills → {mindRoot}/.skills → ~/.mindos/skills → ...
  * Returns { path, result } where result is the file content or error.
  */
 export function resolveSkillFile(
   skillName: string,
   projectRoot: string,
   mindRoot: string,
+  settings?: Pick<ServerSettings, 'skillPaths'>,
 ): { path: string; result: ReadFileResult } {
-  const dirs = skillDirCandidates(skillName, projectRoot, mindRoot);
+  const dirs = skillDirCandidates(skillName, projectRoot, mindRoot, settings);
   const locations = dirs.map(d => path.join(d, 'SKILL.md'));
 
   for (const absPath of locations) {
@@ -118,13 +117,14 @@ export function resolveSkillReference(
   skillName: string,
   projectRoot: string,
   mindRoot: string,
+  settings?: Pick<ServerSettings, 'skillPaths'>,
 ): ReadFileResult {
   const primaryDir = path.dirname(skillInfo.path);
   const primaryPath = path.join(primaryDir, relPath);
   const primaryResult = readAbsoluteFile(primaryPath);
   if (primaryResult.ok) return primaryResult;
 
-  for (const dir of skillDirCandidates(skillName, projectRoot, mindRoot)) {
+  for (const dir of skillDirCandidates(skillName, projectRoot, mindRoot, settings)) {
     if (dir === primaryDir) continue;
     const result = readAbsoluteFile(path.join(dir, relPath));
     if (result.ok) return result;

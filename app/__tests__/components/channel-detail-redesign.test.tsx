@@ -48,64 +48,66 @@ vi.mock('@/lib/stores/locale-store', () => ({
           conversationGroupMentions: 'Only reply when mentioned in groups',
           conversationSaved: 'Conversation settings saved',
           conversationSave: 'Save conversation settings',
-          workInMindosHint: 'Use Ask in MindOS to work with the agent. Use this channel to receive updates, alerts, and sample messages.',
+          workInMindosHint: 'Use Ask in MindOS to work with the agent.',
           useCasesTitle: 'What you can receive',
-          guideLink: 'Open setup guide',
           statusSummaryTitle: 'Status summary',
           lastActivity: 'Last activity',
           lastRecipient: 'Last recipient',
-          tabStatus: 'Status',
-          notAvailable: 'Not available',
+          noActivityYet: 'No messages sent yet',
+          noActivityHint: 'Send a sample message to verify this channel is working.',
+          recentActivity: 'Recent activity',
+          sendSample: 'Send sample notification',
+          sampleHint: 'This sends a real outbound message through the selected channel.',
+          settingsTitle: 'Settings',
+          settingsHint: 'Maintain credentials and channel settings here.',
           latestSuccess: 'Latest success',
           latestFailure: 'Latest failure',
           noRecentActivity: 'No recent activity',
+          notAvailable: 'Not available',
           activityTypeTest: 'Sample message',
           activityTypeAgent: 'Agent update',
           activityTypeManual: 'Manual send',
-          recentActivity: 'Recent activity',
-          noActivityYet: 'No messages sent yet',
-          noActivityHint: 'Send a sample message to verify this channel is working.',
-          sendSample: 'Send sample notification',
-          sampleHint: 'This sends a real outbound message through the selected channel.',
-          recipientPlaceholder: 'Recipient ID',
-          recipientHint: 'Use the platform-specific recipient ID.',
-          messagePlaceholder: 'Hello from MindOS',
-          sentOk: 'Sent successfully',
-          settingsTitle: 'Settings',
-          settingsHint: 'Maintain credentials and channel settings here.',
-          editCredentials: 'Update credentials',
-          editCredentialsHint: 'Need to rotate tokens or fix a broken connection? Update and save here.',
-          savedValuesHint: 'Saved values stay hidden. To update credentials, paste the full replacement values and save.',
-          required: 'required',
-          hideSecret: 'Hide value',
-          showSecret: 'Show value',
-          saving: 'Saving...',
-          saveConfig: 'Save',
-          saved: 'Saved — reconnecting...',
-          disconnect: 'Disconnect',
           disconnectHint: 'Remove credentials and disconnect this platform.',
+          disconnect: 'Disconnect',
           confirmDisconnect: 'Confirm?',
+          editCredentials: 'Update credentials',
+          editCredentialsHint: 'Need to rotate tokens or fix a broken connection?',
+          guideLink: 'Open setup guide',
+          recipientHint: 'Use the platform-specific recipient ID.',
+          recipientPlaceholder: 'Recipient ID',
+          messagePlaceholder: 'Hello from MindOS',
+          savedValuesHint: 'Saved values stay hidden.',
+          required: 'required',
+          saving: 'Saving...',
+          saved: 'Saved',
+          saveConfig: 'Save',
           setupGuide: 'Setup Guide',
           tabConfigure: 'Configure',
+          hideSecret: 'Hide',
+          showSecret: 'Show',
+          sentOk: 'Sent',
         },
       },
     },
   }),
 }));
 
+import { clearChannelCache } from '@/components/agents/channel-detail/cache';
+
 describe('AgentsContentChannelDetail redesign', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearChannelCache();
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it('renders a connected channel as a management page with activity and settings', async () => {
+  it('renders a connected Feishu channel with status bar, conversation, and activity', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url.includes('/api/im/status')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            platforms: [{ platform: 'feishu', connected: true, botName: 'MindOS Bot', capabilities: ['text', 'markdown'], webhook: { state: 'ready', webhookUrl: 'https://mindos.example.com/api/im/webhook/feishu', publicBaseUrl: 'https://mindos.example.com' } }],
+            platforms: [{ platform: 'feishu', connected: true, botName: 'MindOS Bot', capabilities: ['text', 'markdown'], webhook: { state: 'ready', webhookUrl: 'https://mindos.example.com/api/im/webhook/feishu', publicBaseUrl: 'https://mindos.example.com', transport: 'webhook' } }],
           }),
         });
       }
@@ -114,12 +116,8 @@ describe('AgentsContentChannelDetail redesign', () => {
           ok: true,
           json: async () => ({
             activities: [{
-              id: 'a1',
-              platform: 'feishu',
-              type: 'test',
-              status: 'success',
-              recipient: 'ou_123456',
-              messageSummary: 'Hello from MindOS',
+              id: 'a1', platform: 'feishu', type: 'test', status: 'success',
+              recipient: 'ou_123456', messageSummary: 'Hello from MindOS',
               timestamp: '2026-04-10T10:00:00.000Z',
             }],
           }),
@@ -132,78 +130,42 @@ describe('AgentsContentChannelDetail redesign', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
 
-    await act(async () => {
-      root.render(<AgentsContentChannelDetail platformId="feishu" />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
+    await act(async () => { await Promise.resolve(); });
 
-    expect(host.textContent).toContain('How it works');
-    expect(host.textContent).toContain('Conversation');
-    expect(host.textContent).toContain('Ready for replies');
+    // Header
+    expect(host.textContent).toContain('Feishu');
+    expect(host.textContent).toContain('Connected');
+    expect(host.textContent).toContain('MindOS Bot');
+
+    // Status bar
     expect(host.textContent).toContain('Two-way conversation');
+
+    // Conversation section
+    expect(host.textContent).toContain('Conversation');
+    expect(host.textContent).toContain('Allow messages from Feishu');
+
+    // Activity
     expect(host.textContent).toContain('Recent activity');
+    expect(host.textContent).toContain('Hello from MindOS');
+
+    // Test send + Settings (collapsed)
     expect(host.textContent).toContain('Send sample notification');
     expect(host.textContent).toContain('Settings');
-    expect(host.textContent).toContain('This is a delivery channel, not a chat inbox.');
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => { root.unmount(); });
   });
 
-  it('renders a verification token field for Feishu conversation setup', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      if (url.includes('/api/im/status')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            platforms: [{ platform: 'feishu', connected: true, botName: 'MindOS Bot', capabilities: ['text', 'markdown'], webhook: { state: 'ready', webhookUrl: 'https://mindos.example.com/api/im/webhook/feishu', publicBaseUrl: 'https://mindos.example.com' } }],
-          }),
-        });
-      }
-      if (url.includes('/api/im/activity')) {
-        return Promise.resolve({ ok: true, json: async () => ({ activities: [] }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) });
-    }));
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(<AgentsContentChannelDetail platformId="feishu" />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(host.textContent).toContain('Verification Token');
-    expect(host.textContent).toContain('Leave blank to keep the saved value');
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it('renders long connection guidance without requiring webhook url', async () => {
+  it('renders long connection guidance without webhook URL fields', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url.includes('/api/im/status')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
             platforms: [{
-              platform: 'feishu',
-              connected: true,
-              botName: 'MindOS Bot',
+              platform: 'feishu', connected: true, botName: 'MindOS Bot',
               capabilities: ['text', 'markdown'],
-              webhook: {
-                state: 'pending',
-                lastError: 'Start the Feishu long connection client to receive events locally.',
-                transport: 'long_connection',
-              },
+              webhook: { state: 'pending', lastError: 'Start the Feishu long connection client.', transport: 'long_connection' },
             }],
           }),
         });
@@ -218,24 +180,16 @@ describe('AgentsContentChannelDetail redesign', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
 
-    await act(async () => {
-      root.render(<AgentsContentChannelDetail platformId="feishu" />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
+    await act(async () => { await Promise.resolve(); });
 
     expect(host.textContent).toContain('Waiting for verification');
-    expect(host.textContent).toContain('Start the Feishu long connection client to receive events locally.');
-    expect(host.textContent).not.toContain('Webhook URL');
-    expect(host.textContent).not.toContain('Public base URL');
+    expect(host.textContent).toContain('Start the Feishu long connection client.');
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => { root.unmount(); });
   });
 
-  it('renders an unconfigured channel as setup flow instead of activity page', async () => {
+  it('renders an unconfigured channel as setup flow with guide and form', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url.includes('/api/im/status')) {
         return Promise.resolve({ ok: true, json: async () => ({ platforms: [] }) });
@@ -250,20 +204,48 @@ describe('AgentsContentChannelDetail redesign', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
 
-    await act(async () => {
-      root.render(<AgentsContentChannelDetail platformId="telegram" />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await act(async () => { root.render(<AgentsContentChannelDetail platformId="telegram" />); });
+    await act(async () => { await Promise.resolve(); });
 
+    // Setup flow: has guide, has form, no activity/settings
     expect(host.textContent).toContain('Setup Guide');
-    expect(host.textContent).toContain('Configure');
+    expect(host.textContent).toContain('Bot Token');
+    expect(host.textContent).toContain('Save');
     expect(host.textContent).not.toContain('Recent activity');
-    expect(host.textContent).not.toContain('Send sample notification');
+    expect(host.textContent).not.toContain('Settings');
 
-    await act(async () => {
-      root.unmount();
-    });
+    await act(async () => { root.unmount(); });
+  });
+
+  it('renders a connected non-Feishu channel without conversation section', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url.includes('/api/im/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            platforms: [{ platform: 'telegram', connected: true, botName: '@testbot', capabilities: ['text'] }],
+          }),
+        });
+      }
+      if (url.includes('/api/im/activity')) {
+        return Promise.resolve({ ok: true, json: async () => ({ activities: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }));
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => { root.render(<AgentsContentChannelDetail platformId="telegram" />); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(host.textContent).toContain('Telegram');
+    expect(host.textContent).toContain('Connected');
+    expect(host.textContent).toContain('@testbot');
+    expect(host.textContent).toContain('Recent activity');
+    expect(host.textContent).not.toContain('Conversation');
+
+    await act(async () => { root.unmount(); });
   });
 });

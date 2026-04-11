@@ -50,6 +50,7 @@ export async function GET() {
     port: Number(process.env.MINDOS_WEB_PORT) || settings.port || 3456,
     mcpPort: settings.mcpPort ?? 8781,
     agent: settings.agent ?? {},
+    skillPaths: settings.skillPaths ?? {},
     envOverrides,
     envValues,
   });
@@ -107,6 +108,7 @@ export async function POST(req: NextRequest) {
       embedding: resolvedEmbedding,
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
+      skillPaths: body.skillPaths ?? current.skillPaths,
       webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
       port: typeof body.port === 'number' ? body.port : current.port,

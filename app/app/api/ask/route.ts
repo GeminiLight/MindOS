@@ -56,6 +56,7 @@ import {
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
+import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 import { runNonStreamingFallback } from '@/lib/agent/non-streaming';
 
 const MAX_DIR_FILES = 30;
@@ -600,6 +601,9 @@ export async function POST(req: NextRequest) {
     // Extract the last user message for agent.prompt()
     const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
     const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content : '';
+    // Skill selected via slash command (e.g. /test-external-skill)
+    const lastUserSkillName = (lastMsg?.role === 'user' && (lastMsg as any).skillName)
+      ? String((lastMsg as any).skillName) : undefined;
     // Extract images for prompt options (pi-ai ImageContent format, skip stripped)
     const lastUserImages = lastMsg?.role === 'user' && lastMsg.images?.length
       ? lastMsg.images.filter((img: any) => img.data).map((img: any) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))
@@ -636,12 +640,7 @@ export async function POST(req: NextRequest) {
         ...result,
         skills: result.skills.filter((s) => !CORE_SKILL_NAMES.has(s.name)),
       }),
-      additionalSkillPaths: [
-        path.join(projectRoot, 'app', 'data', 'skills'),
-        path.join(projectRoot, 'skills'),
-        path.join(getMindRoot(), '.skills'),
-        path.join(os.homedir(), '.mindos', 'skills'),
-      ],
+      additionalSkillPaths: getSkillSearchPaths(projectRoot, getMindRoot(), serverSettings),
       additionalExtensionPaths: [
         ...scanExtensionPaths(),
         // pi-mcp-adapter: token-efficient MCP proxy tool (~200 tokens vs N*150 full tool defs)
@@ -660,11 +659,23 @@ export async function POST(req: NextRequest) {
     // Must reload() again because the closure captured systemPrompt before mutation.
     if (askMode === 'agent') {
       const { skills: discoveredSkills } = resourceLoader.getSkills();
+      const disabledSkillNames = new Set(serverSettings.disabledSkills ?? []);
       const thirdPartySkills = discoveredSkills.filter(
-        (s: Skill) => !s.disableModelInvocation
+        (s: Skill) => !s.disableModelInvocation && !disabledSkillNames.has(s.name)
       );
       if (thirdPartySkills.length > 0) {
         systemPrompt += '\n\n---\n\n' + generateSkillsXml(thirdPartySkills);
+        await resourceLoader.reload();
+      }
+
+      // If the user selected a specific skill via slash command, inject a directive
+      // so the agent immediately loads it instead of asking "which skill?".
+      if (lastUserSkillName) {
+        systemPrompt += '\n\n---\n\n## Active Skill Request\n\n'
+          + `The user has selected the \"${lastUserSkillName}\" skill via slash command. You MUST:\n`
+          + `1. Immediately call \`load_skill("${lastUserSkillName}")\` to load the skill\'s full content\n`
+          + '2. Follow the skill\'s instructions to handle the user\'s request\n'
+          + '3. Do NOT ask the user which skill they mean — they have already selected it';
         await resourceLoader.reload();
       }
     }

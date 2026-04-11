@@ -797,6 +797,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               onPaste={handlePaste}
               placeholder={t.ask.placeholder}
               rows={1}
+              suppressHydrationWarning
               className={cn('min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-2 leading-relaxed text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-0', isHome ? 'text-xs' : 'text-sm')}
             />
 

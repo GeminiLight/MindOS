@@ -31,10 +31,21 @@ jobs:
       - name: Install MCP build dependencies
         run: cd mcp && npm install --include=dev && npm run build
 
+      - name: Install app dependencies
+        run: cd app && npm install --no-workspaces
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: app/.next/cache
+          key: nextjs-npm-${{ hashFiles('app/package-lock.json') }}-${{ hashFiles('app/**/*.ts', 'app/**/*.tsx') }}
+          restore-keys: |
+            nextjs-npm-${{ hashFiles('app/package-lock.json') }}-
+            nextjs-npm-
+
       - name: Build standalone package
         run: |
-          cd app && npm install --no-workspaces
-          NODE_OPTIONS="--max-old-space-size=8192" npx next build --webpack
+          cd app && NODE_OPTIONS="--max-old-space-size=8192" npx next build --webpack
           cd ..
           node scripts/prepare-standalone.mjs
 

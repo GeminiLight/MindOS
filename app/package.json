@@ -1,6 +1,6 @@
 {
   "name": "wiki-app",
-  "version": "0.6.80",
+  "version": "0.6.81",
   "private": true,
   "engines": {
     "node": ">=18"
@@ -29,6 +29,9 @@
     "@mariozechner/pi-agent-core": "^0.60.0",
     "@mariozechner/pi-ai": "^0.60.0",
     "@mariozechner/pi-coding-agent": "^0.61.1",
+    "@milkdown/crepe": "^7.20.0",
+    "@milkdown/kit": "^7.20.0",
+    "@milkdown/react": "^7.20.0",
     "@mozilla/readability": "^0.6.0",
     "@sinclair/typebox": "^0.34.33",
     "@slack/web-api": "^7.15.0",

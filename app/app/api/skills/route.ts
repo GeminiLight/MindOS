@@ -7,6 +7,7 @@ import { readSettings, writeSettings } from '@/lib/settings';
 import { parseSkillMd, readSkillContentByName } from '@/lib/pi-integration/skills';
 import { loadSkills, type Skill } from '@mariozechner/pi-coding-agent';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 
 const PROJECT_ROOT = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
 
@@ -21,37 +22,41 @@ export async function GET() {
     const disabledSkills = settings.disabledSkills ?? [];
     const mindRoot = getMindRoot();
 
+    const skillSearchPaths = getSkillSearchPaths(PROJECT_ROOT, mindRoot, settings);
+
     const { skills: frameworkSkills } = loadSkills({
       cwd: PROJECT_ROOT,
-      skillPaths: [
-        path.join(PROJECT_ROOT, 'app', 'data', 'skills'),
-        path.join(PROJECT_ROOT, 'skills'),
-        path.join(mindRoot, '.skills'),
-        path.join(os.homedir(), '.mindos', 'skills'),
-      ],
+      skillPaths: skillSearchPaths,
       includeDefaults: false,
     });
 
     const userSkillsDir = path.join(mindRoot, '.skills');
     const globalSkillsDir = path.join(os.homedir(), '.mindos', 'skills');
+    const agentsSkillsDir = path.join(os.homedir(), '.agents', 'skills');
     const appBuiltinDir = path.join(PROJECT_ROOT, 'app', 'data', 'skills');
+    // Custom paths from settings — skills in these dirs are user-editable
+    const customDirs = (settings.skillPaths?.custom ?? []).map(p => p.trim()).filter(Boolean);
 
     const skills = frameworkSkills.map((s: Skill) => {
       const fp = s.filePath;
       const isUserKb = fp.startsWith(userSkillsDir);
       const isGlobal = fp.startsWith(globalSkillsDir);
+      const isAgents = fp.startsWith(agentsSkillsDir);
+      const isCustom = customDirs.some(d => fp.startsWith(d));
       const isAppBuiltin = fp.startsWith(appBuiltinDir);
 
       return {
         name: s.name,
         description: s.description,
         path: fp,
-        source: (isUserKb || isGlobal) ? 'user' as const : 'builtin' as const,
+        source: (isUserKb || isGlobal || isAgents || isCustom) ? 'user' as const : 'builtin' as const,
         enabled: !disabledSkills.includes(s.name),
-        editable: isUserKb || isGlobal,
+        editable: isUserKb || isGlobal || isAgents || isCustom,
         origin: isAppBuiltin ? 'app-builtin' as const
           : isUserKb ? 'mindos-user' as const
           : isGlobal ? 'mindos-global' as const
+          : isAgents ? 'agents-global' as const
+          : isCustom ? 'custom' as const
           : 'project-builtin' as const,
       };
     });
@@ -142,7 +147,7 @@ export async function POST(req: NextRequest) {
 
       case 'read': {
         if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 });
-        const content = readSkillContentByName(name, { projectRoot: PROJECT_ROOT, mindRoot });
+        const content = readSkillContentByName(name, { projectRoot: PROJECT_ROOT, mindRoot, settings });
         if (!content) {
           return NextResponse.json({ error: 'Skill not found' }, { status: 404 });
         }

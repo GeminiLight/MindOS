@@ -10,6 +10,7 @@ import {
 import { searchFiles } from '@/lib/core/search';
 import { hybridSearch } from '@/lib/core/hybrid-search';
 import { readSkillContentByName } from '@/lib/pi-integration/skills';
+import { readSettings } from '@/lib/settings';
 import { a2aTools } from '@/lib/a2a/a2a-tools';
 import { acpTools } from '@/lib/acp/acp-tools';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
@@ -368,7 +369,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     parameters: LoadSkillParams,
     execute: safeExecute(async (_id, params: Static<typeof LoadSkillParams>) => {
       const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
-      const content = readSkillContentByName(params.name, { projectRoot, mindRoot: getMindRoot() });
+      const content = readSkillContentByName(params.name, { projectRoot, mindRoot: getMindRoot(), settings: readSettings() });
       if (!content) return textResult(`Skill not found: ${params.name}`);
       return textResult(truncate(content));
     }),

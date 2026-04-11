@@ -61,6 +61,11 @@ export interface ServerSettings {
   setupPending?: boolean;  // true → / redirects to /setup
   setupPort?: number;      // temporary port used by GUI setup; cleared on completion
   disabledSkills?: string[];
+  /** Skill search path options. */
+  skillPaths?: {
+    enableAgentsDir?: boolean;   // default true — include ~/.agents/skills
+    custom?: string[];           // user-defined extra skill directories
+  };
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
   acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
@@ -275,6 +280,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
   if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;
+  if (settings.skillPaths !== undefined) merged.skillPaths = settings.skillPaths;
   // Remove legacy customProviders (now merged into ai.providers array)
   delete merged.customProviders;
   // setupPending: false/undefined → remove the field (cleanup); true → set it

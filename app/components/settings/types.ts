@@ -42,12 +42,10 @@ export interface SettingsData {
 
 export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'sync' | 'update' | 'uninstall';
 
-export const CONTENT_WIDTHS = [
-  { value: '680px', label: 'Narrow', width: 42 },
-  { value: '780px', label: 'Default', width: 56 },
-  { value: '960px', label: 'Wide', width: 75 },
-  { value: '100%', label: 'Full', width: 100 },
-];
+export const CONTENT_WIDTH_DEFAULT = '80%';
+export const CONTENT_WIDTH_MIN = 50;
+export const CONTENT_WIDTH_MAX = 100;
+export const CONTENT_WIDTH_STEP = 5;
 
 export const FONT_SIZES = [
   { value: '14px', label: '14', numericValue: 14 },
@@ -165,6 +163,7 @@ export interface AppearanceTabProps {
 
 export interface AiTabProps {
   data: SettingsData;
+  setData: React.Dispatch<React.SetStateAction<SettingsData | null>>;
   updateAi: (patch: Partial<AiSettings>) => void;
   updateAgent: (patch: Partial<AgentSettings>) => void;
   t: Messages;

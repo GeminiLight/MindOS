@@ -10,8 +10,20 @@ function escapeXml(str: string): string {
  */
 export function generateSkillsXml(skills: Array<{ name: string; description: string }>): string {
   const lines = [
-    'The following skills provide specialized instructions for specific tasks.',
-    'Use the load_skill tool to load a skill\'s full content when a task matches its description.',
+    '## Available Skills',
+    '',
+    'The following is the COMPLETE and EXHAUSTIVE list of skills available in this environment.',
+    'When a user mentions or requests a skill by name, or when a task matches a skill\'s description,',
+    'use the `load_skill` tool to load its full content before responding.',
+    '',
+    '**IMPORTANT**: ONLY the skills listed below exist. Do NOT mention, suggest, or claim to have',
+    'any skills that are not in this list. If a user asks what skills you have, list ONLY these.',
+    'Fabricating skill names that are not listed here is strictly prohibited.',
+    '',
+    'Invocation patterns:',
+    '- User says "read/use/load <skill-name>" → call load_skill("<skill-name>")',
+    '- User selects a skill via slash command → see "Active Skill Request" section above',
+    '- Task naturally matches a skill description → proactively call load_skill',
     '',
     '<available_skills>',
   ];

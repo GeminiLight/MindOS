@@ -10,7 +10,7 @@ import type { IMPlatform, IMActivity, IMActivityStore, IMActivityType, IMActivit
 const ACTIVITY_DIR = path.join(os.homedir(), '.mindos');
 const ACTIVITY_PATH = path.join(ACTIVITY_DIR, 'im-activity.json');
 const MAX_ACTIVITIES_PER_PLATFORM = 100;
-const MAX_MESSAGE_SUMMARY_LENGTH = 50;
+const MAX_MESSAGE_SUMMARY_LENGTH = 500;
 
 // ─── Internal Helpers ──────────────────────────────────────────────────────────
 
