@@ -681,14 +681,14 @@ export class ProcessManager extends EventEmitter {
    * Kill orphaned child processes from a previous Desktop session that didn't shut down cleanly.
    * Call once at app startup before creating a new ProcessManager.
    */
-  static cleanupOrphanedChildren(): void {
+  static async cleanupOrphanedChildren(): Promise<void> {
     try {
       if (!existsSync(ProcessManager.PID_FILE)) return;
       const raw = readFileSync(ProcessManager.PID_FILE, 'utf-8').trim();
       if (!raw) return;
       const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
       for (const pid of pids) {
-        ProcessManager.killIfNodeProcess(pid, 'orphaned child');
+        await ProcessManager.killIfNodeProcess(pid, 'orphaned child');
       }
       unlinkSync(ProcessManager.PID_FILE);
     } catch { /* non-critical */ }
@@ -698,7 +698,7 @@ export class ProcessManager extends EventEmitter {
    * Kill orphaned CLI-started processes (mindos.pid) from a previous `mindos start` session.
    * Desktop and CLI use separate PID files — both must be cleaned up on reinstall.
    */
-  static cleanupCliPidFile(): void {
+  static async cleanupCliPidFile(): Promise<void> {
     const home = process.env.HOME || process.env.USERPROFILE || '/tmp';
     const cliPidPath = path.join(home, '.mindos', 'mindos.pid');
     try {
@@ -707,7 +707,7 @@ export class ProcessManager extends EventEmitter {
       if (!raw) return;
       const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
       for (const pid of pids) {
-        ProcessManager.killIfNodeProcess(pid, 'orphaned CLI');
+        await ProcessManager.killIfNodeProcess(pid, 'orphaned CLI');
       }
       unlinkSync(cliPidPath);
     } catch { /* non-critical */ }
@@ -721,29 +721,31 @@ export class ProcessManager extends EventEmitter {
    *   Linux:   lsof → ss → fuser
    *   Windows: Get-NetTCPConnection (PowerShell)
    */
-  static killProcessesOnPort(port: number): void {
+  static async killProcessesOnPort(port: number): Promise<void> {
     try {
-      const pids = ProcessManager.findPidsOnPort(port);
+      const pids = await ProcessManager.findPidsOnPort(port);
       for (const pid of pids) {
-        ProcessManager.killIfNodeProcess(pid, `port ${port} occupant`);
+        await ProcessManager.killIfNodeProcess(pid, `port ${port} occupant`);
       }
     } catch { /* best effort */ }
   }
 
   /** Find PIDs listening on a given port — cross-platform with fallbacks */
-  private static findPidsOnPort(port: number): number[] {
-    const { execSync, execFileSync } = require('child_process');
-    const opts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+  private static async findPidsOnPort(port: number): Promise<number[]> {
+    const { exec, execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const execFileAsync = promisify(execFile);
+    const timeout = 3000;
 
     if (process.platform === 'win32') {
-      // Windows: PowerShell Get-NetTCPConnection (execFileSync avoids cmd.exe quoting issues)
       const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'powershell' });
       try {
-        const out = (execFileSync('powershell.exe', [
+        const { stdout } = await execFileAsync('powershell.exe', [
           '-NoProfile', '-Command',
           `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue).OwningProcess`,
-        ], opts) as string).trim();
-        const pids = out.split(/\r?\n/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
+        ], { encoding: 'utf-8', timeout });
+        const pids = (stdout as string).trim().split(/\r?\n/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
         stop({ port, method: 'powershell', pidCount: pids.length, success: true });
         return pids;
       } catch {
@@ -756,9 +758,9 @@ export class ProcessManager extends EventEmitter {
     {
       const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'lsof' });
       try {
-        const out = execSync(`lsof -ti:${port}`, opts).trim();
-        if (out) {
-          const pids = out.split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
+        const { stdout } = await execAsync(`lsof -ti:${port}`, { encoding: 'utf-8', timeout });
+        if (stdout.trim()) {
+          const pids = stdout.trim().split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
           stop({ port, method: 'lsof', pidCount: pids.length, success: true });
           return pids;
         }
@@ -772,9 +774,9 @@ export class ProcessManager extends EventEmitter {
     if (process.platform === 'linux') {
       const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'ss' });
       try {
-        const out = execSync(`ss -tlnp sport = :${port}`, opts).trim();
+        const { stdout } = await execAsync(`ss -tlnp sport = :${port}`, { encoding: 'utf-8', timeout });
         const pids: number[] = [];
-        for (const match of out.matchAll(/pid=(\d+)/g)) {
+        for (const match of (stdout as string).matchAll(/pid=(\d+)/g)) {
           const p = parseInt(match[1], 10);
           if (p > 0) pids.push(p);
         }
@@ -789,12 +791,10 @@ export class ProcessManager extends EventEmitter {
     }
 
     // Fallback: fuser (available on most Unix)
-    // Note: fuser outputs PIDs to stderr on Linux, so we merge stderr into stdout
     const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'fuser' });
     try {
-      const out = execSync(`fuser ${port}/tcp 2>&1`, { encoding: 'utf-8' as const, timeout: 3000 }).trim();
-      // fuser output looks like: "3456/tcp:  1234  5678" or just "1234 5678"
-      const pids = out.match(/\d+/g)?.map(Number).filter((p: number) => p > 0 && p !== port) ?? [];
+      const { stdout } = await execAsync(`fuser ${port}/tcp 2>&1`, { encoding: 'utf-8', timeout });
+      const pids = (stdout as string).match(/\d+/g)?.map(Number).filter((p: number) => p > 0 && p !== port) ?? [];
       if (pids.length > 0) {
         stop({ port, method: 'fuser', pidCount: pids.length, success: true });
         return pids;
@@ -812,62 +812,59 @@ export class ProcessManager extends EventEmitter {
    * On Windows: uses wmic/PowerShell to check process name before killing.
    * On Unix: uses ps -p to check.
    */
-  private static killIfNodeProcess(pid: number, label: string): void {
+  private static async killIfNodeProcess(pid: number, label: string): Promise<void> {
     const stop = desktopTelemetry.startTimer('desktop.port.kill_verify', { pid, label });
     try {
       process.kill(pid, 0); // check alive
-      const { execSync, execFileSync } = require('child_process');
-      const cmdOpts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+      const { exec, execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      const execFileAsync = promisify(execFile);
+      const timeout = 3000;
 
       if (process.platform === 'win32') {
-        // Windows: verify process name before killing.
-        // Try PowerShell first (always available), fallback to wmic (deprecated in Win 11).
         try {
-          const name = (execFileSync('powershell.exe', [
+          const { stdout } = await execFileAsync('powershell.exe', [
             '-NoProfile', '-Command',
             `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`,
-          ], cmdOpts) as string).trim().toLowerCase();
-          if (!name.includes('node')) {
+          ], { encoding: 'utf-8', timeout });
+          if (!(stdout as string).trim().toLowerCase().includes('node')) {
             stop({ pid, label, verifiedNodeProcess: false, success: true });
-            return; // PID reused by non-node process, skip
+            return;
           }
         } catch {
-          // PowerShell failed — try wmic as fallback
           try {
-            const name = execSync(
+            const { stdout } = await execAsync(
               `wmic process where ProcessId=${pid} get Name /format:value`,
-              cmdOpts,
-            ).trim();
-            if (!name.toLowerCase().includes('node')) {
+              { encoding: 'utf-8', timeout },
+            );
+            if (!(stdout as string).trim().toLowerCase().includes('node')) {
               stop({ pid, label, verifiedNodeProcess: false, success: true });
               return;
             }
           } catch {
             stop({ pid, label, verifiedNodeProcess: false, success: false });
             return;
-          } // both failed, skip to be safe
+          }
         }
       } else {
         try {
-          const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
-          if (!comm.includes('node') && !comm.includes('next')) {
+          const { stdout } = await execAsync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 });
+          if (!(stdout as string).trim().includes('node') && !(stdout as string).trim().includes('next')) {
             stop({ pid, label, verifiedNodeProcess: false, success: true });
-            return; // PID reused by non-node process, skip
+            return;
           }
         } catch {
           stop({ pid, label, verifiedNodeProcess: false, success: false });
           return;
-        } // ps failed, skip to be safe
+        }
       }
 
       console.warn(`[MindOS] Killing ${label} process (PID ${pid})`);
-      // Windows: process.kill with SIGTERM maps to TerminateProcess (hard kill).
-      // This is acceptable for cleanup; graceful shutdown via IPC is not available cross-process.
       process.kill(pid, 'SIGTERM');
       stop({ pid, label, verifiedNodeProcess: true, success: true });
     } catch {
       stop({ pid, label, verifiedNodeProcess: false, success: false });
-      /* already dead */
     }
   }
 }

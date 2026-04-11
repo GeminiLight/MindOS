@@ -860,8 +860,8 @@ async function healPreviousInstallation(): Promise<void> {
   await cleanupLinuxSystemdService();
 
   // 2. Kill orphaned processes from BOTH Desktop and CLI pid files
-  ProcessManager.cleanupOrphanedChildren();
-  ProcessManager.cleanupCliPidFile();
+  await ProcessManager.cleanupOrphanedChildren();
+  await ProcessManager.cleanupCliPidFile();
 
   // 3. Port-based fallback kill — catches processes not tracked by PID files
   //    (e.g. Next.js worker processes, externally started MCP)
@@ -882,10 +882,10 @@ async function healPreviousInstallation(): Promise<void> {
     const mcpInUse = await isPortInUse(mcpPort);
 
     if (webInUse) {
-      ProcessManager.killProcessesOnPort(webPort);
+      await ProcessManager.killProcessesOnPort(webPort);
     }
     if (mcpInUse) {
-      ProcessManager.killProcessesOnPort(mcpPort);
+      await ProcessManager.killProcessesOnPort(mcpPort);
     }
 
     // Wait for configured ports to free up (gives killed processes time to exit)
@@ -907,7 +907,7 @@ async function healPreviousInstallation(): Promise<void> {
   };
 
   const runtimeValidation = async () => {
-    validatePrivateNode();
+    await validatePrivateNode();
 
     try {
       const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
@@ -928,7 +928,7 @@ async function healPreviousInstallation(): Promise<void> {
 }
 
 /** Remove private Node.js if it can't run or version is too low (< 18). */
-function validatePrivateNode(): 'missing' | 'ok' | 'removed' {
+async function validatePrivateNode(): Promise<'missing' | 'ok' | 'removed'> {
   const stop = desktopTelemetry.startTimer('desktop.boot.validate_node');
   const nodeBin = path.join(
     app.getPath('home'), '.mindos', 'node',
@@ -940,13 +940,14 @@ function validatePrivateNode(): 'missing' | 'ok' | 'removed' {
   }
 
   try {
-    // Use execFileSync to avoid shell quoting issues with paths containing spaces or special chars
-    const { execFileSync } = require('child_process');
-    const version = execFileSync(nodeBin, ['--version'], {
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync(nodeBin, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    });
+    const version = (stdout as string).trim();
     const match = version.match(/^v(\d+)/);
     if (match && parseInt(match[1], 10) >= 18) {
       stop({ result: 'ok' });
