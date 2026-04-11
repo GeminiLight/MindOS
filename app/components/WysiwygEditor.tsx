@@ -16,7 +16,8 @@ function syncHeadingIds(container: HTMLElement) {
   for (const h of headings) {
     const text = h.textContent?.trim();
     if (text) {
-      h.id = slugger.slug(text);
+      const id = slugger.slug(text);
+      if (h.id !== id) h.id = id; // only write if changed to avoid triggering observers
     }
   }
 }
@@ -65,15 +66,13 @@ export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Keep heading ids in sync so TOC can scroll to them
+  // Use debounced interval instead of MutationObserver to avoid infinite loops
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-    // Initial pass
     syncHeadingIds(el);
-    // Watch for DOM changes (typing, adding headings)
-    const observer = new MutationObserver(() => syncHeadingIds(el));
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => observer.disconnect();
+    const interval = setInterval(() => syncHeadingIds(el), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
