@@ -136,7 +136,7 @@ describe('PluginManager', () => {
 
       const manager = new PluginManager(mindRoot);
       const scanned = await manager.scanObsidianVault(sourceVault);
-      expect(scanned[0]).toMatchObject({ id: 'ported-plugin', compatibilityLevel: 'compatible' });
+      expect(scanned.plugins[0]).toMatchObject({ id: 'ported-plugin', compatibilityLevel: 'compatible' });
 
       await manager.importFromObsidianVault(sourceVault, 'ported-plugin');
       const plugins = await manager.discover();

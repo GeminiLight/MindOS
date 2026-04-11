@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
 
     const vaultRoot = expandSetupPathHome(body.vaultRoot.trim());
     const targetMindRoot = expandSetupPathHome((body.targetMindRoot ?? process.cwd()).trim());
-    const plugins = await scanObsidianVaultPlugins(vaultRoot);
-    const plugin = plugins.find((item) => item.id === body.pluginId);
+    const result = await scanObsidianVaultPlugins(vaultRoot);
+    const plugin = result.plugins.find((item) => item.id === body.pluginId);
     if (!plugin) {
       return NextResponse.json({ ok: false, error: 'Plugin not found in Obsidian vault' }, { status: 404 });
     }
