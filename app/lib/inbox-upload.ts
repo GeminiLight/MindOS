@@ -3,13 +3,76 @@ import type { useLocale } from '@/lib/stores/locale-store';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
 
-function arrayBufferToBase64(buf: ArrayBuffer): string {
+/**
+ * Convert ArrayBuffer to base64 string.
+ * For large buffers (>512KB), offloads to a Web Worker to avoid freezing the UI.
+ * For small buffers, runs synchronously on the main thread (worker overhead not worth it).
+ */
+function arrayBufferToBase64Sync(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   const chunks: string[] = [];
   for (let i = 0; i < bytes.length; i += 8192) {
     chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
   }
   return btoa(chunks.join(''));
+}
+
+const WORKER_THRESHOLD = 512 * 1024; // 512 KB
+
+async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
+  if (buf.byteLength < WORKER_THRESHOLD || typeof Worker === 'undefined') {
+    return arrayBufferToBase64Sync(buf);
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const workerCode = `
+      self.onmessage = function(e) {
+        try {
+          var bytes = new Uint8Array(e.data);
+          var chunks = [];
+          for (var i = 0; i < bytes.length; i += 8192) {
+            chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
+          }
+          self.postMessage(btoa(chunks.join('')));
+        } catch (err) {
+          self.postMessage({ error: err.message || 'base64 encoding failed' });
+        }
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const worker = new Worker(url);
+
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      URL.revokeObjectURL(url);
+      // Fallback to sync on timeout
+      resolve(arrayBufferToBase64Sync(buf));
+    }, 10_000);
+
+    worker.onmessage = (e: MessageEvent) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      URL.revokeObjectURL(url);
+      if (typeof e.data === 'string') {
+        resolve(e.data);
+      } else {
+        // Worker returned error object — fallback
+        resolve(arrayBufferToBase64Sync(buf));
+      }
+    };
+
+    worker.onerror = () => {
+      clearTimeout(timeout);
+      worker.terminate();
+      URL.revokeObjectURL(url);
+      // Fallback to sync
+      resolve(arrayBufferToBase64Sync(buf));
+    };
+
+    // Transfer the buffer to avoid copying
+    worker.postMessage(buf, [buf]);
+  });
 }
 
 function showQuickDropToast(
@@ -46,7 +109,7 @@ export async function quickDropToInbox(
     try {
       if (file.name.toLowerCase().endsWith('.pdf')) {
         const buf = await file.arrayBuffer();
-        payload.push({ name: file.name, content: arrayBufferToBase64(buf), encoding: 'base64' });
+        payload.push({ name: file.name, content: await arrayBufferToBase64(buf), encoding: 'base64' });
       } else {
         const text = await file.text();
         payload.push({ name: file.name, content: text });
@@ -199,7 +262,7 @@ export async function quickDropToDirectory(
       const ext = (file.name.split('.').pop() ?? '').toLowerCase();
       if (BINARY_EXTS.has(ext)) {
         const buf = await file.arrayBuffer();
-        payload.push({ name: file.name, content: arrayBufferToBase64(buf), encoding: 'base64' });
+        payload.push({ name: file.name, content: await arrayBufferToBase64(buf), encoding: 'base64' });
       } else {
         const text = await file.text();
         payload.push({ name: file.name, content: text });
