@@ -77,9 +77,13 @@ export default function ViewPageClient({
   const [savedContent, setSavedContent] = useState(content);
 
   // Sync savedContent when server re-renders with new content (e.g. after router.refresh)
+  const serverContentRef = useRef(content);
   useEffect(() => {
-    if (!editing) {
-      setSavedContent(content);
+    if (content !== serverContentRef.current) {
+      serverContentRef.current = content;
+      if (!editing) {
+        setSavedContent(content);
+      }
     }
   }, [content, editing]);
   const [isPending, startTransition] = useTransition();
