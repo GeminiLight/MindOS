@@ -872,51 +872,56 @@ async function healPreviousInstallation(): Promise<void> {
   const webPort = config.port || DEFAULT_WEB_PORT;
   const mcpPort = config.mcpPort || DEFAULT_MCP_PORT;
 
-  const webInUse = await isPortInUse(webPort);
-  const mcpInUse = await isPortInUse(mcpPort);
+  // Port cleanup and runtime validation are independent — run them in parallel.
+  // Port chain: check → kill → wait release (must be serial internally).
+  // Validate chain: node → cache (fast, no port dependency).
+  splashStatus({ status: 'healing', message: 'Freeing ports & validating runtime...' });
 
-  if (webInUse || mcpInUse) {
-    splashStatus({ status: 'healing', message: 'Freeing ports...' });
-  }
-  if (webInUse) {
-    ProcessManager.killProcessesOnPort(webPort);
-  }
-  if (mcpInUse) {
-    ProcessManager.killProcessesOnPort(mcpPort);
-  }
+  const portCleanup = async () => {
+    const webInUse = await isPortInUse(webPort);
+    const mcpInUse = await isPortInUse(mcpPort);
 
-  // 4. Wait for configured ports to free up (gives killed processes time to exit)
-  //    This prevents findAvailablePort from jumping to 3457 during reinstall.
-  if (webInUse || mcpInUse) {
-    const [webFreed, mcpFreed] = await Promise.all([
-      webInUse ? waitForPortRelease(webPort, 5000) : Promise.resolve(true),
-      mcpInUse ? waitForPortRelease(mcpPort, 5000) : Promise.resolve(true),
-    ]);
-    if (!webFreed) {
-      console.warn(`[MindOS:heal] Port ${webPort} still in use after cleanup — findAvailablePort will handle it`);
+    if (webInUse) {
+      ProcessManager.killProcessesOnPort(webPort);
     }
-    if (!mcpFreed) {
-      console.warn(`[MindOS:heal] Port ${mcpPort} still in use after cleanup — findAvailablePort will handle it`);
+    if (mcpInUse) {
+      ProcessManager.killProcessesOnPort(mcpPort);
     }
-  }
 
-  // 5. Validate private Node.js — if version too low or broken, remove it
-  //    (startLocalMode → downloadNode will re-download a fresh copy)
-  splashStatus({ status: 'healing', message: 'Validating runtime...' });
-  validatePrivateNode();
-
-  // 6. Validate .next build cache — remove if corrupt (triggers rebuild in startLocalMode)
-  //    Only clean up the cache stored under the bundled runtime app dir.
-  try {
-    const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
-    const bundledRoot = getDefaultBundledMindOsDirectory();
-    if (bundledRoot) {
-      validateBuildCache(path.join(bundledRoot, 'app'));
+    // Wait for configured ports to free up (gives killed processes time to exit)
+    // This prevents findAvailablePort from jumping to 3457 during reinstall.
+    if (webInUse || mcpInUse) {
+      const [webFreed, mcpFreed] = await Promise.all([
+        webInUse ? waitForPortRelease(webPort, 5000) : Promise.resolve(true),
+        mcpInUse ? waitForPortRelease(mcpPort, 5000) : Promise.resolve(true),
+      ]);
+      if (!webFreed) {
+        console.warn(`[MindOS:heal] Port ${webPort} still in use after cleanup — findAvailablePort will handle it`);
+      }
+      if (!mcpFreed) {
+        console.warn(`[MindOS:heal] Port ${mcpPort} still in use after cleanup — findAvailablePort will handle it`);
+      }
     }
-  } catch { /* non-critical */ }
+
+    return { webInUse, mcpInUse };
+  };
+
+  const runtimeValidation = async () => {
+    validatePrivateNode();
+
+    try {
+      const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+      const bundledRoot = getDefaultBundledMindOsDirectory();
+      if (bundledRoot) {
+        validateBuildCache(path.join(bundledRoot, 'app'));
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const [portResult] = await Promise.all([portCleanup(), runtimeValidation()]);
 
   const elapsed = Date.now() - t0;
-  stopHeal({ skipped: false, webInUse, mcpInUse });
+  stopHeal({ skipped: false, webInUse: portResult.webInUse, mcpInUse: portResult.mcpInUse });
   if (elapsed > 100) {
     console.info(`[MindOS:heal] Previous installation healing completed in ${elapsed}ms`);
   }
