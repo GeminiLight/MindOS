@@ -28,7 +28,7 @@ describe('POST /api/obsidian/import', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ ok: false, error: 'Missing vaultRoot or pluginId' });
+    expect(await res.json()).toEqual({ ok: false, error: 'Missing vaultRoot, pluginId, or targetMindRoot' });
   });
 
   it('imports a plugin and returns compatibility details', async () => {

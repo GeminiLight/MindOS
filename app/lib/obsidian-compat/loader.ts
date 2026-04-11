@@ -30,10 +30,13 @@ export class PluginLoader {
   }
 
   private resolvePluginDir(pluginId: string): string {
+    if (!pluginId || pluginId.includes('..') || pluginId.includes('/') || pluginId.includes('\\')) {
+      throw new CompatError(`Plugin path escapes .plugins directory: ${pluginId}`, CompatErrorCodes.PLUGIN_NOT_FOUND, { pluginId });
+    }
     const pluginsDir = path.resolve(path.join(this.mindRoot, '.plugins'));
     const pluginDir = path.resolve(path.join(pluginsDir, pluginId));
 
-    if (pluginDir !== pluginsDir && !pluginDir.startsWith(pluginsDir + path.sep)) {
+    if (!pluginDir.startsWith(pluginsDir + path.sep)) {
       throw new CompatError(`Plugin path escapes .plugins directory: ${pluginId}`, CompatErrorCodes.PLUGIN_NOT_FOUND, { pluginId });
     }
 

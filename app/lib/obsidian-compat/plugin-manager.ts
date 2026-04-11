@@ -166,7 +166,11 @@ export class PluginManager {
       }
     }
 
-    fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
-    fs.writeFileSync(this.stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+    try {
+      fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
+      fs.writeFileSync(this.stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+    } catch (err) {
+      console.error(`[obsidian-compat] Failed to write plugin state: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }

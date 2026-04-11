@@ -58,22 +58,22 @@ function unique(values: string[]): string[] {
 function collectObsidianImports(code: string): string[] {
   const apis: string[] = [];
 
-  const destructured = code.matchAll(/require\('obsidian'\)\s*;?|const\s*\{([^}]+)\}\s*=\s*require\('obsidian'\)/g);
+  const destructured = code.matchAll(/require\('obsidian'\)\s*;?|const\s*\{([^}]+)\}\s*=\s*require\('obsidian'\)|import\s*\{([^}]+)\}\s*from\s*['"]obsidian['"]/g);
   for (const match of destructured) {
-    const names = match[1]?.split(',').map((item) => item.trim()).filter(Boolean) ?? [];
+    const names = (match[1] ?? match[2])?.split(',').map((item) => item.trim()).filter(Boolean) ?? [];
     apis.push(...names);
   }
 
   const methodPatterns: Array<[RegExp, string]> = [
-    [/\.addCommand\s*\(/g, 'addCommand'],
-    [/\.loadData\s*\(/g, 'loadData'],
-    [/\.saveData\s*\(/g, 'saveData'],
-    [/\.registerView\s*\(/g, 'registerView'],
-    [/\.registerMarkdownPostProcessor\s*\(/g, 'registerMarkdownPostProcessor'],
-    [/\.registerMarkdownCodeBlockProcessor\s*\(/g, 'registerMarkdownCodeBlockProcessor'],
-    [/\.registerEditorExtension\s*\(/g, 'registerEditorExtension'],
-    [/metadataCache\.getCache\s*\(/g, 'MetadataCache.getCache'],
-    [/metadataCache\.getFileCache\s*\(/g, 'MetadataCache.getFileCache'],
+    [/\.addCommand\s*\(/, 'addCommand'],
+    [/\.loadData\s*\(/, 'loadData'],
+    [/\.saveData\s*\(/, 'saveData'],
+    [/\.registerView\s*\(/, 'registerView'],
+    [/\.registerMarkdownPostProcessor\s*\(/, 'registerMarkdownPostProcessor'],
+    [/\.registerMarkdownCodeBlockProcessor\s*\(/, 'registerMarkdownCodeBlockProcessor'],
+    [/\.registerEditorExtension\s*\(/, 'registerEditorExtension'],
+    [/metadataCache\.getCache\s*\(/, 'MetadataCache.getCache'],
+    [/metadataCache\.getFileCache\s*\(/, 'MetadataCache.getFileCache'],
   ];
 
   for (const [pattern, name] of methodPatterns) {

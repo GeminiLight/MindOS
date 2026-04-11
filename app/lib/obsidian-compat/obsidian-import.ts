@@ -45,8 +45,11 @@ function resolveVaultPluginsDir(vaultRoot: string): string {
 }
 
 function resolvePluginDir(pluginsDir: string, pluginId: string): string {
+  if (!pluginId || pluginId.includes('..') || pluginId.includes('/') || pluginId.includes('\\')) {
+    throw new Error(`Plugin path escapes plugins directory: ${pluginId}`);
+  }
   const pluginDir = path.resolve(path.join(pluginsDir, pluginId));
-  if (pluginDir !== pluginsDir && !pluginDir.startsWith(pluginsDir + path.sep)) {
+  if (!pluginDir.startsWith(pluginsDir + path.sep)) {
     throw new Error(`Plugin path escapes plugins directory: ${pluginId}`);
   }
   return pluginDir;
@@ -73,7 +76,7 @@ export async function scanObsidianVaultPlugins(vaultRoot: string): Promise<ScanR
   const skipped: SkippedPlugin[] = [];
 
   for (const entry of entries) {
-    const pluginDir = path.join(pluginsDir, entry);
+    const pluginDir = path.resolve(path.join(pluginsDir, entry));
     if (!fs.existsSync(pluginDir) || !fs.statSync(pluginDir).isDirectory()) {
       continue;
     }
@@ -100,7 +103,7 @@ export async function scanObsidianVaultPlugins(vaultRoot: string): Promise<ScanR
   }
 
   return {
-    plugins: plugins.sort((a, b) => a.id.localeCompare(b.id)),
+    plugins: plugins.sort((a, b) => a.id.localeCompare(b.id, 'en')),
     skipped,
   };
 }

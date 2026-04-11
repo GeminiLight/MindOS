@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       vaultRoot,
       summary,
-      plugins: result.plugins,
+      plugins: result.plugins.map(({ sourceDir: _sourceDir, ...rest }) => rest),
       skipped: result.skipped,
     });
   } catch (err) {

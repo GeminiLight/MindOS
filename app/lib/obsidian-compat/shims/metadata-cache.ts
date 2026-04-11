@@ -29,8 +29,12 @@ function parseFrontmatter(content: string): Record<string, unknown> | undefined 
     return undefined;
   }
 
-  const parsed = yaml.load(match[1]);
-  return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
+  try {
+    const parsed = yaml.load(match[1]);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function parseTags(content: string): Array<{ tag: string }> {
