@@ -473,7 +473,6 @@ export default function ViewPageClient({
               <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-md">
                 {([
                   { id: 'wysiwyg' as const, icon: <Pencil size={11} />, label: 'Edit' },
-                  { id: 'split' as const, icon: <Columns2 size={11} />, label: 'Split' },
                   { id: 'source' as const, icon: <PanelLeft size={11} />, label: 'Source' },
                   { id: 'preview' as const, icon: <Eye size={11} />, label: 'View' },
                 ] as const).map(m => (
@@ -482,7 +481,7 @@ export default function ViewPageClient({
                     onClick={() => {
                       setMdViewMode(m.id);
                       if (m.id === 'preview') {
-                        // Save and sync content before switching to view
+                        // Sync latest edit content to savedContent before switching
                         const clean = twemojiToNative(editContent);
                         setSavedContent(clean);
                         if (clean !== savedContent) {
@@ -699,8 +698,8 @@ export default function ViewPageClient({
               <JsonView content={savedContent} />
             ) : (
               <>
-                <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
-                <TableOfContents content={savedContent} />
+                <MarkdownView content={twemojiToNative(savedContent)} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
+                <TableOfContents content={twemojiToNative(savedContent)} />
               </>
             )}
             <Backlinks filePath={filePath} />
