@@ -159,14 +159,19 @@
 .milkdown .ProseMirror img { max-width: 100% !important; border-radius: 6px; }
 
 /* ─── Emoji (twemoji extension protection) ─── */
+/* Browser extensions may replace emoji Unicode text with <img src="twemoji-cdn">.
+   We let them display normally in the editor (fighting back causes infinite loops),
+   but twemojiToNative() in WysiwygEditor.tsx converts any leaked ![](twemoji-url)
+   back to Unicode emoji when saving markdown. */
 .milkdown img[src*="twemoji"],
 .milkdown img[src*="emoji"],
 .milkdown img.emoji {
   display: inline !important;
   width: 1.2em !important;
   height: 1.2em !important;
-  vertical-align: -0.1em;
+  vertical-align: -0.15em !important;
   border: none !important;
+  border-radius: 0 !important;
   margin: 0 0.05em !important;
 }
 
