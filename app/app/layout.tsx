@@ -85,7 +85,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang={ssrLocale} suppressHydrationWarning>
+    <html lang={ssrLocale} suppressHydrationWarning style={{ backgroundColor: '#f8f6f1', color: '#1c1a17' }}>
       <head>
         <meta name="theme-color" content="#c8873a" />
         {/* Patch Node.removeChild/insertBefore to swallow errors caused by browser
@@ -105,7 +105,7 @@ export default async function RootLayout({
         {/* Apply user appearance settings before first paint, preventing flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme');var dark=s&&s!=='system'?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',dark);var cw=localStorage.getItem('content-width');if(cw)document.documentElement.style.setProperty('--content-width-override',cw);var pf=localStorage.getItem('prose-font');if(!pf){pf='inter';localStorage.setItem('prose-font','inter')}if(pf==='geist'){pf='inter';localStorage.setItem('prose-font','inter')}var fm={lora:'"Lora", Georgia, serif','ibm-plex-sans':'"IBM Plex Sans", sans-serif',inter:'var(--font-inter), sans-serif','ibm-plex-mono':'"IBM Plex Mono", monospace'};if(pf&&fm[pf])document.documentElement.style.setProperty('--prose-font-override',fm[pf]);var loc=localStorage.getItem('locale')||'system';var rl=loc==='system'?(navigator.language.startsWith('zh')?'zh':'en'):loc;window.__mindos_locale__=rl;document.documentElement.lang=rl==='zh'?'zh':'en';document.cookie='locale='+rl+';path=/;max-age=31536000;SameSite=Lax'}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('theme');var dark=s&&s!=='system'?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',dark);document.documentElement.style.backgroundColor=dark?'#131210':'#f8f6f1';document.documentElement.style.color=dark?'#e8e4dc':'#1c1a17';var cw=localStorage.getItem('content-width');if(cw)document.documentElement.style.setProperty('--content-width-override',cw);var pf=localStorage.getItem('prose-font');if(!pf){pf='inter';localStorage.setItem('prose-font','inter')}if(pf==='geist'){pf='inter';localStorage.setItem('prose-font','inter')}var fm={lora:'"Lora", Georgia, serif','ibm-plex-sans':'"IBM Plex Sans", sans-serif',inter:'var(--font-inter), sans-serif','ibm-plex-mono':'"IBM Plex Mono", monospace'};if(pf&&fm[pf])document.documentElement.style.setProperty('--prose-font-override',fm[pf]);var loc=localStorage.getItem('locale')||'system';var rl=loc==='system'?(navigator.language.startsWith('zh')?'zh':'en'):loc;window.__mindos_locale__=rl;document.documentElement.lang=rl==='zh'?'zh':'en';document.cookie='locale='+rl+';path=/;max-age=31536000;SameSite=Lax'}catch(e){}})();`,
           }}
         />
       </head>

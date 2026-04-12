@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X, Search, Download, Loader2, Check } from 'lucide-react';
+import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X, Search, Download, Loader2, Check, Globe } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { AiTabProps } from './types';
 import { Field, Select, Input, PasswordInput, EnvBadge, Toggle, SettingCard, SettingRow } from './Primitives';
@@ -295,7 +295,10 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
       {/* ── Card 2: Embedding Search ── */}
       <EmbeddingSearchCard data={data} setData={setData} t={t} />
 
-      {/* ── Card 3: Agent Behavior ── */}
+      {/* ── Card 3: Web Search ── */}
+      <WebSearchCard data={data} setData={setData} t={t} />
+
+      {/* ── Card 4: Agent Behavior ── */}
       <SettingCard
         icon={<Bot size={15} />}
         title={t.settings.agent.title}
@@ -808,6 +811,84 @@ function EmbeddingSearchCard({ data, setData, t }: {
           </div>
         </>
       )}
+    </SettingCard>
+  );
+}
+
+/* ── Web Search Card (pi-web-access config → ~/.mindos/web-search.json) ── */
+
+const WEB_SEARCH_PROVIDERS = [
+  { id: 'auto', labelKey: 'providerAuto', descKey: 'providerAutoDesc' },
+  { id: 'exa', labelKey: 'providerExa', descKey: 'providerExaDesc' },
+  { id: 'perplexity', labelKey: 'providerPerplexity', descKey: 'providerPerplexityDesc' },
+  { id: 'gemini', labelKey: 'providerGemini', descKey: 'providerGeminiDesc' },
+];
+
+const WEB_SEARCH_KEY_FIELDS = [
+  { key: 'exaApiKey' as const, labelKey: 'exaApiKey', placeholder: 'exa-...' },
+  { key: 'perplexityApiKey' as const, labelKey: 'perplexityApiKey', placeholder: 'pplx-...' },
+  { key: 'geminiApiKey' as const, labelKey: 'geminiApiKey', placeholder: 'AIza...' },
+];
+
+function WebSearchCard({ data, setData, t }: {
+  data: AiTabProps['data'];
+  setData: AiTabProps['setData'];
+  t: AiTabProps['t'];
+}) {
+  const w = t.settings.webSearch ?? {} as Record<string, unknown>;
+  const wsData = data.webSearch ?? { provider: 'auto', exaApiKey: '', perplexityApiKey: '', geminiApiKey: '' };
+  const activeProvider = wsData.provider || 'auto';
+
+  return (
+    <SettingCard
+      icon={<Globe size={15} />}
+      title={w.title as string ?? 'Web Search'}
+      description={w.description as string ?? 'Configure search providers.'}
+    >
+      {/* Provider selector */}
+      <div className="flex gap-2 flex-wrap">
+        {WEB_SEARCH_PROVIDERS.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => {
+              setData(d => d ? { ...d, webSearch: { ...wsData, provider: p.id } } : d);
+            }}
+            className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+              activeProvider === p.id
+                ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
+                : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            {(w as Record<string, unknown>)[p.labelKey] as string ?? p.id}
+          </button>
+        ))}
+      </div>
+
+      {/* Provider description */}
+      {(() => {
+        const prov = WEB_SEARCH_PROVIDERS.find(p => p.id === activeProvider);
+        if (!prov) return null;
+        const desc = (w as Record<string, unknown>)[prov.descKey] as string;
+        return desc ? (
+          <p className="text-xs text-muted-foreground">{desc}</p>
+        ) : null;
+      })()}
+
+      {/* API Key fields */}
+      {WEB_SEARCH_KEY_FIELDS.map(f => (
+        <Field key={f.key} label={(w as Record<string, unknown>)[f.labelKey] as string ?? f.key} hint={w.apiKeyHint as string}>
+          <PasswordInput
+            value={(wsData as Record<string, string>)[f.key] ?? ''}
+            onChange={v => setData(d => d ? { ...d, webSearch: { ...wsData, [f.key]: v } } : d)}
+            placeholder={f.placeholder}
+          />
+        </Field>
+      ))}
+
+      <p className="text-xs text-muted-foreground">
+        {w.noKeysHint as string ?? 'Works without API keys via Exa MCP (zero-config).'}
+      </p>
     </SettingCard>
   );
 }
