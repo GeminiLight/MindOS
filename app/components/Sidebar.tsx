@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Settings, Trash2 } from 'lucide-react';
+import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Settings, Trash2, CheckSquare } from 'lucide-react';
 import FileTree from './FileTree';
 import SearchModal from './SearchModal';
 import AskModal from './AskModal';
@@ -34,7 +34,7 @@ const Logo = ({ id }: { id: string }) => (
     </defs>
     <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke={`url(#grad-human-${id})`} strokeWidth="3" strokeDasharray="2 4" strokeLinecap="round"/>
     <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke={`url(#grad-agent-${id})`} strokeWidth="4.5" strokeLinecap="round"/>
-    <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="#FEF3C7"/>
+    <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
   </svg>
 );
 
@@ -118,6 +118,13 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
         <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} />
       </div>
       <div className="px-2 pb-1">
+        <Link
+          href="/todo"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <CheckSquare size={13} />
+          <span>TODO</span>
+        </Link>
         <Link
           href="/trash"
           className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

@@ -323,7 +323,7 @@ export default function SectionCard({
           className="h-full rounded-full transition-all duration-500"
           style={{
             width: total ? `${(done / total) * 100}%` : '0%',
-            background: isDoneSection ? 'var(--success, #22c55e)' : 'var(--amber)',
+            background: isDoneSection ? 'var(--success, #5a8d60)' : 'var(--amber)',
           }}
         />
       </div>

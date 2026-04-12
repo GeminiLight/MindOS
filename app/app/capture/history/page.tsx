@@ -21,7 +21,7 @@ import {
   type OrganizeSource,
 } from '@/lib/organize-history';
 
-export default function InboxHistoryPage() {
+export default function CaptureHistoryPage() {
   const { t } = useLocale();
   const [entries, setEntries] = useState<OrganizeHistoryEntry[]>(() => loadHistory());
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -71,9 +71,10 @@ export default function InboxHistoryPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       {ConfirmDialog}
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link
-          href="/wiki"
+          href="/capture"
           className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <ArrowLeft size={16} />

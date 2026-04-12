@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, ExternalLink, Eye, EyeOff, Check, ChevronRight, FileX2 } from 'lucide-react';
-import { SectionLabel, PrimaryButton, Input, Field, SettingCard } from './Primitives';
+import { SectionLabel, PrimaryButton, Input, Field, SettingCard, Select } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
 import type { Messages } from '@/lib/i18n';
@@ -431,9 +431,9 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <span className="text-muted-foreground">{(syncT?.labelAutoSync as string) ?? 'Auto-sync'}</span>
             <span className="flex items-center gap-1 text-xs">
               commit{' '}
-              <select
-                className="bg-muted rounded px-1.5 py-0.5 text-xs border border-border cursor-pointer"
-                value={status.autoCommitInterval}
+              <Select
+                size="sm"
+                value={String(status.autoCommitInterval)}
                 onChange={async (e) => {
                   const val = parseInt(e.target.value, 10);
                   try {
@@ -446,16 +446,16 @@ export function SyncTab({ t, visible }: SyncTabProps) {
                   } catch {}
                 }}
               >
-                <option value={10}>10s</option>
-                <option value={15}>15s</option>
-                <option value={30}>30s</option>
-                <option value={60}>60s</option>
-                <option value={120}>120s</option>
-              </select>
+                <option value="10">10s</option>
+                <option value="15">15s</option>
+                <option value="30">30s</option>
+                <option value="60">60s</option>
+                <option value="120">120s</option>
+              </Select>
               {' · pull '}
-              <select
-                className="bg-muted rounded px-1.5 py-0.5 text-xs border border-border cursor-pointer"
-                value={status.autoPullInterval}
+              <Select
+                size="sm"
+                value={String(status.autoPullInterval)}
                 onChange={async (e) => {
                   const val = parseInt(e.target.value, 10);
                   try {
@@ -468,13 +468,13 @@ export function SyncTab({ t, visible }: SyncTabProps) {
                   } catch {}
                 }}
               >
-                <option value={60}>1min</option>
-                <option value={120}>2min</option>
-                <option value={300}>5min</option>
-                <option value={600}>10min</option>
-                <option value={1800}>30min</option>
-                <option value={3600}>60min</option>
-              </select>
+                <option value="60">1min</option>
+                <option value="120">2min</option>
+                <option value="300">5min</option>
+                <option value="600">10min</option>
+                <option value="1800">30min</option>
+                <option value="3600">60min</option>
+              </Select>
             </span>
           </div>
         </div>

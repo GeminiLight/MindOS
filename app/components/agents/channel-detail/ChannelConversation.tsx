@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Loader2, ExternalLink } from 'lucide-react';
 import { SectionCard, StatusDot, ActionResult } from './shared';
+import { Select } from '@/components/settings/Primitives';
 
 export function ChannelConversation({ status, im, platform, onSaved }: {
   status: { state: string; transport?: string; webhookUrl?: string; publicBaseUrl?: string; lastError?: string } | undefined;
@@ -87,14 +88,13 @@ export function ChannelConversation({ status, im, platform, onSaved }: {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">Transport</label>
-                <select
+                <Select
                   value={transport}
                   onChange={e => setTransport(e.target.value as 'webhook' | 'long_connection')}
-                  className="h-10 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="long_connection">Long Connection (recommended)</option>
                   <option value="webhook">Webhook</option>
-                </select>
+                </Select>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   {isLC
                     ? im.transportLongHint
