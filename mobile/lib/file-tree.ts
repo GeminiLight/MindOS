@@ -29,6 +29,17 @@ export const sortFileNodes = (nodes: FileNode[]): FileNode[] => [...nodes].sort(
   return a.name.localeCompare(b.name);
 });
 
+export const getChildrenAtPath = (nodes: FileNode[], path: string): FileNode[] | null => {
+  if (!path) return nodes;
+  const node = findNode(nodes, path);
+  return node?.type === 'directory' ? (node.children ?? []) : null;
+};
+
+export const getParentPath = (path: string): string => {
+  const idx = path.lastIndexOf('/');
+  return idx === -1 ? '' : path.substring(0, idx);
+};
+
 export const formatRelativeTime = (mtimeMs: number, options: RelativeTimeOptions = {}): string => {
   const now = options.now ?? new Date();
   const diff = now.getTime() - mtimeMs;

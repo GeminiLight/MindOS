@@ -31,6 +31,12 @@ export interface SettingsData {
     building: boolean;
     docCount: number;
   };
+  webSearch?: {
+    provider: string;
+    exaApiKey: string;
+    perplexityApiKey: string;
+    geminiApiKey: string;
+  };
   mindRoot: string;
   webPassword?: string;
   authToken?: string;   // masked: first-xxxx-••••-last pattern

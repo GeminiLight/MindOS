@@ -1,26 +1,53 @@
 # Supported Agents
 
-| Agent | MCP | Skills | MCP Config Path | Skill Config Path |
-|:------|:---:|:------:|:----------------|:------------------|
+## Agent List
+
+### CLI / Terminal Agents
+
+| Agent | MCP | Skills | MCP Config Path | Skill Path |
+|:------|:---:|:------:|:----------------|:-----------|
 | MindOS Agent | ✅ | ✅ | Built-in (no config needed) | Built-in (no config needed) |
-| OpenClaw | ✅ | ✅ | `~/.openclaw/openclaw.json` or `~/.openclaw/mcp.json` | `skills/` (project) or `~/.openclaw/skills/` (global) |
-| Claude Code | ✅ | ✅ | `~/.claude.json` (global) or `.mcp.json` (project) | `.claude/skills/` (project) or `~/.claude/skills/` (global) |
-| CodeBuddy | ✅ | ✅ | `~/.codebuddy/mcp.json` (global) | `.codebuddy/skills/` (project) or `~/.codebuddy/skills/` (global) |
-| Cursor | ✅ | ✅ | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) | `.cursor/skills/` (project) or `~/.cursor/skills/` (global) |
-| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` | `.windsurf/skills/` (project) or `~/.windsurf/skills/` (global) |
-| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | `.agents/skills/` (universal path) |
-| Trae | ✅ | ✅ | `~/.trae/mcp.json` (global) or `.trae/mcp.json` (project) | `.trae/skills/` (project) or `~/.trae/skills/` (global) |
-| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) | `.agents/skills/` (universal path) |
-| GitHub Copilot | ✅ | ✅ | `.vscode/mcp.json` (project) or VS Code User `settings.json` (global) | `.agents/skills/` (universal path) |
-| Kimi Code | ✅ | ✅ | `~/.kimi/mcp.json` (global) or `.kimi/mcp.json` (project) | `.agents/skills/` (universal path) |
-| Qoder | ✅ | ✅ | `~/.qoder.json` (global) | `.qoder/skills/` (project) or `~/.qoder/skills/` (global) |
-| Pi | ✅ | ✅ | `~/.pi/agent/mcp.json` (global) or `.pi/settings.json` (project) | `.pi/skills/` (project) or `~/.pi/skills/` (global) |
-| Augment | ✅ | ✅ | `~/.augment/settings.json` (global) or `.augment/settings.json` (project) | `.augment/skills/` (project) or `~/.augment/skills/` (global) |
-| Qwen Code | ✅ | ✅ | `~/.qwen/settings.json` (global) or `.qwen/settings.json` (project) | `.qwen/skills/` (project) or `~/.qwen/skills/` (global) |
-| OpenCode | ✅ | ✅ | `~/.config/opencode/config.json` (global) | `.agents/skills/` (universal path) |
-| Roo Code | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | `.roo/skills/` (project) or `~/.roo/skills/` (global) |
-| VS Code | ✅ | ✅ | `.vscode/mcp.json` (project) or VS Code User `settings.json` (global, nested `mcp.servers`) | `.agents/skills/` (universal path) |
-| Codex | ✅ | ✅ | `~/.codex/config.toml` (global, TOML format) | `.agents/skills/` (universal path) |
+| Claude Code | ✅ | ✅ | `~/.claude.json` (global) or `.mcp.json` (project) | `~/.claude/skills/` (global) or `.claude/skills/` (project) |
+| OpenClaw | ✅ | ✅ | `~/.openclaw/mcp.json` (global) | `~/.openclaw/skills/` (global) |
+| CodeBuddy | ✅ | ✅ | `~/.codebuddy/mcp.json` (global) | `~/.codebuddy/skills/` (global) or `.codebuddy/skills/` (project) |
+| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) | `~/.agents/skills/` (universal) |
+| Kimi Code | ✅ | ✅ | `~/.kimi/mcp.json` (global) or `.kimi/mcp.json` (project) | `~/.agents/skills/` (universal) |
+| Codex | ✅ | ✅ | `~/.codex/config.toml` (global, TOML format, key: `mcp_servers`) | `~/.agents/skills/` (universal) |
+| OpenCode | ✅ | ✅ | `~/.config/opencode/config.json` (global) | `~/.agents/skills/` (universal) |
+| iFlow CLI | ✅ | ✅ | `~/.iflow/settings.json` (global) or `.iflow/settings.json` (project) | `~/.iflow/skills/` (global) or `.iflow/skills/` (project) |
+| Pi | ✅ | ✅ | `~/.pi/agent/mcp.json` (global) or `.pi/settings.json` (project) | `~/.pi/skills/` (global) or `.pi/skills/` (project) |
+| Qoder | ✅ | ✅ | `~/.qoder.json` (global) | `~/.qoder/skills/` (global) or `.qoder/skills/` (project) |
+| Antigravity | ✅ | ✅ | `~/.gemini/antigravity/mcp_config.json` (global) or `.antigravity/mcp_config.json` (project) | `~/.antigravity/skills/` (global) or `.antigravity/skills/` (project) |
+
+### IDE / Editor Agents
+
+| Agent | MCP | Skills | MCP Config Path | Skill Path |
+|:------|:---:|:------:|:----------------|:-----------|
+| Cursor | ✅ | ✅ | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) | `~/.agents/skills/` (universal) |
+| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` (global) | `~/.windsurf/skills/` (global) or `.windsurf/skills/` (project) |
+| GitHub Copilot (VS Code) | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/mcp.json`; Linux: `~/.config/Code/User/mcp.json` (global, key: `servers`) or `.vscode/mcp.json` (project) | `~/.agents/skills/` (universal) |
+| Trae | ✅ | ✅ | `~/.trae/mcp.json` (global) or `.trae/mcp.json` (project) | `~/.trae/skills/` (global) or `.trae/skills/` (project) |
+| Trae CN | ✅ | ✅ | macOS: `~/Library/Application Support/Trae CN/User/mcp.json`; Linux: `~/.config/Trae CN/User/mcp.json` (global) or `.trae/mcp.json` (project) | `~/.trae/skills/` (global) or `.trae/skills/` (project) |
+| Augment | ✅ | ✅ | `~/.augment/settings.json` (global) or `.augment/settings.json` (project) | `~/.augment/skills/` (global) or `.augment/skills/` (project) |
+| Qwen Code | ✅ | ✅ | `~/.qwen/settings.json` (global) or `.qwen/settings.json` (project) | `~/.qwen/skills/` (global) or `.qwen/skills/` (project) |
+
+### VS Code Extension Agents
+
+| Agent | MCP | Skills | MCP Config Path | Skill Path |
+|:------|:---:|:------:|:----------------|:-----------|
+| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | `~/.agents/skills/` (universal) |
+| Roo Code | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`; or `.roo/mcp.json` (project) | `~/.roo/skills/` (global) or `.roo/skills/` (project) |
+
+### Early Support (MCP only, Skills not yet supported)
+
+| Agent | MCP | Skills | MCP Config Path | Skill Path |
+|:------|:---:|:------:|:----------------|:-----------|
+| QClaw | ✅ | - | `~/.qclaw/mcp.json` (global) | - |
+| WorkBuddy | ✅ | - | `~/.workbuddy/mcp.json` (global) | - |
+| Lingma | ✅ | - | `~/.lingma/mcp.json` (global) | - |
+| CoPaw | ✅ | - | `~/.copaw/config.json` (global, nested key: `mcp.clients`) | - |
+
+> **Note:** Windows users — for agents that reference `~/Library/Application Support/...` (macOS) or `~/.config/...` (Linux), the Windows equivalent is `%APPDATA%/...`. The `mindos mcp install` command handles this automatically.
 
 ## How to Connect
 
@@ -85,7 +112,18 @@ mindos mcp install --transport http --url http://<server-ip>:8781/mcp --token yo
 }
 ```
 
-> Each Agent stores config in a different file — see the **MCP Config Path** column in the table above for exact paths.
+**Codex (TOML format):**
+
+```toml
+[mcp_servers.mindos]
+command = "mindos"
+args = ["mcp"]
+
+[mcp_servers.mindos.env]
+MCP_TRANSPORT = "stdio"
+```
+
+> Each Agent stores config in a different file — see the **MCP Config Path** column in the tables above for exact paths.
 >
 > Maintenance rules and checklist: `wiki/refs/agent-config-registry.md`
 
@@ -93,7 +131,7 @@ mindos mcp install --transport http --url http://<server-ip>:8781/mcp --token yo
 
 ### Tools not appearing after install
 
-Some agents (Cursor, Windsurf, Trae, Cline) **do not hot-reload** MCP config. You must fully quit and restart the agent after running `mindos mcp install`.
+Some agents (Cursor, Windsurf, Trae, Cline, Roo Code) **do not hot-reload** MCP config. You must fully quit and restart the agent after running `mindos mcp install`.
 
 ### `mindos` command not found (macOS)
 
@@ -121,3 +159,39 @@ On Windows, `npx` is a `.cmd` script. If stdio transport fails, try wrapping in 
 ### Cursor: tool limit
 
 Cursor has a ~40 tool limit across all MCP servers combined. If you have many servers installed, MindOS tools may be silently dropped. Disable unused servers to free up slots.
+
+### GitHub Copilot: config key is `servers`, not `mcpServers`
+
+GitHub Copilot uses `"servers"` as the top-level key instead of `"mcpServers"`:
+
+```json
+{
+  "servers": {
+    "mindos": {
+      "type": "stdio",
+      "command": "mindos",
+      "args": ["mcp"],
+      "env": { "MCP_TRANSPORT": "stdio" }
+    }
+  }
+}
+```
+
+### CoPaw: nested config structure
+
+CoPaw uses a nested config path `mcp.clients` inside `~/.copaw/config.json`:
+
+```json
+{
+  "mcp": {
+    "clients": {
+      "mindos": {
+        "type": "stdio",
+        "command": "mindos",
+        "args": ["mcp"],
+        "env": { "MCP_TRANSPORT": "stdio" }
+      }
+    }
+  }
+}
+```

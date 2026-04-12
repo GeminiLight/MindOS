@@ -139,3 +139,124 @@ describe('formatSearchResults', () => {
     expect(md).toContain('obscure query');
   });
 });
+
+describe('webSearch with provider config', () => {
+  it('uses free fallback chain by default (no config)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () => Promise.resolve(ddgHtml([
+        { title: 'Free Result', url: 'https://free.com', snippet: 'free' },
+      ])),
+    });
+
+    const result = await webSearch('test');
+    expect(result.engine).toBe('DuckDuckGo');
+  });
+
+  it('uses free fallback chain with config provider=free', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () => Promise.resolve(ddgHtml([
+        { title: 'Free Result', url: 'https://free.com', snippet: 'free' },
+      ])),
+    });
+
+    const result = await webSearch('test', { provider: 'free', apiKey: '' });
+    expect(result.engine).toBe('DuckDuckGo');
+  });
+
+  it('calls Tavily API with correct format', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        results: [
+          { title: 'Tavily Result', url: 'https://tavily.com', content: 'AI optimized' },
+        ],
+      }),
+    });
+
+    const result = await webSearch('test', { provider: 'tavily', apiKey: 'tvly-xxx' });
+    expect(result.engine).toBe('Tavily');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].title).toBe('Tavily Result');
+    expect(result.results[0].snippet).toBe('AI optimized');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.tavily.com/search',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('calls Brave API with correct headers', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        web: {
+          results: [
+            { title: 'Brave Result', url: 'https://brave.com', description: 'Privacy first' },
+          ],
+        },
+      }),
+    });
+
+    const result = await webSearch('test', { provider: 'brave', apiKey: 'BSA-xxx' });
+    expect(result.engine).toBe('Brave');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].snippet).toBe('Privacy first');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('api.search.brave.com'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Subscription-Token': 'BSA-xxx' }),
+      }),
+    );
+  });
+
+  it('calls Serper API with correct format', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        organic: [
+          { title: 'Serper Result', link: 'https://serper.dev', snippet: 'Google proxy' },
+        ],
+      }),
+    });
+
+    const result = await webSearch('test', { provider: 'serper', apiKey: 'serper-xxx' });
+    expect(result.engine).toBe('Serper');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].url).toBe('https://serper.dev');
+  });
+
+  it('calls Bing API with correct headers', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        webPages: {
+          value: [
+            { name: 'Bing API Result', url: 'https://bing.com', snippet: 'Microsoft search' },
+          ],
+        },
+      }),
+    });
+
+    const result = await webSearch('test', { provider: 'bing-api', apiKey: 'bing-xxx' });
+    expect(result.engine).toBe('Bing API');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].title).toBe('Bing API Result');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('api.bing.microsoft.com'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Ocp-Apim-Subscription-Key': 'bing-xxx' }),
+      }),
+    );
+  });
+
+  it('throws on API error for Tavily', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+
+    await expect(webSearch('test', { provider: 'tavily', apiKey: 'bad-key' }))
+      .rejects.toThrow('Tavily API error: 401');
+  });
+});

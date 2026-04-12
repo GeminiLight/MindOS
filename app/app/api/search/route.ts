@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { searchFiles } from '@/lib/fs';
+import { setPrivateCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { telemetry } from '@/lib/telemetry';
 
@@ -14,7 +15,14 @@ export async function GET(request: NextRequest) {
   try {
     const results = searchFiles(q);
     stop({ resultCount: results.length, success: true });
-    return NextResponse.json(results);
+    
+    const response = NextResponse.json(results);
+    
+    // ── Cache control: private, 5 minutes ──
+    // Search results are user-specific (reflect user's knowledge base state).
+    // Use "private" to prevent CDN caching, but allow browser cache for repeated searches.
+    // 5 minute TTL balances UX (fast repeated searches) with freshness.
+    return setPrivateCacheHeaders(response, 300);
   } catch (err) {
     telemetry.track('search.api.error', {
       queryLen: q.length,

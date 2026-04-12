@@ -217,18 +217,18 @@ body {
 .prose h2 { font-size: 1.35em; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
 .prose h3 { font-size: 1.15em; }
 .prose h4 { font-size: 1.05em; }
-.prose p { margin-top: 0; margin-bottom: 1.1em; }
-.prose a { color: var(--amber); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.35); transition: text-decoration-color 0.15s; }
+.prose p { margin-top: 0; margin-bottom: 0.9em; }
+.prose a { color: var(--amber); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.55); transition: text-decoration-color 0.15s; }
 .prose a:hover { text-decoration-color: var(--amber); }
 .prose strong { color: var(--prose-heading); font-weight: 600; }
 .prose em { font-style: italic; color: var(--prose-muted); }
-.prose ul, .prose ol { margin: 0.5em 0 1.1em 0; padding-left: 1.6em; }
+.prose ul, .prose ol { margin: 0.5em 0 0.8em 0; padding-left: 1.2em; }
 .prose ul { list-style-type: disc; }
 .prose ol { list-style-type: decimal; }
-.prose li { margin-bottom: 0.3em; }
-.prose blockquote { border-left: 2px solid var(--amber); padding-left: 1.1em; margin: 1.2em 0; color: var(--prose-subtle); font-style: italic; }
+.prose li { margin-bottom: 0.15em; }
+.prose blockquote { border-left: 3px solid var(--amber); padding-left: 0.95em; margin: 1em 0; color: var(--prose-subtle); font-style: italic; font-weight: 500; }
 .prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: var(--font-code); }
-.prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1.2em 0; color: var(--prose-pre-color); max-width: 100%; }
+.prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1em 0; color: var(--prose-pre-color); max-width: 100%; }
 @media (min-width: 640px) {
   .prose pre { padding: 1.1em 1.3em; }
 }
@@ -236,12 +236,12 @@ body {
 @media (min-width: 640px) {
   .prose pre code { font-size: 0.855em; word-break: normal; }
 }
-.prose table { width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.85em; font-family: var(--prose-font-override, var(--font-ui)); display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.prose table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.85em; font-family: var(--prose-font-override, var(--font-ui)); display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 @media (min-width: 640px) {
   .prose table { font-size: 0.9em; display: table; overflow-x: visible; }
 }
 .prose thead th { background: var(--prose-th-bg); color: var(--prose-heading); font-weight: 600; padding: 0.6em 0.9em; border: 1px solid var(--prose-border); text-align: left; font-size: 0.78em; letter-spacing: 0.05em; text-transform: uppercase; }
-.prose tbody td { padding: 0.55em 0.9em; border: 1px solid var(--prose-code-border); color: var(--prose-muted); }
+.prose tbody td { padding: 0.6em 0.9em; border: 1px solid var(--prose-code-border); color: var(--prose-muted); }
 .prose tbody tr:nth-child(even) { background: var(--prose-th-bg); }
 .prose img { max-width: 100%; border-radius: 6px; border: 1px solid var(--prose-code-border); }
 /* Emoji images (twemoji etc.) — keep inline-sized, not block-level */
@@ -259,7 +259,7 @@ body {
   border-radius: 0 !important;
   margin: 0 0.05em 0 0.1em !important;
 }
-.prose hr { border: none; border-top: 1px solid var(--prose-border); margin: 2.5em 0; }
+.prose hr { border: none; border-top: 1px solid var(--prose-border); margin: 1.8em 0; }
 
 /* Ask Panel — compact prose for side panel chat bubbles */
 .prose.prose-panel {
@@ -275,6 +275,8 @@ body {
 .prose.prose-panel p { margin-bottom: 0.6em; }
 .prose.prose-panel pre { padding: 0.6em 0.8em; margin: 0.8em 0; }
 .prose.prose-panel pre code { font-size: 0.78em; }
+.prose.prose-panel ul, .prose.prose-panel ol { margin: 0.4em 0 0.6em 0; padding-left: 1em; }
+.prose.prose-panel li { margin-bottom: 0.1em; }
 
 :root {
   --prose-body: #3a3730;

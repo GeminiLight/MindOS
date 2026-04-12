@@ -27,10 +27,37 @@ import {
   spawnAndConnect,
   killAgent,
   type AcpConnection,
+  type AcpProcess,
 } from './subprocess';
 import { findAcpAgent } from './registry';
 
-/* ── Version ───────────────────────────────────────────────────────────── */
+/* ── Error diagnosis ───────────────────────────────────────────────────── */
+
+function diagnoseInitFailure(proc: AcpProcess, rawError: Error): string {
+  const raw = rawError.message ?? '';
+
+  // ENOENT = spawn itself failed because the executable was not found
+  if (raw.includes('ENOENT') || proc.spawnError?.includes('ENOENT')) {
+    return `Command not found: "${proc.agentId}". Verify it is installed and on your PATH, or set an absolute path in Agent settings.`;
+  }
+
+  // EPIPE = child process exited before we could write to stdin
+  if (raw.includes('EPIPE')) {
+    const stderr = proc.spawnError ?? '';
+    if (stderr) {
+      return `Agent "${proc.agentId}" exited immediately: ${stderr}`;
+    }
+    return `Agent "${proc.agentId}" exited before initialization. Common causes: command not found in this environment (desktop apps often have a shorter PATH than your terminal), the agent does not support ACP mode, or authentication is required. Try running the agent command manually in a terminal to diagnose.`;
+  }
+
+  // Non-zero exit with stderr
+  if (proc.spawnError) {
+    return `Agent "${proc.agentId}" failed to start: ${proc.spawnError}`;
+  }
+
+  return `initialize failed: ${raw}`;
+}
+
 
 let _cachedVersion = '';
 function getMindosVersion(): string {
@@ -93,8 +120,11 @@ export async function createSessionFromEntry(
     agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
     authMethods = parseAuthMethods(initResult.authMethods);
   } catch (err) {
+    // Wait briefly for stderr/exit info before diagnosing
+    await new Promise(r => setTimeout(r, 200));
+    const message = diagnoseInitFailure(conn.process, err as Error);
     killAgent(conn.process);
-    throw new Error(`initialize failed: ${(err as Error).message}`);
+    throw new Error(message);
   }
 
   // Phase 2: Authenticate (if agent declares auth methods)
@@ -183,8 +213,10 @@ export async function loadSession(
     });
     agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
   } catch (err) {
+    await new Promise(r => setTimeout(r, 200));
+    const message = diagnoseInitFailure(conn.process, err as Error);
     killAgent(conn.process);
-    throw new Error(`initialize failed: ${(err as Error).message}`);
+    throw new Error(message);
   }
 
   if (!agentCapabilities?.loadSession) {

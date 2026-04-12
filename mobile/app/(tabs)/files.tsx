@@ -1,7 +1,7 @@
 /**
- * Files tab — file tree browser with create file support.
+ * Files tab — file tree browser with folder drill-down navigation.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  BackHandler,
   StyleSheet,
 } from 'react-native';
 import { ActionSheetIOS, Platform } from 'react-native';
@@ -20,12 +21,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { mindosClient } from '@/lib/api-client';
 import TextInputModal from '@/components/TextInputModal';
 import FilesErrorBanner from '@/components/files/FilesErrorBanner';
+import Breadcrumb from '@/components/Breadcrumb';
 import { getFilesErrorMessage, getFilesTabViewState, getRenameInputDefaultValue } from '@/lib/files-tab-state';
+import { getChildrenAtPath, getParentPath, sortFileNodes } from '@/lib/file-tree';
 import type { FileNode } from '@/lib/types';
 
 export default function FilesScreen() {
   const router = useRouter();
   const [tree, setTree] = useState<FileNode[]>([]);
+  const [currentPath, setCurrentPath] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -51,25 +55,45 @@ export default function FilesScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Android back button: go to parent folder or let default behavior
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (currentPath) {
+        setCurrentPath(getParentPath(currentPath));
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [currentPath]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   }, [load]);
 
+  // Compute visible children for the current directory
+  const currentChildren = useMemo(() => {
+    const children = getChildrenAtPath(tree, currentPath);
+    return children ? sortFileNodes(children) : [];
+  }, [tree, currentPath]);
+
+  const viewState = getFilesTabViewState(currentChildren, error);
+
   const handleCreateFile = useCallback(async () => {
     const name = newFileName.trim();
     if (!name) return;
 
-    const fileName = name.endsWith('.md') ? name : `${name}.md`;
+    const baseName = name.endsWith('.md') ? name : `${name}.md`;
+    const filePath = currentPath ? `${currentPath}/${baseName}` : baseName;
     setCreating(true);
     try {
-      // Check if file already exists
-      const exists = await mindosClient.fileExists(fileName);
+      const exists = await mindosClient.fileExists(filePath);
       if (exists) {
         Alert.alert(
           'File Exists',
-          `"${fileName}" already exists. Open it instead?`,
+          `"${baseName}" already exists. Open it instead?`,
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -77,26 +101,24 @@ export default function FilesScreen() {
               onPress: () => {
                 setShowNewFile(false);
                 setNewFileName('');
-                router.push(`/view/${fileName}` as any);
+                router.push(`/view/${filePath}` as any);
               },
             },
           ],
         );
         return;
       }
-      await mindosClient.saveFile(fileName, `# ${name.replace(/\.md$/, '')}\n\n`);
+      await mindosClient.saveFile(filePath, `# ${name.replace(/\.md$/, '')}\n\n`);
       setShowNewFile(false);
       setNewFileName('');
       await load();
-      router.push(`/view/${fileName}` as any);
+      router.push(`/view/${filePath}` as any);
     } catch (e) {
       Alert.alert('Error', (e as Error).message);
     } finally {
       setCreating(false);
     }
-  }, [newFileName, load, router]);
-
-  const viewState = getFilesTabViewState(tree, error);
+  }, [newFileName, currentPath, load, router]);
 
   if (loading) {
     return (
@@ -106,7 +128,7 @@ export default function FilesScreen() {
     );
   }
 
-  const handleLongPress = useCallback((item: FileNode) => {
+  const handleLongPress = (item: FileNode) => {
     const isFile = item.type === 'file';
     const options = isFile
       ? ['Rename', 'Delete', 'View Path', 'Cancel']
@@ -144,7 +166,6 @@ export default function FilesScreen() {
               getRenameInputDefaultValue(item.name),
             );
           } else {
-            // Android: use custom TextInputModal
             setRenameTarget(item);
             setRenameModalVisible(true);
           }
@@ -182,7 +203,6 @@ export default function FilesScreen() {
         handleAction,
       );
     } else {
-      // Android: use Alert with buttons as a simpler fallback
       if (!isFile) {
         Alert.alert(item.name, item.path);
         return;
@@ -197,9 +217,9 @@ export default function FilesScreen() {
         ],
       );
     }
-  }, [load]);
+  };
 
-  const handleRenameSubmit = useCallback(async (newName: string) => {
+  const handleRenameSubmit = async (newName: string) => {
     if (!renameTarget) return;
     const target = renameTarget;
     setRenameModalVisible(false);
@@ -210,7 +230,7 @@ export default function FilesScreen() {
     } catch (e) {
       Alert.alert('Error', (e as Error).message);
     }
-  }, [renameTarget, load]);
+  };
 
   function iconForNode(node: FileNode) {
     if (node.type === 'directory') {
@@ -220,8 +240,19 @@ export default function FilesScreen() {
     return 'document-text-outline';
   }
 
+  const handleItemPress = (item: FileNode) => {
+    if (item.type === 'directory') {
+      setCurrentPath(item.path);
+    } else {
+      router.push(`/view/${item.path}` as any);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      {/* Breadcrumb navigation */}
+      <Breadcrumb currentPath={currentPath} onNavigate={setCurrentPath} />
+
       {/* New file input */}
       {showNewFile && (
         <View style={styles.newFileBar}>
@@ -267,7 +298,7 @@ export default function FilesScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.row}
-            onPress={() => router.push(`/view/${item.path}` as any)}
+            onPress={() => handleItemPress(item)}
             onLongPress={() => handleLongPress(item)}
           >
             <Ionicons
@@ -283,13 +314,21 @@ export default function FilesScreen() {
         )}
         ListEmptyComponent={viewState.showEmptyState ? (
           <View style={styles.empty}>
-            <Ionicons name="document-text-outline" size={48} color="#44403c" />
-            <Text style={styles.emptyText}>No files yet</Text>
+            <Ionicons
+              name={currentPath ? 'folder-open-outline' : 'document-text-outline'}
+              size={48}
+              color="#44403c"
+            />
+            <Text style={styles.emptyText}>
+              {currentPath ? 'This folder is empty' : 'No files yet'}
+            </Text>
             <Pressable
               style={styles.createFirstBtn}
               onPress={() => setShowNewFile(true)}
             >
-              <Text style={styles.createFirstText}>Create your first note</Text>
+              <Text style={styles.createFirstText}>
+                {currentPath ? 'Create a note here' : 'Create your first note'}
+              </Text>
             </Pressable>
           </View>
         ) : null}

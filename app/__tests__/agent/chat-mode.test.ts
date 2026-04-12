@@ -14,11 +14,11 @@ describe('getChatTools', () => {
     expect(chatTools.length).toBeGreaterThan(0);
   });
 
-  it('returns exactly the 8 approved read-only tools', () => {
+  it('returns exactly the 6 approved read-only tools', () => {
+    // web_search and web_fetch are now provided by pi-web-access extension
     const expected = [
       'list_files', 'read_file', 'read_file_chunk',
       'search', 'get_recent', 'get_backlinks',
-      'web_search', 'web_fetch',
     ];
     expect(new Set(chatToolNames)).toEqual(new Set(expected));
   });

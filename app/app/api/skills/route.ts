@@ -6,6 +6,7 @@ import os from 'os';
 import { readSettings, writeSettings } from '@/lib/settings';
 import { parseSkillMd, readSkillContentByName } from '@/lib/pi-integration/skills';
 import { loadSkills, type Skill } from '@mariozechner/pi-coding-agent';
+import { generateJsonETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 
@@ -61,7 +62,14 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ skills });
+    const data = { skills };
+    const response = NextResponse.json(data);
+    
+    // ── Cache control: 5 minutes ──
+    // Skill definitions are stable unless skills are installed/removed/toggled.
+    // Cache significantly improves list loading performance (100+ skills).
+    const etag = generateJsonETag(data);
+    return setPublicCacheHeaders(response, 300, etag);
   } catch (err) {
     return handleRouteErrorSimple(err);
   }

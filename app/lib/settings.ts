@@ -48,10 +48,18 @@ export interface EmbeddingConfig {
   model: string;     // e.g. "text-embedding-3-small" (api) or "Xenova/bge-small-zh-v1.5" (local)
 }
 
+export type WebSearchProvider = 'free' | 'tavily' | 'brave' | 'serper' | 'bing-api';
+
+export interface WebSearchConfig {
+  provider: WebSearchProvider;  // default 'free' — HTML scraping fallback chain
+  apiKey: string;               // required for all providers except 'free'
+}
+
 export interface ServerSettings {
   ai: AiConfig;
   agent?: AgentConfig;
   embedding?: EmbeddingConfig;
+  webSearch?: WebSearchConfig;
   mindRoot: string;   // empty = use env var / default
   port?: number;
   mcpPort?: number;
@@ -163,6 +171,21 @@ function parseEmbedding(raw: unknown): EmbeddingConfig | undefined {
   };
 }
 
+const WEB_SEARCH_PROVIDERS = new Set<WebSearchProvider>(['free', 'tavily', 'brave', 'serper', 'bing-api']);
+
+/** Parse webSearch config from unknown input */
+function parseWebSearch(raw: unknown): WebSearchConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const provider = typeof obj.provider === 'string' && WEB_SEARCH_PROVIDERS.has(obj.provider as WebSearchProvider)
+    ? obj.provider as WebSearchProvider
+    : 'free';
+  return {
+    provider,
+    apiKey: typeof obj.apiKey === 'string' ? obj.apiKey : '',
+  };
+}
+
 /** Parse acpAgents config field, delegates to agent-descriptors.ts */
 function parseAcpAgentsField(raw: unknown): Record<string, import('./acp/agent-descriptors').AcpAgentOverride> | undefined {
   return parseAcpAgentOverrides(raw);
@@ -220,6 +243,7 @@ export function readSettings(): ServerSettings {
       ai: migrateAi(parsed),
       agent: parseAgent(parsed.agent),
       embedding: parseEmbedding(parsed.embedding),
+      webSearch: parseWebSearch(parsed.webSearch),
       acpAgents: parseAcpAgentsField(parsed.acpAgents),
       mindRoot: (parsed.mindRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
@@ -269,6 +293,7 @@ export function writeSettings(settings: ServerSettings): void {
   const merged: Record<string, unknown> = { ...existing, ai: settings.ai, mindRoot: settings.mindRoot };
   if (settings.agent !== undefined) merged.agent = settings.agent;
   if (settings.embedding !== undefined) merged.embedding = settings.embedding;
+  if (settings.webSearch !== undefined) merged.webSearch = settings.webSearch;
   if (settings.webPassword !== undefined) merged.webPassword = settings.webPassword;
   if (settings.authToken   !== undefined) merged.authToken   = settings.authToken;
   if (settings.port        !== undefined) merged.port        = settings.port;

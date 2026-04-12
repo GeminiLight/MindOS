@@ -16,7 +16,6 @@ import { acpTools } from '@/lib/acp/acp-tools';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 import { extractRelevantContent } from '@/lib/agent/paragraph-extract';
 import { computeDiffAsync } from '@/lib/agent/diff-async';
-import { webSearch, formatSearchResults } from '@/lib/agent/web-search';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -154,14 +153,6 @@ const AppendParams = Type.Object({
   content: Type.String({ description: 'Content to append' }),
 });
 
-const FetchUrlParams = Type.Object({
-  url: Type.String({ description: 'The HTTP/HTTPS URL to fetch' }),
-});
-
-const WebSearchParams = Type.Object({
-  query: Type.String({ description: 'The search query or keywords to look up on the internet' }),
-});
-
 const InsertHeadingParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   heading: Type.String({ description: 'Heading text to find (e.g. "## Tasks" or just "Tasks")' }),
@@ -220,7 +211,7 @@ export const WRITE_TOOLS = new Set([
 ]);
 
 /** Tool names sufficient for the "organize uploaded files" task. */
-const ORGANIZE_TOOL_NAMES = new Set([
+export const ORGANIZE_TOOL_NAMES = new Set([
   'list_files', 'read_file', 'search',
   'create_file', 'batch_create_files', 'write_file',
   'append_to_file', 'insert_after_heading', 'update_section',
@@ -238,15 +229,13 @@ export function getOrganizeTools(): AgentTool<any>[] {
  * but blocks all write operations. Extensible: add tool names here
  * to grant more read-only capabilities to Chat mode.
  */
-const CHAT_TOOL_NAMES = new Set([
+export const CHAT_TOOL_NAMES = new Set([
   'list_files',
   'read_file',
   'read_file_chunk',
   'search',
   'get_recent',
   'get_backlinks',
-  'web_search',
-  'web_fetch',
 ]);
 
 export function getChatTools(): AgentTool<any>[] {
@@ -375,99 +364,8 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
     }),
   },
 
-  {
-    name: 'web_search',
-    label: 'Web Search',
-    description: 'Search the internet for up-to-date information. Uses multiple search engines with automatic fallback (DuckDuckGo → Bing → Google). Returns top search results with titles, snippets, and URLs.',
-    parameters: WebSearchParams,
-    execute: safeExecute(async (_id, params: Static<typeof WebSearchParams>) => {
-      try {
-        const response = await webSearch(params.query);
-        return textResult(formatSearchResults(params.query, response));
-      } catch (err) {
-        return textResult(`Web search failed: ${formatToolError(err)}`);
-      }
-    }),
-  },
-
-  {
-    name: 'web_fetch',
-    label: 'Web Fetch',
-    description: 'Fetch the text content of any public URL. Extracts main text from HTML and converts it to Markdown. Use this to read external docs, repos, or articles.',
-    parameters: FetchUrlParams,
-    execute: safeExecute(async (_id, params: Static<typeof FetchUrlParams>) => {
-      let url = params.url;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      
-      try {
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          },
-          // Don't wait forever
-          signal: AbortSignal.timeout(10000)
-        });
-        
-        if (!res.ok) {
-          return textResult(`Failed to fetch URL: HTTP ${res.status} ${res.statusText}`);
-        }
-        
-        const contentType = res.headers.get('content-type') || '';
-        
-        // If it's a raw file (like raw.githubusercontent.com or a raw text file)
-        if (contentType.includes('text/plain') || contentType.includes('application/json') || url.includes('raw.githubusercontent.com')) {
-          const text = await res.text();
-          return textResult(truncate(text));
-        }
-        
-        // For HTML, we do a basic extraction (in a real app you might use JSDOM/Readability, but we'll do a robust regex cleanup here to avoid new dependencies)
-        let html = await res.text();
-        
-        // Extract title if possible
-        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-        const title = titleMatch ? titleMatch[1].trim() : url;
-        
-        // Strip out scripts, styles, svg, and headers/footers roughly
-        html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-                   .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-                   .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
-                   .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
-                   .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
-                   .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ');
-
-        // Convert some basic tags to markdown equivalents roughly before stripping all HTML
-        html = html.replace(/<h[1-2][^>]*>(.*?)<\/h[1-2]>/gi, '\n\n# $1\n\n')
-                   .replace(/<h[3-6][^>]*>(.*?)<\/h[3-6]>/gi, '\n\n## $1\n\n')
-                   .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
-                   .replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1')
-                   .replace(/<br\s*\/?>/gi, '\n');
-                   
-        // Strip remaining HTML tags
-        let text = html.replace(/<[^>]+>/g, ' ');
-        
-        // Decode common HTML entities
-        text = text.replace(/&nbsp;/g, ' ')
-                   .replace(/&amp;/g, ' ')
-                   .replace(/&lt;/g, '<')
-                   .replace(/&gt;/g, '>')
-                   .replace(/&quot;/g, '"')
-                   .replace(/&#39;/g, "'");
-
-        // Clean up whitespace: remove empty lines and extra spaces
-        text = text.replace(/[ \t]+/g, ' ')
-                   .replace(/\n\s*\n\s*\n/g, '\n\n')
-                   .trim();
-                   
-        const result = `# ${title}\nSource: ${url}\n\n${text}`;
-        return textResult(truncate(result));
-      } catch (err) {
-        return textResult(`Failed to fetch URL: ${formatToolError(err)}`);
-      }
-    }),
-  },
+  // web_search and fetch_content are now provided by pi-web-access extension
+  // (registered via additionalExtensionPaths in route.ts / headless.ts)
 
   {
     name: 'get_recent',
