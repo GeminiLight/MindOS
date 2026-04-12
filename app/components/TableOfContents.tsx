@@ -39,37 +39,45 @@ const SCROLL_OFFSET = TOPBAR_H + 12;
 const NAV_W = 212;
 
 /**
- * Find the content heading elements in the DOM, trying multiple strategies.
- * Returns an array aligned with the `headings` array (same length, same order).
+ * Find the content heading elements in the DOM by index.
+ *
+ * We cannot rely on id matching because three different slug algorithms exist:
+ * - TOC uses github-slugger on markdown source text
+ * - View mode uses rehype-slug (github-slugger on HTML text content)
+ * - Edit mode uses Milkdown's defaultHeadingIdGenerator (simple toLowerCase + replace)
+ *
+ * Instead, we find headings by scanning visible content containers in order.
  */
 function findHeadingElements(headings: Heading[]): (HTMLElement | null)[] {
   if (headings.length === 0) return [];
 
-  // Strategy 1: find by id (View mode with rehype-slug)
-  const byId = headings.map(h => document.getElementById(h.id));
-  if (byId.some(Boolean)) return byId;
+  // Check both .prose (View mode) and .ProseMirror (Edit mode) containers
+  const containers = [
+    ...document.querySelectorAll<HTMLElement>('.prose'),
+    ...document.querySelectorAll<HTMLElement>('.ProseMirror'),
+  ];
 
-  // Strategy 2: find headings inside visible .ProseMirror (Edit mode)
-  // Use getComputedStyle to detect visibility — more reliable than offsetParent
-  const proseMirrors = document.querySelectorAll<HTMLElement>('.ProseMirror');
-  for (const pm of proseMirrors) {
-    const style = getComputedStyle(pm);
-    if (style.display === 'none' || style.visibility === 'hidden') continue;
-    // Get only direct content headings (exclude toolbar/menu headings)
-    const pmHeadings = pm.querySelectorAll<HTMLElement>(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
-    if (pmHeadings.length > 0) {
-      return headings.map((_, i) => pmHeadings[i] ?? null);
+  for (const container of containers) {
+    // Skip hidden containers (display:none from mode toggle)
+    // Walk up to check if any ancestor is hidden
+    let hidden = false;
+    let node: HTMLElement | null = container;
+    while (node) {
+      if (node.style.display === 'none') { hidden = true; break; }
+      node = node.parentElement;
     }
-  }
+    if (hidden) continue;
 
-  // Strategy 3: find headings inside visible .prose (fallback)
-  const proseEls = document.querySelectorAll<HTMLElement>('.prose');
-  for (const p of proseEls) {
-    const style = getComputedStyle(p);
-    if (style.display === 'none' || style.visibility === 'hidden') continue;
-    const proseHeadings = p.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
-    if (proseHeadings.length > 0) {
-      return headings.map((_, i) => proseHeadings[i] ?? null);
+    // Get content headings — in ProseMirror they are direct children
+    const found = container.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+    // Filter out headings that are inside Crepe UI components (not content)
+    const contentHeadings = Array.from(found).filter(h => {
+      // Skip headings inside toolbar, menu, or code-block UI
+      return !h.closest('.milkdown-code-block, .milkdown-toolbar, .language-picker, [role="toolbar"], [role="menu"]');
+    });
+
+    if (contentHeadings.length > 0) {
+      return headings.map((_, i) => contentHeadings[i] ?? null);
     }
   }
 
