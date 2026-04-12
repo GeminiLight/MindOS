@@ -73,6 +73,7 @@
 
 ## Next
 
+- [x] 设置页 Obsidian 插件迁移向导（Settings > Plugins > Import from Obsidian）
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
