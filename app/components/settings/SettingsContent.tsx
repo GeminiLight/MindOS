@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2, HelpCircle } from 'lucide-react';
+import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
@@ -11,6 +11,7 @@ import { AppearanceTab } from './AppearanceTab';
 import { KnowledgeTab } from './KnowledgeTab';
 import { SyncTab } from './SyncTab';
 import { McpTab } from './McpTab';
+import { PluginsTab } from './PluginsTab';
 import { UpdateTab } from './UpdateTab';
 import { UninstallTab } from './UninstallTab';
 
@@ -36,6 +37,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const [fontSize, setFontSize] = useState('15px');
   const [contentWidth, setContentWidth] = useState('80%');
   const [dark, setDark] = useState(true);
+  const [pluginStates, setPluginStates] = useState<Record<string, boolean>>({});
 
   // Update available badge on Update tab
   const [hasUpdate, setHasUpdate] = useState(() => {
@@ -208,6 +210,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: boolean }[] = [
     { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={iconSize} /> },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'Connections', icon: <Plug size={iconSize} /> },
+    { id: 'plugins', label: t.settings.tabs.plugins ?? 'Plugins', icon: <Puzzle size={iconSize} /> },
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} /> },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
@@ -237,6 +240,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
           {tab === 'sync' && <SyncTab t={t} visible={visible} />}
           {tab === 'mcp' && <McpTab t={t} />}
+          {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} mindRoot={data?.mindRoot} />}
           {tab === 'update' && <UpdateTab />}
           {tab === 'uninstall' && <UninstallTab />}
         </>

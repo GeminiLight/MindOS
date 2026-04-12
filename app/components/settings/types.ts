@@ -46,7 +46,7 @@ export interface SettingsData {
   envValues?: Record<string, string>;
 }
 
-export type Tab = 'ai' | 'appearance' | 'knowledge' | 'mcp' | 'sync' | 'update' | 'uninstall';
+export type Tab = 'ai' | 'appearance' | 'knowledge' | 'plugins' | 'mcp' | 'sync' | 'update' | 'uninstall';
 
 export const CONTENT_WIDTH_DEFAULT = '80%';
 export const CONTENT_WIDTH_MIN = 50;
@@ -185,6 +185,7 @@ export interface PluginsTabProps {
   pluginStates: Record<string, boolean>;
   setPluginStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   t: Messages;
+  mindRoot?: string;
 }
 
 export interface SyncTabProps {
