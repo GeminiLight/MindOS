@@ -1,9 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { searchFiles } from '@/lib/fs';
+import { hybridSearch } from '@/lib/core/hybrid-search';
+import { effectiveSopRoot } from '@/lib/settings';
 import { setPrivateCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { telemetry } from '@/lib/telemetry';
+import type { SearchResult } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q') || '';
@@ -13,7 +15,8 @@ export async function GET(request: NextRequest) {
 
   const stop = telemetry.startTimer('search.api.request', { queryLen: q.length });
   try {
-    const results = searchFiles(q);
+    const mindRoot = effectiveSopRoot();
+    const results: SearchResult[] = await hybridSearch(mindRoot, q, { limit: 20 });
     stop({ resultCount: results.length, success: true });
     
     const response = NextResponse.json(results);
