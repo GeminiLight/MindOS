@@ -4,7 +4,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { generateETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
-export async function GET(req?: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const files = collectAllFiles();
     
