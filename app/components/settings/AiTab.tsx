@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AlertCircle, Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X, Search, Download, Loader2, Check, Globe } from 'lucide-react';
+import { Sparkles, Bot, Monitor, ExternalLink, RotateCcw, Trash2, X, Search, Download, Loader2, Check, Globe } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { AiTabProps } from './types';
 import { Field, Select, Input, PasswordInput, EnvBadge, Toggle, SettingCard, SettingRow } from './Primitives';
@@ -283,13 +283,6 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
           </div>
         )}
 
-        {/* Env override hint — only when env vars are active */}
-        {!customFormOpen && Object.values(env).some(Boolean) && (
-          <div className="flex items-start gap-2 text-xs text-[var(--amber)] bg-[var(--amber-subtle)] border border-[var(--amber)]/20 rounded-lg px-3 py-2.5">
-            <AlertCircle size={13} className="shrink-0 mt-0.5" />
-            <span>{t.settings.ai.envHint}</span>
-          </div>
-        )}
       </SettingCard>
 
       {/* ── Card 2: Embedding Search ── */}

@@ -422,9 +422,22 @@ export class CoreUpdater extends EventEmitter {
     }
 
     // Clean up previous download attempts — CRITICAL: must ensure files are fully deleted
+    // Use retry logic on Windows because antivirus may hold file locks momentarily
     if (existsSync(DOWNLOAD_DIR)) {
       console.info('[CoreUpdater] Removing previous download directory');
-      rmSync(DOWNLOAD_DIR, { recursive: true, force: true });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          rmSync(DOWNLOAD_DIR, { recursive: true, force: true });
+          break;
+        } catch (err) {
+          if (attempt < 2) {
+            console.warn(`[CoreUpdater] Failed to remove download dir (attempt ${attempt + 1}/3): ${err instanceof Error ? err.message : err}`);
+            await new Promise(r => setTimeout(r, 200));
+          } else {
+            console.warn(`[CoreUpdater] Could not remove download dir after 3 attempts, proceeding anyway`);
+          }
+        }
+      }
     }
     
     // Delete tarball with retry — Windows may hold file lock momentarily

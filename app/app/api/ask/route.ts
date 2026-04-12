@@ -33,6 +33,7 @@ import { toAgentMessages } from '@/lib/agent/to-agent-messages';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
+import { performActiveRecall } from '@/lib/agent/active-recall';
 import { metrics } from '@/lib/metrics';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import '@/lib/pi-integration/mcp-config'; // Injects --mcp-config argv before extension load
@@ -465,6 +466,41 @@ export async function POST(req: NextRequest) {
         `Do NOT use read_file or search tools to find them — they exist only here, not in the knowledge base.\n\n` +
         uploadedParts.join('\n\n---\n\n'),
       );
+    }
+
+    // ── Active Recall: auto-search KB and inject relevant content ──
+    {
+      const arConfig = agentConfig.activeRecall ?? {};
+      if (arConfig.enabled !== false) {
+        const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+        const userQuery = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+        if (userQuery.trim().length > 1) {
+          const excludePaths = [
+            ...(currentFile ? [currentFile] : []),
+            ...(Array.isArray(attachedFiles) ? attachedFiles : []),
+          ];
+          try {
+            const recalled = await performActiveRecall(getMindRoot(), userQuery, {
+              maxTokens: arConfig.maxTokens,
+              maxFiles: arConfig.maxFiles,
+              minScore: arConfig.minScore,
+              excludePaths,
+            });
+            if (recalled.length > 0) {
+              const block = recalled.map(r => `### ${r.path}\n\n${r.content}`).join('\n\n---\n\n');
+              promptParts.push(
+                `---\n\n## KNOWLEDGE CONTEXT (auto-recalled)\n\n` +
+                `The following notes were automatically found in the knowledge base based on the user's question. ` +
+                `Reference this content to provide accurate, grounded answers. ` +
+                `Cite the file path when using information from a specific note.\n\n` +
+                block,
+              );
+            }
+          } catch (err) {
+            console.warn('[ask] Active recall failed, continuing without:', err);
+          }
+        }
+      }
     }
 
     systemPrompt = promptParts.join('\n\n');

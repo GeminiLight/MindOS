@@ -34,6 +34,7 @@ import {
   isToolExecutionStartEvent,
 } from '@/lib/sse/events';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
+import { performActiveRecall } from '@/lib/agent/active-recall';
 
 function readKnowledgeFile(filePath: string): string | null {
   try {
@@ -56,6 +57,32 @@ function buildSystemPrompt(mode: AskModeApi): string {
     parts.push(`---\n\n## Knowledge Base Structure\n\n${readme}`);
   }
   return parts.join('\n\n');
+}
+
+/** Append Active Recall context to system prompt for agent mode. */
+async function appendActiveRecall(systemPrompt: string, userQuery: string, agentConfig: import('@/lib/settings').AgentConfig): Promise<string> {
+  const arConfig = agentConfig.activeRecall ?? {};
+  if (arConfig.enabled === false) return systemPrompt;
+  if (!userQuery || userQuery.trim().length < 2) return systemPrompt;
+  try {
+    const recalled = await performActiveRecall(getMindRoot(), userQuery, {
+      maxTokens: arConfig.maxTokens,
+      maxFiles: arConfig.maxFiles,
+      minScore: arConfig.minScore,
+    });
+    if (recalled.length > 0) {
+      const block = recalled.map(r => `### ${r.path}\n\n${r.content}`).join('\n\n---\n\n');
+      return systemPrompt + '\n\n' +
+        `---\n\n## KNOWLEDGE CONTEXT (auto-recalled)\n\n` +
+        `The following notes were automatically found in the knowledge base based on the user's question. ` +
+        `Reference this content to provide accurate, grounded answers. ` +
+        `Cite the file path when using information from a specific note.\n\n` +
+        block;
+    }
+  } catch (err) {
+    console.warn('[headless] Active recall failed, continuing without:', err);
+  }
+  return systemPrompt;
 }
 
 export interface HeadlessAgentRunOptions {
@@ -106,7 +133,11 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     hasImages: hasImages(allMessages),
   });
 
-  const systemPrompt = buildSystemPrompt(askMode);
+  let systemPrompt = buildSystemPrompt(askMode);
+  // Active Recall: inject KB context for agent mode
+  if (askMode === 'agent') {
+    systemPrompt = await appendActiveRecall(systemPrompt, options.userMessage, agentConfig);
+  }
   const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
   const requestTools = askMode === 'organize' ? getOrganizeTools() : askMode === 'chat' ? getChatTools() : getRequestScopedTools();
   setKbMode(askMode === 'organize' ? 'organize' : askMode === 'chat' ? 'chat' : 'agent');
@@ -145,6 +176,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
       path.join(projectRoot, 'app', 'lib', 'agent', 'kb-extension.ts'),
       path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
       path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
+      path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
       path.join(projectRoot, 'app', 'node_modules', 'pi-web-access', 'index.ts'),
       path.join(projectRoot, 'app', 'lib', 'schedule-prompt', 'index.ts'),
     ],

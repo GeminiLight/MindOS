@@ -91,6 +91,92 @@ function mergeTomlEntry(existing: string, sectionKey: string, serverName: string
   return result.join('\n');
 }
 
+/** Generate a YAML block for an MCP server entry */
+function buildYamlEntry(serverName: string, entry: Record<string, unknown>): string {
+  const lines: string[] = [];
+  lines.push(`  ${serverName}:`);
+  if (entry.type) lines.push(`    type: "${entry.type}"`);
+  if (entry.command) lines.push(`    command: "${entry.command}"`);
+  if (entry.url) lines.push(`    url: "${entry.url}"`);
+  if (Array.isArray(entry.args)) {
+    lines.push(`    args: [${entry.args.map(a => `"${a}"`).join(', ')}]`);
+  }
+  if (entry.env && typeof entry.env === 'object') {
+    lines.push('    env:');
+    for (const [k, v] of Object.entries(entry.env)) {
+      lines.push(`      ${k}: "${v}"`);
+    }
+  }
+  if (entry.headers && typeof entry.headers === 'object') {
+    lines.push('    headers:');
+    for (const [k, v] of Object.entries(entry.headers)) {
+      lines.push(`      ${k}: "${v}"`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/** Replace or append a server block under sectionKey in YAML content */
+function mergeYamlEntry(existing: string, sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
+  const newBlock = buildYamlEntry(serverName, entry);
+  if (!existing.trim()) return `${sectionKey}:\n${newBlock}\n`;
+
+  const lines = existing.split('\n');
+  const result: string[] = [];
+  let inSection = false;
+  let sectionFound = false;
+  let baseIndent = -1;
+  let skipping = false;
+  let serverIndent = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const indent = line.length - line.trimStart().length;
+
+    if (indent === 0 && trimmed === sectionKey + ':') {
+      inSection = true;
+      sectionFound = true;
+      baseIndent = -1;
+      result.push(line);
+      continue;
+    }
+    if (indent === 0 && trimmed && !trimmed.startsWith('#') && inSection) {
+      while (result.length > 0 && result[result.length - 1].trim() === '') result.pop();
+      result.push(newBlock);
+      result.push('');
+      inSection = false;
+      skipping = false;
+      result.push(line);
+      continue;
+    }
+    if (!inSection) { result.push(line); continue; }
+    if (!trimmed || trimmed.startsWith('#')) { if (!skipping) result.push(line); continue; }
+    if (baseIndent < 0) baseIndent = indent;
+    if (indent === baseIndent) {
+      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+      if (match && match[1] === serverName) { skipping = true; serverIndent = indent; continue; }
+      else skipping = false;
+    }
+    if (skipping) { if (indent > serverIndent) continue; else skipping = false; }
+    result.push(line);
+  }
+
+  if (inSection) {
+    while (result.length > 0 && result[result.length - 1].trim() === '') result.pop();
+    result.push(newBlock);
+  }
+  if (!sectionFound) {
+    while (result.length > 0 && result[result.length - 1].trim() === '') result.pop();
+    result.push('');
+    result.push(`${sectionKey}:`);
+    result.push(newBlock);
+  }
+
+  let output = result.join('\n');
+  if (!output.endsWith('\n')) output += '\n';
+  return output;
+}
+
 interface AgentInstallItem {
   key: string;
   scope: 'project' | 'global';
@@ -185,6 +271,11 @@ export async function POST(req: NextRequest) {
           // TOML format (e.g. Codex): merge into existing TOML or generate new
           const existing = fs.existsSync(absPath) ? fs.readFileSync(absPath, 'utf-8') : '';
           const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry as Record<string, unknown>);
+          fs.writeFileSync(absPath, merged, 'utf-8');
+        } else if (agent.format === 'yaml') {
+          // YAML format (e.g. Hermes): merge into existing YAML or generate new
+          const existing = fs.existsSync(absPath) ? fs.readFileSync(absPath, 'utf-8') : '';
+          const merged = mergeYamlEntry(existing, agent.key, 'mindos', entry as Record<string, unknown>);
           fs.writeFileSync(absPath, merged, 'utf-8');
         } else {
           // JSON format (default)

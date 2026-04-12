@@ -109,7 +109,9 @@ export async function quickDropToInbox(
       continue;
     }
     try {
-      if (file.name.toLowerCase().endsWith('.pdf')) {
+      const lowerName = file.name.toLowerCase();
+      const isWord = lowerName.endsWith('.doc') || lowerName.endsWith('.docx') || lowerName.endsWith('.docm');
+      if (lowerName.endsWith('.pdf') || isWord) {
         const buf = await file.arrayBuffer();
         payload.push({ name: file.name, content: await arrayBufferToBase64(buf), encoding: 'base64' });
       } else {
@@ -253,6 +255,7 @@ export async function quickDropToDirectory(
   const BINARY_EXTS = new Set([
     'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico',
     'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'mp4', 'webm', 'mov', 'mkv',
+    'doc', 'docx', 'docm',
   ]);
 
   for (const file of files) {

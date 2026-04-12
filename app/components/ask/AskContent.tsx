@@ -767,7 +767,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               type="file"
               className="hidden"
               multiple
-              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,.doc,.docx,.docm,text/plain,text/markdown,text/csv,application/json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-word.document.macroEnabled.12"
               onChange={async (e) => {
                 const inputEl = e.currentTarget;
                 await upload.pickFiles(inputEl.files);

@@ -116,6 +116,7 @@ export interface LocalAttachment {
     totalChars: number;
     includedChars: number;
     totalPages: number;
+    warning?: string;
   };
 }
 

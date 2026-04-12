@@ -135,17 +135,21 @@ if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
 
   // Determine platform-specific download info
   const nodeArch = arch === 'arm64' ? 'arm64' : 'x64';
-  let nodeUrl, nodeFormat;
+  const OFFICIAL_BASE = `https://nodejs.org/dist/v${NODE_VERSION}`;
+  const MIRROR_BASE = process.env.NODEJS_ORG_MIRROR || `https://npmmirror.com/mirrors/node/v${NODE_VERSION}`;
+  let nodeFile, nodeFormat;
   if (plat === 'darwin') {
-    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-${nodeArch}.tar.gz`;
+    nodeFile = `node-v${NODE_VERSION}-darwin-${nodeArch}.tar.gz`;
     nodeFormat = 'tar.gz';
   } else if (plat === 'win32') {
-    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-${nodeArch}.zip`;
+    nodeFile = `node-v${NODE_VERSION}-win-${nodeArch}.zip`;
     nodeFormat = 'zip';
   } else {
-    nodeUrl = `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${nodeArch}.tar.gz`;
+    nodeFile = `node-v${NODE_VERSION}-linux-${nodeArch}.tar.gz`;
     nodeFormat = 'tar.gz';
   }
+  const nodeUrl = `${OFFICIAL_BASE}/${nodeFile}`;
+  const nodeMirrorUrl = `${MIRROR_BASE}/${nodeFile}`;
 
   const nodeDest = path.join(dest, 'node');
   const tmpDir = path.join(desktopRoot, '.node-bundle-tmp');
@@ -168,13 +172,20 @@ if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
 
     const tmpFile = path.join(tmpDir, `node.${nodeFormat}`);
 
-    // Download using curl (available on all CI platforms and macOS/Linux)
-    const curlResult = spawnSync('curl', ['-fsSL', '-o', tmpFile, nodeUrl], {
+    // Download using curl — try official first, fall back to China mirror (npmmirror.com)
+    const curlResult = spawnSync('curl', ['-fsSL', '--connect-timeout', '15', '-o', tmpFile, nodeUrl], {
       stdio: 'inherit',
       timeout: 120000,
     });
     if (curlResult.status !== 0) {
-      fail(`Failed to download Node.js from ${nodeUrl}`);
+      console.log(`[prepare-mindos-runtime] Official download failed, trying mirror: ${nodeMirrorUrl}`);
+      const mirrorResult = spawnSync('curl', ['-fsSL', '-o', tmpFile, nodeMirrorUrl], {
+        stdio: 'inherit',
+        timeout: 120000,
+      });
+      if (mirrorResult.status !== 0) {
+        fail(`Failed to download Node.js from both ${nodeUrl} and ${nodeMirrorUrl}`);
+      }
     }
 
     // Extract

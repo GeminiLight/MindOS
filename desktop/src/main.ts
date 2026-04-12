@@ -31,6 +31,7 @@ import { getNodePath, getMindosInstallPath, getNpxPath, getNpmPath, getLocalBinP
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
 import { isNextBuildValid, isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout } from './mindos-runtime-layout';
+import { hasRequiredStandaloneAppFiles } from './runtime-health-contract';
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import {
   getEffectiveMindRootFromConfig,
@@ -225,7 +226,11 @@ function createSplash(): BrowserWindow {
     show: false,
   });
 
-  win.loadFile(SPLASH_HTML).catch(() => {});
+  win.loadFile(SPLASH_HTML).catch((err) => {
+    console.error('[MindOS] Splash screen load failed:', err);
+    dialog.showErrorBox('Startup Error', `Failed to load splash screen: ${err.message}\n\nThe installation may be corrupt. Please reinstall MindOS.`);
+    app.quit();
+  });
   win.once('ready-to-show', () => win.show());
 
   // If user closes splash, quit the app
@@ -426,9 +431,18 @@ async function startLocalMode(): Promise<string | null> {
   // 4. Ensure app is built (first run or after update — npm package has no .next)
   //    Check for valid build (BUILD_ID or standalone/server.js), not just .next dir existence.
   //    An incomplete .next (interrupted build, empty dir) would let Next.js crash at startup.
+  //    OPTIMIZATION: Bundled/cached standalone runtimes ship pre-built — skip rebuild entirely
+  //    when standalone/server.js and all required assets are present. This avoids the costly
+  //    npm install + next build cycle (5-15 min on Windows) that was triggered by version
+  //    stamp mismatches on upgrade-in-place scenarios.
   const appDir = path.join(projectRoot, 'app');
   const nextDir = path.join(appDir, '.next');
-  if (!isNextBuildCurrent(appDir, projectRoot)) {
+  const isPrebuiltStandalone =
+    (runtimePick.source === 'bundled' || runtimePick.source === 'cached') &&
+    hasRequiredStandaloneAppFiles(appDir);
+  if (isPrebuiltStandalone) {
+    console.info(`[MindOS] Skipping rebuild — ${runtimePick.source} standalone runtime is intact`);
+  } else if (!isNextBuildCurrent(appDir, projectRoot)) {
     splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
@@ -466,7 +480,7 @@ async function startLocalMode(): Promise<string | null> {
       });
       return null;
     }
-  }
+  } // closes the else-if for !isNextBuildCurrent
 
   splashStatus({ status: 'starting' });
 
@@ -516,7 +530,7 @@ async function startLocalMode(): Promise<string | null> {
   // Clean up any previous processManager (e.g. from retry or mode switch)
   if (processManager) {
     processManager.removeAllListeners();
-    processManager.stop().catch(() => {});
+    try { await processManager.stop(); } catch { /* best-effort cleanup */ }
   }
 
   processManager = createProcessManager(webPort, mcpPort);
@@ -659,7 +673,9 @@ async function startLocalMode(): Promise<string | null> {
       } else {
         crashDialogShown = true;
         const zh = navigator_lang() === 'zh';
-        const stderr = stderrLines?.slice(-5).join('\n') || '';
+        // Strip ANSI escape codes from stderr for clean display in native dialog
+        const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+        const stderr = stripAnsi(stderrLines?.slice(-5).join('\n') || '');
         const lastExitCode = exitCode ?? null;
         // Diagnose crash cause from exit code and stderr
         let hint: string;

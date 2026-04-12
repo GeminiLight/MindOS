@@ -22,8 +22,8 @@ export interface AgentDef {
   global: string;
   key: string;
   preferredTransport: 'stdio' | 'http';
-  /** Config file format: 'json' (default) or 'toml'. */
-  format?: 'json' | 'toml';
+  /** Config file format: 'json' (default), 'toml', or 'yaml'. */
+  format?: 'json' | 'toml' | 'yaml';
   /** For agents whose global config nests under a parent key (e.g. VS Code: mcp.servers). */
   globalNestedKey?: string;
   /** CLI binary name for presence detection (e.g. 'claude'). Optional. */
@@ -280,6 +280,16 @@ export const MCP_AGENTS: Record<string, AgentDef> = {
     presenceCli: 'copaw',
     presenceDirs: ['~/.copaw/'],
   },
+  'hermes': {
+    name: 'Hermes',
+    project: null,
+    global: '~/.hermes/config.yaml',
+    key: 'mcp_servers',
+    format: 'yaml',
+    preferredTransport: 'stdio',
+    presenceCli: 'hermes',
+    presenceDirs: ['~/.hermes/'],
+  },
 };
 
 /**
@@ -311,6 +321,7 @@ export const SKILL_AGENT_REGISTRY: Record<string, SkillAgentRegistration> = {
   'workbuddy': { mode: 'unsupported' },
   'lingma': { mode: 'unsupported' },
   'copaw': { mode: 'unsupported' },
+  'hermes': { mode: 'unsupported' },
 };
 
 export interface SkillWorkspaceProfile {
@@ -393,6 +404,42 @@ function parseJsonServerNames(content: string, configKey: string, globalNestedKe
   }
 }
 
+function parseYamlServerNames(content: string, sectionKey: string): string[] {
+  // Lightweight YAML parser: find top-level key matching sectionKey,
+  // then collect all direct children (indent = base + 2 spaces).
+  const lines = content.split('\n');
+  let inSection = false;
+  let baseIndent = -1;
+  const names: string[] = [];
+  for (const line of lines) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+    // Top-level key
+    if (indent === 0 && trimmed.startsWith(sectionKey + ':')) {
+      inSection = true;
+      baseIndent = -1;
+      continue;
+    }
+    // Another top-level key ends the section
+    if (indent === 0 && trimmed) {
+      inSection = false;
+      continue;
+    }
+    if (!inSection) continue;
+    // First child sets the base indent
+    if (baseIndent < 0) {
+      baseIndent = indent;
+    }
+    // Direct children at base indent level
+    if (indent === baseIndent) {
+      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+      if (match) names.push(match[1]);
+    }
+  }
+  return names;
+}
+
 function parseTomlServerNames(content: string, sectionKey: string): string[] {
   const names = new Set<string>();
   const lines = content.split('\n');
@@ -449,7 +496,9 @@ export function detectAgentConfiguredMcpServers(agentKey: string): AgentConfigur
       const names =
         agent.format === 'toml'
           ? parseTomlServerNames(content, agent.key)
-          : parseJsonServerNames(content, agent.key, nestedPath);
+          : agent.format === 'yaml'
+            ? parseYamlServerNames(content, agent.key)
+            : parseJsonServerNames(content, agent.key, nestedPath);
       for (const name of names) serverSet.add(name);
       sources.push(`${scopeType}:${cfgPath}`);
     } catch {
@@ -560,6 +609,13 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
           return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
         }
+      } else if (agent.format === 'yaml') {
+        const result = parseYamlMcpEntry(content, agent.key, 'mindos');
+        if (result.found && result.entry) {
+          const entry = result.entry;
+          const transport = entry.command ? 'stdio' : entry.url ? 'http' : 'unknown';
+          return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
+        }
       } else {
         // JSON format (default)
         const config = parseJsonc(content);
@@ -576,6 +632,63 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
   }
 
   return { installed: false };
+}
+
+// Parse YAML to find MCP server entry without external library
+function parseYamlMcpEntry(content: string, sectionKey: string, serverName: string): { found: boolean; entry?: { command?: string; url?: string } } {
+  const lines = content.split('\n');
+  let inSection = false;
+  let inServer = false;
+  let baseIndent = -1;
+  let serverIndent = -1;
+  const entry: { command?: string; url?: string } = {};
+
+  for (const line of lines) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+
+    // Top-level key
+    if (indent === 0 && trimmed.startsWith(sectionKey + ':')) {
+      inSection = true;
+      baseIndent = -1;
+      continue;
+    }
+    // Another top-level key ends the section
+    if (indent === 0 && trimmed) {
+      if (inServer) return { found: true, entry };
+      inSection = false;
+      continue;
+    }
+    if (!inSection) continue;
+
+    // First child sets the base indent
+    if (baseIndent < 0) baseIndent = indent;
+
+    // Server name at base indent
+    if (indent === baseIndent) {
+      if (inServer) return { found: true, entry };
+      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+      if (match && match[1] === serverName) {
+        inServer = true;
+        serverIndent = -1;
+      }
+      continue;
+    }
+
+    if (!inServer) continue;
+    if (serverIndent < 0) serverIndent = indent;
+    if (indent === serverIndent) {
+      const kv = trimmed.match(/^(command|url)\s*:\s*["']?([^"'\n]+)["']?\s*$/);
+      if (kv) {
+        if (kv[1] === 'command') entry.command = kv[2].trim();
+        if (kv[1] === 'url') entry.url = kv[2].trim();
+      }
+    }
+  }
+
+  if (inServer) return { found: true, entry };
+  return { found: false };
 }
 
 // Parse TOML to find MCP server entry without external library

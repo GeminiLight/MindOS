@@ -265,7 +265,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
           </div>
           {overflowCount > 0 && (
             <Link
-              href="/view/Inbox/"
+              href="/capture"
               className="flex items-center gap-1 px-3 py-1.5 text-xs text-muted-foreground hover:text-[var(--amber)] transition-colors duration-150"
             >
               <ChevronRight size={12} />
@@ -432,7 +432,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
               {t.importHistory.title}
             </span>
             <Link
-              href="/inbox/history"
+              href="/capture/history"
               className="ml-auto text-2xs text-muted-foreground/50 hover:text-[var(--amber)] transition-colors"
             >
               {t.inbox.viewAllHistory(totalHistory)}

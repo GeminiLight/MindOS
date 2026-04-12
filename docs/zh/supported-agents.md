@@ -4,60 +4,62 @@
 
 ### CLI / 终端类 Agent
 
-| Agent | MCP | Skills | MCP 配置文件路径 | Skill 路径 |
-|:------|:---:|:------:|:-----------------|:-----------|
+| Agent | MCP | Skills | MCP 配置文件路径（全局） | Skill 路径（全局） |
+|:------|:---:|:------:|:-------------------------|:-------------------|
 | MindOS Agent | ✅ | ✅ | 内置（无需配置） | 内置（无需配置） |
-| Claude Code | ✅ | ✅ | `~/.claude.json`（全局）或 `.mcp.json`（项目级） | `~/.claude/skills/`（全局）或 `.claude/skills/`（项目级） |
-| OpenClaw | ✅ | ✅ | `~/.openclaw/mcp.json`（全局） | `~/.openclaw/skills/`（全局） |
-| CodeBuddy | ✅ | ✅ | `~/.codebuddy/mcp.json`（全局） | `~/.codebuddy/skills/`（全局）或 `.codebuddy/skills/`（项目级） |
-| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json`（全局）或 `.gemini/settings.json`（项目级） | `~/.agents/skills/`（通用） |
-| Kimi Code | ✅ | ✅ | `~/.kimi/mcp.json`（全局）或 `.kimi/mcp.json`（项目级） | `~/.agents/skills/`（通用） |
-| Codex | ✅ | ✅ | `~/.codex/config.toml`（全局，TOML 格式，键名：`mcp_servers`） | `~/.agents/skills/`（通用） |
-| OpenCode | ✅ | ✅ | `~/.config/opencode/config.json`（全局） | `~/.agents/skills/`（通用） |
-| iFlow CLI | ✅ | ✅ | `~/.iflow/settings.json`（全局）或 `.iflow/settings.json`（项目级） | `~/.iflow/skills/`（全局）或 `.iflow/skills/`（项目级） |
-| Pi | ✅ | ✅ | `~/.pi/agent/mcp.json`（全局）或 `.pi/settings.json`（项目级） | `~/.pi/skills/`（全局）或 `.pi/skills/`（项目级） |
-| Qoder | ✅ | ✅ | `~/.qoder.json`（全局） | `~/.qoder/skills/`（全局）或 `.qoder/skills/`（项目级） |
-| Antigravity | ✅ | ✅ | `~/.gemini/antigravity/mcp_config.json`（全局）或 `.antigravity/mcp_config.json`（项目级） | `~/.antigravity/skills/`（全局）或 `.antigravity/skills/`（项目级） |
+| Claude Code | ✅ | ✅ | `~/.claude.json` | `~/.claude/skills/` |
+| OpenClaw | ✅ | ✅ | `~/.openclaw/mcp.json` | `~/.openclaw/skills/` |
+| CodeBuddy | ✅ | ✅ | `~/.codebuddy/mcp.json` | `~/.codebuddy/skills/` |
+| Gemini CLI | ✅ | ✅ | `~/.gemini/settings.json` | `~/.agents/skills/` |
+| Kimi Code | ✅ | ✅ | `~/.kimi/mcp.json` | `~/.agents/skills/` |
+| Codex | ✅ | ✅ | `~/.codex/config.toml`（TOML 格式，键名：`mcp_servers`） | `~/.agents/skills/` |
+| OpenCode | ✅ | ✅ | `~/.config/opencode/config.json` | `~/.agents/skills/` |
+| iFlow CLI | ✅ | ✅ | `~/.iflow/settings.json` | `~/.iflow/skills/` |
+| Pi | ✅ | ✅ | `~/.pi/agent/mcp.json` | `~/.pi/skills/` |
+| Qoder | ✅ | ✅ | `~/.qoder.json` | `~/.qoder/skills/` |
+| Antigravity | ✅ | ✅ | `~/.gemini/antigravity/mcp_config.json` | `~/.antigravity/skills/` |
 
 ### IDE / 编辑器类 Agent
 
-| Agent | MCP | Skills | MCP 配置文件路径 | Skill 路径 |
-|:------|:---:|:------:|:-----------------|:-----------|
-| Cursor | ✅ | ✅ | `~/.cursor/mcp.json`（全局）或 `.cursor/mcp.json`（项目级） | `~/.agents/skills/`（通用） |
-| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json`（全局） | `~/.windsurf/skills/`（全局）或 `.windsurf/skills/`（项目级） |
-| GitHub Copilot (VS Code) | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/mcp.json`；Linux: `~/.config/Code/User/mcp.json`（全局，键名：`servers`）或 `.vscode/mcp.json`（项目级） | `~/.agents/skills/`（通用） |
-| Trae | ✅ | ✅ | `~/.trae/mcp.json`（全局）或 `.trae/mcp.json`（项目级） | `~/.trae/skills/`（全局）或 `.trae/skills/`（项目级） |
-| Trae CN | ✅ | ✅ | macOS: `~/Library/Application Support/Trae CN/User/mcp.json`；Linux: `~/.config/Trae CN/User/mcp.json`（全局）或 `.trae/mcp.json`（项目级） | `~/.trae/skills/`（全局）或 `.trae/skills/`（项目级） |
-| Augment | ✅ | ✅ | `~/.augment/settings.json`（全局）或 `.augment/settings.json`（项目级） | `~/.augment/skills/`（全局）或 `.augment/skills/`（项目级） |
-| Qwen Code | ✅ | ✅ | `~/.qwen/settings.json`（全局）或 `.qwen/settings.json`（项目级） | `~/.qwen/skills/`（全局）或 `.qwen/skills/`（项目级） |
+| Agent | MCP | Skills | MCP 配置文件路径（全局） | Skill 路径（全局） |
+|:------|:---:|:------:|:-------------------------|:-------------------|
+| Cursor | ✅ | ✅ | `~/.cursor/mcp.json` | `~/.agents/skills/` |
+| Windsurf | ✅ | ✅ | `~/.codeium/windsurf/mcp_config.json` | `~/.windsurf/skills/` |
+| GitHub Copilot (VS Code) | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/mcp.json`；Linux: `~/.config/Code/User/mcp.json`（键名：`servers`） | `~/.agents/skills/` |
+| Trae | ✅ | ✅ | `~/.trae/mcp.json` | `~/.trae/skills/` |
+| Trae CN | ✅ | ✅ | macOS: `~/Library/Application Support/Trae CN/User/mcp.json`；Linux: `~/.config/Trae CN/User/mcp.json` | `~/.trae/skills/` |
+| Augment | ✅ | ✅ | `~/.augment/settings.json` | `~/.augment/skills/` |
+| Qwen Code | ✅ | ✅ | `~/.qwen/settings.json` | `~/.qwen/skills/` |
 
 ### VS Code 扩展类 Agent
 
-| Agent | MCP | Skills | MCP 配置文件路径 | Skill 路径 |
-|:------|:---:|:------:|:-----------------|:-----------|
-| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | `~/.agents/skills/`（通用） |
-| Roo Code | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`；或 `.roo/mcp.json`（项目级） | `~/.roo/skills/`（全局）或 `.roo/skills/`（项目级） |
+| Agent | MCP | Skills | MCP 配置文件路径（全局） | Skill 路径（全局） |
+|:------|:---:|:------:|:-------------------------|:-------------------|
+| Cline | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | `~/.agents/skills/` |
+| Roo Code | ✅ | ✅ | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`；Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | `~/.roo/skills/` |
 
 ### 早期支持（仅 MCP，暂不支持 Skills）
 
-| Agent | MCP | Skills | MCP 配置文件路径 | Skill 路径 |
-|:------|:---:|:------:|:-----------------|:-----------|
-| QClaw | ✅ | - | `~/.qclaw/mcp.json`（全局） | - |
-| WorkBuddy | ✅ | - | `~/.workbuddy/mcp.json`（全局） | - |
-| Lingma | ✅ | - | `~/.lingma/mcp.json`（全局） | - |
-| CoPaw | ✅ | - | `~/.copaw/config.json`（全局，嵌套键：`mcp.clients`） | - |
+| Agent | MCP | Skills | MCP 配置文件路径（全局） | Skill 路径（全局） |
+|:------|:---:|:------:|:-------------------------|:-------------------|
+| QClaw | ✅ | - | `~/.qclaw/mcp.json` | - |
+| WorkBuddy | ✅ | - | `~/.workbuddy/mcp.json` | - |
+| Lingma | ✅ | - | `~/.lingma/mcp.json` | - |
+| CoPaw | ✅ | - | `~/.copaw/config.json`（嵌套键：`mcp.clients`） | - |
 
-> **注意：** Windows 用户 — 对于引用 `~/Library/Application Support/...`（macOS）或 `~/.config/...`（Linux）的 Agent，Windows 对应路径为 `%APPDATA%/...`。`mindos mcp install` 命令会自动处理。
+> **注意：** 以上路径均为 **全局（推荐）** 安装位置。部分 Agent 也支持项目级配置（如 Claude Code: `.mcp.json`，Cursor: `.cursor/mcp.json`，Trae: `.trae/mcp.json`）。不带 `-g` 运行 `mindos mcp install` 可交互选择项目级安装。
+>
+> **Windows 用户：** 对于引用 `~/Library/Application Support/...`（macOS）或 `~/.config/...`（Linux）的 Agent，Windows 对应路径为 `%APPDATA%/...`。`mindos mcp install` 命令会自动处理。
 
 ## 连接方式
 
 ### 自动安装（推荐）
 
 ```bash
-mindos mcp install
+mindos mcp install -g
 ```
 
-交互式引导选择 agent、scope（全局/项目）、transport（stdio/http）和 token。
+交互式引导选择 agent、transport（stdio/http）和 token。安装到全局。
 
 ### 一键安装
 

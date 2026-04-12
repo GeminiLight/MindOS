@@ -5,6 +5,7 @@ import type { LocalAttachment } from '@/lib/types';
 
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   '.txt', '.md', '.markdown', '.csv', '.json', '.yaml', '.yml', '.xml', '.html', '.htm', '.pdf',
+  '.doc', '.docx', '.docm',
 ]);
 
 function getExt(name: string): string {
@@ -101,6 +102,103 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
   }
 }
 
+async function extractDocxToAttachment(file: File): Promise<LocalAttachment> {
+  const name = file.name;
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const dataBase64 = uint8ToBase64(new Uint8Array(buffer));
+
+    const res = await fetch('/api/extract-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, dataBase64 }),
+    });
+
+    let payload: {
+      text?: string;
+      markdown?: string;
+      extracted?: boolean;
+      extractionError?: string;
+      errorMessage?: string;
+      error?: string;
+      truncated?: boolean;
+      chars?: number;
+      charsTruncated?: number;
+      pages?: number;
+      imageCount?: number;
+      warning?: string;
+    } = {};
+    try {
+      payload = await res.json();
+    } catch {
+      throw new Error('Failed to parse extraction response');
+    }
+
+    if (!res.ok) {
+      throw new Error(payload.error || `Word extraction failed (${res.status})`);
+    }
+
+    // Handle extraction error state
+    if (!payload.extracted) {
+      return {
+        name,
+        content: `[Word: ${name}] Failed to extract text from this Word document.`,
+        status: 'error',
+        error: payload.errorMessage || 'Word extraction failed',
+      };
+    }
+
+    // Handle empty document
+    const text = payload.text || '';
+    if (!text) {
+      return {
+        name,
+        content: `[Word: ${name}] Could not extract readable text (empty document).`,
+        status: 'error',
+        error: 'No extractable text found — document may be empty or corrupted',
+      };
+    }
+
+    const att: LocalAttachment = {
+      name,
+      content: `[WORD TEXT EXTRACTED: ${name}]\n\n${text}`,
+      status: 'success',
+    };
+
+    if (payload.truncated && payload.chars) {
+      const truncInfo = {
+        totalChars: payload.chars || 0,
+        includedChars: payload.charsTruncated || text.length,
+        totalPages: payload.pages ?? 0,
+      };
+
+      att.truncatedInfo = truncInfo;
+    }
+
+    if (payload.warning) {
+      if (!att.truncatedInfo) {
+        att.truncatedInfo = {
+          totalChars: payload.chars || text.length,
+          includedChars: text.length,
+          totalPages: payload.pages ?? 0,
+        };
+      }
+      att.truncatedInfo.warning = payload.warning;
+    }
+
+    return att;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return {
+      name,
+      content: `[Word: ${name}] Failed to extract text from this Word document.`,
+      status: 'error',
+      error: msg,
+    };
+  }
+}
+
 export interface FileUploadLabels {
   unsupportedType?: string;
 }
@@ -136,14 +234,19 @@ export function useFileUpload(labels?: FileUploadLabels) {
       setUploadError('');
     }
 
-    // Phase 1: Immediately add all files — PDFs start in 'loading' state
+    // Phase 1: Immediately add all files — PDFs and Word files start in 'loading' state
     const pdfFiles: File[] = [];
+    const docxFiles: File[] = [];
     const immediateItems: LocalAttachment[] = [];
 
     for (const f of accepted) {
-      if (getExt(f.name) === '.pdf') {
+      const ext = getExt(f.name);
+      if (ext === '.pdf') {
         immediateItems.push({ name: f.name, content: '', status: 'loading' });
         pdfFiles.push(f);
+      } else if (ext === '.doc' || ext === '.docx' || ext === '.docm') {
+        immediateItems.push({ name: f.name, content: '', status: 'loading' });
+        docxFiles.push(f);
       } else {
         immediateItems.push({
           name: f.name,
@@ -161,18 +264,38 @@ export function useFileUpload(labels?: FileUploadLabels) {
       return merged;
     });
 
-    // Phase 2: Extract PDFs in parallel, then update each one in-place
-    if (pdfFiles.length > 0) {
-      const results = await Promise.all(pdfFiles.map(extractPdfToAttachment));
+    // Phase 2: Extract PDFs and Word files in parallel, then update each one in-place
+    const extractionPromises: Promise<void>[] = [];
 
-      setLocalAttachments((prev) =>
-        prev.map((att) => {
-          if (att.status !== 'loading') return att;
-          const result = results.find((r) => r.name === att.name);
-          return result ?? att;
+    if (pdfFiles.length > 0) {
+      extractionPromises.push(
+        Promise.all(pdfFiles.map(extractPdfToAttachment)).then((results) => {
+          setLocalAttachments((prev) =>
+            prev.map((att) => {
+              if (att.status !== 'loading') return att;
+              const result = results.find((r) => r.name === att.name);
+              return result ?? att;
+            }),
+          );
         }),
       );
     }
+
+    if (docxFiles.length > 0) {
+      extractionPromises.push(
+        Promise.all(docxFiles.map(extractDocxToAttachment)).then((results) => {
+          setLocalAttachments((prev) =>
+            prev.map((att) => {
+              if (att.status !== 'loading') return att;
+              const result = results.find((r) => r.name === att.name);
+              return result ?? att;
+            }),
+          );
+        }),
+      );
+    }
+
+    await Promise.all(extractionPromises);
   }, []);
 
   const removeAttachment = useCallback((idx: number) => {

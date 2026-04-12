@@ -27,6 +27,19 @@ export interface AgentConfig {
   thinkingBudget?: number;    // default 5000
   contextStrategy?: 'auto' | 'off'; // default 'auto'
   reconnectRetries?: number;  // default 3, range 0-10 (0 = disabled)
+  activeRecall?: ActiveRecallConfig;  // auto knowledge recall before agent reply
+}
+
+/** Active Recall: auto-search KB and inject relevant content before agent reply. */
+export interface ActiveRecallConfig {
+  /** Enable automatic knowledge recall. Default true. */
+  enabled?: boolean;
+  /** Max tokens for recalled content. Default 2000. */
+  maxTokens?: number;
+  /** Max files to recall. Default 5. */
+  maxFiles?: number;
+  /** Min relevance score threshold. Default 1.0. */
+  minScore?: number;
 }
 
 export interface GuideState {

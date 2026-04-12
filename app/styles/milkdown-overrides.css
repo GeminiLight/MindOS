@@ -80,14 +80,15 @@
 /* ─── Lists — override Crepe's ul,ol { padding:0 } and * { margin:0 } ─── */
 .milkdown .ProseMirror ul,
 .milkdown .ProseMirror ol {
-  margin: 0.5em 0 1.1em 0 !important;
+  margin: 0.5em 0 0.8em 0 !important;
   padding-left: 1.2em !important;
 }
 .milkdown .ProseMirror ul { list-style-type: disc !important; }
 .milkdown .ProseMirror ol { list-style-type: decimal !important; }
 .milkdown .ProseMirror li {
-  margin-bottom: 0.15em !important;
+  margin-bottom: 0.1em !important;
   padding: 0 !important;
+  line-height: inherit !important;
 }
 /* Crepe list-item-block uses flex layout with 32px label wrappers;
    tighten to match .prose density and align bullet/number properly */
@@ -95,18 +96,22 @@
   padding: 0 !important;
 }
 .milkdown .milkdown-list-item-block > .list-item {
-  gap: 1px !important;
-  align-items: center !important;
+  gap: 4px !important;
+  align-items: flex-start !important;
 }
 .milkdown .milkdown-list-item-block li {
-  gap: 1px !important;
+  gap: 4px !important;
 }
 .milkdown .milkdown-list-item-block .label-wrapper {
   height: auto !important;
-  min-height: 1.4em !important;
   width: 14px !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
   color: var(--prose-muted) !important;
   flex-shrink: 0 !important;
+  padding: 0 !important;
+  line-height: 1.85 !important;
 }
 .milkdown .milkdown-list-item-block .label-wrapper svg {
   fill: var(--prose-muted) !important;
@@ -116,17 +121,25 @@
   padding: 0 !important;
   width: 14px !important;
   font-size: 0.85em !important;
-  line-height: 1.4 !important;
+  line-height: 1.85 !important;
+  text-align: center !important;
 }
 .milkdown .milkdown-list-item-block .children {
   min-width: 0 !important;
   flex: 1 !important;
+  line-height: 1.85 !important;
 }
 /* Nested lists: reduce top margin */
 .milkdown .milkdown-list-item-block .children ul,
 .milkdown .milkdown-list-item-block .children ol {
   margin-top: 0.25em !important;
   margin-bottom: 0.25em !important;
+}
+/* Remove paragraph margin inside list items — it adds unwanted vertical space
+   because Milkdown wraps every list-item's text content in a <p> tag */
+.milkdown .milkdown-list-item-block .children p {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* ─── Horizontal rule — override Crepe's complex bg/height/padding hr ─── */
