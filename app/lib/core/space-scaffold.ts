@@ -75,7 +75,7 @@ export function cleanDirName(dirName: string): string {
  */
 export function scaffoldIfNewSpace(mindRoot: string, filePath: string): void {
   try {
-    const parts = filePath.split('/').filter(Boolean);
+    const parts = filePath.split(/[/\\]/).filter(Boolean);
     if (parts.length < 2) return; // root-level file, not inside a Space
 
     const topDir = parts[0];

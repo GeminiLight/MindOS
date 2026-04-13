@@ -9,6 +9,7 @@
  * - Token budget is greedy-fill: highest score first, truncate last entry if needed.
  */
 
+import path from 'path';
 import { hybridSearch } from '@/lib/core/hybrid-search';
 import { estimateStringTokens } from './context';
 import { getFileContent } from '@/lib/fs';
@@ -125,7 +126,7 @@ export async function performActiveRecall(
 
 /** Check if a path is a meta-file (README/INSTRUCTION/CONFIG at any depth). */
 function isMetaFile(filePath: string): boolean {
-  const basename = filePath.split('/').pop()?.toLowerCase() ?? '';
+  const basename = path.basename(filePath).toLowerCase();
   return META_BASENAMES.has(basename);
 }
 

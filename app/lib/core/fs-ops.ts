@@ -133,7 +133,7 @@ export function renameFile(mindRoot: string, oldPath: string, newName: string): 
     throw new MindOSError(ErrorCodes.FILE_ALREADY_EXISTS, 'A file with that name already exists', { newName });
   }
   fs.renameSync(oldResolved, newResolved);
-  return path.relative(root, newResolved);
+  return path.relative(root, newResolved).replace(/\\/g, '/');
 }
 
 /**
@@ -168,7 +168,7 @@ export function renameSpaceDirectory(mindRoot: string, spacePath: string, newNam
   }
 
   fs.renameSync(oldResolved, newResolved);
-  return path.relative(root, newResolved);
+  return path.relative(root, newResolved).replace(/\\/g, '/');
 }
 
 /**

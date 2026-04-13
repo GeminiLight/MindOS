@@ -123,25 +123,34 @@ function splitQueryTerms(query: string): string[] {
  * Count how many times a term appears in text using word-boundary-aware matching.
  * For Latin terms: uses word boundaries (\b)
  * For CJK terms: just counts substring occurrences (CJK has no word boundaries in regex)
+ *
+ * Caches compiled RegExp per term to avoid recompilation on each file (O(files) → O(1) per term).
  */
-function countTermOccurrences(term: string, text: string): number {
-  // Check if term contains CJK characters
+const _termRegexCache = new Map<string, RegExp>();
+
+function getTermRegex(term: string): RegExp {
+  let cached = _termRegexCache.get(term);
+  if (cached) return cached;
+
   const cjkRegex = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
   const hasCJK = cjkRegex.test(term);
-  
   const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  
-  if (hasCJK) {
-    // For CJK: just use substring matching (no word boundaries)
-    const regex = new RegExp(escapedTerm, 'g');
-    const matches = text.match(regex);
-    return matches ? matches.length : 0;
-  } else {
-    // For Latin: use word boundaries to avoid partial matches
-    const regex = new RegExp(`\\b${escapedTerm}\\b`, 'g');
-    const matches = text.match(regex);
-    return matches ? matches.length : 0;
-  }
+
+  cached = hasCJK
+    ? new RegExp(escapedTerm, 'g')
+    : new RegExp(`\\b${escapedTerm}\\b`, 'g');
+
+  // Bound cache size to prevent unbounded memory growth
+  if (_termRegexCache.size > 500) _termRegexCache.clear();
+  _termRegexCache.set(term, cached);
+  return cached;
+}
+
+function countTermOccurrences(term: string, text: string): number {
+  const regex = getTermRegex(term);
+  regex.lastIndex = 0; // reset stateful /g regex
+  const matches = text.match(regex);
+  return matches ? matches.length : 0;
 }
 
 /**

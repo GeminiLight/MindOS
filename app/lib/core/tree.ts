@@ -3,6 +3,15 @@ import fsp from 'fs/promises';
 import path from 'path';
 import type { FileNode } from './types';
 
+/** Normalize path separators to forward slash (POSIX) for cross-platform consistency.
+ *  All relative paths stored in FileNode.path use '/' regardless of OS. */
+function toPosix(p: string): string {
+  // On Unix path.sep is already '/', this is a no-op.
+  // On Windows, replace all backslashes. Using replace is safer than split/join
+  // in case the path contains mixed separators.
+  return process.platform === 'win32' ? p.replace(/\\/g, '/') : p;
+}
+
 const DEFAULT_IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store', 'mcp', '.media']);
 const DEFAULT_ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.pdf',
@@ -41,7 +50,7 @@ export function getFileTree(
   const nodes: FileNode[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
-    const relativePath = path.relative(root, fullPath);
+    const relativePath = toPosix(path.relative(root, fullPath));
 
     if (entry.isDirectory()) {
       if (ignoredDirs.has(entry.name)) continue;
@@ -95,7 +104,7 @@ export function collectAllFiles(
       if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (allowedExtensions.has(ext)) {
-        files.push(path.relative(root, fullPath));
+        files.push(toPosix(path.relative(root, fullPath)));
       }
     }
   }
@@ -236,7 +245,7 @@ export async function collectAllFilesAsync(
       if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (allowedExtensions.has(ext)) {
-        files.push(path.relative(root, fullPath));
+        files.push(toPosix(path.relative(root, fullPath)));
       }
     }
   }

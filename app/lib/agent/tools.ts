@@ -285,7 +285,7 @@ export const knowledgeBaseTools: AgentTool<any>[] = [
       }
 
       if (subdir) {
-        const segments = subdir.replace(/\/$/, '').split('/').filter(Boolean);
+        const segments = subdir.replace(/[\\/]+$/, '').split(/[/\\]/).filter(Boolean);
         let current: Array<{ name: string; type: string; path?: string; children?: unknown[] }> = tree as any;
         for (const seg of segments) {
           const found = current.find(n => n.name === seg && n.type === 'directory');

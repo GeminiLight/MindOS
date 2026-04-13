@@ -94,9 +94,8 @@ function buildCache(root: string): FileTreeCache {
 
 function sameFileList(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  return sa.every((p, i) => p === sb[i]);
+  const set = new Set(a);
+  return b.every(p => set.has(p));
 }
 
 /** Monotonically increasing counter — bumped on every file mutation so the
@@ -819,7 +818,7 @@ function generateSnippet(
  */
 export function appendCsvRow(filePath: string, row: string[]): { newRowCount: number } {
   const result = coreAppendCsvRow(getMindRoot(), filePath, row);
-  invalidateCache();
+  invalidateCacheForFile(filePath);
   return result;
 }
 

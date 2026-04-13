@@ -256,7 +256,7 @@ export async function compileSpaceOverview(
   const mindRoot = getMindRoot();
   resolveSafe(mindRoot, space);
 
-  const spaceName = space.split('/').pop() || space;
+  const spaceName = path.basename(space) || space;
   const readmePath = path.join(mindRoot, space, 'README.md');
 
   // Check for existing compile metadata → attempt incremental
