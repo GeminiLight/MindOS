@@ -1,6 +1,34 @@
-<!-- Last verified: 2026-04-10 | Current version: v0.6.65 -->
+<!-- Last verified: 2026-04-13 | Current version: v0.6.82 -->
 
 # 变更日志 (CHANGELOG)
+
+## v0.6.82+ (未发布)
+
+### 修复
+
+**跨模块 Bug 审计 (2026-04-13)**
+
+- **🔴 安全：trash.ts 路径遍历**：`moveToTrash` / `restoreFromTrash` / `restoreAsCopy` 未使用 `resolveSafe()`，攻击者构造的 `../../` 路径可将 mindRoot 外的文件移入回收站。已改为 `resolveSafe()` 校验。Desktop runtime 副本同步修复。
+- **🔴 数据丢失：stream-consumer tool_end 静默丢弃**：当网络抖动导致 `tool_start` SSE 事件丢失时，对应的 `tool_end` 被静默忽略，用户看不到工具执行结果。改为 `findOrCreateToolCall()` 按需创建。
+- **🟡 竞态：killAllAgents / reapStaleSessions Map 迭代中删除**：迭代 `Map.values()` 时调用 `delete()` 导致跳过后续条目。改为先收集快照再迭代。
+- **🟡 闭包：useAskChat modelOverride 未入依赖数组**：用户切换 model override 后发送消息，请求仍使用切换前的模型。
+- **🟡 竞态：deleteFile TOCTOU**：`existsSync` 和 `unlinkSync` 之间文件可能被删除。改为直接 `unlinkSync` 并 catch `ENOENT`。
+- **🟡 错误契约：convertToSpace 抛原始 fs 错误**：`writeFileSync` 失败时抛 `EACCES` / `ENOSPC` 而非 `MindOSError`。加 try-catch 包裹。
+- **🟡 诊断：ACP npx 网络错误信息不明确**：中国等网络受限环境中 Claude Code ACP 启动失败，错误信息只显示 "initialize failed"。增加 npm 网络错误的专门诊断分支。
+
+**跨平台路径标准化 (2026-04-13)**
+
+- **🔴 Windows 路径断裂**：`tree.ts` 的 `path.relative()` 在 Windows 上返回 `\` 分隔路径，导致整个系统的 `FileNode.path` 在 Windows 上无法被 `split('/')` 正确分割。添加 `toPosix()` 函数在源头统一为 `/`。
+- **🟡 路径分割**：`space-scaffold.ts`、`agent/tools.ts` 的 `split('/')` 改为 `split(/[/\\]/)` 兼容两种分隔符。
+- **🟡 basename 提取**：`active-recall.ts`、`compile.ts` 的 `split('/').pop()` 改为 `path.basename()`。
+- **🟡 返回路径**：`fs-ops.ts` 的 `renameFile` / `renameSpaceDirectory` 返回值加 `.replace(/\\/g, '/')`。
+- **🟡 Windows symlink**：`web-search-config.ts` 的 `symlinkSync` 在 Windows 上需要管理员权限，增加 `copyFileSync` fallback。
+
+### 性能优化
+
+- **搜索正则缓存**：`countTermOccurrences` 每次搜索对每个文件 × 每个词都重新编译正则。改为缓存编译后的 RegExp（带 500 条上限防内存泄漏），搜索查询加速 ~15-30%。
+- **文件列表比较**：`sameFileList` 从双排序 O(N log N) 改为 Set 查找 O(N)。
+- **CSV 追加增量更新**：`appendCsvRow` 从全量 `invalidateCache()` 改为 `invalidateCacheForFile()`，避免每次 CSV 追加后重建整个搜索索引。
 
 ## 未发布 (v0.6.8 - v0.6.65)
 
