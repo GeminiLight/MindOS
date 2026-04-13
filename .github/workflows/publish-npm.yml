@@ -93,23 +93,21 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "Verifying published package ${VERSION}..."
           cd /tmp && rm -rf mindos-pkg-verify && mkdir mindos-pkg-verify && cd mindos-pkg-verify
-          npm pack "@geminilight/mindos@${VERSION}" --silent 2>&1 | head -1
-          
+          npm pack "@geminilight/mindos@${VERSION}" 2>&1
+          TGZ=$(ls -1 geminilight-mindos-*.tgz 2>/dev/null | head -1)
+          if [ -z "$TGZ" ]; then
+            echo "❌ npm pack failed — no .tgz file found"
+            exit 1
+          fi
+          echo "Downloaded: $TGZ"
+
           # Check _standalone structure
-          if ! tar -tzf *.tgz | grep -q "_standalone/server.js"; then
-            echo "❌ Published package missing _standalone/server.js!"
-            exit 1
-          fi
-          if ! tar -tzf *.tgz | grep -q "_standalone/.next/server/app-paths-manifest.json"; then
-            echo "❌ Published package missing app-paths-manifest.json!"
-            exit 1
-          fi
-          if ! tar -tzf *.tgz | grep -q "_standalone/.next/server/app/page.js"; then
-            echo "❌ Published package missing home page.js!"
-            exit 1
-          fi
-          
+          for f in "_standalone/server.js" "_standalone/.next/server/app-paths-manifest.json" "_standalone/.next/server/app/page.js"; do
+            if ! tar -tzf "$TGZ" | grep -q "$f"; then
+              echo "❌ Published package missing $f!"
+              exit 1
+            fi
+            echo "   ✓ $f"
+          done
+
           echo "✅ Package integrity verified"
-          echo "   - server.js present"
-          echo "   - app-paths-manifest.json present"
-          echo "   - home page.js present"
