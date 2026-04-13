@@ -112,12 +112,30 @@ export function handleRouteError(err: unknown): NextResponse<ApiErrorResponse> {
  * Used for backwards-compatible routes that haven't migrated to structured errors.
  * New routes should use handleRouteError() instead.
  *
- * @param err The error to convert to string
- * @param status HTTP status code (default 500)
- * @returns NextResponse with { error: string } envelope
- * @note Messages are truncated to 256 chars to avoid exposing stack traces
+ * Behavior:
+ * - MindOSError: uses the error code to derive HTTP status + exposes the message (safe, authored by us)
+ * - Other errors with explicit non-500 status: exposes truncated message (client errors are safe to show)
+ * - Other errors (500): returns generic message in production to avoid leaking internal paths/stack traces
  */
 export function handleRouteErrorSimple(err: unknown, status = 500): NextResponse<{ error: string }> {
-  const message = toErrorMessage(err).slice(0, 256);
+  // MindOSError: use structured code → status mapping, message is safe to expose
+  if (err instanceof MindOSError) {
+    return NextResponse.json(
+      { error: err.message },
+      { status: mapCodeToStatus(err.code) },
+    );
+  }
+
+  // Client errors (4xx): safe to expose truncated message
+  if (status < 500) {
+    const message = toErrorMessage(err).slice(0, 256);
+    return NextResponse.json({ error: message }, { status });
+  }
+
+  // Server errors (5xx): hide internal details in production
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+  const message = isDev
+    ? toErrorMessage(err).slice(0, 256)
+    : 'Internal server error';
   return NextResponse.json({ error: message }, { status });
 }

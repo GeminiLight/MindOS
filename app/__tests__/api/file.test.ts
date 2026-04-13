@@ -418,6 +418,7 @@ describe('POST /api/file', () => {
     seedFile('notadir.md', 'x');
     invalidateCache();
     const res = await POST(post({ op: 'rename_space', path: 'notadir.md', new_name: 'Y' }));
-    expect(res.status).toBe(500);
+    // INVALID_PATH → 400 (not a directory is a client error, not a server error)
+    expect(res.status).toBe(400);
   });
 });
