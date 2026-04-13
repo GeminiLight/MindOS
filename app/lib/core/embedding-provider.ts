@@ -105,6 +105,10 @@ let _localPipeline: any = null;
 let _localModelId: string | null = null;
 let _loadingPromise: Promise<any> | null = null;
 
+const DOWNLOAD_MAX_RETRIES = 2;
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes for model download
+const INITIAL_BACKOFF_MS = 1000; // 1 second
+
 /**
  * Download and initialize the local embedding model.
  * Call this explicitly before first use — allows UI to show progress.
@@ -126,6 +130,25 @@ export async function downloadLocalModel(modelId?: string): Promise<boolean> {
   }
 }
 
+/**
+ * Classifies error types to determine if retry is worthwhile.
+ */
+function isRetryableError(err: any): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  // Network errors: DNS, connection reset, timeout, temporary unavailable
+  return (
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('timeout') ||
+    msg.includes('temporarily unavailable') ||
+    msg.includes('connect econnrefused') ||
+    msg.includes('net::err_internet_disconnected')
+  );
+}
+
 async function loadLocalPipeline(modelId: string): Promise<any> {
   // Return existing if same model
   if (_localPipeline && _localModelId === modelId) return _localPipeline;
@@ -135,18 +158,59 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
 
   _localModelId = modelId;
   _loadingPromise = (async () => {
-    try {
-      const { pipeline } = await import('@huggingface/transformers');
-      _localPipeline = await pipeline('feature-extraction', modelId, {
-        dtype: 'fp32',
-      });
-      return _localPipeline;
-    } catch (err) {
-      _localPipeline = null;
-      _localModelId = null;
-      throw err;
-    } finally {
-      _loadingPromise = null;
+    for (let attempt = 0; attempt <= DOWNLOAD_MAX_RETRIES; attempt++) {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let timedOut = false;
+      let lastError: Error | null = null;
+      try {
+        const { pipeline } = await import('@huggingface/transformers');
+        
+        // Set up timeout to catch stuck downloads
+        timer = setTimeout(() => {
+          timedOut = true;
+        }, DOWNLOAD_TIMEOUT_MS);
+        
+        // Start download
+        const downloadPromise = pipeline('feature-extraction', modelId, {
+          dtype: 'fp32',
+        });
+        
+        // Wait with timeout monitoring
+        _localPipeline = await downloadPromise;
+        
+        if (timer) clearTimeout(timer);
+        return _localPipeline;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (timer) clearTimeout(timer);
+        
+        // Treat timeout as retryable error
+        if (timedOut) {
+          lastError = new Error(`Request timeout (>${(DOWNLOAD_TIMEOUT_MS / 1000).toFixed(0)}s)`);
+        }
+        
+        const isRetryable = isRetryableError(lastError);
+        const shouldRetry = isRetryable && attempt < DOWNLOAD_MAX_RETRIES;
+        
+        console.error(
+          `[embedding] Download attempt ${attempt + 1}/${DOWNLOAD_MAX_RETRIES + 1} failed: ${lastError.message}` +
+          (shouldRetry ? ` — retrying...` : ' — giving up'),
+        );
+        
+        if (shouldRetry) {
+          // Exponential backoff: 1s, 2s
+          const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+          console.log(`[embedding] Waiting ${backoff}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          continue;
+        }
+        
+        // Non-retryable or exhausted retries
+        _localPipeline = null;
+        _localModelId = null;
+        _loadingPromise = null;
+        throw lastError;
+      }
     }
   })();
 

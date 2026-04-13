@@ -53,11 +53,21 @@ export async function POST(req: NextRequest) {
       downloadLocalModel(modelId)
         .then(ok => {
           _downloading = false;
-          if (!ok) _downloadError = 'Download failed';
+          if (!ok) {
+            _downloadError = 'Download failed. Check your network connection and try again.';
+          }
         })
         .catch(err => {
           _downloading = false;
-          _downloadError = err instanceof Error ? err.message : 'Unknown error';
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          // Classify error for user-friendly message
+          if (errMsg.toLowerCase().includes('timeout')) {
+            _downloadError = 'Download timeout. Your connection may be too slow. Try again or use API mode.';
+          } else if (errMsg.toLowerCase().includes('enotfound') || errMsg.toLowerCase().includes('econnrefused')) {
+            _downloadError = 'Network connection failed. Check your internet and try again.';
+          } else {
+            _downloadError = `Download failed: ${errMsg}`;
+          }
         });
 
       return NextResponse.json({ ok: true, message: `Downloading ${modelId}...` });
