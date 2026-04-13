@@ -13,6 +13,7 @@ import {
   Archive,
 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   loadHistory,
   clearHistory,
@@ -23,12 +24,18 @@ import {
 export default function InboxHistoryPage() {
   const { t } = useLocale();
   const [entries, setEntries] = useState<OrganizeHistoryEntry[]>(() => loadHistory());
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
-  const handleClear = useCallback(() => {
-    if (!confirm(t.importHistory.clearConfirm)) return;
+  const handleClear = useCallback(async () => {
+    const ok = await confirm({
+      title: t.importHistory.clearConfirm,
+      variant: 'destructive',
+      confirmLabel: t.importHistory.clearAll,
+    });
+    if (!ok) return;
     clearHistory();
     setEntries([]);
-  }, [t]);
+  }, [t, confirm]);
 
   const grouped = useMemo(() => {
     const now = new Date();
@@ -63,7 +70,7 @@ export default function InboxHistoryPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Header */}
+      {ConfirmDialog}
       <div className="flex items-center gap-3 mb-6">
         <Link
           href="/wiki"

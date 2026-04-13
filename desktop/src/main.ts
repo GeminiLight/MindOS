@@ -31,6 +31,7 @@ import { getNodePath, getMindosInstallPath, getNpxPath, getNpmPath, getLocalBinP
 import { downloadNode, installMindosWithPrivateNode } from './node-bootstrap';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
 import { isNextBuildValid, isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout } from './mindos-runtime-layout';
+import { hasRequiredStandaloneAppFiles } from './runtime-health-contract';
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import {
   getEffectiveMindRootFromConfig,
@@ -225,7 +226,11 @@ function createSplash(): BrowserWindow {
     show: false,
   });
 
-  win.loadFile(SPLASH_HTML).catch(() => {});
+  win.loadFile(SPLASH_HTML).catch((err) => {
+    console.error('[MindOS] Splash screen load failed:', err);
+    dialog.showErrorBox('Startup Error', `Failed to load splash screen: ${err.message}\n\nThe installation may be corrupt. Please reinstall MindOS.`);
+    app.quit();
+  });
   win.once('ready-to-show', () => win.show());
 
   // If user closes splash, quit the app
@@ -426,9 +431,18 @@ async function startLocalMode(): Promise<string | null> {
   // 4. Ensure app is built (first run or after update — npm package has no .next)
   //    Check for valid build (BUILD_ID or standalone/server.js), not just .next dir existence.
   //    An incomplete .next (interrupted build, empty dir) would let Next.js crash at startup.
+  //    OPTIMIZATION: Bundled/cached standalone runtimes ship pre-built — skip rebuild entirely
+  //    when standalone/server.js and all required assets are present. This avoids the costly
+  //    npm install + next build cycle (5-15 min on Windows) that was triggered by version
+  //    stamp mismatches on upgrade-in-place scenarios.
   const appDir = path.join(projectRoot, 'app');
   const nextDir = path.join(appDir, '.next');
-  if (!isNextBuildCurrent(appDir, projectRoot)) {
+  const isPrebuiltStandalone =
+    (runtimePick.source === 'bundled' || runtimePick.source === 'cached') &&
+    hasRequiredStandaloneAppFiles(appDir);
+  if (isPrebuiltStandalone) {
+    console.info(`[MindOS] Skipping rebuild — ${runtimePick.source} standalone runtime is intact`);
+  } else if (!isNextBuildCurrent(appDir, projectRoot)) {
     splashStatus({ message: zh ? '正在构建 MindOS（首次约需 1-2 分钟）...' : 'Building MindOS (first run, ~1-2 min)...' });
     try {
       const enrichedEnv = getEnrichedEnv(nodePath);
@@ -466,7 +480,7 @@ async function startLocalMode(): Promise<string | null> {
       });
       return null;
     }
-  }
+  } // closes the else-if for !isNextBuildCurrent
 
   splashStatus({ status: 'starting' });
 
@@ -516,7 +530,7 @@ async function startLocalMode(): Promise<string | null> {
   // Clean up any previous processManager (e.g. from retry or mode switch)
   if (processManager) {
     processManager.removeAllListeners();
-    processManager.stop().catch(() => {});
+    try { await processManager.stop(); } catch { /* best-effort cleanup */ }
   }
 
   processManager = createProcessManager(webPort, mcpPort);
@@ -659,7 +673,9 @@ async function startLocalMode(): Promise<string | null> {
       } else {
         crashDialogShown = true;
         const zh = navigator_lang() === 'zh';
-        const stderr = stderrLines?.slice(-5).join('\n') || '';
+        // Strip ANSI escape codes from stderr for clean display in native dialog
+        const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+        const stderr = stripAnsi(stderrLines?.slice(-5).join('\n') || '');
         const lastExitCode = exitCode ?? null;
         // Diagnose crash cause from exit code and stderr
         let hint: string;
@@ -855,12 +871,13 @@ async function healPreviousInstallation(): Promise<void> {
   } catch { /* config read failure — run full heal */ }
 
   // 1. Stop launchd/systemd daemon — prevents it from respawning processes we just killed
-  cleanupConflictingLaunchdService();
-  cleanupLinuxSystemdService();
+  splashStatus({ status: 'healing', message: 'Checking previous installation...' });
+  await cleanupConflictingLaunchdService();
+  await cleanupLinuxSystemdService();
 
   // 2. Kill orphaned processes from BOTH Desktop and CLI pid files
-  ProcessManager.cleanupOrphanedChildren();
-  ProcessManager.cleanupCliPidFile();
+  await ProcessManager.cleanupOrphanedChildren();
+  await ProcessManager.cleanupCliPidFile();
 
   // 3. Port-based fallback kill — catches processes not tracked by PID files
   //    (e.g. Next.js worker processes, externally started MCP)
@@ -871,54 +888,63 @@ async function healPreviousInstallation(): Promise<void> {
   const webPort = config.port || DEFAULT_WEB_PORT;
   const mcpPort = config.mcpPort || DEFAULT_MCP_PORT;
 
-  const webInUse = await isPortInUse(webPort);
-  const mcpInUse = await isPortInUse(mcpPort);
+  // Port cleanup and runtime validation are independent — run them in parallel.
+  // Port chain: check → kill → wait release (must be serial internally).
+  // Validate chain: node → cache (fast, no port dependency).
+  splashStatus({ status: 'healing', message: 'Freeing ports & validating runtime...' });
 
-  if (webInUse) {
-    ProcessManager.killProcessesOnPort(webPort);
-  }
-  if (mcpInUse) {
-    ProcessManager.killProcessesOnPort(mcpPort);
-  }
+  const portCleanup = async () => {
+    const webInUse = await isPortInUse(webPort);
+    const mcpInUse = await isPortInUse(mcpPort);
 
-  // 4. Wait for configured ports to free up (gives killed processes time to exit)
-  //    This prevents findAvailablePort from jumping to 3457 during reinstall.
-  if (webInUse || mcpInUse) {
-    const [webFreed, mcpFreed] = await Promise.all([
-      webInUse ? waitForPortRelease(webPort, 5000) : Promise.resolve(true),
-      mcpInUse ? waitForPortRelease(mcpPort, 5000) : Promise.resolve(true),
-    ]);
-    if (!webFreed) {
-      console.warn(`[MindOS:heal] Port ${webPort} still in use after cleanup — findAvailablePort will handle it`);
+    if (webInUse) {
+      await ProcessManager.killProcessesOnPort(webPort);
     }
-    if (!mcpFreed) {
-      console.warn(`[MindOS:heal] Port ${mcpPort} still in use after cleanup — findAvailablePort will handle it`);
+    if (mcpInUse) {
+      await ProcessManager.killProcessesOnPort(mcpPort);
     }
-  }
 
-  // 5. Validate private Node.js — if version too low or broken, remove it
-  //    (startLocalMode → downloadNode will re-download a fresh copy)
-  validatePrivateNode();
-
-  // 6. Validate .next build cache — remove if corrupt (triggers rebuild in startLocalMode)
-  //    Only clean up the cache stored under the bundled runtime app dir.
-  try {
-    const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
-    const bundledRoot = getDefaultBundledMindOsDirectory();
-    if (bundledRoot) {
-      validateBuildCache(path.join(bundledRoot, 'app'));
+    // Wait for configured ports to free up (gives killed processes time to exit)
+    // This prevents findAvailablePort from jumping to 3457 during reinstall.
+    if (webInUse || mcpInUse) {
+      const [webFreed, mcpFreed] = await Promise.all([
+        webInUse ? waitForPortRelease(webPort, 5000) : Promise.resolve(true),
+        mcpInUse ? waitForPortRelease(mcpPort, 5000) : Promise.resolve(true),
+      ]);
+      if (!webFreed) {
+        console.warn(`[MindOS:heal] Port ${webPort} still in use after cleanup — findAvailablePort will handle it`);
+      }
+      if (!mcpFreed) {
+        console.warn(`[MindOS:heal] Port ${mcpPort} still in use after cleanup — findAvailablePort will handle it`);
+      }
     }
-  } catch { /* non-critical */ }
+
+    return { webInUse, mcpInUse };
+  };
+
+  const runtimeValidation = async () => {
+    await validatePrivateNode();
+
+    try {
+      const { getDefaultBundledMindOsDirectory } = await import('./mindos-runtime-path');
+      const bundledRoot = getDefaultBundledMindOsDirectory();
+      if (bundledRoot) {
+        validateBuildCache(path.join(bundledRoot, 'app'));
+      }
+    } catch { /* non-critical */ }
+  };
+
+  const [portResult] = await Promise.all([portCleanup(), runtimeValidation()]);
 
   const elapsed = Date.now() - t0;
-  stopHeal({ skipped: false, webInUse, mcpInUse });
+  stopHeal({ skipped: false, webInUse: portResult.webInUse, mcpInUse: portResult.mcpInUse });
   if (elapsed > 100) {
     console.info(`[MindOS:heal] Previous installation healing completed in ${elapsed}ms`);
   }
 }
 
 /** Remove private Node.js if it can't run or version is too low (< 18). */
-function validatePrivateNode(): 'missing' | 'ok' | 'removed' {
+async function validatePrivateNode(): Promise<'missing' | 'ok' | 'removed'> {
   const stop = desktopTelemetry.startTimer('desktop.boot.validate_node');
   const nodeBin = path.join(
     app.getPath('home'), '.mindos', 'node',
@@ -930,13 +956,14 @@ function validatePrivateNode(): 'missing' | 'ok' | 'removed' {
   }
 
   try {
-    // Use execFileSync to avoid shell quoting issues with paths containing spaces or special chars
-    const { execFileSync } = require('child_process');
-    const version = execFileSync(nodeBin, ['--version'], {
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync(nodeBin, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    });
+    const version = (stdout as string).trim();
     const match = version.match(/^v(\d+)/);
     if (match && parseInt(match[1], 10) >= 18) {
       stop({ result: 'ok' });
@@ -1000,21 +1027,20 @@ function validateBuildCache(appDir: string): 'missing' | 'ok' | 'removed' {
  * Only acts on macOS. Only stops the service if it exists and conflicts with
  * Desktop's own startup (i.e. Desktop is about to manage its own processes).
  */
-function cleanupConflictingLaunchdService(): void {
+async function cleanupConflictingLaunchdService(): Promise<void> {
   if (process.platform !== 'darwin') return;
 
   try {
-    const { execSync: exec } = require('child_process');
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const execOpts = { encoding: 'utf-8' as const, timeout: 3000 };
 
     // Check if com.mindos.app service is registered with launchd
     let serviceExists = false;
     try {
-      const output = exec('launchctl list com.mindos.app', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
-      serviceExists = output.includes('com.mindos.app');
+      const { stdout } = await execAsync('launchctl list com.mindos.app', execOpts);
+      serviceExists = stdout.includes('com.mindos.app');
     } catch {
       // launchctl list exits non-zero if service doesn't exist — that's fine
       return;
@@ -1026,18 +1052,12 @@ function cleanupConflictingLaunchdService(): void {
 
     // Step 1: bootout the service so launchd stops restarting it
     try {
-      exec(`launchctl bootout gui/$(id -u)/com.mindos.app`, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
+      await execAsync(`launchctl bootout gui/$(id -u)/com.mindos.app`, { ...execOpts, timeout: 5000 });
       console.info('[MindOS] Stopped launchd service com.mindos.app');
     } catch (err) {
       // Try `launchctl remove` as fallback (works on some macOS versions)
       try {
-        exec('launchctl remove com.mindos.app', {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          timeout: 5000,
-        });
+        await execAsync('launchctl remove com.mindos.app', { ...execOpts, timeout: 5000 });
         console.info('[MindOS] Removed launchd service com.mindos.app via fallback');
       } catch {
         console.warn('[MindOS] Could not stop launchd service:', err instanceof Error ? err.message : err);
@@ -1058,17 +1078,11 @@ function cleanupConflictingLaunchdService(): void {
     // Step 3: Kill residual CLI mindos processes still holding ports.
     // Use full path pattern to avoid killing our own Desktop process.
     try {
-      exec('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
+      await execAsync('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', execOpts);
     } catch { /* no matching processes — fine */ }
     // Also kill Next.js workers spawned by the CLI
     try {
-      exec('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 3000,
-      });
+      await execAsync('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', execOpts);
     } catch { /* no matching processes — fine */ }
 
     // Note: no explicit wait needed — findAvailablePort will retry if ports haven't released yet
@@ -1086,29 +1100,31 @@ function cleanupConflictingLaunchdService(): void {
  * (which creates ~/.config/systemd/user/mindos.service), then deleted the app,
  * systemd keeps restarting the service and occupies all ports.
  */
-function cleanupLinuxSystemdService(): void {
+async function cleanupLinuxSystemdService(): Promise<void> {
   if (process.platform !== 'linux') return;
 
   try {
-    const { execSync: exec } = require('child_process');
-    const opts = { encoding: 'utf-8' as const, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] as const };
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    const opts = { encoding: 'utf-8' as const, timeout: 5000 };
 
     // Check if the service is active or enabled
     let isActive = false;
     try {
-      const status = exec('systemctl --user is-active mindos 2>/dev/null || true', opts).trim();
-      isActive = status === 'active' || status === 'activating';
+      const { stdout } = await execAsync('systemctl --user is-active mindos 2>/dev/null || true', opts);
+      isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
     } catch { /* systemctl not available */ return; }
 
     if (!isActive) {
       // Also check by alternative service name com.mindos.app
       try {
-        const status = exec('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts).trim();
-        isActive = status === 'active' || status === 'activating';
+        const { stdout } = await execAsync('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts);
+        isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
         if (isActive) {
           console.warn('[MindOS] Detected conflicting systemd service com.mindos.app — stopping it');
-          try { exec('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
-          try { exec('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
+          try { await execAsync('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
+          try { await execAsync('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
           return;
         }
       } catch { /* ok */ }
@@ -1116,8 +1132,8 @@ function cleanupLinuxSystemdService(): void {
     }
 
     console.warn('[MindOS] Detected conflicting systemd service mindos — stopping it');
-    try { exec('systemctl --user stop mindos', opts); } catch { /* ok */ }
-    try { exec('systemctl --user disable mindos', opts); } catch { /* ok */ }
+    try { await execAsync('systemctl --user stop mindos', opts); } catch { /* ok */ }
+    try { await execAsync('systemctl --user disable mindos', opts); } catch { /* ok */ }
     console.info('[MindOS] Stopped systemd user service');
   } catch {
     // Non-critical
@@ -1803,8 +1819,9 @@ app.whenReady().then(async () => {
   try {
     ensureMindosCliShim();
     cleanupOrphanedSshTunnel();
-    await healPreviousInstallation();
 
+    // Show splash BEFORE healing so users see immediate visual feedback
+    // instead of staring at an empty desktop during port cleanup.
     if (needsDesktopModeSelectAtLaunch()) {
       const mode = await showModeSelectWindow();
       if (!mode) {
@@ -1821,6 +1838,7 @@ app.whenReady().then(async () => {
       splashWindow = createSplash();
     }
 
+    await healPreviousInstallation();
     await bootApp();
     stopBoot({ mode: currentMode, modeSelected: true, success: true });
   } catch (error) {

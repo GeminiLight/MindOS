@@ -6,6 +6,7 @@ import StepEditor from './StepEditor';
 import { serializeWorkflowYaml, generateStepId } from './serializer';
 import type { WorkflowYaml, WorkflowStep } from './types';
 import { DirPicker } from './selectors';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface WorkflowEditorProps {
   workflow: WorkflowYaml;
@@ -18,6 +19,7 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   useEffect(() => {
     if (!saveSuccess) return;
@@ -33,12 +35,19 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
     onChange({ ...workflow, steps });
   }, [workflow, onChange]);
 
-  const deleteStep = useCallback((index: number) => {
+  const deleteStep = useCallback(async (index: number) => {
     const step = workflow.steps[index];
     const hasContent = step.name || step.prompt;
-    if (hasContent && !window.confirm(`Delete step "${step.name || 'Untitled'}"?`)) return;
+    if (hasContent) {
+      const ok = await confirm({
+        title: `Delete step "${step.name || 'Untitled'}"?`,
+        variant: 'destructive',
+        confirmLabel: 'Delete',
+      });
+      if (!ok) return;
+    }
     onChange({ ...workflow, steps: workflow.steps.filter((_, i) => i !== index) });
-  }, [workflow, onChange]);
+  }, [workflow, onChange, confirm]);
 
   const addStep = useCallback(() => {
     const existingIds = workflow.steps.map(s => s.id);
@@ -95,7 +104,7 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
 
   return (
     <div>
-      {/* ── Metadata Section ── */}
+      {ConfirmDialog}
       <div className="space-y-3 mb-8">
         {/* Title — large, inline feel */}
         <input type="text" value={workflow.title} onChange={e => updateMeta({ title: e.target.value })}

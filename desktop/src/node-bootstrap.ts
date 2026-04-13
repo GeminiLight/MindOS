@@ -50,17 +50,24 @@ export function isPrivateNodeInstalled(): boolean {
 }
 
 /** Resolve the download URL for the current platform */
-function getDownloadUrl(): { url: string; format: 'tar.gz' | 'zip' } {
+function getDownloadUrl(): { url: string; mirrorUrl: string; format: 'tar.gz' | 'zip' } {
   const plat = process.platform;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 
+  // China mirror: npmmirror.com hosts official Node.js binaries
+  const OFFICIAL_BASE = `https://nodejs.org/dist/v${NODE_VERSION}`;
+  const MIRROR_BASE = `https://npmmirror.com/mirrors/node/v${NODE_VERSION}`;
+
   if (plat === 'darwin') {
-    return { url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-${arch}.tar.gz`, format: 'tar.gz' };
+    const file = `node-v${NODE_VERSION}-darwin-${arch}.tar.gz`;
+    return { url: `${OFFICIAL_BASE}/${file}`, mirrorUrl: `${MIRROR_BASE}/${file}`, format: 'tar.gz' };
   }
   if (plat === 'linux') {
-    return { url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${arch}.tar.gz`, format: 'tar.gz' };
+    const file = `node-v${NODE_VERSION}-linux-${arch}.tar.gz`;
+    return { url: `${OFFICIAL_BASE}/${file}`, mirrorUrl: `${MIRROR_BASE}/${file}`, format: 'tar.gz' };
   }
-  return { url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-${arch}.zip`, format: 'zip' };
+  const file = `node-v${NODE_VERSION}-win-${arch}.zip`;
+  return { url: `${OFFICIAL_BASE}/${file}`, mirrorUrl: `${MIRROR_BASE}/${file}`, format: 'zip' };
 }
 
 /**
@@ -75,18 +82,26 @@ export async function downloadNode(
     return getPrivateNodePath();
   }
 
-  const { url, format } = getDownloadUrl();
+  const { url, mirrorUrl, format } = getDownloadUrl();
   const tmpDir = path.join(MINDOS_DIR, 'tmp');
   mkdirSync(tmpDir, { recursive: true });
   mkdirSync(NODE_DIR, { recursive: true });
 
   const tmpFile = path.join(tmpDir, `node.${format}`);
 
-  // 1. Download
+  // 1. Download — try official URL first, fall back to China mirror on failure/timeout
   onProgress?.(0, 'downloading');
-  await downloadFile(url, tmpFile, (percent) => {
-    onProgress?.(Math.round(percent * 0.8), 'downloading'); // 0-80%
-  });
+  try {
+    await downloadFile(url, tmpFile, (percent) => {
+      onProgress?.(Math.round(percent * 0.8), 'downloading');
+    }, 30000); // 30s timeout for official — fail fast if blocked
+  } catch (primaryErr) {
+    console.warn(`[MindOS] Official Node.js download failed (${primaryErr instanceof Error ? primaryErr.message : primaryErr}), trying mirror...`);
+    onProgress?.(0, 'downloading');
+    await downloadFile(mirrorUrl, tmpFile, (percent) => {
+      onProgress?.(Math.round(percent * 0.8), 'downloading');
+    }); // default timeout for mirror
+  }
 
   // 2. Extract (using spawn with argument arrays — no shell injection)
   onProgress?.(80, 'extracting');
@@ -142,20 +157,48 @@ export async function downloadNode(
 /**
  * Download a file via HTTPS with progress tracking.
  * Progress is tracked by monitoring bytes written to disk (not stream consumption).
+ * @param timeoutMs — overall download timeout in ms (0 = no timeout, default)
  */
 function downloadFile(
   url: string,
   dest: string,
   onProgress?: (percent: number) => void,
+  timeoutMs = 0,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let redirects = 0;
+    let settled = false;
+    let overallTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = (progressInterval: ReturnType<typeof setInterval> | null, res?: import('http').IncomingMessage) => {
+      if (progressInterval) clearInterval(progressInterval);
+      if (overallTimer) { clearTimeout(overallTimer); overallTimer = null; }
+      // Destroy response stream to stop network I/O on timeout/error
+      if (res && !res.destroyed) res.destroy();
+    };
+
+    const fail = (err: Error, res?: import('http').IncomingMessage) => {
+      if (settled) return;
+      settled = true;
+      cleanup(null, res);
+      reject(err);
+    };
+
+    if (timeoutMs > 0) {
+      overallTimer = setTimeout(() => {
+        fail(new Error(`Download timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+    }
+
     const follow = (reqUrl: string) => {
+      if (settled) return;
       if (++redirects > 5) {
-        reject(new Error('Too many redirects'));
+        fail(new Error('Too many redirects'));
         return;
       }
-      https.get(reqUrl, (res) => {
+      const req = https.get(reqUrl, (res) => {
+        if (settled) { res.resume(); return; }
+
         // Follow redirects
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
@@ -165,7 +208,7 @@ function downloadFile(
 
         if (res.statusCode !== 200) {
           res.resume();
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+          fail(new Error(`Download failed: HTTP ${res.statusCode}`), res);
           return;
         }
 
@@ -173,12 +216,13 @@ function downloadFile(
         const fileStream = createWriteStream(dest);
         let lastReportedPercent = 0;
 
-        fileStream.on('error', reject);
+        fileStream.on('error', (err) => { cleanup(null, res); fail(err, res); });
 
         res.pipe(fileStream);
 
         // Track progress via periodic stat of the file
         const progressInterval = totalBytes > 0 ? setInterval(() => {
+          if (settled) return;
           try {
             const written = statSync(dest).size;
             const percent = (written / totalBytes) * 100;
@@ -190,11 +234,14 @@ function downloadFile(
         }, 200) : null;
 
         fileStream.on('finish', () => {
-          if (progressInterval) clearInterval(progressInterval);
+          cleanup(progressInterval, res);
+          if (settled) return;
+          settled = true;
           onProgress?.(100);
           resolve();
         });
-      }).on('error', reject);
+      });
+      req.on('error', (err) => { fail(err); });
     };
 
     follow(url);

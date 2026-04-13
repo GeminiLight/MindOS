@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette } from 'lucide-react';
 import { Locale } from '@/lib/i18n';
-import { CONTENT_WIDTHS, FONTS, FONT_SIZES, AppearanceTabProps } from './types';
+import { FONTS, FONT_SIZES, AppearanceTabProps } from './types';
 import { SettingCard } from './Primitives';
 
 /* ── Setting Group ── */
@@ -166,8 +166,8 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
             <span className="text-xs text-muted-foreground/60 shrink-0" style={{ fontSize: '11px' }}>A</span>
             <input
               type="range"
-              min={14}
-              max={17}
+              min={12}
+              max={22}
               step={1}
               value={parseInt(fontSize)}
               onChange={e => setFontSize(`${e.target.value}px`)}
@@ -199,38 +199,34 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         </div>
       </SettingGroup>
 
-      {/* ── Content Width — visual width bars ── */}
+      {/* ── Content Width — percentage slider (same style as font size) ── */}
       <SettingGroup icon={<Columns3 size={14} />} label={a.contentWidth}>
-        <div className="space-y-1">
-          {CONTENT_WIDTHS.map(w => {
-            const selected = contentWidth === w.value;
-            return (
-              <button
-                key={w.value}
-                type="button"
-                onClick={() => setContentWidth(w.value)}
-                className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg transition-all ${
-                  selected ? 'bg-[var(--amber-subtle)]' : 'hover:bg-muted/50'
-                }`}
-              >
-                {/* Width indicator bar */}
-                <div className="flex-1 h-2 rounded-full bg-muted/40 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      selected ? 'bg-[var(--amber)]' : 'bg-muted-foreground/20'
-                    }`}
-                    style={{ width: `${w.width}%` }}
-                  />
-                </div>
-                {/* Label */}
-                <span className={`text-sm shrink-0 w-14 text-right ${
-                  selected ? 'text-foreground font-medium' : 'text-muted-foreground'
-                }`}>
-                  {w.label}
-                </span>
-              </button>
-            );
-          })}
+        <div className="px-1">
+          {/* Slider */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground/60 shrink-0">▬</span>
+            <input
+              type="range"
+              min={50}
+              max={100}
+              step={5}
+              value={parseInt(contentWidth) || 80}
+              onChange={(e) => setContentWidth(`${e.target.value}%`)}
+              className="flex-1 h-1.5 rounded-full appearance-none bg-muted cursor-pointer accent-[var(--amber)]
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--amber)]
+                [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:cursor-pointer
+                [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110
+                [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full
+                [&::-moz-range-thumb]:bg-[var(--amber)] [&::-moz-range-thumb]:border-0
+                [&::-moz-range-thumb]:shadow-sm [&::-moz-range-thumb]:cursor-pointer"
+            />
+            <span className="text-xs text-muted-foreground/60 shrink-0">▬▬▬</span>
+          </div>
+          {/* Current value */}
+          <div className="text-center mt-1.5">
+            <span className="text-xs tabular-nums text-muted-foreground">{parseInt(contentWidth) || 80}%</span>
+          </div>
         </div>
       </SettingGroup>
 

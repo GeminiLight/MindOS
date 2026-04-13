@@ -39,8 +39,9 @@
 | `claude-code` | Claude Code | json | `mcpServers` | `~/.claude.json` | `.mcp.json` | `stdio` | additional |
 | `cursor` | Cursor | json | `mcpServers` | `~/.cursor/mcp.json` | `.cursor/mcp.json` | `stdio` | universal |
 | `windsurf` | Windsurf | json | `mcpServers` | `~/.codeium/windsurf/mcp_config.json` | - | `stdio` | additional |
-| `cline` | Cline | json | `mcpServers` | `Code/User/globalStorage/.../cline_mcp_settings.json` | - | `stdio` | universal |
+| `cline` | Cline | json | `mcpServers` | macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | - | `stdio` | universal |
 | `trae` | Trae | json | `mcpServers` | `~/.trae/mcp.json` | `.trae/mcp.json` | `stdio` | additional |
+| `trae-cn` | Trae CN | json | `mcpServers` | macOS: `~/Library/Application Support/Trae CN/User/mcp.json`; Linux: `~/.config/Trae CN/User/mcp.json` | `.trae/mcp.json` | `stdio` | additional |
 | `gemini-cli` | Gemini CLI | json | `mcpServers` | `~/.gemini/settings.json` | `.gemini/settings.json` | `stdio` | universal |
 | `openclaw` | OpenClaw | json | `mcpServers` | `~/.openclaw/mcp.json` | - | `stdio` | additional |
 | `codebuddy` | CodeBuddy | json | `mcpServers` | `~/.codebuddy/mcp.json` | - | `stdio` | additional |
@@ -51,10 +52,14 @@
 | `augment` | Augment | json | `mcpServers` | `~/.augment/settings.json` | `.augment/settings.json` | `stdio` | additional |
 | `qwen-code` | Qwen Code | json | `mcpServers` | `~/.qwen/settings.json` | `.qwen/settings.json` | `stdio` | additional |
 | `qoder` | Qoder | json | `mcpServers` | `~/.qoder.json` | - | `stdio` | additional |
-| `trae-cn` | Trae CN | json | `mcpServers` | `Trae CN/User/mcp.json` | `.trae/mcp.json` | `stdio` | additional |
-| `roo` | Roo Code | json | `mcpServers` | `Code/User/globalStorage/.../roo-cline/.../mcp_settings.json` | `.roo/mcp.json` | `stdio` | additional |
-| `github-copilot` | GitHub Copilot | json | `servers` | `Code/User/mcp.json` | `.vscode/mcp.json` | `stdio` | universal |
+| `roo` | Roo Code | json | `mcpServers` | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | `.roo/mcp.json` | `stdio` | additional |
+| `github-copilot` | GitHub Copilot | json | `servers` | macOS: `~/Library/Application Support/Code/User/mcp.json`; Linux: `~/.config/Code/User/mcp.json` | `.vscode/mcp.json` | `stdio` | universal |
 | `codex` | Codex | toml | `mcp_servers` | `~/.codex/config.toml` | - | `stdio` | universal |
+| `antigravity` | Antigravity | json | `mcpServers` | `~/.gemini/antigravity/mcp_config.json` | `.antigravity/mcp_config.json` | `stdio` | additional |
+| `qclaw` | QClaw | json | `mcpServers` | `~/.qclaw/mcp.json` | - | `stdio` | unsupported |
+| `workbuddy` | WorkBuddy | json | `mcpServers` | `~/.workbuddy/mcp.json` | - | `stdio` | unsupported |
+| `lingma` | Lingma | json | `mcpServers` | `~/.lingma/mcp.json` | - | `stdio` | unsupported |
+| `copaw` | CoPaw | json | `mcp` (嵌套 `mcp.clients`) | `~/.copaw/config.json` | - | `stdio` | unsupported |
 
 ---
 
@@ -67,12 +72,19 @@
 - 全局（`-g`）：`~/.agents/skills/<skill>/`
 
 ### 2) Additional 模式（agent 目录 symlink 到 `.agents/skills`）
-适用：`claude-code`、`windsurf`、`trae`、`openclaw`、`codebuddy`、`iflow-cli`、`pi`、`augment`、`qwen-code`、`qoder`、`trae-cn`、`roo`。
+适用：`claude-code`、`windsurf`、`trae`、`trae-cn`、`openclaw`、`codebuddy`、`iflow-cli`、`pi`、`augment`、`qwen-code`、`qoder`、`roo`、`antigravity`。
 
-- 目标目录（示例）：`~/.claude/skills/<skill>`、`~/.windsurf/skills/<skill>`、`~/.trae/skills/<skill>` 等
+- `npx skills` 创建的 symlink 目录：`~/.<agent>/skills/<skill>` → `~/.agents/skills/<skill>`
+- 示例：`~/.claude/skills/<skill>`、`~/.windsurf/skills/<skill>`、`~/.trae/skills/<skill>`、`~/.roo/skills/<skill>` 等
 - 内容来源：链接到 `~/.agents/skills/<skill>`（或项目级 `.agents/skills/<skill>`）
 
-### 3) MindOS 当前安装策略
+### 3) Unsupported 模式（MCP 安装时自动复制 Skill 文件）
+适用：`qclaw`、`workbuddy`、`lingma`、`copaw`。
+
+- MCP 安装时将 skill 目录直接复制到 agent 根目录的 `skills/` 下
+- 不走 `npx skills` 工具链
+
+### 4) MindOS 当前安装策略
 来源：`app/app/api/mcp/install-skill/route.ts` 与 `scripts/setup.js`。
 
 - 安装命令：`npx skills add <source> --skill <name> -a ... -g -y`
@@ -162,10 +174,13 @@
 但当前代码**尚未统一读取**各 agent 隐藏目录里的“对话历史 / token 账单 / 会话统计”文件。  
 原因：不同 agent 的日志与计费文件格式、路径、版本差异较大，不适合硬编码为单一路径。
 
-#### 已有可稳定依赖的“隐藏目录入口”（按注册表）
+#### 已有可稳定依赖的"隐藏目录入口"（按注册表）
 - `claude-code`：`~/.claude/`
 - `cursor`：`~/.cursor/`
 - `windsurf`：`~/.codeium/windsurf/`
+- `cline`：macOS `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/`; Linux `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/`
+- `trae`：`~/.trae/`
+- `trae-cn`：macOS `~/Library/Application Support/Trae CN/`; Linux `~/.config/Trae CN/`
 - `gemini-cli`：`~/.gemini/`
 - `openclaw`：`~/.openclaw/`
 - `codebuddy`：`~/.codebuddy/`
@@ -176,7 +191,14 @@
 - `augment`：`~/.augment/`
 - `qwen-code`：`~/.qwen/`
 - `qoder`：`~/.qoder/` 或 `~/.qoder.json`
+- `roo`：macOS `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/`; Linux `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/`
+- `github-copilot`：macOS `~/Library/Application Support/Code/`; Linux `~/.config/Code/`
 - `codex`：`~/.codex/`
+- `antigravity`：`~/.gemini/antigravity/`
+- `qclaw`：`~/.qclaw/`
+- `workbuddy`：`~/.workbuddy/`
+- `lingma`：`~/.lingma/`
+- `copaw`：`~/.copaw/`
 
 #### 推荐采集策略（后续实现）
 1. 以 `presenceDirs` 为起点扫描 agent 目录；

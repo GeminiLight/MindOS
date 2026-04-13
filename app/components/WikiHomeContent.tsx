@@ -8,6 +8,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { InboxSection } from '@/components/home/InboxSection';
 import type { SpaceInfo } from '@/app/page';
+import { Select } from '@/components/settings/Primitives';
 
 interface RecentFile {
   path: string;
@@ -167,15 +168,15 @@ export default function WikiHomeContent({ spaces, recent }: WikiHomeContentProps
           )}
           <div className="ml-auto flex items-center gap-3">
             {spaces.length > 0 && (
-              <select
+              <Select
+                size="sm"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-2 py-1 transition-colors bg-transparent"
               >
                 <option value="recent">{t.home.sortRecent ?? 'Recent'}</option>
                 <option value="name">{t.home.sortName ?? 'A-Z'}</option>
                 <option value="fileCount">{t.home.sortCount ?? 'File Count'}</option>
-              </select>
+              </Select>
             )}
             <button
               onClick={() => window.dispatchEvent(new Event('mindos:create-space'))}

@@ -767,7 +767,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               type="file"
               className="hidden"
               multiple
-              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+              accept=".txt,.md,.markdown,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,.doc,.docx,.docm,text/plain,text/markdown,text/csv,application/json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-word.document.macroEnabled.12"
               onChange={async (e) => {
                 const inputEl = e.currentTarget;
                 await upload.pickFiles(inputEl.files);
@@ -797,6 +797,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               onPaste={handlePaste}
               placeholder={t.ask.placeholder}
               rows={1}
+              suppressHydrationWarning
               className={cn('min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-2 leading-relaxed text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-0', isHome ? 'text-xs' : 'text-sm')}
             />
 

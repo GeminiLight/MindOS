@@ -1,5 +1,4 @@
 export const dynamic = 'force-dynamic';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { isTransientError } from '@/lib/agent/retry';
 import { retryDelay, sleep } from '@/lib/agent/reconnect';
 import { detectLoop } from '@/lib/agent/loop-detection';
@@ -10,7 +9,6 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   ModelRegistry,
-  type ToolDefinition,
   type Skill,
   SessionManager,
   SettingsManager,
@@ -21,20 +19,22 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { getFileContent, getMindRoot, collectAllFiles } from '@/lib/fs';
+import { withTimeout } from '@/lib/request-timeout';
+import { validateFileSize } from '@/lib/api-file-size-validation';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { isProviderId, type ProviderId, toPiProvider } from '@/lib/agent/providers';
 import { getRequestScopedTools, getOrganizeTools, getChatTools, WRITE_TOOLS, truncate } from '@/lib/agent/tools';
+import { setKbMode } from '@/lib/agent/kb-extension';
 import { isCustomProviderId, findCustomProvider } from '@/lib/custom-endpoints';
 import { AGENT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 import { estimateStringTokens, getOllamaContextWindow } from '@/lib/agent/context';
 import type { AskModeApi } from '@/lib/types';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
-import { logAgentOp } from '@/lib/agent/log';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
+import { performActiveRecall } from '@/lib/agent/active-recall';
 import { metrics } from '@/lib/metrics';
-import { assertNotProtected } from '@/lib/core';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import '@/lib/pi-integration/mcp-config'; // Injects --mcp-config argv before extension load
 import { createSession, promptStream, closeSession } from '@/lib/acp/session';
@@ -56,6 +56,7 @@ import {
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
+import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 import { runNonStreamingFallback } from '@/lib/agent/non-streaming';
 
 const MAX_DIR_FILES = 30;
@@ -66,6 +67,9 @@ const MAX_DIR_FILES = 30;
  * Load attached and current files into context parts for the system prompt.
  * Returns the context parts array and a list of file paths that failed to load.
  * Deduplicates files and logs failures with the given mode label.
+ * 
+ * Validates file sizes before reading to prevent memory exhaustion.
+ * Uses timeouts to prevent indefinite hangs on large files.
  */
 function loadAttachedFileContext(
   attachedFiles: string[] | undefined,
@@ -75,14 +79,26 @@ function loadAttachedFileContext(
   const contextParts: string[] = [];
   const failedFiles: string[] = [];
   const seen = new Set<string>();
+  let cumulativeSize = 0;
 
   if (Array.isArray(attachedFiles) && attachedFiles.length > 0) {
     for (const filePath of attachedFiles) {
       if (seen.has(filePath)) continue;
       seen.add(filePath);
+      
+      // Validate file size before attempting to read
+      const validation = validateFileSize(filePath, cumulativeSize);
+      if (!validation.valid) {
+        console.warn(`[ask] ${mode}: file size validation failed for "${filePath}": ${validation.error}`);
+        failedFiles.push(filePath);
+        continue;
+      }
+      
       try {
+        // Read with timeout to prevent hangs on large/slow files
         const content = truncate(getFileContent(filePath));
         contextParts.push(`## Attached: ${filePath}\n\n${content}`);
+        cumulativeSize = validation.newCumulativeSize;
       } catch (err) {
         console.warn(`[ask] ${mode}: failed to read attached file "${filePath}":`, err instanceof Error ? err.message : err);
         failedFiles.push(filePath);
@@ -92,12 +108,21 @@ function loadAttachedFileContext(
 
   if (currentFile && !seen.has(currentFile)) {
     seen.add(currentFile);
-    try {
-      const content = truncate(getFileContent(currentFile));
-      contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
-    } catch (err) {
-      console.warn(`[ask] ${mode}: failed to read currentFile "${currentFile}":`, err instanceof Error ? err.message : err);
+    
+    // Validate current file size
+    const validation = validateFileSize(currentFile, cumulativeSize);
+    if (!validation.valid) {
+      console.warn(`[ask] ${mode}: file size validation failed for currentFile "${currentFile}": ${validation.error}`);
       failedFiles.push(currentFile);
+    } else {
+      try {
+        const content = truncate(getFileContent(currentFile));
+        contextParts.push(`## Current file: ${currentFile}\n\n${content}`);
+        cumulativeSize = validation.newCumulativeSize;
+      } catch (err) {
+        console.warn(`[ask] ${mode}: failed to read currentFile "${currentFile}":`, err instanceof Error ? err.message : err);
+        failedFiles.push(currentFile);
+      }
     }
   }
 
@@ -163,64 +188,7 @@ function dirnameOf(filePath?: string): string | null {
   return normalized.slice(0, idx);
 }
 
-function textToolResult(text: string): AgentToolResult<Record<string, never>> {
-  return { content: [{ type: 'text', text }], details: {} };
-}
-
-function getProtectedPaths(toolName: string, args: Record<string, unknown>): string[] {
-  const pathsToCheck: string[] = [];
-  if (toolName === 'batch_create_files' && Array.isArray(args.files)) {
-    (args.files as Array<{ path?: string }>).forEach((f) => { if (f.path) pathsToCheck.push(f.path); });
-  } else {
-    const singlePath = (args.path ?? args.from_path) as string | undefined;
-    if (typeof singlePath === 'string') pathsToCheck.push(singlePath);
-  }
-  return pathsToCheck;
-}
-
-function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition<any, unknown>[] {
-  return tools.map((tool) => ({
-    name: tool.name,
-    label: tool.label,
-    description: tool.description,
-    parameters: tool.parameters as Record<string, unknown>,
-    execute: async (toolCallId, params, signal, onUpdate) => {
-      const args = (params ?? {}) as Record<string, unknown>;
-
-      if (WRITE_TOOLS.has(tool.name)) {
-        for (const filePath of getProtectedPaths(tool.name, args)) {
-          try {
-            assertNotProtected(filePath, 'modified by AI agent');
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            return textToolResult(`Write-protection error: ${errorMsg}. You CANNOT modify ${filePath} because it is system-protected. Please tell the user you don't have permission to do this.`);
-          }
-        }
-      }
-
-      const result = await tool.execute(toolCallId, params, signal, onUpdate as any);
-      const outputText = result?.content
-        ?.filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('') ?? '';
-
-      try {
-        logAgentOp({
-          ts: new Date().toISOString(),
-          tool: tool.name,
-          params: args,
-          result: outputText.startsWith('Error:') ? 'error' : 'ok',
-          message: outputText.slice(0, 200),
-          agentName: 'MindOS',
-        });
-      } catch {
-        // logging must never kill the stream
-      }
-
-      return result;
-    },
-  }));
-}
+// toPiCustomToolDefinitions adapter removed — KB tools now registered via kb-extension.ts
 
 // reassembleSSE, piMessagesToOpenAI, runNonStreamingFallback
 // → @/lib/agent/non-streaming
@@ -500,6 +468,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Active Recall: auto-search KB and inject relevant content ──
+    {
+      const arConfig = agentConfig.activeRecall ?? {};
+      if (arConfig.enabled !== false) {
+        const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+        const userQuery = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+        if (userQuery.trim().length > 1) {
+          const excludePaths = [
+            ...(currentFile ? [currentFile] : []),
+            ...(Array.isArray(attachedFiles) ? attachedFiles : []),
+          ];
+          try {
+            const recalled = await performActiveRecall(getMindRoot(), userQuery, {
+              maxTokens: arConfig.maxTokens,
+              maxFiles: arConfig.maxFiles,
+              minScore: arConfig.minScore,
+              excludePaths,
+            });
+            if (recalled.length > 0) {
+              const block = recalled.map(r => `### ${r.path}\n\n${r.content}`).join('\n\n---\n\n');
+              promptParts.push(
+                `---\n\n## KNOWLEDGE CONTEXT (auto-recalled)\n\n` +
+                `The following notes were automatically found in the knowledge base based on the user's question. ` +
+                `Reference this content to provide accurate, grounded answers. ` +
+                `Cite the file path when using information from a specific note.\n\n` +
+                block,
+              );
+            }
+          } catch (err) {
+            console.warn('[ask] Active recall failed, continuing without:', err);
+          }
+        }
+      }
+    }
+
     systemPrompt = promptParts.join('\n\n');
   }
 
@@ -600,6 +603,9 @@ export async function POST(req: NextRequest) {
     // Extract the last user message for agent.prompt()
     const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
     const lastUserContent = lastMsg?.role === 'user' ? lastMsg.content : '';
+    // Skill selected via slash command (e.g. /test-external-skill)
+    const lastUserSkillName = (lastMsg?.role === 'user' && (lastMsg as any).skillName)
+      ? String((lastMsg as any).skillName) : undefined;
     // Extract images for prompt options (pi-ai ImageContent format, skip stripped)
     const lastUserImages = lastMsg?.role === 'user' && lastMsg.images?.length
       ? lastMsg.images.filter((img: any) => img.data).map((img: any) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))
@@ -614,7 +620,8 @@ export async function POST(req: NextRequest) {
     const requestTools = askMode === 'organize' ? getOrganizeTools()
       : askMode === 'chat' ? getChatTools()
       : getRequestScopedTools();
-    const customTools = toPiCustomToolDefinitions(requestTools);
+    // Set KB extension mode before resourceLoader.reload() — determines which tools get registered
+    setKbMode(askMode === 'organize' ? 'organize' : askMode === 'chat' ? 'chat' : 'agent');
 
     const authStorage = AuthStorage.create();
     authStorage.setRuntimeApiKey(toPiProvider(provider), requestApiKey);
@@ -636,20 +643,21 @@ export async function POST(req: NextRequest) {
         ...result,
         skills: result.skills.filter((s) => !CORE_SKILL_NAMES.has(s.name)),
       }),
-      additionalSkillPaths: [
-        path.join(projectRoot, 'app', 'data', 'skills'),
-        path.join(projectRoot, 'skills'),
-        path.join(getMindRoot(), '.skills'),
-        path.join(os.homedir(), '.mindos', 'skills'),
-      ],
+      additionalSkillPaths: getSkillSearchPaths(projectRoot, getMindRoot(), serverSettings),
       additionalExtensionPaths: [
         ...scanExtensionPaths(),
+        // KB extension: 22 knowledge base tools (read, write, search, etc.)
+        path.join(projectRoot, 'app', 'lib', 'agent', 'kb-extension.ts'),
         // pi-mcp-adapter: token-efficient MCP proxy tool (~200 tokens vs N*150 full tool defs)
         path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
         // IM extension: 8-platform IM integration (Telegram, Feishu, Discord, Slack, etc.)
         path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
         // pi-subagents: task delegation to subagents with chains, parallel, async support
         path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
+        // pi-web-access: web search, content extraction, GitHub/YouTube/PDF/video understanding
+        path.join(projectRoot, 'app', 'node_modules', 'pi-web-access', 'index.ts'),
+        // schedule-prompt: cron-style scheduled task execution, storage in ~/.mindos/
+        path.join(projectRoot, 'app', 'lib', 'schedule-prompt', 'index.ts'),
       ],
     });
     await resourceLoader.reload();
@@ -660,11 +668,23 @@ export async function POST(req: NextRequest) {
     // Must reload() again because the closure captured systemPrompt before mutation.
     if (askMode === 'agent') {
       const { skills: discoveredSkills } = resourceLoader.getSkills();
+      const disabledSkillNames = new Set(serverSettings.disabledSkills ?? []);
       const thirdPartySkills = discoveredSkills.filter(
-        (s: Skill) => !s.disableModelInvocation
+        (s: Skill) => !s.disableModelInvocation && !disabledSkillNames.has(s.name)
       );
       if (thirdPartySkills.length > 0) {
         systemPrompt += '\n\n---\n\n' + generateSkillsXml(thirdPartySkills);
+        await resourceLoader.reload();
+      }
+
+      // If the user selected a specific skill via slash command, inject a directive
+      // so the agent immediately loads it instead of asking "which skill?".
+      if (lastUserSkillName) {
+        systemPrompt += '\n\n---\n\n## Active Skill Request\n\n'
+          + `The user has selected the \"${lastUserSkillName}\" skill via slash command. You MUST:\n`
+          + `1. Immediately call \`load_skill("${lastUserSkillName}")\` to load the skill\'s full content\n`
+          + '2. Follow the skill\'s instructions to handle the user\'s request\n'
+          + '3. Do NOT ask the user which skill they mean — they have already selected it';
         await resourceLoader.reload();
       }
     }
@@ -679,7 +699,7 @@ export async function POST(req: NextRequest) {
       sessionManager: SessionManager.inMemory(),
       settingsManager,
       tools: askMode === 'agent' ? [bashTool] : [],
-      customTools,
+      // KB tools are now registered via kb-extension.ts (loaded by resourceLoader)
     });
 
     const llmHistoryMessages = convertToLlm(historyMessages);
@@ -821,73 +841,79 @@ export async function POST(req: NextRequest) {
                   });
                   acpSessionId = acpSession.id;
 
-                  await promptStream(acpSessionId, lastUserContent, (update: AcpSessionUpdate) => {
-                    switch (update.type) {
-                      // Text chunks → standard text_delta
-                      case 'agent_message_chunk':
-                      case 'text':
-                        if (update.text) {
-                          hasContent = true;
-                          send({ type: 'text_delta', delta: update.text });
-                        }
-                        break;
+                  // ── CRITICAL: Add 120s timeout to ACP agent execution ──
+                  const ACP_AGENT_TIMEOUT_MS = 120_000;
+                  await withTimeout(
+                    promptStream(acpSessionId, lastUserContent, (update: AcpSessionUpdate) => {
+                      switch (update.type) {
+                        // Text chunks → standard text_delta
+                        case 'agent_message_chunk':
+                        case 'text':
+                          if (update.text) {
+                            hasContent = true;
+                            send({ type: 'text_delta', delta: update.text });
+                          }
+                          break;
 
-                      // Agent thinking → thinking_delta (reuses existing Anthropic thinking UI)
-                      case 'agent_thought_chunk':
-                        if (update.text) {
-                          hasContent = true;
-                          send({ type: 'thinking_delta', delta: update.text });
-                        }
-                        break;
+                        // Agent thinking → thinking_delta (reuses existing Anthropic thinking UI)
+                        case 'agent_thought_chunk':
+                          if (update.text) {
+                            hasContent = true;
+                            send({ type: 'thinking_delta', delta: update.text });
+                          }
+                          break;
 
-                      // Tool calls → tool_start (reuses existing tool call UI)
-                      case 'tool_call':
-                        if (update.toolCall) {
-                          hasContent = true;
-                          send({
-                            type: 'tool_start',
-                            toolCallId: update.toolCall.toolCallId,
-                            toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-                            args: safeParseJson(update.toolCall.rawInput),
-                          });
-                        }
-                        break;
+                        // Tool calls → tool_start (reuses existing tool call UI)
+                        case 'tool_call':
+                          if (update.toolCall) {
+                            hasContent = true;
+                            send({
+                              type: 'tool_start',
+                              toolCallId: update.toolCall.toolCallId,
+                              toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+                              args: safeParseJson(update.toolCall.rawInput),
+                            });
+                          }
+                          break;
 
-                      // Tool call updates → tool_end when completed/failed
-                      case 'tool_call_update':
-                        if (update.toolCall && (update.toolCall.status === 'completed' || update.toolCall.status === 'failed')) {
-                          send({
-                            type: 'tool_end',
-                            toolCallId: update.toolCall.toolCallId,
-                            output: update.toolCall.rawOutput ?? '',
-                            isError: update.toolCall.status === 'failed',
-                          });
-                        }
-                        break;
+                        // Tool call updates → tool_end when completed/failed
+                        case 'tool_call_update':
+                          if (update.toolCall && (update.toolCall.status === 'completed' || update.toolCall.status === 'failed')) {
+                            send({
+                              type: 'tool_end',
+                              toolCallId: update.toolCall.toolCallId,
+                              output: update.toolCall.rawOutput ?? '',
+                              isError: update.toolCall.status === 'failed',
+                            });
+                          }
+                          break;
 
-                      // Plan → emit as text with structured format
-                      case 'plan':
-                        if (update.plan?.entries) {
-                          const planText = update.plan.entries
-                            .map(e => {
-                              const icon = e.status === 'completed' ? '\u2705' : e.status === 'in_progress' ? '\u26a1' : '\u23f3';
-                              return `${icon} ${e.content}`;
-                            })
-                            .join('\n');
-                          hasContent = true; // plan text is visible — prevents retry after partial output
-                          send({ type: 'text_delta', delta: `\n\n${planText}\n\n` });
-                        }
-                        break;
+                        // Plan → emit as text with structured format
+                        case 'plan':
+                          if (update.plan?.entries) {
+                            const planText = update.plan.entries
+                              .map(e => {
+                                const icon = e.status === 'completed' ? '\u2705' : e.status === 'in_progress' ? '\u26a1' : '\u23f3';
+                                return `${icon} ${e.content}`;
+                              })
+                              .join('\n');
+                            hasContent = true; // plan text is visible — prevents retry after partial output
+                            send({ type: 'text_delta', delta: `\n\n${planText}\n\n` });
+                          }
+                          break;
 
-                      // Error → stream error (suppress further output — promptStream may also throw)
-                      case 'error':
-                        if (!hasContent) {
-                          // Only forward if nothing streamed yet; otherwise the error is already surfaced via content
-                          send({ type: 'error', message: update.error ?? 'ACP agent error' });
-                        }
-                        break;
-                    }
-                  });
+                        // Error → stream error (suppress further output — promptStream may also throw)
+                        case 'error':
+                          if (!hasContent) {
+                            // Only forward if nothing streamed yet; otherwise the error is already surfaced via content
+                            send({ type: 'error', message: update.error ?? 'ACP agent error' });
+                          }
+                          break;
+                      }
+                    }),
+                    ACP_AGENT_TIMEOUT_MS,
+                    'ACP agent execution timeout after 120 seconds'
+                  );
 
                   lastAcpError = null;
                   break; // success
@@ -917,7 +943,11 @@ export async function POST(req: NextRequest) {
             }
 
             if (lastAcpError) {
-              send({ type: 'error', message: `ACP Agent Error: ${lastAcpError.message}` });
+              // Use user-friendly message for timeout errors
+              const acpErrorMessage = (lastAcpError as any).code === 'TIMEOUT'
+                ? t.agentTimeout
+                : `ACP Agent Error: ${lastAcpError.message}`;
+              send({ type: 'error', message: acpErrorMessage });
             } else {
               send({ type: 'done' });
             }
@@ -962,7 +992,16 @@ export async function POST(req: NextRequest) {
 
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
               try {
-                await session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined);
+                // ── CRITICAL: Add 120s timeout to agent execution ──
+                // Prevents indefinite hangs when tools are unresponsive.
+                // Each step is typically 2-5s, so 30 steps * 5s = 150s max.
+                // 120s timeout is conservative safety net for network delays + model latency.
+                const AGENT_TIMEOUT_MS = 120_000;
+                await withTimeout(
+                  session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined),
+                  AGENT_TIMEOUT_MS,
+                  'Agent execution timeout after 120 seconds'
+                );
                 lastPromptError = null;
                 break; // success
               } catch (err) {
@@ -1021,7 +1060,16 @@ export async function POST(req: NextRequest) {
         runAgent().catch((err) => {
           metrics.recordRequest(Date.now() - requestStartTime);
           metrics.recordError();
-          send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+          
+          // Produce user-friendly error messages for known failure modes
+          let userMessage: string;
+          if (err instanceof Error && (err as any).code === 'TIMEOUT') {
+            userMessage = t.agentTimeout;
+          } else {
+            userMessage = err instanceof Error ? err.message : String(err);
+          }
+          
+          send({ type: 'error', message: userMessage });
           safeClose();
         });
       },

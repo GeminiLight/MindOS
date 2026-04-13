@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2, HelpCircle } from 'lucide-react';
+import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, Database, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
@@ -11,6 +11,7 @@ import { AppearanceTab } from './AppearanceTab';
 import { KnowledgeTab } from './KnowledgeTab';
 import { SyncTab } from './SyncTab';
 import { McpTab } from './McpTab';
+import { PluginsTab } from './PluginsTab';
 import { UpdateTab } from './UpdateTab';
 import { UninstallTab } from './UninstallTab';
 
@@ -32,10 +33,11 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const dataLoaded = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const [font, setFont] = useState('lora');
+  const [font, setFont] = useState('inter');
   const [fontSize, setFontSize] = useState('15px');
-  const [contentWidth, setContentWidth] = useState('780px');
+  const [contentWidth, setContentWidth] = useState('80%');
   const [dark, setDark] = useState(true);
+  const [pluginStates, setPluginStates] = useState<Record<string, boolean>>({});
 
   // Update available badge on Update tab
   const [hasUpdate, setHasUpdate] = useState(() => {
@@ -66,9 +68,14 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
 
     if (justOpened) {
       apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
-      setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'ibm-plex-sans');
+      setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'inter');
       setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
-      setContentWidth(localStorage.getItem('content-width') ?? '780px');
+      // Migrate old px-based content-width to percentage
+      const storedCW = localStorage.getItem('content-width') ?? '80%';
+      const migratedCW = storedCW.endsWith('px')
+        ? (() => { const px = parseInt(storedCW); if (px >= 960) return '100%'; if (px >= 780) return '80%'; return '65%'; })()
+        : storedCW;
+      setContentWidth(migratedCW);
       const stored = localStorage.getItem('theme');
       setDark(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
       setStatus('idle');
@@ -203,6 +210,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: boolean }[] = [
     { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={iconSize} /> },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'Connections', icon: <Plug size={iconSize} /> },
+    { id: 'plugins', label: t.settings.tabs.plugins ?? 'Plugins', icon: <Puzzle size={iconSize} /> },
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} /> },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} /> },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} /> },
@@ -227,11 +235,12 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         </div>
       ) : (
         <>
-          {tab === 'ai' && data?.ai && <AiTab data={data} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
+          {tab === 'ai' && data?.ai && <AiTab data={data} setData={setData} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
           {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
           {tab === 'sync' && <SyncTab t={t} visible={visible} />}
           {tab === 'mcp' && <McpTab t={t} />}
+          {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} mindRoot={data?.mindRoot} />}
           {tab === 'update' && <UpdateTab />}
           {tab === 'uninstall' && <UninstallTab />}
         </>

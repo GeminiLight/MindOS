@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { analyzePluginCompatibility, getCompatibilityLevel, type CompatibilityLevel, type PluginCompatibilityReport } from './compatibility-report';
-import { importObsidianPlugin, scanObsidianVaultPlugins, type ScannedObsidianPlugin } from './obsidian-import';
+import { importObsidianPlugin, scanObsidianVaultPlugins, type ScanResult } from './obsidian-import';
 import { PluginLoader } from './loader';
 import type { PluginManifest } from './types';
 
@@ -104,7 +104,7 @@ export class PluginManager {
     return this.loader;
   }
 
-  async scanObsidianVault(vaultRoot: string): Promise<ScannedObsidianPlugin[]> {
+  async scanObsidianVault(vaultRoot: string): Promise<ScanResult> {
     return scanObsidianVaultPlugins(vaultRoot);
   }
 
@@ -166,7 +166,11 @@ export class PluginManager {
       }
     }
 
-    fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
-    fs.writeFileSync(this.stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+    try {
+      fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
+      fs.writeFileSync(this.stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+    } catch (err) {
+      console.error(`[obsidian-compat] Failed to write plugin state: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }

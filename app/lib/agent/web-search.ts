@@ -1,10 +1,15 @@
 /**
- * Multi-engine web search with automatic fallback.
+ * Multi-provider web search.
  *
- * Chain: DuckDuckGo HTML → Bing HTML → Google Lite HTML
- * All engines are free, require no API keys, and use HTML scraping.
- * If an engine returns results, we stop. If it fails or returns empty, we try the next.
+ * Providers:
+ *   - 'free' (default): DuckDuckGo → Bing → Google HTML scraping fallback chain. No API key.
+ *   - 'tavily': Tavily Search API (AI-optimized, structured summaries)
+ *   - 'brave':  Brave Search API (privacy-first)
+ *   - 'serper': Serper.dev (Google results proxy)
+ *   - 'bing-api': Bing Web Search API (Microsoft)
  */
+
+import type { WebSearchConfig } from '../settings';
 
 const PRIMARY_TIMEOUT_MS = 10_000;
 const FALLBACK_TIMEOUT_MS = 6_000;
@@ -134,19 +139,33 @@ type SearchEngine = {
   search: (query: string) => Promise<SearchResult[]>;
 };
 
-const engines: SearchEngine[] = [
+const freeEngines: SearchEngine[] = [
   { name: 'DuckDuckGo', search: searchDuckDuckGo },
   { name: 'Bing', search: searchBing },
   { name: 'Google', search: searchGoogle },
 ];
 
 /**
- * Search the web using a multi-engine fallback chain.
- * Returns the first engine's results that are non-empty.
- * If all engines fail, returns an empty result set.
+ * Search the web. Dispatches to the configured provider.
+ * Falls back to the free HTML-scraping chain if no config or provider='free'.
  */
-export async function webSearch(query: string): Promise<SearchResponse> {
-  for (const engine of engines) {
+export async function webSearch(query: string, config?: WebSearchConfig): Promise<SearchResponse> {
+  const provider = config?.provider ?? 'free';
+  const apiKey = config?.apiKey ?? '';
+
+  switch (provider) {
+    case 'tavily':  return searchTavily(query, apiKey);
+    case 'brave':   return searchBraveApi(query, apiKey);
+    case 'serper':  return searchSerper(query, apiKey);
+    case 'bing-api': return searchBingApi(query, apiKey);
+    default:        return searchFree(query);
+  }
+}
+
+// ─── Free: HTML scraping fallback chain ────────────────────────────────────────
+
+async function searchFree(query: string): Promise<SearchResponse> {
+  for (const engine of freeEngines) {
     try {
       const results = await engine.search(query);
       if (results.length > 0) {
@@ -174,3 +193,80 @@ export function formatSearchResults(query: string, response: SearchResponse): st
 
 // Export individual engines for testing
 export { searchDuckDuckGo, searchBing, searchGoogle };
+
+// ─── Tavily Search API ────────────────────────────────────────────────────────
+
+async function searchTavily(query: string, apiKey: string): Promise<SearchResponse> {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, query, max_results: MAX_RESULTS, include_answer: false, search_depth: 'basic' }),
+    signal: AbortSignal.timeout(PRIMARY_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Tavily API error: ${res.status}`);
+  const data = await res.json();
+  const results: SearchResult[] = ((data as Record<string, unknown>).results as Array<Record<string, unknown>> ?? []).map(r => ({
+    title: String(r.title ?? ''),
+    url: String(r.url ?? ''),
+    snippet: String(r.content ?? ''),
+  }));
+  return { results: results.slice(0, MAX_RESULTS), engine: 'Tavily' };
+}
+
+// ─── Brave Search API ─────────────────────────────────────────────────────────
+
+async function searchBraveApi(query: string, apiKey: string): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query, count: String(MAX_RESULTS) });
+  const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    headers: { 'X-Subscription-Token': apiKey, 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(PRIMARY_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Brave API error: ${res.status}`);
+  const data = await res.json() as { web?: { results?: Array<Record<string, unknown>> } };
+  const results: SearchResult[] = (data.web?.results ?? []).map(r => ({
+    title: String(r.title ?? ''),
+    url: String(r.url ?? ''),
+    snippet: String(r.description ?? ''),
+  }));
+  return { results: results.slice(0, MAX_RESULTS), engine: 'Brave' };
+}
+
+// ─── Serper.dev (Google results proxy) ────────────────────────────────────────
+
+async function searchSerper(query: string, apiKey: string): Promise<SearchResponse> {
+  const res = await fetch('https://google.serper.dev/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
+    body: JSON.stringify({ q: query, num: MAX_RESULTS }),
+    signal: AbortSignal.timeout(PRIMARY_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Serper API error: ${res.status}`);
+  const data = await res.json() as { organic?: Array<Record<string, unknown>> };
+  const results: SearchResult[] = (data.organic ?? []).map(r => ({
+    title: String(r.title ?? ''),
+    url: String(r.link ?? ''),
+    snippet: String(r.snippet ?? ''),
+  }));
+  return { results: results.slice(0, MAX_RESULTS), engine: 'Serper' };
+}
+
+// ─── Bing Web Search API (Microsoft) ─────────────────────────────────────────
+
+async function searchBingApi(query: string, apiKey: string): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query, count: String(MAX_RESULTS) });
+  const res = await fetch(`https://api.bing.microsoft.com/v7.0/search?${params}`, {
+    headers: { 'Ocp-Apim-Subscription-Key': apiKey },
+    signal: AbortSignal.timeout(PRIMARY_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Bing API error: ${res.status}`);
+  const data = await res.json() as { webPages?: { value?: Array<Record<string, unknown>> } };
+  const results: SearchResult[] = (data.webPages?.value ?? []).map(r => ({
+    title: String(r.name ?? ''),
+    url: String(r.url ?? ''),
+    snippet: String(r.snippet ?? ''),
+  }));
+  return { results: results.slice(0, MAX_RESULTS), engine: 'Bing API' };
+}
+
+// Re-export API providers for testing
+export { searchTavily, searchBraveApi, searchSerper, searchBingApi };

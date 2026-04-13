@@ -33,7 +33,7 @@ export default function Logo({ id, className = 'w-8 h-4' }: LogoProps) {
       </defs>
       <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke={`url(#grad-human-${id})`} strokeWidth="3" strokeDasharray="2 4" strokeLinecap="round" />
       <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke={`url(#grad-agent-${id})`} strokeWidth="4.5" strokeLinecap="round" />
-      <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="#FEF3C7" />
+      <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)" />
     </svg>
   );
 }

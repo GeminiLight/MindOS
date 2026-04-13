@@ -65,23 +65,23 @@ describe('obsidian import scanner', () => {
       `,
     );
 
-    const reports = await scanObsidianVaultPlugins(vaultRoot);
+    const result = await scanObsidianVaultPlugins(vaultRoot);
 
-    expect(reports).toHaveLength(2);
+    expect(result.plugins).toHaveLength(2);
 
-    const quickadd = reports.find((item) => item.id === 'quickadd-like');
+    const quickadd = result.plugins.find((item) => item.id === 'quickadd-like');
     expect(quickadd).toMatchObject({
       compatibilityLevel: 'compatible',
       hasStyles: true,
       hasData: true,
     });
 
-    const desktopOnly = reports.find((item) => item.id === 'desktop-only-like');
+    const desktopOnly = result.plugins.find((item) => item.id === 'desktop-only-like');
     expect(desktopOnly).toMatchObject({ compatibilityLevel: 'blocked' });
     expect(desktopOnly?.compatibility.nodeModules).toContain('electron');
   });
 
-  it('skips invalid manifests instead of crashing the whole scan', async () => {
+  it('skips invalid manifests and reports the reason', async () => {
     writeVaultPlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class Good extends Plugin {};`);
     writeVaultPlugin(
       'bad-plugin',
@@ -89,9 +89,17 @@ describe('obsidian import scanner', () => {
       { manifest: { id: 'bad plugin', name: 'bad', version: '1.0.0' } },
     );
 
-    const reports = await scanObsidianVaultPlugins(vaultRoot);
+    // Create a plugin dir with no manifest at all
+    const noManifestDir = path.join(vaultRoot, '.obsidian', 'plugins', 'no-manifest');
+    fs.mkdirSync(noManifestDir, { recursive: true });
+    fs.writeFileSync(path.join(noManifestDir, 'main.js'), 'module.exports = {}', 'utf-8');
 
-    expect(reports.map((item) => item.id)).toEqual(['good-plugin']);
+    const result = await scanObsidianVaultPlugins(vaultRoot);
+
+    expect(result.plugins.map((item) => item.id)).toEqual(['good-plugin']);
+    expect(result.skipped).toHaveLength(2);
+    expect(result.skipped.map((item) => item.dirName).sort()).toEqual(['bad-plugin', 'no-manifest']);
+    expect(result.skipped.every((item) => typeof item.reason === 'string' && item.reason.length > 0)).toBe(true);
   });
 
   it('imports an Obsidian plugin into MindOS .plugins and preserves data and styles', async () => {

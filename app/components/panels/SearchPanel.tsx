@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, ChevronRight } from 'lucide-react';
-import { SearchResult, SearchWarmState, SearchPrewarmResponse } from '@/lib/types';
+import { Search, X, FileText, Table, ChevronRight, Eye } from 'lucide-react';
+import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import PanelHeader from './PanelHeader';
 import { Virtuoso } from 'react-virtuoso';
+import { getSearchWarmHint, shouldStartSearchPrewarm, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
 /** Highlight matched text fragments in a snippet based on the query */
 function highlightSnippet(snippet: string, query: string): React.ReactNode {
@@ -39,31 +40,7 @@ interface SearchPanelProps {
   onMaximize?: () => void;
 }
 
-export function shouldStartSearchPrewarm({
-  active,
-  hasAttemptedPrewarm,
-  warmState,
-}: {
-  active: boolean;
-  hasAttemptedPrewarm: boolean;
-  warmState: SearchWarmState;
-}): boolean {
-  return active && !hasAttemptedPrewarm && warmState === 'idle';
-}
-
-export function getSearchWarmHint(
-  warmState: SearchWarmState,
-  query: string,
-  hints: { preparing: string; fallbackWarmHint: string } = {
-    preparing: 'Preparing search...',
-    fallbackWarmHint: 'Search will prepare on first query.',
-  },
-): string | null {
-  if (query.trim()) return null;
-  if (warmState === 'warming') return hints.preparing;
-  if (warmState === 'fallback') return hints.fallbackWarmHint;
-  return null;
-}
+export { getSearchWarmHint, shouldStartSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
 export default function SearchPanel({ active, onNavigate, maximized, onMaximize }: SearchPanelProps) {
   const [query, setQuery] = useState('');
@@ -71,10 +48,7 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [warmState, setWarmState] = useState<SearchWarmState>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
-  const hasAttemptedPrewarm = useRef(false);
-  const isMountedRef = useRef(true);
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
@@ -86,44 +60,52 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
     }
   }, [active]);
 
+  const warmState = useSearchPrewarm(active);
+
+  // ── Preview state ──
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fetch preview content when selected result changes (debounced 150ms)
   useEffect(() => {
-    if (!shouldStartSearchPrewarm({ active, hasAttemptedPrewarm: hasAttemptedPrewarm.current, warmState })) {
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+
+    if (results.length === 0 || selectedIndex < 0 || selectedIndex >= results.length) {
+      setPreviewContent(null);
+      setPreviewPath(null);
       return;
     }
 
-    hasAttemptedPrewarm.current = true;
-    setWarmState('warming');
+    const result = results[selectedIndex];
+    if (result.path === previewPath && previewContent !== null) return;
 
-    void apiFetch<SearchPrewarmResponse>('/api/search/prewarm')
-      .then(() => {
-        if (isMountedRef.current) setWarmState('ready');
-      })
-      .catch(() => {
-        if (isMountedRef.current) setWarmState('fallback');
-      });
-  }, [active, warmState]);
+    previewTimer.current = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const data = await apiFetch<{ content: string }>(`/api/file?path=${encodeURIComponent(result.path)}`);
+        setPreviewContent(typeof data.content === 'string' ? data.content.slice(0, 2000) : null);
+        setPreviewPath(result.path);
+      } catch {
+        setPreviewContent(null);
+        setPreviewPath(null);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 150);
 
-  useEffect(() => {
     return () => {
-      isMountedRef.current = false;
+      if (previewTimer.current) clearTimeout(previewTimer.current);
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, selectedIndex]);
 
+  // Clear preview when query changes
   useEffect(() => {
-    const handleFilesChanged = () => {
-      hasAttemptedPrewarm.current = false;
-      setWarmState('idle');
-    };
-    window.addEventListener('mindos:files-changed', handleFilesChanged);
-    return () => window.removeEventListener('mindos:files-changed', handleFilesChanged);
-  }, []);
-
-  useEffect(() => {
-    if (!active && warmState === 'fallback') {
-      hasAttemptedPrewarm.current = false;
-      setWarmState('idle');
-    }
-  }, [active, warmState]);
+    setPreviewContent(null);
+    setPreviewPath(null);
+  }, [query]);
 
   // Debounced search
   const doSearch = useCallback((q: string) => {
@@ -346,6 +328,30 @@ export default function SearchPanel({ active, onNavigate, maximized, onMaximize 
           />
         )}
       </div>
+
+      {/* Preview pane — shows content of selected result */}
+      {results.length > 0 && (previewContent || previewLoading) && (
+        <div className="border-t border-border shrink-0 max-h-[30%] overflow-y-auto">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border-b border-border/50 sticky top-0 bg-card z-10">
+            <Eye size={12} className="shrink-0" />
+            <span className="truncate">{previewPath ?? ''}</span>
+          </div>
+          {previewLoading && !previewContent ? (
+            <div className="px-3 py-4 space-y-2 animate-pulse">
+              <div className="h-3 bg-muted rounded w-full" />
+              <div className="h-3 bg-muted rounded w-5/6" />
+              <div className="h-3 bg-muted rounded w-4/6" />
+            </div>
+          ) : previewContent ? (
+            <pre className="px-3 py-2 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words font-sans">
+              {previewContent}
+              {previewContent.length >= 2000 && (
+                <span className="text-muted-foreground/40"> …</span>
+              )}
+            </pre>
+          ) : null}
+        </div>
+      )}
 
       {/* Footer hints */}
       {results.length > 0 && (

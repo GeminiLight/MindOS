@@ -61,7 +61,7 @@ function isNewer(a: string, b: string): boolean {
 /**
  * Desktop-only update notification toast.
  *
- * Appears in the bottom-right corner when the Electron bridge reports a new
+ * Appears in the bottom-left corner when the Electron bridge reports a new
  * Desktop shell or MindOS Core update.  Persists until the user clicks
  * "View Details" (→ Settings > Update tab) or "Skip Version" (→ stored in
  * localStorage so it won't re-appear for that version).
@@ -203,7 +203,7 @@ export default function UpdateToast() {
       role="status"
       aria-live="polite"
       className={`
-        fixed bottom-14 right-4 z-40 pointer-events-none
+        fixed bottom-14 left-14 z-40 pointer-events-none
         transition-all duration-200
         ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
       `}

@@ -196,9 +196,12 @@ export default function InboxView() {
   if (loading) {
     return (
       <div className="flex flex-col min-h-screen">
-        <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center bg-background">
-          <div className="px-4 md:px-6">
-            <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+        <div className="sticky top-[52px] md:top-0 z-20 border-b border-border h-[46px] flex items-center bg-background">
+          <div className="w-full px-4 md:px-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 bg-muted rounded animate-pulse" />
+              <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+            </div>
           </div>
         </div>
         <div className="flex-1 px-4 md:px-6 py-8">
@@ -227,7 +230,8 @@ export default function InboxView() {
       {/* ─── Sticky Top Bar ─── */}
       <div className="sticky top-[52px] md:top-0 z-20 border-b border-border h-[46px] flex items-center bg-background">
         <div className="w-full px-4 md:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          {/* Left: Back + Title + file count (horizontal) */}
+          <div className="flex items-center gap-3 min-w-0">
             {/* Back */}
             <button
               onClick={() => router.push('/wiki')}
@@ -237,53 +241,51 @@ export default function InboxView() {
               <ArrowLeft size={16} />
             </button>
 
-            {/* Title area */}
-            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+            {/* Title area — icon + title + file count inline */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)] shrink-0">
                 <Inbox size={15} />
               </div>
-              <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-foreground tracking-tight leading-tight">
-                  {t.inbox.title}
-                </h1>
-                {hasFiles && (
-                  <p className="text-2xs text-muted-foreground/60 leading-tight mt-0.5">
-                    {t.inbox.fileCount(files.length)}
-                    {agingCount > 0 && (
-                      <span className="text-[var(--amber)]/70"> · {agingCount} {t.inbox.agingHint}</span>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-                title={t.inbox.uploadButton}
-              >
-                <Upload size={13} />
-                <span className="hidden sm:inline">{t.inbox.uploadButton}</span>
-              </button>
+              <h1 className="text-sm font-semibold text-foreground tracking-tight leading-tight shrink-0">
+                {t.inbox.title}
+              </h1>
               {hasFiles && (
-                <button
-                  onClick={handleOrganize}
-                  disabled={organizing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={organizing ? t.inbox.organizing : t.inbox.organizeButton}
-                >
-                  {organizing ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={13} />
+                <span className="text-2xs text-muted-foreground/60 leading-tight shrink-0">
+                  {t.inbox.fileCount(files.length)}
+                  {agingCount > 0 && (
+                    <span className="text-[var(--amber)]/70"> · {agingCount} {t.inbox.agingHint}</span>
                   )}
-                  <span>{organizing ? t.inbox.organizing : t.inbox.organizeButton}</span>
-                </button>
+                </span>
               )}
             </div>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+              title={t.inbox.uploadButton}
+            >
+              <Upload size={13} />
+              <span className="hidden sm:inline">{t.inbox.uploadButton}</span>
+            </button>
+            {hasFiles && (
+              <button
+                onClick={handleOrganize}
+                disabled={organizing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={organizing ? t.inbox.organizing : t.inbox.organizeButton}
+              >
+                {organizing ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Sparkles size={13} />
+                )}
+                <span>{organizing ? t.inbox.organizing : t.inbox.organizeButton}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -468,7 +470,7 @@ export default function InboxView() {
                 </span>
                 {history.length > HISTORY_VISIBLE && (
                   <Link
-                    href="/inbox/history"
+                    href="/capture/history"
                     className="ml-auto text-2xs text-muted-foreground/50 hover:text-[var(--amber)] transition-colors"
                   >
                     {t.inbox.viewAllHistory(history.length)}

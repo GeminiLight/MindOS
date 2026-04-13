@@ -1,6 +1,5 @@
 import os from 'os';
 import path from 'path';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { AgentSessionEvent as AgentEvent } from '@mariozechner/pi-coding-agent';
 import {
   AuthStorage,
@@ -12,19 +11,17 @@ import {
   SettingsManager,
   bashTool,
   type Skill,
-  type ToolDefinition,
 } from '@mariozechner/pi-coding-agent';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { isProviderId, type ProviderId, toPiProvider } from '@/lib/agent/providers';
 import { findCustomProvider, isCustomProviderId } from '@/lib/custom-endpoints';
 import { AGENT_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT, ORGANIZE_SYSTEM_PROMPT } from '@/lib/agent/prompt';
-import { getChatTools, getOrganizeTools, getRequestScopedTools, truncate, WRITE_TOOLS } from '@/lib/agent/tools';
+import { getChatTools, getOrganizeTools, getRequestScopedTools, truncate } from '@/lib/agent/tools';
+import { setKbMode } from '@/lib/agent/kb-extension';
 import { toAgentMessages } from '@/lib/agent/to-agent-messages';
-import { logAgentOp } from '@/lib/agent/log';
 import { readSettings } from '@/lib/settings';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
-import { assertNotProtected } from '@/lib/core';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import {
   getTextDelta,
@@ -37,6 +34,7 @@ import {
   isToolExecutionStartEvent,
 } from '@/lib/sse/events';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
+import { performActiveRecall } from '@/lib/agent/active-recall';
 
 function readKnowledgeFile(filePath: string): string | null {
   try {
@@ -44,64 +42,6 @@ function readKnowledgeFile(filePath: string): string | null {
   } catch {
     return null;
   }
-}
-
-function textToolResult(text: string): AgentToolResult<Record<string, never>> {
-  return { content: [{ type: 'text', text }], details: {} };
-}
-
-function getProtectedPaths(toolName: string, args: Record<string, unknown>): string[] {
-  const pathsToCheck: string[] = [];
-  if (toolName === 'batch_create_files' && Array.isArray(args.files)) {
-    (args.files as Array<{ path?: string }>).forEach((f) => { if (f.path) pathsToCheck.push(f.path); });
-  } else {
-    const singlePath = (args.path ?? args.from_path) as string | undefined;
-    if (typeof singlePath === 'string') pathsToCheck.push(singlePath);
-  }
-  return pathsToCheck;
-}
-
-function toPiCustomToolDefinitions(tools: AgentTool<any>[]): ToolDefinition<any, unknown>[] {
-  return tools.map((tool) => ({
-    name: tool.name,
-    label: tool.label,
-    description: tool.description,
-    parameters: tool.parameters as Record<string, unknown>,
-    execute: async (toolCallId, params, signal, onUpdate) => {
-      const args = (params ?? {}) as Record<string, unknown>;
-      if (WRITE_TOOLS.has(tool.name)) {
-        for (const filePath of getProtectedPaths(tool.name, args)) {
-          try {
-            assertNotProtected(filePath, 'modified by AI agent');
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            return textToolResult(`Write-protection error: ${errorMsg}`);
-          }
-        }
-      }
-
-      const result = await tool.execute(toolCallId, params, signal, onUpdate as any);
-      const outputText = result?.content
-        ?.filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('') ?? '';
-
-      try {
-        logAgentOp({
-          ts: new Date().toISOString(),
-          tool: tool.name,
-          params: args,
-          result: outputText.startsWith('Error:') ? 'error' : 'ok',
-          message: outputText.slice(0, 200),
-          agentName: 'MindOS',
-        });
-      } catch {
-        // ignore logging failures
-      }
-
-      return result;
-    },
-  }));
 }
 
 function buildSystemPrompt(mode: AskModeApi): string {
@@ -117,6 +57,32 @@ function buildSystemPrompt(mode: AskModeApi): string {
     parts.push(`---\n\n## Knowledge Base Structure\n\n${readme}`);
   }
   return parts.join('\n\n');
+}
+
+/** Append Active Recall context to system prompt for agent mode. */
+async function appendActiveRecall(systemPrompt: string, userQuery: string, agentConfig: import('@/lib/settings').AgentConfig): Promise<string> {
+  const arConfig = agentConfig.activeRecall ?? {};
+  if (arConfig.enabled === false) return systemPrompt;
+  if (!userQuery || userQuery.trim().length < 2) return systemPrompt;
+  try {
+    const recalled = await performActiveRecall(getMindRoot(), userQuery, {
+      maxTokens: arConfig.maxTokens,
+      maxFiles: arConfig.maxFiles,
+      minScore: arConfig.minScore,
+    });
+    if (recalled.length > 0) {
+      const block = recalled.map(r => `### ${r.path}\n\n${r.content}`).join('\n\n---\n\n');
+      return systemPrompt + '\n\n' +
+        `---\n\n## KNOWLEDGE CONTEXT (auto-recalled)\n\n` +
+        `The following notes were automatically found in the knowledge base based on the user's question. ` +
+        `Reference this content to provide accurate, grounded answers. ` +
+        `Cite the file path when using information from a specific note.\n\n` +
+        block;
+    }
+  } catch (err) {
+    console.warn('[headless] Active recall failed, continuing without:', err);
+  }
+  return systemPrompt;
 }
 
 export interface HeadlessAgentRunOptions {
@@ -167,10 +133,14 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     hasImages: hasImages(allMessages),
   });
 
-  const systemPrompt = buildSystemPrompt(askMode);
+  let systemPrompt = buildSystemPrompt(askMode);
+  // Active Recall: inject KB context for agent mode
+  if (askMode === 'agent') {
+    systemPrompt = await appendActiveRecall(systemPrompt, options.userMessage, agentConfig);
+  }
   const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
   const requestTools = askMode === 'organize' ? getOrganizeTools() : askMode === 'chat' ? getChatTools() : getRequestScopedTools();
-  const customTools = toPiCustomToolDefinitions(requestTools);
+  setKbMode(askMode === 'organize' ? 'organize' : askMode === 'chat' ? 'chat' : 'agent');
   const authStorage = AuthStorage.create();
   authStorage.setRuntimeApiKey(toPiProvider(provider), apiKey);
   const modelRegistry = new ModelRegistry(authStorage);
@@ -203,8 +173,12 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     ],
     additionalExtensionPaths: [
       ...scanExtensionPaths(),
+      path.join(projectRoot, 'app', 'lib', 'agent', 'kb-extension.ts'),
       path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
       path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
+      path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
+      path.join(projectRoot, 'app', 'node_modules', 'pi-web-access', 'index.ts'),
+      path.join(projectRoot, 'app', 'lib', 'schedule-prompt', 'index.ts'),
     ],
   });
   await resourceLoader.reload();
@@ -228,7 +202,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     sessionManager: SessionManager.inMemory(),
     settingsManager,
     tools: askMode === 'agent' ? [bashTool] : [],
-    customTools,
+    // KB tools registered via kb-extension.ts (loaded by resourceLoader)
   });
 
   const llmHistoryMessages = convertToLlm(toAgentMessages(historyMessages));

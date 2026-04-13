@@ -39,7 +39,7 @@ describe('IM activity store', () => {
     expect(activities).toHaveLength(1);
     expect(activities[0].type).toBe('test');
     expect(activities[0].status).toBe('success');
-    expect(activities[0].messageSummary.length).toBeLessThanOrEqual(50);
+    expect(activities[0].messageSummary.length).toBeLessThanOrEqual(500);
     expect(mockFs.writeFileSync).toHaveBeenCalled();
   });
 

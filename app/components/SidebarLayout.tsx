@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Settings, Menu, X, FolderInput } from 'lucide-react';
@@ -47,6 +47,8 @@ import { useAiOrganize } from '@/hooks/useAiOrganize';
 import { toast } from '@/lib/toast';
 import { quickDropToInbox } from '@/lib/inbox-upload';
 import type { Tab } from './settings/types';
+
+const noop = () => {};
 
 function collectDirPaths(nodes: FileNode[], prefix = ''): string[] {
   const result: string[] = [];
@@ -325,11 +327,27 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
   const agentDockOpen = agentDetailKey !== null && lp.activePanel === 'agents';
 
   // Refresh file tree when server-side tree version changes.
-  // Polls a lightweight version counter every 3s — only calls router.refresh()
+  // Polls a lightweight version counter every 5s — only calls router.refresh()
   // (which rebuilds the full tree) when the version actually changes.
+  // A 2-second cooldown prevents rapid-fire refreshes during bulk file operations.
   useEffect(() => {
     let lastVersion = -1;
     let stopped = false;
+    let lastRefreshTime = 0;
+    let pendingRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const doRefresh = (version: number, previousVersion: number) => {
+      lastRefreshTime = Date.now();
+      const stopRefresh = telemetry.startTimer('tree.refresh.trigger');
+      startTransition(() => {
+        router.refresh();
+      });
+      stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
+      window.dispatchEvent(new Event('mindos:files-changed'));
+    };
+
+    const REFRESH_COOLDOWN_MS = 2000;
+    const POLL_INTERVAL_MS = 5000;
 
     const checkVersion = async () => {
       if (stopped || document.visibilityState === 'hidden') return;
@@ -349,11 +367,20 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
         if (v !== lastVersion) {
           const previousVersion = lastVersion;
           lastVersion = v;
-          const stopRefresh = telemetry.startTimer('tree.refresh.trigger');
-          router.refresh();
-          stopRefresh({ previousVersion, version: v, reason: 'tree_version_changed' });
-          window.dispatchEvent(new Event('mindos:files-changed'));
-          stop({ ok: true, changed: true, previousVersion, version: v });
+
+          // Cooldown: if we refreshed recently, delay this one
+          const elapsed = Date.now() - lastRefreshTime;
+          if (elapsed < REFRESH_COOLDOWN_MS) {
+            if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
+            pendingRefreshTimer = setTimeout(() => {
+              pendingRefreshTimer = null;
+              if (!stopped) doRefresh(v, previousVersion);
+            }, REFRESH_COOLDOWN_MS - elapsed);
+            stop({ ok: true, changed: true, previousVersion, version: v, deferred: true });
+          } else {
+            doRefresh(v, previousVersion);
+            stop({ ok: true, changed: true, previousVersion, version: v });
+          }
           return;
         }
         stop({ ok: true, changed: false, version: v });
@@ -368,12 +395,13 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     };
 
     void checkVersion();
-    const interval = setInterval(() => void checkVersion(), 3_000);
+    const interval = setInterval(() => void checkVersion(), POLL_INTERVAL_MS);
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       stopped = true;
       clearInterval(interval);
+      if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [router]);
@@ -442,6 +470,8 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
     lp.handleExpandedChange(expanded);
     setSyncPopoverOpen(false);
   }, [lp]);
+
+  const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
   return (
     <>
@@ -524,7 +554,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
       <Panel
         activePanel={lp.activePanel}
         fileTree={fileTree}
-        onNavigate={() => {}}
+        onNavigate={noop}
         onOpenSyncSettings={openSyncSettings}
         railWidth={lp.railWidth}
         panelWidth={lp.panelWidth ?? undefined}
@@ -644,7 +674,7 @@ export default function SidebarLayout({ fileTree, children }: SidebarLayoutProps
           </button>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <FileTree nodes={fileTree} onNavigate={() => setMobileOpen(false)} onImport={handleOpenImport} />
+          <FileTree nodes={fileTree} onNavigate={handleMobileNavigate} onImport={handleOpenImport} />
         </div>
       </aside>
 

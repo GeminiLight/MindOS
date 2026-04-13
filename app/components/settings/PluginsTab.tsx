@@ -3,9 +3,10 @@
 import { Puzzle } from 'lucide-react';
 import { getPluginRenderers, setRendererEnabled } from '@/lib/renderers/registry';
 import { Toggle } from './Primitives';
+import { ObsidianImportSection } from './ObsidianImportSection';
 import type { PluginsTabProps } from './types';
 
-export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps) {
+export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: PluginsTabProps) {
   const renderers = getPluginRenderers();
   return (
     <div className="space-y-6">
@@ -65,6 +66,8 @@ export function PluginsTab({ pluginStates, setPluginStates, t }: PluginsTabProps
           })}
         </div>
       )}
+
+      <ObsidianImportSection mindRoot={mindRoot} />
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground border border-border/40 bg-card/30 rounded-xl px-4 py-3">
         <Puzzle size={13} className="shrink-0" />

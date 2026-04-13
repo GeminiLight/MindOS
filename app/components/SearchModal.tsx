@@ -8,6 +8,7 @@ import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
+import { getSearchWarmHint, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
 interface SearchModalProps {
   open: boolean;
@@ -58,6 +59,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const router = useRouter();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
+  const warmState = useSearchPrewarm(open && tab === 'search');
 
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
@@ -231,6 +233,11 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
 
   if (!open) return null;
 
+  const warmHint = getSearchWarmHint(warmState, query, {
+    preparing: t.search.preparing,
+    fallbackWarmHint: t.search.fallbackWarmHint,
+  });
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
@@ -270,29 +277,34 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         {tab === 'search' && (
           <>
             {/* Search input - IMPROVED */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-              <Search size={16} className="text-muted-foreground shrink-0 flex-none" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={handleChange}
-                placeholder={t.search.placeholder}
-                className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
-              />
-              {loading && (
-                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
+            <div className="px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-3">
+                <Search size={16} className="text-muted-foreground shrink-0 flex-none" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={handleChange}
+                  placeholder={t.search.placeholder}
+                  className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
+                />
+                {loading && (
+                  <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
+                )}
+                {!loading && query && (
+                  <button 
+                    onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
+                    className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={t.search.clear}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+                <kbd className="hidden md:inline text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">ESC</kbd>
+              </div>
+              {warmHint && (
+                <p className="mt-2 text-xs text-muted-foreground/70">{warmHint}</p>
               )}
-              {!loading && query && (
-                <button 
-                  onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
-                  className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Clear search"
-                >
-                  <X size={16} />
-                </button>
-              )}
-              <kbd className="hidden md:inline text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">ESC</kbd>
             </div>
 
             {/* Results */}
@@ -303,8 +315,8 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                   <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
                     <Search size={20} className="text-muted-foreground/60" />
                   </div>
-                  <h3 className="text-sm font-medium text-foreground mb-1">快速查找你的笔记</h3>
-                  <p className="text-xs text-muted-foreground/70">开始输入文件名或内容关键词</p>
+                  <h3 className="text-sm font-medium text-foreground mb-1">{t.search.emptyTitle}</h3>
+                  <p className="text-xs text-muted-foreground/70">{t.search.emptyHint}</p>
                 </div>
               )}
 
@@ -314,8 +326,8 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                   <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
                     <Search size={20} className="text-muted-foreground/60" />
                   </div>
-                  <h3 className="text-sm font-medium text-foreground mb-1">未找到匹配的文件</h3>
-                  <p className="text-xs text-muted-foreground/70">尝试其他关键词</p>
+                  <h3 className="text-sm font-medium text-foreground mb-1">{t.search.noResults}</h3>
+                  <p className="text-xs text-muted-foreground/70">{t.search.noResultsHint}</p>
                 </div>
               )}
 

@@ -7,6 +7,7 @@ import { Loader2, CheckCircle2, Circle, RefreshCw, AlertCircle } from 'lucide-re
 import { useLocale } from '@/lib/stores/locale-store';
 import { PLATFORMS, type PlatformStatus } from '@/lib/im/platforms';
 import AgentsContentChannelDetail from './AgentsContentChannelDetail';
+import { getCachedStatuses, setCachedStatuses } from './channel-detail/cache';
 
 export default function AgentsContentChannels() {
   const { t } = useLocale();
@@ -29,27 +30,33 @@ function ChannelsOverview() {
   const { t } = useLocale();
   const im = t.panels.im;
 
-  const [statuses, setStatuses] = useState<PlatformStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedStatuses();
+  const [statuses, setStatuses] = useState<PlatformStatus[]>(cached.data);
+  const [loading, setLoading] = useState(cached.data.length === 0);
   const [error, setError] = useState(false);
 
-  const fetchStatuses = useCallback(async () => {
+  const fetchStatuses = useCallback(async (background = false) => {
     setError(false);
+    if (!background) setLoading(true);
     try {
       const res = await fetch('/api/im/status');
       if (res.ok) {
         const data = await res.json();
-        setStatuses(data.platforms ?? []);
+        const platforms = data.platforms ?? [];
+        setCachedStatuses(platforms);
+        setStatuses(platforms);
       } else {
-        setError(true);
+        if (!background) setError(true);
       }
     } catch {
-      setError(true);
+      if (!background) setError(true);
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchStatuses(); }, [fetchStatuses]);
+  useEffect(() => {
+    if (cached.stale) fetchStatuses(cached.data.length > 0);
+  }, [fetchStatuses, cached.stale, cached.data.length]);
 
   if (loading) {
     return (

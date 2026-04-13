@@ -48,7 +48,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
             : transport;
           return {
             key,
-            scope: scopes[key] || (agent?.hasProjectScope ? 'project' : 'global'),
+            scope: scopes[key] || 'global',
             transport: effectiveTransport,
           };
         }),
@@ -124,13 +124,13 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
             )}
             {selected.has(agent.key) && agent.hasProjectScope && agent.hasGlobalScope && (
               <CustomSelect
-                value={scopes[agent.key] || 'project'}
+                value={scopes[agent.key] || 'global'}
                 onChange={v => setScopes({ ...scopes, [agent.key]: v as 'project' | 'global' })}
                 size="sm"
                 className="ml-auto"
                 options={[
-                  { value: 'project', label: m?.project ?? 'Project' },
                   { value: 'global', label: m?.global ?? 'Global' },
+                  { value: 'project', label: m?.project ?? 'Project' },
                 ]}
               />
             )}

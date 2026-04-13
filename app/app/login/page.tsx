@@ -48,21 +48,21 @@ function LoginForm() {
       <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-8">
         {/* Logo + title */}
         <div className="flex flex-col items-center gap-3 mb-8">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" width={40} height={40}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" width={40} height={40} className="text-[var(--amber)]">
             <defs>
               <linearGradient id="lp-grad-human" x1="35" y1="40" x2="5" y2="40" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#c8873a" stopOpacity="0.8"/>
-                <stop offset="100%" stopColor="#c8873a" stopOpacity="0.3"/>
+                <stop offset="0%" stopColor="currentColor" stopOpacity="0.8"/>
+                <stop offset="100%" stopColor="currentColor" stopOpacity="0.3"/>
               </linearGradient>
               <linearGradient id="lp-grad-agent" x1="35" y1="40" x2="75" y2="40" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#c8873a" stopOpacity="0.8"/>
-                <stop offset="100%" stopColor="#c8873a" stopOpacity="1"/>
+                <stop offset="0%" stopColor="currentColor" stopOpacity="0.8"/>
+                <stop offset="100%" stopColor="currentColor" stopOpacity="1"/>
               </linearGradient>
             </defs>
             <g transform="translate(0, 20)">
               <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#lp-grad-human)" strokeWidth="3" strokeDasharray="2 4" strokeLinecap="round"/>
               <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#lp-grad-agent)" strokeWidth="4.5" strokeLinecap="round"/>
-              <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="#FEF3C7"/>
+              <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
             </g>
           </svg>
           <h1 className="text-2xl font-brand text-foreground">

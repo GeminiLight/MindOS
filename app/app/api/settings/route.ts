@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { readSettings, writeSettings, ServerSettings } from '@/lib/settings';
+import { readWebSearchConfig, writeWebSearchConfig } from '@/lib/web-search-config';
 import { invalidateCache } from '@/lib/fs';
 import { ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
 import { parseProviders } from '@/lib/custom-endpoints';
@@ -44,12 +45,23 @@ export async function GET() {
     },
     embedding: settings.embedding ?? { enabled: false, baseUrl: '', apiKey: '', model: '' },
     embeddingStatus: getEmbeddingStatus(),
+    webSearch: (() => {
+      const wsc = readWebSearchConfig();
+      // Mask API keys for client
+      return {
+        provider: wsc.provider ?? 'auto',
+        exaApiKey: wsc.exaApiKey ? '••••••' : '',
+        perplexityApiKey: wsc.perplexityApiKey ? '••••••' : '',
+        geminiApiKey: wsc.geminiApiKey ? '••••••' : '',
+      };
+    })(),
     mindRoot: settings.mindRoot,
     webPassword: settings.webPassword ?? '',
     authToken: maskToken(settings.authToken),
     port: Number(process.env.MINDOS_WEB_PORT) || settings.port || 3456,
     mcpPort: settings.mcpPort ?? 8781,
     agent: settings.agent ?? {},
+    skillPaths: settings.skillPaths ?? {},
     envOverrides,
     envValues,
   });
@@ -102,11 +114,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Handle webSearch config → writes to ~/.mindos/web-search.json (with symlink to ~/.pi/web-search.json)
+    if (body.webSearch && typeof body.webSearch === 'object') {
+      const ws = body.webSearch as unknown as Record<string, unknown>;
+      const currentWsc = readWebSearchConfig();
+      const patch: Record<string, unknown> = {};
+      if (typeof ws.provider === 'string') patch.provider = ws.provider;
+      // Preserve existing keys if incoming is masked (contains ••)
+      if (typeof ws.exaApiKey === 'string') patch.exaApiKey = ws.exaApiKey.includes('••') ? currentWsc.exaApiKey : ws.exaApiKey;
+      if (typeof ws.perplexityApiKey === 'string') patch.perplexityApiKey = ws.perplexityApiKey.includes('••') ? currentWsc.perplexityApiKey : ws.perplexityApiKey;
+      if (typeof ws.geminiApiKey === 'string') patch.geminiApiKey = ws.geminiApiKey.includes('••') ? currentWsc.geminiApiKey : ws.geminiApiKey;
+      writeWebSearchConfig({ ...currentWsc, ...patch });
+    }
+
     const next: ServerSettings = {
       ai: resolvedAi,
       embedding: resolvedEmbedding,
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
+      skillPaths: body.skillPaths ?? current.skillPaths,
       webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
       port: typeof body.port === 'number' ? body.port : current.port,

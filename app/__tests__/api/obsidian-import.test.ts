@@ -28,27 +28,30 @@ describe('POST /api/obsidian/import', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ ok: false, error: 'Missing vaultRoot or pluginId' });
+    expect(await res.json()).toEqual({ ok: false, error: 'Missing vaultRoot, pluginId, or targetMindRoot' });
   });
 
   it('imports a plugin and returns compatibility details', async () => {
-    scanObsidianVaultPlugins.mockResolvedValue([
-      {
-        id: 'quickadd-like',
-        manifest: { id: 'quickadd-like', name: 'QuickAdd', version: '1.0.0' },
-        sourceDir: '/tmp/vault/.obsidian/plugins/quickadd-like',
-        compatibilityLevel: 'compatible',
-        compatibility: {
-          obsidianApis: ['Plugin', 'Modal', 'Notice', 'addCommand'],
-          nodeModules: [],
-          supportedApis: ['Plugin', 'Modal', 'Notice', 'addCommand'],
-          partialApis: [],
-          blockers: [],
+    scanObsidianVaultPlugins.mockResolvedValue({
+      plugins: [
+        {
+          id: 'quickadd-like',
+          manifest: { id: 'quickadd-like', name: 'QuickAdd', version: '1.0.0' },
+          sourceDir: '/tmp/vault/.obsidian/plugins/quickadd-like',
+          compatibilityLevel: 'compatible',
+          compatibility: {
+            obsidianApis: ['Plugin', 'Modal', 'Notice', 'addCommand'],
+            nodeModules: [],
+            supportedApis: ['Plugin', 'Modal', 'Notice', 'addCommand'],
+            partialApis: [],
+            blockers: [],
+          },
+          hasStyles: false,
+          hasData: true,
         },
-        hasStyles: false,
-        hasData: true,
-      },
-    ]);
+      ],
+      skipped: [],
+    });
     importObsidianPlugin.mockResolvedValue({
       pluginId: 'quickadd-like',
       targetDir: '/tmp/mindRoot/.plugins/quickadd-like',
@@ -74,7 +77,7 @@ describe('POST /api/obsidian/import', () => {
   });
 
   it('returns 404 when plugin is not found in the scanned vault', async () => {
-    scanObsidianVaultPlugins.mockResolvedValue([]);
+    scanObsidianVaultPlugins.mockResolvedValue({ plugins: [], skipped: [] });
     const { POST } = await importRoute();
     const req = new NextRequest('http://localhost/api/obsidian/import', {
       method: 'POST',

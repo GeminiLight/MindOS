@@ -13,19 +13,20 @@ export async function GET(req: NextRequest) {
     }
 
     const vaultRoot = expandSetupPathHome(vaultRootParam.trim());
-    const plugins = await scanObsidianVaultPlugins(vaultRoot);
+    const result = await scanObsidianVaultPlugins(vaultRoot);
     const summary = {
-      total: plugins.length,
-      compatible: plugins.filter((plugin) => plugin.compatibilityLevel === 'compatible').length,
-      partial: plugins.filter((plugin) => plugin.compatibilityLevel === 'partial').length,
-      blocked: plugins.filter((plugin) => plugin.compatibilityLevel === 'blocked').length,
+      total: result.plugins.length,
+      compatible: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'compatible').length,
+      partial: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'partial').length,
+      blocked: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'blocked').length,
     };
 
     return NextResponse.json({
       ok: true,
       vaultRoot,
       summary,
-      plugins,
+      plugins: result.plugins.map(({ sourceDir: _sourceDir, ...rest }) => rest),
+      skipped: result.skipped,
     });
   } catch (err) {
     return handleRouteErrorSimple(err);

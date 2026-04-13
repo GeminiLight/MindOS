@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { effectiveSopRoot } from '@/lib/settings';
-import { listInboxFiles, saveToInbox } from '@/lib/core/inbox';
+import { listInboxFiles, saveToInbox, ensureInboxSpace } from '@/lib/core/inbox';
 import { invalidateCache } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
@@ -15,6 +15,7 @@ export async function GET() {
   }
 
   try {
+    ensureInboxSpace(mindRoot);
     const files = listInboxFiles(mindRoot);
     return NextResponse.json({ files });
   } catch (err) {

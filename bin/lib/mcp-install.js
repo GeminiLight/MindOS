@@ -6,6 +6,7 @@ import { expandHome } from './path-expand.js';
 import { parseJsonc } from './jsonc.js';
 import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from './mcp-agents.js';
 import { mergeTomlEntry } from './toml.js';
+import { mergeYamlEntry } from './yaml.js';
 
 /**
  * Walk a dot-separated path inside an object, creating intermediate {} as needed.
@@ -301,6 +302,10 @@ export async function mcpInstall() {
             if (agent.format === 'toml') {
               // TOML: look for [section.mindos] header
               installed = content.includes(`[${agent.key}.mindos]`);
+            } else if (agent.format === 'yaml') {
+              // YAML: look for "  mindos:" under the section key
+              const yamlPattern = new RegExp(`^\\s{2}mindos\\s*:`, 'm');
+              installed = yamlPattern.test(content);
             } else {
               const config = parseJsonc(content);
               // For agents with globalNestedKey (e.g. CoPaw: mcp.clients),
@@ -402,16 +407,16 @@ export async function mcpInstall() {
   for (const agentKey of agentKeys) {
     const agent = MCP_AGENTS[agentKey];
 
-    // scope
+    // scope — default to global
     let isGlobal = hasGlobalFlag;
     if (!hasGlobalFlag) {
       if (agent.project && agent.global) {
         if (hasYesFlag) {
-          isGlobal = false; // default to project
+          isGlobal = true; // default to global
         } else {
           const picked = await interactiveSelect(`[${agent.name}] Install scope?`, [
-            { label: 'Project',  hint: agent.project, value: 'project' },
             { label: 'Global',   hint: agent.global,  value: 'global'  },
+            { label: 'Project',  hint: agent.project, value: 'project' },
           ]);
           isGlobal = picked.value === 'global';
         }
@@ -438,6 +443,13 @@ export async function mcpInstall() {
       const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
       existed = existing.includes(`[${agent.key}.mindos]`);
       const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry);
+      writeFileSync(absPath, merged, 'utf-8');
+    } else if (agent.format === 'yaml') {
+      // YAML format (e.g. Hermes): line-based merge preserving existing content
+      const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
+      const yamlPattern = new RegExp(`^\\s{2}mindos\\s*:`, 'm');
+      existed = yamlPattern.test(existing);
+      const merged = mergeYamlEntry(existing, agent.key, 'mindos', entry);
       writeFileSync(absPath, merged, 'utf-8');
     } else {
       // JSON format (default)

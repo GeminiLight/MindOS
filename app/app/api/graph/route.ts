@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { collectAllFiles, getLinkIndex } from '@/lib/fs';
+import { generateJsonETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
 export interface GraphNode {
@@ -35,7 +36,14 @@ export async function GET() {
     const linkIndex = getLinkIndex();
     const edges = linkIndex.getAllEdges();
 
-    return NextResponse.json({ nodes, edges } satisfies GraphData);
+    const graphData: GraphData = { nodes, edges };
+    const response = NextResponse.json(graphData);
+    
+    // ── Cache control: 5 minutes ──
+    // Graph data is stable for knowledge base navigation.
+    // Changes only when files are created/deleted or links change.
+    const etag = generateJsonETag(graphData as unknown as Record<string, unknown>);
+    return setPublicCacheHeaders(response, 300, etag);
   } catch (err) {
     console.error('[graph] Error building graph:', err);
     return handleRouteErrorSimple(err);

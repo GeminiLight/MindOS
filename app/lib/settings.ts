@@ -27,6 +27,19 @@ export interface AgentConfig {
   thinkingBudget?: number;    // default 5000
   contextStrategy?: 'auto' | 'off'; // default 'auto'
   reconnectRetries?: number;  // default 3, range 0-10 (0 = disabled)
+  activeRecall?: ActiveRecallConfig;  // auto knowledge recall before agent reply
+}
+
+/** Active Recall: auto-search KB and inject relevant content before agent reply. */
+export interface ActiveRecallConfig {
+  /** Enable automatic knowledge recall. Default true. */
+  enabled?: boolean;
+  /** Max tokens for recalled content. Default 2000. */
+  maxTokens?: number;
+  /** Max files to recall. Default 5. */
+  maxFiles?: number;
+  /** Min relevance score threshold. Default 1.0. */
+  minScore?: number;
 }
 
 export interface GuideState {
@@ -48,10 +61,18 @@ export interface EmbeddingConfig {
   model: string;     // e.g. "text-embedding-3-small" (api) or "Xenova/bge-small-zh-v1.5" (local)
 }
 
+export type WebSearchProvider = 'free' | 'tavily' | 'brave' | 'serper' | 'bing-api';
+
+export interface WebSearchConfig {
+  provider: WebSearchProvider;  // default 'free' — HTML scraping fallback chain
+  apiKey: string;               // required for all providers except 'free'
+}
+
 export interface ServerSettings {
   ai: AiConfig;
   agent?: AgentConfig;
   embedding?: EmbeddingConfig;
+  webSearch?: WebSearchConfig;
   mindRoot: string;   // empty = use env var / default
   port?: number;
   mcpPort?: number;
@@ -61,6 +82,11 @@ export interface ServerSettings {
   setupPending?: boolean;  // true → / redirects to /setup
   setupPort?: number;      // temporary port used by GUI setup; cleared on completion
   disabledSkills?: string[];
+  /** Skill search path options. */
+  skillPaths?: {
+    enableAgentsDir?: boolean;   // default true — include ~/.agents/skills
+    custom?: string[];           // user-defined extra skill directories
+  };
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
   acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
@@ -158,6 +184,21 @@ function parseEmbedding(raw: unknown): EmbeddingConfig | undefined {
   };
 }
 
+const WEB_SEARCH_PROVIDERS = new Set<WebSearchProvider>(['free', 'tavily', 'brave', 'serper', 'bing-api']);
+
+/** Parse webSearch config from unknown input */
+function parseWebSearch(raw: unknown): WebSearchConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const provider = typeof obj.provider === 'string' && WEB_SEARCH_PROVIDERS.has(obj.provider as WebSearchProvider)
+    ? obj.provider as WebSearchProvider
+    : 'free';
+  return {
+    provider,
+    apiKey: typeof obj.apiKey === 'string' ? obj.apiKey : '',
+  };
+}
+
 /** Parse acpAgents config field, delegates to agent-descriptors.ts */
 function parseAcpAgentsField(raw: unknown): Record<string, import('./acp/agent-descriptors').AcpAgentOverride> | undefined {
   return parseAcpAgentOverrides(raw);
@@ -215,6 +256,7 @@ export function readSettings(): ServerSettings {
       ai: migrateAi(parsed),
       agent: parseAgent(parsed.agent),
       embedding: parseEmbedding(parsed.embedding),
+      webSearch: parseWebSearch(parsed.webSearch),
       acpAgents: parseAcpAgentsField(parsed.acpAgents),
       mindRoot: (parsed.mindRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
@@ -264,6 +306,7 @@ export function writeSettings(settings: ServerSettings): void {
   const merged: Record<string, unknown> = { ...existing, ai: settings.ai, mindRoot: settings.mindRoot };
   if (settings.agent !== undefined) merged.agent = settings.agent;
   if (settings.embedding !== undefined) merged.embedding = settings.embedding;
+  if (settings.webSearch !== undefined) merged.webSearch = settings.webSearch;
   if (settings.webPassword !== undefined) merged.webPassword = settings.webPassword;
   if (settings.authToken   !== undefined) merged.authToken   = settings.authToken;
   if (settings.port        !== undefined) merged.port        = settings.port;
@@ -275,6 +318,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
   if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;
+  if (settings.skillPaths !== undefined) merged.skillPaths = settings.skillPaths;
   // Remove legacy customProviders (now merged into ai.providers array)
   delete merged.customProviders;
   // setupPending: false/undefined → remove the field (cleanup); true → set it

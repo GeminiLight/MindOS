@@ -2,6 +2,7 @@ import path from 'path';
 
 export const ALLOWED_IMPORT_EXTENSIONS = new Set([
   '.txt', '.md', '.markdown', '.csv', '.json', '.yaml', '.yml', '.xml', '.html', '.htm', '.pdf',
+  '.doc', '.docx', '.docm',
 ]);
 
 export interface ConvertResult {

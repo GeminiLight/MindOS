@@ -1,3 +1,7 @@
+/**
+ * Standalone Feishu long-connection script.
+ * Kept for manual debugging — production use goes through instrumentation.ts auto-start.
+ */
 import { getPlatformConfig } from '@/lib/im/config';
 import { startFeishuWSClient, getFeishuWSClientStatus } from '@/lib/im/feishu-ws-client';
 
@@ -8,21 +12,11 @@ async function main() {
   }
 
   await startFeishuWSClient(config);
-  const status = getFeishuWSClientStatus();
-
-  console.log('[feishu/ws] status:', JSON.stringify(status, null, 2));
+  console.log('[feishu/ws] status:', JSON.stringify(getFeishuWSClientStatus(), null, 2));
   console.log('[feishu/ws] connected. Keep this process running to receive events.');
 
-  process.on('SIGINT', () => {
-    console.log('\n[feishu/ws] shutting down');
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', () => {
-    console.log('\n[feishu/ws] shutting down');
-    process.exit(0);
-  });
-
+  process.on('SIGINT', () => { process.exit(0); });
+  process.on('SIGTERM', () => { process.exit(0); });
   await new Promise(() => {});
 }
 

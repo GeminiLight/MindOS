@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getFileContent, getMindRoot } from '@/lib/fs';
 import { buildFileIndex } from '@/lib/core/tree';
+import { generateJsonETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
 import path from 'path';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
@@ -35,7 +36,13 @@ export async function GET(req: NextRequest) {
       result.target_config_json = tryRead(path.join(targetDir, 'CONFIG.json'));
     }
 
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    
+    // ── Cache control: 5 minutes ──
+    // Bootstrap data is stable for knowledge base operations.
+    // Shorter TTL (5 min vs 1 hour) to catch INSTRUCTION/CONFIG changes quickly.
+    const etag = generateJsonETag(result);
+    return setPublicCacheHeaders(response, 300, etag); // 5 minutes = 300 seconds
   } catch (e) {
     return handleRouteErrorSimple(e);
   }

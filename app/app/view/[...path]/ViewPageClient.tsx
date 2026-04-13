@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -11,6 +11,7 @@ import Backlinks from '@/components/Backlinks';
 import { useRendererState } from '@/lib/renderers/useRendererState';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
+import EditorWrapper from '@/components/EditorWrapper';
 import TableOfContents from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
 import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
@@ -23,6 +24,8 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { buildLineDiff } from '@/components/changes/line-diff';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
+import { useEditorTheme } from '@/lib/stores/editor-theme-store';
+import { twemojiToNative } from '@/lib/twemoji';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -51,6 +54,7 @@ export default function ViewPageClient({
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(filePath);
   const [exportOpen, setExportOpen] = useState(false);
+  const editorTheme = useEditorTheme(s => s.theme);
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -66,20 +70,81 @@ export default function ViewPageClient({
     'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac',
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
-  const [editing, setEditing] = useState(!isBinaryFile && (initialEditing || content === ''));
+  const isMarkdown = extension === 'md';
+  const [editing, setEditing] = useState(() => {
+    if (isBinaryFile) return false;
+    // Always start in Edit for empty/new files regardless of persisted mode
+    if (initialEditing || content === '') return true;
+    if (isMarkdown && typeof window !== 'undefined' && localStorage.getItem('md-view-mode') === 'preview') return false;
+    return isMarkdown;
+  });
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
 
   // Sync savedContent when server re-renders with new content (e.g. after router.refresh)
+  const serverContentRef = useRef(content);
   useEffect(() => {
-    if (!editing) {
-      setSavedContent(content);
+    if (content !== serverContentRef.current) {
+      serverContentRef.current = content;
+      if (!editing) {
+        setSavedContent(content);
+      }
     }
   }, [content, editing]);
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [mdViewMode, setMdViewMode] = useState<MdViewMode>('wysiwyg');
+
+  // Auto-save for Markdown files — debounce 1s after each change
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSavingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isMarkdown || !editing || isDraft || editContent === savedContent) {
+      return;
+    }
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (autoSavingRef.current) return;
+      autoSavingRef.current = true;
+      try {
+        if (!mountedRef.current) return;
+        setAutoSaveStatus('saving');
+        const cleanContent = twemojiToNative(editContent);
+        await saveAction(cleanContent);
+        if (!mountedRef.current) return;
+        setSavedContent(cleanContent);
+        setAutoSaveStatus('saved');
+        setTimeout(() => {
+          if (mountedRef.current) setAutoSaveStatus('idle');
+        }, 1500);
+      } catch {
+        if (mountedRef.current) setAutoSaveStatus('idle');
+      } finally {
+        autoSavingRef.current = false;
+      }
+    }, 1000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction]);
+  const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
+    if (typeof window === 'undefined') return 'wysiwyg';
+    const stored = localStorage.getItem('md-view-mode');
+    if (stored === 'wysiwyg' || stored === 'source' || stored === 'preview') return stored;
+    return 'wysiwyg';
+  });
+  const setMdViewMode = (mode: MdViewMode) => {
+    setMdViewModeState(mode);
+    localStorage.setItem('md-view-mode', mode);
+  };
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -260,16 +325,20 @@ export default function ViewPageClient({
     setSaveError(null);
     startTransition(async () => {
       try {
-        await saveAction(editContent);
-        setSavedContent(editContent);
-        setEditing(false);
+        const cleanContent = twemojiToNative(editContent);
+        await saveAction(cleanContent);
+        setSavedContent(cleanContent);
+        // Markdown auto-save: Ctrl+S saves but stays in edit mode
+        if (!isMarkdown) {
+          setEditing(false);
+        }
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 2500);
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, isDraft, saveAction, editContent]);
+  }, [isCsv, isDraft, isMarkdown, saveAction, editContent]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
@@ -290,7 +359,7 @@ export default function ViewPageClient({
       if (e.key === 'e' && !editing && !isBinaryFile && document.activeElement?.tagName === 'BODY') {
         handleEdit();
       }
-      if (e.key === 'Escape' && editing) handleCancel();
+      if (e.key === 'Escape' && editing && !isMarkdown) handleCancel();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -378,7 +447,20 @@ export default function ViewPageClient({
                 <span className="hidden sm:inline">updated</span>
               </span>
             )}
-            {saveSuccess && (
+            {/* Auto-save status for Markdown */}
+            {isMarkdown && editing && autoSaveStatus === 'saving' && (
+              <span className="text-xs flex items-center gap-1.5 text-muted-foreground animate-in fade-in-0 duration-200">
+                <Loader2 size={12} className="animate-spin" />
+                <span className="hidden sm:inline">saving...</span>
+              </span>
+            )}
+            {isMarkdown && editing && autoSaveStatus === 'saved' && (
+              <span className="text-xs flex items-center gap-1.5 animate-in fade-in-0 duration-200" style={{ color: 'var(--success)' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
+                <span className="hidden sm:inline">saved</span>
+              </span>
+            )}
+            {saveSuccess && !isMarkdown && (
               <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--success)' }} />
                 <span className="hidden sm:inline">saved</span>
@@ -404,7 +486,48 @@ export default function ViewPageClient({
               </button>
             )}
 
-            {!editing && !showRenderer && !isDraft && !isBinaryFile && (
+            {/* Markdown editing: mode switcher in header */}
+            {isMarkdown && !isDraft && (
+              <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-md">
+                {([
+                  { id: 'wysiwyg' as const, icon: <Pencil size={11} />, label: 'Edit' },
+                  { id: 'source' as const, icon: <PanelLeft size={11} />, label: 'Source' },
+                  { id: 'preview' as const, icon: <Eye size={11} />, label: 'View' },
+                ] as const).map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setMdViewMode(m.id);
+                      if (m.id === 'preview') {
+                        // Sync latest edit content to savedContent before switching
+                        const clean = twemojiToNative(editContent);
+                        setSavedContent(clean);
+                        if (clean !== savedContent) {
+                          saveAction(clean).catch(() => {});
+                        }
+                        setEditing(false);
+                      } else if (!editing) {
+                        setEditContent(savedContent);
+                        setEditing(true);
+                      }
+                    }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      mdViewMode === m.id
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {m.icon}
+                    <span className="hidden md:inline">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Editor theme picker — hidden for now, may move to Settings later */}
+
+            {/* Edit button — shown in view mode for non-markdown editable file types */}
+            {!editing && !showRenderer && !isDraft && !isBinaryFile && !isMarkdown && (
               <button
                 onClick={handleEdit}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
@@ -416,7 +539,9 @@ export default function ViewPageClient({
                 <span className="hidden sm:inline">Edit</span>
               </button>
             )}
-            {editing && (
+
+            {/* Non-markdown editing: original Cancel + Save buttons */}
+            {editing && !isMarkdown && (
               <>
                 <button
                   onClick={handleCancel}
@@ -431,6 +556,31 @@ export default function ViewPageClient({
                 </button>
                 <button
                   onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
+                  style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
+                >
+                  {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  <span className="hidden sm:inline">Save</span>
+                </button>
+              </>
+            )}
+            {/* Draft markdown: keep Save/Cancel */}
+            {editing && isMarkdown && isDraft && (
+              <>
+                <button
+                  onClick={handleCancel}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                  style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
+                >
+                  <X size={13} />
+                  <span className="hidden sm:inline">Cancel</span>
+                </button>
+                <button
+                  onClick={showSaveAs ? handleConfirmDraftSave : handleSave}
                   disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50"
                   style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
@@ -494,54 +644,51 @@ export default function ViewPageClient({
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-4 md:px-6 py-6 md:py-8">
-        {editing ? (
-          <div className="content-width">
-            {isDraft && showSaveAs && (
-              <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">{t.view?.saveDirectory ?? 'Directory'}</label>
-                  <div className="mt-1">
-                    <DirPicker
-                      dirPaths={draftDirectories}
-                      value={saveDir}
-                      onChange={setSaveDir}
-                      rootLabel={t.home?.rootLevel ?? 'Root'}
+      <div className="flex-1 py-6 md:py-8">
+        {isMarkdown && !showRenderer ? (
+          <>
+            {/* Markdown Edit — always mounted, hidden when in View mode */}
+            <div className="content-width" style={{ display: editing ? undefined : 'none' }}>
+              {isDraft && showSaveAs && (
+                <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">{t.view?.saveDirectory ?? 'Directory'}</label>
+                    <div className="mt-1">
+                      <DirPicker
+                        dirPaths={draftDirectories}
+                        value={saveDir}
+                        onChange={setSaveDir}
+                        rootLabel={t.home?.rootLevel ?? 'Root'}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">{t.view?.saveFileName ?? 'File name'}</label>
+                    <input
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
+                      className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="Untitled.md"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">{t.view?.saveFileName ?? 'File name'}</label>
-                  <input
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmDraftSave(); }}
-                    className="mt-1 w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder="Untitled.md"
-                  />
-                </div>
-              </div>
-            )}
-            {isCsv ? (
-              <CsvView
-                content={editContent}
-                filePath={filePath}
-                appendAction={appendRowAction}
-                saveAction={async (c) => {
-                  await saveAction(c);
-                  setEditContent(c);
-                  setSavedContent(c);
-                }}
-              />
-            ) : (
+              )}
               <MarkdownEditor
                 value={editContent}
                 onChange={setEditContent}
                 viewMode={mdViewMode}
-                onViewModeChange={setMdViewMode}
               />
-            )}
-          </div>
+              {mdViewMode !== 'source' && <TableOfContents content={editContent} />}
+            </div>
+            {/* Markdown View — always mounted, hidden when in Edit mode */}
+            <div ref={contentRef} className="content-width" style={{ display: editing ? 'none' : undefined }}>
+              {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
+              <MarkdownView content={twemojiToNative(savedContent)} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
+              <TableOfContents content={twemojiToNative(savedContent)} />
+              <Backlinks filePath={filePath} />
+            </div>
+          </>
         ) : showRenderer && LazyComponent ? (
           <div ref={contentRef} className="content-width">
             {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
@@ -555,6 +702,23 @@ export default function ViewPageClient({
             </Suspense>
             <Backlinks filePath={filePath} />
           </div>
+        ) : editing ? (
+          <div className="content-width">
+            {isCsv ? (
+              <CsvView
+                content={editContent}
+                filePath={filePath}
+                appendAction={appendRowAction}
+                saveAction={async (c) => {
+                  await saveAction(c);
+                  setEditContent(c);
+                  setSavedContent(c);
+                }}
+              />
+            ) : (
+              <EditorWrapper value={editContent} onChange={setEditContent} language="plain" />
+            )}
+          </div>
         ) : (
           <div ref={contentRef} className="content-width">
             {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
@@ -566,10 +730,7 @@ export default function ViewPageClient({
             ) : extension === 'json' ? (
               <JsonView content={savedContent} />
             ) : (
-              <>
-                <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
-                <TableOfContents content={savedContent} />
-              </>
+              <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
             )}
             <Backlinks filePath={filePath} />
           </div>

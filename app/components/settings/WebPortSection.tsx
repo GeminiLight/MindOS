@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Monitor, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { SettingCard } from './Primitives';
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
@@ -22,76 +23,6 @@ interface CheckPortResult {
 }
 
 const EMPTY_STATUS: PortStatus = { checking: false, available: null, isSelf: false, suggestion: null };
-
-/* ── PortField ─────────────────────────────────────────────────── */
-
-function PortField({
-  label, hint, value, onChange, status, onCheckPort, m,
-}: {
-  label: string; hint: string; value: number;
-  onChange: (v: number) => void;
-  status: PortStatus;
-  onCheckPort: (port: number) => void;
-  m: Record<string, any>;
-}) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = parseInt(e.target.value, 10) || value;
-    onChange(v);
-    clearTimeout(timerRef.current);
-    if (v >= 1024 && v <= 65535) {
-      timerRef.current = setTimeout(() => onCheckPort(v), 500);
-    }
-  };
-  const handleBlur = () => {
-    clearTimeout(timerRef.current);
-    if (value >= 1024 && value <= 65535) onCheckPort(value);
-  };
-  useEffect(() => () => clearTimeout(timerRef.current), []);
-
-  return (
-    <div className="space-y-1">
-      {label && <label className="text-xs font-medium text-foreground">{label}</label>}
-      {hint && <p className="text-2xs text-muted-foreground">{hint}</p>}
-      <input
-        type="number" min={1024} max={65535} value={value}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-border bg-muted/30 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring tabular-nums"
-      />
-      {status.checking && (
-        <p className="text-xs flex items-center gap-1 text-muted-foreground">
-          <Loader2 size={11} className="animate-spin" /> {m.portChecking}
-        </p>
-      )}
-      {!status.checking && status.available === false && !status.invalid && (
-        <div className="flex items-center gap-2">
-          <p className="text-xs flex items-center gap-1 text-[var(--amber)]">
-            <AlertTriangle size={11} /> {m.portInUse(value)}
-          </p>
-          {status.suggestion !== null && (
-            <button type="button"
-              onClick={() => { onChange(status.suggestion!); setTimeout(() => onCheckPort(status.suggestion!), 0); }}
-              className="text-xs px-2 py-0.5 rounded border border-[var(--amber)] text-[var(--amber)] transition-colors hover:bg-[var(--amber-subtle)]"
-            >
-              {m.portSuggest(status.suggestion)}
-            </button>
-          )}
-        </div>
-      )}
-      {!status.checking && status.invalid && (
-        <p className="text-xs flex items-center gap-1 text-destructive">
-          <AlertTriangle size={11} /> 1024 – 65535
-        </p>
-      )}
-      {!status.checking && status.available === true && (
-        <p className="text-xs flex items-center gap-1 text-success">
-          <CheckCircle2 size={11} /> {status.isSelf ? m.portSelf : m.portAvailable}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /* ── Full-screen restart overlay ───────────────────────────────── */
 
@@ -117,6 +48,7 @@ export default function WebPortSection({ m }: { m: Record<string, any> }) {
   const [overlayMsg, setOverlayMsg] = useState<string | null>(null);
   const [overlaySub, setOverlaySub] = useState<string | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     apiFetch<{ port?: number }>('/api/settings').then(d => {
@@ -126,7 +58,7 @@ export default function WebPortSection({ m }: { m: Record<string, any> }) {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => () => clearInterval(pollRef.current), []);
+  useEffect(() => () => { clearInterval(pollRef.current); clearTimeout(timerRef.current); }, []);
 
   const hasChanges = port !== origPort;
   const portInvalid = port < 1024 || port > 65535;
@@ -226,36 +158,77 @@ export default function WebPortSection({ m }: { m: Record<string, any> }) {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
-          <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
-            <Monitor size={14} className="text-muted-foreground" />
+      <SettingCard
+        icon={<Monitor size={15} />}
+        title={m.webPortLabel}
+        description={m.webPortHint}
+      >
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="number" min={1024} max={65535} value={port}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10) || port;
+                setPort(v);
+                setStatus(EMPTY_STATUS);
+                clearTimeout(timerRef.current);
+                if (v >= 1024 && v <= 65535) {
+                  timerRef.current = setTimeout(() => checkPort(v), 500);
+                }
+              }}
+              onBlur={() => {
+                clearTimeout(timerRef.current);
+                if (port >= 1024 && port <= 65535) checkPort(port);
+              }}
+              className="flex-1 px-2.5 py-1.5 text-sm rounded-lg border border-border bg-muted/30 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring tabular-nums"
+            />
+            <button
+              type="button"
+              onClick={handleUpdate}
+              disabled={!hasChanges || portInvalid || portUnavailable || updating}
+              className="shrink-0 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors
+                bg-[var(--amber)] text-[var(--amber-foreground)]
+                hover:opacity-90
+                disabled:opacity-40 disabled:cursor-not-allowed
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {updating ? m.portUpdating : m.portUpdateBtn}
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">{m.webPortLabel}</h3>
-            <p className="text-2xs text-muted-foreground">{m.webPortHint}</p>
-          </div>
+
+          {/* Port status feedback */}
+          {status.checking && (
+            <p className="text-xs flex items-center gap-1 text-muted-foreground">
+              <Loader2 size={11} className="animate-spin" /> {m.portChecking}
+            </p>
+          )}
+          {!status.checking && status.available === false && !status.invalid && (
+            <div className="flex items-center gap-2">
+              <p className="text-xs flex items-center gap-1 text-[var(--amber)]">
+                <AlertTriangle size={11} /> {m.portInUse(port)}
+              </p>
+              {status.suggestion !== null && (
+                <button type="button"
+                  onClick={() => { setPort(status.suggestion!); setStatus(EMPTY_STATUS); setTimeout(() => checkPort(status.suggestion!), 0); }}
+                  className="text-xs px-2 py-0.5 rounded border border-[var(--amber)] text-[var(--amber)] transition-colors hover:bg-[var(--amber-subtle)]"
+                >
+                  {m.portSuggest(status.suggestion)}
+                </button>
+              )}
+            </div>
+          )}
+          {!status.checking && status.invalid && (
+            <p className="text-xs flex items-center gap-1 text-destructive">
+              <AlertTriangle size={11} /> 1024 – 65535
+            </p>
+          )}
+          {!status.checking && status.available === true && (
+            <p className="text-xs flex items-center gap-1 text-success">
+              <CheckCircle2 size={11} /> {status.isSelf ? m.portSelf : m.portAvailable}
+            </p>
+          )}
         </div>
-        <div className="px-4 pb-4 space-y-3">
-          <PortField
-            label="" hint=""
-            value={port} onChange={v => { setPort(v); setStatus(EMPTY_STATUS); }}
-            status={status} onCheckPort={checkPort} m={m}
-          />
-          <button
-            type="button"
-            onClick={handleUpdate}
-            disabled={!hasChanges || portInvalid || portUnavailable || updating}
-            className="w-full py-2 rounded-lg text-xs font-medium transition-colors
-              bg-[var(--amber)] text-[var(--amber-foreground)]
-              hover:opacity-90
-              disabled:opacity-40 disabled:cursor-not-allowed
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {updating ? m.portUpdating : m.portUpdateBtn}
-          </button>
-        </div>
-      </div>
+      </SettingCard>
 
       {overlayMsg && <RestartOverlay message={overlayMsg} sub={overlaySub} />}
     </>

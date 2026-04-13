@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
-import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Zap, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical, Search, Download } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
-import { Field, Input, EnvBadge, SectionLabel, Toggle, SettingCard, SettingRow, PasswordInput } from './Primitives';
+import { Field, Input, EnvBadge, Toggle, SettingCard, SettingRow, PasswordInput } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatBytes, formatUptime } from '@/lib/format';
 import { setShowHiddenFiles } from '@/components/FileTree';
 import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
+import WebPortSection from './WebPortSection';
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
@@ -96,67 +97,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
       })
       .catch(err => console.error('Failed to restart walkthrough:', err));
   }, []);
-
-  // Embedding config
-  const embeddingData = data.embedding ?? { enabled: false, provider: 'local' as const, baseUrl: '', apiKey: '', model: '' };
-  const embeddingStatus = data.embeddingStatus ?? { enabled: false, ready: false, building: false, docCount: 0 };
-  const embeddingProvider = embeddingData.provider || 'local';
-
-  const [localModelDownloaded, setLocalModelDownloaded] = useState<boolean | null>(null);
-  const [downloading, setDownloading] = useState(false);
-
-  // Check local model status when Local mode is selected
-  useEffect(() => {
-    if (embeddingData.enabled && embeddingProvider === 'local') {
-      apiFetch<{ downloaded: boolean }>('/api/embedding')
-        .then(d => setLocalModelDownloaded(d.downloaded))
-        .catch(() => setLocalModelDownloaded(false));
-    }
-  }, [embeddingData.enabled, embeddingProvider]);
-
-  // Poll download status
-  useEffect(() => {
-    if (!downloading) return;
-    const id = setInterval(() => {
-      apiFetch<{ downloading: boolean; downloaded: boolean; error: string | null }>('/api/embedding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status' }),
-      }).then(d => {
-        if (d.downloaded) {
-          setLocalModelDownloaded(true);
-          setDownloading(false);
-          toast.success?.('Model downloaded successfully') ?? toast('Model downloaded');
-        }
-        if (d.error) {
-          setDownloading(false);
-          toast.error?.(d.error) ?? toast(d.error);
-        }
-      }).catch(() => {});
-    }, 3000);
-    return () => clearInterval(id);
-  }, [downloading]);
-
-  const handleDownloadModel = useCallback(() => {
-    setDownloading(true);
-    apiFetch('/api/embedding', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'download', model: embeddingData.model || undefined }),
-    }).catch(() => setDownloading(false));
-  }, [embeddingData.model]);
-
-  const API_PRESETS = [
-    { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
-    { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-embed' },
-    { label: 'Ollama', baseUrl: 'http://localhost:11434/v1', model: 'nomic-embed-text' },
-  ];
-
-  const LOCAL_MODELS = [
-    { id: 'Xenova/bge-small-zh-v1.5', label: 'BGE Small ZH (33MB)', desc: 'Chinese + English' },
-    { id: 'Xenova/all-MiniLM-L6-v2', label: 'MiniLM L6 (23MB)', desc: 'English only' },
-    { id: 'Xenova/bge-small-en-v1.5', label: 'BGE Small EN (33MB)', desc: 'English only' },
-  ];
 
   const origin = useSyncExternalStore(
     () => () => {},
@@ -249,6 +189,9 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </div>
         )}
       </SettingCard>
+
+      {/* ── Web UI Port ── */}
+      <WebPortSection m={t.settings?.mcp ?? {}} />
 
       {/* ── Card 2: Security ── */}
       <SettingCard
@@ -345,177 +288,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </button>
         </SettingCard>
       )}
-
-      {/* ── Card: Embedding Search (optional RAG) ── */}
-      <SettingCard
-        icon={<Search size={15} />}
-        title="Embedding Search"
-        description="Enable semantic search with vector embeddings. Finds notes by meaning, not just exact words."
-      >
-        <SettingRow label="Enable embedding search" hint="Combines keyword matching (BM25) with semantic similarity.">
-          <Toggle
-            checked={embeddingData.enabled}
-            onChange={() => {
-              setData(d => d ? { ...d, embedding: { ...embeddingData, enabled: !embeddingData.enabled } } : d);
-            }}
-          />
-        </SettingRow>
-
-        {embeddingData.enabled && (
-          <>
-            {/* Provider toggle: Local vs API */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setData(d => d ? { ...d, embedding: { ...embeddingData, provider: 'local', model: embeddingData.model || 'Xenova/bge-small-zh-v1.5' } } : d)}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors text-center ${
-                  embeddingProvider === 'local'
-                    ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
-                    : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                <span className="font-medium">Local (Free)</span>
-                <span className="block text-xs opacity-70 mt-0.5">Runs on your machine, no API key needed</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setData(d => d ? { ...d, embedding: { ...embeddingData, provider: 'api', model: embeddingData.model || 'text-embedding-3-small' } } : d)}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors text-center ${
-                  embeddingProvider === 'api'
-                    ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
-                    : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                <span className="font-medium">API</span>
-                <span className="block text-xs opacity-70 mt-0.5">OpenAI, DeepSeek, Ollama, etc.</span>
-              </button>
-            </div>
-
-            {/* ── Local provider UI ── */}
-            {embeddingProvider === 'local' && (
-              <>
-                {/* Model selector */}
-                <Field label="Model" hint="Choose a model. Smaller models are faster.">
-                  <div className="space-y-1.5">
-                    {LOCAL_MODELS.map(m => (
-                      <label
-                        key={m.id}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
-                          embeddingData.model === m.id
-                            ? 'border-[var(--amber)] bg-[var(--amber)]/5'
-                            : 'border-border hover:bg-muted'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="local-model"
-                          checked={embeddingData.model === m.id}
-                          onChange={() => setData(d => d ? { ...d, embedding: { ...embeddingData, model: m.id } } : d)}
-                          className="accent-[var(--amber)]"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-foreground">{m.label}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{m.desc}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </Field>
-
-                {/* Download button */}
-                {localModelDownloaded === false && !downloading && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadModel}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
-                  >
-                    <Download size={14} />
-                    Download Model
-                  </button>
-                )}
-                {downloading && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>Downloading model... This may take a minute.</span>
-                  </div>
-                )}
-                {localModelDownloaded === true && (
-                  <div className="flex items-center gap-2 text-xs text-success">
-                    <Check size={12} />
-                    <span>Model ready</span>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ── API provider UI ── */}
-            {embeddingProvider === 'api' && (
-              <>
-                {/* Preset buttons */}
-                <div className="flex gap-2 flex-wrap">
-                  {API_PRESETS.map(p => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => {
-                        setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: p.baseUrl, model: p.model } } : d);
-                      }}
-                      className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                        embeddingData.baseUrl === p.baseUrl
-                          ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
-                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                <Field label="Base URL" hint="OpenAI-compatible embedding endpoint">
-                  <Input
-                    value={embeddingData.baseUrl}
-                    onChange={e => setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: e.target.value } } : d)}
-                    placeholder="https://api.openai.com/v1"
-                  />
-                </Field>
-
-                <Field label="API Key" hint="Leave empty for local providers (e.g., Ollama)">
-                  <PasswordInput
-                    value={embeddingData.apiKey}
-                    onChange={v => setData(d => d ? { ...d, embedding: { ...embeddingData, apiKey: v } } : d)}
-                    placeholder="sk-..."
-                  />
-                </Field>
-
-                <Field label="Model" hint="Embedding model name">
-                  <Input
-                    value={embeddingData.model}
-                    onChange={e => setData(d => d ? { ...d, embedding: { ...embeddingData, model: e.target.value } } : d)}
-                    placeholder="text-embedding-3-small"
-                  />
-                </Field>
-              </>
-            )}
-
-            {/* Index status */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-              {embeddingStatus.building ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>Building embedding index...</span>
-                </>
-              ) : embeddingStatus.ready ? (
-                <>
-                  <Check size={12} className="text-success" />
-                  <span>{embeddingStatus.docCount} documents indexed</span>
-                </>
-              ) : (
-                <span>Index will be built on first search</span>
-              )}
-            </div>
-          </>
-        )}
-      </SettingCard>
 
       {/* ── Card 4: Labs — experimental features ── */}
       <SettingCard icon={<FlaskConical size={15} />} title={a.labsTitle ?? 'Labs'} description={a.labsDesc ?? 'Experimental features that are still in development.'}>

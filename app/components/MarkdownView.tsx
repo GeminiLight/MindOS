@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Copy, Check, X } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
@@ -43,7 +43,7 @@ function CopyButton({ code }: { code: string }) {
         bg-muted hover:bg-accent
         text-muted-foreground hover:text-foreground
         transition-colors duration-100
-        opacity-0 group-hover:opacity-100
+        opacity-60 group-hover:opacity-100
       "
       title="Copy code"
     >
@@ -141,9 +141,15 @@ function extractText(node: React.ReactNode): string {
 export default function MarkdownView({ content, highlightLines, onDismissHighlight, emptyPlaceholder }: MarkdownViewProps) {
   const hasHighlights = highlightLines && highlightLines.length > 0;
 
+  // Defer markdown rendering to the client to avoid hydration mismatches
+  // caused by browser extensions (e.g. Twemoji) that replace emoji Unicode
+  // with <img> tags before React hydrates.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   if (!content.trim() && emptyPlaceholder) {
     return (
-      <div className="py-12 text-center text-sm text-muted-foreground/50">
+      <div className="py-16 text-center text-sm text-muted-foreground/60">
         {emptyPlaceholder}
       </div>
     );
@@ -179,13 +185,15 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
         </div>
       )}
       <div className="prose max-w-none">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
-          components={components}
-        >
-          {content}
-        </ReactMarkdown>
+        {mounted ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
+            components={components}
+          >
+            {content}
+          </ReactMarkdown>
+        ) : null}
       </div>
     </div>
   );

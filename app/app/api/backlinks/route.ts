@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { findBacklinks } from '@/lib/fs';
+import { generateETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
 // GET /api/backlinks?path=Profile/Identity.md
@@ -12,11 +13,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const backlinks = findBacklinks(target);
-    // Transform core shape { source, line, context } → frontend shape { filePath, snippets }
-    return NextResponse.json(backlinks.map(b => ({
+    const data = backlinks.map(b => ({
       filePath: b.source,
       snippets: [b.context],
-    })));
+    }));
+    
+    const response = NextResponse.json(data);
+    
+    // ── Cache control: 5 minutes ──
+    // Backlinks are stable for a given file until link structure changes.
+    // ETag derived from serialized data ensures content-based invalidation.
+    const etag = generateETag(JSON.stringify(data));
+    return setPublicCacheHeaders(response, 300, etag);
   } catch (e) {
     return handleRouteErrorSimple(e);
   }

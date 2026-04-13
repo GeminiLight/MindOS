@@ -304,7 +304,7 @@ describe('GET /api/mcp/agents', () => {
     const { GET } = await importAgentsRoute();
     const res = await GET();
     const body = await res.json();
-    expect(body.agents).toHaveLength(25);
+    expect(body.agents).toHaveLength(26);
     const keys = body.agents.map((a: { key: string }) => a.key);
     expect(keys).toContain('mindos');
     expect(keys).toContain('claude-code');

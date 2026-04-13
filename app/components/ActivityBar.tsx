@@ -7,6 +7,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
 import Logo from './Logo';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 export type PanelId = 'files' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
 
@@ -43,13 +44,15 @@ interface RailButtonProps {
 }
 
 function RailButton({ icon, label, shortcut, active = false, expanded, onClick, buttonRef, badge, walkthroughId }: RailButtonProps) {
-  return (
+  const tooltipText = shortcut ? `${label} (${shortcut})` : label;
+
+  const button = (
     <button
       ref={buttonRef}
       onClick={onClick}
       aria-pressed={active}
       aria-label={label}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      title={undefined}
       data-walkthrough={walkthroughId}
       className={`
         relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 rounded-md transition-colors
@@ -74,6 +77,17 @@ function RailButton({ icon, label, shortcut, active = false, expanded, onClick, 
         </>
       )}
     </button>
+  );
+
+  if (expanded) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipContent side="right" sideOffset={8}>
+        {tooltipText}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -186,6 +200,7 @@ export default function ActivityBar({
   ) : undefined;
 
   return (
+    <TooltipProvider delay={2000}>
     <aside
       className="group hidden md:flex fixed top-0 left-0 h-screen z-[31] flex-col bg-background border-r border-border transition-[width] duration-200 ease-out"
       style={{ width: `${railWidth}px` }}
@@ -289,5 +304,6 @@ export default function ActivityBar({
         {expanded ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
       </button>
     </aside>
+    </TooltipProvider>
   );
 }

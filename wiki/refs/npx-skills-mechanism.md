@@ -156,6 +156,11 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `qwen-code` | ❌ Additional | ✅ `-a qwen-code` |
 | `trae-cn` | ❌ Additional | ✅ `-a trae-cn` |
 | `roo` | ❌ Additional | ✅ `-a roo` |
+| `antigravity` | ❌ Additional | ✅ `-a antigravity` |
+| `qclaw` | - Unsupported | ❌（MCP 安装时自动复制） |
+| `workbuddy` | - Unsupported | ❌（MCP 安装时自动复制） |
+| `lingma` | - Unsupported | ❌（MCP 安装时自动复制） |
+| `copaw` | - Unsupported | ❌（MCP 安装时自动复制） |
 
 ### Agent 映射表
 
@@ -178,5 +183,24 @@ npx skills add <source> -s <skill> -a universal -g -y
 | `qwen-code` | `qwen-code` | ❌ | ✅ |
 | `trae-cn` | `trae-cn` | ❌ | ✅ |
 | `roo` | `roo` | ❌ | ✅ |
+| `antigravity` | `antigravity` | ❌ | ✅ |
+| `qclaw` | - | - | ❌ (unsupported) |
+| `workbuddy` | - | - | ❌ (unsupported) |
+| `lingma` | - | - | ❌ (unsupported) |
+| `copaw` | - | - | ❌ (unsupported) |
+
+### 注意：`npx skills` 目录名 vs MindOS 内部检测路径
+
+`npx skills` 工具对 Additional agents 创建的 symlink 目录统一命名为 `~/.<agent-name>/skills/`（如 `~/.windsurf/skills/`、`~/.roo/skills/`）。但 MindOS 内部的 `resolveSkillWorkspaceProfile()` 函数基于 `presenceDirs` 推导 agent 根目录，对于部分 agent 会产生不同的路径：
+
+| Agent | `npx skills` symlink 目录 | MindOS 内部检测路径 |
+|-------|---------------------------|----------------------------|
+| `windsurf` | `~/.windsurf/skills/` | `~/.codeium/windsurf/skills/` |
+| `roo` | `~/.roo/skills/` | macOS: `~/Library/.../roo-cline/skills/`; Linux: `~/.config/.../roo-cline/skills/` |
+| `antigravity` | `~/.antigravity/skills/` | `~/.gemini/antigravity/skills/` |
+
+其余 Additional agents 的两者路径一致（如 `~/.claude/skills/` 两边相同）。
+
+> 这个差异当前不影响功能，因为 Skill 安装走 `npx skills` 侧的路径，而 MindOS 的 `detectAgentInstalledSkills()` 只用于 UI 展示。但如果未来需要在 MindOS 侧主动读取已安装 Skills，需要统一两套路径。
 
 > 全局维护规则见：`wiki/refs/agent-config-registry.md`

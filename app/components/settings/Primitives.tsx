@@ -73,12 +73,13 @@ export function PasswordInput({ value, onChange, placeholder, disabled, classNam
 
 interface SelectOption { value: string; label: string }
 
-export function Select({ value, onChange, children, className = '', disabled }: {
+export function Select({ value, onChange, children, className = '', disabled, size = 'md' }: {
   value?: string;
   onChange?: (e: { target: { value: string } }) => void;
   children?: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  size?: 'sm' | 'md';
 }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
@@ -149,10 +150,10 @@ export function Select({ value, onChange, children, className = '', disabled }: 
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground text-left flex items-center justify-between gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`${size === 'sm' ? 'px-1.5 py-0.5 text-xs rounded cursor-pointer' : 'w-full px-3 py-2 text-sm rounded-lg'} bg-background border border-border text-foreground text-left flex items-center justify-between gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className={`truncate ${selectedLabel ? '' : 'text-muted-foreground'}`}>{selectedLabel || '—'}</span>
-        <ChevronDown size={14} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={size === 'sm' ? 10 : 14} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -160,7 +161,7 @@ export function Select({ value, onChange, children, className = '', disabled }: 
           ref={listRef}
           role="listbox"
           aria-activedescendant={focusIdx >= 0 ? `${uid}-opt-${focusIdx}` : undefined}
-          className="absolute z-20 w-full mt-1 py-1 border border-border rounded-lg bg-card shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-100"
+          className={`absolute z-20 ${size === 'sm' ? 'min-w-[8rem]' : 'w-full'} mt-1 py-1 border border-border rounded-lg bg-card shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-100`}
         >
           {options.map((opt, idx) => {
             const isSelected = opt.value === value;
@@ -174,11 +175,11 @@ export function Select({ value, onChange, children, className = '', disabled }: 
                 type="button"
                 onMouseDown={e => { e.preventDefault(); select(idx); }}
                 onMouseEnter={() => setFocusIdx(idx)}
-                className={`w-full px-3 py-1.5 text-sm text-left flex items-center gap-2 transition-colors ${
+                className={`w-full ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} text-left flex items-center gap-2 transition-colors ${
                   isFocused ? 'bg-accent text-accent-foreground' : 'text-foreground'
                 }`}
               >
-                <Check size={14} className={`shrink-0 ${isSelected ? 'text-[var(--amber)]' : 'invisible'}`} />
+                <Check size={size === 'sm' ? 10 : 14} className={`shrink-0 ${isSelected ? 'text-[var(--amber)]' : 'invisible'}`} />
                 <span className="truncate">{opt.label}</span>
               </button>
             );

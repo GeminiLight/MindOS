@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useTransition, useEffect } from 'react';
+import { useState, useCallback, useRef, useTransition, useEffect, memo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
@@ -130,7 +130,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
 
 // ─── DirectoryNode ────────────────────────────────────────────────────────────
 
-function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onImport }: {
+const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onImport }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
   maxOpenDepth?: number | null; onImport?: (space: string) => void;
 }) {
@@ -138,6 +138,9 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
   const isSpace = !!node.isSpace;
   const [open, setOpen] = useState(depth === 0 ? true : isActive);
+  // Track whether this directory has ever been opened — only render children after first open.
+  // This avoids mounting hundreds of hidden components for deep trees that haven't been explored.
+  const [hasBeenOpened, setHasBeenOpened] = useState(depth === 0 || isActive);
   const [showNewFile, setShowNewFile] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
@@ -150,9 +153,19 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
   const [isPendingDelete, startDeleteTransition] = useTransition();
 
   // ── External file drop target (from hook) ──
-  const { isDragTarget, handleRowDragOver, handleRowDragEnter, handleRowDragLeave, handleRowDrop } = useDirectoryDragDrop(node, open, setOpen, t);
+  // Wrap setOpen so drag-expand also marks the directory as opened for lazy rendering
+  const setOpenWithTracking = useCallback((v: boolean) => {
+    setOpen(v);
+    if (v) setHasBeenOpened(true);
+  }, []);
+  const { isDragTarget, handleRowDragOver, handleRowDragEnter, handleRowDragLeave, handleRowDrop } = useDirectoryDragDrop(node, open, setOpenWithTracking, t);
 
-  const toggle = useCallback(() => setOpen(v => !v), []);
+  const toggle = useCallback(() => {
+    setOpen(v => {
+      if (!v) setHasBeenOpened(true);
+      return !v;
+    });
+  }, []);
 
   const prevMaxOpenDepth = useRef<number | null | undefined>(undefined);
   useEffect(() => {
@@ -164,8 +177,11 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
       const enteringControlled = prevMaxOpenDepth.current === null || prevMaxOpenDepth.current === undefined;
       if (enteringControlled) {
         if (depth > maxOpenDepth) setOpen(false);
+        else setHasBeenOpened(true);
       } else {
-        setOpen(depth <= maxOpenDepth);
+        const shouldOpen = depth <= maxOpenDepth;
+        setOpen(shouldOpen);
+        if (shouldOpen) setHasBeenOpened(true);
       }
       prevMaxOpenDepth.current = maxOpenDepth;
     }
@@ -329,7 +345,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           style={showBorder ? { borderColor: 'color-mix(in srgb, var(--amber) 30%, transparent)' } : undefined}
           {...(!open && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}
         >
-          {node.children && (
+          {hasBeenOpened && node.children && (
             <FileTree
               nodes={node.children}
               depth={showBorder ? 1 : depth + 1}
@@ -356,7 +372,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
-          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
+          onNewFile={() => { setOpen(true); setHasBeenOpened(true); setShowNewFile(true); }}
           onImport={onImport}
           onDelete={() => setDeleteConfirm('space')}
         />
@@ -367,7 +383,7 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
           node={node}
           onClose={() => setContextMenu(null)}
           onRename={() => startRename()}
-          onNewFile={() => { setOpen(true); setShowNewFile(true); }}
+          onNewFile={() => { setOpen(true); setHasBeenOpened(true); setShowNewFile(true); }}
           onDelete={() => setDeleteConfirm('folder')}
         />
       ))}
@@ -403,11 +419,11 @@ function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onI
 
     </div>
   );
-}
+});
 
 // ─── FileNodeItem ─────────────────────────────────────────────────────────────
 
-function FileNodeItem({ node, depth, currentPath, onNavigate }: {
+const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNavigate }: {
   node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
 }) {
   const router = useRouter();
@@ -581,7 +597,7 @@ function FileNodeItem({ node, depth, currentPath, onNavigate }: {
       />
     </div>
   );
-}
+});
 
 // ─── FileTree (root) ──────────────────────────────────────────────────────────
 

@@ -266,6 +266,16 @@ export const MCP_AGENTS = {
     presenceCli: 'copaw',
     presenceDirs: ['~/.copaw/'],
   },
+  'hermes': {
+    name: 'Hermes',
+    project: null,
+    global: '~/.hermes/config.yaml',
+    key: 'mcp_servers',
+    format: 'yaml',
+    preferredTransport: 'stdio',
+    presenceCli: 'hermes',
+    presenceDirs: ['~/.hermes/'],
+  },
 };
 
 /**
@@ -297,6 +307,7 @@ export const SKILL_AGENT_REGISTRY = {
   'workbuddy': { mode: 'unsupported' },
   'lingma': { mode: 'unsupported' },
   'copaw': { mode: 'unsupported' },
+  'hermes': { mode: 'unsupported' },
 };
 
 export function detectAgentPresence(agentKey) {

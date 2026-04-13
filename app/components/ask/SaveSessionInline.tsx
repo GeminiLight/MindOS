@@ -141,7 +141,7 @@ export function SaveSessionButton({ messages, disabled }: {
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         disabled={disabled}
-        className={`p-2 rounded-lg transition-colors ${
+        className={`h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors ${
           open
             ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted'

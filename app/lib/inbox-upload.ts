@@ -3,13 +3,78 @@ import type { useLocale } from '@/lib/stores/locale-store';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
 
-function arrayBufferToBase64(buf: ArrayBuffer): string {
+/**
+ * Convert ArrayBuffer to base64 string.
+ * For large buffers (>512KB), offloads to a Web Worker to avoid freezing the UI.
+ * For small buffers, runs synchronously on the main thread (worker overhead not worth it).
+ */
+function arrayBufferToBase64Sync(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   const chunks: string[] = [];
   for (let i = 0; i < bytes.length; i += 8192) {
     chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
   }
   return btoa(chunks.join(''));
+}
+
+const WORKER_THRESHOLD = 512 * 1024; // 512 KB
+
+async function arrayBufferToBase64(buf: ArrayBuffer): Promise<string> {
+  if (buf.byteLength < WORKER_THRESHOLD || typeof Worker === 'undefined') {
+    return arrayBufferToBase64Sync(buf);
+  }
+
+  // Clone before transfer — the original buf becomes detached after postMessage with transfer
+  const syncFallbackBuf = buf.slice(0);
+
+  return new Promise<string>((resolve) => {
+    const workerCode = `
+      self.onmessage = function(e) {
+        try {
+          var bytes = new Uint8Array(e.data);
+          var chunks = [];
+          for (var i = 0; i < bytes.length; i += 8192) {
+            chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
+          }
+          self.postMessage(btoa(chunks.join('')));
+        } catch (err) {
+          self.postMessage({ error: err.message || 'base64 encoding failed' });
+        }
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const worker = new Worker(url);
+
+    const cleanup = () => {
+      worker.terminate();
+      URL.revokeObjectURL(url);
+    };
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(arrayBufferToBase64Sync(syncFallbackBuf));
+    }, 10_000);
+
+    worker.onmessage = (e: MessageEvent) => {
+      clearTimeout(timeout);
+      cleanup();
+      if (typeof e.data === 'string') {
+        resolve(e.data);
+      } else {
+        resolve(arrayBufferToBase64Sync(syncFallbackBuf));
+      }
+    };
+
+    worker.onerror = () => {
+      clearTimeout(timeout);
+      cleanup();
+      resolve(arrayBufferToBase64Sync(syncFallbackBuf));
+    };
+
+    // Transfer the buffer to avoid copying (original buf is now detached)
+    worker.postMessage(buf, [buf]);
+  });
 }
 
 function showQuickDropToast(
@@ -44,9 +109,11 @@ export async function quickDropToInbox(
       continue;
     }
     try {
-      if (file.name.toLowerCase().endsWith('.pdf')) {
+      const lowerName = file.name.toLowerCase();
+      const isWord = lowerName.endsWith('.doc') || lowerName.endsWith('.docx') || lowerName.endsWith('.docm');
+      if (lowerName.endsWith('.pdf') || isWord) {
         const buf = await file.arrayBuffer();
-        payload.push({ name: file.name, content: arrayBufferToBase64(buf), encoding: 'base64' });
+        payload.push({ name: file.name, content: await arrayBufferToBase64(buf), encoding: 'base64' });
       } else {
         const text = await file.text();
         payload.push({ name: file.name, content: text });
@@ -188,6 +255,7 @@ export async function quickDropToDirectory(
   const BINARY_EXTS = new Set([
     'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico',
     'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'mp4', 'webm', 'mov', 'mkv',
+    'doc', 'docx', 'docm',
   ]);
 
   for (const file of files) {
@@ -199,7 +267,7 @@ export async function quickDropToDirectory(
       const ext = (file.name.split('.').pop() ?? '').toLowerCase();
       if (BINARY_EXTS.has(ext)) {
         const buf = await file.arrayBuffer();
-        payload.push({ name: file.name, content: arrayBufferToBase64(buf), encoding: 'base64' });
+        payload.push({ name: file.name, content: await arrayBufferToBase64(buf), encoding: 'base64' });
       } else {
         const text = await file.text();
         payload.push({ name: file.name, content: text });

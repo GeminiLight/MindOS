@@ -27,10 +27,42 @@ import {
   spawnAndConnect,
   killAgent,
   type AcpConnection,
+  type AcpProcess,
 } from './subprocess';
 import { findAcpAgent } from './registry';
 
-/* ── Version ───────────────────────────────────────────────────────────── */
+/* ── Error diagnosis ───────────────────────────────────────────────────── */
+
+function diagnoseInitFailure(proc: AcpProcess, rawError: Error): string {
+  const raw = rawError.message ?? '';
+  const stderr = proc.spawnError ?? '';
+
+  // ENOENT = spawn itself failed because the executable was not found
+  if (raw.includes('ENOENT') || stderr.includes('ENOENT')) {
+    return `Command not found: "${proc.agentId}". Verify it is installed and on your PATH, or set an absolute path in Agent settings.`;
+  }
+
+  // npx download failures (common when npm registry is unreachable, e.g. in China)
+  if (stderr.includes('npm ERR!') || stderr.includes('ERR_SOCKET_TIMEOUT') || stderr.includes('ETIMEDOUT') || stderr.includes('ECONNREFUSED') || stderr.includes('Could not resolve host') || stderr.includes('FETCH_ERROR')) {
+    return `Agent "${proc.agentId}" failed to download its ACP wrapper package. This usually means the npm registry is unreachable. Check your network connection and npm proxy settings. Stderr: ${stderr.slice(0, 300)}`;
+  }
+
+  // EPIPE = child process exited before we could write to stdin
+  if (raw.includes('EPIPE')) {
+    if (stderr) {
+      return `Agent "${proc.agentId}" exited immediately: ${stderr}`;
+    }
+    return `Agent "${proc.agentId}" exited before initialization. Common causes: command not found in this environment (desktop apps often have a shorter PATH than your terminal), the agent does not support ACP mode, or authentication is required. Try running the agent command manually in a terminal to diagnose.`;
+  }
+
+  // Non-zero exit with stderr
+  if (stderr) {
+    return `Agent "${proc.agentId}" failed to start: ${stderr}`;
+  }
+
+  return `initialize failed: ${raw}`;
+}
+
 
 let _cachedVersion = '';
 function getMindosVersion(): string {
@@ -93,8 +125,11 @@ export async function createSessionFromEntry(
     agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
     authMethods = parseAuthMethods(initResult.authMethods);
   } catch (err) {
+    // Wait briefly for stderr/exit info before diagnosing
+    await new Promise(r => setTimeout(r, 200));
+    const message = diagnoseInitFailure(conn.process, err as Error);
     killAgent(conn.process);
-    throw new Error(`initialize failed: ${(err as Error).message}`);
+    throw new Error(message);
   }
 
   // Phase 2: Authenticate (if agent declares auth methods)
@@ -183,8 +218,10 @@ export async function loadSession(
     });
     agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
   } catch (err) {
+    await new Promise(r => setTimeout(r, 200));
+    const message = diagnoseInitFailure(conn.process, err as Error);
     killAgent(conn.process);
-    throw new Error(`initialize failed: ${(err as Error).message}`);
+    throw new Error(message);
   }
 
   if (!agentCapabilities?.loadSession) {
@@ -629,10 +666,15 @@ const STALE_SESSION_MS = 30 * 60 * 1000; // 30 minutes
 
 function reapStaleSessions(): void {
   const now = Date.now();
+  const staleIds: string[] = [];
   for (const [id, session] of sessions) {
     const lastActivity = new Date(session.lastActivityAt).getTime();
     if (now - lastActivity > STALE_SESSION_MS && session.state !== 'active') {
-      closeSession(id).catch(() => {});
+      staleIds.push(id);
     }
+  }
+  // Close stale sessions outside the iteration to avoid mutating the Map mid-loop.
+  for (const id of staleIds) {
+    closeSession(id).catch(() => {});
   }
 }

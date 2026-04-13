@@ -654,7 +654,11 @@ export interface AppSearchResult {
 // - App search (here): Fuse.js fuzzy match, best for interactive UI search
 // - Core search (lib/core/search.ts): exact literal match with filters, best for MCP tools
 
-const MAX_CONTENT_LENGTH = 50_000;
+const MAX_CONTENT_LENGTH = 10_000;
+
+/** Maximum content length for large knowledge bases (300+ files) to keep Fuse queries fast. */
+const MAX_CONTENT_LENGTH_LARGE_KB = 5_000;
+const LARGE_KB_THRESHOLD = 300;
 
 interface SearchIndex {
   fuse: InstanceType<typeof Fuse<SearchDocument>>;
@@ -680,6 +684,10 @@ function getSearchIndex(): SearchIndex {
   const allFiles = collectAllFiles();
   const documents: SearchDocument[] = [];
 
+  const contentLimit = allFiles.length >= LARGE_KB_THRESHOLD
+    ? MAX_CONTENT_LENGTH_LARGE_KB
+    : MAX_CONTENT_LENGTH;
+
   for (const filePath of allFiles) {
     let content: string;
     try {
@@ -687,8 +695,8 @@ function getSearchIndex(): SearchIndex {
     } catch {
       continue;
     }
-    if (content.length > MAX_CONTENT_LENGTH) {
-      content = content.slice(0, MAX_CONTENT_LENGTH);
+    if (content.length > contentLimit) {
+      content = content.slice(0, contentLimit);
     }
     documents.push({
       path: filePath,

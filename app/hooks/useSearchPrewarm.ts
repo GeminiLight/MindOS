@@ -20,7 +20,10 @@ export function shouldStartSearchPrewarm({
 export function getSearchWarmHint(
   warmState: SearchWarmState,
   query: string,
-  hints: SearchWarmHintMessages,
+  hints: SearchWarmHintMessages = {
+    preparing: 'Preparing search...',
+    fallbackWarmHint: 'Search will prepare on first query.',
+  },
 ): string | null {
   if (query.trim()) return null;
   if (warmState === 'warming') return hints.preparing;
@@ -52,9 +55,13 @@ export function useSearchPrewarm(active: boolean): SearchWarmState {
       .catch(() => {
         if (isMountedRef.current) setWarmState('fallback');
       });
+    // warmState is in deps but won't cause infinite loops because
+    // shouldStartSearchPrewarm returns false when warmState !== 'idle'
   }, [active, warmState]);
 
+  // Reset on mount (needed for React 18 StrictMode which unmounts then remounts)
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };

@@ -74,7 +74,7 @@ export default function Panel({
   const { t } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
-  const isInboxActive = pathname === '/view/Inbox' || pathname === '/view/Inbox/';
+  const isInboxActive = pathname === '/capture' || pathname === '/capture/';
 
   // File tree depth control: null = manual (no override), number = forced max open depth
   const [maxOpenDepth, setMaxOpenDepth] = useState<number | null>(null);
@@ -286,7 +286,7 @@ export default function Panel({
                 >
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                    onClick={() => { setMorePopover(false); router.push('/view/Inbox/'); }}
+                    onClick={() => { setMorePopover(false); router.push('/capture'); }}
                   >
                     <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
                     <span className="flex-1">{t.sidebar.capture}</span>
@@ -336,7 +336,7 @@ export default function Panel({
         {/* Inbox quick entry — always visible above sync bar */}
         <button
           type="button"
-          onClick={() => router.push('/view/Inbox/')}
+          onClick={() => router.push('/capture')}
           className={`flex items-center gap-2 mx-2 px-2 py-1.5 text-sm rounded-lg transition-all duration-150 group shrink-0 ${
             isInboxActive
               ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
