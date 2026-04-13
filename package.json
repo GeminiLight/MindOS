@@ -35,7 +35,8 @@
     "mcp": "mindos mcp",
     "test": "cd app && npx vitest run",
     "verify:standalone": "node scripts/verify-standalone.mjs",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "prepare": "git config core.hooksPath scripts/hooks 2>/dev/null || true"
   },
   "engines": {
     "node": ">=18"

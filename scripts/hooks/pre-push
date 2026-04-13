@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+
+# ─── Guard: block direct branch push to public repo ──────────────────────────
+# Only tag pushes (git push public v0.6.x) are allowed.
+# Code sync to public happens automatically via CI (sync-to-mindos.yml).
+REMOTE_URL=$(git remote get-url "$1" 2>/dev/null || echo "")
+if echo "$REMOTE_URL" | grep -q "GeminiLight/MindOS\.git\|GeminiLight/mindos\.git"; then
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" != refs/tags/* ]]; then
+      echo ""
+      echo "  ❌ BLOCKED: Direct branch push to public repo is forbidden."
+      echo ""
+      echo "  Only tag pushes are allowed:"
+      echo "    git push public v0.6.x"
+      echo ""
+      echo "  Code sync happens automatically via CI on push to origin/main."
+      echo ""
+      exit 1
+    fi
+  done
+  # Tag push — allow through without running tests
+  exit 0
+fi
+
+# ─── Tests ────────────────────────────────────────────────────────────────────
+if [ "$SKIP_TESTS" = "1" ]; then
+  echo "Skipping pre-push tests (SKIP_TESTS=1)"
+  exit 0
+fi
+
+echo "Running tests before push..."
+echo "(Tip: use SKIP_TESTS=1 git push to skip)"
+MINDOS_WEB_PORT=19456 MINDOS_MCP_PORT=19781 npm test
+
+echo "Running TypeScript type check..."
+cd app && npx tsc --noEmit

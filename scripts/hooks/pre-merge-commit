@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+# Block merges from public repo (auto-merge, no conflicts)
+exec "$(dirname "$0")/block-public-merge.sh"
