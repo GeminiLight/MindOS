@@ -58,7 +58,6 @@ import {
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 import { runNonStreamingFallback } from '@/lib/agent/non-streaming';
-import { handleWebSearchFallback } from '@/lib/agent/web-search-fallback';
 
 const MAX_DIR_FILES = 30;
 
@@ -655,7 +654,11 @@ export async function POST(req: NextRequest) {
         path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
         // pi-subagents: task delegation to subagents with chains, parallel, async support
         path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
-        // pi-web-access: web search, content extraction, GitHub/YouTube/PDF/video understanding
+        // web-search: our own web_search tool (DDG→Bing→Google free chain + Tavily/Brave/Serper/Bing API)
+        // Loaded BEFORE pi-web-access so our web_search takes priority.
+        path.join(projectRoot, 'app', 'lib', 'agent', 'web-search-extension.ts'),
+        // pi-web-access: content extraction, code search, GitHub/YouTube/PDF/video understanding
+        // (web_search is now handled by our own extension above)
         path.join(projectRoot, 'app', 'node_modules', 'pi-web-access', 'index.ts'),
         // schedule-prompt: cron-style scheduled task execution, storage in ~/.mindos/
         path.join(projectRoot, 'app', 'lib', 'schedule-prompt', 'index.ts'),
@@ -702,11 +705,6 @@ export async function POST(req: NextRequest) {
       tools: askMode === 'agent' ? [bashTool] : [],
       // KB tools are now registered via kb-extension.ts (loaded by resourceLoader)
     });
-
-    // Fallback to free search chain (DuckDuckGo → Bing → Google) when web_search fails
-    if (askMode === 'agent') {
-      session.agent.setAfterToolCall(handleWebSearchFallback as any);
-    }
 
     const llmHistoryMessages = convertToLlm(historyMessages);
     await session.newSession({

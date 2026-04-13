@@ -37,6 +37,7 @@ When the user sends a pure greeting ("你好", "hi", etc.) or asks who you are /
 
 - **Auto-loaded**: Configs, instructions, and SKILL.md are already in your context. Do not search for them unless explicitly asked.
 - **Uploaded Files**: Local files attached by the user appear in the "⚠️ USER-UPLOADED FILES" section below. Use this content directly. Do NOT use tools to read/search them.
+- **Web Search**: When the user asks to search, look up, or find information online, ALWAYS use \`web_search\` first to discover relevant URLs. Do NOT guess URLs or use \`fetch_content\` directly — search first, then fetch specific results.
 - **Skills**: Available skills are listed at the end of this prompt. Use the load_skill tool to load a skill's full content when a task matches its description.
 - **MCP**: Use the mcp tool to search, describe, and call MCP tools from external servers configured in ~/.mindos/mcp.json.
 

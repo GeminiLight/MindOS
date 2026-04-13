@@ -245,10 +245,10 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
             {/* DropZone */}
             {isSelectStep && (
               <div
-                className={`border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer ${
+                className={`rounded-lg transition-all duration-200 cursor-pointer ${
                   hasFiles
-                    ? 'border-border py-3 px-4'
-                    : 'border-[var(--amber)]/30 hover:border-[var(--amber)]/60 py-8 px-4'
+                    ? 'border border-border/50 bg-muted/25 py-3 px-4'
+                    : 'border-2 border-dashed border-[var(--amber)]/25 hover:border-[var(--amber)]/40 bg-[var(--amber)]/2 hover:bg-[var(--amber)]/4 py-8 px-4 shadow-[inset_0_1px_2px_rgba(200,135,58,0.08)]'
                 }`}
                 role="button"
                 tabIndex={0}

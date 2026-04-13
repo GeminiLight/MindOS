@@ -33,11 +33,11 @@ const VARIANT_ICON = {
 } as const;
 
 const VARIANT_STYLE = {
-  kb: 'border-border bg-muted text-foreground',
-  upload: 'border-border bg-muted text-foreground',
-  image: 'border-border bg-muted text-foreground',
-  skill: 'border-[var(--amber)]/25 bg-[var(--amber)]/10 text-foreground',
-  agent: 'border-[var(--amber)]/25 bg-[var(--amber)]/10 text-foreground',
+  kb: 'border-border/60 bg-muted/70 text-foreground shadow-sm',
+  upload: 'border-border/60 bg-muted/70 text-foreground shadow-sm',
+  image: 'border-border/60 bg-muted/70 text-foreground shadow-sm',
+  skill: 'border-[var(--amber)]/35 bg-[var(--amber)]/12 text-foreground shadow-sm',
+  agent: 'border-[var(--amber)]/35 bg-[var(--amber)]/12 text-foreground shadow-sm',
 } as const;
 
 export default function FileChip({ path, onRemove, variant = 'kb', imageData, imageMime, status, error, truncatedInfo }: FileChipProps) {
@@ -81,9 +81,9 @@ export default function FileChip({ path, onRemove, variant = 'kb', imageData, im
   }
 
   const style = status === 'error'
-    ? 'border-destructive/30 bg-destructive/5 text-foreground'
+    ? 'border-destructive/40 bg-destructive/8 text-foreground shadow-sm'
     : isTruncated
-    ? 'border-[var(--amber)]/30 bg-[var(--amber)]/5 text-foreground'
+    ? 'border-[var(--amber)]/40 bg-[var(--amber)]/8 text-foreground shadow-sm'
     : VARIANT_STYLE[variant];
 
   // Build tooltip text
