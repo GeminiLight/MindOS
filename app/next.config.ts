@@ -43,6 +43,10 @@ const nextConfig: NextConfig = {
       './node_modules/pdfjs-dist/legacy/build/pdf.mjs',
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
+    // extract-docx.cjs is spawned at runtime for .doc/.docx/.docm files
+    '/api/extract-docx': [
+      './scripts/extract-docx.cjs',
+    ],
   },
   turbopack: {
     root: projectDir,
