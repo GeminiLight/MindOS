@@ -155,6 +155,7 @@ export async function consumeUIMessageStream(
           case 'tool_start': {
             // Beginning of tool execution
             const toolCallId = event.toolCallId as string;
+            if (!toolCallId) break;
             const toolName = event.toolName as string;
             const tc = findOrCreateToolCall(toolCallId, toolName);
             tc.input = event.args;
@@ -166,16 +167,16 @@ export async function consumeUIMessageStream(
           case 'tool_end': {
             // Tool execution finished
             const toolCallId = event.toolCallId as string;
-            const tc = toolCalls.get(toolCallId);
-            if (tc) {
-              const output = event.output as string;
-              tc.output = output ?? '';
-              tc.state = (event.isError ? 'error' : 'done');
-              changed = true;
-              // Notify when a file-modifying tool completes successfully
-              if (!event.isError && FILE_MUTATING_TOOLS.has(tc.toolName)) {
-                notifyFilesChanged();
-              }
+            if (!toolCallId) break;
+            // Use findOrCreateToolCall so tool_end still works even if tool_start was lost
+            const tc = findOrCreateToolCall(toolCallId, (event as Record<string, unknown>).toolName as string | undefined);
+            const output = event.output as string;
+            tc.output = output ?? '';
+            tc.state = (event.isError ? 'error' : 'done');
+            changed = true;
+            // Notify when a file-modifying tool completes successfully
+            if (!event.isError && FILE_MUTATING_TOOLS.has(tc.toolName)) {
+              notifyFilesChanged();
             }
             break;
           }

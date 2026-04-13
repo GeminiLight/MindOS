@@ -320,7 +320,7 @@ export function useAskChat({
       abortRef.current = null;
       pendingMessageRef.current = null;
     }
-  }, [currentFile, chatMode, providerOverride, errorLabels.noResponse, errorLabels.stopped, onFirstMessage, refs, resetInputState]);
+  }, [currentFile, chatMode, providerOverride, modelOverride, errorLabels.noResponse, errorLabels.stopped, onFirstMessage, refs, resetInputState]);
 
   const isLoadingRef = useRef(isLoading);
   isLoadingRef.current = isLoading;

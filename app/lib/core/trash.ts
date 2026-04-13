@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { resolveSafe } from './security';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function safeMove(src: string, dest: string, isDir: boolean): void {
 
 export function moveToTrash(mindRoot: string, filePath: string): TrashMeta {
   ensureDirs(mindRoot);
-  const src = path.join(mindRoot, filePath);
+  const src = resolveSafe(mindRoot, filePath);
   if (!fs.existsSync(src)) throw new Error(`File not found: ${filePath}`);
 
   const isDir = fs.statSync(src).isDirectory();
@@ -121,7 +122,7 @@ export function restoreFromTrash(mindRoot: string, trashId: string, overwrite = 
   const trashPath = path.join(trashRoot(mindRoot), trashId);
   if (!fs.existsSync(trashPath)) throw new Error('Trash file missing from disk');
 
-  const dest = path.join(mindRoot, meta.originalPath);
+  const dest = resolveSafe(mindRoot, meta.originalPath);
 
   // Check for conflicts
   if (fs.existsSync(dest) && !overwrite) {
@@ -164,7 +165,7 @@ export function restoreAsCopy(mindRoot: string, trashId: string): { restoredPath
     counter++;
   }
 
-  const dest = path.join(mindRoot, copyPath);
+  const dest = resolveSafe(mindRoot, copyPath);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   safeMove(trashPath, dest, meta.isDirectory);
 

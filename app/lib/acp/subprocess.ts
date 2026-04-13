@@ -187,7 +187,8 @@ export function getActiveProcesses(): AcpProcess[] {
 }
 
 export function killAllAgents(): void {
-  for (const proc of processes.values()) {
+  const snapshot = [...processes.values()];
+  for (const proc of snapshot) {
     killAgent(proc);
   }
 }

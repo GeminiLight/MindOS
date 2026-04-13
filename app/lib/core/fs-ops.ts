@@ -55,10 +55,14 @@ export function createFile(mindRoot: string, filePath: string, initialContent = 
  */
 export function deleteFile(mindRoot: string, filePath: string): void {
   const resolved = resolveSafe(mindRoot, filePath);
-  if (!fs.existsSync(resolved)) {
-    throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `File not found: ${filePath}`, { filePath });
+  try {
+    fs.unlinkSync(resolved);
+  } catch (err: unknown) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `File not found: ${filePath}`, { filePath });
+    }
+    throw err;
   }
-  fs.unlinkSync(resolved);
 }
 
 /**
@@ -92,14 +96,19 @@ export function convertToSpace(mindRoot: string, dirPath: string): void {
   const dirName = path.basename(resolved);
   const name = cleanDirName(dirName);
 
-  const instructionPath = path.join(resolved, 'INSTRUCTION.md');
-  if (!fs.existsSync(instructionPath)) {
-    fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(name), 'utf-8');
-  }
+  try {
+    const instructionPath = path.join(resolved, 'INSTRUCTION.md');
+    if (!fs.existsSync(instructionPath)) {
+      fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(name), 'utf-8');
+    }
 
-  const readmePath = path.join(resolved, 'README.md');
-  if (!fs.existsSync(readmePath)) {
-    fs.writeFileSync(readmePath, README_TEMPLATE(name), 'utf-8');
+    const readmePath = path.join(resolved, 'README.md');
+    if (!fs.existsSync(readmePath)) {
+      fs.writeFileSync(readmePath, README_TEMPLATE(name), 'utf-8');
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Failed to create space files in ${dirPath}: ${msg}`, { dirPath });
   }
 }
 

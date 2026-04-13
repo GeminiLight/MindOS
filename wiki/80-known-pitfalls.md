@@ -1691,5 +1691,84 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
   2. 关键用户可见 surfaces 同步更新：prompt、默认 Agent 名称、Onboarding、Help、Channels、skills/
   3. 对 `skills/` 与 `app/data/skills/` 建一致性测试，避免再次漂移
 - **文件：** `app/lib/agent/prompt.ts`、`app/lib/ask-agent.ts`、`app/lib/i18n/modules/*`、`skills/mindos*`、`app/data/skills/mindos*`
-- **规则：** 只要是“产品身份 / 默认助手命名”这类跨入口文案，就不能局部修补；必须把 source-of-truth 与所有用户可见关键 surface 一起对齐
+- **规则：** 只要是"产品身份 / 默认助手命名"这类跨入口文案，就不能局部修补；必须把 source-of-truth 与所有用户可见关键 surface 一起对齐
+
+### ACP killAllAgents/reapStaleSessions 在迭代中修改 Map (2026-04-13)
+
+**症状**：ACP 会话清理时偶发跳过部分进程清理，或者 reapStaleSessions 遗留僵尸 session。
+
+**根因**：
+1. `killAllAgents()` 遍历 `processes.values()` 时调用 `killAgent()` → `processes.delete(id)`，在迭代中修改 Map。JavaScript Map 迭代在 delete 后会跳过后续条目。
+2. `reapStaleSessions()` 同样在 `for...of sessions` 循环中调用 `closeSession()` → `sessions.delete(id)`。
+
+**修复**：两处都改为先收集要处理的 ID/value 快照，再在循环外处理。
+
+**规则**：不要在 `for...of Map/Set` 循环内调用 delete/set 修改正在迭代的集合。先收集到数组再处理。
+
+**文件**：`app/lib/acp/subprocess.ts`、`app/lib/acp/session.ts`、`desktop/resources/mindos-runtime/app/lib/acp/subprocess.ts`
+
+### useAskChat submit 依赖数组缺少 modelOverride (2026-04-13)
+
+**症状**：用户在 Ask 面板切换 model override 后发送消息，请求仍使用切换前的 model。
+
+**根因**：`useAskChat.submit` 的 `useCallback` 依赖数组包含 `providerOverride` 但遗漏了 `modelOverride`，导致闭包使用旧值。
+
+**修复**：将 `modelOverride` 加入 `useCallback` 依赖数组。
+
+**规则**：`useCallback` 体内引用的所有外部变量都必须列入依赖数组。使用 ESLint `exhaustive-deps` 规则自动检查。
+
+**文件**：`app/hooks/useAskChat.ts`
+
+### ACP npx wrapper 网络不可达时错误信息不明确 (2026-04-13)
+
+**症状**：在中国等网络受限环境中，Claude Code ACP 启动失败，错误信息只显示 "initialize failed" 或 "exited before initialization"，没有提示具体原因。
+
+**根因**：Claude Code 的 ACP 实现依赖 `npx --yes @agentclientprotocol/claude-agent-acp` 下载第三方 wrapper 包。在 npm registry 不可达时，npx 超时或连接被拒。`diagnoseInitFailure()` 没有针对 npm 网络错误的诊断分支。
+
+**修复**：在 `diagnoseInitFailure()` 中增加对 `npm ERR!`、`ERR_SOCKET_TIMEOUT`、`ETIMEDOUT`、`ECONNREFUSED` 等网络错误的专门诊断，明确告知用户检查网络连接和 npm proxy 设置。
+
+**文件**：`app/lib/acp/session.ts`
+
+### trash.ts 路径遍历漏洞 — moveToTrash 未使用 resolveSafe (2026-04-13)
+
+**严重等级：** 🔴 HIGH — 安全漏洞
+
+**症状**：恶意构造的 filePath (如 `../../etc/passwd`) 可以将 mindRoot 外的文件移入回收站，造成文件丢失。
+
+**根因**：`moveToTrash()` 使用 `path.join(mindRoot, filePath)` 拼接路径，没有调用 `resolveSafe()` 做路径边界校验。`restoreFromTrash` 的恢复目标路径同样缺少校验。
+
+**修复**：所有 trash 操作的路径都改用 `resolveSafe(mindRoot, filePath)` 代替 `path.join`。
+
+**规则**：任何接受用户提供路径的文件操作函数都必须通过 `resolveSafe()` 校验。直接 `path.join(root, userInput)` 是路径遍历漏洞。
+
+**文件**：`app/lib/core/trash.ts`
+
+### stream-consumer.ts tool_end 丢失工具结果 (2026-04-13)
+
+**严重等级：** 🟡 MEDIUM — 数据丢失
+
+**症状**：网络抖动导致 `tool_start` 事件丢失时，对应的 `tool_end` 被静默忽略，用户看不到工具执行结果。
+
+**根因**：`tool_end` 处理器只从 Map 查找已有 ToolCallPart (`toolCalls.get(id)`)，不存在时静默跳过。而 `findOrCreateToolCall()` 函数本可按需创建。
+
+**修复**：`tool_end` 改用 `findOrCreateToolCall()` 代替 `toolCalls.get()`，并增加 toolCallId 空值守卫。
+
+**规则**：SSE 流解析必须对事件乱序/丢失保持容错。不能假设事件严格按序到达。
+
+**文件**：`app/lib/agent/stream-consumer.ts`
+
+### fs-ops.ts deleteFile TOCTOU 竞态 (2026-04-13)
+
+**严重等级：** 🟡 LOW — 单用户环境下极少触发
+
+**症状**：`existsSync` 检查和 `unlinkSync` 之间文件被删除，抛出未包装的 ENOENT 错误。
+
+**根因**：检查-然后-操作 (TOCTOU) 模式。正确做法是直接执行操作并捕获 ENOENT。
+
+**修复**：去掉 `existsSync` 前置检查，直接 `unlinkSync` 并 catch ENOENT 转为 MindOSError。
+
+**规则**：文件删除/重命名操作不要用 existsSync 前置检查，直接操作并 catch 特定错误码。
+
+**文件**：`app/lib/core/fs-ops.ts`
+
 
