@@ -74,6 +74,9 @@
 ## Next
 
 - [x] 设置页 Obsidian 插件迁移向导（Settings > Plugins > Import from Obsidian）
+- [x] 跨模块 Bug 审计：安全漏洞（trash 路径遍历）、数据丢失（stream tool_end 静默丢弃）、竞态（Map 迭代中删除、TOCTOU）、闭包（modelOverride）、错误契约、ACP 诊断增强
+- [x] 跨平台路径标准化：tree.ts toPosix 源头统一、split('/') 兼容 Windows、symlink fallback
+- [x] 搜索性能优化：正则缓存、Set 比较、CSV 增量更新
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
