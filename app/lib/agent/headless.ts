@@ -35,7 +35,6 @@ import {
 } from '@/lib/sse/events';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
 import { performActiveRecall } from '@/lib/agent/active-recall';
-import { handleWebSearchFallback } from '@/lib/agent/web-search-fallback';
 
 function readKnowledgeFile(filePath: string): string | null {
   try {
@@ -178,6 +177,9 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
       path.join(projectRoot, 'app', 'node_modules', 'pi-mcp-adapter', 'index.ts'),
       path.join(projectRoot, 'app', 'lib', 'im', 'index.ts'),
       path.join(projectRoot, 'app', 'node_modules', 'pi-subagents', 'index.ts'),
+      // web-search: our own web_search tool (DDG→Bing→Google free chain + API providers)
+      path.join(projectRoot, 'app', 'lib', 'agent', 'web-search-extension.ts'),
+      // pi-web-access: content extraction, code search (web_search handled by our extension above)
       path.join(projectRoot, 'app', 'node_modules', 'pi-web-access', 'index.ts'),
       path.join(projectRoot, 'app', 'lib', 'schedule-prompt', 'index.ts'),
     ],
@@ -205,11 +207,6 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     tools: askMode === 'agent' ? [bashTool] : [],
     // KB tools registered via kb-extension.ts (loaded by resourceLoader)
   });
-
-  // Fallback to free search chain (DuckDuckGo → Bing → Google) when web_search fails
-  if (askMode === 'agent') {
-    session.agent.setAfterToolCall(handleWebSearchFallback as any);
-  }
 
   const llmHistoryMessages = convertToLlm(toAgentMessages(historyMessages));
   await session.newSession({

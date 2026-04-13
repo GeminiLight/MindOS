@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import {
   ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, AlertTriangle,
   Search, FolderOpen, BookOpen, Pencil, FilePlus, FileText, Pin, Trash2,
-  ArrowRightLeft, Link2, History, Clock, Table, Wrench as WrenchIcon,
+  ArrowRightLeft, Link2, History, Clock, Table, Globe, Wrench as WrenchIcon,
 } from 'lucide-react';
 import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
@@ -17,6 +17,7 @@ const DIFF_TOOLS = new Set([
 ]);
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
+  web_search: Globe,
   search: Search,
   list_files: FolderOpen,
   read_file: BookOpen,

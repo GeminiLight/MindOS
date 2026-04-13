@@ -1789,7 +1789,142 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 
 **规则**：
 - **永远通过 CI 发布** npm 包，不要手动 `npm publish`
-- 添加新页面路由时，同步更新 `desktop/runtime-health-contract.json` 和 `scripts/prepare-standalone.mjs` 中的 `criticalRoutes` 数组
+- 添加新页面路由时，同步更新 `scripts/prepare-standalone.mjs` 的 `criticalRoutes` 数组（它现在动态读 manifest，所以列表只是备注）
 - 发版后执行冒烟验证（见 AGENTS.md）
 
+**长期防御**（见下面 "npm 发布流程安全加固"）：
+1. CI 中添加 `verify-standalone.mjs` 烟雾测试（实际启动 server 验证 /api/health）
+2. 加 git pre-push hook 防止意外手动发布
+3. 自动化验证 npm 包内 _standalone 的完整性
+
 **文件**：`desktop/runtime-health-contract.json`, `scripts/prepare-standalone.mjs`, `bin/lib/build.js`
+
+## npm 发布流程安全加固（长期方案）
+
+### 问题回顾
+
+/wiki 500 bug 的根本原因是发布流程有 **4 层漏洞**：
+
+1. **静态检查不完整**：`prepare-standalone.mjs` 只硬编码检查 5 个关键路由，新增路由容易遗漏
+   - 修复：改为动态读 `app-paths-manifest.json` 逐条验证 ✅ 已做
+
+2. **没有烟雾测试**：`verify-standalone.mjs` 脚本存在但 CI 没有调用
+   - 修复：在 `publish-npm.yml` 中 add `node scripts/verify-standalone.mjs` step
+
+3. **没有防手动发布机制**：用户可以在本地运行 `npm publish` 绕过 CI，导致 0.7.0 这样的残缺包
+   - 修复：git pre-push hook + `.npmrc` 配置 + 文档
+
+4. **版本号冲突检测缺失**：0.6.76–0.6.82 的 CI 全部因 403 失败但无告警
+   - 修复：CI 中添加发布前版本号检查 step
+
+### 方案 A：CI 中添加烟雾测试（立即可做）
+
+```bash
+# 在 publish-npm.yml 的 "Build standalone package" 之后插入：
+- name: Smoke test standalone
+  run: node scripts/verify-standalone.mjs
+```
+
+这会：
+- 实际启动 Next.js server
+- 检查 /api/health 端点是否响应
+- 捕获任何 MODULE_NOT_FOUND 或路由 500 错误
+- 如果失败，CI 停止发布
+
+### 方案 B：防止手动发布（git hook）
+
+创建 `.github/hooks/pre-push`：
+
+```bash
+#!/bin/bash
+# Prevent accidental `npm publish` — only publish via CI workflows
+if [[ $(git rev-parse --abbrev-ref HEAD) != "main" ]]; then
+  exit 0
+fi
+
+# Check if someone is trying to publish (has .npmrc changes or ran npm publish)
+if git status --porcelain | grep -q ".npmrc\|npm-debug.log"; then
+  echo "❌ Looks like a local npm publish attempt"
+  echo "ℹ️  Always publish via git tag: git tag v0.6.x && git push origin v0.6.x"
+  echo "📖 See wiki/82-release-process.md"
+  exit 1
+fi
+exit 0
+```
+
+在 CODEBUDDY.md 中文档化：
+```markdown
+## 发版流程
+
+1. 确保所有 tests 通过
+2. 更新 CHANGELOG.md
+3. 创建 tag：git tag v0.6.x
+4. 推送 tag：git push origin v0.6.x
+5. 等待 CI 发布完成（.github/workflows/publish-npm.yml）
+
+❌ **禁止**：本地运行 `npm publish`
+```
+
+### 方案 C：发布前版本号检查（CI step）
+
+在 `publish-npm.yml` 的 "Publish to npm" 之前插入：
+
+```yaml
+- name: Check for version conflict
+  run: |
+    VERSION=$(node -p "require('./package.json').version")
+    npm view "@geminilight/mindos@${VERSION}" version 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "❌ Version ${VERSION} already published!"
+      echo "   Update version in package.json to a higher number"
+      exit 1
+    fi
+    echo "✅ Version ${VERSION} is available"
+```
+
+### 方案 D：npm 包内容验证（post-publish）
+
+在 "Publish to npm" 之后添加：
+
+```yaml
+- name: Verify published package
+  run: |
+    VERSION=$(node -p "require('./package.json').version")
+    cd /tmp && rm -rf mindos-pkg-verify && mkdir mindos-pkg-verify && cd mindos-pkg-verify
+    npm pack "@geminilight/mindos@${VERSION}" --silent
+    tar -tzf *.tgz | grep -q "_standalone/.next/server/app-paths-manifest.json" || {
+      echo "❌ Published package missing _standalone manifest!"
+      exit 1
+    }
+    tar -tzf *.tgz | grep -q "_standalone/.next/server/app/page.js" || {
+      echo "❌ Published package missing home page.js!"
+      exit 1
+    }
+    echo "✅ Package integrity verified"
+```
+
+### 全景对比：修复前后
+
+| 检查点 | 修复前 | 修复后 |
+|--------|--------|--------|
+| 构建时 manifest 验证 | ❌ 硬编码 5 路由 | ✅ 动态逐条验证 |
+| 烟雾测试（实启动） | ❌ 脚本存在但未用 | ✅ CI 调用 verify |
+| 防手动发布 | ❌ 无 | ✅ git hook + 文档 |
+| 版本号冲突检查 | ❌ 无 | ✅ CI 检查 |
+| 发布后完整性验证 | ❌ 无 | ✅ CI 验证包内容 |
+
+### 实施优先级
+
+**L1（立即做）**：
+1. Add `verify-standalone.mjs` call to CI（1 行代码）
+2. Update `prepare-standalone.mjs` 到动态 manifest 验证（已做 ✅）
+
+**L2（本周）**：
+1. Add version conflict check to CI
+2. Add npm 包完整性验证到 CI
+
+**L3（下周）**：
+1. 添加 git pre-push hook
+2. 更新 CODEBUDDY.md release 文档
+
+**文件**：`.github/workflows/publish-npm.yml`, `.github/hooks/pre-push`（新创建）, `CODEBUDDY.md`（文档部分）

@@ -49,6 +49,11 @@ jobs:
           cd ..
           node scripts/prepare-standalone.mjs
 
+      - name: Smoke test standalone server
+        run: |
+          # Materialize assets and verify server starts + responds to health check
+          node scripts/verify-standalone.mjs
+
       - name: Clean build artifacts before publish
         run: |
           rm -rf app/node_modules app/.next mcp/node_modules node_modules
@@ -58,6 +63,17 @@ jobs:
           ls -la _standalone/server.js
           echo "=== Checking tarball size ==="
           npm pack --dry-run --ignore-scripts 2>&1 | tail -5
+
+      - name: Check for version conflict
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Checking if version ${VERSION} is already published..."
+          if npm view "@geminilight/mindos@${VERSION}" version 2>/dev/null; then
+            echo "❌ Version ${VERSION} is already published to npm!"
+            echo "   Please update the version in package.json to a higher number"
+            exit 1
+          fi
+          echo "✅ Version ${VERSION} is available on npm"
 
       - name: Publish to npm
         run: npm publish --access public --ignore-scripts
@@ -71,3 +87,29 @@ jobs:
           npm dist-tag add "@geminilight/mindos@${VERSION}" latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published package integrity
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Verifying published package ${VERSION}..."
+          cd /tmp && rm -rf mindos-pkg-verify && mkdir mindos-pkg-verify && cd mindos-pkg-verify
+          npm pack "@geminilight/mindos@${VERSION}" --silent 2>&1 | head -1
+          
+          # Check _standalone structure
+          if ! tar -tzf *.tgz | grep -q "_standalone/server.js"; then
+            echo "❌ Published package missing _standalone/server.js!"
+            exit 1
+          fi
+          if ! tar -tzf *.tgz | grep -q "_standalone/.next/server/app-paths-manifest.json"; then
+            echo "❌ Published package missing app-paths-manifest.json!"
+            exit 1
+          fi
+          if ! tar -tzf *.tgz | grep -q "_standalone/.next/server/app/page.js"; then
+            echo "❌ Published package missing home page.js!"
+            exit 1
+          fi
+          
+          echo "✅ Package integrity verified"
+          echo "   - server.js present"
+          echo "   - app-paths-manifest.json present"
+          echo "   - home page.js present"

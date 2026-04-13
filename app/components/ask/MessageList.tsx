@@ -227,26 +227,98 @@ export default memo(function MessageList({
   const endRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
+  // Track whether user has manually scrolled away from bottom during streaming.
+  // When true, auto-scroll is suppressed so users can read earlier content.
+  const userScrolledAwayRef = useRef(false);
+  const prevMessageCountRef = useRef(messages.length);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    container.scrollTo({ top: container.scrollHeight, behavior });
   }, []);
 
+  // Auto-scroll: only when user hasn't scrolled away.
+  // Reset userScrolledAway when a brand new message arrives (new user prompt),
+  // so the view follows the new response naturally.
   useEffect(() => {
-    scrollToBottom();
+    const newCount = messages.length;
+    const isNewMessage = newCount > prevMessageCountRef.current;
+    prevMessageCountRef.current = newCount;
+
+    if (isNewMessage) {
+      // New message added (user sent or assistant started) — re-engage auto-scroll
+      userScrolledAwayRef.current = false;
+      scrollToBottom('instant');
+      return;
+    }
+
+    // Streaming chunk update — only scroll if user is still at bottom
+    if (!userScrolledAwayRef.current) {
+      scrollToBottom('instant');
+    }
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    let ticking = false;
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      setShowScrollDown(scrollHeight - scrollTop - clientHeight > 100);
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        const distFromBottom = scrollHeight - scrollTop - clientHeight;
+        setShowScrollDown(distFromBottom > 100);
+
+        // If user scrolled near bottom, re-enable auto-scroll
+        if (distFromBottom < 80) {
+          userScrolledAwayRef.current = false;
+        }
+        ticking = false;
+      });
     };
+
+    // Detect manual scroll-up via wheel / touch / keyboard.
+    // wheel fires BEFORE scroll position updates, so we check deltaY direction
+    // instead of relying on isNearBottom() which reads the stale scrollTop.
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        // User is scrolling up
+        userScrolledAwayRef.current = true;
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0]?.clientY ?? 0;
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      const currentY = e.touches[0]?.clientY ?? 0;
+      if (currentY > touchStartY) {
+        // Finger moving down = scrolling up
+        userScrolledAwayRef.current = true;
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) {
+        userScrolledAwayRef.current = true;
+      }
+    };
+
     container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
+    container.addEventListener('wheel', handleWheel, { passive: true });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('keydown', handleKeyDown);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   return (
@@ -359,7 +431,10 @@ export default memo(function MessageList({
       {showScrollDown && messages.length > 0 && (
         <button
           type="button"
-          onClick={scrollToBottom}
+          onClick={() => {
+            userScrolledAwayRef.current = false;
+            scrollToBottom();
+          }}
           className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 p-2 rounded-full border border-border/60 bg-card shadow-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all hover:shadow-lg"
           title="Scroll to bottom"
         >

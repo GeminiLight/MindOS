@@ -1,174 +1,109 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { handleWebSearchFallback } from '@/lib/agent/web-search-fallback';
 
-// Mock the free search chain
+// Mock dependencies before importing the extension
 vi.mock('@/lib/agent/web-search', () => ({
   webSearch: vi.fn(),
   formatSearchResults: vi.fn(),
 }));
 
+vi.mock('@/lib/settings', () => ({
+  readSettings: vi.fn(() => ({})),
+}));
+
+vi.mock('@sinclair/typebox', () => ({
+  Type: {
+    Object: (schema: Record<string, unknown>) => schema,
+    String: (opts?: unknown) => ({ type: 'string', ...(opts as object) }),
+    Integer: (opts?: unknown) => ({ type: 'integer', ...(opts as object) }),
+    Optional: (schema: unknown) => schema,
+  },
+}));
+
 import { webSearch, formatSearchResults } from '@/lib/agent/web-search';
+import { readSettings } from '@/lib/settings';
+import webSearchExtension from '@/lib/agent/web-search-extension';
 
 const mockWebSearch = vi.mocked(webSearch);
 const mockFormat = vi.mocked(formatSearchResults);
+const mockReadSettings = vi.mocked(readSettings);
+
+// Capture the registered tool's execute function
+let registeredExecute: (toolCallId: string, params: unknown) => Promise<{ content: Array<{ type: string; text: string }>; details: unknown }>;
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mockReadSettings.mockReturnValue({
+    ai: { provider: 'anthropic', model: 'test', apiKey: 'test' },
+    mindRoot: '',
+  } as any);
+
+  // Capture registerTool call
+  const mockPi = {
+    registerTool: vi.fn((def: { execute: typeof registeredExecute }) => {
+      registeredExecute = def.execute;
+    }),
+  };
+  webSearchExtension(mockPi as any);
 });
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeContext(overrides: {
-  toolName?: string;
-  isError?: boolean;
-  query?: string;
-  errorText?: string;
-}) {
-  return {
-    toolCall: { name: overrides.toolName ?? 'web_search' },
-    args: overrides.query !== undefined ? { query: overrides.query } : {},
-    result: {
-      content: overrides.errorText
-        ? [{ type: 'text', text: overrides.errorText }]
-        : [],
-    },
-    isError: overrides.isError ?? true,
-  };
-}
-
-// ── Tests ────────────────────────────────────────────────────────────────────
-
-describe('handleWebSearchFallback', () => {
-  describe('skip conditions', () => {
-    it('skips non web_search tools', async () => {
-      const result = await handleWebSearchFallback(
-        makeContext({ toolName: 'read_file', isError: true, query: 'test' }),
-      );
-      expect(result).toBeUndefined();
-      expect(mockWebSearch).not.toHaveBeenCalled();
-    });
-
-    it('skips when tool succeeded (isError=false)', async () => {
-      const result = await handleWebSearchFallback(
-        makeContext({ isError: false, query: 'test' }),
-      );
-      expect(result).toBeUndefined();
-      expect(mockWebSearch).not.toHaveBeenCalled();
-    });
-
-    it('skips when query is empty', async () => {
-      const result = await handleWebSearchFallback(
-        makeContext({ query: '' }),
-      );
-      expect(result).toBeUndefined();
-      expect(mockWebSearch).not.toHaveBeenCalled();
-    });
-
-    it('skips when query is missing from args', async () => {
-      const ctx = {
-        toolCall: { name: 'web_search' },
-        args: {},
-        result: { content: [] },
-        isError: true,
-      };
-      const result = await handleWebSearchFallback(ctx);
-      expect(result).toBeUndefined();
-      expect(mockWebSearch).not.toHaveBeenCalled();
-    });
+describe('web-search-extension', () => {
+  it('registers a tool named web_search', () => {
+    const mockPi = { registerTool: vi.fn() };
+    webSearchExtension(mockPi as any);
+    expect(mockPi.registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'web_search' }),
+    );
   });
 
-  describe('successful fallback', () => {
-    it('returns free search results when web_search fails', async () => {
-      mockWebSearch.mockResolvedValue({
-        results: [
-          { title: 'DuckDuckGo Result', url: 'https://example.com', snippet: 'Found it' },
-        ],
-        engine: 'DuckDuckGo',
-      });
-      mockFormat.mockReturnValue('## Web Search Results for: "test"\n\n### 1. DuckDuckGo Result');
-
-      const result = await handleWebSearchFallback(
-        makeContext({ query: 'test', errorText: 'Exa monthly free tier exhausted' }),
-      );
-
-      expect(mockWebSearch).toHaveBeenCalledWith('test');
-      expect(mockFormat).toHaveBeenCalledWith('test', {
-        results: [{ title: 'DuckDuckGo Result', url: 'https://example.com', snippet: 'Found it' }],
-        engine: 'DuckDuckGo',
-      });
-      expect(result).toEqual({
-        content: [{ type: 'text', text: '## Web Search Results for: "test"\n\n### 1. DuckDuckGo Result' }],
-        isError: false,
-      });
+  it('returns formatted results on success', async () => {
+    mockWebSearch.mockResolvedValue({
+      results: [{ title: 'Result', url: 'https://example.com', snippet: 'Found it' }],
+      engine: 'DuckDuckGo',
     });
+    mockFormat.mockReturnValue('## Web Search Results for: "test"\n\n### 1. Result');
 
-    it('trims whitespace from query', async () => {
-      mockWebSearch.mockResolvedValue({
-        results: [{ title: 'R', url: 'https://r.com', snippet: 's' }],
-        engine: 'Bing',
-      });
-      mockFormat.mockReturnValue('formatted');
+    const result = await registeredExecute('call-1', { query: 'test' });
 
-      await handleWebSearchFallback(makeContext({ query: '  react 19  ' }));
-      expect(mockWebSearch).toHaveBeenCalledWith('react 19');
-    });
+    expect(mockWebSearch).toHaveBeenCalledWith('test', undefined);
+    expect(result.content[0].text).toContain('Web Search Results');
+    expect(result.details).toEqual({ engine: 'DuckDuckGo' });
   });
 
-  describe('fallback also fails', () => {
-    it('returns undefined when free search returns empty results', async () => {
-      mockWebSearch.mockResolvedValue({ results: [], engine: 'none' });
+  it('passes webSearch config from settings', async () => {
+    mockReadSettings.mockReturnValue({
+      ai: { provider: 'anthropic', model: 'test', apiKey: 'test' },
+      mindRoot: '',
+      webSearch: { provider: 'tavily', apiKey: 'tvly-xxx' },
+    } as any);
+    mockWebSearch.mockResolvedValue({ results: [{ title: 'R', url: 'https://r.com', snippet: 's' }], engine: 'Tavily' });
+    mockFormat.mockReturnValue('formatted');
 
-      const result = await handleWebSearchFallback(
-        makeContext({ query: 'obscure query', errorText: 'No provider available' }),
-      );
+    await registeredExecute('call-2', { query: 'test' });
 
-      expect(mockWebSearch).toHaveBeenCalledWith('obscure query');
-      expect(result).toBeUndefined();
-    });
-
-    it('returns undefined when free search throws', async () => {
-      mockWebSearch.mockRejectedValue(new Error('Network error'));
-
-      const result = await handleWebSearchFallback(
-        makeContext({ query: 'test', errorText: 'Exa error' }),
-      );
-
-      expect(mockWebSearch).toHaveBeenCalledWith('test');
-      expect(result).toBeUndefined();
-    });
+    expect(mockWebSearch).toHaveBeenCalledWith('test', { provider: 'tavily', apiKey: 'tvly-xxx' });
   });
 
-  describe('error message extraction', () => {
-    it('logs the original error from tool result', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      mockWebSearch.mockResolvedValue({ results: [], engine: 'none' });
+  it('returns error message when query is empty', async () => {
+    const result = await registeredExecute('call-3', { query: '  ' });
 
-      await handleWebSearchFallback(
-        makeContext({ query: 'test', errorText: 'Exa monthly free tier exhausted (1,000 requests)' }),
-      );
+    expect(mockWebSearch).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain('query cannot be empty');
+  });
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Exa monthly free tier exhausted'),
-      );
-      warnSpy.mockRestore();
-    });
+  it('returns error message when webSearch throws', async () => {
+    mockWebSearch.mockRejectedValue(new Error('Network timeout'));
 
-    it('handles missing error text gracefully', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      mockWebSearch.mockResolvedValue({ results: [], engine: 'none' });
+    const result = await registeredExecute('call-4', { query: 'test' });
 
-      const ctx = {
-        toolCall: { name: 'web_search' },
-        args: { query: 'test' },
-        result: { content: [] },
-        isError: true,
-      };
-      await handleWebSearchFallback(ctx);
+    expect(result.content[0].text).toContain('Web search error: Network timeout');
+  });
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('unknown error'),
-      );
-      warnSpy.mockRestore();
-    });
+  it('trims whitespace from query', async () => {
+    mockWebSearch.mockResolvedValue({ results: [{ title: 'R', url: 'https://r.com', snippet: 's' }], engine: 'Bing' });
+    mockFormat.mockReturnValue('formatted');
+
+    await registeredExecute('call-5', { query: '  react 19  ' });
+
+    expect(mockWebSearch).toHaveBeenCalledWith('react 19', undefined);
   });
 });

@@ -663,8 +663,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       <div className={cn('shrink-0', isHome ? 'px-2 pb-2 pt-0.5' : 'px-3 pb-2.5 pt-1')}>
         <div
           className={cn(
-            'rounded-xl bg-muted/40 transition-all focus-within:bg-muted/60',
-            isDragOver && 'ring-2 ring-[var(--amber)] bg-[var(--amber-dim)]',
+            'rounded-xl bg-muted/40 border border-transparent transition-all focus-within:bg-muted/60',
+            isDragOver && 'ring-2 ring-[var(--amber)] border-[var(--amber)]/40 bg-[var(--amber)]/5 shadow-[0_0_12px_rgba(200,135,58,0.15)]',
           )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -672,7 +672,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         >
           {/* Unified context chip flow */}
           {(attachedFiles.length > 0 || upload.localAttachments.length > 0 || imageUpload.images.length > 0 || selectedSkill || selectedAcpAgent || upload.uploadError || imageUpload.imageError) && (
-            <div className={cn('px-3 pt-2.5 pb-1', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
+            <div className={cn('px-3 pt-2.5 pb-2 border-b border-border/30', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
               <div className="flex flex-wrap gap-1.5">
                 {attachedFiles.map(f => (
                   <FileChip key={f} path={f} variant="kb" onRemove={() => setAttachedFiles(prev => prev.filter(x => x !== f))} />
