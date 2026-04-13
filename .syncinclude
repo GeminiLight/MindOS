@@ -1,0 +1,105 @@
+# Public Sync Whitelist
+# =====================
+# Single source of truth: only paths listed here are synced to GeminiLight/MindOS.
+# Everything else in mindos-dev stays PRIVATE by default.
+#
+# Consumed by: scripts/parse-syncinclude.sh → CI workflow + pre-push hook
+# Modify with care — changes affect what becomes PUBLIC.
+
+# ─── Directories to sync ─────────────────────────────────────────────────────
+# Only these top-level directories are copied to public repo.
+# New directories are PRIVATE until explicitly added here.
+directories:
+  - app
+  - mcp
+  - desktop
+  - shared
+  - skills
+  - templates
+  - assets
+  - bin
+  - scripts
+  - tests
+  - docs
+  - wiki
+  - browser-extension
+
+# ─── Root files to sync ──────────────────────────────────────────────────────
+# Only these individual files at the repo root are copied.
+# New root files are PRIVATE until explicitly added here.
+root_files:
+  - package.json
+  - package-lock.json
+  - README.md
+  - README_zh.md
+  - LICENSE
+  - AGENTS.md
+  - CLAUDE.md
+  - .env.local.example
+  - TROUBLESHOOTING.md
+  - .gitignore
+
+# ─── Wiki exclusions ─────────────────────────────────────────────────────────
+# Even though wiki/ is whitelisted above, these patterns within it are excluded.
+wiki_exclude:
+  - "0*.md"
+  - specs/
+  - discussions/
+  - reviews/
+  - 85-backlog.md
+  - project-status-report.md
+  - implementation-roadmap.md
+  - architecture-review-summary.md
+  - "ui-audit-*.md"
+
+# ─── Global rsync exclusions ─────────────────────────────────────────────────
+# Applied to every directory sync. Build artifacts and tool dirs.
+global_exclude:
+  - node_modules/
+  - .next/
+  - .claude/
+  - dist/
+  - dist-electron/
+  - dist-renderer/
+  - TASKS.md
+
+# ─── Blocked patterns (defense-in-depth) ─────────────────────────────────────
+# Even if the whitelist is misconfigured, these patterns ALWAYS block the sync.
+# CI aborts with an error if any of these appear in the staged public commit.
+blocked_patterns:
+  - startup/
+  - .claude-internal/
+  - .claude/
+  - marketing/
+  - human-insights/
+  - my-skills/
+  - activities/
+  - "0_TASKS"
+  - "0_BUGS"
+  - "0_DONE"
+  - "0_NOTE"
+  - "0_TEST"
+  - "0_TODO"
+  - SKILL_BAD_CASES
+  - AUTONOMOUS-WORKFLOW
+  - HUMAN-INSIGHTS.md
+  - MULTI_AGENT_WORKFLOW
+  - Dockerfile
+  - docker-compose
+  - .npmrc
+  - .dockerignore
+  - .gitignore.prod
+  - .vscode/
+  - sync-to-mindos.yml
+  - ci.yml
+  - cli-note.md
+  - experience.md
+  - knowledge.md
+  - npm_experience
+  - GIT_UPDATE
+  - SERVER_DEV
+  - DOCKER.md
+  - note.md
+  - todo.md
+  # NOTE: TODO.md removed from blocked patterns — templates/*/TODO.md is legitimate.
+  # Root-level TODO.md is excluded via global_exclude instead.
