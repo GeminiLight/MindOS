@@ -42,6 +42,14 @@ export interface SettingsData {
   authToken?: string;   // masked: first-xxxx-••••-last pattern
   port?: number;
   mcpPort?: number;
+  skillPaths?: {
+    enableAgentsDir?: boolean;
+    custom?: string[];
+  };
+  connectionMode?: {
+    cli: boolean;
+    mcp: boolean;
+  };
   envOverrides?: Record<string, boolean>;
   envValues?: Record<string, string>;
 }

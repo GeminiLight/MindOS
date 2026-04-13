@@ -145,7 +145,10 @@ function isRetryableError(err: any): boolean {
     msg.includes('timeout') ||
     msg.includes('temporarily unavailable') ||
     msg.includes('connect econnrefused') ||
-    msg.includes('net::err_internet_disconnected')
+    msg.includes('net::err_internet_disconnected') ||
+    msg.includes('eaddrnotavail') ||
+    msg.includes('enetunreach') ||
+    msg.includes('socket hang up')
   );
 }
 
@@ -170,6 +173,8 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
           timedOut = true;
         }, DOWNLOAD_TIMEOUT_MS);
         
+        console.log(`[embedding] Attempt ${attempt + 1}/${DOWNLOAD_MAX_RETRIES + 1}: Loading pipeline for ${modelId}...`);
+        
         // Start download
         const downloadPromise = pipeline('feature-extraction', modelId, {
           dtype: 'fp32',
@@ -179,6 +184,7 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
         _localPipeline = await downloadPromise;
         
         if (timer) clearTimeout(timer);
+        console.log(`[embedding] Successfully loaded pipeline for ${modelId}`);
         return _localPipeline;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));

@@ -128,7 +128,17 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
       await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ai: d.ai, agent: d.agent, mindRoot: d.mindRoot, webPassword: d.webPassword, authToken: d.authToken }),
+        body: JSON.stringify({
+          ai: d.ai,
+          agent: d.agent,
+          embedding: d.embedding,
+          webSearch: d.webSearch,
+          mindRoot: d.mindRoot,
+          webPassword: d.webPassword,
+          authToken: d.authToken,
+          skillPaths: d.skillPaths,
+          connectionMode: d.connectionMode,
+        }),
       });
       setStatus('saved');
       window.dispatchEvent(new Event('mindos:settings-changed'));
@@ -175,7 +185,17 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         apiFetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ai: d.ai, agent: d.agent, mindRoot: d.mindRoot, webPassword: d.webPassword, authToken: d.authToken }),
+          body: JSON.stringify({
+            ai: d.ai,
+            agent: d.agent,
+            embedding: d.embedding,
+            webSearch: d.webSearch,
+            mindRoot: d.mindRoot,
+            webPassword: d.webPassword,
+            authToken: d.authToken,
+            skillPaths: d.skillPaths,
+            connectionMode: d.connectionMode,
+          }),
         }).catch(() => {});
       }
     };

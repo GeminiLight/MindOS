@@ -23,6 +23,8 @@ const nextConfig: NextConfig = {
     'sharp', '@img/sharp-linux-x64', '@img/sharp-darwin-arm64', '@img/sharp-win32-x64',
     // PDF extraction: extract-pdf.cjs spawns outside bundler and requires this package directly
     'pdfjs-dist',
+    // Word extraction: extract-docx.cjs spawns outside bundler and requires these packages directly
+    'mammoth', 'word-extractor',
   ],
   output: 'standalone',
   outputFileTracingRoot: projectDir,

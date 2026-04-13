@@ -59,15 +59,31 @@ export async function POST(req: NextRequest) {
         })
         .catch(err => {
           _downloading = false;
-          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const lowerMsg = errMsg.toLowerCase();
+          
           // Classify error for user-friendly message
-          if (errMsg.toLowerCase().includes('timeout')) {
+          if (lowerMsg.includes('timeout') || lowerMsg.includes('took too long')) {
             _downloadError = 'Download timeout. Your connection may be too slow. Try again or use API mode.';
-          } else if (errMsg.toLowerCase().includes('enotfound') || errMsg.toLowerCase().includes('econnrefused')) {
+          } else if (
+            lowerMsg.includes('enotfound') ||
+            lowerMsg.includes('econnrefused') ||
+            lowerMsg.includes('econnreset') ||
+            lowerMsg.includes('net::err_internet_disconnected')
+          ) {
             _downloadError = 'Network connection failed. Check your internet and try again.';
+          } else if (lowerMsg.includes('permission denied') || lowerMsg.includes('eacces')) {
+            _downloadError = 'Permission denied. Check cache directory permissions (~/.cache/huggingface/).';
+          } else if (lowerMsg.includes('disk quota') || lowerMsg.includes('no space')) {
+            _downloadError = 'Not enough disk space. Free up space and try again.';
           } else {
-            _downloadError = `Download failed: ${errMsg}`;
+            _downloadError = `Download failed: ${errMsg.slice(0, 200)}`;
           }
+          console.error('[embedding/POST] Download error:', {
+            model: modelId,
+            originalError: errMsg,
+            displayedError: _downloadError,
+          });
         });
 
       return NextResponse.json({ ok: true, message: `Downloading ${modelId}...` });

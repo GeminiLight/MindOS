@@ -43,7 +43,7 @@ export async function GET() {
       activeProvider: settings.ai.activeProvider,
       providers: settings.ai.providers,
     },
-    embedding: settings.embedding ?? { enabled: false, baseUrl: '', apiKey: '', model: '' },
+    embedding: settings.embedding ?? { enabled: false, provider: 'local', baseUrl: '', apiKey: '', model: '' },
     embeddingStatus: getEmbeddingStatus(),
     webSearch: (() => {
       const wsc = readWebSearchConfig();
