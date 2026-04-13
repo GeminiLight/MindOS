@@ -49,24 +49,35 @@ if (!existsSync(destServerJs)) {
   process.exit(1);
 }
 
-// ── Step 5: Verify critical routes ──────────────────────────────────────────
-// These routes must exist in the standalone build; a missing route means 500 at runtime.
-const criticalRoutes = [
-  '.next/server/app/page.js',           // home
-  '.next/server/app/wiki/page.js',      // wiki
-  '.next/server/app/explore/page.js',   // explore
-  '.next/server/app/changelog/page.js', // changelog
-  '.next/server/app/setup/page.js',     // setup
-];
+// ── Step 5: Verify every route declared in app-paths-manifest actually exists ─
+// Root cause of the /wiki 500 bug: manifest listed the route but the page.js
+// file was missing from the standalone build.  A static checklist can go stale
+// when new pages are added, so we read the manifest directly — zero maintenance.
+const manifestPath = resolve(destDir, '.next', 'server', 'app-paths-manifest.json');
+if (!existsSync(manifestPath)) {
+  console.error('[prepare-standalone] FAILED: app-paths-manifest.json not found in standalone build');
+  process.exit(1);
+}
 
-const missingRoutes = criticalRoutes.filter(r => !existsSync(resolve(destDir, r)));
-if (missingRoutes.length > 0) {
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+const serverDir = resolve(destDir, '.next', 'server');
+const missingFiles = [];
+
+for (const [route, relPath] of Object.entries(manifest)) {
+  const absPath = resolve(serverDir, relPath);
+  if (!existsSync(absPath)) {
+    missingFiles.push({ route, file: relPath });
+  }
+}
+
+if (missingFiles.length > 0) {
   console.error(
-    `[prepare-standalone] FAILED: ${missingRoutes.length} critical route(s) missing from standalone build:\n` +
-    missingRoutes.map(r => `  - _standalone/${r}`).join('\n') + '\n' +
+    `[prepare-standalone] FAILED: ${missingFiles.length} route(s) declared in app-paths-manifest.json but file missing:\n` +
+    missingFiles.map(({ route, file }) => `  ${route}  →  ${file}`).join('\n') + '\n' +
     'This will cause 500 errors at runtime. Check the Next.js build output for errors.'
   );
   process.exit(1);
 }
 
-console.log(`[prepare-standalone] OK — _standalone/server.js + ${criticalRoutes.length} critical routes verified (v${version})`);
+const pageRoutes = Object.keys(manifest).filter(r => r.endsWith('/page'));
+console.log(`[prepare-standalone] OK — server.js + ${Object.keys(manifest).length} manifest entries verified (${pageRoutes.length} pages, v${version})`);

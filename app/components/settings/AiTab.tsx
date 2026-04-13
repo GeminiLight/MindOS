@@ -575,9 +575,10 @@ function CustomProviderForm({
 /* ── Embedding Search Card ── */
 
 const EMBEDDING_API_PRESETS = [
-  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
-  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-embed' },
-  { label: 'Ollama', baseUrl: 'http://localhost:11434/v1', model: 'nomic-embed-text' },
+  { label: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', model: 'BAAI/bge-m3', badge: 'free' as const },
+  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'text-embedding-3-small', badge: null },
+  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-embed', badge: null },
+  { label: 'Ollama', baseUrl: 'http://localhost:11434/v1', model: 'nomic-embed-text', badge: 'local' as const },
 ];
 
 const EMBEDDING_LOCAL_MODELS = [
@@ -591,6 +592,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
   setData: AiTabProps['setData'];
   t: AiTabProps['t'];
 }) {
+  const { locale } = useLocale();
   const e = t.settings.embedding ?? {} as Record<string, unknown>;
   const embeddingData = data.embedding ?? { enabled: false, provider: 'local' as const, baseUrl: '', apiKey: '', model: '' };
   const embeddingStatus = data.embeddingStatus ?? { enabled: false, ready: false, building: false, docCount: 0 };
@@ -695,7 +697,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
             </button>
             <button
               type="button"
-              onClick={() => setData(d => d ? { ...d, embedding: { ...embeddingData, provider: 'api', model: embeddingData.model || 'text-embedding-3-small' } } : d)}
+              onClick={() => setData(d => d ? { ...d, embedding: { ...embeddingData, provider: 'api', model: embeddingData.model || 'BAAI/bge-m3', baseUrl: embeddingData.baseUrl || 'https://api.siliconflow.cn/v1' } } : d)}
               className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors text-center ${
                 embeddingProvider === 'api'
                   ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
@@ -787,34 +789,65 @@ function EmbeddingSearchCard({ data, setData, t }: {
           {/* API provider UI */}
           {embeddingProvider === 'api' && (
             <>
-              <div className="flex gap-2 flex-wrap">
-                {EMBEDDING_API_PRESETS.map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => {
-                      setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: p.baseUrl, model: p.model } } : d);
-                    }}
-                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                      embeddingData.baseUrl === p.baseUrl
-                        ? 'border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/10'
-                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              {/* Preset quick-select: card-style buttons with badges */}
+              <div className="grid grid-cols-2 gap-2">
+                {EMBEDDING_API_PRESETS.map(p => {
+                  const isActive = embeddingData.baseUrl === p.baseUrl;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: p.baseUrl, model: p.model } } : d);
+                      }}
+                      className={`relative px-3 py-2 text-left text-sm rounded-lg border transition-colors ${
+                        isActive
+                          ? 'border-[var(--amber)] bg-[var(--amber)]/5'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      <span className={`font-medium ${isActive ? 'text-[var(--amber)]' : 'text-foreground'}`}>
+                        {p.label}
+                      </span>
+                      {p.badge && (
+                        <span className={`ml-1.5 inline-flex items-center px-1.5 py-0.5 text-2xs rounded-full font-medium ${
+                          p.badge === 'free'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        }`}>
+                          {p.badge === 'free' ? (locale === 'zh' ? '免费' : 'Free') : (locale === 'zh' ? '本地' : 'Local')}
+                        </span>
+                      )}
+                      <span className="block text-2xs text-muted-foreground mt-0.5 truncate">
+                        {p.model}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* SiliconFlow recommendation hint */}
+              {!embeddingData.baseUrl && (
+                <p className="text-xs text-muted-foreground">
+                  {locale === 'zh'
+                    ? '推荐使用硅基流动 (SiliconFlow)，注册即可免费使用嵌入模型。'
+                    : 'SiliconFlow recommended — free embedding models with registration.'}
+                </p>
+              )}
 
               <Field label={e.baseUrl as string ?? 'Base URL'} hint={e.baseUrlHint as string}>
                 <Input
                   value={embeddingData.baseUrl}
                   onChange={ev => setData(d => d ? { ...d, embedding: { ...embeddingData, baseUrl: ev.target.value } } : d)}
-                  placeholder="https://api.openai.com/v1"
+                  placeholder="https://api.siliconflow.cn/v1"
                 />
               </Field>
 
-              <Field label={e.apiKey as string ?? 'API Key'} hint={e.apiKeyHint as string}>
+              <Field label={e.apiKey as string ?? 'API Key'} hint={
+                embeddingData.baseUrl?.includes('localhost') || embeddingData.baseUrl?.includes('127.0.0.1')
+                  ? (e.apiKeyHintLocal as string ?? (locale === 'zh' ? '本地服务可留空' : 'Leave empty for local services'))
+                  : (e.apiKeyHint as string ?? (locale === 'zh' ? '在服务商网站获取 API Key' : 'Get your API key from the provider'))
+              }>
                 <PasswordInput
                   value={embeddingData.apiKey}
                   onChange={v => setData(d => d ? { ...d, embedding: { ...embeddingData, apiKey: v } } : d)}
@@ -826,7 +859,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
                 <Input
                   value={embeddingData.model}
                   onChange={ev => setData(d => d ? { ...d, embedding: { ...embeddingData, model: ev.target.value } } : d)}
-                  placeholder="text-embedding-3-small"
+                  placeholder="BAAI/bge-m3"
                 />
               </Field>
             </>

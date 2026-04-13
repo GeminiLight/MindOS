@@ -113,10 +113,12 @@ export function hasPrebuiltStandalone() {
   } catch {
     return false;
   }
-  // Verify at least one critical route exists — catches incomplete builds
-  // that have server.js but are missing page bundles (causes 500 at runtime).
-  const serverAppDir = resolve(ROOT, '_standalone', '.next', 'server', 'app');
-  if (!existsSync(resolve(serverAppDir, 'page.js'))) return false;
+  // Quick sanity check: manifest + at least the home page bundle must exist.
+  // Catches incomplete builds (e.g. 0.6.75 where manifest listed /wiki but
+  // the page.js was missing, causing 500). Full validation is in prepare-standalone.mjs.
+  const serverDir = resolve(ROOT, '_standalone', '.next', 'server');
+  if (!existsSync(resolve(serverDir, 'app-paths-manifest.json'))) return false;
+  if (!existsSync(resolve(serverDir, 'app', 'page.js'))) return false;
   return true;
 }
 
