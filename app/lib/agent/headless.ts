@@ -35,6 +35,7 @@ import {
 } from '@/lib/sse/events';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
 import { performActiveRecall } from '@/lib/agent/active-recall';
+import { handleWebSearchFallback } from '@/lib/agent/web-search-fallback';
 
 function readKnowledgeFile(filePath: string): string | null {
   try {
@@ -204,6 +205,11 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     tools: askMode === 'agent' ? [bashTool] : [],
     // KB tools registered via kb-extension.ts (loaded by resourceLoader)
   });
+
+  // Fallback to free search chain (DuckDuckGo → Bing → Google) when web_search fails
+  if (askMode === 'agent') {
+    session.agent.setAfterToolCall(handleWebSearchFallback as any);
+  }
 
   const llmHistoryMessages = convertToLlm(toAgentMessages(historyMessages));
   await session.newSession({

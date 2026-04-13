@@ -25,6 +25,10 @@ export interface SearchResult {
   snippet: string;
   score: number;
   occurrences: number;
+  /** True if this result came from semantic/embedding search but not keyword match. */
+  semanticMatch?: boolean;
+  /** Cosine similarity score (0-1) from embedding search. */
+  similarity?: number;
 }
 
 export interface BacklinkEntry {

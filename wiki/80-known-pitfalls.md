@@ -1771,4 +1771,25 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 
 **文件**：`app/lib/core/fs-ops.ts`
 
+### npm 包 standalone 缺少路由 → /wiki 500 错误（2026-04-14）
 
+**症状**：用户通过 `npm install -g @geminilight/mindos` 安装后，访问 `/wiki` 返回 500 错误。
+
+**根因**：npm 发布流程问题导致 `_standalone` 目录不完整：
+1. 0.7.0 完全缺少 `_standalone` 目录（手动发布绕过 CI）
+2. 0.6.75 有 `_standalone` 但缺少 `/wiki/page.js` 路由（standalone 构建不完整）
+3. 0.6.76–0.6.82 的 CI 全部因版本号冲突 403 失败
+
+`runtime-health-contract.json` 只检查 `server.js` 和 `.next/server` 目录存在，不检查具体路由文件，所以不完整的构建通过了验证。
+
+**修复**：
+1. 在 `runtime-health-contract.json` 中添加 `critical-routes` feature，检查关键页面路由
+2. 在 `prepare-standalone.mjs` 中添加关键路由存在性验证
+3. 在 `bin/lib/build.js` 的 `hasPrebuiltStandalone()` 中增加 `page.js` 存在性检查
+
+**规则**：
+- **永远通过 CI 发布** npm 包，不要手动 `npm publish`
+- 添加新页面路由时，同步更新 `desktop/runtime-health-contract.json` 和 `scripts/prepare-standalone.mjs` 中的 `criticalRoutes` 数组
+- 发版后执行冒烟验证（见 AGENTS.md）
+
+**文件**：`desktop/runtime-health-contract.json`, `scripts/prepare-standalone.mjs`, `bin/lib/build.js`

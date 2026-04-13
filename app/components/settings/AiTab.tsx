@@ -597,7 +597,9 @@ function EmbeddingSearchCard({ data, setData, t }: {
   const embeddingProvider = embeddingData.provider || 'local';
 
   const [localModelDownloaded, setLocalModelDownloaded] = useState<boolean | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  // Download state: 'idle' | 'starting' | 'downloading' | 'error'
+  const [downloadState, setDownloadState] = useState<'idle' | 'starting' | 'downloading' | 'error'>('idle');
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (embeddingData.enabled && embeddingProvider === 'local') {
@@ -608,7 +610,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
   }, [embeddingData.enabled, embeddingProvider]);
 
   useEffect(() => {
-    if (!downloading) return;
+    if (downloadState !== 'downloading') return;
     const id = setInterval(() => {
       apiFetch<{ downloading: boolean; downloaded: boolean; error: string | null }>('/api/embedding', {
         method: 'POST',
@@ -617,26 +619,48 @@ function EmbeddingSearchCard({ data, setData, t }: {
       }).then(d => {
         if (d.downloaded) {
           setLocalModelDownloaded(true);
-          setDownloading(false);
+          setDownloadState('idle');
           toast.success?.(e.modelReady as string ?? 'Model downloaded') ?? toast(e.modelReady as string ?? 'Model downloaded');
         }
         if (d.error) {
-          setDownloading(false);
+          setDownloadState('error');
+          setDownloadError(d.error);
           toast.error?.(d.error) ?? toast(d.error);
         }
       }).catch(() => {});
     }, 3000);
     return () => clearInterval(id);
-  }, [downloading, e.modelReady]);
+  }, [downloadState, e.modelReady]);
 
   const handleDownloadModel = useCallback(() => {
-    setDownloading(true);
-    apiFetch('/api/embedding', {
+    // Immediate visual feedback
+    setDownloadState('starting');
+    setDownloadError(null);
+    
+    apiFetch<{ ok: boolean; error?: string }>('/api/embedding', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'download', model: embeddingData.model || undefined }),
-    }).catch(() => setDownloading(false));
+    }).then(res => {
+      if (res.ok) {
+        // Request accepted, switch to downloading state
+        setDownloadState('downloading');
+      } else {
+        // Immediate error from server
+        setDownloadState('error');
+        setDownloadError(res.error ?? 'Download request failed');
+      }
+    }).catch(err => {
+      // Network error
+      setDownloadState('error');
+      setDownloadError(err instanceof Error ? err.message : 'Network error');
+    });
   }, [embeddingData.model]);
+
+  const handleRetry = useCallback(() => {
+    setDownloadState('idle');
+    setDownloadError(null);
+  }, []);
 
   return (
     <SettingCard
@@ -713,7 +737,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
                 </div>
               </Field>
 
-              {localModelDownloaded === false && !downloading && (
+              {localModelDownloaded === false && downloadState === 'idle' && (
                 <button
                   type="button"
                   onClick={handleDownloadModel}
@@ -723,13 +747,35 @@ function EmbeddingSearchCard({ data, setData, t }: {
                   {e.downloadModel as string ?? 'Download Model'}
                 </button>
               )}
-              {downloading && (
+              {downloadState === 'starting' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>{e.starting as string ?? 'Starting download...'}</span>
+                </div>
+              )}
+              {downloadState === 'downloading' && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 size={14} className="animate-spin" />
                   <span>{e.downloading as string ?? 'Downloading model...'}</span>
                 </div>
               )}
-              {localModelDownloaded === true && (
+              {downloadState === 'error' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <X size={14} />
+                    <span>{downloadError ?? 'Download failed'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border text-foreground hover:bg-muted transition-colors"
+                  >
+                    <RotateCcw size={12} />
+                    {e.retry as string ?? 'Retry'}
+                  </button>
+                </div>
+              )}
+              {localModelDownloaded === true && downloadState === 'idle' && (
                 <div className="flex items-center gap-2 text-xs text-success">
                   <Check size={12} />
                   <span>{e.modelReady as string ?? 'Model ready'}</span>

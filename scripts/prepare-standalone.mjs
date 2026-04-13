@@ -42,11 +42,31 @@ cpSync(standaloneAppDir, destDir, { recursive: true });
 const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8')).version;
 writeFileSync(resolve(destDir, '.mindos-build-version'), version, 'utf-8');
 
-// ── Step 4: Verify ───────────────────────────────────────────────────────────
+// ── Step 4: Verify server.js ─────────────────────────────────────────────────
 const destServerJs = resolve(destDir, 'server.js');
 if (!existsSync(destServerJs)) {
   console.error('[prepare-standalone] FAILED: _standalone/server.js not found after copy');
   process.exit(1);
 }
 
-console.log(`[prepare-standalone] OK — _standalone/server.js ready (v${version})`);
+// ── Step 5: Verify critical routes ──────────────────────────────────────────
+// These routes must exist in the standalone build; a missing route means 500 at runtime.
+const criticalRoutes = [
+  '.next/server/app/page.js',           // home
+  '.next/server/app/wiki/page.js',      // wiki
+  '.next/server/app/explore/page.js',   // explore
+  '.next/server/app/changelog/page.js', // changelog
+  '.next/server/app/setup/page.js',     // setup
+];
+
+const missingRoutes = criticalRoutes.filter(r => !existsSync(resolve(destDir, r)));
+if (missingRoutes.length > 0) {
+  console.error(
+    `[prepare-standalone] FAILED: ${missingRoutes.length} critical route(s) missing from standalone build:\n` +
+    missingRoutes.map(r => `  - _standalone/${r}`).join('\n') + '\n' +
+    'This will cause 500 errors at runtime. Check the Next.js build output for errors.'
+  );
+  process.exit(1);
+}
+
+console.log(`[prepare-standalone] OK — _standalone/server.js + ${criticalRoutes.length} critical routes verified (v${version})`);

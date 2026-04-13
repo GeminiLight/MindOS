@@ -41,6 +41,9 @@ export class EmbeddingIndex {
   /** Number of indexed documents. */
   getDocCount(): number { return this.vectors.size; }
 
+  /** Current index dimensions (0 if not built). */
+  getDimensions(): number { return this.dimensions; }
+
   // ── Build ────────────────────────────────────────────────────────
 
   /**
@@ -136,9 +139,21 @@ export class EmbeddingIndex {
   /**
    * Find the top-K most similar documents to the query vector.
    * Returns results sorted by descending similarity.
+   * 
+   * Validates query vector dimensions match index dimensions.
+   * Returns empty array (graceful degradation) on mismatch.
    */
   searchByVector(queryVector: Float32Array, topK: number = 20): EmbeddingSearchResult[] {
     if (!this._ready || this.vectors.size === 0) return [];
+
+    // Dimension validation: query must match index dimensions
+    if (this.dimensions > 0 && queryVector.length !== this.dimensions) {
+      console.warn(
+        `[embedding-index] Dimension mismatch: query has ${queryVector.length} dimensions, ` +
+        `index has ${this.dimensions}. Returning empty results.`
+      );
+      return [];
+    }
 
     const results: EmbeddingSearchResult[] = [];
 

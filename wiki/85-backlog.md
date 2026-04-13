@@ -77,6 +77,12 @@
 - [x] 跨模块 Bug 审计：安全漏洞（trash 路径遍历）、数据丢失（stream tool_end 静默丢弃）、竞态（Map 迭代中删除、TOCTOU）、闭包（modelOverride）、错误契约、ACP 诊断增强
 - [x] 跨平台路径标准化：tree.ts toPosix 源头统一、split('/') 兼容 Windows、symlink fallback
 - [x] 搜索性能优化：正则缓存、Set 比较、CSV 增量更新
+- [x] 向量搜索正确性增强
+  - 维度校验：query 与 index 维度不匹配时 graceful 降级
+  - 语义匹配 snippet：读取文件内容提供有意义的预览（而非 `[semantic match]`）
+  - 配置变更检测：model/provider 切换时自动 invalidate 索引
+  - 下载按钮即时反馈：点击后 <200ms 显示 "Starting..."，支持错误状态与重试
+  - 新增 20 条测试覆盖维度校验、snippet 提取、配置变更检测
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite

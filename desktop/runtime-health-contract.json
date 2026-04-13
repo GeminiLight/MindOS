@@ -19,6 +19,32 @@
         }
       ]
     },
+    "critical-routes": {
+      "description": "Server-rendered page bundles for core routes — missing any means 500 at runtime",
+      "required": true,
+      "files": [
+        {
+          "path": "app/.next/standalone/.next/server/app/page.js",
+          "type": "file"
+        },
+        {
+          "path": "app/.next/standalone/.next/server/app/wiki/page.js",
+          "type": "file"
+        },
+        {
+          "path": "app/.next/standalone/.next/server/app/explore/page.js",
+          "type": "file"
+        },
+        {
+          "path": "app/.next/standalone/.next/server/app/changelog/page.js",
+          "type": "file"
+        },
+        {
+          "path": "app/.next/standalone/.next/server/app/setup/page.js",
+          "type": "file"
+        }
+      ]
+    },
     "pdf-runtime": {
       "description": "PDF extraction entrypoint and parser runtime",
       "required": true,
@@ -71,6 +97,7 @@
   "checks": {
     "standaloneAppRequiredFeatures": [
       "web-standalone",
+      "critical-routes",
       "pdf-runtime"
     ],
     "bundledRuntimeRequiredFiles": [
@@ -81,6 +108,7 @@
     ],
     "bundledRuntimeRequiredFeatures": [
       "web-standalone",
+      "critical-routes",
       "pdf-runtime",
       "mcp-dist"
     ],
@@ -92,6 +120,7 @@
     ],
     "archiveRequiredFeatures": [
       "web-standalone",
+      "critical-routes",
       "pdf-runtime",
       "mcp-dist",
       "skills-data"

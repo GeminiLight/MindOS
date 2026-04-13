@@ -109,10 +109,15 @@ export function hasPrebuiltStandalone() {
   try {
     const builtVersion = readFileSync(STANDALONE_STAMP, 'utf-8').trim();
     const currentVersion = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')).version;
-    return builtVersion === currentVersion;
+    if (builtVersion !== currentVersion) return false;
   } catch {
     return false;
   }
+  // Verify at least one critical route exists — catches incomplete builds
+  // that have server.js but are missing page bundles (causes 500 at runtime).
+  const serverAppDir = resolve(ROOT, '_standalone', '.next', 'server', 'app');
+  if (!existsSync(resolve(serverAppDir, 'page.js'))) return false;
+  return true;
 }
 
 export function ensureAppDeps({ force = false } = {}) {

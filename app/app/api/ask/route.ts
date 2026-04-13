@@ -58,6 +58,7 @@ import {
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 import { runNonStreamingFallback } from '@/lib/agent/non-streaming';
+import { handleWebSearchFallback } from '@/lib/agent/web-search-fallback';
 
 const MAX_DIR_FILES = 30;
 
@@ -701,6 +702,11 @@ export async function POST(req: NextRequest) {
       tools: askMode === 'agent' ? [bashTool] : [],
       // KB tools are now registered via kb-extension.ts (loaded by resourceLoader)
     });
+
+    // Fallback to free search chain (DuckDuckGo → Bing → Google) when web_search fails
+    if (askMode === 'agent') {
+      session.agent.setAfterToolCall(handleWebSearchFallback as any);
+    }
 
     const llmHistoryMessages = convertToLlm(historyMessages);
     await session.newSession({
