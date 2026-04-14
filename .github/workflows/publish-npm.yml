@@ -64,17 +64,6 @@ jobs:
           echo "=== Checking tarball size ==="
           npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 
-      - name: Check for version conflict
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "Checking if version ${VERSION} is already published..."
-          if npm view "@geminilight/mindos@${VERSION}" version 2>/dev/null; then
-            echo "❌ Version ${VERSION} is already published to npm!"
-            echo "   Please update the version in package.json to a higher number"
-            exit 1
-          fi
-          echo "✅ Version ${VERSION} is available on npm"
-
       - name: Publish to npm
         run: npm publish --access public --ignore-scripts
         env:

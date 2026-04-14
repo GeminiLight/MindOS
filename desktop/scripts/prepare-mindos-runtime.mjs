@@ -239,4 +239,32 @@ if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
   console.log('[prepare-mindos-runtime] MINDOS_SKIP_BUNDLE_NODE=1 — skipping Node.js bundle');
 }
 
+// ── Remove symlinks ──
+// macOS codesign rejects bundles containing symlinks with invalid destinations.
+// Standalone node_modules may contain symlinks from fixTurbopackHashedExternals
+// or leftover from npm's hoisting. Remove them all — they're not needed at runtime
+// since webpack already bundles everything, and standalone traces all required files.
+import { lstatSync } from 'fs';
+function removeSymlinks(dir) {
+  if (!existsSync(dir)) return;
+  let count = 0;
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    try {
+      const stat = lstatSync(full);
+      if (stat.isSymbolicLink()) {
+        rmSync(full, { force: true });
+        count++;
+      } else if (stat.isDirectory()) {
+        count += removeSymlinks(full);
+      }
+    } catch { /* skip unreadable entries */ }
+  }
+  return count;
+}
+const symlinkCount = removeSymlinks(dest) || 0;
+if (symlinkCount > 0) {
+  console.log(`[prepare-mindos-runtime] Removed ${symlinkCount} symlinks from runtime bundle`);
+}
+
 console.log(`[prepare-mindos-runtime] OK → ${dest} (from ${source})`);
