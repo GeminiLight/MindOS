@@ -236,7 +236,9 @@ export const run = async (args, flags) => {
     console.log(yellow('Building MindOS (first run or new version detected)...\n'));
     cleanNextDir();
     execInherited('node scripts/gen-renderer-index.js', ROOT);
-    execInherited(`${NEXT_BIN} build --webpack`, resolve(ROOT, 'app'));
+    execInherited(`${NEXT_BIN} build --webpack`, resolve(ROOT, 'app'), {
+      NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-old-space-size=8192'].filter(Boolean).join(' '),
+    });
     writeBuildStamp();
   }
 
