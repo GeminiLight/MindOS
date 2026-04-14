@@ -22,7 +22,7 @@ export interface AiConfig {
 }
 
 export interface AgentConfig {
-  maxSteps?: number;          // default 20, range 1-30
+  maxSteps?: number;          // default 20, range 1-999 (999 = unlimited)
   enableThinking?: boolean;   // default false, Anthropic only
   thinkingBudget?: number;    // default 5000
   contextStrategy?: 'auto' | 'off'; // default 'auto'
@@ -161,7 +161,7 @@ function parseAgent(raw: unknown): AgentConfig | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const obj = raw as Record<string, unknown>;
   const result: AgentConfig = {};
-  if (typeof obj.maxSteps === 'number') result.maxSteps = Math.min(30, Math.max(1, obj.maxSteps));
+  if (typeof obj.maxSteps === 'number') result.maxSteps = Math.min(999, Math.max(1, obj.maxSteps));
   if (typeof obj.enableThinking === 'boolean') result.enableThinking = obj.enableThinking;
   if (typeof obj.thinkingBudget === 'number') result.thinkingBudget = Math.min(50000, Math.max(1000, obj.thinkingBudget));
   if (obj.contextStrategy === 'auto' || obj.contextStrategy === 'off') result.contextStrategy = obj.contextStrategy;

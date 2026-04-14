@@ -239,8 +239,8 @@ export async function POST(req: NextRequest) {
   const t = acceptLang.startsWith('zh') ? i18nZh.ask : i18nEn.ask;
   const defaultMaxSteps = askMode === 'chat' ? 8 : (agentConfig.maxSteps ?? 20);
   const stepLimit = Number.isFinite(body.maxSteps)
-    ? Math.min(30, Math.max(1, Number(body.maxSteps)))
-    : Math.min(30, Math.max(1, defaultMaxSteps));
+    ? Math.min(999, Math.max(1, Number(body.maxSteps)))
+    : Math.min(999, Math.max(1, defaultMaxSteps));
   const enableThinking = agentConfig.enableThinking ?? false;
   const thinkingBudget = agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
@@ -788,6 +788,8 @@ export async function POST(req: NextRequest) {
                 input: JSON.stringify(tr.content, null, 0), // Deterministic (no whitespace)
               }));
               stepHistory.push(...newEntries);
+              // Keep only the most recent entries — detectLoop only looks at the last 8
+              if (stepHistory.length > 20) stepHistory.splice(0, stepHistory.length - 20);
             }
 
             // Loop detection: (1) same tool+args 3x in a row, (2) repeating pattern cycle

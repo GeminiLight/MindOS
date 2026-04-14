@@ -318,7 +318,7 @@ export const knowledgeEn = {
     discardConfirm: 'Discard',
     discardCancel: 'Cancel',
     dropOverlay: 'Drop files to import into knowledge base',
-    dropOverlayFormats: 'Supports .md .txt .pdf .csv .json .yaml .html',
+    dropOverlayFormats: 'Supports .md .txt .pdf .doc .docx .csv .json .yaml .xml .html',
     onboardingHint: 'Already have notes? Import files →',
     digestPromptSingle: (name: string, targetSpace?: string) => {
       const loc = targetSpace ? ` under the "${targetSpace}" space` : '';
@@ -764,7 +764,7 @@ export const knowledgeZh = {
     discardConfirm: '放弃',
     discardCancel: '取消',
     dropOverlay: '松开鼠标，导入文件到知识库',
-    dropOverlayFormats: '支持 .md .txt .pdf .csv .json .yaml .html',
+    dropOverlayFormats: '支持 .md .txt .pdf .doc .docx .csv .json .yaml .xml .html',
     onboardingHint: '已有笔记？导入文件到知识库 →',
     digestPromptSingle: (name: string, targetSpace?: string) => {
       const loc = targetSpace ? `"${targetSpace}" 空间下` : '知识库中合适的位置';

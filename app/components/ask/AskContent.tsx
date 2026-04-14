@@ -336,12 +336,19 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [variant, visible, onClose, maximized, onMaximize]);
 
   const formRef = useRef<HTMLFormElement>(null);
+  // When set to true, auto-submit on next render after input state update
+  const pendingAutoSubmitRef = useRef(false);
 
   useLayoutEffect(() => {
     if (!visible) return;
     const el = inputRef.current;
     if (!el || !(el instanceof HTMLTextAreaElement)) return;
     syncTextareaToContent(el, TEXTAREA_MAX_VISIBLE_LINES);
+    // Auto-submit after resend pre-fills input
+    if (pendingAutoSubmitRef.current && input.trim()) {
+      pendingAutoSubmitRef.current = false;
+      formRef.current?.requestSubmit();
+    }
   }, [input, isLoading, visible]);
 
   useEffect(() => {
@@ -561,7 +568,29 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     generating: t.ask.generating,
     reconnecting: reconnectAttempt > 0 ? t.ask.reconnecting(reconnectAttempt, reconnectMaxRef.current) : undefined,
     copyMessage: t.ask.copyMessage,
+    editMessage: t.ask.editMessage,
+    regenerateMessage: t.ask.regenerateMessage,
   }), [t, reconnectAttempt]);
+
+  /** Edit: pre-fill composer with the user message content, truncate history after it */
+  const handleEditMessage = useCallback((index: number) => {
+    const msg = session.messages[index];
+    if (!msg || msg.role !== 'user') return;
+    // Truncate: keep messages up to (not including) the edited message
+    session.setMessages(session.messages.slice(0, index));
+    setInput(msg.content);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [session]);
+
+  /** Resend / Regenerate: truncate after user message, auto-submit same content */
+  const handleResendMessage = useCallback((index: number) => {
+    const msg = session.messages[index];
+    if (!msg || msg.role !== 'user') return;
+    // Truncate: keep messages up to (not including) the user message
+    session.setMessages(session.messages.slice(0, index));
+    setInput(msg.content);
+    pendingAutoSubmitRef.current = true;
+  }, [session]);
 
   const handleProviderChange = useCallback((p: ProviderId | `p_${string}` | null) => {
     setProviderOverride(p);
@@ -619,6 +648,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             emptyHint={t.ask.emptyHint}
             suggestions={t.ask.suggestions}
             onSuggestionClick={setInput}
+            onEditMessage={handleEditMessage}
+            onResendMessage={handleResendMessage}
             labels={messageLabels}
           />
         )}
@@ -631,6 +662,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             emptyHint={t.ask.emptyHint}
             suggestions={maximized && session.messages.length === 0 ? t.ask.suggestions : []}
             onSuggestionClick={setInput}
+            onEditMessage={handleEditMessage}
+            onResendMessage={handleResendMessage}
             labels={messageLabels}
           />
         )}

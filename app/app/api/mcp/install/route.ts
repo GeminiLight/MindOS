@@ -307,8 +307,16 @@ export async function POST(req: NextRequest) {
           const skillPath = path.join(skillProfile.workspacePath, activeSkill, 'SKILL.md');
           recordSkillInstall(key, activeSkill, skillPath);
 
-          // Auto-copy skill for unsupported agents (QClaw, WorkBuddy, Lingma, etc.)
+          // Ensure workspace directory exists for 'additional' and 'unsupported' modes
           const reg = SKILL_AGENT_REGISTRY[key];
+          if (reg && (reg.mode === 'additional' || reg.mode === 'unsupported')) {
+            const workspacePath = skillProfile.workspacePath;
+            if (!fs.existsSync(workspacePath)) {
+              fs.mkdirSync(workspacePath, { recursive: true });
+            }
+          }
+
+          // Auto-copy skill for unsupported agents (QClaw, WorkBuddy, Lingma, etc.)
           if (reg?.mode === 'unsupported') {
             const projectRoot = process.env.MINDOS_PROJECT_ROOT || path.resolve(process.cwd(), '..');
             const candidates = [

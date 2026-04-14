@@ -405,7 +405,14 @@ export function hardPrune(
   } else if (cutIdx > 0 && pruned.length > 0 && asMsg(pruned[0]).role === 'user') {
     // If we pruned and the first message IS a user message, prepend the warning to it
     const firstMsg = { ...pruned[0] } as UserMessage;
-    firstMsg.content = `[System Note: Older conversation history has been truncated due to context length limits. The user may refer to things you can no longer see. If so, kindly ask them to repeat the context.]\n\n` + firstMsg.content;
+    const pruneNote = '[System Note: Older conversation history has been truncated due to context length limits. The user may refer to things you can no longer see. If so, kindly ask them to repeat the context.]\n\n';
+    if (typeof firstMsg.content === 'string') {
+      firstMsg.content = pruneNote + firstMsg.content;
+    } else if (Array.isArray(firstMsg.content)) {
+      firstMsg.content = [{ type: 'text' as const, text: pruneNote }, ...firstMsg.content];
+    } else {
+      firstMsg.content = pruneNote;
+    }
     pruned[0] = firstMsg as AgentMessage;
   }
 

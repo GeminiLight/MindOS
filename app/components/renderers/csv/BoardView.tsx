@@ -60,7 +60,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
           onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
           onDrop={e => {
             setDragOver(null);
-            const idx = parseInt(e.dataTransfer.getData('origIdx'));
+            const idx = parseInt(e.dataTransfer.getData('origIdx'), 10);
             if (!isNaN(idx)) moveCard(idx, group);
           }}
         >

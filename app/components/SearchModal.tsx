@@ -134,7 +134,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     },
   ], [t, router, onClose, isDark]);
 
-  // Focus input when modal opens
+  // Focus input when modal opens; clean up debounce timer on close/unmount
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -144,6 +144,12 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
       setTab('search');
       setActionIndex(0);
     }
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+        debounceTimer.current = null;
+      }
+    };
   }, [open]);
 
   // Debounced search

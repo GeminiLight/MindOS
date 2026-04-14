@@ -27,8 +27,8 @@ function getWorker(): Worker | null {
       if (error) pending.reject(new Error(error));
       else pending.resolve(result!);
     });
-    _worker.on('error', () => { _worker = null; });
-    _worker.on('exit', () => { _worker = null; });
+    _worker.on('error', () => { _worker = null; drainPending(); });
+    _worker.on('exit', () => { _worker = null; drainPending(); });
     return _worker;
   } catch {
     return null;
@@ -60,15 +60,20 @@ export function computeDiffAsync(before: string, after: string): Promise<DiffLin
   });
 }
 
+/** Resolve all pending requests and clear timers (worker died or was terminated). */
+function drainPending(): void {
+  for (const [, p] of _pending) {
+    clearTimeout(p.timer);
+    p.resolve([]);
+  }
+  _pending.clear();
+}
+
 /** Terminate the worker (for cleanup/tests). */
 export function terminateDiffWorker(): void {
   if (_worker) {
     _worker.terminate();
     _worker = null;
   }
-  for (const [, p] of _pending) {
-    clearTimeout(p.timer);
-    p.resolve([]);
-  }
-  _pending.clear();
+  drainPending();
 }
