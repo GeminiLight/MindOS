@@ -15,6 +15,54 @@ import CustomProviderFields from './CustomProviderFields';
 import { TestButton } from './TestButton';
 import { apiFetch } from '@/lib/api';
 
+const MAX_STEPS_PRESETS = [10, 20, 30, 40, 50, 999] as const;
+
+function MaxStepsSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const isPreset = MAX_STEPS_PRESETS.includes(value as typeof MAX_STEPS_PRESETS[number]);
+  const [customMode, setCustomMode] = useState(!isPreset);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={customMode ? 'custom' : String(value)}
+        onChange={e => {
+          const v = e.target.value;
+          if (v === 'custom') {
+            setCustomMode(true);
+          } else {
+            setCustomMode(false);
+            onChange(Number(v));
+          }
+        }}
+        className="w-28"
+      >
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+        <option value="999">Unlimited</option>
+        <option value="custom">Custom</option>
+      </Select>
+      {customMode && (
+        <input
+          type="number"
+          value={value === 999 ? '' : value}
+          onChange={e => {
+            const v = parseInt(e.target.value, 10);
+            if (!isNaN(v) && v > 0) onChange(Math.min(999, v));
+          }}
+          placeholder="1-999"
+          min={1}
+          max={999}
+          autoFocus
+          className="w-20 px-2 py-1 rounded-md border border-border/60 bg-muted/50 text-sm text-foreground"
+        />
+      )}
+    </div>
+  );
+}
+
 export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
   const { locale } = useLocale();
   const env = data.envOverrides ?? {};
@@ -298,18 +346,7 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
         description={t.settings.agent.subtitle ?? 'Configure how the AI agent operates'}
       >
         <SettingRow label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
-          <Select
-            value={String(data.agent?.maxSteps ?? 20)}
-            onChange={e => updateAgent({ maxSteps: Number(e.target.value) })}
-            className="w-20"
-          >
-            <option value="5">5</option>
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
-            <option value="25">25</option>
-            <option value="30">30</option>
-          </Select>
+          <MaxStepsSelect value={data.agent?.maxSteps ?? 20} onChange={v => updateAgent({ maxSteps: v })} />
         </SettingRow>
 
         <SettingRow label={t.settings.agent.contextStrategy} hint={t.settings.agent.contextStrategyHint}>

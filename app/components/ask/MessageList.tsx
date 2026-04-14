@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, memo, useState, useCallback } from 'react';
+import { useRef, useEffect, memo, useState, useCallback, useMemo } from 'react';
 import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -10,6 +10,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
 import { SaveMessageButton } from './SaveSessionInline';
+import UserMessageActions from './UserMessageActions';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
 
@@ -205,12 +206,16 @@ interface MessageListProps {
   emptyHint?: string;
   suggestions: readonly { label: string; prompt: string }[];
   onSuggestionClick: (text: string) => void;
+  onEditMessage?: (index: number) => void;
+  onResendMessage?: (index: number) => void;
   labels: {
     connecting: string;
     thinking: string;
     generating: string;
     reconnecting?: string;
     copyMessage?: string;
+    editMessage?: string;
+    regenerateMessage?: string;
   };
 }
 
@@ -222,6 +227,8 @@ export default memo(function MessageList({
   emptyHint,
   suggestions,
   onSuggestionClick,
+  onEditMessage,
+  onResendMessage,
   labels,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -231,6 +238,14 @@ export default memo(function MessageList({
   // When true, auto-scroll is suppressed so users can read earlier content.
   const userScrolledAwayRef = useRef(false);
   const prevMessageCountRef = useRef(messages.length);
+
+  // Find the last user message index for edit/resend actions
+  const lastUserMessageIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return i;
+    }
+    return -1;
+  }, [messages]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = scrollContainerRef.current;
@@ -368,9 +383,21 @@ export default memo(function MessageList({
           )}
           {m.role === 'user' ? (
             <div
-              className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-lg text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
+              className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-lg text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
             >
               <UserMessageContent content={m.content} skillName={m.skillName} images={m.images} attachedFiles={m.attachedFiles} uploadedFileNames={m.uploadedFileNames} />
+              <UserMessageActions
+                content={m.content}
+                isLastUserMessage={i === lastUserMessageIndex}
+                isLoading={isLoading}
+                onEdit={onEditMessage ? () => onEditMessage(i) : undefined}
+                onResend={onResendMessage ? () => onResendMessage(i) : undefined}
+                labels={{
+                  copy: labels.copyMessage ?? 'Copy',
+                  edit: labels.editMessage ?? 'Edit',
+                  regenerate: labels.regenerateMessage ?? 'Regenerate',
+                }}
+              />
             </div>
           ) : m.content.startsWith('__error__') ? (
             <div className="max-w-[85%] px-3.5 py-3 rounded-2xl rounded-bl-md border border-error/30 bg-error/10 text-sm shadow-sm">

@@ -1,6 +1,6 @@
 {
   "name": "wiki-app",
-  "version": "0.6.85",
+  "version": "0.7.0",
   "private": true,
   "engines": {
     "node": ">=18"

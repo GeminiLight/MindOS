@@ -250,7 +250,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".md,.txt,.csv,.json,.pdf"
+        accept=".md,.markdown,.txt,.csv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,.doc,.docx,.docm"
         className="hidden"
         onChange={(e) => handleUpload(e.target.files)}
       />

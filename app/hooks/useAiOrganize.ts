@@ -179,12 +179,12 @@ async function consumeOrganizeStream(
               if (toolName === 'create_file' || toolName === 'batch_create_files') action = 'create';
               else if (toolName === 'delete_file' || toolName === 'rename_file' || toolName === 'move_file') action = 'unknown';
 
-              // Capture snapshot for update operations (fire-and-forget)
+              // Capture snapshot for update operations — await to ensure we get the
+              // pre-write content before the server executes the write tool call
               if (action === 'update' && path && !snapshotted.has(path)) {
                 snapshotted.add(path);
-                captureSnapshot(path).then(content => {
-                  if (content) onSnapshot(path, content);
-                });
+                const content = await captureSnapshot(path);
+                if (content) onSnapshot(path, content);
               }
 
               pendingTools.set(toolCallId, { name: toolName, path, action });
