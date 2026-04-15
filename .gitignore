@@ -79,8 +79,5 @@ image.png
 !browser-extension/src/icons/*.png
 .tmux.conf
 TMUX_DOC.md
-tmux-manage.sh
-tmux-sessions.conf
 .mcp.json
 collect-session-ids.py
-local-scripts/

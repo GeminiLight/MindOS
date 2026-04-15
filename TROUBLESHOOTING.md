@@ -1,4 +1,4 @@
-# Troubleshooting
+image.png# Troubleshooting
 
 ## Local URL not accessible when running on a remote server
 
