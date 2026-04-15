@@ -27,9 +27,6 @@ export function getSkillSearchPaths(
     path.join(home, '.mindos', 'skills'),
   ];
 
-  // npm-installed pi-package skills (e.g. pi-playwright-cli)
-  paths.push(path.join(projectRoot, 'app', 'node_modules', 'pi-playwright-cli', 'skills'));
-
   // ~/.agents/skills — on by default, user can toggle off
   if (settings?.skillPaths?.enableAgentsDir !== false) {
     paths.push(path.join(home, '.agents', 'skills'));

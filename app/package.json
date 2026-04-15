@@ -1,6 +1,6 @@
 {
   "name": "wiki-app",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "engines": {
     "node": ">=18"
@@ -68,7 +68,6 @@
     "papaparse": "^5.5.3",
     "pdfjs-dist": "^4.10.38",
     "pi-mcp-adapter": "^2.2.2",
-    "pi-playwright-cli": "^1.0.3",
     "pi-schedule-prompt": "^0.1.2",
     "pi-subagents": "^0.12.5",
     "pi-web-access": "^0.10.6",
