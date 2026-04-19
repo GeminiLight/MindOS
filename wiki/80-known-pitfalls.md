@@ -20,6 +20,50 @@
 
 ## Agent / LLM API
 
+### Hugging Face 模型下载失败（中国大陆网络）（2026-04-20）
+
+**症状**：用户在设置页面启用本地嵌入搜索并点击"下载模型"后，一直显示 "Download failed. Check your network connection and try again."。
+
+**根因**：中国大陆网络无法直接访问 `huggingface.co` 和 `cdn-lfs.huggingface.co`，导致 `@huggingface/transformers` 下载模型时超时（75 秒+）。
+
+**修复**：
+1. 代码自动配置 `hf-mirror.com` 镜像源（中国大陆可访问）
+2. 支持通过 `HF_ENDPOINT` 环境变量自定义镜像源
+3. UI 提示用户可切换到 API 模式（使用硅基流动等国内服务）
+
+**使用方式**：
+
+方案 1（推荐）：代码已自动配置镜像，无需手动操作，直接点击"下载模型"即可。
+
+方案 2：自定义镜像源
+```bash
+# 设置环境变量后启动
+export HF_ENDPOINT=https://hf-mirror.com
+npm run dev
+
+# 或 Desktop 用户
+export HF_ENDPOINT=https://hf-mirror.com
+open /Applications/MindOS.app
+```
+
+方案 3：使用 API 模式
+- 在设置页面切换到"API"模式
+- 选择"SiliconFlow"（免费，中国大陆可用）
+- 填写 API Key（在 https://siliconflow.cn 注册获取）
+
+**技术细节**：
+- `embedding-provider.ts:173-177` 检测到未设置 `HF_ENDPOINT` 且 `env.remoteHost` 为空时，自动配置 `https://hf-mirror.com`
+- 重试逻辑：最多 3 次尝试（初始 + 2 次重试），指数退避（1s, 2s）
+- 超时保护：单次下载最长 5 分钟
+- 错误分类：区分网络错误（可重试）和非网络错误（不重试）
+
+**规则**：
+- 本地模型下载失败时，优先引导用户切换到 API 模式，而非反复重试
+- 镜像源配置应尊重用户的 `HF_ENDPOINT` 环境变量，不要强制覆盖
+- UI 错误提示应包含具体的解决方案，而非仅显示"网络错误"
+
+**测试**：`__tests__/core/embedding-provider.test.ts` 覆盖镜像配置、重试逻辑、错误分类等场景。
+
 ### Agent 超时配置不足导致慢速 API 场景失败（2026-04-20）
 
 **症状**：用户使用慢速 API（自建 Ollama、海外 API、高延迟网络）或复杂工具链时，Agent 回复在 120 秒后超时，前端显示 "Agent execution timeout after 120 seconds"。
@@ -807,6 +851,42 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 - **文件：** `scripts/setup.js`、`bin/lib/port.js`
 
 ## 构建 / 部署
+
+### Windows onboard 失败：mcp/src/ 被 .npmignore 排除（2026-04-20）
+
+**症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，运行 `mindos onboard` 报错：
+```
+X [ERROR] Could not resolve "src/index.ts"
+Error: Command failed: esbuild.exe src/index.ts --bundle ...
+```
+
+**根因**：`.npmignore` 第 23 行排除了 `mcp/src/`，导致 npm 包中没有 MCP 源码。用户安装后如果触发 MCP 重建（`needsMcpBuild()` 检测到源文件更新或首次运行），`npm run build` 会因找不到 `src/index.ts` 而失败。
+
+**调用链**：
+```
+mindos onboard
+  → scripts/setup.js:969 spawn('mindos start')
+    → bin/lib/mcp-build.js:56 ensureMcpBundle()
+      → bin/lib/mcp-build.js:69 run('npm run build', MCP_DIR)
+        → mcp/package.json:7 "npx esbuild src/index.ts ..."
+          → esbuild 报错: Could not resolve "src/index.ts"
+```
+
+**为什么本地开发没发现**：
+- 本地开发时 `mcp/src/` 存在
+- `prepack` 脚本在发布前会构建 `mcp/dist/index.cjs`
+- 但用户环境如果触发重建（如检测到源文件更新），就会失败
+
+**修复**：
+1. 删除 `.npmignore` 中的 `mcp/src/` 排除规则（允许源码进入 npm 包，增加约 36KB）
+2. `bin/lib/mcp-build.js` 添加防御性检查：如果 `mcp/src/` 不存在且 `dist/index.cjs` 存在，跳过重建直接使用预构建 bundle
+
+**教训**：
+- `.npmignore` 排除源码前，确认没有构建脚本依赖它
+- 对于需要用户侧重建的模块（如 MCP），源码应该包含在 npm 包中
+- 本地测试无法覆盖 npm 全局安装场景，需要 `npm pack` + 模拟全局安装验证
+
+**文件**：`.npmignore`、`bin/lib/mcp-build.js`
 
 ### Skill 安装 process.cwd() 路径错误
 - **现象：** GUI Setup Wizard 安装 Skill 提示失败，CLI 正常

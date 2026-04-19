@@ -20,7 +20,6 @@ _standalone/node_modules/node_modules
 mcp/node_modules/
 mcp/package-lock.json
 mcp/*.tgz
-mcp/src/
 
 # Assets dev files
 assets/node_modules/

@@ -4,6 +4,10 @@
 
 ## Completed
 
+- [x] Windows onboard 失败：mcp/src/ 被 .npmignore 排除（2026-04-20）
+  - 删除 `.npmignore` 中的 `mcp/src/` 排除规则
+  - `bin/lib/mcp-build.js` 添加防御性检查：src 不存在时跳过重建
+  - 记录到 `wiki/80-known-pitfalls.md`
 - [x] Obsidian compat Spike 文档链路
   - 总体方案、API shim、兼容矩阵、生态调研、Spike 计划、Spike 实施规约
 - [x] Obsidian compat 最小宿主骨架
