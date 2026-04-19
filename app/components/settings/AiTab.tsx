@@ -804,6 +804,9 @@ function EmbeddingSearchCard({ data, setData, t }: {
                     <X size={14} />
                     <span>{downloadError ?? 'Download failed'}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {e.downloadFailedHint as string ?? 'If download keeps failing, try API mode or set HF_ENDPOINT=https://hf-mirror.com'}
+                  </p>
                   <button
                     type="button"
                     onClick={handleRetry}

@@ -8,6 +8,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock @huggingface/transformers to avoid real downloads
 vi.mock('@huggingface/transformers', () => ({
   pipeline: vi.fn(),
+  env: {
+    remoteHost: '',
+    remotePathTemplate: '',
+  },
 }));
 
 describe('embedding-provider retry logic', () => {
@@ -19,6 +23,80 @@ describe('embedding-provider retry logic', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('mirror configuration', () => {
+    it('should configure hf-mirror.com when HF_ENDPOINT is not set', async () => {
+      const originalEnv = process.env.HF_ENDPOINT;
+      delete process.env.HF_ENDPOINT;
+
+      const { pipeline, env } = await import('@huggingface/transformers');
+      // Reset env to simulate fresh state
+      env.remoteHost = '';
+      env.remotePathTemplate = '';
+
+      const mockPipeline = { mock: true };
+      vi.mocked(pipeline).mockResolvedValueOnce(mockPipeline);
+
+      const { downloadLocalModel } = await import('@/lib/core/embedding-provider');
+      await downloadLocalModel('test-model');
+
+      // Verify mirror was configured
+      expect(env.remoteHost).toBe('https://hf-mirror.com');
+      expect(env.remotePathTemplate).toBe('{model}/resolve/{revision}/{fileName}');
+
+      // Restore
+      if (originalEnv) process.env.HF_ENDPOINT = originalEnv;
+    });
+
+    it('should respect HF_ENDPOINT environment variable', async () => {
+      const originalEnv = process.env.HF_ENDPOINT;
+      process.env.HF_ENDPOINT = 'https://custom-mirror.com';
+
+      const { pipeline, env } = await import('@huggingface/transformers');
+      // Reset env to simulate fresh state
+      env.remoteHost = '';
+      env.remotePathTemplate = '';
+
+      const mockPipeline = { mock: true };
+      vi.mocked(pipeline).mockResolvedValueOnce(mockPipeline);
+
+      const { downloadLocalModel } = await import('@/lib/core/embedding-provider');
+      await downloadLocalModel('test-model');
+
+      // Verify custom mirror was NOT overridden (env.remoteHost should remain empty)
+      expect(env.remoteHost).toBe('');
+
+      // Restore
+      if (originalEnv) {
+        process.env.HF_ENDPOINT = originalEnv;
+      } else {
+        delete process.env.HF_ENDPOINT;
+      }
+    });
+
+    it('should not override if env.remoteHost is already set', async () => {
+      const originalEnv = process.env.HF_ENDPOINT;
+      delete process.env.HF_ENDPOINT;
+
+      const { pipeline, env } = await import('@huggingface/transformers');
+      // Simulate user has already configured a custom mirror
+      env.remoteHost = 'https://user-custom-mirror.com';
+      env.remotePathTemplate = 'custom/{model}/{fileName}';
+
+      const mockPipeline = { mock: true };
+      vi.mocked(pipeline).mockResolvedValueOnce(mockPipeline);
+
+      const { downloadLocalModel } = await import('@/lib/core/embedding-provider');
+      await downloadLocalModel('test-model');
+
+      // Verify user's custom mirror was NOT overridden
+      expect(env.remoteHost).toBe('https://user-custom-mirror.com');
+      expect(env.remotePathTemplate).toBe('custom/{model}/{fileName}');
+
+      // Restore
+      if (originalEnv) process.env.HF_ENDPOINT = originalEnv;
+    });
   });
 
   describe('isRetryableError classification', () => {

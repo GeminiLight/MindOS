@@ -166,15 +166,23 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
       let timedOut = false;
       let lastError: Error | null = null;
       try {
-        const { pipeline } = await import('@huggingface/transformers');
-        
+        const { pipeline, env } = await import('@huggingface/transformers');
+
+        // Configure mirror for China network (only if HF_ENDPOINT env var is not set)
+        // Check both process.env and the transformers env object
+        if (!process.env.HF_ENDPOINT && !env.remoteHost) {
+          console.log('[embedding] Configuring hf-mirror.com for better connectivity in China');
+          env.remoteHost = 'https://hf-mirror.com';
+          env.remotePathTemplate = '{model}/resolve/{revision}/{fileName}';
+        }
+
         // Set up timeout to catch stuck downloads
         timer = setTimeout(() => {
           timedOut = true;
         }, DOWNLOAD_TIMEOUT_MS);
-        
+
         console.log(`[embedding] Attempt ${attempt + 1}/${DOWNLOAD_MAX_RETRIES + 1}: Loading pipeline for ${modelId}...`);
-        
+
         // Start download
         const downloadPromise = pipeline('feature-extraction', modelId, {
           dtype: 'fp32',
