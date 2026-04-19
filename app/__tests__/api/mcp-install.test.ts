@@ -179,7 +179,9 @@ describe('POST /api/mcp/install', () => {
   it('handles empty config file gracefully (e.g. fresh VS Code mcp.json)', async () => {
     const { POST } = await importInstallRoute();
     // Pre-create an empty config file (common with VS Code)
-    const copilotDir = path.join(tempHome, '.config', 'Code', 'User');
+    const copilotDir = process.platform === 'darwin'
+      ? path.join(tempHome, 'Library', 'Application Support', 'Code', 'User')
+      : path.join(tempHome, '.config', 'Code', 'User');
     fs.mkdirSync(copilotDir, { recursive: true });
     fs.writeFileSync(path.join(copilotDir, 'mcp.json'), '', 'utf-8');
 
@@ -195,7 +197,11 @@ describe('POST /api/mcp/install', () => {
     const body = await res.json();
     expect(body.results[0].status).toBe('ok');
 
-    const config = JSON.parse(fs.readFileSync(path.join(copilotDir, 'mcp.json'), 'utf-8'));
+    const configPath = path.join(copilotDir, 'mcp.json');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content.trim()).not.toBe(''); // Should have written valid JSON
+    const config = JSON.parse(content);
     expect(config.servers.mindos.type).toBe('stdio');
   });
 
