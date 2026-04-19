@@ -58,6 +58,14 @@ export function ensureMcpBundle() {
 
   const hadBundle = existsSync(MCP_BUNDLE);
 
+  // If src/ doesn't exist (npm install scenario), skip rebuild and use prebuilt bundle
+  if (!existsSync(MCP_SRC_DIR)) {
+    if (hadBundle) {
+      return; // Use prebuilt bundle from npm package
+    }
+    throw new Error(`MCP bundle not found and source directory missing: ${MCP_SRC_DIR}`);
+  }
+
   if (!hasBuildDeps()) {
     console.log(yellow('Installing MCP build dependencies...\n'));
     npmInstall(MCP_DIR, '--no-workspaces');
