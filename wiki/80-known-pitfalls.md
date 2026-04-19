@@ -20,7 +20,36 @@
 
 ## Agent / LLM API
 
-### 背景预热请求不要绑在“面板隐藏”清理上（2026-04-11）
+### Agent 超时配置不足导致慢速 API 场景失败（2026-04-20）
+
+**症状**：用户使用慢速 API（自建 Ollama、海外 API、高延迟网络）或复杂工具链时，Agent 回复在 120 秒后超时，前端显示 "Agent execution timeout after 120 seconds"。
+
+**根因**：`app/api/ask/route.ts` 中 `AGENT_TIMEOUT_MS` 和 `ACP_AGENT_TIMEOUT_MS` 硬编码为 120 秒，对于以下场景不够用：
+- 自建 Ollama 模型推理慢（CPU 推理、大模型）
+- 海外 API 高延迟（跨国网络、代理）
+- 复杂工具链（多步工具调用、大文件处理）
+- 用户自定义 Agent 执行耗时任务
+
+**修复**：
+1. 将默认超时从 120s 提升到 600s（10 分钟）
+2. 支持通过 `MINDOS_AGENT_TIMEOUT_MS` 环境变量自定义
+3. 同时应用于 MindOS Agent 和 ACP Agent 路径
+
+**使用方式**：
+```bash
+# 设置 20 分钟超时
+MINDOS_AGENT_TIMEOUT_MS=1200000 npm run dev
+
+# Desktop 用户可在启动前设置环境变量
+export MINDOS_AGENT_TIMEOUT_MS=1200000
+```
+
+**规则**：
+- 默认 600s 适配大部分场景，极端慢速场景通过环境变量调整
+- 不要在代码中硬编码超时值，始终支持环境变量覆盖
+- 超时错误信息应包含实际超时时间，便于用户诊断
+
+### 背景预热请求不要绑在"面板隐藏"清理上（2026-04-11）
 
 **症状**：像 Search 这类后台预热请求，如果在面板关闭时直接取消并阻止状态更新，下一次重新打开面板可能一直停留在 `warming` 或再也不重试。
 
