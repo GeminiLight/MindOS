@@ -83,7 +83,7 @@ export MINDOS_AGENT_TIMEOUT_MS=1200000
 
 **三次复发根因**（2026-04-11）：用户已更新到最新 Desktop，但 `~/.mindos/runtime/` 缓存的旧 runtime 版本 **高于** 新 bundled runtime 版本。`cleanupOnBoot()` 只在 `bundled >= cached` 时才删除缓存，所以用户继续使用缺少 `pdfjs-dist` 的旧 runtime。`analyzeMindOsLayout()` 不检查具体依赖是否存在，只检查 `server.js`，无法拦截这类不完整的 runtime。
 
-**用户自救**：
+**用户自救（cached runtime 问题）**：
 ```bash
 # macOS / Linux
 rm -rf ~/.mindos/runtime
@@ -92,6 +92,22 @@ rm -rf ~/.mindos/runtime
 Remove-Item -Recurse -Force "$env:USERPROFILE\.mindos\runtime"
 ```
 重启 Desktop 后会自动使用新 bundled runtime。
+
+**四次复发根因**（2026-04-20）：用户下载的 Desktop 应用本身的 **bundled runtime 缺少 `pdfjs-dist`**（构建于 v0.6.80 之前）。错误路径指向 `/Applications/MindOS.app/Contents/Resources/mindos-runtime/app/scripts/extract-pdf.cjs`，说明问题在 bundled runtime，不是 cached runtime。
+
+**用户自救（bundled runtime 问题）**：
+```bash
+# 方案 1：删除旧的 bundled runtime，强制使用全局 npm 安装
+rm -rf /Applications/MindOS.app/Contents/Resources/mindos-runtime
+
+# 方案 2：安装最新的全局 MindOS（>= v0.6.80）
+npm install -g @geminilight/mindos@latest
+
+# 方案 3：下载最新的 Desktop 版本（>= desktop-v0.1.13）
+# 从 https://github.com/GeminiLight/MindOS/releases 下载最新的 desktop-v* 版本
+```
+
+**根本解决**：确保 Desktop 发布流程始终使用最新的 `main` 分支代码构建，不要使用旧的 tag 或 commit。GitHub Actions workflow 应该从 `main` checkout，而不是从 tag checkout。
 
 **最终修复**（2026-04-11）：
 1. `desktop/src/core-updater.ts` 在 `cleanupOnBoot()` 中先检查 cached runtime 完整性；若缺少 `extract-pdf.cjs` / `pdfjs-dist` 关键文件，则**无条件删除** `~/.mindos/runtime/`

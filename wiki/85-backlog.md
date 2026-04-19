@@ -88,6 +88,11 @@
   - 支持通过 `MINDOS_AGENT_TIMEOUT_MS` 环境变量自定义超时时间
   - 同时应用于 MindOS Agent 和 ACP Agent 路径
   - 适配慢速 API、高延迟网络、复杂工具链场景
+- [x] pdfjs-dist 四次复发诊断与文档更新
+  - 诊断用户 Desktop bundled runtime 缺少 pdfjs-dist 问题
+  - 更新 wiki/80-known-pitfalls.md 记录四次复发根因
+  - 提供三种用户自救方案（删除 bundled runtime / 全局安装 / 下载最新版）
+  - 明确根本解决方案：Desktop 发布流程使用最新 main 分支构建
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
