@@ -83,6 +83,11 @@
   - 配置变更检测：model/provider 切换时自动 invalidate 索引
   - 下载按钮即时反馈：点击后 <200ms 显示 "Starting..."，支持错误状态与重试
   - 新增 20 条测试覆盖维度校验、snippet 提取、配置变更检测
+- [x] Agent 超时配置优化
+  - 将内置 Agent 单条回复超时从 120s 提升到 600s（10 分钟）
+  - 支持通过 `MINDOS_AGENT_TIMEOUT_MS` 环境变量自定义超时时间
+  - 同时应用于 MindOS Agent 和 ACP Agent 路径
+  - 适配慢速 API、高延迟网络、复杂工具链场景
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite

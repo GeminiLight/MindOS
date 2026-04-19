@@ -847,8 +847,11 @@ export async function POST(req: NextRequest) {
                   });
                   acpSessionId = acpSession.id;
 
-                  // ── CRITICAL: Add 120s timeout to ACP agent execution ──
-                  const ACP_AGENT_TIMEOUT_MS = 120_000;
+                  // ── CRITICAL: Add timeout to ACP agent execution ──
+                  // Default 600s (10min), configurable via MINDOS_AGENT_TIMEOUT_MS env var
+                  const ACP_AGENT_TIMEOUT_MS = process.env.MINDOS_AGENT_TIMEOUT_MS
+                    ? parseInt(process.env.MINDOS_AGENT_TIMEOUT_MS, 10)
+                    : 600_000;
                   await withTimeout(
                     promptStream(acpSessionId, lastUserContent, (update: AcpSessionUpdate) => {
                       switch (update.type) {
@@ -918,7 +921,7 @@ export async function POST(req: NextRequest) {
                       }
                     }),
                     ACP_AGENT_TIMEOUT_MS,
-                    'ACP agent execution timeout after 120 seconds'
+                    `ACP agent execution timeout after ${ACP_AGENT_TIMEOUT_MS / 1000} seconds`
                   );
 
                   lastAcpError = null;
@@ -998,15 +1001,17 @@ export async function POST(req: NextRequest) {
 
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
               try {
-                // ── CRITICAL: Add 120s timeout to agent execution ──
-                // Prevents indefinite hangs when tools are unresponsive.
-                // Each step is typically 2-5s, so 30 steps * 5s = 150s max.
-                // 120s timeout is conservative safety net for network delays + model latency.
-                const AGENT_TIMEOUT_MS = 120_000;
+                // ── CRITICAL: Add timeout to agent execution ──
+                // Prevents indefinite hangs when tools are unresponsive or API is slow.
+                // Default 600s (10min) accommodates slow APIs, complex tool chains, and high-latency scenarios.
+                // Configurable via MINDOS_AGENT_TIMEOUT_MS env var.
+                const AGENT_TIMEOUT_MS = process.env.MINDOS_AGENT_TIMEOUT_MS
+                  ? parseInt(process.env.MINDOS_AGENT_TIMEOUT_MS, 10)
+                  : 600_000;
                 await withTimeout(
                   session.prompt(lastUserContent, lastUserImages ? { images: lastUserImages } : undefined),
                   AGENT_TIMEOUT_MS,
-                  'Agent execution timeout after 120 seconds'
+                  `Agent execution timeout after ${AGENT_TIMEOUT_MS / 1000} seconds`
                 );
                 lastPromptError = null;
                 break; // success
