@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
 import { SaveSessionButton } from './SaveSessionInline';
@@ -38,6 +38,7 @@ export default memo(function AskHeader({
   messages,
 }: AskHeaderProps) {
   const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
   const iconSize = 14;
   const hasMultipleSessions = sessions && sessions.length >= 2;
   const headerButtonClass = isPanel
@@ -93,8 +94,10 @@ export default memo(function AskHeader({
   }, [renamingId]);
 
   const handleSelectSession = useCallback((id: string) => {
-    onLoadSession?.(id);
-    setSwitcherOpen(false);
+    startTransition(() => {
+      onLoadSession?.(id);
+      setSwitcherOpen(false);
+    });
   }, [onLoadSession]);
 
   const handleStartRename = useCallback((id: string, currentTitle: string) => {
@@ -103,10 +106,12 @@ export default memo(function AskHeader({
   }, []);
 
   const handleCommitRename = useCallback(() => {
-    if (renamingId && onRenameSession && renameValue.trim()) {
-      onRenameSession(renamingId, renameValue.trim());
-    }
-    setRenamingId(null);
+    startTransition(() => {
+      if (renamingId && onRenameSession && renameValue.trim()) {
+        onRenameSession(renamingId, renameValue.trim());
+      }
+      setRenamingId(null);
+    });
   }, [renamingId, renameValue, onRenameSession]);
 
   // Position dropdown below trigger
@@ -222,11 +227,13 @@ export default memo(function AskHeader({
               ref={switcherRef}
               type="button"
               onClick={() => {
-                if (sessions && sessions.length >= 2) {
-                  setSwitcherOpen(v => !v);
-                } else {
-                  onToggleHistory();
-                }
+                startTransition(() => {
+                  if (sessions && sessions.length >= 2) {
+                    setSwitcherOpen(v => !v);
+                  } else {
+                    onToggleHistory();
+                  }
+                });
               }}
               className={`flex items-center gap-1 min-w-0 text-sm font-medium text-[var(--amber)] hover:text-[var(--amber)]/80 hover:bg-muted/40 transition-colors ${titleTriggerClass}`}
               aria-expanded={switcherOpen}
@@ -249,32 +256,32 @@ export default memo(function AskHeader({
       )}
       {hideTitle && <div />}
       <div className="flex items-center gap-1 shrink-0">
-        <button type="button" onClick={(e) => { e.stopPropagation(); onToggleHistory(); }} aria-pressed={showHistory} className={`${headerButtonClass} inline-flex items-center justify-center transition-colors ${showHistory ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
+        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onToggleHistory()); }} aria-pressed={showHistory} className={`${headerButtonClass} inline-flex items-center justify-center transition-colors ${showHistory ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
           <History size={iconSize} />
         </button>
         {messages && messages.length > 0 && (
           <SaveSessionButton messages={messages} disabled={isLoading} />
         )}
-        <button type="button" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={isLoading} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40`} title={t.hints.newSession}>
+        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onReset()); }} disabled={isLoading} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40`} title={t.hints.newSession}>
           <SquarePen size={iconSize} />
         </button>
         {onMaximize && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onMaximize(); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onMaximize()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
             {maximized ? <Minimize2 size={iconSize} /> : <Maximize2 size={iconSize} />}
           </button>
         )}
         {onDockToPanel && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDockToPanel(); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.dockToSide ?? 'Dock to side panel'}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onDockToPanel()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.dockToSide ?? 'Dock to side panel'}>
             <PanelRight size={iconSize} />
           </button>
         )}
         {onModeSwitch && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onModeSwitch(); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onModeSwitch()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
             {askMode === 'popup' ? <PanelRight size={iconSize} /> : <AppWindow size={iconSize} />}
           </button>
         )}
         {onClose && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onClose(); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.closePanel} aria-label="Close">
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onClose()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.closePanel} aria-label="Close">
             <X size={iconSize} />
           </button>
         )}

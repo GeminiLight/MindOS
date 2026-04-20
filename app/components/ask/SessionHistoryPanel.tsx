@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useTransition } from 'react';
 import { Search, Trash2, Pencil, Pin, PinOff, FolderInput, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
@@ -60,6 +60,7 @@ export default function SessionHistoryPanel({
   onClose, onNewChat,
 }: SessionHistoryPanelProps) {
   const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
   const ask = t.ask;
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -113,13 +114,17 @@ export default function SessionHistoryPanel({
   const totalCount = sessions.filter(s => s.messages.length > 0).length;
 
   const handleLoad = useCallback((id: string) => {
-    onLoad(id);
-    onClose();
+    startTransition(() => {
+      onLoad(id);
+      onClose();
+    });
   }, [onLoad, onClose]);
 
   const handleNewChat = useCallback(() => {
-    onNewChat();
-    onClose();
+    startTransition(() => {
+      onNewChat();
+      onClose();
+    });
   }, [onNewChat, onClose]);
 
   const startRename = useCallback((s: ChatSession) => {
@@ -128,10 +133,12 @@ export default function SessionHistoryPanel({
   }, []);
 
   const commitRename = useCallback(() => {
-    if (editingId && editValue.trim()) {
-      onRename(editingId, editValue.trim());
-    }
-    setEditingId(null);
+    startTransition(() => {
+      if (editingId && editValue.trim()) {
+        onRename(editingId, editValue.trim());
+      }
+      setEditingId(null);
+    });
   }, [editingId, editValue, onRename]);
 
   const handleClearAll = useCallback(() => {
@@ -141,9 +148,11 @@ export default function SessionHistoryPanel({
       clearTimer.current = setTimeout(() => setConfirmClearAll(false), 3000);
       return;
     }
-    if (clearTimer.current) clearTimeout(clearTimer.current);
-    onClearAll();
-    setConfirmClearAll(false);
+    startTransition(() => {
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+      onClearAll();
+      setConfirmClearAll(false);
+    });
   }, [confirmClearAll, onClearAll]);
 
   // Keyboard: Esc to close
