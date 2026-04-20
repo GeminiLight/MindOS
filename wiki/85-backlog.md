@@ -102,6 +102,12 @@
   - 使用 startTransition 将状态更新标记为非紧急，避免阻塞 UI 响应
   - 优化多次 setState 批处理，减少不必要的重新渲染
   - 改进用户体验：按钮点击立即响应，状态更新在后台完成
+- [x] Chatbot 交互性能优化
+  - 修复历史切换、放缩、会话切换等按钮点击卡顿问题
+  - 优化 AskHeader 和 SessionHistoryPanel 所有按钮交互
+  - 使用 startTransition 包裹状态更新，提升 UI 响应速度
+  - 解决鼠标移动缓慢问题：按钮 hover 效果不再阻塞渲染
+  - 涉及组件：AskHeader.tsx (10 处优化)、SessionHistoryPanel.tsx (4 处优化)
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
