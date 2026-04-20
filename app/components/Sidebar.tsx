@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { Search, PanelLeftClose, PanelLeftOpen, Menu, X, Settings, Trash2, CheckSquare } from 'lucide-react';
@@ -45,6 +45,7 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
   const [settingsTab, setSettingsTab] = useState<Tab | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   // Shared sync status for collapsed dot & mobile dot
@@ -76,9 +77,18 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setSearchOpen(v => !v); }
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); setAskOpen(v => !v); }
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); setSettingsOpen(v => !v); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        startTransition(() => setSearchOpen(v => !v));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        startTransition(() => setAskOpen(v => !v));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        startTransition(() => setSettingsOpen(v => !v));
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -86,7 +96,12 @@ export default function Sidebar({ fileTree, collapsed = false, onCollapse, onExp
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
-  const openSyncSettings = () => { setSettingsTab('sync'); setSettingsOpen(true); };
+  const openSyncSettings = () => {
+    startTransition(() => {
+      setSettingsTab('sync');
+      setSettingsOpen(true);
+    });
+  };
 
   const sidebarContent = (
     <div className="flex flex-col h-full">

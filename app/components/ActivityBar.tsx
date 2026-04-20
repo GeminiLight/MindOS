@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useState, useEffect } from 'react';
+import { useRef, useCallback, useState, useEffect, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { FolderTree, Search, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -109,6 +109,7 @@ export default function ActivityBar({
   const syncBtnRef = useRef<HTMLButtonElement>(null);
   const { t } = useLocale();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const isHome = pathname === '/';
 
@@ -214,12 +215,14 @@ export default function ActivityBar({
         <button
           type="button"
           onClick={() => {
-            if (isHome) {
-              onPanelChange(activePanel === 'files' ? null : 'files');
-            } else {
-              onPanelChange('files');
-              router.push('/');
-            }
+            startTransition(() => {
+              if (isHome) {
+                onPanelChange(activePanel === 'files' ? null : 'files');
+              } else {
+                onPanelChange('files');
+                router.push('/');
+              }
+            });
           }}
           className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[46px] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
           aria-label="MindOS Home"

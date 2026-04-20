@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronsDownUp, ChevronsUpDown, Plus, Import, FileText, Layers, MoreHorizontal, Eye, EyeOff, Trash2, Inbox, History } from 'lucide-react';
 import type { PanelId } from './ActivityBar';
@@ -72,6 +72,7 @@ export default function Panel({
   const width = maximized ? undefined : (panelWidth ?? defaultWidth);
 
   const { t } = useLocale();
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname();
   const isInboxActive = pathname === '/capture' || pathname === '/capture/';
@@ -196,7 +197,12 @@ export default function Panel({
               <button
                 ref={newBtnRef}
                 type="button"
-                onClick={() => { setMorePopover(false); setNewPopover(v => !v); }}
+                onClick={() => {
+                  startTransition(() => {
+                    setMorePopover(false);
+                    setNewPopover(v => !v);
+                  });
+                }}
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
                 aria-label={t.sidebar.new}
                 title={t.sidebar.new}
@@ -210,7 +216,12 @@ export default function Panel({
                 >
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                    onClick={() => { setNewPopover(false); router.push('/view/Untitled.md'); }}
+                    onClick={() => {
+                      startTransition(() => {
+                        setNewPopover(false);
+                        router.push('/view/Untitled.md');
+                      });
+                    }}
                   >
                     <FileText size={14} className="shrink-0" />
                     {t.sidebar.newFile}
@@ -272,7 +283,12 @@ export default function Panel({
               <button
                 ref={moreBtnRef}
                 type="button"
-                onClick={() => { setNewPopover(false); setMorePopover(v => !v); }}
+                onClick={() => {
+                  startTransition(() => {
+                    setNewPopover(false);
+                    setMorePopover(v => !v);
+                  });
+                }}
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
                 aria-label={t.sidebar.more}
                 title={t.sidebar.more}
@@ -286,7 +302,12 @@ export default function Panel({
                 >
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                    onClick={() => { setMorePopover(false); router.push('/capture'); }}
+                    onClick={() => {
+                      startTransition(() => {
+                        setMorePopover(false);
+                        router.push('/capture');
+                      });
+                    }}
                   >
                     <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
                     <span className="flex-1">{t.sidebar.capture}</span>
@@ -296,14 +317,24 @@ export default function Panel({
                   </button>
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                    onClick={() => { setMorePopover(false); router.push('/view/.mindos/change-log.json'); }}
+                    onClick={() => {
+                      startTransition(() => {
+                        setMorePopover(false);
+                        router.push('/view/.mindos/change-log.json');
+                      });
+                    }}
                   >
                     <History size={14} className="shrink-0 text-[var(--amber)]" />
                     <span className="flex-1">{t.changes.title}</span>
                   </button>
                   <button
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                    onClick={() => { setMorePopover(false); router.push('/trash'); }}
+                    onClick={() => {
+                      startTransition(() => {
+                        setMorePopover(false);
+                        router.push('/trash');
+                      });
+                    }}
                   >
                     <Trash2 size={14} className="shrink-0" />
                     <span className="flex-1">{t.trash.title}</span>

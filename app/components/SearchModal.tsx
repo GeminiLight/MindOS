@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
@@ -57,6 +57,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const resultsRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
   const warmState = useSearchPrewarm(open && tab === 'search');
@@ -258,7 +259,12 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         {/* Tab bar */}
         <div className="flex items-center gap-1 px-4 pt-2 pb-0">
           <button
-            onClick={() => { setTab('search'); setTimeout(() => inputRef.current?.focus(), 50); }}
+            onClick={() => {
+              startTransition(() => {
+                setTab('search');
+                setTimeout(() => inputRef.current?.focus(), 50);
+              });
+            }}
             className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
               tab === 'search'
                 ? 'text-foreground border-b-2 border-[var(--amber)]'
@@ -268,7 +274,12 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
             {t.search.tabSearch}
           </button>
           <button
-            onClick={() => { setTab('actions'); setActionIndex(0); }}
+            onClick={() => {
+              startTransition(() => {
+                setTab('actions');
+                setActionIndex(0);
+              });
+            }}
             className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
               tab === 'actions'
                 ? 'text-foreground border-b-2 border-[var(--amber)]'
@@ -298,8 +309,14 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                   <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
                 )}
                 {!loading && query && (
-                  <button 
-                    onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
+                  <button
+                    onClick={() => {
+                      startTransition(() => {
+                        setQuery('');
+                        setResults([]);
+                        inputRef.current?.focus();
+                      });
+                    }}
                     className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
                     aria-label={t.search.clear}
                   >
