@@ -26,6 +26,18 @@
   "bin": {
     "mindos": "bin/cli.js"
   },
+  "files": [
+    "bin/",
+    "app/",
+    "mcp/",
+    "assets/",
+    "skills/",
+    "templates/",
+    "_standalone/",
+    "README.md",
+    "README_zh.md",
+    "LICENSE"
+  ],
   "scripts": {
     "prepack": "rm -rf _standalone && cd mcp && npm install --include=dev && npm run build && cd ../app && npm install --no-workspaces && NODE_OPTIONS=\"--max-old-space-size=8192\" ./node_modules/.bin/next build --webpack && cd .. && node scripts/prepare-standalone.mjs && rm -rf app/node_modules app/.next mcp/node_modules _standalone/node_modules",
     "setup": "node scripts/setup.js",

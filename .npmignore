@@ -14,6 +14,7 @@ app/.claude-internal/
 
 # Standalone build artifacts — keep _standalone/ in npm for zero-build install.
 # Only exclude node_modules symlinks (standalone has its own traced deps).
+!_standalone/
 _standalone/node_modules/node_modules
 
 # MCP build artifacts
