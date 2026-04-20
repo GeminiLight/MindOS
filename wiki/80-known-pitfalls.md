@@ -878,6 +878,72 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 
 ## 构建 / 部署
 
+### Windows 安装包首次启动耗时 5-6 分钟（2026-04-14，已修复）
+
+**症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，首次运行 `mindos start` 需要等待 5-6 分钟才能启动成功。
+
+**根因**：npm 包缺少预构建的 `_standalone/` 目录，导致用户首次启动时需要经历三个耗时的构建步骤：
+1. **npm install 73 个依赖**（2-3 分钟，Windows NTFS 文件系统比 Unix 慢 20%）
+2. **next build 编译**（1.5-2 分钟，可能因堆内存不足而 OOM）
+3. **postcss 嵌套依赖安装**（0.5-1.5 分钟，Windows 上 npm install 慢 50-100%）
+
+**为什么 `_standalone/` 缺失**：
+- `prepack` 脚本中的 `next build --webpack` 因堆内存不足而 OOM
+- OOM 导致构建失败，`_standalone/` 目录未生成
+- npm 发布时 `_standalone/` 不存在，用户下载的包缺少预构建产物
+
+**调用链**：
+```
+npm install -g @geminilight/mindos（下载的包缺少 _standalone/）
+  → mindos start（首次启动）
+    → bin/commands/start.js 检测到缺少 .next/BUILD_ID
+      → npm install（73 个依赖，2-3 分钟）
+        → postinstall: fix-postcss-deps.cjs
+          → npm install --install-strategy=nested（0.5-1.5 分钟）
+      → next build --webpack（1.5-2 分钟）
+        → ❌ 可能 OOM（默认堆内存不足）
+```
+
+**修复**：
+1. **防止 OOM**：在 `prepack`、`build`、`start` 命令中添加 `NODE_OPTIONS="--max-old-space-size=8192"`，确保 next build 有足够堆内存
+2. **优化 postcss 安装**：`scripts/fix-postcss-deps.cjs` 改为 symlink/copy 兼容依赖（picocolors、source-map-js）从 app node_modules，只用 npm install 安装不兼容的 nanoid@3，减少安装时间 50-70%
+3. **确保 _standalone/ 进入 npm 包**：
+   - `.npmignore` 添加 `!_standalone/` 否定规则
+   - `package.json` 添加 `files` 字段显式声明包含 `_standalone/`
+
+**优化效果**：
+- **有 _standalone/**：0 秒（直接使用预构建，无需等待）
+- **无 _standalone/**：5-6 分钟 → 2-3 分钟（通过 OOM 修复 + postcss 优化）
+
+**为什么 Windows 特别慢**：
+1. **NTFS 文件系统**：小文件操作比 ext4/APFS 慢 20-30%
+2. **npm 并发解压**：Windows 文件锁机制导致竞争条件更频繁
+3. **postcss 嵌套安装**：Windows 上 npm install 慢 50-100%
+
+**教训**：
+- 构建脚本必须有足够的堆内存，否则 OOM 会导致产物缺失
+- npm 包应该包含预构建产物，避免用户侧首次启动时长时间等待
+- Windows 平台的文件系统性能差异需要特别优化
+- 使用 `npm pack` + 解压验证关键文件是否存在，不要只依赖本地测试
+
+**验证方式**：
+```bash
+npm pack
+tar -tzf geminilight-mindos-*.tgz | grep "_standalone/server.js"
+```
+
+**文件**：
+- `package.json:42`（prepack 添加 NODE_OPTIONS）
+- `bin/commands/build.js:24-26`（build 添加 NODE_OPTIONS）
+- `bin/commands/start.js:239-241`（start 添加 NODE_OPTIONS）
+- `scripts/fix-postcss-deps.cjs:17-66`（优化 postcss 依赖安装）
+- `.npmignore:17`（添加 !_standalone/）
+- `package.json:29-40`（添加 files 字段）
+
+**相关 commit**：
+- `0c3d0f3f` - fix: resolve Windows installation taking 5-6 minutes
+- `7911ea3c` - fix: ensure _standalone/ is included in npm package
+
 ### Windows onboard 失败：mcp/src/ 被 .npmignore 排除（2026-04-20）
 
 **症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，运行 `mindos onboard` 报错：
@@ -2079,3 +2145,76 @@ exit 0
 2. 更新 CODEBUDDY.md release 文档
 
 **文件**：`.github/workflows/publish-npm.yml`, `.github/hooks/pre-push`（新创建）, `CODEBUDDY.md`（文档部分）
+**文件**：`.github/workflows/publish-npm.yml`, `.github/hooks/pre-push`（新创建）, `CODEBUDDY.md`（文档部分）
+
+## Desktop / Electron
+
+### Windows 下 ACP (Claude Code/Codex) 调用失败（2026-04-21）
+
+**症状**：Windows 用户在 Chatbot 中使用 ACP 功能时，子进程无法正常启动或终止，导致 Agent 执行失败。
+
+**根因**：`app/lib/acp/subprocess.ts` 中的进程管理逻辑存在 3 个 Windows 兼容性问题：
+
+1. **负 PID 杀进程（Unix-only）**：
+   - `killAgent()` 使用 `process.kill(-pid)` 杀进程组
+   - Windows 不支持负 PID，会抛出 `EINVAL` 错误
+
+2. **detached + shell:false 配置冲突**：
+   - `spawnAndConnect()` 使用 `detached: true, shell: false`
+   - Windows 下 detached 进程需要 `shell: true` 才能正常工作
+
+3. **缺少 Windows 特定的进程树终止逻辑**：
+   - Unix 使用负 PID 杀进程组，Windows 需要 `taskkill /T` 递归杀子进程
+
+**修复**：
+
+```typescript
+// killAgent() - 添加 Windows 分支
+if (process.platform === 'win32') {
+  // Windows: use taskkill to kill process tree
+  try {
+    execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+  } catch (err) {
+    // Process may already be dead
+  }
+} else {
+  // Unix: kill process group with negative PID
+  try {
+    process.kill(-pid, 'SIGTERM');
+    setTimeout(() => {
+      try { process.kill(-pid, 'SIGKILL'); } catch {}
+    }, 3000);
+  } catch (err) {
+    // Process may already be dead
+  }
+}
+
+// spawnAcpAgent() - 修复 detached 配置
+const proc = spawn(cmd, args, {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: mergedEnv,
+  // Windows: detached requires shell:true to create new process group
+  // Unix: detached with shell:false creates new process group
+  shell: process.platform === 'win32',
+  detached: true,
+  ...(options?.cwd ? { cwd: options.cwd } : {}),
+});
+```
+
+**技术细节**：
+- Windows 进程模型不支持 Unix 的进程组概念（负 PID）
+- `detached: true` 在 Windows 下需要 `shell: true` 才能创建独立进程
+- `taskkill /T` 递归终止进程树，`/F` 强制终止
+
+**参考**：
+- `bin/lib/stop.js` 的 `killTree()` 函数（正确实现）
+- Node.js 文档：child_process.spawn options.detached
+
+**规则**：
+- 所有进程管理代码必须考虑 Windows 兼容性
+- 使用 `process.platform === 'win32'` 分支处理平台差异
+- 优先参考 bin/lib/stop.js 的成熟实现
+
+**测试**：
+- Mac: `cd app && npx vitest run __tests__/acp/` (131 tests passed ✅)
+- Windows: 需要在 Windows 环境实际测试 ACP 功能

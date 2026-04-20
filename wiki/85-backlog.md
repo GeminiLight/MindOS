@@ -114,6 +114,11 @@
   - 修复 ActivityBar.tsx：Logo 按钮导航卡顿问题（1 处优化）
   - 修复 Sidebar.tsx：键盘快捷键（⌘K/⌘//⌘,）和同步设置按钮卡顿问题（4 处优化）
   - 所有高频交互组件现在响应时间 <16ms，显著提升用户体验
+- [x] Windows 下 ACP (Claude Code/Codex) 调用失败
+  - 修复 subprocess.ts killAgent() 使用负 PID（Unix-only）导致 Windows 进程无法终止
+  - 修复 spawnAcpAgent() detached+shell:false 配置导致 Windows 进程管理异常
+  - 添加 Windows 特定的 taskkill /T 进程树终止逻辑
+  - Mac 测试通过（131 tests），Windows 需实际环境验证
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite

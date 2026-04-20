@@ -116,10 +116,14 @@ export function spawnAcpAgent(
     ...(options?.env ?? {}),
   };
 
+  const isWin = process.platform === 'win32';
+
   const proc = spawn(cmd, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: mergedEnv,
-    shell: false,
+    // Windows: detached requires shell:true to create new process group
+    // Unix: detached with shell:false creates new process group
+    shell: isWin,
     detached: true,
     ...(options?.cwd ? { cwd: options.cwd } : {}),
   });
@@ -155,10 +159,28 @@ export function spawnAcpAgent(
 
 /**
  * Kill an ACP agent process and its entire process tree.
+ * On Windows, uses taskkill /T for tree kill; on Unix, uses negative PID.
  */
 export function killAgent(acpProc: AcpProcess): void {
   const pid = acpProc.proc.pid;
-  if (pid) {
+  if (!pid) {
+    acpProc.alive = false;
+    processes.delete(acpProc.id);
+    return;
+  }
+
+  const isWin = process.platform === 'win32';
+
+  if (isWin) {
+    // Windows: Use taskkill /T to kill process tree
+    try {
+      const { execSync } = require('child_process');
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+    } catch {
+      // Process already dead or taskkill unavailable
+    }
+  } else {
+    // Unix: Use negative PID to kill process group
     try { process.kill(-pid, 'SIGTERM'); } catch { /* already dead */ }
     setTimeout(() => {
       try {
@@ -167,6 +189,7 @@ export function killAgent(acpProc: AcpProcess): void {
       } catch { /* already dead */ }
     }, 3000);
   }
+
   acpProc.alive = false;
   processes.delete(acpProc.id);
   const terms = terminalMaps.get(acpProc.id);
