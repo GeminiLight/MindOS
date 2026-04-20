@@ -30,17 +30,21 @@ export default function ViewNotFound() {
     setCreating(true);
     try {
       const target = isMd && !filePath.includes('.') ? `${filePath}.md` : filePath;
-      const res = await fetch('/api/files', {
-        method: 'PUT',
+      const res = await fetch('/api/file', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: target, content: '' }),
+        body: JSON.stringify({ op: 'create_file', path: target, content: '' }),
       });
       if (res.ok) {
         router.replace(`/view/${encodePath(target)}`);
         router.refresh();
+      } else {
+        // Show error to user instead of silent failure
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[not-found] Failed to create file:', data.error);
       }
-    } catch {
-      // silent — user can retry
+    } catch (err) {
+      console.error('[not-found] Network error:', err);
     } finally {
       setCreating(false);
     }

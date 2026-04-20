@@ -20,6 +20,32 @@
 
 ## Agent / LLM API
 
+### "创建此文件"按钮无法点击（2026-04-20）
+
+**症状**：用户访问不存在的文件（如 `笔记/國 AI/Untitled.md`）时，页面显示"文件未找到"提示和"创建此文件"按钮，但点击按钮无响应。
+
+**根因**：`app/view/[...path]/not-found.tsx:33-36` 调用了错误的 API 端点：
+- 错误：`PUT /api/files`（不存在）
+- 正确：`POST /api/file` + `op: 'create_file'`
+
+**修复**：
+1. 修改 API 端点从 `/api/files` 到 `/api/file`
+2. 修改 HTTP 方法从 `PUT` 到 `POST`
+3. 添加 `op: 'create_file'` 参数
+4. 改进错误处理：记录错误日志而非静默失败
+
+**技术细节**：
+- `/api/files` (GET) 用于列出所有文件
+- `/api/file` (POST) 用于文件操作，需要 `op` 参数指定操作类型
+- 可用的 `op` 值：`create_file`, `save_file`, `delete_file`, `rename_file`, `move_file` 等
+
+**规则**：
+- 所有文件操作必须通过 `POST /api/file` + `op` 参数
+- 不要静默吞掉错误，至少记录到 console 便于调试
+- API 调用失败时应给用户明确的反馈
+
+**测试**：手动测试访问不存在的文件路径，验证"创建此文件"按钮可正常工作。
+
 ### Hugging Face 模型下载失败（中国大陆网络）（2026-04-20）
 
 **症状**：用户在设置页面启用本地嵌入搜索并点击"下载模型"后，一直显示 "Download failed. Check your network connection and try again."。
