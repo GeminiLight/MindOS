@@ -97,6 +97,11 @@
   - 更新 wiki/80-known-pitfalls.md 记录四次复发根因
   - 提供三种用户自救方案（删除 bundled runtime / 全局安装 / 下载最新版）
   - 明确根本解决方案：Desktop 发布流程使用最新 main 分支构建
+- [x] Markdown 视图模式切换性能优化
+  - 修复 Edit/Source/View 按钮点击卡顿问题
+  - 使用 startTransition 将状态更新标记为非紧急，避免阻塞 UI 响应
+  - 优化多次 setState 批处理，减少不必要的重新渲染
+  - 改进用户体验：按钮点击立即响应，状态更新在后台完成
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite

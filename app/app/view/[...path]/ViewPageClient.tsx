@@ -497,19 +497,22 @@ export default function ViewPageClient({
                   <button
                     key={m.id}
                     onClick={() => {
-                      setMdViewMode(m.id);
-                      if (m.id === 'preview') {
-                        // Sync latest edit content to savedContent before switching
-                        const clean = twemojiToNative(editContent);
-                        setSavedContent(clean);
-                        if (clean !== savedContent) {
-                          saveAction(clean).catch(() => {});
+                      // Use startTransition to mark state updates as non-urgent
+                      startTransition(() => {
+                        setMdViewMode(m.id);
+                        if (m.id === 'preview') {
+                          // Sync latest edit content to savedContent before switching
+                          const clean = twemojiToNative(editContent);
+                          setSavedContent(clean);
+                          if (clean !== savedContent) {
+                            saveAction(clean).catch(() => {});
+                          }
+                          setEditing(false);
+                        } else if (!editing) {
+                          setEditContent(savedContent);
+                          setEditing(true);
                         }
-                        setEditing(false);
-                      } else if (!editing) {
-                        setEditContent(savedContent);
-                        setEditing(true);
-                      }
+                      });
                     }}
                     className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
                       mdViewMode === m.id
