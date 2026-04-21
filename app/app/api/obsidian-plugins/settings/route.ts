@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getPluginManager } from '@/lib/obsidian-compat/singleton';
+import { readSettings } from '@/lib/settings';
+import { PluginManager } from '@/lib/obsidian-compat/plugin-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    const manager = getPluginManager();
+    const settings = readSettings();
+    const manager = new PluginManager(settings.mindRoot);
     const loader = manager.getLoader();
     const loadedPlugins = loader.getLoadedPlugins();
 

@@ -65,6 +65,8 @@ export interface AcpConnection {
 /* ── State ─────────────────────────────────────────────────────────────── */
 
 const processes = new Map<string, AcpProcess>();
+// Track cleanup timers to prevent leaks when killAgent is called multiple times
+const cleanupTimers = new Map<string, NodeJS.Timeout[]>();
 
 /* ── Public API — Process Lifecycle ───────────────────────────────────── */
 
@@ -167,8 +169,13 @@ export function killAgent(acpProc: AcpProcess): void {
   if (!pid) {
     acpProc.alive = false;
     processes.delete(acpProc.id);
+    clearCleanupTimers(acpProc.id);
     return;
   }
+
+  // Clear any existing cleanup timers from previous killAgent calls
+  clearCleanupTimers(acpProc.id);
+  const timers: NodeJS.Timeout[] = [];
 
   // Step 1: Kill all terminals first to prevent orphaned processes
   const terms = terminalMaps.get(acpProc.id);
@@ -178,11 +185,12 @@ export function killAgent(acpProc: AcpProcess): void {
         try {
           entry.child.kill('SIGTERM');
           // Force kill after 1 second if still alive
-          setTimeout(() => {
+          const timer = setTimeout(() => {
             if (entry.child.exitCode === null) {
               try { entry.child.kill('SIGKILL'); } catch { /* already dead */ }
             }
           }, 1000);
+          timers.push(timer);
         } catch { /* already dead */ }
       }
     }
@@ -203,17 +211,34 @@ export function killAgent(acpProc: AcpProcess): void {
   } else {
     // Unix: Use negative PID to kill process group
     try { process.kill(-pid, 'SIGTERM'); } catch { /* already dead */ }
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         process.kill(-pid, 0);
         process.kill(-pid, 'SIGKILL');
       } catch { /* already dead */ }
     }, 3000);
+    timers.push(timer);
+  }
+
+  // Track timers for cleanup
+  if (timers.length > 0) {
+    cleanupTimers.set(acpProc.id, timers);
   }
 
   // Step 3: Clean up process tracking
   acpProc.alive = false;
   processes.delete(acpProc.id);
+}
+
+/**
+ * Clear all cleanup timers for a given process ID.
+ */
+function clearCleanupTimers(processId: string): void {
+  const timers = cleanupTimers.get(processId);
+  if (timers) {
+    timers.forEach(timer => clearTimeout(timer));
+    cleanupTimers.delete(processId);
+  }
 }
 
 export function getProcess(id: string): AcpProcess | undefined {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
 export interface UseComposerVerticalResizeOptions {
   minHeight: number;
@@ -23,6 +23,28 @@ export function useComposerVerticalResize({
   setHeight,
   persist,
 }: UseComposerVerticalResizeOptions) {
+  // Track active listeners for cleanup on unmount
+  const activeListenersRef = useRef<{
+    el: HTMLElement;
+    onMove: (ev: PointerEvent) => void;
+    onUpOrCancel: (ev: PointerEvent) => void;
+  } | null>(null);
+
+  // Cleanup listeners on unmount
+  useEffect(() => {
+    return () => {
+      const active = activeListenersRef.current;
+      if (active) {
+        active.el.removeEventListener('pointermove', active.onMove);
+        active.el.removeEventListener('pointerup', active.onUpOrCancel);
+        active.el.removeEventListener('pointercancel', active.onUpOrCancel);
+        document.body.classList.remove('select-none');
+        document.body.style.cursor = '';
+        activeListenersRef.current = null;
+      }
+    };
+  }, []);
+
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLElement>) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -55,6 +77,7 @@ export function useComposerVerticalResize({
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUpOrCancel);
         el.removeEventListener('pointercancel', onUpOrCancel);
+        activeListenersRef.current = null;
         try {
           el.releasePointerCapture(pointerId);
         } catch {
@@ -66,6 +89,9 @@ export function useComposerVerticalResize({
       el.addEventListener('pointermove', onMove);
       el.addEventListener('pointerup', onUpOrCancel);
       el.addEventListener('pointercancel', onUpOrCancel);
+
+      // Track listeners for cleanup on unmount
+      activeListenersRef.current = { el, onMove, onUpOrCancel };
     },
     [minHeight, maxHeightAbs, maxHeightViewportRatio, getHeight, setHeight, persist],
   );

@@ -124,8 +124,20 @@
   - 优化依赖项：只在 nodes/showHidden/isRoot 变化时重新过滤
   - 减少文件树展开/折叠时的不必要计算
   - 测试通过（1933 tests），无功能回归
-- [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
-- [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
+- [x] 将 Setting / PluginSettingTab 接入真实宿主设置页面
+  - 创建 ObsidianPluginSettings 组件（可折叠面板，支持 text/toggle/dropdown/button 四种设置类型）
+  - 创建 ObsidianPluginSettingsList 组件（从 API 获取插件设置并渲染）
+  - 创建 GET /api/obsidian-plugins/settings 端点（返回已加载插件的设置项）
+  - 集成到 Settings > Plugins 页面（在 ObsidianImportSection 后添加 Obsidian Plugin Settings 部分）
+  - 使用 Warm Amber 设计系统样式，支持展开/折叠动画
+  - 所有测试通过（203 test files, 1953 tests）
+- [x] 将 Notice / Modal 接入真实宿主 UI 反馈系统
+  - Notice 类集成 MindOS toast 系统（toast.success/error/info）
+  - Modal 类集成真实 DOM 和 dialog 元素
+  - 添加 CSS 动画和样式注入
+  - 支持 onOpen/onClose 生命周期钩子
+  - 实现 setTitle/setContent 方法
+  - UI 测试全部通过（4 tests）
 - [x] 为真实第三方社区插件构建 smoke suite
   - 增强现有 fixtures：添加更真实的代码模式（设置持久化、错误处理、Modal 交互、vault 操作等）
   - 创建可选的真实插件测试套件（`community-real-plugins.test.ts`）
