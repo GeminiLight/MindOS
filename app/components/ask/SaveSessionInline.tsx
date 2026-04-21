@@ -239,7 +239,13 @@ function SingleSaveForm({ content, defaultFilenamePrefix, dirPaths, onClose, ask
   const [errorMsg, setErrorMsg] = useState('');
   const fnRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setTimeout(() => { fnRef.current?.focus(); fnRef.current?.select(); }, 100); }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fnRef.current?.focus();
+      fnRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const safePath = (() => {
     const fn = filename.trim() || defaultFn;
@@ -385,7 +391,13 @@ function ArchiveForm({ messages, dirPaths, onBack, onClose, ask }: {
   const [errorMsg, setErrorMsg] = useState('');
   const fnRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setTimeout(() => { fnRef.current?.focus(); fnRef.current?.select(); }, 100); }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fnRef.current?.focus();
+      fnRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const safePath = (() => {
     const fn = filename.trim() || defaultFn;

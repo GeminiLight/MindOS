@@ -4,20 +4,7 @@
  */
 
 import { Component } from '../component';
-import type { App, PluginSettingTab as IPluginSettingTab } from '../types';
-
-export type SettingKind = 'text' | 'toggle' | 'dropdown' | 'button';
-
-export interface PluginSettingItem {
-  name?: string;
-  desc?: string;
-  kind?: SettingKind;
-  value?: unknown;
-  buttonText?: string;
-  options?: Array<{ value: string; label: string }>;
-  onChange?: (value: unknown) => void;
-  onClick?: () => void;
-}
+import type { App, PluginSettingTab as IPluginSettingTab, PluginSettingItem, SettingKind } from '../types';
 
 class TextComponent {
   private item: PluginSettingItem;

@@ -65,6 +65,8 @@ export interface AcpConnection {
 /* ── State ─────────────────────────────────────────────────────────────── */
 
 const processes = new Map<string, AcpProcess>();
+// Track cleanup timers to prevent leaks when killAgent is called multiple times
+const cleanupTimers = new Map<string, NodeJS.Timeout[]>();
 
 /* ── Public API — Process Lifecycle ───────────────────────────────────── */
 
@@ -160,15 +162,42 @@ export function spawnAcpAgent(
 /**
  * Kill an ACP agent process and its entire process tree.
  * On Windows, uses taskkill /T for tree kill; on Unix, uses negative PID.
+ * CRITICAL: Terminals must be killed BEFORE the parent process to prevent leaks.
  */
 export function killAgent(acpProc: AcpProcess): void {
   const pid = acpProc.proc.pid;
   if (!pid) {
     acpProc.alive = false;
     processes.delete(acpProc.id);
+    clearCleanupTimers(acpProc.id);
     return;
   }
 
+  // Clear any existing cleanup timers from previous killAgent calls
+  clearCleanupTimers(acpProc.id);
+  const timers: NodeJS.Timeout[] = [];
+
+  // Step 1: Kill all terminals first to prevent orphaned processes
+  const terms = terminalMaps.get(acpProc.id);
+  if (terms) {
+    for (const entry of terms.values()) {
+      if (entry.child.exitCode === null) {
+        try {
+          entry.child.kill('SIGTERM');
+          // Force kill after 1 second if still alive
+          const timer = setTimeout(() => {
+            if (entry.child.exitCode === null) {
+              try { entry.child.kill('SIGKILL'); } catch { /* already dead */ }
+            }
+          }, 1000);
+          timers.push(timer);
+        } catch { /* already dead */ }
+      }
+    }
+    terminalMaps.delete(acpProc.id);
+  }
+
+  // Step 2: Kill the parent ACP agent process
   const isWin = process.platform === 'win32';
 
   if (isWin) {
@@ -182,22 +211,33 @@ export function killAgent(acpProc: AcpProcess): void {
   } else {
     // Unix: Use negative PID to kill process group
     try { process.kill(-pid, 'SIGTERM'); } catch { /* already dead */ }
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         process.kill(-pid, 0);
         process.kill(-pid, 'SIGKILL');
       } catch { /* already dead */ }
     }, 3000);
+    timers.push(timer);
   }
 
+  // Track timers for cleanup
+  if (timers.length > 0) {
+    cleanupTimers.set(acpProc.id, timers);
+  }
+
+  // Step 3: Clean up process tracking
   acpProc.alive = false;
   processes.delete(acpProc.id);
-  const terms = terminalMaps.get(acpProc.id);
-  if (terms) {
-    for (const entry of terms.values()) {
-      if (entry.child.exitCode === null) entry.child.kill('SIGTERM');
-    }
-    terminalMaps.delete(acpProc.id);
+}
+
+/**
+ * Clear all cleanup timers for a given process ID.
+ */
+function clearCleanupTimers(processId: string): void {
+  const timers = cleanupTimers.get(processId);
+  if (timers) {
+    timers.forEach(timer => clearTimeout(timer));
+    cleanupTimers.delete(processId);
   }
 }
 
@@ -252,12 +292,19 @@ function createMindosClient(
           content = lines.slice(Math.max(0, start), end).join('\n');
         }
         return { content };
-      } catch (err: any) {
-        if (err?.code === 'ENOENT') throw RequestError.resourceNotFound(params.path);
-        if (err?.code === 'EACCES' || err?.code === 'EPERM') {
+      } catch (err) {
+        // Type-safe error handling with proper guards
+        const isNodeError = (e: unknown): e is NodeJS.ErrnoException => {
+          return typeof e === 'object' && e !== null && 'code' in e;
+        };
+        if (isNodeError(err) && err.code === 'ENOENT') {
+          throw RequestError.resourceNotFound(params.path);
+        }
+        if (isNodeError(err) && (err.code === 'EACCES' || err.code === 'EPERM')) {
           throw new RequestError(-32001, `Permission denied: ${params.path}`);
         }
-        throw new RequestError(-32603, `Failed to read ${params.path}: ${err?.message ?? err}`);
+        const message = err instanceof Error ? err.message : String(err);
+        throw new RequestError(-32603, `Failed to read ${params.path}: ${message}`);
       }
     },
 
@@ -271,14 +318,19 @@ function createMindosClient(
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(params.path, params.content, 'utf-8');
         return {};
-      } catch (err: any) {
-        if (err?.code === 'EACCES' || err?.code === 'EPERM') {
+      } catch (err) {
+        // Type-safe error handling with proper guards
+        const isNodeError = (e: unknown): e is NodeJS.ErrnoException => {
+          return typeof e === 'object' && e !== null && 'code' in e;
+        };
+        if (isNodeError(err) && (err.code === 'EACCES' || err.code === 'EPERM')) {
           throw new RequestError(-32001, `Write permission denied: ${params.path}`);
         }
-        if (err?.code === 'ENOSPC') {
+        if (isNodeError(err) && err.code === 'ENOSPC') {
           throw new RequestError(-32603, `Disk full: cannot write ${params.path}`);
         }
-        throw RequestError.internalError(undefined, err?.message ?? String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        throw RequestError.internalError(undefined, message);
       }
     },
 

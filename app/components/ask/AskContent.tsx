@@ -103,6 +103,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [dropError, setDropError] = useState('');
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
@@ -183,7 +184,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     session.setSessionDefaultAcpAgent(agent);
   }, [session]);
   const hasLoadingAttachments = upload.localAttachments.some((f) => f.status === 'loading');
-  const composerStatusMessage = upload.uploadError || imageUpload.imageError || '';
+  const composerStatusMessage = upload.uploadError || imageUpload.imageError || dropError || '';
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -361,17 +362,27 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
   const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     setInput(val);
     const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
     if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
-    mentionTimerRef.current = setTimeout(() => mentionRef.current.updateMentionFromInput(val, pos), 80);
-    slashTimerRef.current = setTimeout(() => slashRef.current.updateSlashFromInput(val, pos), 80);
+    mentionTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      mentionRef.current.updateMentionFromInput(val, pos);
+    }, 80);
+    slashTimerRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      slashRef.current.updateSlashFromInput(val, pos);
+    }, 80);
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
       if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
     };
@@ -503,6 +514,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
+    setDropError(''); // Clear any previous drop errors
     const filePath = e.dataTransfer.getData('text/mindos-path');
     if (filePath) {
       const pathType = e.dataTransfer.getData('text/mindos-type');
@@ -516,7 +528,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (files.length > 0) {
       const hasImages = Array.from(files).some(f => f.type.startsWith('image/'));
       const nonImageFiles = Array.from(files).filter(f => !f.type.startsWith('image/'));
-      // Fire-and-forget with error handling to prevent unhandled rejections
+      // Process files with proper error handling and user feedback
       void (async () => {
         try {
           if (hasImages) await imageUploadRef.current.handleDrop(e);
@@ -526,7 +538,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             await uploadRef.current.pickFiles(dt.files);
           }
         } catch (err) {
-          console.warn('[AskContent] Drop file processing failed:', err);
+          // Surface unexpected errors to the user via composerStatusMessage
+          const errorMsg = err instanceof Error ? err.message : 'Failed to process dropped files';
+          setDropError(errorMsg);
+          console.error('[AskContent] Drop file processing failed:', err);
         }
       })();
     }

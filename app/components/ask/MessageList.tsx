@@ -328,6 +328,8 @@ export default memo(function MessageList({
     container.addEventListener('touchmove', handleTouchMove, { passive: true });
     container.addEventListener('keydown', handleKeyDown);
     return () => {
+      // Verify container still exists before removing listeners to prevent memory leaks
+      if (!container) return;
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
       container.removeEventListener('touchstart', handleTouchStart);

@@ -4,6 +4,7 @@ import { Puzzle } from 'lucide-react';
 import { getPluginRenderers, setRendererEnabled } from '@/lib/renderers/registry';
 import { Toggle } from './Primitives';
 import { ObsidianImportSection } from './ObsidianImportSection';
+import { ObsidianPluginSettingsList } from './ObsidianPluginSettingsList';
 import type { PluginsTabProps } from './types';
 
 export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: PluginsTabProps) {
@@ -68,6 +69,13 @@ export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: Plugi
       )}
 
       <ObsidianImportSection mindRoot={mindRoot} />
+
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Obsidian Plugin Settings
+        </p>
+        <ObsidianPluginSettingsList />
+      </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground border border-border/40 bg-card/30 rounded-xl px-4 py-3">
         <Puzzle size={13} className="shrink-0" />
