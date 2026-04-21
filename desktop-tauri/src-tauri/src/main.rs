@@ -4,6 +4,8 @@
 mod config;
 mod deep_link;
 mod runtime;
+mod shortcuts;
+mod updater;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -32,6 +34,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(runtime::RuntimeState::new())
         .invoke_handler(tauri::generate_handler![
             toggle_window,
@@ -41,6 +44,8 @@ fn main() {
             runtime::stop_runtime_command,
             config::get_config,
             config::set_config,
+            updater::check_updates_command,
+            updater::install_update_command,
         ])
         .setup(|app| {
             // Register deep link handler
@@ -78,7 +83,9 @@ fn main() {
             let show_item = MenuItem::with_id(app, "show", "Show/Hide", true, None::<&str>)?;
             let health_item =
                 MenuItem::with_id(app, "health", "Runtime Status", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &health_item, &quit_item])?;
+            let update_item =
+                MenuItem::with_id(app, "update", "Check for Updates", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &health_item, &update_item, &quit_item])?;
 
             // Create tray icon
             let _tray = TrayIconBuilder::new()
@@ -126,6 +133,24 @@ fn main() {
                             }
                         });
                     }
+                    "update" => {
+                        // Check for updates
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            match updater::check_for_updates(app_handle).await {
+                                Ok(status) => {
+                                    if status.available {
+                                        println!("[MindOS] Update available: {:?}", status.version);
+                                    } else {
+                                        println!("[MindOS] No updates available");
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("[MindOS] Failed to check updates: {}", e);
+                                }
+                            }
+                        });
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -168,6 +193,17 @@ fn main() {
                         Err(e) => eprintln!("[MindOS] Failed to start runtime: {}", e),
                     }
                 });
+            }
+
+            // Check for updates on startup (non-blocking)
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = updater::check_for_updates(app_handle).await;
+            });
+
+            // Register global shortcuts
+            if let Err(e) = shortcuts::register_shortcuts(app) {
+                eprintln!("[MindOS] Failed to register shortcuts: {}", e);
             }
 
             Ok(())
