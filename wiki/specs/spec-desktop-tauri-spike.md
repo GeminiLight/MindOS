@@ -88,8 +88,8 @@ desktop-tauri/
 - [x] 自动启动 runtime（app 启动时）
 - [x] 优雅关闭（app 退出时停止 runtime）
 
-**Phase 3: 高级功能（后续）**
-- [ ] Deep link (mindos://)
+**Phase 3: 高级功能**
+- [x] Deep link (mindos://) - 支持从浏览器/其他应用打开文件
 - [ ] 自动更新
 - [ ] 多窗口管理
 - [ ] 快捷键

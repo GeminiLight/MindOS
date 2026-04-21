@@ -18,11 +18,11 @@ A minimal Tauri-based desktop application spike for MindOS, designed to evaluate
 - Runtime status in tray menu
 - Graceful shutdown
 
-### Phase 3: Advanced Features (🔄 Future)
-- Deep link support (mindos://)
-- Auto-update
-- Multi-window management
-- Global shortcuts
+### Phase 3: Advanced Features (🔄 Partial)
+- Deep link support (mindos://) ✅
+- Auto-update (future)
+- Multi-window management (future)
+- Global shortcuts (future)
 
 ## Quick Start
 
@@ -168,3 +168,28 @@ Based on the evaluation, decide:
 ## License
 
 Same as MindOS main project.
+
+## Deep Link Usage
+
+MindOS Desktop registers the `mindos://` protocol. You can use it to open files directly:
+
+```bash
+# Open a specific file
+open "mindos://open/notes/test.md"
+
+# Open with query parameters
+open "mindos://open/notes/test.md?line=10"
+
+# Just open the app
+open "mindos://"
+```
+
+From HTML:
+```html
+<a href="mindos://open/notes/test.md">Open in MindOS</a>
+```
+
+The app will:
+1. Launch or focus if already running
+2. Parse the URL and extract the path
+3. Navigate to the specified file in the runtime
