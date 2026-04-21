@@ -1,0 +1,13 @@
+file '/tmp/mindos-walkthrough.JEIUDT/00-product-loop.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/01-home.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/02-chat.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/03-dashboard.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/04-echo.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/05-agents-page.png'
+duration 3
+file '/tmp/mindos-walkthrough.JEIUDT/05-agents-page.png'

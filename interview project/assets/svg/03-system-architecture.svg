@@ -1,0 +1,78 @@
+<svg width="1600" height="1040" viewBox="0 0 1600 1040" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="90" y1="60" x2="1500" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCF8F2"/>
+      <stop offset="1" stop-color="#F2ECE3"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="132" y1="314" x2="132" y2="884" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2B26F"/>
+      <stop offset="1" stop-color="#8B5B21"/>
+    </linearGradient>
+    <filter id="shadow" x="80" y="240" width="1440" height="700" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#8B5B21" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1040" fill="url(#bg)"/>
+  <circle cx="1320" cy="180" r="120" fill="#EDCCA1" opacity="0.24"/>
+  <circle cx="250" cy="900" r="146" fill="#E0A55E" opacity="0.10"/>
+
+  <text x="120" y="106" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.18em">MINDOS / SYSTEM ARCHITECTURE</text>
+  <text x="120" y="172" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="56" font-weight="700">系统中心不是模型，而是本地知识底座</text>
+  <text x="120" y="216" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24">上层是人和 Agent 的多入口协作，中层是服务与协议，底层是可审计、可迁移的本地知识系统。</text>
+
+  <g filter="url(#shadow)">
+    <rect x="120" y="286" width="1360" height="620" rx="42" fill="#FFFDF9"/>
+  </g>
+
+  <rect x="154" y="332" width="6" height="520" rx="3" fill="url(#accent)"/>
+
+  <g transform="translate(196 322)">
+    <text x="0" y="28" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.16em">TOP LAYER</text>
+    <text x="0" y="68" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="38" font-weight="700">用户与外部 Agent 入口</text>
+    <text x="0" y="100" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">同一套知识底座，被 GUI、CLI、Desktop 和外部 Agent 共同访问。</text>
+
+    <rect x="540" y="0" width="138" height="72" rx="22" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="609" y="44" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">Web GUI</text>
+    <rect x="696" y="0" width="112" height="72" rx="22" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="752" y="44" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">CLI</text>
+    <rect x="826" y="0" width="148" height="72" rx="22" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="900" y="44" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">Desktop</text>
+    <rect x="992" y="0" width="160" height="72" rx="22" fill="#221E1A"/>
+    <text x="1072" y="44" text-anchor="middle" fill="#FFF8EF" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">Agents</text>
+  </g>
+
+  <g transform="translate(196 520)">
+    <text x="0" y="28" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.16em">SERVICE LAYER</text>
+    <text x="0" y="68" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="38" font-weight="700">服务、协议与执行层</text>
+    <text x="0" y="100" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">把人的操作和 Agent 请求，统一翻译成对知识底座的安全调用。</text>
+
+    <rect x="468" y="8" width="190" height="88" rx="28" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="563" y="43" text-anchor="middle" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">APPLICATION</text>
+    <text x="563" y="76" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="700">Next.js API</text>
+
+    <rect x="680" y="8" width="210" height="88" rx="28" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="785" y="43" text-anchor="middle" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">PROTOCOL</text>
+    <text x="785" y="76" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="700">MCP / ACP / A2A</text>
+
+    <rect x="912" y="8" width="270" height="88" rx="28" fill="#FFF8EF" stroke="#DFD3C6"/>
+    <text x="1047" y="43" text-anchor="middle" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">EXECUTION</text>
+    <text x="1047" y="76" text-anchor="middle" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="700">Tools / Sessions / Prompt</text>
+  </g>
+
+  <g transform="translate(196 718)">
+    <text x="0" y="28" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.16em">FOUNDATION</text>
+    <text x="0" y="68" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="38" font-weight="700">本地知识底座</text>
+    <text x="0" y="100" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">Markdown / CSV / JSON 作为单一事实源，配合 Git、索引、规则与审计能力构成长期资产。</text>
+
+    <rect x="468" y="0" width="714" height="136" rx="34" fill="#221E1A"/>
+    <text x="825" y="42" text-anchor="middle" fill="#EBCFA6" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.16em">LOCAL KNOWLEDGE FOUNDATION</text>
+    <text x="825" y="83" text-anchor="middle" fill="#FFF9F1" font-family="Lora, Georgia, serif" font-size="31" font-weight="700">Markdown / CSV / JSON</text>
+    <text x="825" y="118" text-anchor="middle" fill="#FFF4E4" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="26" font-weight="600">Git + Skills + Instructions</text>
+  </g>
+
+  <path d="M1022 466V514" stroke="#B27630" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1022 664V712" stroke="#B27630" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1009 499L1022 514L1035 499" stroke="#B27630" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1009 697L1022 712L1035 697" stroke="#B27630" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

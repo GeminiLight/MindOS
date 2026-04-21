@@ -123,3 +123,10 @@
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
 - [ ] 补全 `resolvedLinks` / `unresolvedLinks` 全局索引语义
+- [x] Desktop Tauri Spike
+  - 创建 desktop-tauri/ 目录结构
+  - 实现最小 Tauri 窗口 + System Tray
+  - 连接到 localhost:3456 runtime
+  - 完整的 spec、类型定义、README、SETUP 指南
+  - 红队审查并修复所有 blocker 问题
+  - 文档更新：wiki/80-known-pitfalls.md 新增 Tauri 图标加载问题

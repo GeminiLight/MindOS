@@ -1,0 +1,296 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1.8cm]{geometry}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{pdfpages}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{tcolorbox}
+\usepackage{xcolor}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+\definecolor{MindAmber}{HTML}{C8873A}
+\definecolor{MindAmberDark}{HTML}{8D5C1F}
+\definecolor{MindInk}{HTML}{222222}
+\definecolor{MindMuted}{HTML}{5F5A54}
+\definecolor{MindLine}{HTML}{DED7CF}
+\definecolor{MindBg}{HTML}{F8F5F0}
+
+\hypersetup{
+  colorlinks=true,
+  urlcolor=MindAmberDark,
+  linkcolor=MindAmberDark,
+  pdftitle={MindOS},
+  pdfauthor={GeminiLight},
+  pdfsubject={Vibe Coding Project Case Study}
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\headheight}{14pt}
+\setlist[itemize]{leftmargin=1.6em,itemsep=2pt,topsep=2pt}
+\setstretch{1.15}
+
+\titleformat{\section}
+  {\LARGE\bfseries\color{MindInk}}
+  {\thesection}{0.6em}{}
+  [\vspace{0.35em}\color{MindLine}\titlerule]
+
+\titleformat{\subsection}
+  {\large\bfseries\color{MindAmberDark}}
+  {\thesubsection}{0.6em}{}
+
+\titlespacing*{\section}{0pt}{1.2em}{0.8em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.45em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\color{MindMuted}MindOS}
+\fancyhead[R]{\color{MindMuted}Vibe Coding 项目案例}
+\fancyfoot[C]{\color{MindMuted}\thepage\ /\ \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\newtcolorbox{highlightbox}{
+  colback=MindBg,
+  colframe=MindAmber,
+  boxrule=0.7pt,
+  arc=6pt,
+  left=12pt,right=12pt,top=10pt,bottom=10pt
+}
+
+\newtcolorbox{lightbox}{
+  colback=MindBg!45!white,
+  colframe=MindLine,
+  boxrule=0.55pt,
+  arc=6pt,
+  left=12pt,right=12pt,top=10pt,bottom=10pt
+}
+
+\begin{document}
+
+\includepdf[pages=1]{../assets/svg/pdf/04-cover-board.pdf}
+
+\section{用户场景分析}
+
+\subsection{问题背景}
+
+在 Vibe Coding 时代，AI 已经显著降低了编码、调研和内容生产的执行成本，“先做出来再说”变得前所未有地容易；但真实工作流并没有因此自动变顺。对同时使用多种 Agent 的独立开发者 / 创始人来说，新的复杂性反而更集中地暴露出来：\textbf{工具链越来越繁琐，经验越来越分散，而人的能力增长并没有被系统承接。}
+
+\begin{lightbox}
+\textbf{典型现象}
+\begin{itemize}
+  \item 同时使用 3 个以上的 AI Agent 已越来越常见，但项目背景、命名规范、错误处理标准仍要在不同工具之间反复搬运。
+  \item 用户实际上仍在“伺候 AI”：手动维护 \texttt{CLAUDE.md}、\texttt{.cursorrules}、Prompt 模板和项目说明，人在适配机器，而不是机器适配人。
+  \item 很多人已经能借助 Vibe Coding 很快把页面或 Demo 做出来，但自己的架构判断和工程习惯并没有同步提升，做完后也很难回答“这次到底沉淀了什么”。
+  \item 用户对 AI 的每一次纠正都蕴含高密度判断，但这些反馈大多停留在一次性对话中，AI 没有稳定记住，人也没有因此更系统地认识自己。
+\end{itemize}
+\end{lightbox}
+
+也正是因为看到这些现象，MindOS 在产品优先级上首先解决的，并不是“再做一个更会聊天的 AI”，而是\textbf{先把用户判断沉淀下来，并让不同 Agent 稳定复用。} 这样，用户获得的不只是更快的产出，还能把纠正、取舍和决策逐步沉淀为自己的规则体系，而不是停留在一次“做出来了但没有真正留下什么”的 Vibe Coding 体验里。
+
+\subsection{问题拆解}
+
+\begin{center}
+\includegraphics[width=\textwidth]{../assets/svg/pdf/01-problem-layers.pdf}
+\end{center}
+\vspace{-0.2cm}
+{\small \color{MindMuted}问题拆解图：表层是上下文搬运，中层是经验蒸发，深层是成长无法形成复利。}
+
+\subsection{核心用户画像}
+
+MindOS 的核心用户不是泛大众，而是 \textbf{同时使用 3+ AI Agent 的独立开发者 / 创始人}。这类用户普遍具备以下特征：
+
+\begin{itemize}
+  \item 日常在 CLI、IDE、浏览器和多个 AI 对话窗口之间切换；
+  \item 对本地文件、Markdown、SOP、项目文档管理有较强习惯；
+  \item 对效率与掌控感要求高，不愿把核心记忆交给云端黑箱；
+  \item 希望 AI 不只是回答问题，而是能真正读懂自己的规则并参与交付。
+\end{itemize}
+
+\subsection{代表性场景}
+
+\begin{lightbox}
+\textbf{场景 A：开发者跨 Agent 编码}\par
+用户在 Claude Code 写后端、在 Cursor 调前端、在其他 Agent 做 review。如果每次切换都要重新交代背景、命名规范和错误处理标准，效率会被严重吞噬。\par
+\textbf{需求本质：} 写一次规则，所有 Agent 遵守。
+\end{lightbox}
+
+\begin{lightbox}
+\textbf{场景 B：创始人沉淀战略与决策}\par
+产品定位、优先级判断、竞品差异化等高价值信息，往往散落在对话窗口中，事后很难追溯。\par
+\textbf{需求本质：} 让决策成为知识资产，而不是一次性对话产物。
+\end{lightbox}
+
+\begin{lightbox}
+\textbf{场景 C：把工作流变成可执行 SOP}\par
+用户每次纠正 AI，实际都在暴露自己的方法论。如果这些纠正能沉淀成 Skill 或 Instruction，下次就无需重复纠正。\par
+\textbf{需求本质：} 让纠正可以复用，并被不同 Agent 继承。
+\end{lightbox}
+
+\section{解决方案}
+
+\subsection{产品定义}
+
+MindOS 更接近一个本地优先的人机共享知识系统。整体由三层组成：
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{2.4cm}p{2.4cm}X@{}}
+\toprule
+层级 & 核心概念 & 作用 \\
+\midrule
+结构层 & Space & 按项目、主题、角色组织知识 \\
+控制层 & Instruction & 定义所有 Agent 共同遵守的规则 \\
+执行层 & Skill & 把经验与方法论沉淀成可复用执行手册 \\
+\bottomrule
+\end{tabularx}
+
+\subsection{竞品分析与差异化}
+
+MindOS 面对的竞品并不在同一层：有的是\textbf{给人使用的知识工具}，有的是\textbf{单一模型内置的记忆能力}，还有的是\textbf{面向开发者的记忆基础设施}。它要解决的核心问题，是把\textbf{跨 Agent 的判断沉淀、可审计治理与本地数据主权}放进同一套工作流里。
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash\bfseries}p{2.45cm}>{\raggedright\arraybackslash}p{2.75cm}X@{}}
+\toprule
+对象 & 典型强项 & 与 MindOS 的关键差异 \\
+\midrule
+Obsidian & 本地 Markdown、个人知识管理、插件生态成熟 & 更适合“人读人的笔记”；Agent 连接不是产品的一等能力。MindOS 更强调让多个 Agent 直接读写同一套上下文，并把操作过程纳入审计。 \\
+Notion AI & 团队协作、云端工作流、文档组织能力强 & 核心还是“人协作 + AI 增强”。MindOS 则优先服务本地优先的独立开发者 / 创始人，重点解决跨 Agent 共享规则与判断沉淀。 \\
+OpenAI Memory / Claude 项目记忆 & 单一模型内的记忆延续，开箱即用 & 只能在各自生态内生效，跨工具迁移弱、用户难以治理。MindOS 的目标是让记忆和规则不依附于任何单一模型厂商。 \\
+MemOS 一类记忆基础设施 & 提供程序化记忆能力，适合集成到 Agent 系统 & 更偏开发者集成层，记忆往往存在向量或内部结构里。MindOS 更偏终端产品层，强调纯文本、可读、可改、可追溯。 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{lightbox}
+\textbf{定位结论}
+\begin{itemize}
+  \item \textbf{和 Obsidian 的关系}：更像互补。Obsidian 适合管理个人笔记，MindOS 解决的是人和多个 Agent 共享上下文的问题。
+  \item \textbf{和模型内置记忆的区别}：不只是“记住”，而是把判断整理成可复用规则，并且允许用户随时查看和修改。
+  \item \textbf{和纯基础设施的区别}：除了协议和接口，MindOS 还把治理、审计和工作台一起做成可直接使用的产品。
+  \item \textbf{差异化位置}：在“多 Agent”和“人可审计”这两个维度上，MindOS 的定位会更清晰。
+\end{itemize}
+\end{lightbox}
+
+\subsection{关键设计思路}
+
+\begin{itemize}
+  \item \textbf{统一知识底座}：以本地 Markdown / CSV / JSON 作为单一事实源。
+  \item \textbf{统一 Agent 接入}：通过 MCP、ACP、A2A 等协议让不同 Agent 共享上下文。
+  \item \textbf{统一人机工作台}：用户通过 GUI、CLI、Desktop 操作同一套知识系统。
+  \item \textbf{统一沉淀机制}：让规则、操作日志、工作流和反思都能回流到知识库。
+\end{itemize}
+
+\subsection{用户价值主张}
+
+\begin{highlightbox}
+\begin{itemize}
+  \item \textbf{写一次，全局复用}：项目背景和规则不再重复交代。
+  \item \textbf{人可治理，透明可控}：知识与规则都以本地纯文本保存，可审计、可修改。
+  \item \textbf{经验回流，持续演进}：对 AI 的纠正不浪费，而是逐步沉淀成自己的方法论。
+\end{itemize}
+\end{highlightbox}
+
+\vspace{0.35cm}
+\begin{center}
+\includegraphics[width=\textwidth]{../assets/svg/pdf/02-human-agent-flywheel.pdf}
+\end{center}
+\vspace{-0.2cm}
+{\small \color{MindMuted}认知复利飞轮：先把判断沉淀下来，再让不同 Agent 稳定复用，后续再逐步扩展到反思与方法论沉淀。}
+
+\section{系统架构与数据流}
+
+\subsection{总体架构}
+
+\begin{center}
+\includegraphics[width=\textwidth]{../assets/svg/pdf/03-system-architecture.pdf}
+\end{center}
+\vspace{-0.2cm}
+{\small \color{MindMuted}系统架构图：系统中心不是模型，而是本地知识底座；上层入口、协议层与执行层都围绕它组织。}
+
+\subsection{关键数据流}
+
+\begin{lightbox}
+\textbf{数据流 1：用户编辑知识}\par
+用户在 GUI / CLI 中发起操作 $\rightarrow$ API Route / CLI Command $\rightarrow$ 写入本地知识库 $\rightarrow$ 更新搜索索引 / 变更记录 / Git 历史 $\rightarrow$ 新内容对所有 Agent 立即可读。
+\end{lightbox}
+
+\begin{lightbox}
+\textbf{数据流 2：外部 Agent 访问知识库}\par
+外部 Agent 通过 MCP 请求工具 $\rightarrow$ MCP Server 做鉴权、路径校验、写保护校验 $\rightarrow$ 读取或写入本地文件 $\rightarrow$ 记录 Agent 操作日志 $\rightarrow$ GUI 中可审计、可追溯。
+\end{lightbox}
+
+\begin{lightbox}
+\textbf{数据流 3：经验回流成规则}\par
+用户纠正 AI 输出 $\rightarrow$ 经验被整理为 Instruction / Skill / Note $\rightarrow$ 保存回知识库 $\rightarrow$ 下次其他 Agent 读取同一规则并执行。
+\end{lightbox}
+
+\section{技术选型}
+
+\subsection{技术栈总览}
+
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash\bfseries}p{2.7cm}>{\raggedright\arraybackslash}p{4.8cm}X@{}}
+\toprule
+层级 & 选型 & 选择理由 \\
+\midrule
+Web 前端 & Next.js 16 + React 19 + TypeScript & 适合构建同时包含 UI、API Route、路由页面和本地工具整合的全栈工作台 \\
+样式系统 & Tailwind CSS 4 + 设计 Token & 适合快速迭代，同时可通过设计原则约束一致性 \\
+编辑能力 & TipTap + CodeMirror & 同时覆盖富文本感编辑与代码 / Markdown 场景 \\
+状态管理 & Zustand & 轻量，适合复杂面板状态和局部全局状态共享 \\
+Agent~Runtime & pi-agent-core / pi-coding-agent /\newline pi-ai & 便于整合模型、session、tool 调用与自定义 system prompt \\
+协议层 & MCP + ACP + A2A & 保证外部 Agent 兼容性和后续多 Agent 扩展能力 \\
+CLI & Node.js ESM & 与服务端逻辑复用便利，适合 npm 分发 \\
+Desktop & Electron & 以较小阻力覆盖 macOS / Windows / Linux \\
+存储 & Markdown / CSV / JSON + Git & 强调透明、可审计、可迁移和本地优先 \\
+\bottomrule
+\end{tabularx}
+
+\subsection{关键技术判断}
+
+\begin{itemize}
+  \item \textbf{为什么选择本地纯文本，而不是云数据库}：因为产品核心是“让用户掌控自己的判断资产”，数据必须可读、可改、可迁移。
+  \item \textbf{为什么同时做 GUI、CLI、Desktop}：目标用户不是单一浏览器用户，而是分散在本地开发环境和多 Agent 场景中的重度用户。
+  \item \textbf{为什么早期就布局多 Agent 协议}：如果只服务一个 Agent，本质只是聊天记忆；只有把协议层做好，产品才有机会成为基础设施。
+\end{itemize}
+
+\section{原型截图}
+
+\begin{center}
+\includegraphics[width=\textwidth]{../assets/screenshots/00-product-loop.png}
+\end{center}
+\vspace{-0.2cm}
+{\small \color{MindMuted}产品总览图：展示“用户思考 $\rightarrow$ Agent 执行 $\rightarrow$ 经验回流”的闭环。}
+
+\vspace{0.5cm}
+
+\begin{center}
+\begin{tabular}{cc}
+\includegraphics[width=0.47\textwidth]{../assets/screenshots/01-home.png} &
+\includegraphics[width=0.47\textwidth]{../assets/screenshots/02-chat.png} \\
+\small 首页工作台 & \small AI 对话页 \\
+\includegraphics[width=0.47\textwidth]{../assets/screenshots/03-dashboard.png} &
+\includegraphics[width=0.47\textwidth]{../assets/screenshots/04-echo.png} \\
+\small Dashboard / Agent 可见性 & \small Echo / 反思与认知沉淀 \\
+\end{tabular}
+\end{center}
+
+\vspace{0.4cm}
+
+\begin{center}
+\includegraphics[width=0.82\textwidth]{../assets/screenshots/05-agents-page.png}
+\end{center}
+\vspace{-0.2cm}
+{\small \color{MindMuted}Agents 页面：集中展示接入状态、配置入口和治理能力。}
+
+\end{document}

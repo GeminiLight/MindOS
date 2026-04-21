@@ -1,0 +1,61 @@
+<svg width="1600" height="2262" viewBox="0 0 1600 2262" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="120" x2="1440" y2="2140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCF8F2"/>
+      <stop offset="1" stop-color="#F1EBE1"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="180" y1="360" x2="1380" y2="1880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4B676"/>
+      <stop offset="1" stop-color="#8B5B21"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1600" height="2262" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="34" flood-color="#8B5B21" flood-opacity="0.12"/>
+    </filter>
+    <filter id="blur" x="0" y="0" width="1600" height="2262" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="2262" fill="url(#bg)"/>
+  <circle cx="1348" cy="250" r="160" fill="#E7C48C" opacity="0.14" filter="url(#blur)"/>
+  <circle cx="250" cy="1980" r="186" fill="#C8873A" opacity="0.08" filter="url(#blur)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="88" y="260" width="1424" height="1744" rx="56" fill="#FFFDFC"/>
+  </g>
+
+  <rect x="88" y="260" width="12" height="1744" rx="6" fill="url(#amber)"/>
+  <path d="M132 470H1468" stroke="#E9DED0" stroke-width="1.2"/>
+
+  <text x="150" y="372" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="0.14em">VIBE CODING 项目案例</text>
+
+  <text x="148" y="560" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="112" font-weight="700">MindOS</text>
+  <text x="152" y="628" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="32" font-weight="600" letter-spacing="0.03em">一个面向多 AI Agent 工作流的</text>
+  <text x="152" y="672" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="32" font-weight="600" letter-spacing="0.03em">本地优先知识操作系统</text>
+
+  <text x="152" y="824" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="600">不是再做一个更会聊天的 AI 工具，</text>
+  <text x="152" y="874" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="600">而是让用户的判断可以沉淀、复用，</text>
+  <text x="152" y="924" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="600">并逐步转化为可执行的规则系统。</text>
+
+  <path d="M150 1014H686" stroke="#DCCDBB" stroke-width="2"/>
+
+  <text x="152" y="1110" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="26">用户场景分析</text>
+  <text x="152" y="1172" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="26">解决方案与系统架构</text>
+  <text x="152" y="1234" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="26">技术选型与原型展示</text>
+
+  <g>
+    <circle cx="1158" cy="952" r="238" stroke="url(#amber)" stroke-width="38" stroke-dasharray="322 74 322 74 322 74 322 74" transform="rotate(-16 1158 952)"/>
+    <circle cx="1158" cy="952" r="176" fill="#FFF8EE" stroke="#E4D8CB" stroke-width="2"/>
+    <circle cx="1158" cy="952" r="118" fill="#F7EDE1"/>
+    <text x="1158" y="944" text-anchor="middle" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="56" font-weight="700">判断沉淀层</text>
+    <text x="1158" y="994" text-anchor="middle" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="26" font-weight="600">写一次，全局复用</text>
+  </g>
+
+  <g>
+    <rect x="906" y="1298" width="440" height="170" rx="30" fill="#FFF8F0" stroke="#E3D7CA"/>
+    <text x="946" y="1370" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="30" font-weight="600">产品定义 · 系统设计</text>
+    <text x="946" y="1422" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24">Web、CLI、MCP、Desktop 一体化交付</text>
+  </g>
+
+  <text x="150" y="1974" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.08em">独立完成项目案例</text>
+</svg>

@@ -1,0 +1,72 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(800 470) rotate(90) scale(660 980)">
+      <stop stop-color="#FCF8F2"/>
+      <stop offset="1" stop-color="#F2ECE3"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="506" y1="196" x2="1098" y2="782" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E3B372"/>
+      <stop offset="1" stop-color="#8B5B21"/>
+    </linearGradient>
+    <filter id="shadow" x="120" y="126" width="1360" height="800" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#8B5B21" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)"/>
+  <circle cx="1300" cy="174" r="118" fill="#EDC998" opacity="0.24"/>
+  <circle cx="300" cy="820" r="140" fill="#E0A55D" opacity="0.10"/>
+
+  <text x="120" y="104" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.18em">MINDOS / COGNITIVE FLYWHEEL</text>
+  <text x="120" y="170" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="52" font-weight="700">把一次次纠正，变成持续增强的人机飞轮</text>
+  <text x="120" y="214" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24">用户判断沉淀为规则，规则提升 Agent 输出，输出再反过来逼近更清晰的方法论。</text>
+
+  <g filter="url(#shadow)">
+    <circle cx="800" cy="584" r="252" fill="#FFFDF9"/>
+    <circle cx="800" cy="584" r="286" stroke="url(#ring)" stroke-width="42" stroke-dasharray="384 90 384 90 384 90 384 90" transform="rotate(-22 800 584)"/>
+    <circle cx="800" cy="584" r="176" fill="#FFF7EE" stroke="#E2D5C6" stroke-width="2"/>
+  </g>
+
+  <text x="800" y="556" text-anchor="middle" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="0.18em">COMPOUND LOOP</text>
+  <text x="800" y="608" text-anchor="middle" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="62" font-weight="700">认知复利</text>
+  <text x="800" y="648" text-anchor="middle" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22">Judgment becomes reusable intelligence</text>
+
+  <g>
+    <rect x="692" y="250" width="216" height="82" rx="26" fill="#221E1A"/>
+    <text x="800" y="281" text-anchor="middle" fill="#EBCFA6" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">STAGE 1</text>
+    <text x="800" y="314" text-anchor="middle" fill="#FFF9F1" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="700">痛点入口</text>
+  </g>
+
+  <g>
+    <rect x="1110" y="478" width="216" height="82" rx="26" fill="#221E1A"/>
+    <text x="1218" y="509" text-anchor="middle" fill="#EBCFA6" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">STAGE 2</text>
+    <text x="1218" y="542" text-anchor="middle" fill="#FFF9F1" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="700">判断积累</text>
+  </g>
+
+  <g>
+    <rect x="692" y="854" width="216" height="82" rx="26" fill="#221E1A"/>
+    <text x="800" y="885" text-anchor="middle" fill="#EBCFA6" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">STAGE 3</text>
+    <text x="800" y="918" text-anchor="middle" fill="#FFF9F1" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="700">AI 变准</text>
+  </g>
+
+  <g>
+    <rect x="274" y="478" width="216" height="82" rx="26" fill="#221E1A"/>
+    <text x="382" y="509" text-anchor="middle" fill="#EBCFA6" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">STAGE 4</text>
+    <text x="382" y="542" text-anchor="middle" fill="#FFF9F1" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="700">人变清晰</text>
+  </g>
+
+  <path d="M801 338C912 352 1006 412 1062 490" stroke="#B17630" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 16"/>
+  <path d="M1060 702C1002 782 909 837 801 850" stroke="#B17630" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 16"/>
+  <path d="M799 850C691 837 598 782 540 702" stroke="#B17630" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 16"/>
+  <path d="M538 490C594 412 688 352 799 338" stroke="#B17630" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 16"/>
+
+  <rect x="1132" y="308" width="272" height="102" rx="28" fill="#FFF8EF" stroke="#DDD0C1"/>
+  <text x="1164" y="344" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">AGENT SIDE</text>
+  <text x="1164" y="382" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">越来越懂你</text>
+  <text x="1164" y="408" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18">输出越来越贴近标准</text>
+
+  <rect x="196" y="308" width="272" height="102" rx="28" fill="#FFF8EF" stroke="#DDD0C1"/>
+  <text x="228" y="344" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">HUMAN SIDE</text>
+  <text x="228" y="382" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700">越来越懂自己</text>
+  <text x="228" y="408" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18">方法论越来越显性化</text>
+</svg>

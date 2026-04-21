@@ -944,6 +944,129 @@ tar -tzf geminilight-mindos-*.tgz | grep "_standalone/server.js"
 - `0c3d0f3f` - fix: resolve Windows installation taking 5-6 minutes
 - `7911ea3c` - fix: ensure _standalone/ is included in npm package
 
+### Desktop APP 首次启动耗时 5-6 分钟（2026-04-21，已诊断）
+
+**症状**：Windows 用户安装 MindOS Desktop APP 后，首次启动需要等待 5-6 分钟，显示"Installing MindOS (first time, ~1-2 min)..."但实际耗时远超预期。
+
+**根因**：Desktop APP 的 bundled runtime 不完整（只有 README.md），首次启动时需要执行 `npm install -g @geminilight/mindos@latest` 下载和安装完整的 MindOS 包。
+
+**调用链**：
+```
+Desktop 首次启动
+  → main.ts:357 resolveLocalMindOsProjectRoot()
+    → 检测到 bundled runtime 不可运行（只有 README）
+    → needsInstallFallback = true
+  → main.ts:382 installMindosWithPrivateNode()
+    → node-bootstrap.ts:291 npm install -g @geminilight/mindos@latest
+      → 从 npm registry 下载完整包（约 50MB）
+      → npm install 安装依赖（73 个包，2-3 分钟）
+        → 如果包缺少 _standalone/，触发 next build（1.5-2 分钟）
+          → postcss postinstall（0.5-1.5 分钟）
+      → 总耗时：5-6 分钟
+```
+
+**为什么 bundled runtime 不完整**：
+- `desktop/package.json` 中的 `dist:win` 命令直接调用 `electron-builder`，**没有**先运行 `prepare-mindos-runtime`
+- 只有 `dist:with-bundled` 和 CI 构建（`.github/workflows/build-desktop.yml:118`）才会打包完整的 runtime
+- 如果开发者本地使用 `npm run dist:win` 构建，会打包一个空的 runtime
+
+**CI 构建是否正确**：
+- ✅ CI 配置正确：`.github/workflows/build-desktop.yml:115-118` 有 `npm run prepare-mindos-runtime`
+- ✅ 通过 CI 构建的安装包应该包含完整的 bundled runtime（app/.next、mcp/、node/ 等）
+- ⚠️ 如果用户报告安装慢，可能是使用了本地构建的安装包（未执行 prepare-mindos-runtime）
+
+**两个场景的区别**：
+1. **npm 包安装慢**（`npm install -g @geminilight/mindos`）：
+   - 根因：npm 包缺少 `_standalone/` 目录
+   - 修复：commit `0c3d0f3f` 和 `7911ea3c`（已包含在 v0.7.0+）
+   - 状态：✅ 已修复
+
+2. **Desktop APP 安装慢**（Windows 安装包）：
+   - 根因：bundled runtime 不完整，首次启动触发 `npm install -g`
+   - 如果 npm 包也缺少 `_standalone/`，会叠加 npm 包的问题
+   - 修复：确保使用 CI 构建的安装包（包含完整 bundled runtime）
+   - 状态：✅ CI 配置正确，通过 GitHub Release 分发的安装包应该没问题
+
+**验证方式**：
+```bash
+# 检查 Desktop 安装包是否包含完整 runtime
+# macOS
+cd /Applications/MindOS.app/Contents/Resources/mindos-runtime
+ls -lh app/.next/standalone/server.js  # 应该存在
+ls -lh node/bin/node                    # 应该存在
+
+# Windows
+cd "C:\Program Files\MindOS\resources\mindos-runtime"
+dir app\.next\standalone\server.js      # 应该存在
+dir node\node.exe                       # 应该存在
+```
+
+**解决方案**：
+1. **用户侧**：从 GitHub Release 下载官方构建的安装包（通过 CI 构建，包含完整 runtime）
+2. **开发者侧**：本地构建时使用 `npm run dist:with-bundled` 而不是 `npm run dist:win`
+3. **长期方案**：修改 `dist:win`/`dist:mac`/`dist:linux` 命令，自动执行 `prepare-mindos-runtime`
+
+**教训**：
+- Desktop 打包命令应该默认包含 runtime 准备步骤，避免开发者忘记
+- 本地构建和 CI 构建的差异需要明确文档说明
+- 首次启动的超时提示应该更准确（"~1-2 min" vs 实际 5-6 分钟）
+
+**文件**：
+- `desktop/package.json:18-20`（dist:win/mac/linux 命令）
+- `desktop/package.json:24`（dist:with-bundled 命令，包含 prepare-mindos-runtime）
+- `desktop/scripts/prepare-mindos-runtime.mjs`（runtime 打包脚本）
+- `.github/workflows/build-desktop.yml:115-118`（CI 中的 prepare-mindos-runtime）
+- `desktop/src/main.ts:357-399`（runtime 解析和安装逻辑）
+- `desktop/src/node-bootstrap.ts:277-338`（installMindosWithPrivateNode 实现）
+
+**相关 commit**：
+- `0c3d0f3f` - fix: resolve Windows installation taking 5-6 minutes（npm 包问题）
+- `7911ea3c` - fix: ensure _standalone/ is included in npm package（npm 包问题）
+- Desktop bundled runtime 问题：需要确保使用 CI 构建或 `dist:with-bundled` 命令
+
+**版本信息**：
+- npm 包问题修复：v0.7.0+（包含 commit `0c3d0f3f`）
+- Desktop 最新版本：v0.5.52（desktop-v0.5.52）
+- Desktop v0.3.12 不包含 npm 包修复（commit `0c3d0f3f` 在 v0.3.12 之后）
+
+---
+
+## Desktop / Tauri
+
+### Tauri spike 图标加载失败（2026-04-21）
+
+**症状**：运行 `npm run tauri dev` 时报错 "Failed to load window icon"。
+
+**根因**：
+- `tauri.conf.json` 引用了不存在的 `icons/icon.icns` 文件
+- macOS 需要 .icns 格式，但只有 .png 和 .ico
+
+**修复**：
+1. 从配置中移除不存在的图标引用
+2. 使用 `sips` 或 `iconutil` 生成 .icns 文件：
+   ```bash
+   # macOS
+   sips -s format icns icon.png --out icon.icns
+
+   # 或使用 iconutil（需要先创建 iconset）
+   mkdir icon.iconset
+   sips -z 16 16 icon.png --out icon.iconset/icon_16x16.png
+   sips -z 32 32 icon.png --out icon.iconset/icon_16x16@2x.png
+   # ... 其他尺寸
+   iconutil -c icns icon.iconset
+   ```
+
+**规则**：
+- Tauri 配置中引用的所有文件必须存在
+- 不同平台需要不同格式：macOS (.icns), Windows (.ico), Linux (.png)
+- 使用 `expect()` 而非 `unwrap()` 提供更好的错误信息
+
+**文件**：
+- `desktop-tauri/src-tauri/tauri.conf.json:15-20`
+- `desktop-tauri/src-tauri/src/main.rs:42-46`
+
+---
+
 ### Windows onboard 失败：mcp/src/ 被 .npmignore 排除（2026-04-20）
 
 **症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，运行 `mindos onboard` 报错：

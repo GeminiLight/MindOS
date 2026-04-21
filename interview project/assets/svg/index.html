@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindOS SVG Logic Board</title>
+  <style>
+    :root {
+      --paper: #f6f0e8;
+      --ink: #231f1b;
+      --muted: #5f5a54;
+      --amber: #c8873a;
+      --line: #d9ccbe;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 28px 80px;
+      background:
+        radial-gradient(circle at top right, rgba(219,178,120,.20), transparent 30%),
+        linear-gradient(180deg, #fbf8f3 0%, var(--paper) 100%);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    }
+    .wrap { max-width: 1320px; margin: 0 auto; }
+    .eyebrow {
+      color: #8d5c1f;
+      letter-spacing: .16em;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-family: "Lora", Georgia, serif;
+      font-size: 48px;
+      line-height: 1.05;
+      margin: 0 0 16px;
+    }
+    p.lead {
+      font-size: 19px;
+      line-height: 1.7;
+      color: var(--muted);
+      max-width: 900px;
+      margin: 0 0 36px;
+    }
+    .grid {
+      display: grid;
+      gap: 22px;
+    }
+    .card {
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 18px 48px rgba(141,92,31,.08);
+      backdrop-filter: blur(10px);
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+    .meta strong { font-size: 18px; }
+    .meta span { color: var(--muted); font-size: 14px; }
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">MindOS / SVG logic board</div>
+    <h1>为面试项目准备的高质量逻辑图</h1>
+    <p class="lead">这三张 SVG 分别对应：问题拆解、认知复利飞轮、系统架构。它们适合直接插入 PDF、PPT、作品集，或者继续微调成更偏产品向 / 工程向的版本。</p>
+    <div class="grid">
+      <div class="card">
+        <div class="meta"><strong>01 · Problem Layers</strong><span>痛点的三层结构</span></div>
+        <img src="01-problem-layers.svg" alt="Problem layers" />
+      </div>
+      <div class="card">
+        <div class="meta"><strong>02 · Cognitive Flywheel</strong><span>人和 Agent 共同增强的飞轮</span></div>
+        <img src="02-human-agent-flywheel.svg" alt="Flywheel" />
+      </div>
+      <div class="card">
+        <div class="meta"><strong>03 · System Architecture</strong><span>以本地知识底座为核心的系统分层</span></div>
+        <img src="03-system-architecture.svg" alt="Architecture" />
+      </div>
+    </div>
+  </div>
+</body>
+</html>

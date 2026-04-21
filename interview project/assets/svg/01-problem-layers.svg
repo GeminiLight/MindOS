@@ -1,0 +1,58 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="1500" y2="930" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCF8F2"/>
+      <stop offset="1" stop-color="#F2ECE3"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="248" y1="320" x2="248" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E1B06E"/>
+      <stop offset="1" stop-color="#8B5B21"/>
+    </linearGradient>
+    <filter id="shadow" x="120" y="220" width="1360" height="620" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#8B5B21" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)"/>
+  <circle cx="1328" cy="170" r="120" fill="#EFD5AE" opacity="0.28"/>
+  <circle cx="232" cy="840" r="130" fill="#E6B067" opacity="0.10"/>
+
+  <text x="120" y="104" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.18em">MINDOS / PROBLEM LAYERS</text>
+  <text x="120" y="170" fill="#221E1A" font-family="Lora, Georgia, serif" font-size="56" font-weight="700">问题不是工具不够多，而是判断没有沉淀层</text>
+  <text x="120" y="214" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="24">我把用户痛点拆成三层：表层是重复讲背景，中层是纠正无法复用，深层是成长无法形成复利。</text>
+
+  <g filter="url(#shadow)">
+    <rect x="208" y="286" width="1184" height="492" rx="40" fill="#FFFCF8"/>
+  </g>
+
+  <rect x="242" y="336" width="8" height="392" rx="4" fill="url(#accent)"/>
+
+  <g transform="translate(286 324)">
+    <rect width="980" height="110" rx="28" fill="#FFF8EF" stroke="#E1D5C8"/>
+    <text x="34" y="34" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.16em">SURFACE / 表层</text>
+    <text x="34" y="74" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="700">使用割裂</text>
+    <text x="34" y="101" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">换一个 Agent，就要重新讲一遍项目背景、目录结构和偏好。</text>
+    <text x="900" y="61" text-anchor="end" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">重复搬运上下文</text>
+  </g>
+
+  <g transform="translate(286 478)">
+    <rect width="980" height="110" rx="28" fill="#FFF8EF" stroke="#E1D5C8"/>
+    <text x="34" y="34" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.16em">MIDDLE / 中层</text>
+    <text x="34" y="74" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="700">经验蒸发</text>
+    <text x="34" y="101" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">纠正过的标准、做出的判断和总结出的原则，关掉对话就消失。</text>
+    <text x="900" y="61" text-anchor="end" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">纠正无法复用</text>
+  </g>
+
+  <g transform="translate(286 632)">
+    <rect width="980" height="110" rx="28" fill="#FFF8EF" stroke="#E1D5C8"/>
+    <text x="34" y="34" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.16em">DEEP / 深层</text>
+    <text x="34" y="74" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="700">成长不复合</text>
+    <text x="34" y="101" fill="#5F5A54" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="20">用户在变强，但系统没有随着用户一起进化，判断无法成为长期资产。</text>
+    <text x="900" y="61" text-anchor="end" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">认知无法形成复利</text>
+  </g>
+
+  <rect x="1138" y="822" width="256" height="76" rx="24" fill="#FFF8EF" stroke="#DDD0C1"/>
+  <text x="1168" y="852" fill="#8B5B21" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.16em">THESIS</text>
+  <text x="1168" y="881" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">真正缺的不是更聪明的聊天，</text>
+  <text x="1168" y="905" fill="#221E1A" font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">而是判断沉淀层。</text>
+</svg>
