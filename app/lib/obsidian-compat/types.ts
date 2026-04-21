@@ -179,8 +179,22 @@ export interface Workspace {
 export interface PluginSettingTab extends IComponent {
   app: App;
   containerEl: HTMLElement;
+  items?: PluginSettingItem[];
 
   display(): void;
+}
+
+export type SettingKind = 'text' | 'toggle' | 'dropdown' | 'button';
+
+export interface PluginSettingItem {
+  name?: string;
+  desc?: string;
+  kind?: SettingKind;
+  value?: unknown;
+  buttonText?: string;
+  options?: Array<{ value: string; label: string }>;
+  onChange?: (value: unknown) => void;
+  onClick?: () => void;
 }
 
 export interface Events {

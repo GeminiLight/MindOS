@@ -23,11 +23,11 @@ export class Notice {
       // Determine toast type based on message content
       const lowerMessage = message.toLowerCase();
       if (lowerMessage.includes('error') || lowerMessage.includes('failed') || lowerMessage.includes('fail')) {
-        toast.error(message, { duration: timeout });
+        toast.error(message, timeout);
       } else if (lowerMessage.includes('success') || lowerMessage.includes('saved') || lowerMessage.includes('complete')) {
-        toast.success(message, { duration: timeout });
+        toast.success(message, timeout);
       } else {
-        toast(message, { duration: timeout });
+        toast(message, timeout !== undefined ? { duration: timeout } : undefined);
       }
     }
   }

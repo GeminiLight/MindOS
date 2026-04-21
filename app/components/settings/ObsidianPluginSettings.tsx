@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { PluginSettingItem } from '@/lib/obsidian-compat/shims/settings';
+import type { PluginSettingItem } from '@/lib/obsidian-compat/types';
 
 interface ObsidianPluginSettingsProps {
   pluginId: string;

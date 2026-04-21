@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ObsidianPluginSettings } from './ObsidianPluginSettings';
-import type { PluginSettingItem } from '@/lib/obsidian-compat/shims/settings';
+import type { PluginSettingItem } from '@/lib/obsidian-compat/types';
 
 interface PluginSettingsData {
   id: string;
