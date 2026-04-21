@@ -18,11 +18,11 @@ A minimal Tauri-based desktop application spike for MindOS, designed to evaluate
 - Runtime status in tray menu
 - Graceful shutdown
 
-### Phase 3: Advanced Features (🔄 Partial)
+### Phase 3: Advanced Features (✅ Completed)
 - Deep link support (mindos://) ✅
-- Auto-update (future)
-- Multi-window management (future)
-- Global shortcuts (future)
+- Auto-update ✅
+- Global shortcuts ✅
+- Multi-window management (not needed for spike)
 
 ## Quick Start
 
@@ -193,3 +193,22 @@ The app will:
 1. Launch or focus if already running
 2. Parse the URL and extract the path
 3. Navigate to the specified file in the runtime
+
+## Global Shortcuts
+
+MindOS Desktop registers the following global shortcuts:
+
+- **Cmd/Ctrl + Shift + M**: Show/Hide main window
+
+These shortcuts work even when the app is in the background.
+
+## Auto-Update
+
+The app automatically checks for updates on startup. You can also manually check via:
+- Tray menu → "Check for Updates"
+
+Update process:
+1. Check for new version on startup
+2. Download update in background
+3. Notify user when ready
+4. Install on next restart

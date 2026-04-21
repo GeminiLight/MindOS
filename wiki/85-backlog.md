@@ -128,7 +128,7 @@
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite
 - [ ] 补全 `resolvedLinks` / `unresolvedLinks` 全局索引语义
-- [x] Desktop Tauri Spike
+- [x] Desktop Tauri Spike - 完整实现 ✅
   - Phase 1: 创建 desktop-tauri/ 目录结构
   - Phase 1: 实现最小 Tauri 窗口 + System Tray
   - Phase 1: 连接到 localhost:3456 runtime
@@ -141,3 +141,7 @@
   - Phase 3: Deep link 支持（mindos:// 协议）
   - Phase 3: 新增 deep_link.rs 模块，支持 URL 解析和事件发送
   - Phase 3: 前端监听 deep-link 事件并导航到指定路径
+  - Phase 3: 自动更新功能（启动检查 + 托盘菜单手动检查）
+  - Phase 3: 新增 updater.rs 模块
+  - Phase 3: 全局快捷键（Cmd/Ctrl+Shift+M 显示/隐藏）
+  - Phase 3: 新增 shortcuts.rs 模块
