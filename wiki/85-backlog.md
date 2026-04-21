@@ -133,3 +133,6 @@
   - Phase 2: Runtime 管理（启动 Node.js sidecar、健康检查、配置管理、自动启动、优雅关闭）
   - Phase 2: 新增 runtime.rs 和 config.rs 模块
   - Phase 2: 托盘菜单新增 Runtime Status 选项
+  - Phase 3: Deep link 支持（mindos:// 协议）
+  - Phase 3: 新增 deep_link.rs 模块，支持 URL 解析和事件发送
+  - Phase 3: 前端监听 deep-link 事件并导航到指定路径
