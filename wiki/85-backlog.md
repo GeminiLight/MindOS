@@ -124,9 +124,12 @@
 - [ ] 为真实第三方社区插件构建 smoke suite
 - [ ] 补全 `resolvedLinks` / `unresolvedLinks` 全局索引语义
 - [x] Desktop Tauri Spike
-  - 创建 desktop-tauri/ 目录结构
-  - 实现最小 Tauri 窗口 + System Tray
-  - 连接到 localhost:3456 runtime
-  - 完整的 spec、类型定义、README、SETUP 指南
-  - 红队审查并修复所有 blocker 问题
-  - 文档更新：wiki/80-known-pitfalls.md 新增 Tauri 图标加载问题
+  - Phase 1: 创建 desktop-tauri/ 目录结构
+  - Phase 1: 实现最小 Tauri 窗口 + System Tray
+  - Phase 1: 连接到 localhost:3456 runtime
+  - Phase 1: 完整的 spec、类型定义、README、SETUP 指南
+  - Phase 1: 红队审查并修复所有 blocker 问题
+  - Phase 1: 文档更新：wiki/80-known-pitfalls.md 新增 Tauri 图标加载问题
+  - Phase 2: Runtime 管理（启动 Node.js sidecar、健康检查、配置管理、自动启动、优雅关闭）
+  - Phase 2: 新增 runtime.rs 和 config.rs 模块
+  - Phase 2: 托盘菜单新增 Runtime Status 选项
