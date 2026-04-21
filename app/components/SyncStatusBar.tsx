@@ -186,8 +186,11 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       const syncT = t.sidebar?.sync;
       // Recovery: was error/conflicts, now synced
       if ((prev === 'error' || prev === 'conflicts') && currentLevel === 'synced') {
-        setToast(syncT?.syncRestored ?? 'Sync restored');
-        setTimeout(() => setToast(null), 3000);
+        // Defer state update to avoid cascading renders
+        setTimeout(() => {
+          setToast(syncT?.syncRestored ?? 'Sync restored');
+          setTimeout(() => setToast(null), 3000);
+        }, 0);
       }
       prevLevelRef.current = currentLevel;
     }
