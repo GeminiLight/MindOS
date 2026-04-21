@@ -82,3 +82,4 @@ TMUX_DOC.md
 .mcp.json
 collect-session-ids.py
 app/__fixtures__/real-plugins/
+wiki/migration/
