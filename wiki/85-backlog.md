@@ -119,6 +119,11 @@
   - 修复 spawnAcpAgent() detached+shell:false 配置导致 Windows 进程管理异常
   - 添加 Windows 特定的 taskkill /T 进程树终止逻辑
   - Mac 测试通过（131 tests），Windows 需实际环境验证
+- [x] 性能优化 - FileTree 过滤优化
+  - 添加 useMemo 缓存 FileTree 的过滤结果，避免每次渲染重新计算
+  - 优化依赖项：只在 nodes/showHidden/isRoot 变化时重新过滤
+  - 减少文件树展开/折叠时的不必要计算
+  - 测试通过（1933 tests），无功能回归
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
 - [ ] 为真实第三方社区插件构建 smoke suite

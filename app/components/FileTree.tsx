@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useTransition, useEffect, memo } from 'react';
+import { useState, useCallback, useRef, useTransition, useEffect, memo, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
@@ -607,10 +607,14 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, p
   const showHidden = useShowHiddenFiles();
 
   const isRoot = depth === 0;
-  const filtered = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
-  const visibleNodes = isRoot
-    ? filtered.filter(n => !(n.type === 'directory' && n.name === 'Inbox'))
-    : filtered;
+
+  // Memoize filtering to avoid re-computing on every render
+  const visibleNodes = useMemo(() => {
+    const filtered = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
+    return isRoot
+      ? filtered.filter(n => !(n.type === 'directory' && n.name === 'Inbox'))
+      : filtered;
+  }, [nodes, showHidden, isRoot]);
 
   useEffect(() => {
     if (!currentPath || depth !== 0) return;
