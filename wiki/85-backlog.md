@@ -126,8 +126,21 @@
   - 测试通过（1933 tests），无功能回归
 - [ ] 将 Setting / PluginSettingTab 接入真实宿主设置页面
 - [ ] 将 Notice / Modal 接入真实宿主 UI 反馈系统
-- [ ] 为真实第三方社区插件构建 smoke suite
-- [ ] 补全 `resolvedLinks` / `unresolvedLinks` 全局索引语义
+- [x] 为真实第三方社区插件构建 smoke suite
+  - 增强现有 fixtures：添加更真实的代码模式（设置持久化、错误处理、Modal 交互、vault 操作等）
+  - 创建可选的真实插件测试套件（`community-real-plugins.test.ts`）
+  - 创建下载脚本（`scripts/download-community-plugins.js`）从 GitHub releases 下载真实插件
+  - 支持通过 `TEST_REAL_PLUGINS=1` 环境变量启用真实插件测试
+  - 测试覆盖 4 个真实插件：Style Settings、QuickAdd、Tag Wrangler、Homepage
+  - 所有测试通过（增强 fixtures 5 tests，真实插件测试默认跳过）
+- [x] 补全 `resolvedLinks` / `unresolvedLinks` 全局索引语义
+  - 实现 `buildGlobalIndex()` 方法扫描所有 markdown 文件
+  - 实现 `indexFileLinks()` 私有方法直接解析内容计数所有链接出现次数
+  - 实现 `updateFileIndex()` 方法增量更新单个文件索引
+  - 实现 `invalidateGlobalIndex()` 方法全量重建索引
+  - 支持 wikilink 和 markdown link 两种格式
+  - 支持按完整路径和 basename 解析链接
+  - 新增 19 条测试覆盖（正常路径、边界 case、增量更新、全量重建）
 - [x] Desktop Tauri Spike - 完整实现 ✅
   - Phase 1: 创建 desktop-tauri/ 目录结构
   - Phase 1: 实现最小 Tauri 窗口 + System Tray

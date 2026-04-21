@@ -86,6 +86,97 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
     private vault: IVault,
   ) {
     super();
+    this.buildGlobalIndex();
+  }
+
+  /**
+   * Build global index of resolved and unresolved links across all files.
+   * This populates resolvedLinks and unresolvedLinks properties.
+   */
+  buildGlobalIndex(): void {
+    this.resolvedLinks = {};
+    this.unresolvedLinks = {};
+
+    const markdownFiles = this.vault.getMarkdownFiles();
+
+    for (const file of markdownFiles) {
+      this.indexFileLinks(file);
+    }
+  }
+
+  /**
+   * Index all links in a file (helper for buildGlobalIndex and updateFileIndex).
+   * Parses content directly to count all link occurrences, not just unique links.
+   */
+  private indexFileLinks(file: TFile): void {
+    const content = readMarkdownFile(this.mindRoot, file);
+    if (!content) {
+      return;
+    }
+
+    const sourcePath = file.path;
+    const resolvedMap: Record<string, number> = {};
+    const unresolvedMap: Record<string, number> = {};
+
+    // Parse wikilinks - count all occurrences
+    for (const match of content.matchAll(WIKILINK_RE)) {
+      const linkText = match[1]?.trim();
+      if (!linkText) continue;
+
+      const destFile = this.getFirstLinkpathDest(linkText, sourcePath);
+      if (destFile) {
+        const destPath = destFile.path;
+        resolvedMap[destPath] = (resolvedMap[destPath] ?? 0) + 1;
+      } else {
+        unresolvedMap[linkText] = (unresolvedMap[linkText] ?? 0) + 1;
+      }
+    }
+
+    // Parse markdown links - count all occurrences
+    for (const match of content.matchAll(MARKDOWN_LINK_RE)) {
+      const linkText = match[1]?.trim();
+      if (!linkText) continue;
+
+      const normalized = linkText.replace(/\.md$/, '');
+      const destFile = this.getFirstLinkpathDest(normalized, sourcePath);
+      if (destFile) {
+        const destPath = destFile.path;
+        resolvedMap[destPath] = (resolvedMap[destPath] ?? 0) + 1;
+      } else {
+        unresolvedMap[normalized] = (unresolvedMap[normalized] ?? 0) + 1;
+      }
+    }
+
+    // Store results if non-empty
+    if (Object.keys(resolvedMap).length > 0) {
+      this.resolvedLinks[sourcePath] = resolvedMap;
+    }
+    if (Object.keys(unresolvedMap).length > 0) {
+      this.unresolvedLinks[sourcePath] = unresolvedMap;
+    }
+  }
+
+  /**
+   * Update global index for a specific file.
+   * Call this when a file is created, modified, or deleted.
+   */
+  updateFileIndex(file: TFile): void {
+    const sourcePath = file.path;
+
+    // Remove old entries for this file
+    delete this.resolvedLinks[sourcePath];
+    delete this.unresolvedLinks[sourcePath];
+
+    // Rebuild entries for this file
+    this.indexFileLinks(file);
+  }
+
+  /**
+   * Invalidate and rebuild the entire global index.
+   * Call this when files are renamed or deleted, as it may affect link resolution.
+   */
+  invalidateGlobalIndex(): void {
+    this.buildGlobalIndex();
   }
 
   getFileCache(file: TFile): CachedMetadata | null {

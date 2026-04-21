@@ -86,21 +86,24 @@ export function useAskChat({
       // from the messages array. The user clicked stop — they don't want this
       // exchange in the history at all.
       refs.sessionRef.current?.setMessages(prev => {
-        const updated = [...prev];
-        const idx = pending.userMessageIndex;
+        // Use timestamp to locate messages instead of index to avoid race conditions.
+        // If the messages array is modified between submit() and stop(), index-based
+        // deletion could remove the wrong messages.
+        const userTimestamp = pending.userMessage.timestamp;
 
-        // Remove assistant message first (at idx + 1) — may be empty placeholder
-        // or a partial streamed response.
-        if (idx + 1 < updated.length && updated[idx + 1]?.role === 'assistant') {
-          updated.splice(idx + 1, 1);
-        }
-
-        // Remove the user message.
-        if (idx < updated.length && updated[idx]?.role === 'user') {
-          updated.splice(idx, 1);
-        }
-
-        return updated;
+        return prev.filter((msg, idx) => {
+          // Remove the user message with matching timestamp
+          if (msg.role === 'user' && msg.timestamp === userTimestamp) {
+            return false;
+          }
+          // Remove the assistant message that immediately follows the user message
+          if (idx > 0 && prev[idx - 1].role === 'user' &&
+              prev[idx - 1].timestamp === userTimestamp &&
+              msg.role === 'assistant') {
+            return false;
+          }
+          return true;
+        });
       });
 
       // Restore text (+ attachments) back into the input box.
