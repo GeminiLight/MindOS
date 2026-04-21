@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod deep_link;
 mod runtime;
 
 use tauri::{
@@ -30,6 +31,7 @@ fn get_app_version() -> String {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(runtime::RuntimeState::new())
         .invoke_handler(tauri::generate_handler![
             toggle_window,
@@ -41,6 +43,16 @@ fn main() {
             config::set_config,
         ])
         .setup(|app| {
+            // Register deep link handler
+            let app_handle = app.handle().clone();
+            tauri_plugin_deep_link::register("mindos", move |request| {
+                let url = request.to_string();
+                if let Err(e) = deep_link::handle_deep_link(&app_handle, &url) {
+                    eprintln!("[MindOS] Failed to handle deep link: {}", e);
+                }
+            })
+            .map_err(|e| format!("Failed to register deep link: {}", e))?;
+
             let window = app
                 .get_webview_window("main")
                 .expect("Failed to get main window - this should never happen");

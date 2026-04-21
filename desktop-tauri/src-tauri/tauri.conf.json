@@ -48,7 +48,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     },
     "trayIcon": {
       "id": "main-tray",
@@ -56,6 +60,14 @@
       "iconAsTemplate": true,
       "menuOnLeftClick": false,
       "title": "MindOS"
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [],
+      "desktop": {
+        "schemes": ["mindos"]
+      }
     }
   }
 }
