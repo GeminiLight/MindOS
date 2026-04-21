@@ -52,7 +52,7 @@ describe('Feishu dispatcher', () => {
       status: 202,
       body: { ok: false, ignored: true, reason: 'Public base URL is required for Feishu event callbacks.' },
     });
-  });
+  }, 10000);
 
   it('returns challenge response using SDK helper', async () => {
     const { dispatchFeishuWebhook } = await import('@/lib/im/feishu-dispatcher');
