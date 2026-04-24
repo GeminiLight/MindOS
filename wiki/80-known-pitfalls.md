@@ -18,6 +18,30 @@
 
 **恢复方式**：`git reset --hard <merge前的commit>` + `git push origin main --force-with-lease`
 
+## NPM 发布
+
+### `mindos onboard` 全局安装后报 MODULE_NOT_FOUND（2026-04-24）
+
+**症状**：用户执行 `npm install -g @geminilight/mindos` 后运行 `mindos onboard`，报错：
+```
+Error: Cannot find module '/opt/homebrew/lib/node_modules/@geminilight/mindos/scripts/setup.js'
+```
+
+**根因**：`package.json` 的 `files` 字段未包含 `scripts/` 目录，导致 npm 发布时该目录被排除，但 `bin/commands/onboard.js:24` 依赖 `scripts/setup.js`。
+
+**修复**：在 `package.json` 的 `files` 数组中添加 `"scripts/"`。
+
+**规则**：
+- 所有被 `bin/` 目录代码引用的文件/目录必须包含在 `files` 字段中
+- 修改 `bin/` 代码引用新目录时，同步检查 `package.json` 的 `files` 字段
+- 发版前用 `npm pack --dry-run --ignore-scripts` 验证关键文件是否包含
+
+**验证**：
+```bash
+npm pack --dry-run --ignore-scripts 2>&1 | grep "scripts/setup.js"
+# 应输出：npm notice 60.3kB scripts/setup.js
+```
+
 ## Agent / LLM API
 
 ### "创建此文件"按钮无法点击（2026-04-20）
