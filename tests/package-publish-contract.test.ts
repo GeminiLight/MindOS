@@ -153,6 +153,7 @@ describe('product npm publish contract', () => {
     expect(prepareStandalone).toContain('packages/mindos/_standalone');
     expect(prepareStandalone).toContain('prunePackageLocks');
     expect(prepareStandalone).toContain('copyRuntimeDependencyClosure');
+    expect(prepareStandalone).toContain("'@mariozechner/pi-coding-agent'");
     expect(prepareStandalone).toContain("'@sinclair/typebox'");
     expect(prepareStandalone).toContain("'partial-json'");
     expect(prepareStandalone).toContain("'openai'");

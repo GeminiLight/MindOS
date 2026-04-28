@@ -21,6 +21,7 @@ const standaloneServerJs = resolve(standaloneAppDir, 'server.js');
 const productRoot = resolve(root, 'packages', 'mindos');
 const destDir = resolve(productRoot, '_standalone');
 const runtimeDependencySeeds = [
+  '@mariozechner/pi-coding-agent',
   '@sinclair/typebox',
   'partial-json',
   'ajv',
