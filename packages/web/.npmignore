@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.turbo/
+coverage/
+__tests__/
+vitest.config.ts
+eslint.config.mjs
+tsconfig.tsbuildinfo
+package-lock.json
+*.log

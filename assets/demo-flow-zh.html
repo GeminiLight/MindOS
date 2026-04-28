@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindOS Demo Flow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0906;
+    --fg: #e8e4dc;
+    --accent: #d4954a;
+    --accent-glow: rgba(212, 149, 74, 0.35);
+    --accent-dim: rgba(212, 149, 74, 0.10);
+    --muted: #1c1a17;
+    --muted-fg: #8a8275;
+    --border: rgba(232, 228, 220, 0.08);
+    --success: #7aad80;
+    --info: #7a9ec4;
+  }
+
+  body.light {
+    --bg: #fdfbf7;
+    --fg: #1c1a17;
+    --accent: #c8873a;
+    --accent-glow: rgba(200, 135, 58, 0.25);
+    --accent-dim: rgba(200, 135, 58, 0.08);
+    --muted: #f2efe9;
+    --muted-fg: #7a7568;
+    --border: rgba(28, 26, 23, 0.1);
+    --success: #5a9460;
+    --info: #5a82a8;
+  }
+
+  body {
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  .canvas {
+    width: 1520px;
+    background: var(--bg);
+    border-radius: 20px;
+    padding: 44px 44px 56px;
+    position: relative;
+    overflow: visible;
+    border: 1px solid var(--border);
+  }
+  .canvas::before {
+    content: '';
+    position: absolute;
+    top: -250px; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 500px;
+    background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 40px; }
+  .header h1 {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 26px; font-weight: 500; color: var(--fg);
+    margin-bottom: 6px; letter-spacing: -0.01em;
+  }
+  .header p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: var(--muted-fg); letter-spacing: 0.05em;
+  }
+
+  /* Three columns with wide gaps for arrow labels */
+  .flow {
+    display: grid;
+    grid-template-columns: 300px 1fr 430px 1fr 370px;
+    align-items: start;
+    position: relative;
+  }
+  /* Gap columns (for arrows) */
+  .arrow-gap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    min-height: 40px;
+  }
+
+  .column-label {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 14px; padding: 0 4px;
+  }
+  .column-label .step {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .column-label .text {
+    font-size: 14px; font-weight: 600; color: var(--fg); opacity: 0.85;
+  }
+  .column-label .subtext {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted-fg); margin-left: auto;
+  }
+
+  /* Step colors */
+  .step-1 .step { background: var(--accent); }
+  .step-2 .step { background: var(--success); }
+  .step-3 .step { background: var(--info); }
+
+  /* ============ LEFT: Mobile ============ */
+  .mobile-frame {
+    background: var(--muted); border-radius: 28px;
+    border: 1.5px solid rgba(232,228,220,0.06);
+    overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+  }
+  .mobile-status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 20px; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted-fg); background: var(--bg);
+  }
+  .mobile-nav {
+    display: flex; align-items: center; padding: 10px 16px;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .mobile-nav .back { color: var(--accent); font-size: 18px; margin-right: 10px; }
+  .mobile-nav .title { font-size: 14px; font-weight: 600; color: var(--fg); }
+  .mobile-body { padding: 12px; min-height: 260px; background: var(--muted); }
+  .mobile-note {
+    background: var(--bg); border-radius: 10px; padding: 11px;
+    margin-bottom: 8px; border-left: 3px solid var(--accent);
+  }
+  .mobile-note .note-time {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    color: var(--muted-fg); margin-bottom: 4px;
+  }
+  .mobile-note .note-text { font-size: 12px; color: var(--fg); line-height: 1.5; opacity: 0.9; }
+  .mobile-note .note-tag {
+    display: inline-block; margin-top: 5px; padding: 2px 7px;
+    border-radius: 4px; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--accent-dim); color: var(--accent);
+  }
+  .mobile-input {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    background: var(--bg); border-top: 1px solid var(--border);
+  }
+  .mobile-input input {
+    flex: 1; background: var(--muted); border: 1px solid var(--border);
+    border-radius: 18px; padding: 6px 12px; font-size: 11px;
+    font-family: 'Inter', sans-serif; color: var(--fg); outline: none;
+  }
+  .mobile-input .send-btn {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--bg); font-weight: 700;
+  }
+
+  /* ============ MIDDLE: Desktop GUI ============ */
+  .desktop-frame {
+    background: var(--muted); border-radius: 12px;
+    border: 1px solid var(--border); overflow: hidden;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+  }
+  .desktop-titlebar {
+    display: flex; align-items: center; padding: 9px 14px;
+    background: var(--bg); border-bottom: 1px solid var(--border); gap: 7px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #e06c6c; }
+  .dot-y { background: var(--accent); }
+  .dot-g { background: var(--success); }
+  .desktop-titlebar .title {
+    margin-left: 8px; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace; color: var(--muted-fg);
+  }
+  .desktop-layout { display: flex; min-height: 360px; }
+  .sidebar {
+    width: 140px; background: var(--bg); opacity: 0.85;
+    border-right: 1px solid var(--border); padding: 10px 0;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 7px; padding: 6px 12px;
+    font-size: 11.5px; color: var(--muted-fg); cursor: default;
+  }
+  .sidebar-item.active {
+    background: var(--accent-dim); color: var(--accent);
+    border-right: 2px solid var(--accent);
+  }
+  .sidebar-item .icon {
+    width: 15px; height: 15px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-family: 'JetBrains Mono', monospace;
+    border-radius: 3px; background: rgba(232,228,220,0.04);
+    color: var(--muted-fg); font-weight: 600;
+  }
+  .sidebar-item.active .icon { background: rgba(212,149,74,0.15); color: var(--accent); }
+  .main-content { flex: 1; padding: 14px 18px; overflow: hidden; }
+  .file-path {
+    font-size: 10px; color: var(--muted-fg); margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .content-title {
+    font-family: 'Lora', Georgia, serif; font-size: 16px; font-weight: 500;
+    color: var(--fg); margin-bottom: 10px;
+  }
+  .content-section { margin-bottom: 12px; }
+  .content-section h3 {
+    font-size: 11.5px; font-weight: 600; color: var(--accent);
+    margin-bottom: 4px; letter-spacing: 0.02em;
+  }
+  .content-section li { font-size: 11.5px; color: var(--fg); opacity: 0.8; line-height: 1.6; }
+  .content-section ul { list-style: none; padding: 0; }
+  .content-section li::before { content: '\2022'; color: var(--accent); margin-right: 6px; opacity: 0.5; }
+  .badge-row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+  .badge {
+    padding: 2px 7px; border-radius: 4px; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(232,228,220,0.04); color: var(--muted-fg); border: 1px solid var(--border);
+  }
+  .updated-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 6px; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--accent-dim); color: var(--accent);
+    border: 1px solid rgba(212,149,74,0.15); margin-bottom: 10px;
+  }
+
+  /* ============ RIGHT: Agent Group ============ */
+  .agent-group {
+    border: 1.5px solid rgba(122,158,196,0.2);
+    border-radius: 14px; padding: 14px 12px 12px;
+    background: rgba(122,158,196,0.03); position: relative;
+  }
+  .agent-group-label {
+    position: absolute; top: -10px; left: 14px;
+    padding: 1px 10px; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--info); background: var(--bg); border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .agent-stack { display: flex; flex-direction: column; gap: 8px; }
+
+  /* CLI terminal card */
+  .cli-frame {
+    background: var(--bg); border-radius: 9px;
+    border: 1px solid var(--border); overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  }
+  .cli-titlebar {
+    display: flex; align-items: center; padding: 6px 10px;
+    background: var(--muted); border-bottom: 1px solid var(--border); gap: 5px;
+  }
+  .cli-titlebar .dots { display: flex; gap: 4px; }
+  .cli-titlebar .dots span { width: 7px; height: 7px; border-radius: 50%; }
+  .dot-r-sm { background: #e06c6c; }
+  .dot-y-sm { background: var(--accent); }
+  .dot-g-sm { background: var(--success); }
+  .cli-titlebar .name {
+    margin-left: 5px; font-size: 10.5px;
+    font-family: 'JetBrains Mono', monospace; color: var(--muted-fg);
+  }
+  .cli-body {
+    padding: 8px 12px; font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1.6;
+  }
+  .cli-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cli-prompt { color: var(--accent); opacity: 0.8; }
+  .cli-cmd { color: var(--fg); opacity: 0.9; }
+  .cli-output { color: var(--muted-fg); }
+  .cli-highlight { color: var(--accent); }
+  .cli-reading { color: var(--info); }
+
+  /* Telegram-style chat card for OpenClaw */
+  .tg-frame {
+    background: var(--bg); border-radius: 9px;
+    border: 1px solid var(--accent-glow); overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  }
+  .tg-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; background: var(--accent-dim);
+    border-bottom: 1px solid rgba(212,149,74,0.12);
+  }
+  .tg-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); display: flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 700; color: var(--bg);
+  }
+  .tg-name {
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    font-family: 'Inter', sans-serif;
+  }
+  .tg-badge {
+    margin-left: auto; font-size: 9px; padding: 1px 6px;
+    border-radius: 3px; background: var(--accent); color: var(--bg);
+    font-family: 'JetBrains Mono', monospace; font-weight: 600;
+  }
+  .tg-body { padding: 8px 12px; }
+  .tg-bubble {
+    padding: 7px 10px; border-radius: 8px 8px 8px 2px;
+    font-size: 11px; line-height: 1.5; margin-bottom: 5px;
+  }
+  .tg-bubble.user {
+    background: var(--accent-dim); color: var(--fg);
+    border-radius: 8px 8px 2px 8px; margin-left: 30px;
+  }
+  .tg-bubble.bot {
+    background: var(--muted); color: var(--fg); margin-right: 30px;
+  }
+  .tg-bubble .tg-hl { color: var(--accent); }
+
+  /* SVG overlay */
+  .arrows-svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 50;
+  }
+
+  /* Bottom tagline */
+  .tagline {
+    text-align: center; margin-top: 44px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .tagline p {
+    font-size: 13px; color: var(--muted-fg);
+  }
+  .tagline span { color: var(--accent); font-weight: 600; }
+
+  /* CTA card */
+  .cta-card {
+    margin: 20px auto 0; max-width: 680px; text-align: center;
+    background: var(--accent-dim); border: 1px solid rgba(212,149,74,0.15);
+    border-radius: 12px; padding: 16px 24px;
+  }
+  .cta-label {
+    font-size: 13px; font-weight: 600; color: var(--accent);
+    margin-bottom: 8px; letter-spacing: 0.02em;
+  }
+  .cta-code {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    color: var(--fg); opacity: 0.85; line-height: 1.5;
+    text-align: left;
+  }
+</style>
+</head>
+<body>
+<div class="canvas" id="canvas">
+  <div class="header">
+    <h1>MindOS：想法、执行到复盘，一条线贯穿</h1>
+    <p>记一句想法，剩下的全自动</p>
+  </div>
+
+  <div class="flow" id="flow">
+    <!-- COL 1: Mobile -->
+    <div id="col-left">
+      <div class="column-label step-1">
+        <div class="step">1</div>
+        <div class="text">随时记录想法</div>
+        <div class="subtext">手机 / 任意设备</div>
+      </div>
+      <div class="mobile-frame" id="mobile-frame">
+        <div class="mobile-status-bar"><span>9:41</span><span>MindOS</span><span>Wi-Fi</span></div>
+        <div class="mobile-nav"><span class="back">&lsaquo;</span><span class="title">Quick Capture</span></div>
+        <div class="mobile-body">
+          <div class="mobile-note">
+            <div class="note-time">今天 11:30</div>
+            <div class="note-text">想好了新项目：先理清思路，<br/>代码开搞，顺便发个帖宣传下</div>
+            <div class="note-tag">#想法</div>
+          </div>
+          <div class="mobile-note" style="border-left-color: var(--muted-fg);">
+            <div class="note-time">昨天 16:00</div>
+            <div class="note-text">之前调研过竞品，用 React + Tailwind 方案</div>
+            <div class="note-tag" style="background:rgba(138,130,117,0.1);color:var(--muted-fg);">#技术选型</div>
+          </div>
+        </div>
+        <div class="mobile-input">
+          <input type="text" value="记一下新项目的想法..." readonly />
+          <div class="send-btn">&uarr;</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAP 1: arrow placeholder -->
+    <div class="arrow-gap" id="gap1"></div>
+
+    <!-- COL 2: Desktop GUI -->
+    <div id="col-mid">
+      <div class="column-label step-2">
+        <div class="step">2</div>
+        <div class="text">Agent 自动整理</div>
+        <div class="subtext">MindOS GUI</div>
+      </div>
+      <div class="desktop-frame" id="desktop-frame">
+        <div class="desktop-titlebar">
+          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+          <span class="title">MindOS &mdash; localhost:3000</span>
+        </div>
+        <div class="desktop-layout">
+          <div class="sidebar">
+            <div class="sidebar-item"><span class="icon">P</span> Profile</div>
+            <div class="sidebar-item"><span class="icon">W</span> Workflows</div>
+            <div class="sidebar-item active"><span class="icon">J</span> Projects</div>
+            <div class="sidebar-item"><span class="icon">C</span> Configs</div>
+            <div class="sidebar-item"><span class="icon">R</span> Resources</div>
+            <div class="sidebar-item"><span class="icon">G</span> Graph</div>
+          </div>
+          <div class="main-content">
+            <div class="file-path">Projects/新项目计划.md</div>
+            <div class="updated-tag">* Agent 已自动更新 3 个文件</div>
+            <div class="content-title">新项目计划</div>
+            <div class="content-section">
+              <h3>核心思路</h3>
+              <ul>
+                <li>先理清项目方案和架构</li>
+                <li>搭建代码骨架，快速出原型</li>
+                <li>发帖宣传，收集早期反馈</li>
+              </ul>
+            </div>
+            <div class="content-section">
+              <h3>关联更新</h3>
+              <div class="badge-row">
+                <span class="badge">Projects/Project-Plan.md</span>
+                <span class="badge">Workflows/Launch-SOP.md</span>
+                <span class="badge">TODO.md</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAP 2: arrow placeholder -->
+    <div class="arrow-gap" id="gap2"></div>
+
+    <!-- COL 3: Agent Group -->
+    <div id="col-right">
+      <div class="column-label step-3">
+        <div class="step">3</div>
+        <div class="text">所有 Agent 同步执行</div>
+        <div class="subtext">via MCP &amp; Skills</div>
+      </div>
+      <div class="agent-group" id="agent-group">
+        <div class="agent-group-label">ALL AGENTS via MCP</div>
+        <div class="agent-stack">
+          <!-- Claude Code -->
+          <div class="cli-frame">
+            <div class="cli-titlebar">
+              <div class="dots"><span class="dot-r-sm"></span><span class="dot-y-sm"></span><span class="dot-g-sm"></span></div>
+              <span class="name">Gemini</span>
+            </div>
+            <div class="cli-body">
+              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">梳理项目方案和架构</span></div>
+              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; Project-Plan.md</span></div>
+              <div class="cli-line"><span class="cli-output">  Done. 已整理项目方案 + 技术架构文档</span></div>
+            </div>
+          </div>
+          <!-- Cursor -->
+          <div class="cli-frame">
+            <div class="cli-titlebar">
+              <div class="dots"><span class="dot-r-sm"></span><span class="dot-y-sm"></span><span class="dot-g-sm"></span></div>
+              <span class="name">Cursor</span>
+            </div>
+            <div class="cli-body">
+              <div class="cli-line"><span class="cli-prompt">&gt; </span><span class="cli-cmd">搭建项目骨架</span></div>
+              <div class="cli-line"><span class="cli-reading">  Reading MindOS &rarr; Project-Plan.md</span></div>
+              <div class="cli-line"><span class="cli-output">  Done. 已初始化项目结构 + 基础配置</span></div>
+            </div>
+          </div>
+          <!-- OpenClaw (Telegram style) -->
+          <div class="tg-frame" id="cli-feedback">
+            <div class="tg-header">
+              <div class="tg-avatar">O</div>
+              <span class="tg-name">OpenClaw</span>
+              <span class="tg-badge">BOT</span>
+            </div>
+            <div class="tg-body">
+              <div class="tg-bubble user">发帖宣传项目，收集大家反馈</div>
+              <div class="tg-bubble bot"><span class="tg-hl">Writing &rarr; Workflows/Launch-SOP.md</span><br/>Done. 已发布宣传帖 + 汇总反馈沉淀到 SOP</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="arrows-svg" id="arrows-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+  <div class="tagline">
+    <p>一句想法 &rarr; <span>MindOS</span> 归档 + 关联 &rarr; 所有 Agent 各就各位 &rarr; <span>经验自动沉淀</span></p>
+  </div>
+
+  <div class="cta-card">
+    <div class="cta-label">&#9889; 立即体验 &mdash; 把这句话发给你的 Agent</div>
+    <div class="cta-code">帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。</div>
+  </div>
+</div>
+
+<script>
+function drawArrows() {
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('arrows-svg');
+  const cr = canvas.getBoundingClientRect();
+
+  function rel(el) {
+    const r = el.getBoundingClientRect();
+    return {
+      left: r.left - cr.left, right: r.right - cr.left,
+      top: r.top - cr.top, bottom: r.bottom - cr.top,
+      cx: (r.left + r.right) / 2 - cr.left,
+      cy: (r.top + r.bottom) / 2 - cr.top,
+    };
+  }
+
+  const mobile = rel(document.getElementById('mobile-frame'));
+  const desktop = rel(document.getElementById('desktop-frame'));
+  const group = rel(document.getElementById('agent-group'));
+  const feedback = rel(document.getElementById('cli-feedback'));
+  const gap1 = rel(document.getElementById('gap1'));
+  const gap2 = rel(document.getElementById('gap2'));
+
+  svg.setAttribute('width', cr.width);
+  svg.setAttribute('height', cr.height);
+  svg.setAttribute('viewBox', `0 0 ${cr.width} ${cr.height}`);
+
+  const cs = getComputedStyle(document.body);
+  const accent = cs.getPropertyValue('--accent').trim();
+  const info = cs.getPropertyValue('--info').trim();
+
+  // Arrow 1: Mobile -> Desktop  (想法同步)
+  const a1y = mobile.cy;
+  const a1x1 = mobile.right + 2;
+  const a1x2 = desktop.left - 2;
+  const a1mx = gap1.cx;
+
+  // Arrow 2: Desktop -> Agent Group  (MCP 读取)
+  const a2y = group.cy;
+  const a2x1 = desktop.right + 2;
+  const a2x2 = group.left - 2;
+  const a2mx = gap2.cx;
+
+  // Arrow 3: Feedback -> Desktop bottom  (经验回流)
+  // Start: bottom center of OpenClaw
+  const a3sx = feedback.cx;
+  const a3sy = feedback.bottom + 2;
+  // End: bottom center of Desktop GUI
+  const a3ex = desktop.cx;
+  const a3ey = desktop.bottom + 2;
+  // Horizontal line runs below both panels
+  const a3by = Math.max(feedback.bottom, desktop.bottom) + 36;
+  const r = 10;                     // corner radius
+  // Label position: closer to the right (OpenClaw) side
+  const a3labelX = a3sx - (a3sx - a3ex) * 0.25;
+
+  svg.innerHTML = `
+    <defs>
+      <marker id="ah-a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <path d="M0,0.5 L7,3 L0,5.5" fill="none" stroke="${accent}" stroke-width="1.2"/>
+      </marker>
+      <marker id="ah-i" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <path d="M0,0.5 L7,3 L0,5.5" fill="none" stroke="${info}" stroke-width="1.2"/>
+      </marker>
+    </defs>
+
+    <!-- Arrow 1: 想法同步 -->
+    <line x1="${a1x1}" y1="${a1y}" x2="${a1mx - 36}" y2="${a1y}"
+          stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"/>
+    <line x1="${a1mx + 36}" y1="${a1y}" x2="${a1x2}" y2="${a1y}"
+          stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"
+          marker-end="url(#ah-a)"/>
+    <rect x="${a1mx - 32}" y="${a1y - 11}" width="64" height="20" rx="10"
+          fill="var(--bg)" stroke="${accent}" stroke-width="0.7" opacity="0.85"/>
+    <text x="${a1mx}" y="${a1y + 3}" text-anchor="middle" fill="${accent}"
+          font-size="10.5" font-weight="500" font-family="'Inter',sans-serif">想法同步</text>
+
+    <!-- Arrow 2: MCP 读取 -->
+    <line x1="${a2x1}" y1="${a2y}" x2="${a2mx - 38}" y2="${a2y}"
+          stroke="${info}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"/>
+    <line x1="${a2mx + 38}" y1="${a2y}" x2="${a2x2}" y2="${a2y}"
+          stroke="${info}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"
+          marker-end="url(#ah-i)"/>
+    <rect x="${a2mx - 34}" y="${a2y - 11}" width="68" height="20" rx="10"
+          fill="var(--bg)" stroke="${info}" stroke-width="0.7" opacity="0.85"/>
+    <text x="${a2mx}" y="${a2y + 3}" text-anchor="middle" fill="${info}"
+          font-size="10.5" font-weight="500" font-family="'Inter',sans-serif">MCP 读取</text>
+
+    <!-- Arrow 3: 经验回流 (U-shape, split into segments with label gap) -->
+    <!-- Right vertical: OpenClaw bottom -> corner -> toward label -->
+    <path d="M ${a3sx} ${a3sy}
+             L ${a3sx} ${a3by - r}
+             Q ${a3sx} ${a3by} ${a3sx - r} ${a3by}
+             L ${a3labelX + 36} ${a3by}"
+          fill="none" stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"/>
+    <!-- Left vertical: label -> corner -> up to Desktop bottom -->
+    <path d="M ${a3labelX - 36} ${a3by}
+             L ${a3ex + r} ${a3by}
+             Q ${a3ex} ${a3by} ${a3ex} ${a3by - r}
+             L ${a3ex} ${a3ey}"
+          fill="none" stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.55"
+          marker-end="url(#ah-a)"/>
+    <rect x="${a3labelX - 32}" y="${a3by - 11}" width="64" height="20" rx="10"
+          fill="var(--bg)" stroke="${accent}" stroke-width="0.7" opacity="0.85"/>
+    <text x="${a3labelX}" y="${a3by + 3}" text-anchor="middle" fill="${accent}"
+          font-size="10.5" font-weight="500" font-family="'Inter',sans-serif">经验回流</text>
+  `;
+}
+
+window.addEventListener('load', () => setTimeout(drawArrows, 500));
+</script>
+</body>
+</html>

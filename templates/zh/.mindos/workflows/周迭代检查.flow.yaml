@@ -1,0 +1,84 @@
+title: 周迭代检查工作流
+description: 每周进行代码审查、测试运行和文档更新的标准工作流
+
+# 全局配置 - 此工作流可用的技能
+skills:
+  - software-architecture
+  - code-review-quality
+
+# 工作流步骤 - 按顺序执行
+steps:
+  # 第 1 步：运行测试套件
+  - id: run_tests
+    name: 运行测试
+    description: 执行完整测试套件并报告覆盖率
+    agent: cursor
+    prompt: |
+      执行此项目的完整测试套件。
+      
+      提供以下信息：
+      1. 运行的总测试数、通过数、失败数
+      2. 覆盖率报告（行/分支/函数）
+      3. 任何严重失败及修复建议
+      4. 耗时
+      
+      如果有失败，列出前 3 个最严重的失败及建议的修复方案。
+    timeout: 120
+
+  # 第 2 步：代码审查
+  - id: code_review
+    name: 代码审查
+    description: 使用标准进行代码审查
+    agent: claude-code
+    skill: code-review-quality
+    prompt: |
+      使用代码审查标准对最近的代码变更进行审查。
+      
+      评估以下方面：
+      1. 正确性 - 错误处理、边界情况
+      2. 安全性 - 认证、输入验证、密钥管理
+      3. 性能 - 查询优化、缓存策略、复杂度
+      4. 可维护性 - 命名规范、测试覆盖、文档完整性
+      5. 架构 - 是否遵循项目模式，有无反模式
+      
+      给出评分（如 8.5/10）和主要建议。
+    timeout: 120
+
+  # 第 3 步：更新文档
+  - id: update_docs
+    name: 更新文档
+    description: 同步 CHANGELOG 和 README
+    skill: document-release
+    prompt: |
+      根据本次发布的变更更新项目文档：
+      
+      1. 更新 CHANGELOG.md，遵循语义化版本规范
+      2. 如果功能或 API 变更，更新 README.md
+      3. 如果端点变更，更新 API 文档
+      4. 验证所有文档链接有效
+      5. 检查代码示例是否匹配当前实现
+      
+      提供所有文档变更的摘要。
+    timeout: 60
+
+  # 第 4 步：发布前最终检查
+  - id: final_check
+    name: 发布前验证
+    description: 最终确认一切就绪
+    agent: mindos
+    prompt: |
+      进行最终的发布前验证检查：
+      
+      清单：
+      ☐ 所有测试通过
+      ☐ 代码审查完成并问题已解决
+      ☐ 文档已更新并链接有效
+      ☐ 版本号正确升级（语义化版本）
+      ☐ Git 标签和提交干净
+      ☐ 无未提交的更改
+      ☐ CHANGELOG 条目存在
+      ☐ 依赖项已更新并锁定
+      ☐ 性能基准可接受
+      
+      确认发布就绪或列出任何阻碍因素。
+    timeout: 60

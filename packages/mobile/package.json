@@ -1,0 +1,49 @@
+{
+  "name": "@mindos/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:dev": "eas build --profile development --platform all",
+    "build:preview": "eas build --profile preview --platform all",
+    "build:android:preview": "eas build --profile preview --platform android",
+    "build:ios:preview": "eas build --profile preview --platform ios",
+    "build:android:production": "eas build --profile production --platform android",
+    "build:ios:production": "eas build --profile production --platform ios"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "~14.0.4",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
+    "expo-camera": "~16.0.0",
+    "expo-clipboard": "~7.0.1",
+    "expo-constants": "~17.0.0",
+    "expo-font": "~13.0.4",
+    "expo-linking": "~7.0.5",
+    "expo-router": "~4.0.0",
+    "expo-splash-screen": "~0.29.24",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-gesture-handler": "~2.20.0",
+    "react-native-markdown-display": "^7.0.2",
+    "react-native-reanimated": "~3.16.0",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.0",
+    "eas-cli": "^18.8.1",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.9"
+  }
+}

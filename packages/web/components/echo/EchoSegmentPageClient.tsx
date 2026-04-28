@@ -1,0 +1,309 @@
+'use client';
+
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, Brain, Check, Eye, Footprints } from 'lucide-react';
+import type { EchoSegment } from '@/lib/echo-segments';
+import { buildEchoInsightUserPrompt } from '@/lib/echo-insight-prompt';
+import type { Locale, Messages } from '@/lib/i18n';
+import { useLocale } from '@/lib/stores/locale-store';
+import { cn } from '@/lib/utils';
+import { openAskModal } from '@/hooks/useAskModal';
+import { EchoHero } from './EchoHero';
+import EchoSegmentNav from './EchoSegmentNav';
+import { EchoInsightCollapsible } from './EchoInsightCollapsible';
+import { EchoFactSnapshot } from './EchoPageSections';
+import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
+import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
+import type { DailyEchoReport } from '@/lib/daily-echo/types';
+import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
+import { loadDailyEchoConfig } from '@/lib/daily-echo/config';
+
+const STORAGE_DAILY = 'mindos-echo-daily-line';
+const STORAGE_GROWTH = 'mindos-echo-growth-intent';
+
+function segmentTitle(segment: EchoSegment, echo: ReturnType<typeof useLocale>['t']['panels']['echo']): string {
+  switch (segment) {
+    case 'imprint':
+      return echo.imprintTitle;
+    case 'growth':
+      return echo.growthTitle;
+    case 'self':
+      return echo.selfTitle;
+  }
+}
+
+function segmentLead(segment: EchoSegment, p: ReturnType<typeof useLocale>['t']['echoPages']): string {
+  switch (segment) {
+    case 'imprint':
+      return p.imprintLead;
+    case 'growth':
+      return p.growthLead;
+    case 'self':
+      return p.selfLead;
+  }
+}
+
+const SEGMENT_ICON: Record<EchoSegment, ReactNode> = {
+  imprint: <Footprints size={16} strokeWidth={1.75} />,
+  growth: <Brain size={16} strokeWidth={1.75} />,
+  self: <Eye size={16} strokeWidth={1.75} />,
+};
+
+const fieldLabelClass =
+  'block font-sans text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+const inputClass =
+  'mt-2 w-full min-h-20 resize-y rounded-lg border border-border bg-background px-3 py-3 font-sans text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+const cardSectionClass =
+  'rounded-xl border border-border bg-card p-5 shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/25 hover:shadow sm:p-6';
+
+function echoSnapshotCopy(segment: EchoSegment, p: Messages['echoPages']): { title: string; body: string } {
+  switch (segment) {
+    case 'imprint':
+      return { title: p.snapshotImprintTitle, body: p.snapshotImprintBody };
+    case 'growth':
+      return { title: p.snapshotGrowthTitle, body: p.snapshotGrowthBody };
+    case 'self':
+      return { title: p.snapshotSelfTitle, body: p.snapshotSelfBody };
+  }
+}
+
+export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
+  const { t, locale } = useLocale();
+  const p = t.echoPages;
+  const echo = t.panels.echo;
+  const title = segmentTitle(segment, echo);
+  const lead = segmentLead(segment, p);
+  const factsHeadingId = useId();
+  const pageTitleId = 'echo-page-title';
+
+  const [dailyLine, setDailyLine] = useState('');
+  const [growthIntent, setGrowthIntent] = useState('');
+  const [dailySaved, setDailySaved] = useState(false);
+  const [growthSaved, setGrowthSaved] = useState(false);
+  const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
+  const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
+  const [isDailyEchoGenerating, setIsDailyEchoGenerating] = useState(false);
+  const dailySavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const growthSavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => {
+    clearTimeout(dailySavedTimer.current);
+    clearTimeout(growthSavedTimer.current);
+  }, []);
+
+  const snapshot = useMemo(() => echoSnapshotCopy(segment, p), [segment, p]);
+
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem(STORAGE_DAILY);
+      if (d) setDailyLine(d);
+      const g = localStorage.getItem(STORAGE_GROWTH);
+      if (g) setGrowthIntent(g);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistDaily = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_DAILY, dailyLine);
+    } catch {
+      /* ignore */
+    }
+    clearTimeout(dailySavedTimer.current);
+    setDailySaved(true);
+    dailySavedTimer.current = setTimeout(() => setDailySaved(false), 1800);
+  }, [dailyLine]);
+
+  const persistGrowth = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_GROWTH, growthIntent);
+    } catch {
+      /* ignore */
+    }
+    clearTimeout(growthSavedTimer.current);
+    setGrowthSaved(true);
+    growthSavedTimer.current = setTimeout(() => setGrowthSaved(false), 1800);
+  }, [growthIntent]);
+
+  const openImprintAsk = useCallback(() => {
+    persistDaily();
+    openAskModal(p.dailyAskPrefill(dailyLine), 'user');
+  }, [dailyLine, p, persistDaily]);
+
+  const openSegmentAsk = useCallback(() => {
+    openAskModal(`${p.parent} / ${title}\n\n`, 'user');
+  }, [p.parent, title]);
+
+  const handleDailyEchoGenerated = useCallback((report: DailyEchoReport) => {
+    setDailyEchoReport(report);
+    setIsDailyEchoOpen(true);
+    setIsDailyEchoGenerating(false);
+  }, []);
+
+  const handleDailyEchoRegenerate = useCallback(async () => {
+    setDailyEchoReport(null);
+    setIsDailyEchoGenerating(true);
+    try {
+      const config = loadDailyEchoConfig();
+      const report = await generateDailyEchoReport(new Date(), config, true);
+      setDailyEchoReport(report);
+    } catch (err) {
+      console.error('[EchoImprint] Regenerate failed:', err);
+    } finally {
+      setIsDailyEchoGenerating(false);
+    }
+  }, []);
+
+  const handleDailyEchoContinueAgent = useCallback((content: string) => {
+    setIsDailyEchoOpen(false);
+    openAskModal(content, 'user');
+  }, []);
+
+  const insightUserPrompt = useMemo(
+    () =>
+      buildEchoInsightUserPrompt({
+        locale: locale as Locale,
+        segment,
+        segmentTitle: title,
+        factsHeading: p.factsHeading,
+        emptyTitle: snapshot.title,
+        emptyBody: snapshot.body,
+        dailyLineLabel: p.dailyLineLabel,
+        dailyLine,
+        growthIntentLabel: p.growthIntentLabel,
+        growthIntent,
+      }),
+    [locale, segment, title, p.factsHeading, snapshot, p.dailyLineLabel, dailyLine, p.growthIntentLabel, growthIntent],
+  );
+
+  const secondaryBtnClass =
+    'inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 font-sans text-sm font-medium text-foreground transition-[background-color,border-color] duration-150 hover:border-[var(--amber)]/25 hover:bg-[var(--amber-dim)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+  const chatLabel = segment === 'imprint' ? p.imprintChatLabel
+    : segment === 'growth' ? p.growthChatLabel
+    : p.selfChatLabel;
+
+  const agentBtn = (onClick: () => void, disabled?: boolean) => (
+    <button type="button" onClick={onClick} disabled={disabled} className={cn(secondaryBtnClass, disabled && 'opacity-40 pointer-events-none')}>
+      {chatLabel}
+      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  );
+
+  return (
+    <article
+      className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-11"
+      aria-labelledby={pageTitleId}
+    >
+      <EchoHero
+        pageTitle={title}
+        lead={lead}
+        titleId={pageTitleId}
+      >
+        <EchoSegmentNav activeSegment={segment} />
+      </EchoHero>
+
+      {/* Imprint: daily line + report generation */}
+      {segment === 'imprint' && (
+        <>
+          <section className={`${cardSectionClass} mt-8`}>
+            <label htmlFor="echo-daily-line" className={fieldLabelClass}>
+              {p.dailyLineLabel}
+            </label>
+            <textarea
+              id="echo-daily-line"
+              value={dailyLine}
+              onChange={(e) => setDailyLine(e.target.value)}
+              onBlur={persistDaily}
+              rows={3}
+              placeholder={p.dailyLinePlaceholder}
+              className={inputClass}
+            />
+            <p className="mt-3 flex items-center gap-2 font-sans text-xs text-muted-foreground">
+              <span>{p.dailySavedNote}</span>
+              <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
+                {dailySaved ? <><Check size={14} aria-hidden /> {p.savedFlash}</> : null}
+              </span>
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <DailyEchoReportButton
+                onGenerated={handleDailyEchoGenerated}
+                onError={(err) => console.error('[EchoImprint]', err)}
+                locale={{ t: p }}
+              />
+              {agentBtn(openImprintAsk, !dailyLine.trim())}
+            </div>
+          </section>
+          <DailyEchoReportDrawer
+            isOpen={isDailyEchoOpen}
+            report={dailyEchoReport}
+            isGenerating={isDailyEchoGenerating}
+            onClose={() => setIsDailyEchoOpen(false)}
+            onRegenerate={handleDailyEchoRegenerate}
+            onContinueAgent={handleDailyEchoContinueAgent}
+            locale={{ t: p }}
+          />
+        </>
+      )}
+
+      {/* Growth: intent textarea + agent */}
+      {segment === 'growth' && (
+        <section className={`${cardSectionClass} mt-8`}>
+          <label htmlFor="echo-growth-intent" className={fieldLabelClass}>
+            {p.growthIntentLabel}
+          </label>
+          <textarea
+            id="echo-growth-intent"
+            value={growthIntent}
+            onChange={(e) => setGrowthIntent(e.target.value)}
+            onBlur={persistGrowth}
+            rows={4}
+            placeholder={p.growthIntentPlaceholder}
+            className={`${inputClass} min-h-24`}
+          />
+          <p className="mt-3 flex items-center gap-2 font-sans text-xs text-muted-foreground">
+            <span>{p.growthSavedNote}</span>
+            <span className="inline-flex items-center gap-1 text-[var(--success)]" aria-live="polite">
+              {growthSaved ? <><Check size={14} aria-hidden /> {p.savedFlash}</> : null}
+            </span>
+          </p>
+          <div className="mt-4">
+            {agentBtn(openSegmentAsk, !growthIntent.trim())}
+          </div>
+        </section>
+      )}
+
+      {/* Self: snapshot + insight */}
+      {segment === 'self' && (
+        <div className="mt-8 space-y-6">
+          <EchoFactSnapshot
+            headingId={factsHeadingId}
+            heading={p.factsHeading}
+            emptyTitle={snapshot.title}
+            emptyBody={snapshot.body}
+            icon={SEGMENT_ICON[segment]}
+            actions={agentBtn(openSegmentAsk, true)}
+          />
+        </div>
+      )}
+
+      {/* Insight collapsible — for growth and self segments */}
+      {segment !== 'imprint' && (
+        <EchoInsightCollapsible
+          title={p.insightTitle}
+          showLabel={p.insightShow}
+          hideLabel={p.insightHide}
+          hint={p.insightHint}
+          generateLabel={p.generateInsight}
+          noAiHint={p.generateInsightNoAi}
+          generatingLabel={p.insightGenerating}
+          errorPrefix={p.insightErrorPrefix}
+          retryLabel={p.insightRetry}
+          userPrompt={insightUserPrompt}
+        />
+      )}
+    </article>
+  );
+}

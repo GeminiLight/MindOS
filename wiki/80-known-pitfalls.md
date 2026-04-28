@@ -1,0 +1,2475 @@
+<!-- Last verified: 2026-04-28 | Current stage: v1 release-candidate -->
+
+# 踩坑记录 (Known Pitfalls)
+
+## v1 Monorepo Migration
+
+### v1 迁移后不要再把顶层 `app/` / `apps/` / `desktop/` / `mobile/` 当源码入口
+
+**症状**：顶层 legacy source roots 删除后，如果运行时代码仍从 `projectRoot/app/...` 查找 skills 或 Agent extensions，会造成 dev、npm 包和 Desktop runtime 行为不一致。
+
+**根因**：v1 迁移时先复制目录再切入口，旧路径容易残留在 tests、docs、hooks 和动态路径解析里；单纯删除目录不足以证明运行时自洽。
+
+**规则**：
+- 源码入口固定为 `packages/web/`、`packages/desktop/`、`packages/mobile/`、`packages/protocols/acp/`、`packages/protocols/mcp-server/`
+- `packages/web/data/skills/` 是 Web 内置 skill copy；`skills/` 是项目级 source-of-truth copy
+- Desktop 新打包产物也使用 `packages/web/` + `packages/protocols/mcp-server/`，不再生成顶层 `app/` + `mcp/` 兼容布局
+- `packages/mindos/_standalone`、`packages/mindos/packages`、`packages/mindos/scripts` 等是 pack/publish staging output，不是源码；不要在那里修 bug
+
+**验证**：`pnpm exec vitest run tests/legacy-cleanup-contract.test.ts`，发布前再跑真实 `npm pack` tarball smoke。
+
+### MCP source path 迁移后不要再改顶层 `mcp/`
+
+**症状**：v1 迁移后如果继续在顶层 `mcp/` 修 MCP，会出现"本地修了但发布包 / CLI / Desktop 没变化"的假修复。
+
+**根因**：v1 的 MCP 源码和新 Desktop runtime source of truth 都已迁移到 `packages/protocols/mcp-server/`。顶层 `mcp/` 只可能来自旧安装包或旧缓存，不能作为新版本入口。
+
+**规则**：
+- MCP 源码只改 `packages/protocols/mcp-server/src/index.ts`
+- 构建用 `pnpm --filter @mindos/mcp-server build`
+- CLI 通过 `packages/mindos/bin/lib/mcp-build.js` 读取 `packages/protocols/mcp-server/dist/index.cjs`
+- Desktop runtime prepare 直接复制为 `packages/protocols/mcp-server/dist/index.cjs`
+
+**验证**：`pnpm exec vitest run tests/mcp-package-migration-contract.test.ts`，并确认 npm tarball 包含 `packages/protocols/mcp-server/dist/index.cjs`。
+
+## Git / 双仓同步
+
+### 公开仓 tag push 与 workflow_dispatch 不要双触发同一个发布
+
+**症状**：`npm run release` 后公开仓出现两个 `publish-npm` run；一个成功发布 npm，另一个因为同一版本已存在而失败。
+
+**根因**：`sync-to-mindos.yml` 使用 PAT 把 `vX.Y.Z` tag 推到公开仓时，公开仓的 `publish-npm.yml` 会被 tag push 自动触发。如果 sync workflow 同时再调用 `publish-npm.yml/dispatches`，同一版本会被发布两次。
+
+**规则**：
+- `vX.Y.Z`：只靠公开仓 tag push 自动触发 `publish-npm.yml` / `publish-runtime.yml`
+- `desktop-vX.Y.Z`：因为 desktop workflow 不监听 tag push，才由 `sync-to-mindos.yml` 显式 dispatch `build-desktop.yml`
+- `clipper-vX.Y.Z`：只靠公开仓 tag push 自动触发 `publish-clipper.yml`
+
+**验证**：`pnpm exec vitest run tests/workflow-migration-contract.test.ts`，确认 `sync-to-mindos.yml` 不包含 `publish-npm.yml/dispatches`。
+
+### 绝对禁止手动 push/merge public repo（2026-03-31 实际事故）
+
+**症状**：mindos-dev 丢失 219 个文件（`.claude-internal/`、`startup/`、私有 wiki 等）。
+
+**根因**：手动 `git push public main` 把 dev 完整历史推到 public repo，然后 `git merge public/main` 回来。public repo 只有 sync 子集，Git 认为 public 端"删除"了 dev-only 文件，merge 时同步删除。
+
+**规则**：
+- **永远不要** `git push public main` 或 `git merge public/main`
+- 只通过 `sync-to-mindos.yml` CI 单向同步 dev → public
+- 唯一允许直接推 public 的是 tag：`git push public v0.6.27`（仅 tag，不推 branch）
+- 如果 public 有外部 PR，在 GitHub 上合并后让 CI 回流，不要手动 merge
+
+**恢复方式**：`git reset --hard <merge前的commit>` + `git push origin main --force-with-lease`
+
+## Agent / LLM API
+
+### "创建此文件"按钮无法点击（2026-04-20）
+
+**症状**：用户访问不存在的文件（如 `笔记/國 AI/Untitled.md`）时，页面显示"文件未找到"提示和"创建此文件"按钮，但点击按钮无响应。
+
+**根因**：`app/view/[...path]/not-found.tsx:33-36` 调用了错误的 API 端点：
+- 错误：`PUT /api/files`（不存在）
+- 正确：`POST /api/file` + `op: 'create_file'`
+
+**修复**：
+1. 修改 API 端点从 `/api/files` 到 `/api/file`
+2. 修改 HTTP 方法从 `PUT` 到 `POST`
+3. 添加 `op: 'create_file'` 参数
+4. 改进错误处理：记录错误日志而非静默失败
+
+**技术细节**：
+- `/api/files` (GET) 用于列出所有文件
+- `/api/file` (POST) 用于文件操作，需要 `op` 参数指定操作类型
+- 可用的 `op` 值：`create_file`, `save_file`, `delete_file`, `rename_file`, `move_file` 等
+
+**规则**：
+- 所有文件操作必须通过 `POST /api/file` + `op` 参数
+- 不要静默吞掉错误，至少记录到 console 便于调试
+- API 调用失败时应给用户明确的反馈
+
+**测试**：手动测试访问不存在的文件路径，验证"创建此文件"按钮可正常工作。
+
+### Hugging Face 模型下载失败（中国大陆网络）（2026-04-20）
+
+**症状**：用户在设置页面启用本地嵌入搜索并点击"下载模型"后，一直显示 "Download failed. Check your network connection and try again."。
+
+**根因**：中国大陆网络无法直接访问 `huggingface.co` 和 `cdn-lfs.huggingface.co`，导致 `@huggingface/transformers` 下载模型时超时（75 秒+）。
+
+**修复**：
+1. 代码自动配置 `hf-mirror.com` 镜像源（中国大陆可访问）
+2. 支持通过 `HF_ENDPOINT` 环境变量自定义镜像源
+3. UI 提示用户可切换到 API 模式（使用硅基流动等国内服务）
+
+**使用方式**：
+
+方案 1（推荐）：代码已自动配置镜像，无需手动操作，直接点击"下载模型"即可。
+
+方案 2：自定义镜像源
+```bash
+# 设置环境变量后启动
+export HF_ENDPOINT=https://hf-mirror.com
+npm run dev
+
+# 或 Desktop 用户
+export HF_ENDPOINT=https://hf-mirror.com
+open /Applications/MindOS.app
+```
+
+方案 3：使用 API 模式
+- 在设置页面切换到"API"模式
+- 选择"SiliconFlow"（免费，中国大陆可用）
+- 填写 API Key（在 https://siliconflow.cn 注册获取）
+
+**技术细节**：
+- `embedding-provider.ts:173-177` 检测到未设置 `HF_ENDPOINT` 且 `env.remoteHost` 为空时，自动配置 `https://hf-mirror.com`
+- 重试逻辑：最多 3 次尝试（初始 + 2 次重试），指数退避（1s, 2s）
+- 超时保护：单次下载最长 5 分钟
+- 错误分类：区分网络错误（可重试）和非网络错误（不重试）
+
+**规则**：
+- 本地模型下载失败时，优先引导用户切换到 API 模式，而非反复重试
+- 镜像源配置应尊重用户的 `HF_ENDPOINT` 环境变量，不要强制覆盖
+- UI 错误提示应包含具体的解决方案，而非仅显示"网络错误"
+
+**测试**：`__tests__/core/embedding-provider.test.ts` 覆盖镜像配置、重试逻辑、错误分类等场景。
+
+### Agent 超时配置不足导致慢速 API 场景失败（2026-04-20）
+
+**症状**：用户使用慢速 API（自建 Ollama、海外 API、高延迟网络）或复杂工具链时，Agent 回复在 120 秒后超时，前端显示 "Agent execution timeout after 120 seconds"。
+
+**根因**：`app/api/ask/route.ts` 中 `AGENT_TIMEOUT_MS` 和 `ACP_AGENT_TIMEOUT_MS` 硬编码为 120 秒，对于以下场景不够用：
+- 自建 Ollama 模型推理慢（CPU 推理、大模型）
+- 海外 API 高延迟（跨国网络、代理）
+- 复杂工具链（多步工具调用、大文件处理）
+- 用户自定义 Agent 执行耗时任务
+
+**修复**：
+1. 将默认超时从 120s 提升到 600s（10 分钟）
+2. 支持通过 `MINDOS_AGENT_TIMEOUT_MS` 环境变量自定义
+3. 同时应用于 MindOS Agent 和 ACP Agent 路径
+
+**使用方式**：
+```bash
+# 设置 20 分钟超时
+MINDOS_AGENT_TIMEOUT_MS=1200000 npm run dev
+
+# Desktop 用户可在启动前设置环境变量
+export MINDOS_AGENT_TIMEOUT_MS=1200000
+```
+
+**规则**：
+- 默认 600s 适配大部分场景，极端慢速场景通过环境变量调整
+- 不要在代码中硬编码超时值，始终支持环境变量覆盖
+- 超时错误信息应包含实际超时时间，便于用户诊断
+
+### 背景预热请求不要绑在"面板隐藏"清理上（2026-04-11）
+
+**症状**：像 Search 这类后台预热请求，如果在面板关闭时直接取消并阻止状态更新，下一次重新打开面板可能一直停留在 `warming` 或再也不重试。
+
+**根因**：很多面板是“隐藏但仍挂载”，不是完全 unmount。把 background prewarm 的完成回调绑到 `active=false` 的 cleanup 上，会把一次正常的后台完成误判成“应该丢弃的结果”。同时若文件内容变化后不重置 prewarm 状态，会导致预热状态与真实索引生命周期脱节。
+
+**规则**：
+- 背景预热的完成回调要区分“组件卸载”和“面板隐藏”
+- 只在真正 unmount 时阻止状态更新，不要因为 `active=false` 就丢结果
+- 任何依赖缓存的 warmState，都要在 `files-changed` 等失效事件发生时重置
+
+
+### pdfjs-dist 在 Next.js standalone 构建下找不到模块（2026-04-11，更新 2026-04-11）
+
+**症状**：用户在 Chatbot 上传 PDF 时报错 `Cannot find module 'pdfjs-dist/legacy/build/pdf.mjs'`，require stack 指向 `.next/standalone/…/extract-pdf.cjs`。dev 模式正常，standalone（Desktop/npm 全局）模式才出问题。
+
+**根因**：`extract-pdf.cjs` 是通过 `execFileSync('node', [scriptPath, …])` 在子进程中运行的，不经过 Next.js 打包。`next.config.ts` 的 `outputFileTracingIncludes` 虽然把脚本文件拷贝到 `.next/standalone/scripts/`，但 `pdfjs-dist` 不在 `serverExternalPackages` 列表，所以 **`node_modules/pdfjs-dist/` 不会被拷贝到 standalone**。子进程 `require('pdfjs-dist/…')` 时找不到模块。
+
+**二次复发根因**（2026-04-11）：主 `app/next.config.ts` 修复后，**Desktop runtime 副本**（`desktop/resources/mindos-runtime/app/next.config.ts`）和 **npm 包副本**（`_standalone/next.config.ts`）未同步更新 `serverExternalPackages`。用户通过 Desktop 安装的 runtime 使用过期配置构建，standalone 仍然缺少 `pdfjs-dist`。
+
+**修复**：
+1. 将 `pdfjs-dist` 加入 `serverExternalPackages` 列表
+2. **同时更新所有 `next.config.ts` 副本**：`app/`、`_standalone/`、`desktop/resources/mindos-runtime/app/`
+3. 同步 `extract-pdf.cjs` 脚本到所有副本
+
+**规则**：
+1. 任何被 spawn 的 `.cjs`/`.mjs` 脚本若直接 `require()`/`import()` npm 包，该包必须加入 `serverExternalPackages`
+2. **`next.config.ts` 改动必须同步到三处副本**：`app/`、`_standalone/`、`desktop/resources/mindos-runtime/app/`
+3. `extract-pdf.cjs` 等运行时脚本改动必须同步到 `desktop/resources/mindos-runtime/app/scripts/`
+
+**测试**：`__tests__/scripts/extract-pdf-runtime.test.ts` 直接 spawn `extract-pdf.cjs` 验证 pdfjs-dist 加载成功。
+
+**三次复发根因**（2026-04-11）：用户已更新到最新 Desktop，但 `~/.mindos/runtime/` 缓存的旧 runtime 版本 **高于** 新 bundled runtime 版本。`cleanupOnBoot()` 只在 `bundled >= cached` 时才删除缓存，所以用户继续使用缺少 `pdfjs-dist` 的旧 runtime。`analyzeMindOsLayout()` 不检查具体依赖是否存在，只检查 `server.js`，无法拦截这类不完整的 runtime。
+
+**用户自救（cached runtime 问题）**：
+```bash
+# macOS / Linux
+rm -rf ~/.mindos/runtime
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:USERPROFILE\.mindos\runtime"
+```
+重启 Desktop 后会自动使用新 bundled runtime。
+
+**四次复发根因**（2026-04-20）：用户下载的 Desktop 应用本身的 **bundled runtime 缺少 `pdfjs-dist`**（构建于 v0.6.80 之前）。错误路径指向 `/Applications/MindOS.app/Contents/Resources/mindos-runtime/app/scripts/extract-pdf.cjs`，说明问题在 bundled runtime，不是 cached runtime。
+
+**用户自救（bundled runtime 问题）**：
+```bash
+# 方案 1：删除旧的 bundled runtime，强制使用全局 npm 安装
+rm -rf /Applications/MindOS.app/Contents/Resources/mindos-runtime
+
+# 方案 2：安装最新的全局 MindOS（>= v0.6.80）
+npm install -g @geminilight/mindos@latest
+
+# 方案 3：下载最新的 Desktop 版本（>= desktop-v0.1.13）
+# 从 https://github.com/GeminiLight/MindOS/releases 下载最新的 desktop-v* 版本
+```
+
+**根本解决**：确保 Desktop 发布流程始终使用最新的 `main` 分支代码构建，不要使用旧的 tag 或 commit。GitHub Actions workflow 应该从 `main` checkout，而不是从 tag checkout。
+
+**最终修复**（2026-04-11）：
+1. `desktop/src/core-updater.ts` 在 `cleanupOnBoot()` 中先检查 cached runtime 完整性；若缺少 `extract-pdf.cjs` / `pdfjs-dist` 关键文件，则**无条件删除** `~/.mindos/runtime/`
+2. `desktop/src/mindos-runtime-layout.ts` 的 `analyzeMindOsLayout()` / `isBundledRuntimeIntact()` 统一校验 standalone 关键文件，避免坏 runtime 被当作 runnable
+3. `scripts/build-runtime-archive.sh` 与 Desktop 内置 runtime archive 脚本增加 `pdfjs-dist` 自检，打包阶段直接 fail fast
+4. `desktop/scripts/prepare-mindos-bundle.mjs` 在 prepare 阶段校验 standalone 关键文件，防止坏 runtime 被打进安装包
+5. 将 runtime 健康标准收敛到 `desktop/runtime-health-contract.json`，让 Desktop 运行时判定、prepare、自检统一消费同一份 contract，未来更换 PDF 库只需改一处
+
+**发布链路澄清**（2026-04-11）：
+- Desktop 用户安装包走 `.github/workflows/build-desktop.yml` 平台矩阵：在对应 runner 上先执行 `next build --webpack`，再执行 `desktop/scripts/prepare-mindos-runtime.mjs`，把 freshly built runtime 打进安装包。
+- 因此，**Desktop 用户拿到的不是历史 cache 产物**，而是当前 workflow 现场构建并校验过的 bundled runtime。
+- `scripts/build-runtime-archive.sh` 的 bash-only 限制只影响 `publish-runtime.yml` 这条 **Linux CI 发布链路**，不影响 Desktop 用户在 macOS / Windows / Linux 上运行最新健康版本。
+
+**发布规则**：修复上线时需要同时发新的 Core patch 版本和新的 Desktop 版本；仅发 npm 或仅发 Desktop 都可能留下旧缓存继续生效。
+
+### Vitest `vi.mock()` 工厂会被提升，引用顶层变量会直接炸掉 (2026-04-11)
+
+**症状**：测试文件能过 TypeScript，但执行时直接报 `[vitest] There was an error when mocking a module`，并提示 `Cannot access 'xxx' before initialization`。
+
+**根因**：`vi.mock()` 工厂会在模块顶层被 hoist；如果工厂里引用了测试文件里后定义的变量/类（即使肉眼看起来在前面），运行时仍会进入 TDZ。
+
+**规则**：
+- 需要在 mock 工厂里复用的 `fn` / class，优先放进 `vi.hoisted(() => ...)`
+- 或把 mock 所需的最小 class/对象直接定义在工厂内部
+- 不要在 `vi.mock()` 工厂中捕获普通顶层变量
+
+**修复**：Quick Capture 测试改为 `vi.hoisted()` 托管 `getFileContent` / `saveFile` / `ApiError`，再由 mock 工厂引用。
+
+### Plain JS CLI 直接 import app/*.ts 会在运行时炸掉 (2026-04-10)
+
+**症状**：`node packages/mindos/bin/cli.js channel --help` 或其他 bin 命令在启动阶段直接报 `ERR_MODULE_NOT_FOUND` / `Unexpected token`，指向 `packages/web/lib/**.ts`。
+
+**根因**：CLI 运行在原生 Node ESM 下，`packages/mindos/bin/*.js` 不经过 Next / tsx / ts-node 装载链；直接从 plain JS CLI import TypeScript 源文件会在运行时失败。
+
+**规则**：
+- `packages/mindos/bin/` 层优先保持纯 JS，可直接做文件 I/O、参数解析、轻量校验。
+- 复杂 TypeScript 业务逻辑通过 app 内 API route / 子进程边界调用，不要从 `bin/*.js` 直接 import `app/**/*.ts`。
+- 若 CLI 与 app 需要共享规则，优先抽数据常量或协议边界，避免共享需要 TS loader 的实现文件。
+
+**修复**：本次 `mindos channel` 采用 `packages/mindos/bin/lib/channel-config.js` + `/api/channels/verify` 的分层方式：CLI 负责配置和 UX，Web app 负责真实凭证校验。
+
+
+### DefaultResourceLoader.systemPromptOverride 闭包缓存陷阱 (2026-04-10)
+
+**症状**：修改 `systemPrompt` 变量后追加内容（如 `<available_skills>` XML），但 LLM 始终看不到追加的内容。
+
+**根因**：`systemPromptOverride: () => systemPrompt` 是闭包，但 `reload()` 调用时只执行一次并缓存结果到 `this.systemPrompt`。后续 `_rebuildSystemPrompt()` 调用 `getSystemPrompt()` 读取的是缓存值，不会重新执行闭包。
+
+**修复**：在修改 `systemPrompt` 后再调用一次 `resourceLoader.reload()` 刷新缓存。
+
+**规则**：凡是 `DefaultResourceLoader` 的 `*Override` 回调，都只在 `reload()` 时执行一次。如果需要动态修改 override 的返回值，必须在修改后重新调用 `reload()`。
+
+### Non-streaming API fallback message format mismatch (2026-04-07)
+
+**症状**：用户配置非官方 LLM API 代理（例：`https://api.ikuncode.cc/v1`），启用 non-streaming 模式后报错或返回错误内容。MindOS 内部 runNonStreamingFallback() 函数无法正确调用第三方 API。
+
+**根因**：runNonStreamingFallback() 在将消息传递给 OpenAI 兼容 API 时，直接使用 pi-ai 格式的消息对象，而非 OpenAI 标准格式：
+- pi-ai assistant message: `{ content: [{ type: 'text', text: '...' }, { type: 'toolCall', ... }] }`
+- OpenAI format: `{ content: 'text', tool_calls: [{ id, type, function: { name, arguments } }] }`
+- pi-ai toolResult: `{ toolCallId, content: [{ type: 'text', text: '...' }] }`
+- OpenAI format: `{ tool_call_id, content: 'text' }`
+
+rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Message[]）给 runNonStreamingFallback()，未经格式转换。
+
+**修复**：（app/api/ask/route.ts:408-477）
+1. 新增 `piMessagesToOpenAI()` 函数，完整映射 pi-ai → OpenAI 消息格式
+2. 在 runNonStreamingFallback() 入口调用该转换函数
+3. 保证所有用户场景可用：文本、工具调用、工具结果、复杂对话历史
+
+**验收标准**：
+- ✅ 非流式纯文本提示
+- ✅ 含工具调用的多轮对话
+- ✅ 非官方 OpenAI 兼容代理（ikuncode、本地 llama.cpp 等）
+- ✅ 所有消息类型（user/assistant/tool/system）
+
+
+
+### 首次本地模式白屏（无/空 config + 未进 /setup）
+- **现象：** 选「本地模式」后主窗口全白；`~/.mindos/config.json` 不存在，或存在但为空/坏 JSON/缺 `desktopMode`
+- **原因：** 旧逻辑用 `isFirstRun && !existsSync` 决定是否打开 `/setup?force=1`；`saveDesktopMode` 只写了 `desktopMode` 未设 `setupPending`，与 Next 侧 `readSettings` 不一致；若 `config.json` 已存在但无效，会跳过模式选择并直接加载 `/`，易与空知识库/首启状态叠加为白屏
+- **解决：** `needsDesktopModeSelectAtLaunch()` 覆盖空/坏文件；首次选本地且尚无 `mindRoot` 时写入 `setupPending: true`；`resolveLocalMindOsBrowseUrl()` 在 **`setupPending` 或配置里尚无 `mindRoot`/`sopRoot`** 时打开 `/setup?force=1`（与 Next `readSettings` 的 `mindRoot ?? sopRoot` 一致）；**重启服务 / 更新后恢复** 用 `loadURL(resolve…)` 代替裸 `reload()`，避免仍停在白屏页
+
+### Next 生产进程绑定机器 hostname，`127.0.0.1` 健康检查永远超时
+- **现象：** Desktop 或 `verify-standalone` 等不到 `/api/health`，但本机 `curl http://$(hostname):PORT/api/health` 有响应
+- **原因：** Next 默认把监听地址设成 **系统 hostname**，未监听 loopback
+- **解决：** Desktop `ProcessManager` 与 CLI `mindos start`（`next start`）**无条件**注入 `HOSTNAME=127.0.0.1`（旧版条件判断 `if (!env.HOSTNAME)` 在有系统 HOSTNAME 时不生效，已改为无条件赋值）；需要对外监听时用户自行 export `HOSTNAME=0.0.0.0`
+
+### Web 进程启动即崩溃，`waitForReady` 傻等 120 秒才报超时
+- **现象：** Desktop 首次安装后报 "MindOS web server did not start within 120 seconds on port 3456"，但实际 Web 进程在数秒内就已崩溃退出
+- **原因：** `waitForReady()` 只轮询 HTTP `/api/health`，**不检测子进程是否已死亡**。即使 Web 进程在第 1 秒就崩了（Gatekeeper 拦截、native 模块不兼容、.next 损坏等），也要等满 120 秒超时才返回错误
+- **解决：** `waitForReady()` 同时监听 `webProcess.exit` 事件，进程死亡后给 crash handler 5 秒重试窗口（最多 3 次），若仍无法存活则立即终止等待、抛出包含 stderr 日志的错误信息。同时为 `spawn()` 添加 `error` 事件监听防止 ENOENT 导致 Electron 崩溃
+
+### macOS Gatekeeper 隔离属性静默杀死下载的 Node.js 二进制
+- **现象：** Desktop 下载私有 Node.js 到 `~/.mindos/node/` 后，spawn 的 Web/MCP 进程被 macOS 立即 SIGKILL，无任何错误输出
+- **原因：** `downloadNode()` 通过 HTTPS 下载并解压 Node.js tar.gz，解压后文件带有 `com.apple.quarantine` 扩展属性；macOS Gatekeeper 对未签名的受隔离可执行文件执行静默拦截
+- **解决：** `node-bootstrap.ts` 在 `chmodSync(nodeBin, 0o755)` 后，对 macOS 额外执行 `xattr -dr com.apple.quarantine` 清除整个 Node 目录的隔离标记
+
+### `prepare-mindos-runtime` 把 `.next/dev` 打进安装包 → 体积暴涨
+- **现象：** Desktop 内置 `mindos-runtime/app` 数百 MB，其中 `.next/dev` 占大头
+- **原因：** Turbopack/开发会话会在 `app/.next/dev` 留下缓存；整目录拷贝 `app/.next` 时会一并带上
+- **解决：** `copyAppForBundledRuntime` 排除 `.next/dev`（与 `.next/cache` 同理）；生产启动走 `standalone/server.js`，不依赖该目录
+
+### `mindos.pid` 误判「CLI 已在跑」→ `ERR_CONNECTION_REFUSED` 白屏
+- **现象：** 主窗口 `did-fail-load -102`；`http://127.0.0.1:3456/` 拒绝连接；删 `config.json` 仍白屏；可能伴随 `Bundled MindOS CLI not found (mindos-runtime/bin/cli.js)`
+- **原因：** (1) `checkCliConflict()` 仅 `kill(pid,0)` 即假定 MindOS Web 已在 `config.port ?? 3456` 上监听，**未探测 `/api/health`**，陈旧 PID 或无关进程占位会导致假阳性；(2) `prepare-mindos-runtime` 未拷贝仓库 `bin/`，打包内缺少 `mindos-runtime/bin/cli.js`
+
+### Core 更新下载在 Windows 上失败（ENOENT / All URLs failed）【已修复 v0.6.57】
+- **现象：** Windows 用户点"更新"→ "All download URLs failed" 或 "ENOENT: no such file or directory, open 'C:\Users\...\runtime-download.tar.gz'"；重试也无法成功
+- **根因：** (1) Windows 文件锁定：第一次下载失败后 `TARBALL_PATH` 可能无法被立即删除，重试时部分覆写导致状态混乱；(2) 错误信息丢失：所有 URL 失败时只返回泛泛的 "All URLs failed"，未记录具体错误（超时/404/DNS 等），难以诊断
+- **解决：** (1) 下载前清理 tarball 时添加重试逻辑（最多 3 次，每次间隔 100ms）；(2) 在 `downloadFile()` 中用 `lastErr` 变量追踪最后错误，返回具体信息如 "All URLs failed: timeout"；(3) 增强日志，记录每次删除/重试的尝试
+- **Ref:** `wiki/specs/spec-core-updater-bugfix.md`
+- **解决：** 冲突分支在 `loadURL` 前 `verifyMindOsWebListening`（短重试）；`prepare-mindos-runtime` 在存在时拷贝 `bin/`；用户可手动删 `~/.mindos/mindos.pid` 后重开（仍建议用新版本逻辑自动回落到起本地服务）
+
+### macOS：用户拖拽删除 .app 后残留进程、端口、PID 文件导致重装异常
+- **现象：** 重装后端口跳到 3457、launchd daemon 无限重试、.next 构建缓存损坏、MCP 客户端配置失效
+- **原因：** macOS 无卸载 hook；拖垃圾桶不触发任何清理。孤立的 Next.js/MCP 进程持续占端口；`desktop-children.pid`/`mindos.pid` 残留；launchd `com.mindos.app` 的 `KeepAlive.SuccessfulExit=false` 导致无限重启
+- **解决：** `healPreviousInstallation()` 在每次 Desktop 启动时静默运行——停 launchd daemon、清理双 PID 文件（Desktop + CLI）、port-based fallback kill、等待端口释放（5s）、验证私有 Node.js 版本、验证 .next 构建缓存。端口偏移时自动更新 MCP 客户端配置。用户无感知。[spec](./specs/spec-desktop-reinstall-healing.md)
+
+### 知识库路径配置在危险目录导致数据丢失风险【v0.6.77 修复】
+- **现象：** 用户将知识库配置到安装目录（如 `D:\Program Files\MindOS\data`）、Electron userData（`%APPDATA%\MindOS`）、或系统管理目录（`~/.mindos/runtime`）后，重装/更新/卸载时知识库被清除
+- **根因：** 
+  1. Setup Wizard 没有验证 `mindRoot` 路径的安全性
+  2. NSIS 卸载器执行 `RMDir /r $INSTDIR` 删除整个安装目录；Core Updater 会清理 `~/.mindos/runtime`
+  3. 用户如果恰好把知识库放在安装目录子目录，则会跟着被删
+- **解决（两层防护）：**
+  - **第一层**（通用黑名单）：新增 `validateMindRootPath()` 函数（`app/api/setup/path-utils.ts`），拦截已知危险路径：Windows `%APPDATA%`/`Program Files` 等、macOS `.app` bundle、Linux `/opt/mindos` 等、跨平台 `~/.mindos/`
+  - **第二层**（精确拦截）：Desktop 通过 `MINDOS_INSTALL_DIR` env 传递**真实安装目录**给 Web 进程，setup 校验时**拒绝用户把知识库设到安装目录或其子目录**（包括自定义安装到 D 盘等情况）
+- **用户体验：** Setup Wizard 显示红色警告框，禁用 Next 按钮直到用户选择安全路径
+- **测试：** `app/__tests__/api/setup-path-utils.test.ts`（26 条测试） + `desktop/src/process-manager-hostname.test.ts`（MINDOS_INSTALL_DIR 注入测试）
+- **重装/更新安全性（已审计）：**
+  - ✅ `~/.mindos/config.json`（含 mindRoot）不会因重装/更新/卸载而被删除
+  - ✅ NSIS 卸载器只删 `$APPDATA\MindOS`（Electron 缓存），不涉及主目录
+  - ✅ 核心热更新仅删 `~/.mindos/runtime/`，config.json 有白名单保护
+  - ✅ 更新后系统自动恢复现有 mindRoot，无须重新配置
+- **规则：** 用户知识库应放在 `~/MindOS/mind`（默认）、`~/Documents/` 或其他用户数据目录
+
+### macOS：`file://…/app.asar` 内嵌页面 `ERR_FAILED`（connect / splash）
+- **现象：** `did-fail-load` 指向 `…/app.asar/src/connect.html` 等；模式选择或远程连接窗口打不开
+- **原因：** 部分环境下 Chromium 对 asar 内 `file://` 主文档或子资源加载不稳定
+- **解决：** `electron-builder` `asarUnpack` 列出 `src/connect.html`、`src/splash.html`、`dist-electron/renderer/connect-renderer.js`、`dist-electron/preload/**`；运行时 `resolvePreferUnpacked()` 优先使用 `app.asar.unpacked` 下同路径；**connect / 模式选择页**用特权 scheme `mindos-connect://bundle/...` + `protocol.handle` + `net.fetch` 提供内容（避免 `file://` 仍 `ERR_FAILED`）；对应窗口 `webPreferences.sandbox: false`
+
+### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
+
+### SSH 隧道孤儿进程占端口
+- **现象：** Desktop 崩溃或被 SIGKILL 后，SSH 隧道子进程继续运行。下次启动远程模式时端口被孤儿进程占用
+- **原因：** `before-quit` cleanup 未能执行（崩溃时不触发 quit 事件），SSH 子进程是 detached 的不会随父进程退出
+- **解决：** `SshTunnel.start()` 将子进程 PID 写入 `~/.mindos/ssh-tunnel.pid`；`stop()` 和 `exit` 事件清理 PID 文件；`main.ts` 启动时调用 `cleanupOrphanedSshTunnel()` 检查并杀掉残留进程
+
+### `.next` 目录存在但构建不完整 → Web 连续崩溃 3 次
+- **现象：** Desktop 启动报 "Could not find a production build in the '.next' directory"，Web 进程连崩 3 次后显示 "MindOS Service Crashed"
+- **原因：** `analyzeMindOsLayout()` 和 `main.ts` 的 build 检查仅用 `existsSync('.next')` 判断是否需要构建。但 `.next` 目录可能因中断的构建、空目录或 npm 包残留而存在却不含有效产物（无 `BUILD_ID`、无 `standalone/server.js`）。`next start` 会因找不到 build ID 直接退出
+- **解决：** 新增 `isNextBuildValid()` 检查 `.next/BUILD_ID` 或 `.next/standalone/server.js` 是否存在；`analyzeMindOsLayout` 和 `main.ts` 的 build 门控均改为调用 `isNextBuildValid()` 而非裸 `existsSync('.next')`；不完整构建会触发自动重建流程
+
+### 重装/升级后旧 `.next` 导致 Web 连崩 3 次
+- **现象：** 重装 MindOS Desktop 或 npm 升级后，Desktop 启动弹 "MindOS Service Crashed — Web 服务连续崩溃 3 次"
+- **原因：** `isNextBuildValid()` 只检查 BUILD_ID/standalone 文件是否存在，不检查版本。重装后旧 `.next` 产物仍在，BUILD_ID 存在 → 跳过构建 → 新版源码 + 旧版 .next → 不兼容 → crash 3 次
+- **解决：** 新增 `isNextBuildCurrent(appDir, projectRoot)` 严格检查：build 存在 + `.mindos-build-version` 版本标记匹配 `package.json` version。main.ts 启动前门控改用此函数。版本不匹配或无标记 → 自动触发重建。crash 对话框改为附带 stderr 最后 5 行帮助诊断
+- **文件：** `desktop/src/mindos-runtime-layout.ts`, `desktop/src/main.ts`, `desktop/src/process-manager.ts`
+
+### Web 连崩 3 次的运行时防御体系
+- **背景：** 即使启动前检查通过，运行时仍可能因 OOM、端口冲突、磁盘满等原因连续 crash。原有的 crash 对话框只说"请检查 Node.js 环境"，用户无法自助定位
+- **防御 1 — Crash 日志持久化：** `ProcessManager.logCrash()` 每次 crash 写入 `~/.mindos/crash.log`（时间戳 + exit code + signal + 最后 20 行 stderr），日志自动截断到 ~100KB
+- **防御 2 — 多因诊断对话框：** crash 对话框根据 exit code 和 stderr 自动判断原因并给出针对性提示：
+  - exit code 137/9 → "内存不足 (OOM)，尝试关闭其他应用"
+  - stderr 含 ENOSPC → "磁盘空间不足，请清理磁盘"
+  - stderr 含 EADDRINUSE → "端口被占用，请关闭占用端口的程序"
+  - stderr 含 MODULE_NOT_FOUND → "构建产物过期，请运行 mindos start 重新编译"
+  - 其他 → 通用提示 + 指向 `~/.mindos/crash.log`
+- **防御 3 — 加长 respawn 间隔：** 从 1s/3s 改为 2s/5s，给 Web 进程更多恢复时间；`waitForPortOrFallback` 从 3s 改为 10s，减少 TCP TIME_WAIT 导致的连续 EADDRINUSE
+- **文件：** `desktop/src/process-manager.ts`（logCrash + 延迟调整）, `desktop/src/main.ts`（诊断逻辑）
+
+### 内置 `mindos-runtime/mcp/node_modules` 在另一平台打包 → esbuild 报错
+- **现象：** Desktop 本地模式或 `mindos` CLI 起 MCP 时：`@esbuild/linux-x64` present but this platform needs `@esbuild/darwin-arm64`（或 win/linux 交叉）
+- **原因：** `prepare-mindos-runtime` 在 Linux CI 上 `npm ci`，把当前平台的可选原生包装进 zip；Mac/Win 用户解压后二进制不匹配
+- **解决：** `prepare` 在 `mcp/` 写入 `.mindos-npm-ci-platform`（如 `linux-x64`）；`ProcessManager.start()` 调用 `ensureBundledMcpNodeModules()`：与 `process.platform-arch` 不一致（或启发式发现错误 `@esbuild/*`）时删掉 `mcp/node_modules` 并在本机再跑 `npm ci --omit=dev`（用 Desktop 自带的 Node）；根本方案也可改为在目标 OS 上执行 `prepare-mindos-runtime`
+
+### Desktop 模式下 Settings → Update 执行 npm update 无效
+- **现象：** 用户在 Desktop 点「Update」，npm 更新了全局包，但 App 内置的 `mindos-runtime` 不变，重启后版本未升
+- **原因：** Desktop 走 bundled standalone runtime（只读 `.app` 内），npm install 写到另一个路径；且 `process.cwd()` 在 standalone 下指向 `.next/standalone/`，CLI 路径也不对
+- **解决：** `UpdateTab` 检测 `window.mindos`（Electron preload bridge），存在时走 `electron-updater`（IPC `check-update` / `install-update`），不走 npm API；浏览器/CLI 模式保持原有 npm 更新。CI 的 `build-desktop.yml` 用 `--publish always` 让 electron-builder 自动生成 `latest-mac.yml` 等描述文件并上传 GitHub Release，electron-updater 才能正常工作
+
+### Desktop electron-updater 三个缺陷
+- **现象 1：** `install-update` IPC handler 出错后渲染端停在 'downloading' 转圈状态，无错误提示
+- **原因：** handler 内 catch 调用 `dialog.showErrorBox()` 但没有 re-throw，IPC 返回成功，渲染端 `handleInstall` 的 catch 永远不触发
+- **现象 2：** 「Restart Now」按钮点击后若失败，无任何反馈（unhandled promise rejection）
+- **原因：** `onClick={() => bridge.installUpdate()}` 没有 `.catch()`，错误被静默吞掉
+- **现象 3：** 点「Restart Now」时虽然 update 已下载完成，仍会重新调用 `downloadUpdate()` 再走一遍下载
+- **原因：** `install-update` handler 无条件调用 `downloadUpdate()` + `quitAndInstall()`，不判断是否已下载
+- **解决：** ① 移除 handler 内 try-catch 让错误自然传播到渲染端处理；② 渲染端「Restart Now」按钮加 async/catch 错误处理；③ 用 `isDownloaded` 标志跳过已完成的下载。测试见 `app/__tests__/settings/update-tab-desktop.test.tsx`
+
+### CLI/Web 更新 buildIfNeeded 失败导致服务不可恢复
+- **现象：** 用户在 Web UI 点「Update」，npm 安装成功但 `next build` 失败（OOM/磁盘满），旧服务已被杀死，新服务未启动，浏览器卡在"正在重启"5 分钟后超时，用户必须手动 `mindos start`
+- **原因：** `bin/cli.js` update 命令的 daemon 和 non-daemon 两条路径中，`buildIfNeeded()` 没有 try-catch。`stopMindos()` 已杀旧进程后若 build 抛异常，整个 update 进程崩溃，不会走到 Stage 4 (restart)
+- **解决：** 三个 `buildIfNeeded()` 调用全部加 try-catch；catch 后仍然继续启动服务（`mindos start` 有自己的 build-on-startup 逻辑，可以重试）；失败信息写入 `update-status.json`，浏览器能立即显示具体错误而非等 5 分钟超时
+
+### "假更新"：更新后服务仍运行旧版本代码（2026-04-06 修复）
+- **现象：** Web UI 点「Update」，进度条走完提示成功，但页面功能/内容仍是旧版本。`/api/update-check` 报新版本号，但实际代码行为不变
+- **原因（三重叠加）：**
+  1. **环境变量泄漏**：`/api/update/route.ts` 和 `update.js` spawn 新进程时只删了 5 个特定 env var（`MINDOS_WEB_PORT` 等），遗漏了 `MINDOS_PROJECT_ROOT`、`MINDOS_CLI_PATH` 等关键路径变量。新进程继承旧路径 → 从旧安装目录读代码
+  2. **孤儿进程**：`stopMindos()` 发 SIGTERM 后不等待确认，Next.js worker 进程忽略 SIGTERM 继续占端口。新进程无法绑定或被路由到旧 worker
+  3. **就绪检查不验证版本**：`waitForHttp()` 只检查 `/api/health` 返回 HTTP 200，不验证是否是新版本。旧 worker 响应 health check → 误判更新成功
+- **解决（四层防御）：**
+  1. **`bin/lib/clean-env.js`**：新建通用 helper，遍历删除所有 `MINDOS_*`/`MIND_*` 前缀 + `AUTH_TOKEN`/`WEB_PASSWORD`/`NODE_OPTIONS`。`update.js`、`/api/update/route.ts`、`/api/restart/route.ts` 统一使用
+  2. **`bin/lib/stop.js` SIGKILL fallback**：SIGTERM 后等 2s（`Atomics.wait` 跨平台），检查进程是否存活 → 仍活则 SIGKILL。`killTree()` 和 `killByPort()` 均增加此逻辑
+  3. **`bin/lib/gateway.js` 版本感知就绪检查**：`waitForHttp()` 新增 `expectedVersion` 参数。health check 通过后，额外查 `/api/update-check` 确认 `current === expectedVersion`。版本不匹配视为旧进程，继续等待
+  4. **端口释放双重确认**：`update.js` 停止旧进程后，端口"空闲"后再等 1s 复查，避免 TCP TIME_WAIT 闪烁假阴性。超时则 force-kill
+- **反思**：
+  - `childEnv` 清理应该用"白名单"（只保留需要的）或"黑前缀"（删所有自定义前缀），而非"黑名单"（逐个删）。黑名单永远跟不上新增变量
+  - `waitForHttp` 从一开始就应该验证版本，不应假设"HTTP 200 = 新版本就绪"
+  - 进程清理必须有 SIGKILL 后备，SIGTERM 不保证进程响应
+- **文件：** `bin/lib/clean-env.js`（新建）, `bin/lib/stop.js`, `bin/lib/gateway.js`, `bin/commands/update.js`, `app/app/api/update/route.ts`, `app/app/api/restart/route.ts`
+
+### Diff 仅做插件入口，用户看不到全局变化
+- **现象：** 只有打开 `Agent-Diff.md` 才能看到差异；普通编辑流里不知道哪里变了、何时变了
+- **原因：** Diff 依赖 renderer + markdown fenced block（`agent-diff`），缺少主程序级事件流和全局未读提醒
+- **解决：** 升级为主程序能力：统一写入 `.mindos/change-log.json`，提供 `/api/changes`（summary/list/mark_seen）、全局提醒条与 `/changes` 下钻视图；Diff 插件仅作兼容，不再是主入口
+
+### Ask 对话执行中输入被禁用，无法提前草拟下一步
+- **现象：** Agent 正在执行时，输入框不可编辑；用户只能等待执行结束后再输入下一步
+- **原因：** `AskContent` 在 `isLoading` 时给 input/textarea 加了 `disabled`，把“发送中”与“不可输入”错误耦合
+- **解决：** 执行中仍允许输入；仅阻止并发 submit，不阻断草拟。并在 footer 提示“可先输入下一步”，降低等待焦虑并提升连续操作体验
+
+### 移动端 Chat 重试不能丢附件上下文（2026-04-10）
+- **现象：** 用户给消息附加知识库文件后发送失败，点 Retry 只重发文本，不再带附件路径，导致 AI 第二次看到的上下文和第一次不一致
+- **原因：** `useChat` 只记录 `lastFailedMessage`，没有同时记录 `lastFailedAttachments`；UI 层在发送开始后会清空附件 chips，更放大了这个问题
+- **解决：** `useChat` 同时持久化 `lastFailedAttachments` 并在 `retry()` 时一并传回 `send()`；发送链路里不要假设“重试只需要文本”
+
+## CLI
+
+### npm 全局安装缺 node_modules
+- **现象：** `mindos mcp -g -y` → `ERR_MODULE_NOT_FOUND`
+- **原因：** npm global install 不包含 devDependencies 和被 `.npmignore`/`files` 排除的目录
+- **解决：** `spawnMcp()` 改为使用正确路径 + MCP 命令加 first-run auto-install (`ensureAppDeps()`)
+
+### MCP CLI 命令路由 4-bug 链
+- **现象：** 一个 `ERR_MODULE_NOT_FOUND` 背后串联 4 个 bug
+- **Bug 链：** (1) node_modules 缺失 → (2) `process.argv[3]` 是 `-g` 不是 `install`，路由到 MCP server → (3) `-y` 跳过了 agent 选择（应强制弹出）→ (4) args 解析起始位置基于 sub 不同而不同
+- **教训：** 用户报一个症状，沿调用链至少查 3 层
+
+### JSDoc / 块注释里出现字面量 `/*` → `.js` 整文件解析失败
+- **现象：** 如 `mindos onboard` 报 `SyntaxError: Unexpected token ')'`，栈指向含「JSONC、注释」说明的注释行
+- **原因：** `/** … /* … */` 中内层 `/*` 会提前结束块注释，后续代码裸露
+- **解决：** 注释说明里避免未转义的 `/*` 序列（改用「块注释」「slash-star」等文字描述）
+
+### cleanNextDir() 必须清理完整 .next
+- **现象：** 构建缓存导致 stale artifact 错误
+- **解决：** 清理整个 `.next` 目录，不做选择性清理
+
+### `mindos ask` 旧版发送 `{ question }` 格式，API 不识别
+- **现象：** `mindos ask "xxx"` 无响应或报错（API 返回 SSE 但 CLI 尝试 `res.json()` 解析）
+- **原因：** API `/api/ask` 期望 `{ messages: [{role:'user',content:'...'}], mode:'chat'|'agent' }` 格式，旧版 CLI 发送的 `{ question }` 不被识别，且无 SSE 流式处理
+- **解决：** CLI `ask` 和 `agent` 命令已改用正确的 `messages` 数组格式 + SSE 流式读取
+- **教训：** CLI 与 API 的 contract 必须同步演进；API 签名变更后需检查所有调用方
+
+### npx next 会拉全局缓存版本导致 Web UI 崩溃
+- **现象：** `mindos start` 后 Web UI 立即崩溃，报 `TypeError: Cannot read properties of undefined (reading 'map')`
+- **原因：** `npx next start` 不保证用本地 `node_modules` 的版本。如果用户全局 npx 缓存里有更高版本的 Next.js（如 16.2.0），而 build 产物是本地 16.1.6 编译的，版本不匹配导致运行时崩溃
+- **解决：** `bin/cli.js` 中定义 `NEXT_BIN = resolve(ROOT, 'app', 'node_modules', '.bin', 'next')`，所有调用直接用绝对路径，彻底绕开 npx/npm exec 的解析逻辑
+- **注意：** `npm exec -- next` 和 `npx next` 在 npm 7+ 中本质是同一个东西（npx 是 npm exec 的别名），解析逻辑相同，都不可靠。直接引用 `.bin/next` 是唯一确定的方式
+- **防护：** 无自动化测试可覆盖此问题（依赖用户环境），靠此记录防止回归
+
+## 前端
+
+### 渠道详情页若只展示配置表单，用户会误解为“聊天页”或“不知道下一步做什么”
+- **现象：** 用户点击 Feishu / Telegram 这类 Channel 后，会问“我能在这里聊天吗？”“这个页面到底是干嘛的？”
+- **原因：** 页面只展示凭证表单和 test send，缺少用途说明、运行状态、最近活动，无法建立“消息投递渠道”的正确心智模型
+- **解决：** Channel detail 首屏必须先回答 3 个问题：**这是干嘛的、它在不在工作、我下一步做什么**。具体做法：
+  1. 顶部增加 `How it works` / 用途说明，明确“不是聊天收件箱”
+  2. 增加 `Status summary`，展示最近活动、最近成功/失败、能力摘要
+  3. 增加 `Recent activity`，让用户知道系统真的在工作
+  4. 把凭证维护下沉到 `Settings`，不要让配置表单成为页面主角
+
+### 飞书 webhook 协议层不要手搓，优先交给官方 SDK（2026-04-11）
+- **现象：** 业务代码里手写 challenge 返回、verification token 比较、payload 解密和验签，导致逻辑重复、可测但偏离官方集成模式
+- **原因：** 把协议层和业务层混在一起了；官方 `@larksuiteoapi/node-sdk` 已提供 `EventDispatcher`、`generateChallenge`、decrypt 和验签能力
+- **规则：** Feishu 集成优先分两层：
+  1. **SDK 接入层**：challenge / 验签 / decrypt / event dispatch
+  2. **MindOS 业务层**：@mention 过滤、标准化、会话历史、Agent 编排、回复发送
+- **修复：** 将 `/api/im/webhook/feishu` 改为委托 `app/lib/im/feishu-dispatcher.ts`，保留 `app/lib/im/webhook/feishu.ts` 作为业务层
+- **补充：** 本地验证时优先用飞书 **Long Connection**。MindOS 现在同时支持 `webhook` 和 `long_connection` 两种 transport；本地开发若还选 webhook，通常会误以为“功能坏了”，本质上只是缺公网可达地址。
+- **文件参考：** `app/components/agents/AgentsContentChannelDetail.tsx`, `app/lib/im/platforms.ts`, `app/lib/im/activity.ts`
+
+### Secret 输入框不能用占位符回写真实值（2026-04-11）
+- **现象：** 用户打开已配置的 secret 字段（如 Feishu Encrypt Key / Verification Token），输入框里若显示 `••••••••` 之类的占位符，点击保存后可能把占位符本身写回配置文件
+- **原因：** 前端把“已隐藏的展示占位符”当成真实值保存在 state 中，提交时又原样发送给 API
+- **解决：** secret 字段默认保持空值；UI 只通过 placeholder / hint 表示“已保存值存在”；提交时只有用户真的输入了新值才发送，空值必须走 `undefined` 保持后端原值
+- **文件参考：** `app/components/agents/AgentsContentChannelDetail.tsx`, `app/app/api/im/config/route.ts`
+
+### Emoji Hydration Mismatch（Twemoji 浏览器扩展）
+- **现象：** SSR 渲染的 emoji 文本（如 `🎯`、`🚀`）在客户端被 Twemoji 等浏览器扩展替换为 `<img>` 元素，触发 React hydration error：`Hydration failed because the server rendered text didn't match the client`
+- **原因：** 浏览器扩展在 React hydration 之前修改 DOM，将 emoji 文本节点替换为 `<img src="...twemoji...">`，导致 SSR HTML 与客户端 DOM 不一致
+- **已踩坑位置：** HomeContent.tsx Space 卡片描述（v1）、DiscoverPanel.tsx Section icon（v2）、UseCaseCard.tsx emoji icon
+- **解决：** 所有包含 emoji 的 `<span>` 必须加 `suppressHydrationWarning`
+- **规则：** 凡是 JSX 中直接渲染 emoji 字符的元素，**一律加 `suppressHydrationWarning`**。新增 emoji 渲染时必须检查此规则，不要等报错再修
+- **检查方法：** `grep -rn 'emoji\|📝\|🎯\|🚀\|👤\|📥\|🔄\|🔁\|💡\|🤝\|🛡️\|🧩\|⚡\|🧠\|🕐' --include='*.tsx' | grep -v suppressHydrationWarning`
+
+### AI `<thinking>` 标签泄露给终端用户 ✅ 已解决
+- **现象：** AI Organize 完成后，Modal 里直接显示了 AI 内部推理过程 `<thinking>The user wants me to read the uploaded PDF file...`
+- **原因：** `useAiOrganize` 的 `consumeOrganizeStream` 把所有 `text_delta` 事件无差别拼入 `summary`。当模型未开启 extended thinking（Anthropic `thinking_delta` 事件）而是在 text 中直接输出 `<thinking>` XML 标签时，原始推理过程被当作用户可见文本
+- **解决：** 新增 `stripThinkingTags()` 函数，在 stream 消费结束后清洗 `<thinking>...</thinking>` 块和未闭合的 trailing tag；"无更改"状态下不再展示 summary（AI 的技术描述对用户无价值）
+- **规则：** 任何面向终端用户的 AI 输出展示，都必须过滤 `<thinking>`、`<reasoning>`、`<scratchpad>` 等模型内部标签。不能直接 `.slice(0, 300)` 截断展示
+- **文件：** `app/hooks/useAiOrganize.ts`、`app/components/ImportModal.tsx`
+
+### Modal 标题在 error 状态下仍显示 "完成" ✅ 已解决
+- **现象：** AI Organize 失败时，Modal 标题显示"整理完成"但内容显示"整理失败" + 错误信息，矛盾混淆用户
+- **原因：** `isOrganizeReview` 状态在 success 和 error 时都为 true，标题只按 step 判断（`organizeReviewTitle`），未区分 `aiOrganize.phase` 是 `'done'` 还是 `'error'`
+- **解决：** 标题逻辑增加 phase 判断：`phase === 'error'` 时显示 `organizeErrorTitle`（"整理失败"），否则显示 `organizeReviewTitle`（"整理完成"）；同时移除 body 中重复的错误标签
+- **规则：** 当同一个 UI step 同时承载 success 和 error 两种状态时，所有展示元素（标题、图标、描述）都必须根据实际状态分支渲染，不能只用一套文案
+- **文件：** `app/components/ImportModal.tsx`、`app/lib/i18n-en.ts`、`app/lib/i18n-zh.ts`
+
+### AI Organize 撤销生命周期与 Modal 耦合 ✅ 已解决
+- **现象：** 用户点 "View file" 后 Modal 关闭，撤销机会丢失；update 操作无法撤销；用户浏览文件期间 3 分钟后无法再撤销
+- **原因：** 撤销状态（`useAiOrganize` hook）声明在 `ImportModal` 组件内部，Modal 关闭即销毁状态。update 文件无快照存储
+- **解决：** 将 `useAiOrganize` 提升到 `SidebarLayout` 级别，新增独立 `OrganizeToast` 组件。update 操作在 `tool_start` SSE 事件时异步抓取文件快照（`captureSnapshot`）。Toast 独立于 Modal 存在，3 分钟自动消失但用户交互会重置计时器
+- **规则：** 跨生命周期的状态（如撤销数据）不能绑定在可能随时卸载的组件（Modal/Popover）中。应提升到持久化容器或全局 store
+- **文件：** `app/hooks/useAiOrganize.ts`、`app/components/OrganizeToast.tsx`、`app/components/SidebarLayout.tsx`
+
+### AskPanel/SettingsPanel 与 Modal 版本代码重复 ✅ 已解决
+- **现象：** `panels/AskPanel.tsx` 与 `AskModal.tsx` 约 80% 逻辑重复
+- **解决：** 提取 `ask/AskContent.tsx` 和 `settings/SettingsContent.tsx` 共享核心组件。AskModal/AskPanel、SettingsModal/SettingsPanel 各缩减为 ~20 行 thin wrapper。`variant: 'modal' | 'panel'` 控制差异（ESC handler、close 按钮、abort-on-close、尺寸微调）
+- **规则：** 修改 Ask/Settings 逻辑时只改 Content 组件，wrapper 不含业务逻辑
+
+### Logo SVG 组件重复 ✅ 已解决
+- **现象：** Logo SVG 在多个文件中重复定义
+- **解决：** 提取到 `components/Logo.tsx`，接收 `id`（gradient ID 唯一化）和 `className` props。ActivityBar 用 `id="rail"`，移动端 Header 用 `id="mobile"`，Drawer 用 `id="drawer"`
+
+### 组件拆分时 import 路径
+- **现象：** barrel export 后其他文件 import 路径需要更新
+- **解决：** 拆分后全局 grep 旧 import 路径并替换
+
+### encodePath vs encodeURIComponent
+- **现象：** `not-found.tsx` 用 `encodeURIComponent()` 编码文件路径，导致 `/` 被编码为 `%2F`，路由 404
+- **解决：** 使用 `encodePath()`（按 `/` 分割后逐段编码），不要用 `encodeURIComponent`
+- **规则：** 凡是文件路径拼接到 URL 的场景，一律用 `encodePath()`
+
+### 插件开关（raw/plugin toggle）全局污染
+- **现象：** 在 `.agent-log.json` 上点击插件按钮切到 raw 视图 → 所有文件都变 raw（md 不显示 wiki graph，csv 不显示表格插件）
+- **原因：** `mindos-use-raw` 在 localStorage 里存的是全局 boolean，一个文件切换影响所有文件
+- **解决：** 统一为 `useRendererState` hook（`lib/renderers/useRendererState.ts`），per-file 持久化状态，key 格式 `mindos-renderer:{rendererId}:{filePath}`，CSV config 同步迁移
+- **文件：** `app/app/view/[...path]/ViewPageClient.tsx`、`app/components/renderers/csv/CsvRenderer.tsx`
+
+### useSyncExternalStore + JSON.parse 无限重渲染
+- **现象：** `useSyncExternalStore` 的 `getSnapshot` 每次调用 `JSON.parse` 返回新对象引用 → `Object.is` 永远 false → 对象类型 state（如 CsvConfig）触发无限重渲染
+- **原因：** 原始值（boolean、number）不受影响，但对象/数组每次 parse 产生新引用
+- **解决：** `useRendererState` 内部用 `cacheRef` 缓存上次 raw string，只在值实际变化时重新 parse；`setState` 同步更新 cache 避免 stale ref
+- **规则：** 凡是 `useSyncExternalStore` + localStorage 存对象，必须做 snapshot 缓存
+
+### inline fontFamily 反模式
+- **现象：** 8+ 组件用 `style={{ fontFamily: "IBM Plex Mono..." }}`，绕过 Next.js 字体优化
+- **解决：** 统一用 `.font-display` 工具类（定义在 `globals.css`）
+- **规则：** 新组件禁止 inline fontFamily，全部走 CSS class
+
+### 硬编码状态色 — 用 CSS 变量管理
+- **现象：** `#7aad80`（success）和 `#c85050`（error）在 20+ 文件中硬编码，暗色模式无法单独调整；`#ef4444`（Tailwind red-500）和 `#c85050` 两种红混用，视觉不一致
+- **解决：** globals.css 定义 `--success` / `--error` 变量（:root + .dark），Tailwind `@theme inline` 注册 `--color-success` / `--color-error`。TSX 中 inline style 用 `var(--success)` / `var(--error)`，Tailwind class 用 `text-success` / `text-error`
+- **规则：** 新增语义色值必须先在 globals.css 定义变量 + 文档化到 `03-design-principle.md`，禁止直接写 hex 值
+
+### focus ring 用 focus-visible 而非 focus
+- **现象：** 部分自定义 input 用 `focus:ring-1`，鼠标点击也触发 ring，视觉噪音
+- **解决：** 统一改为 `focus-visible:ring-1 focus-visible:ring-ring`；`--ring` 变量改为 `var(--amber)` 与设计规范一致
+- **规则：** 新组件的 focus 样式一律用 `focus-visible:` 前缀，不要用 `focus:`
+
+### FileTree 蓝色 focus border 偏离设计系统
+- **现象：** FileTree 的 rename/create input 用 `border-blue-500/60`，与全局 amber focus ring 不一致
+- **解决：** 改为 `focus-visible:ring-1 focus-visible:ring-ring`（继承 amber）
+- **规则：** 任何 focus 指示色都走 `ring-ring`（即 `--amber`），不要用 Tailwind 默认色
+
+### Google Fonts 不要随意删除
+- **现象：** 以为 5 个字体太多想精简到 3 个，实际审计发现 15+ 文件引用了全部 5 个
+- **解决：** 只删除未使用的 weight（如 IBM Plex Sans 的 300、IBM Plex Mono 的 500），不删整个字体
+- **教训：** 精简前先全局 grep 确认引用
+
+### Sidebar 文件目录不更新（创建/删除/重命名后）
+- **现象：** 在 sidebar 创建、删除、重命名文件后，文件树不更新；MCP agent 在后台操作文件后更不更新
+- **原因：** 三层问题叠加：
+  1. Next.js client-side Router Cache 默认 30s，`router.refresh()` 可能拿到 stale 的 RSC payload
+  2. `/api/file` route（MCP 调用路径）的写操作没有调用 `revalidatePath('/', 'layout')`，服务端 router cache 不失效
+  3. 没有任何客户端主动刷新机制（visibilitychange / 定时轮询），外部变更无法被感知
+- **解决：**
+  1. `next.config.ts` 加 `experimental.staleTimes.dynamic = 0`，禁用 dynamic 路由的客户端 router cache
+  2. `/api/file` route 的 tree-changing ops（create/delete/rename/move）加 `revalidatePath('/', 'layout')`
+  3. `Sidebar.tsx` 加 `visibilitychange` 监听 + 30s 定时 `router.refresh()`
+- **注意：** `export const dynamic = 'force-dynamic'` 只对 page/route 有效，对 layout.tsx 无效
+- **规则：** 凡是新增文件写操作的 API route，必须调用 `revalidatePath('/', 'layout')` 来通知 layout 刷新 file tree
+
+### Sidebar 按钮既当“面板开关”又当“内容路由”会导致状态漂移
+- **现象：** 点击 Activity Bar 的 `Agents` 后，左侧面板状态与内容路由不同步，出现按钮高亮但打开了旧 panel，或进入内容页却仍保留右侧详情 dock
+- **原因：** 同一个入口同时承担两种语义（toggle panel + navigate route），并且共享 `activePanel` 状态
+- **解决：** `Agents` 入口统一语义为“内容路由”到 `/agents`，面板逻辑降级为兼容层；高亮与路由联动（`pathname.startsWith('/agents')`）
+- **规则：** 一个导航入口只做一种语义。若迁移过程中保留旧实现，必须显式定义兼容期和退场时间线
+
+### Agents Dashboard 在技能规模增大时的信息过载
+- **现象：** Skills 页在技能数量增长后（例如 >100），首屏同时展示分组与全量条目，用户很难快速定位目标
+- **原因：** 缺少检索和维度过滤，兼容矩阵默认展开会进一步放大认知负担
+- **解决：** 引入 `search + source filter + matrix accordion` 组合：先筛选再展开矩阵；矩阵默认折叠，仅在需要时展开
+- **规则：** Dashboard 中高密度数据默认“渐进披露”而非“首屏全量渲染”；优先提供过滤入口，再提供明细视图
+
+### Agents Sidebar Hub 行为与 Content 信息架构不一致
+- **现象：** Sidebar 里的 `MCP/Skills` 看起来像一级导航，但点击后分别跳到 Settings 或面板内滚动，用户难以形成稳定心智模型
+- **原因：** Hub 行为同时承担“导航”和“局部动作”，入口语义不统一
+- **解决：** Hub 三行统一改为内容页深链：`/agents`、`/agents?tab=mcp`、`/agents?tab=skills`；局部动作保留在具体页面内部
+- **规则：** 当某行 UI 呈现为导航样式（icon + title + chevron）时，必须跳转到与标题同名的信息架构层级，不应偷偷执行异质动作
+
+### Skills 矩阵被误解为“可按 Agent 单独开关”
+- **现象：** 用户看到 `Skill x Agent` 矩阵后，预期可在单元格级别独立启停；实际切换仍是全局 skill 开关
+- **原因：** 当前数据模型只有 `SkillInfo.enabled`（全局），不存在 per-agent assignment 字段
+- **解决：** 在 P1.7 将矩阵定位为“兼容与覆盖视图”，只提供 Agent 聚焦与状态展示；可编辑动作保留在全局 skill 级。若要单元格编辑，需先扩展后端模型与 API
+- **规则：** UI 能力必须与数据模型能力严格对齐。展示矩阵不代表支持矩阵级写操作；没有后端语义支撑时，只做可视化不可做误导性交互
+
+### MCP 管理只做单行操作，导致多 Agent 恢复效率低
+- **现象：** 当多个 Agent 同时异常（如 detected/notFound），用户需要逐行点击 reconnect，恢复流程慢且反馈分散
+- **原因：** 旧 MCP 页面缺少批量动作与执行摘要，只提供单 Agent 级别操作
+- **解决：** 在 P1.8 增加“筛选结果批量重连 + 成功/失败摘要”，并引入传输筛选和风险队列，形成“定位 -> 批量修复 -> 验证”的单页闭环
+- **规则：** 多 Agent 管理页必须提供批量恢复能力；没有批量动作时，至少要有可复制执行计划与统一反馈，避免用户手工重复点击
+
+### Agents Sidebar 行项同时承担“开抽屉”和“进内容页”会造成路径分叉
+- **现象：** 用户在 Sidebar 点击 Agent 后，有时进入右侧详情抽屉，有时进入 Content 路由，导致“详情到底在哪看”认知混乱
+- **原因：** 同一个 UI 行项绑定了两种导航语义（局部抽屉状态 + URL 路由）
+- **解决：** 在 P1.9 将 Agent 行点击统一为 `/agents/[agentKey]` 路由；右侧抽屉保留兼容代码但不再作为主入口
+- **规则：** 同一层级导航项只能有一个主语义。若信息是“完整详情”，必须放在可回退、可分享、可刷新的内容路由中
+
+### 把进程级统计误当成 Agent 原生运行统计
+- **现象：** 在 Agents 页面把 `/api/monitoring` 的 token/request 累计直接当作单个 Agent 的 usage，导致“某个 Agent 高活跃”结论失真
+- **原因：** `metrics.ts` 是 MindOS 进程级聚合，不等于 `~/.claude`、`~/.codex` 等 Agent 隐藏目录里的原生会话/usage 证据
+- **解决：** 明确拆两层信号：进程级指标继续走 `/api/monitoring`；Agent 级运行迹象通过隐藏目录扫描信号（conversation/usage/last activity）展示
+- **规则：** 任何 Agent 级可视化必须标注数据来源层级（MindOS runtime vs Agent hidden folder），避免混用口径
+
+### Agent Detail 只展示 enabled skills，导致“信息量几乎为零”
+- **现象：** 详情页只列出启用技能，禁用技能/来源/编辑入口全部不可见；用户误判为“没有配置”
+- **原因：** UI 直接使用 `skills.filter(enabled)`，把“状态维度”当成“数据集维度”，丢失全量配置上下文
+- **解决：** 详情页改为全量 skills 视图（搜索 + source 过滤 + 启停 + user skill 编辑），并补充 MCP 管理区（scope/transport 应用、snippet 复制、刷新）
+- **规则：** 管理页默认应展示“全量配置 + 状态标签”，而不是先裁剪后展示；状态属于筛选器，不属于数据源定义
+
+### Agent 详情使用全局 catalog 冒充“该 Agent 已安装项”
+- **现象：** 页面显示了 skill 管理控件，但用户仍看不出某个 Agent 在其隐藏目录里到底安装了哪些 skills、配置了哪些 MCP servers
+- **原因：** 数据源来自全局 `/api/skills` 与 `mindos` 单条安装检测，缺少对 agent 原生目录与配置文件的全量扫描结果
+- **解决：** `/api/mcp/agents` 增加 `configuredMcpServers` 与 `installedSkillNames`（含来源路径），详情页单独展示“agent native installed”区块并提供空态/数量反馈
+- **规则：** “已安装/已配置”必须来自 agent 原生配置扫描；“可用 catalog”仅作管理参考，不能替代真实安装态
+
+### Agents 页面只有局部指标，切 tab 后丢失全局状态
+- **现象：** 用户在 MCP/Skills/Detail 间切换时，需要反复重新判断“现在整体健康度如何”，容易漏掉风险项
+- **原因：** 指标只散落在各区块，没有稳定的全局摘要层，信息架构停留在“平面卡片堆叠”
+- **解决：** 在 `/agents` 顶部增加统一 Workspace Pulse（connected/detected/notFound/risk/enabled skills），各子页再补筛选摘要和健康条，形成“摘要→操作→明细”三层结构
+- **规则：** 多 Agent 控制台必须始终保留全局状态入口；tab 内区块只承载局部操作，不应承担全局态心智负担
+
+## MCP
+
+### 删除文件的入口不一致——部分走回收站、部分硬删 ✅ 已解决
+- **现象：** Web UI 删除文件进回收站可恢复，但 MCP `mindos_delete_file` 和 AI Agent `delete_file` 工具做永久硬删除，数据无法恢复
+- **原因：** Tier 1 Trash 功能实现时只改了 Server Actions（Web UI 入口），漏了 API route `POST /api/file` 的 `delete_file` op 和 Agent tools
+- **解决：** API route 和 Agent tools 的 `delete_file` 统一改为调用 `moveToTrashFile()`，返回 `trashId`。MCP 工具描述同步更新
+- **规则：** 同一语义操作（如"删除"）的所有入口必须走同一实现路径。新增入口时全局搜索同操作的其他入口，确认行为一致
+- **文件：** `app/app/api/file/route.ts`、`app/lib/agent/tools.ts`、`mcp/src/index.ts`
+
+### JSONC 配置文件导致 Agent 安装失败
+- **现象：** Cursor Agent 安装时报 `SyntaxError: Unexpected token '/', "// { // "... is not valid JSON`
+- **原因：** Cursor、Windsurf、Cline 等 VS Code 系编辑器的 MCP 配置文件是 JSONC 格式（允许 `//` 单行注释和 `/* */` 块注释），但代码用 `JSON.parse()` 解析，遇到注释直接崩
+- **影响范围：** 6 处读取 Agent 配置文件的位置（`mcp-agents.ts` 检测、`install/route.ts` GUI 安装、`mcp-install.js` CLI 安装 ×2、`setup.js` onboard ×2）
+- **解决：** 新增 `parseJsonc()` 工具函数，用正则先剥离注释再 `JSON.parse()`。正则 `/"(?:\\"|[^"])*"|(\/\/.*$)/gm` 确保不误伤字符串内的 `//`
+- **规则：** 凡是读取第三方编辑器配置文件的地方，一律用 `parseJsonc()` 而非 `JSON.parse()`。VS Code 生态的配置文件默认是 JSONC，不是严格 JSON
+- **文件：** `app/lib/mcp-agents.ts`、`app/app/api/mcp/install/route.ts`、`bin/lib/mcp-install.js`、`bin/lib/utils.js`、`scripts/setup.js`
+
+### Codex TOML 配置解析失败
+- **现象：** 配置代理时 trae 和 Claude Code 正常工作，codex 报 `SyntaxError: Unexpected token 'm', "model = "g"... is not valid JSON`
+- **原因：** codex 的配置文件是 TOML 格式（`~/.codex/config.toml`），但 `detectInstalled()` 函数对所有 agent 都使用 `JSON.parse()` 解析，导致 TOML 内容解析失败
+- **解决：** 在 `detectInstalled()` 中增加 `agent.format === 'toml'` 的判断分支，使用逐行扫描方式解析 TOML 文件中的 MCP 服务器配置；新增 `parseTomlMcpEntry()` 辅助函数处理 TOML 格式
+- **代码：** [app/lib/mcp-agents.ts](file:///data/home/geminitwang/code/mindos/app/lib/mcp-agents.ts)
+- **规则：** 新增 agent 时必须考虑其配置文件格式（JSON/TOML/JSONC），所有解析逻辑需要按格式分别处理
+
+### INSTRUCTION.md 写保护
+- **现象：** Agent 通过 MCP 误修改了系统内核文件
+- **解决：** `isRootProtected()` + `assertNotProtected()` 硬编码保护
+
+### 搜索索引失效必须与文件缓存联动
+- **现象：** 写操作后搜索结果过时（索引未失效）
+- **规则：** 所有文件写操作都通过 `lib/fs.ts` 的 `invalidateCache()` 触发，该函数同时清除文件树缓存、Fuse.js 搜索缓存和 Core 倒排索引。新增写操作入口必须调用 `invalidateCache()`，不能只清部分缓存
+
+### 字符截断
+- **现象：** 大文件读取超过 LLM context
+- **解决：** 单文件读取上限 25,000 字符 + `truncate()` 工具函数
+
+## Agent (Ask Modal)
+
+### 跳过 spec 直接写代码 — 流程违规
+- **现象：** Phase 1（7 工具 + UIMessageStream）从 plan 直接跳到执行，跳过 spec + spec review
+- **后果：** 没有验收标准就动手，连续多轮 code review 才逐步发现 React state mutation、setState 频率过高、多轮 tool 历史丢失等问题——本应在 spec 阶段就识别为边界条件
+- **根因：** 把 roadmap plan（战略级）当成了 spec（执行级）。Plan 描述方向，spec 描述变更范围、文件清单、接口设计、验收标准
+- **规则：** 每个 phase/任务执行前必须先写 spec（`wiki/specs/`），等用户确认后再动手。**Spec ≠ Plan**
+
+### React state mutation — stream consumer 浅拷贝
+- **现象：** `buildMessage()` 返回的 parts 与 mutable working copies 共享引用，后续 `part.text += delta` 篡改了已在 React state 中的对象
+- **解决：** `buildMessage()` 深拷贝每个 part：TextPart 用 `{ type: 'text', text: p.text }`，ToolCallPart 用 `{ ...p }`（`input` 是替换而非修改，浅拷贝安全）
+- **规则：** 任何流式更新组装对象传给 React setState 前，必须断开与 mutable 源的引用
+
+### setState 频率过高 — 每条 SSE line 触发一次
+- **现象：** 单次 `reader.read()` 可能包含多条 SSE line，每条都调用 `onUpdate(buildMessage())` 触发 React 重渲染
+- **解决：** 用 `changed` flag，每个 `reader.read()` 批次只在循环结束后触发一次 `onUpdate`
+- **规则：** 流式解析中 setState 应按 I/O 批次聚合，不按解析单元
+
+### 多轮对话 tool 历史丢失
+- **现象：** 前端发送 `Message[]`（`{role, content, parts?}`），但 AI SDK 的 `streamText()` 期望 `ModelMessage[]`，其中 tool calls 需拆为 assistant message + tool message。直接透传导致 AI 在后续轮次不知道之前执行了什么工具
+- **解决：** 后端新增 `convertToModelMessages()` 转换函数：assistant parts 拆为 `{role: 'assistant', content: [TextPart, ToolCallPart]}`（不含 output）+ `{role: 'tool', content: [ToolResultPart]}`
+- **规则：** 前端 Message 格式与 AI SDK ModelMessage 格式不同，跨边界传递时必须转换
+- **文件：** `app/app/api/ask/route.ts`
+
+### Abort 后只检查 content 不检查 parts
+- **现象：** 用户中断时，代码只检查 `!content.trim()` 判断消息是否为空。但 UIMessageStream 下消息可能有 tool call parts 但空 text content
+- **解决：** 改为 `const hasContent = last.content.trim() || (last.parts && last.parts.length > 0)`
+- **规则：** UIMessageStream 后判断消息"是否有内容"必须同时检查 `content` 和 `parts`
+
+### pi-agent-core 迁移：AgentEvent 类型不完整
+- **现象：** `subscribe()` 回调的 `AgentEvent` 是 union type，但 `message_update` 等变体的子字段（如 `assistantMessageEvent`）没有在 TS 类型中导出
+- **解决：** 写 type guard 函数（`isTextDeltaEvent()` 等），内部用 `as any` 访问，但使用侧完全类型安全。`as any` 只出现在 guard 内部，不扩散
+- **规则：** 第三方库类型不完整时，用 type guard 隔离 `as any`，不要在业务逻辑中直接 cast
+
+### pi-agent-core 迁移：compact 失败不能静默返回
+
+### pi-ai `getModel()` 返回 undefined 而非 throw — Agent 静默无输出
+- **现象：** Ask AI 发消息后无任何回复，前端提示 "No response from AI"。服务端日志只有 `Step 1/N` 无 text_delta
+- **原因：** `piGetModel('openai', 'claude-sonnet-4-6')` 对不在 registry 中的模型名**返回 `undefined`**，不抛异常。`try { model = piGetModel(...) } catch { /* fallback */ }` 不会进 catch，`model` 变为 `undefined`。后续 `{ ...undefined, api: 'openai-completions' }` 产生残缺对象（缺 `id`/`baseUrl`/`name` 等），pi-ai 的 `detectCompat()` 对 `undefined.includes()` 报错，被 lazy load 的 catch 静默吞掉，agent-loop 收到 `stopReason: "error"` 但不 emit 任何 text 事件
+- **解决：** `piGetModel()` 返回后检查 `if (!resolved) throw new Error('Model not in registry')`，强制走 fallback 手工构造 model 对象
+- **规则：** 调用第三方库函数时，不要假设"失败一定 throw"。检查返回值是否为 `undefined`/`null`，防御性处理
+- **文件：** `app/lib/agent/model.ts`
+
+### pi-ai openai-completions compat 配置 — 自定义代理必须设 compat flags
+- **现象：** 配了 OpenAI 兼容代理（baseUrl），Agent 请求到达代理但因参数不兼容返回空
+- **原因：** pi-ai 的 `openai-completions` provider 默认启用 `store: false`、`developer` role、`max_completion_tokens`、`stream_options` 等，多数代理不支持
+- **解决：** `model.ts` 检测 `hasCustomBase` 时设保守 compat（`supportsStore: false, supportsDeveloperRole: false, supportsUsageInStreaming: false`），但 **不覆盖 `maxTokensField`** —— 交给 pi-ai 根据 URL 自动检测（默认 `max_completion_tokens`）
+- **规则：** 自定义 OpenAI 代理默认走最保守兼容配置，但 `maxTokensField` 由 pi-ai 框架自动检测，禁止手动覆盖
+- **文件：** `app/lib/agent/model.ts`
+
+### API Key 测试通过但聊天失败（test-key / chat 代码路径分叉）
+- **现象：** Settings 页 Test Key 显示 ✅ 成功，但实际发消息时返回 "AI 未返回响应"
+- **原因：** `test-key` API 曾用独立的 `fetch()` 实现（直接调 provider HTTP API），而聊天走 `pi-ai.complete()` + `getModelConfig()`。两条路径的 model 构造、compat flags、base URL 解析、认证方式全部不同。测试时用对了参数不代表聊天也对
+- **解决：** `test-key/route.ts` 完全重写为使用 `pi-ai.complete()` + `getModelConfig(overrides)`，与聊天路径 100% 共享 model 构造逻辑。新增 `ModelConfigOverrides` 接口允许临时传入未保存的 apiKey/model/baseUrl
+- **规则：** API 连通性测试必须与实际功能调用走同一代码路径。测试接口不能自建 HTTP 调用
+- **文件：** `app/app/api/settings/test-key/route.ts`、`app/lib/agent/model.ts`
+
+### Multi-Provider 配置：新增 Provider 必须注册到 PROVIDER_PRESETS
+- **现象：** 新增 AI Provider 后 UI 不显示、测试/聊天不工作
+- **原因：** 所有 Provider 的 UI/UX 元数据（name、defaultModel、signupUrl、supportsThinking、category 等）集中在 `PROVIDER_PRESETS`。技术细节（baseUrl、API 协议、env 变量映射、compat flags）则委托给 pi-ai 框架
+- **规则：** 新增 Provider 步骤：(1) `providers.ts` 添加 `ProviderId` union + `PROVIDER_PRESETS` entry（仅 UI 元数据） (2) 确认该 provider 在 pi-ai 的 `getModels()` 注册表中存在（若不存在，如 DeepSeek，需设 `piProviderOverride` + `fixedBaseUrl`） (3) 设置正确的 `category`（primary/secondary/advanced） (4) 若 pi-ai 的 `getEnvApiKey()` 不覆盖该 provider，在 `EXTRA_ENV_KEYS` 中补充
+- **文件：** `app/lib/agent/providers.ts`
+
+### gpt-5.4 等新模型拒绝 max_tokens 参数（禁止重复造轮子）
+- **现象：** gpt-5.4 配合中转站使用时，连接测试返回"测试失败"，聊天也无法工作
+- **原因：** gpt-5.4/o1/o3 系列模型要求使用 `max_completion_tokens` 而非 `max_tokens`。我们曾在 `model.ts` 中强制覆盖 `maxTokensField: 'max_tokens'`，但 pi-ai 框架已内置基于 URL 的自动检测逻辑（默认 `max_completion_tokens`），我们的覆盖反而破坏了它。同时还曾为此构建了非流式回退路径（~150 行），但实际上所有现代代理都支持流式
+- **解决：** (1) model.ts 删除 `maxTokensField` 覆盖，完全交给 pi-ai 自动检测 (2) test-key 的 OpenAI 测试请求不发 token 限制参数 (3) 删除整个非流式回退路径（`directNonStreamingCall`、`handleNonStreaming`、`streamingBlacklist`），完全复用 pi-ai 流式路径 (4) 删除 `useStreaming` 配置项和 UI 中的 streaming 检测逻辑
+- **规则：** 禁止在 model.ts compat 中覆盖 `maxTokensField`（pi-ai 已处理）。禁止自建非流式回退（所有代理都支持流式）。test-key 只做连通性 + 工具兼容性测试，不测流式
+- **文件：** `app/lib/agent/model.ts`, `app/app/api/settings/test-key/route.ts`, `app/app/api/ask/route.ts`
+
+### pi-ai openai-completions vs openai-responses — 代理 API 选择
+- **现象：** 配了 OpenAI 兼容代理，Agent 请求 `/responses` 端点被 403 拒绝
+- **原因：** pi-ai 默认用 `openai-responses` API（请求 `/responses`），多数代理只支持 `/chat/completions`
+- **解决：** `model.ts` 检测 `hasCustomBase` 时默认用 `openai-completions`（对应 `/chat/completions`）
+- **规则：** 有自定义 baseUrl → `openai-completions`；无 baseUrl（直连 OpenAI）→ `openai-responses`
+- **文件：** `app/lib/agent/model.ts`
+
+### piProviderOverride 导致 API Key 查找不命中（#23）
+- **现象：** 用户配置 DeepSeek/Ollama/zai-cn 后，对话报错 "No API key found for openai"
+- **原因：** `ask/route.ts` 调用 `authStorage.setRuntimeApiKey(provider, apiKey)` 时 `provider` 是 MindOS ProviderId（如 `"deepseek"`），但 pi-coding-agent 内部通过 `model.provider` 查找 API key，而 `model.provider` = `toPiProvider(provider)`（如 `"openai"`）。存储和查找使用了不同的 key
+- **解决：** 改为 `authStorage.setRuntimeApiKey(toPiProvider(provider), requestApiKey)`，确保存储 key 与查找 key 一致
+- **规则：** 所有传给 `pi-coding-agent` / `pi-ai` 的 provider 标识符必须经过 `toPiProvider()` 转换。MindOS ProviderId 仅用于 UI 层和 settings 层
+- **文件：** `app/app/api/ask/route.ts`
+
+### Provider override 传协议 ID 时误读 activeProvider（#24）
+- **现象：** Settings 页 Test Key 可通过，但聊天实际走错 provider，常见表现是自定义 OpenAI 兼容网关返回 `please auth first`、`auth first`，或者请求落到了当前 active provider 的模型/鉴权配置上
+- **原因：** `getModelConfig()` 把 `ProviderId`（如 `"openai"`）传给 `effectiveAiConfig()`，但后者原本只把参数当作 provider entry ID（`p_*`）查找。查找失败后会退回 `activeProvider` / 默认 provider，导致显式传入的 `apiKey`、`model`、`baseUrl` 与最终选中的 provider 不一致
+- **解决：** `effectiveAiConfig()` 同时支持 entry ID 和 protocol ID；`getModelConfig()` 明确保留 `options.provider` 作为最终 provider，不再被回退配置覆盖
+- **规则：** provider 解析层必须区分“配置项 ID（p_*）”与“协议 ID（openai/anthropic/...）”；接受两种输入时，禁止静默回退到 active provider
+- **文件：** `app/lib/settings.ts`、`app/lib/agent/model.ts`
+
+### ACP sendAndWait 不感知进程死亡 — 30 秒盲等（#23，已通过 SDK 迁移彻底修复）
+- **现象：** 用户选择未安装的 ACP agent（如 Auggie），等待 30 秒后报错 "ACP Agent Error: ACP RPC timeout after 30000ms for method: initialize"
+- **原因：** 手写的 `sendAndWait()` 发送 JSON-RPC 后仅靠 `setTimeout` 等待响应，不监听进程 `close`/`error` 事件
+- **解决：** 迁移至 `@agentclientprotocol/sdk`，SDK 的 `ClientSideConnection` 自动将流关闭事件传播为 Promise rejection，消除了手写 JSON-RPC 解析/调度的整类 bug
+- **规则：** 协议层优先使用官方 SDK 而非手写实现。手写 JSON-RPC 解析/调度曾导致 5 类 bug（sessionId 丢失、streaming 格式不匹配、同步 prompt 无文本、进程死亡盲等、modes 解析错误）
+- **文件：** v1 后为 `packages/protocols/acp/src/subprocess.ts`, `packages/protocols/acp/src/session.ts`
+
+### ACP waitForTerminalExit 竞态条件（#24）
+- **现象：** 如果终端子进程在 `exitCode !== null` 检查和 `.on('exit')` 监听之间退出，Promise 永远挂起
+- **原因：** Node.js 的 `exit` 事件已触发后不会重发，附加监听器后再也收不到
+- **解决：** 在附加 `.on('exit')` 后再次检查 `exitCode`，覆盖竞态窗口
+- **规则：** 任何 "先检查状态 → 再挂监听器" 的模式都必须在监听器挂上后重新检查状态
+- **文件：** v1 后为 `packages/protocols/acp/src/subprocess.ts`
+
+### pi-agent-core 迁移：compact 失败不能静默返回
+- **现象：** `compactMessages()` 调用 `complete()` 失败时直接返回未压缩的消息。如果上下文已超 70%，后续调用大概率超 token limit → 不可预测行为
+- **解决：** 失败时 fallback 到 `hardPrune()`，pruning 也失败才 throw
+- **规则：** 上下文管理的 error path 必须保证出口 token 数 ≤ limit。不能"原样返回"——原样可能就是超限的
+
+### pi-agent-core 迁移：AssistantMessage.usage 字段结构变化
+- **现象：** 构造历史 AssistantMessage 时 `usage` 字段需要包含 `totalTokens` 和 `cost` 子对象，否则 TS 报错
+- **解决：** 补全所有必需字段：`{ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }`
+- **规则：** 构造 pi-ai Message 对象时，即使是历史占位消息，也必须满足完整类型签名。用 `satisfies` 约束
+
+### pi-agent-core 迁移：ToolCall 字段名与 AI SDK 不同
+- **现象：** AI SDK 用 `toolCallId` / `toolName` / `input`，pi-agent-core 用 `id` / `name` / `arguments`
+- **解决：** `toAgentMessages()` 中做字段映射（`type: 'toolCall', id: part.toolCallId, name: part.toolName, arguments: part.input`）
+- **规则：** 跨 SDK 迁移时逐字段对比类型定义，不要假设字段名相同
+
+### Settings 半迁移配置：activeProvider 仍是协议值导致 AI 配置项整块消失（#25）
+- **现象：** 设置页里 OpenAI / Gemini 等按钮看起来被选中了，但标题仍显示“未选择”，下面的 API Key / Base URL / Model 配置项完全不出现
+- **原因：** 某些用户本地 `config.json` 已迁到 `ai.providers: Provider[]` 新格式，但 `ai.activeProvider` 仍保留旧协议值（如 `"openai"`、`"google"`）而不是 provider entry id（`p_*`）。`ProviderSelect` 用这个值仍会高亮协议按钮，但 `AiTab` 用 `providers.find(p => p.id === activeProvider)` 查当前项时查不到，于是整块配置区不渲染
+- **解决：** `readSettings()` 在读取数组格式 providers 时增加 `normalizeActiveProvider()`：若 `activeProvider` 是协议值，则映射到首个匹配的 provider entry id；若指向缺失条目，则回退到第一个 provider
+- **规则：** 配置迁移不能只迁“数据结构”，还要归一化主键字段。凡是 `active*` / `selected*` / `current*` 这类引用字段，都必须校验是否仍指向有效实体
+- **文件：** `app/lib/settings.ts`
+
+## 架构 & 设计模式
+
+### 插件兼容 / runtime 层的假绿陷阱（2026-04-10）
+- **现象：** 插件 compat 骨架测试初看通过，但一补集成测试就暴露出 3 类问题：`../` 路径穿越、`onload()` 异步未等待、`.plugins/` 私有文件混入用户 vault 文件列表
+- **原因：** 纯骨架实现容易只验证 happy path；如果没有更贴近用户流的集成测试，很多问题会“假绿”——尤其是 async 生命周期、路径边界、私有目录隔离这三类
+- **解决：** compat/runtime 层默认做三件事：
+  1. 所有文件路径统一走 `resolveSafe()`
+  2. 生命周期 `load()/unload()` 设计为 async，并在 loader 中 `await`
+  3. 文件扫描显式排除私有运行时目录（如 `.plugins/`）
+- **规则：** 任何“宿主适配层 / 插件 runtime / loader”类模块，测试必须至少覆盖：
+  - 正常加载
+  - 异步生命周期
+  - 路径逃逸
+  - 私有目录污染
+  - 配置损坏而非缺失
+  - 设置 DSL 只收集声明，不要假装已经接到真实宿主 UI
+
+## 进程生命周期
+
+### stopMindos 只清理 config 端口，漏掉旧端口
+- **现象：** GUI 改端口后 restart，旧 MCP 进程存活，新服务报 "Port already in use"
+- **原因：** `stopMindos()` 从 config 文件读端口，但 config 在 `/api/setup` 时已写入新端口；旧进程实际运行在旧端口，port cleanup 打空
+- **解决：** `stopMindos()` 新增 `opts.extraPorts`；`/api/restart` 通过 `MINDOS_OLD_*` env 传递旧端口；`cli.js restart` 对比新旧差异自动传入
+- **教训：** 多步状态变更（config 写入 → 进程 stop → 进程 start）之间，数据来源必须区分"运行态"和"配置态"
+
+### /api/restart 环境变量继承导致新端口不生效
+- **现象：** GUI 改端口后 restart，服务仍在旧端口启动
+- **原因：** `spawn` 传 `process.env` 给子进程，`loadConfig()` 的 `set()` 策略是"已有则不覆盖" → 旧 env 值屏蔽了 config 文件的新值
+- **解决：** spawn 前删除 `MINDOS_WEB_PORT` 等 env vars，让子进程 `loadConfig()` 从文件读新值
+- **教训：** 子进程继承父进程 env 时，如果有"配置加载跳过已有 env"逻辑，必须主动清理过时的 env vars
+
+### PID 文件只记录主进程，工人进程残留
+- **现象：** `mindos stop` 后端口仍被占用
+- **原因：** `savePids()` 只存主进程 PID + MCP PID，Next.js 工人进程（独立 PID）不在文件中
+- **解决：** (1) `killTree(-pid)` 杀整个进程组 (2) 端口清理 ALWAYS 运行，不因有 PID 文件就跳过
+- **教训：** PID 文件不可靠（只是部分快照），必须有端口清理兜底
+
+### lsof 环境差异 + ss 端口子串误匹配
+- **现象：** `lsof -ti :PORT` 在某些环境返回 exit 1（权限问题）；`ss` 输出 `:3003` 误匹配 `:30030`
+- **解决：** lsof 失败后 fallback 到 `ss -tlnp`；端口匹配用正则 `/:PORT(?!\d)/` 防子串
+- **教训：** 系统工具的可用性不能假设统一，关键路径必须有 fallback
+
+### restart 用固定 sleep 等端口释放不可靠
+- **现象：** 1.5s sleep 后端口尚未释放，`assertPortFree` 失败
+- **解决：** 改为 polling `isPortInUse()` + 15s deadline
+- **教训：** 异步资源释放用轮询确认，不用固定 delay
+
+### launchd KeepAlive=true 导致多种无限重启循环
+- **现象：** (1) daemon 启动时端口未释放 → `assertPortFree` exit(1) → KeepAlive 立即重启 → 无限循环 (2) build 失败 → exit(1) → 立即重启 → 日志暴涨 (3) `mindos start --daemon` 的 install+start 同时执行，install(bootstrap+RunAtLoad) 已启动，start(kickstart -k) 杀进程导致端口冲突
+- **原因：** `KeepAlive=true` 是无条件重启，任何 exit 立即重启，无间隔。与 `assertPortFree` 的 `process.exit(1)` 组合形成快速循环
+- **解决：** 4 个改动：(1) plist 的 `KeepAlive` 改为 `<dict><key>SuccessfulExit</key><false/></dict>`（只在非正常退出时重启）+ `ThrottleInterval=5`（至少 5 秒间隔） (2) plist 注入 `LAUNCHED_BY_LAUNCHD=1` 环境变量，cli.js 在 daemon 模式下用 `waitForPortFree`（等 30s）替代 `assertPortFree`（立即退出） (3) `mindos start --daemon` 移除多余的 `runGatewayCommand('start')`（install 已通过 bootstrap+RunAtLoad 启动） (4) build 失败的无限重启被 ThrottleInterval 自然节流
+- **教训：** launchd 的 `KeepAlive=true` 等效于"无条件无延迟重启"，任何可能失败的服务都不应使用。正确方式是 `SuccessfulExit=false`（等效 systemd 的 `Restart=on-failure`）+ `ThrottleInterval`
+- **文件：** `bin/lib/gateway.js`、`bin/cli.js`
+
+### update 命令 launchctl bootout 不等端口释放
+- **现象：** `mindos update` 在 macOS 上 stop → install → start，新服务报 "Port already in use" 并无限循环重试
+- **原因：** `launchctl bootout` 是异步的——发信号给进程但不等进程退出，端口在 bootout 返回后仍被旧进程占用。与 `systemctl --user stop`（同步等待）行为不同
+- **解决：** `launchd.stop()` 改为 async，bootout 后 polling `isPortInUse()` 等端口释放（30 次 × 500ms = 15s deadline），超时则 fallback 到 `stopMindos()` 强制 kill
+- **教训：** macOS launchctl 和 Linux systemctl 的 stop 语义不同，macOS 需要额外的端口释放等待
+- **文件：** `bin/lib/gateway.js`
+
+### onboard GUI 模式端口冲突 + env 不匹配
+- **现象：** `mindos onboard` 选 GUI，旧 MindOS 半死（端口占着但 `/api/health` 无响应），新服务报 "Port already in use" 无限循环
+- **原因（两个 bug）：** (1) `startGuiSetup()` 传 `env.PORT` 给 spawn 的 start 进程，但 `loadConfig()` 设的是 `MINDOS_WEB_PORT`，`PORT` 被忽略，临时端口白分配 (2) 端口被旧进程占着时直接换临时端口，不尝试清理旧进程
+- **解决：** (1) spawn env 改传 `MINDOS_WEB_PORT` 而非 `PORT` (2) 端口被占时先调 `stopMindos()` 清理旧进程 + `waitForPortFree()` 等释放，失败才 fallback 到临时端口
+- **教训：** env 变量名必须与消费侧严格匹配；端口冲突时优先清理而非回避
+- **文件：** `scripts/setup.js`
+
+### /api/health 被 middleware auth 拦截
+- **现象：** re-onboard 时 `isSelfPort()` 调 `/api/health` 被 401 → 误报 "Port already in use"
+- **原因：** server-to-self HTTP 请求没有 `Sec-Fetch-Site: same-origin` header，也没有 auth token
+- **解决：** `proxy.ts` 豁免 `/api/health` 和 `/api/auth`
+- **教训：** 健康检查端点必须无认证，否则内部自检会失败
+
+### check-port 自回环 fetch 超时导致误报"端口占用"
+- **现象：** 在 `http://localhost:3013/setup` 上 onboard 时，webPort 输入 3013 提示"已被占用"
+- **原因：** `check-port` API 检测端口占用后，通过 `fetch('http://127.0.0.1:3013/api/health')` 回环请求自身判断 isSelf。Next.js 单线程模式下，当前请求未结束时发出的新请求被队列阻塞，800ms 超时 → `isSelfPort` 返回 false → 把自己的端口报为"已被占用"
+- **解决：** 从 `req.nextUrl.port` 直接获取当前监听端口，检测相同端口时直接返回 `{available: true, isSelf: true}`，跳过网络自回环。HTTP 回环保留为后备逻辑
+- **注意：** 只信任 `req.nextUrl.port`（实际监听的端口），不从 settings 读配置端口——settings 里是"配置值"不是"监听值"（首次 onboard 时 MCP 端口可能未启动，误标为 self 会掩盖真实冲突）
+- **教训：** 服务端 self-detection 不要依赖网络自回环（可能死锁/超时），优先用进程内信息（request context）判断
+- **文件：** `app/app/api/setup/check-port/route.ts`
+
+### setup.js 与 port.js 的 isPortInUse timeout 行为不一致
+- **现象：** `scripts/setup.js` 和 `bin/lib/port.js` 各有一份 `isPortInUse`，timeout 返回值相反
+- **差异：** setup.js `sock.setTimeout → cleanup(true)` vs port.js `sock.setTimeout → cleanup(false)`
+- **影响：** setup.js 在极端慢响应（localhost 几乎不触发）时误判端口被占，导致不必要地切换到临时端口
+- **解决：** 统一为 `cleanup(false)`（localhost timeout = 无人监听 = 端口空闲）
+- **教训：** 同一功能的两份实现必须行为一致，或者只保留一份、另一处 import 复用
+- **文件：** `scripts/setup.js`、`bin/lib/port.js`
+
+## 构建 / 部署
+
+### Windows 安装包首次启动耗时 5-6 分钟（2026-04-14，已修复）
+
+**症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，首次运行 `mindos start` 需要等待 5-6 分钟才能启动成功。
+
+**根因**：npm 包缺少预构建的 `_standalone/` 目录，导致用户首次启动时需要经历三个耗时的构建步骤：
+1. **npm install 73 个依赖**（2-3 分钟，Windows NTFS 文件系统比 Unix 慢 20%）
+2. **next build 编译**（1.5-2 分钟，可能因堆内存不足而 OOM）
+3. **postcss 嵌套依赖安装**（0.5-1.5 分钟，Windows 上 npm install 慢 50-100%）
+
+**为什么 `_standalone/` 缺失**：
+- `prepack` 脚本中的 `next build --webpack` 因堆内存不足而 OOM
+- OOM 导致构建失败，`_standalone/` 目录未生成
+- npm 发布时 `_standalone/` 不存在，用户下载的包缺少预构建产物
+
+**调用链**：
+```
+npm install -g @geminilight/mindos（下载的包缺少 _standalone/）
+  → mindos start（首次启动）
+    → bin/commands/start.js 检测到缺少 .next/BUILD_ID
+      → npm install（73 个依赖，2-3 分钟）
+        → postinstall: fix-postcss-deps.cjs
+          → npm install --install-strategy=nested（0.5-1.5 分钟）
+      → next build --webpack（1.5-2 分钟）
+        → ❌ 可能 OOM（默认堆内存不足）
+```
+
+**修复**：
+1. **防止 OOM**：在 `prepack`、`build`、`start` 命令中添加 `NODE_OPTIONS="--max-old-space-size=8192"`，确保 next build 有足够堆内存
+2. **优化 postcss 安装**：`scripts/fix-postcss-deps.cjs` 改为 symlink/copy 兼容依赖（picocolors、source-map-js）从 app node_modules，只用 npm install 安装不兼容的 nanoid@3，减少安装时间 50-70%
+3. **确保 _standalone/ 进入 npm 包**：
+   - `.npmignore` 添加 `!_standalone/` 否定规则
+   - `package.json` 添加 `files` 字段显式声明包含 `_standalone/`
+
+**优化效果**：
+- **有 _standalone/**：0 秒（直接使用预构建，无需等待）
+- **无 _standalone/**：5-6 分钟 → 2-3 分钟（通过 OOM 修复 + postcss 优化）
+
+**为什么 Windows 特别慢**：
+1. **NTFS 文件系统**：小文件操作比 ext4/APFS 慢 20-30%
+2. **npm 并发解压**：Windows 文件锁机制导致竞争条件更频繁
+3. **postcss 嵌套安装**：Windows 上 npm install 慢 50-100%
+
+**教训**：
+- 构建脚本必须有足够的堆内存，否则 OOM 会导致产物缺失
+- npm 包应该包含预构建产物，避免用户侧首次启动时长时间等待
+- Windows 平台的文件系统性能差异需要特别优化
+- 使用 `npm pack` + 解压验证关键文件是否存在，不要只依赖本地测试
+
+**验证方式**：
+```bash
+npm pack
+tar -tzf geminilight-mindos-*.tgz | grep "_standalone/server.js"
+```
+
+**文件**：
+- `package.json:42`（prepack 添加 NODE_OPTIONS）
+- `bin/commands/build.js:24-26`（build 添加 NODE_OPTIONS）
+- `bin/commands/start.js:239-241`（start 添加 NODE_OPTIONS）
+- `scripts/fix-postcss-deps.cjs:17-66`（优化 postcss 依赖安装）
+- `.npmignore:17`（添加 !_standalone/）
+- `package.json:29-40`（添加 files 字段）
+
+**相关 commit**：
+- `0c3d0f3f` - fix: resolve Windows installation taking 5-6 minutes
+- `7911ea3c` - fix: ensure _standalone/ is included in npm package
+
+### Desktop APP 首次启动耗时 5-6 分钟（2026-04-21，已诊断）
+
+**症状**：Windows 用户安装 MindOS Desktop APP 后，首次启动需要等待 5-6 分钟，显示"Installing MindOS (first time, ~1-2 min)..."但实际耗时远超预期。
+
+**根因**：Desktop APP 的 bundled runtime 不完整（只有 README.md），首次启动时需要执行 `npm install -g @geminilight/mindos@latest` 下载和安装完整的 MindOS 包。
+
+**调用链**：
+```
+Desktop 首次启动
+  → main.ts:357 resolveLocalMindOsProjectRoot()
+    → 检测到 bundled runtime 不可运行（只有 README）
+    → needsInstallFallback = true
+  → main.ts:382 installMindosWithPrivateNode()
+    → node-bootstrap.ts:291 npm install -g @geminilight/mindos@latest
+      → 从 npm registry 下载完整包（约 50MB）
+      → npm install 安装依赖（73 个包，2-3 分钟）
+        → 如果包缺少 _standalone/，触发 next build（1.5-2 分钟）
+          → postcss postinstall（0.5-1.5 分钟）
+      → 总耗时：5-6 分钟
+```
+
+**为什么 bundled runtime 不完整**：
+- `desktop/package.json` 中的 `dist:win` 命令直接调用 `electron-builder`，**没有**先运行 `prepare-mindos-runtime`
+- 只有 `dist:with-bundled` 和 CI 构建（`.github/workflows/build-desktop.yml:118`）才会打包完整的 runtime
+- 如果开发者本地使用 `npm run dist:win` 构建，会打包一个空的 runtime
+
+**CI 构建是否正确**：
+- ✅ CI 配置正确：`.github/workflows/build-desktop.yml:115-118` 有 `npm run prepare-mindos-runtime`
+- ✅ 通过 CI 构建的安装包应该包含完整的 bundled runtime（app/.next、mcp/、node/ 等）
+- ⚠️ 如果用户报告安装慢，可能是使用了本地构建的安装包（未执行 prepare-mindos-runtime）
+
+**两个场景的区别**：
+1. **npm 包安装慢**（`npm install -g @geminilight/mindos`）：
+   - 根因：npm 包缺少 `_standalone/` 目录
+   - 修复：commit `0c3d0f3f` 和 `7911ea3c`（已包含在 v0.7.0+）
+   - 状态：✅ 已修复
+
+2. **Desktop APP 安装慢**（Windows 安装包）：
+   - 根因：bundled runtime 不完整，首次启动触发 `npm install -g`
+   - 如果 npm 包也缺少 `_standalone/`，会叠加 npm 包的问题
+   - 修复：确保使用 CI 构建的安装包（包含完整 bundled runtime）
+   - 状态：✅ CI 配置正确，通过 GitHub Release 分发的安装包应该没问题
+
+**验证方式**：
+```bash
+# 检查 Desktop 安装包是否包含完整 runtime
+# macOS
+cd /Applications/MindOS.app/Contents/Resources/mindos-runtime
+ls -lh app/.next/standalone/server.js  # 应该存在
+ls -lh node/bin/node                    # 应该存在
+
+# Windows
+cd "C:\Program Files\MindOS\resources\mindos-runtime"
+dir app\.next\standalone\server.js      # 应该存在
+dir node\node.exe                       # 应该存在
+```
+
+**解决方案**：
+1. **用户侧**：从 GitHub Release 下载官方构建的安装包（通过 CI 构建，包含完整 runtime）
+2. **开发者侧**：本地构建时使用 `npm run dist:with-bundled` 而不是 `npm run dist:win`
+3. **长期方案**：修改 `dist:win`/`dist:mac`/`dist:linux` 命令，自动执行 `prepare-mindos-runtime`
+
+**教训**：
+- Desktop 打包命令应该默认包含 runtime 准备步骤，避免开发者忘记
+- 本地构建和 CI 构建的差异需要明确文档说明
+- 首次启动的超时提示应该更准确（"~1-2 min" vs 实际 5-6 分钟）
+
+**文件**：
+- `desktop/package.json:18-20`（dist:win/mac/linux 命令）
+- `desktop/package.json:24`（dist:with-bundled 命令，包含 prepare-mindos-runtime）
+- `desktop/scripts/prepare-mindos-runtime.mjs`（runtime 打包脚本）
+- `.github/workflows/build-desktop.yml:115-118`（CI 中的 prepare-mindos-runtime）
+- `desktop/src/main.ts:357-399`（runtime 解析和安装逻辑）
+- `desktop/src/node-bootstrap.ts:277-338`（installMindosWithPrivateNode 实现）
+
+**相关 commit**：
+- `0c3d0f3f` - fix: resolve Windows installation taking 5-6 minutes（npm 包问题）
+- `7911ea3c` - fix: ensure _standalone/ is included in npm package（npm 包问题）
+- Desktop bundled runtime 问题：需要确保使用 CI 构建或 `dist:with-bundled` 命令
+
+**版本信息**：
+- npm 包问题修复：v0.7.0+（包含 commit `0c3d0f3f`）
+- Desktop 最新版本：v0.5.52（desktop-v0.5.52）
+- Desktop v0.3.12 不包含 npm 包修复（commit `0c3d0f3f` 在 v0.3.12 之后）
+
+---
+
+## Desktop / Tauri
+
+### Tauri spike 图标加载失败（2026-04-21）
+
+**症状**：运行 `npm run tauri dev` 时报错 "Failed to load window icon"。
+
+**根因**：
+- `tauri.conf.json` 引用了不存在的 `icons/icon.icns` 文件
+- macOS 需要 .icns 格式，但只有 .png 和 .ico
+
+**修复**：
+1. 从配置中移除不存在的图标引用
+2. 使用 `sips` 或 `iconutil` 生成 .icns 文件：
+   ```bash
+   # macOS
+   sips -s format icns icon.png --out icon.icns
+
+   # 或使用 iconutil（需要先创建 iconset）
+   mkdir icon.iconset
+   sips -z 16 16 icon.png --out icon.iconset/icon_16x16.png
+   sips -z 32 32 icon.png --out icon.iconset/icon_16x16@2x.png
+   # ... 其他尺寸
+   iconutil -c icns icon.iconset
+   ```
+
+**规则**：
+- Tauri 配置中引用的所有文件必须存在
+- 不同平台需要不同格式：macOS (.icns), Windows (.ico), Linux (.png)
+- 使用 `expect()` 而非 `unwrap()` 提供更好的错误信息
+
+**文件**：
+- `packages/desktop-tauri/src-tauri/tauri.conf.json:15-20`
+- `packages/desktop-tauri/src-tauri/src/main.rs:42-46`
+
+---
+
+### Windows onboard 失败：mcp/src/ 被 .npmignore 排除（2026-04-20）
+
+**症状**：Windows 用户通过 `npm install -g @geminilight/mindos` 安装后，运行 `mindos onboard` 报错：
+```
+X [ERROR] Could not resolve "src/index.ts"
+Error: Command failed: esbuild.exe src/index.ts --bundle ...
+```
+
+**根因**：`.npmignore` 第 23 行排除了 `mcp/src/`，导致 npm 包中没有 MCP 源码。用户安装后如果触发 MCP 重建（`needsMcpBuild()` 检测到源文件更新或首次运行），`npm run build` 会因找不到 `src/index.ts` 而失败。
+
+**调用链**：
+```
+mindos onboard
+  → scripts/setup.js:969 spawn('mindos start')
+    → bin/lib/mcp-build.js:56 ensureMcpBundle()
+      → bin/lib/mcp-build.js:69 run('npm run build', MCP_DIR)
+        → mcp/package.json:7 "npx esbuild src/index.ts ..."
+          → esbuild 报错: Could not resolve "src/index.ts"
+```
+
+**为什么本地开发没发现**：
+- 本地开发时 `mcp/src/` 存在
+- `prepack` 脚本在发布前会构建 `mcp/dist/index.cjs`
+- 但用户环境如果触发重建（如检测到源文件更新），就会失败
+
+**修复**：
+1. 删除 `.npmignore` 中的 `mcp/src/` 排除规则（允许源码进入 npm 包，增加约 36KB）
+2. `bin/lib/mcp-build.js` 添加防御性检查：如果 `mcp/src/` 不存在且 `dist/index.cjs` 存在，跳过重建直接使用预构建 bundle
+
+**教训**：
+- `.npmignore` 排除源码前，确认没有构建脚本依赖它
+- 对于需要用户侧重建的模块（如 MCP），源码应该包含在 npm 包中
+- 本地测试无法覆盖 npm 全局安装场景，需要 `npm pack` + 模拟全局安装验证
+
+**文件**：`.npmignore`、`bin/lib/mcp-build.js`
+
+### Skill 安装 process.cwd() 路径错误
+- **现象：** GUI Setup Wizard 安装 Skill 提示失败，CLI 正常
+- **原因：** API route 用 `path.resolve(process.cwd(), 'skills')` 定位 skills 目录，但 Next.js 的 `process.cwd()` 是 `app/`，解析到 `app/skills/`（不存在）。CLI 用 `__dirname` 相对定位所以没问题
+- **解决：** 改为 GitHub 源优先（`npx skills add GeminiLight/MindOS --skill mindos`），本地路径作为离线 fallback（搜索 `packages/web/data/skills/` 和 `skills/`）
+- **教训：** Next.js API route 里 `process.cwd()` 不等于项目根目录，定位文件用 GitHub 源或 `__dirname` 相对路径，不要依赖 cwd
+- **文件：** `packages/web/app/api/mcp/install-skill/route.ts`、`scripts/setup.js`
+
+### Skill 安装多 agent 逗号分隔无效
+- **现象：** 选多个 agent 安装 Skill 时，`skills` CLI 报 "Invalid agents: claude-code,windsurf"
+- **原因：** `buildCommand` 用 `agents.join(',')` 拼成 `-a claude-code,windsurf`，但 `skills` CLI 不支持逗号分隔，每个 agent 需要独立的 `-a` flag
+- **解决：** 改为 `agents.map(a => \`-a ${a}\`).join(' ')`，生成 `-a claude-code -a windsurf`
+- **教训：** CLI 工具的多值参数格式不要想当然，先用 `--help` 或实际测试确认
+- **文件：** `app/api/mcp/install-skill/route.ts`、`scripts/setup.js`
+- **现象：** 新增的顶层目录未被同步到公开仓
+- **解决：** `.github/workflows/sync-to-mindos.yml` 中 rsync 目录列表需要手动维护
+
+### npm install 后 next build 报 MODULE_NOT_FOUND
+- **现象：** 全局安装后 `mindos start`，`npm install` 报 336 个 `TAR_ENTRY_ERROR ENOENT`，随后 `next build` 报 `Cannot find module '@next/env'`
+- **原因：** npm 在深层全局路径下并发解压 tar 时存在竞争条件（目录未创建完，文件就写入），导致大量文件丢失。Node v23.9.0（非 LTS 奇数版本）加剧了此问题
+- **解决：** `ensureAppDeps()` 新增安装后验证 + 自动重试：定义 `CRITICAL_DEPS`（next、@next/env、react、react-dom），安装后逐一检查 `package.json` 是否存在，缺失则删 `node_modules` 重新 `npm install`
+- **教训：** `npm install` 报 `added N packages` 不代表所有文件完整解压，关键依赖必须验证
+- **文件：** `bin/lib/build.js`
+
+### 预编译 .next/ 进 npm 包 — 已评估放弃
+- **动机：** `npm update` 后首次启动需 ~12s `next build`，想预编译消除等待
+- **可行性结论：** 技术上可行（`next start` 不依赖硬编码路径，包体 9.9→15MB），但 **ROI 为负**
+- **放弃原因：** (1) 12s 延迟只在版本更新后首次启动触发，频率极低 (2) 所有用户每次 `npm install` 都多下载 5MB，总成本远高于偶发的 12s (3) CI 必须耦合 `next build`，构建失败阻塞发版 (4) 非标准模式，Next.js 升级可能静默破坏 (5) CI 环境变量会 bake 进产物，用户端出诡异 bug
+- **当前方案：** 已有 `Building MindOS (first run or new version detected)...` 提示，用户体感可接受，不做额外优化
+- **评估日期：** 2026-03-17
+
+### 免交互模式 (-y) 区分可跳过 vs 必须交互
+- **现象：** `-y` 全局免交互跳过了 agent 选择（用户必须自己选）
+- **解决：** `choose()` 加 `forcePrompt` 参数，必须交互的选项标记 `{ forcePrompt: true }`
+
+### npm 包体积膨胀 — package.json files 排除项遗漏
+- **现象：** npm 包从 ~480kB 膨胀到 1.8MB
+- **原因：** 发布包 `package.json` 的 `files` 字段缺少排除项：`assets/images/`（1.2MB 截图）、`mcp/package-lock.json`（58kB）、`app/package-lock.json`（560kB）
+- **`app/package-lock.json` 处理：** 原本 `depsHash()` 读 lock 文件做 hash，导致不能排除。改为读 `app/package.json`（几 KB）做 hash——依赖增删改时 package.json 一定变，精度足够
+- **教训：** npm 官方建议**不要发布 lock 文件**，lock 只对根项目有意义。如有 build 脚本依赖 lock 文件，应改为依赖 package.json 或预算 hash 写入小文件
+- **文件：** v1 后为 `packages/mindos/package.json`, `packages/mindos/bin/lib/build.js`
+
+## 变更质量 checklist（通用）
+
+### 第三方库返回值必须做 null/undefined 检查（不能只 try-catch）
+- **案例：** `pi-ai` 的 `getModel('openai', 'claude-sonnet-4-6')` 对未知模型返回 `undefined`，不抛异常。`try { model = getModel(...) } catch {}` 不进 catch，`model` 变成 `undefined`。后续 `{ ...undefined }` 产生残缺对象，5 层调用链后静默失败，用户只看到 "No response from AI"
+- **排查耗时：** ~2 小时。从 API 连通性 → API variant → compat flags → Turbopack bundling → provider 注册 → lazy load → 最终定位到一行 `getModel` 返回值
+- **规则：**
+  1. 调用第三方库函数后，**同时检查异常和返回值**：`const result = lib.fn(); if (!result) throw new Error(...)`
+  2. 对关键路径（LLM 调用、认证、配置加载），失败时必须有**用户可见的错误信息**，不能 resolve 空结果
+  3. 引入或升级第三方依赖后，在 `npm run dev` 中做一次**端到端手动验证**（不只是跑单元测试），特别是涉及运行时动态行为的包
+- **防御模式：**
+  ```typescript
+  // ❌ 只靠 try-catch
+  try { model = getModel(provider, name); } catch { model = fallback(); }
+
+  // ✅ try-catch + 返回值检查
+  try {
+    const resolved = getModel(provider, name);
+    if (!resolved) throw new Error('not in registry');
+    model = resolved;
+  } catch { model = fallback(); }
+  ```
+
+### 静默失败链条的排查方法
+- **现象：** 功能不工作但无报错，日志只有正常流程信息
+- **排查步骤：**
+  1. 在调用链**最外层**加事件全量打印（确认收到了哪些事件、缺了哪些）
+  2. 在关键中间层加 `console.error`（特别是 `.catch` 块和 error event handler）
+  3. 对第三方库，**直接 patch `node_modules` 加日志**比猜测快 10 倍——定位后再还原
+  4. 不要假设"编译通过 = 运行正常"——Turbopack 编译产物的运行时行为可能与源码不同
+- **教训：** 本次 bug 的 5 层静默链：`getModel → undefined` → `spread undefined → 残缺 model` → `detectCompat → .includes() throw` → `lazy load catch → error event` → `agent-loop error case → 空 message_end`。每一层都有"合理的"错误处理，但组合起来就是完全静默
+
+### 加新 UI 分支前，检查旧 UI 是否需要移除
+- **案例：** 非空目录新增提示框，但旧的 amber 警告行未移除，用户看到两条重复提示
+- **规则：** 加条件分支时，grep 被替代的旧 UI 元素（同一 state 变量驱动的），确认移除或互斥
+
+### 加条件分支后，验证所有状态的初始值
+- **案例：** 非空目录条件分支依赖 `template === ''` 做默认跳过，但初始值是 `'en'`，用户不点跳过直接 Next 就合并了
+- **规则：** 新分支如果改变了某状态的"期望默认值"，必须在分支生效时主动设置（不能依赖用户手动点击）
+
+### 加禁用状态后，排查所有消费同一状态的 UI 入口
+- **案例：** `submitting` 只禁用了 Complete 按钮，StepDots 和 Back 按钮漏了，用户可以在 saving 期间跳走
+- **规则：** 加 disabled 逻辑时，grep 所有能触发 `setStep` / 导航的地方，逐一确认守卫
+
+### setState updater 中不要做副作用
+- **案例：** `setState(prev => { navigator.clipboard.writeText(prev.authToken); return prev })` — clipboard 写入是副作用，放在 state updater 里违反 React 纯函数约定（React 18 严格模式下 updater 可能执行两次）
+- **解决：** 用 ref 或直接从 state 读值后在外层执行副作用
+- **规则：** `setState(fn)` 的 fn 只做纯计算，不触发 I/O / DOM / 网络
+
+### `.catch(() => {})` 静默吞错误
+- **案例：** SetupWizard 初始化阶段 token 生成和 agent 加载的 3 处 `.catch(() => {})` 完全静默，导致后续状态异常时难以排查
+- **规则：** 至少 `console.warn`，或设置 error state 给用户反馈。可以降级处理但不能完全无视
+
+### autocomplete effect 在 programmatic setState 后重触发
+- **案例：** StepKB `selectSuggestion()` 调用 `update('mindRoot', val)` → 触发 autocomplete `useEffect` → `setShowSuggestions(true)` → dropdown 闪回一帧
+- **原因：** React state 变更无论来源（用户输入 / 代码调用）都会触发依赖该 state 的 effect
+- **解决：** 用 `useRef` flag（`justSelectedRef`）标记"本次变更来自选中"，effect 开头检查并跳过
+- **规则：** 当 programmatic setState 会触发不希望的 effect 时，用 ref flag 做一次性跳过，不要用 setTimeout 延迟（竞态不可控）
+
+### disabled prop 对永远不可达的状态值做守卫（dead code）
+- **案例：** StepReview retry button `disabled={st.state === 'installing'}`，但 `failedAgents` 的 filter 条件是 `v.state === 'error'`，`installing` 条目根本不会出现在列表中
+- **规则：** 加 `disabled` 前先确认 guard 的状态值在当前渲染上下文中是否可达。不可达的 guard 是 dead code，增加阅读负担且暗示错误的心智模型
+
+## 云同步 (Sync)
+
+### Turbopack 无法解析动态 import() 路径变量
+- **现象：** `instrumentation.ts` 用 `await import(syncModule)` 加载 sync.js，Next.js 16 (Turbopack) 启动时报 `Cannot find module as expression is too dynamic`
+- **原因：** `/* webpackIgnore: true */` 注解只对 webpack 有效，Turbopack 不识别。Turbopack 在编译阶段尝试静态解析 `import(variable)` 表达式，变量路径无法解析
+- **解决：** 改用 `createRequire()` + `require()` 绕过 bundler 静态分析：`const req = createRequire(syncModule); const { startSyncDaemon } = req(syncModule);`
+- **规则：** 在 Next.js 16+ (Turbopack 默认) 中，动态加载外部 JS 模块（路径在运行时确定）不要用 `import()`，用 `module.createRequire()` 完全绕过 bundler
+- **文件：** `app/instrumentation.ts`
+
+### Turbopack 无法 bundle chokidar 等 native 模块
+- **现象：** `instrumentation.ts` 直接 `import('../bin/lib/sync.js')` 会被 Turbopack 扫描，chokidar（含 native 绑定）解析失败
+- **解决：** (1) `next.config.ts` 添加 `serverExternalPackages: ['chokidar']` (2) 用 `resolve()` 构造绝对路径 + `/* webpackIgnore: true */` 注解绕过 bundler
+- **教训：** Next.js instrumentation.ts 中导入含 native 依赖的模块，必须同时做 serverExternalPackages 注册和 bundler ignore
+
+### git credential approve 后再 chmod
+- **现象：** `chmod 600 ~/.git-credentials` 在 `git credential approve` 之前执行，文件尚不存在，chmod 无效
+- **解决：** 调整顺序：先 `git credential approve`（创建文件），再 `chmod 600`
+- **教训：** 涉及文件权限的操作，确认文件已存在再执行
+
+### git rev-list @{u}..HEAD 在无 upstream 时抛异常
+- **现象：** 首次 `initSync` 后尚未设置 upstream tracking，`autoPull()` 末尾的 push 重试逻辑执行 `git rev-list --count @{u}..HEAD` 抛异常，错误写入 `sync-state.json`，UI 显示红色错误状态
+- **解决：** catch 块改为静默忽略（`// No upstream tracking or push failed`），不写 `lastError`
+- **教训：** Git 命令在仓库初始状态下的行为可能与成熟仓库不同（如无 upstream、无 commit 等），关键路径需处理这些边界
+
+### sync.js 全量 execSync → execFileSync 迁移 + credential 静默吞错
+- **现象（P0）：** `git config credential.helper` 和 `git credential approve` 失败被空 `catch {}` 吞掉，后续 `git ls-remote` 因无凭证失败报 "Remote not reachable"，用户无从排查是 credential 问题
+- **现象（P1 注入）：** `remoteUrl` 和 `branch` 通过模板字符串插入 `execSync`，理论上可被 shell 注入
+- **现象（P1 竞态）：** SIGTERM + SIGINT 同时触发 `gracefulShutdown` → `autoCommitAndPush` 跑两次 → git 并发写冲突
+- **解决：**
+  - credential catch 块记日志 + fallback 到 URL 内嵌 token
+  - `ls-remote` 失败时从 `err.stderr` 提取具体错误信息
+  - sync.js 全部 `execSync` 迁移至 `execFileSync` 参数数组（含 `gitExec` 改为接收数组）
+  - `gracefulShutdown` 加 `shutdownInProgress` guard
+- **教训：** (1) catch 空块是 P0 级反模式，至少 `console.error` (2) 即使命令是硬编码的，统一用 `execFileSync` 消除整个攻击面比逐行审计更可靠
+- **文件：** `bin/lib/sync.js`
+
+### route.ts exec() shell 注入 + context.ts Anthropic API 兼容
+- **现象（P1）：** `app/api/sync/route.ts` 的 `runCli` 用 `exec()` 拼接 shell 字符串，用户输入可注入
+- **现象（P1）：** `truncateToolOutputs` 未做 `trp.output` null guard，output 为 undefined 时 crash
+- **现象（P2）：** `compactMessages` 产生连续 user 消息，Anthropic API 拒绝
+- **现象（P2）：** `hardPrune` 裁剪后首条可能是 assistant，Anthropic 要求 user 开头
+- **解决：**
+  - `runCli` 改为 `execFile` + 参数数组
+  - `trp.output` 加 null/type guard
+  - compact 时检测 recentMessages 首条是否 user，是则合并（支持 string 和 array content）
+  - hardPrune 跳过非 user 后加 fallback 注入 synthetic user 消息
+- **教训：** Anthropic API 严格要求消息以 user 开头且无连续同 role 消息，所有裁剪/合并操作后都需校验
+- **文件：** `app/app/api/sync/route.ts`、`app/lib/agent/context.ts`
+
+## 依赖版本
+
+### @types/node 版本号写了不存在的大版本
+- **现象：** 新电脑首次 `mindos start`，MCP 依赖安装报 `npm error code ETARGET — No matching version found for @types/node@^25.4.0`
+- **原因：** 旧版 `mcp/package.json` 的 `@types/node` 写成了 `^25.4.0`，但 npm 上该包最新大版本对应 Node 22。开发机有缓存 `node_modules` 所以不触发安装，新机器首次 `npm install` 找不到匹配版本
+- **解决：** 改为 `^22`，与实际 Node 版本对齐
+- **规则：** `@types/node` 的大版本号 = Node.js 大版本号（如 Node 22 → `@types/node@^22`）。写 devDependencies 时不要凭感觉写版本号，先 `npm view @types/node versions` 确认存在
+- **文件：** v1 后为 `packages/protocols/mcp-server/package.json`
+
+### @modelcontextprotocol/sdk 版本范围过宽导致 express transport 缺失
+- **现象：** 新环境 / 缓存旧版本时，`npm install` 安装到 <1.25.0 的 SDK 版本，运行时 `import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js"` 报 `MODULE_NOT_FOUND`
+- **原因：** 旧版 `mcp/package.json` 声明 `"@modelcontextprotocol/sdk": "^1.6.1"`，但 `server/express.js` 直到 **1.25.0** 才加入 SDK（1.6.1 ~ 1.24.x 共 19 个大版本都没有该文件）。开发机有 lockfile 锁定 1.27.1 所以不触发
+- **触发条件：** lockfile 丢失 / 新环境首次 install / `--prefer-offline` 命中旧缓存版本
+- **解决：** 版本范围从 `^1.6.1` 改为 `^1.25.0`，确保最低安装到有 express.js 的版本
+- **规则：** 代码 import 了某个子路径（如 `sdk/server/express.js`），`package.json` 的版本范围**下界**必须 ≥ 该子路径首次出现的版本。用 `npm pack @pkg@x.y.z --dry-run | grep filename` 验证
+- **文件：** v1 后为 `packages/protocols/mcp-server/package.json`
+
+### --prefer-offline 首次安装失败无回退
+- **现象：** 新机器 `mindos start` 时 MCP 依赖安装失败，报 `npm error code ETARGET` 或 `No matching version found`
+- **原因：** `mcp-spawn.js`、`cli.js`、`build.js` 三处用 `npm install --prefer-offline` 做首次安装，本地 npm 缓存中无所需版本的 packument 时直接报错退出，无在线回退
+- **解决：** try `--prefer-offline` → catch 后回退到 `npm install`（不带 offline flag）。缓存命中时仍享受离线加速，缓存缺失时自动联网
+- **规则：** `--prefer-offline` 仅作为优化手段，不能出现在唯一安装路径上。必须有在线回退
+- **文件：** `bin/lib/mcp-spawn.js`、`bin/cli.js`、`bin/lib/build.js`
+
+### next@16 内嵌 postcss 缺少嵌套依赖导致 build 失败
+- **现象：** `npm install` 后 `next build` 报 `Module not found: Can't resolve 'source-map-js'`、`'nanoid/non-secure'`、`'picocolors'`
+- **原因：** Next.js 16 内嵌 `postcss@8.4.31`（位于 `next/node_modules/postcss`），它依赖 `nanoid@^3`。但 app 顶层声明了 `nanoid@^5`（大版本不兼容），npm hoisting 把 v5 放在 `app/node_modules/nanoid`，postcss 从自身位置向上查找只能找到 v5——解析失败。`picocolors` 和 `source-map-js` 被 hoisting 到上层后，从 `next/node_modules/postcss/` 的解析路径也找不到
+- **解决：** `app/package.json` 加 `postinstall` 脚本（`scripts/fix-postcss-deps.cjs`），检测 `next/node_modules/postcss/node_modules` 不存在时自动执行 `npm install --no-save --install-strategy=nested` 补装
+- **教训：** 当项目依赖与框架内嵌依赖存在大版本冲突时，npm hoisting 可能导致嵌套包找不到自己的依赖。用 `npm ls <pkg>` 检查是否有 `extraneous` 标记
+- **文件：** `app/package.json`、`scripts/fix-postcss-deps.cjs`
+
+### npm install -g 后 ROOT 常量指向旧包路径
+- **现象：** `mindos update` 执行 `npm install -g @geminilight/mindos@latest` 后，代码中模块加载时计算的 `ROOT`（`constants.js`）仍指向旧安装路径。新包的文件（`package.json`、`skills/`）在新路径下
+- **影响：** 版本检测读旧 `package.json` → 永远显示 "Already on the latest version"；skill check 读旧 `skills/` → 永远无 mismatch
+- **解决：** `getUpdatedRoot()` 通过 `which mindos` + `readlink -f` 解析新安装路径；所有 post-install 操作（版本检测、skill check、buildIfNeeded）统一使用 `updatedRoot` 而非 `ROOT`
+- **规则：** `npm install -g` 后，所有读包内文件的操作必须用动态解析的路径，不能用模块加载时的静态 `ROOT`
+- **文件：** `bin/cli.js`、`bin/lib/skill-check.js`
+
+### GUI 更新在非 daemon 模式下不 restart
+- **现象：** 用户通过 GUI Settings > Update 点击更新，前端一直卡在 "正在更新..."，4 分钟后超时
+- **原因：** GUI 调用 `POST /api/update` → spawn `cli.js update`。`cli.js update` 只在检测到 systemd/launchd daemon 时才自动 restart。非 daemon 模式（用户手动 `mindos start`）走 else 分支，只打印 "Run `mindos start`" 然后退出。旧 Next.js 进程继续运行在旧代码上，前端 poll 的版本号永远不变
+- **解决：** 非 daemon 分支新增端口检测（`isPortInUse`）。如果有实例在跑：`stopMindos()` → 等端口释放 → `buildIfNeeded(updatedRoot)` → spawn 新包的 `cli.js start` → `waitForHttp` 等服务就绪。无实例则保持原行为（只 build + 提示手动启动）
+- **教训：** CLI 命令被 GUI spawn 时，不能假设用户会手动操作。所有被 API route spawn 的 CLI 命令必须自包含（检测 → 清理 → 执行 → 验证）
+- **文件：** `bin/cli.js`、`app/app/api/update/route.ts`
+
+## 架构 & 设计模式
+
+### inline style 绕过设计系统
+- **现象：** `style={{ color: 'var(--foreground)' }}` 在组件中大量使用，全局调色值时不受 Tailwind 影响
+- **解决：** 批量替换为 Tailwind class（`text-foreground`、`bg-card`、`border-border` 等）。72→2 处
+- **规则：** 优先用 Tailwind 语义 class > `text-[var(--xxx)]` arbitrary value > inline style。inline style 仅用于动态计算值（如条件渲染不同 background）或 CSS var() 带 fallback（Tailwind 不支持）
+- **对照表：** `color: var(--foreground)` → `text-foreground` | `background: var(--card)` → `bg-card` | `borderColor: var(--border)` → `border-border` | `color: var(--amber)` → `text-[var(--amber)]`
+
+### auto-rotating 内容不加 aria-live
+- **现象：** 给自动轮播内容加 `aria-live="polite"` 导致屏幕阅读器每 3.5s 打断用户
+- **规则：** WCAG 2.2.2 要求 auto-updating 内容可暂停。auto-rotating carousel 不应用 `aria-live`，除非提供暂停机制
+- **文件：** `HomeContent.tsx` 建议轮播
+
+### CSS var() + fallback 无法用 Tailwind arbitrary value
+- **现象：** `bg-[var(--amber-subtle,rgba(200,135,30,0.08))]` 在 Tailwind 中解析出错
+- **解决：** 在 globals.css 中定义 `--amber-subtle`（:root + .dark），然后用 `bg-[var(--amber-subtle)]`
+- **规则：** 需要 CSS var + fallback 时，先在 globals.css 定义变量，再用 Tailwind arbitrary value 引用
+
+### Context Provider 嵌套层数控制
+- **现状：** 4 层（LocaleProvider → WalkthroughProvider → McpProvider → SidebarLayout）
+- **规则：** ≤6 层可接受，超过时考虑 Zustand/Jotai 替代。当前用 `useMemo` 包裹 context value 缓解 re-render
+- **监控：** 用 React DevTools Profiler 检查 Context 引起的不必要 re-render
+
+### 大组件拆分阈值
+- **规则：** 组件超 300 行 → 考虑拆子组件。超 500 行 → 必须拆。自定义 hook 超 100 行 → 考虑拆
+- **案例：** SidebarLayout 479→314（拆出 useLeftPanel + useAskPanel）| McpSkillsSection 595→359（拆出 McpSkillRow + McpSkillCreateForm）
+- **注意：** 拆分后主组件仍保留编排职责（orchestrator pattern），子组件通过 callback props 通信
+
+## Electron / 桌面端
+
+### MCP 依赖缺失 → ERR_MODULE_NOT_FOUND 崩溃循环（已根治）
+- **现象：** `[MindOS:mcp]` 报 `ERR_MODULE_NOT_FOUND: Cannot find package '@modelcontextprotocol/sdk'`
+- **原因：** npm 包排除了 `mcp/node_modules`（含跨平台原生二进制），需要运行时动态安装。多个启动路径（CLI / Desktop / API restart）的安装逻辑不一致，漏装时即崩溃
+- **v0.6.4 方案：** 三层防御（postinstall + 运行时安装）——治标不治本，仍依赖网络 + npm 可用
+- **v0.6.6 根治：** esbuild 预编译 MCP → 单文件 `mcp/dist/index.cjs`（1.1MB），直接 `node dist/index.cjs` 运行。彻底消除 `node_modules`、`tsx`、跨平台原生依赖、运行时安装逻辑
+- **删除的文件：** `scripts/postinstall.js`、`desktop/src/ensure-mcp-native-deps.ts`（及其测试）
+- **规则：** MCP 服务器应始终以预编译 bundle 形态发布。v1 后修改 `packages/protocols/mcp-server/src/`，用 `pnpm --filter @mindos/mcp-server build` 重新打包。`npm pack` / `npm publish` 会通过 `prepack` 钩子自动触发构建
+
+### SameSite=None 必须搭配 Secure
+- **现象：** 跨域 auth cookie 被浏览器静默丢弃
+- **原因：** Chrome 80+ 规范要求 `SameSite=None` 必须同时有 `Secure` 标志，但 HTTP 环境不能设 `Secure`
+- **解决：** 跨域 + HTTPS 才用 `SameSite=None; Secure`，否则用 `SameSite=Lax`
+- **规则：** 任何涉及跨域 cookie 的改动，必须测试 HTTP 和 HTTPS 两种场景
+
+### CORS Origin Echo 必须配 Allowlist
+- **现象：** 直接 echo 请求的 Origin header + `Allow-Credentials: true` = 任意站点可发凭据请求
+- **解决：** 在 `/api/auth` 中维护 `ALLOWED_ORIGIN_PATTERNS` 正则数组，只有匹配的 Origin 才返回 CORS headers
+- **规则：** 绝不 echo `*` + credentials；绝不无条件 echo origin + credentials
+
+### Electron before-quit 不 await async handler
+- **现象：** `app.on('before-quit', async () => { await cleanup() })` 中 cleanup 未完成进程就退出了
+- **解决：** 用 `e.preventDefault()` 阻止退出，完成清理后手动 `app.exit(0)`
+- **规则：** Electron 的 app 事件不 await promise，需要手动控制退出时序
+
+### Electron 打包后 npx/npm 不在 PATH
+- **现象：** 打包后 `exec('npm root -g')` / `exec('npm install ...')` 报 `/bin/sh: npm: command not found`
+- **原因：** Electron 打包后 `process.env.PATH` 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，不包含 `/usr/local/bin`、`/opt/homebrew/bin`、nvm/fnm 路径
+- **解决：** (1) `node-detect.ts` 中 `enrichedPath()` 函数注入 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.nvm/current/bin` 等常见路径 (2) 所有 `exec()` / `spawn()` 调用传入 `env: { PATH: enrichedPath(nodeBinDir) }` (3) `getMindosInstallPath()` 先用已知 node 路径旁边的 npm 执行 `npm root -g`，再扫描常见全局路径做兜底
+- **规则：** Electron 打包应用中执行任何 shell 命令，必须手动构造 PATH，不能依赖 `process.env.PATH`
+- **文件：** `desktop/src/node-detect.ts`、`desktop/src/connect-window.ts`
+
+### ACP 检测与启动不能各自重新猜 PATH（2026-04-11）
+- **现象：** macOS 桌面端里 ACP 面板显示 Gemini / CodeBuddy / Claude 已安装，但点击任意 Agent 都报 `ACP Agent Error: initialize failed: write EPIPE`
+- **原因：** 检测阶段会用目录兜底或 shell PATH 解析判断“已安装”，但启动阶段 `spawn()` 仍然直接执行裸命令（如 `gemini` / `codebuddy` / `npx`）。GUI 进程拿到的 PATH 往往比终端短，导致子进程启动即退出，随后 `initialize` 写 stdin 时触发 `EPIPE`
+- **解决：** 检测与启动必须复用同一套“运行时解析到的可执行路径”。优先使用用户 override 的绝对路径；否则先在当前环境 `which/where`，再回退到 login shell `command -v` 解析绝对路径；只有“检测到存在”且“启动命令可解析”时才视为 installed。目录存在但没有可执行命令，只能算 detected，不能算 runnable
+- **规则：** 对桌面端/GUI 进程，**installed = runnable**。不要让“目录兜底检测成功”与“spawn 裸命令启动成功”使用两套不同标准
+- **文件：** v1 后为 `packages/protocols/acp/src/detect-local.ts`、`packages/protocols/acp/src/subprocess.ts`
+
+### Desktop 本地模式：`mindos.pid` 存活时绕过 Bundled/User 择优
+- **现象：** 配置了 `mindosRuntimePolicy` 或内置 `mindos-runtime`，仍连上「旧」Web
+- **原因：** `checkCliConflict()` 发现 `~/.mindos/mindos.pid` 对应进程仍存活时，`startLocalMode` **直接返回已有 URL**，不创建 `ProcessManager`，也不应用 `resolveLocalMindOsProjectRoot` 的结果
+- **规则：** 排障时先看是否已有 `mindos start`/CLI 占用端口；与 spec `spec-desktop-bundled-mindos.md`「CLI 短路」一致
+
+### Electron modal + hidden titlebar = macOS 死锁
+- **现象：** `modal: true` + `parent: mainWindow`（`titleBarStyle: 'hidden'`）→ 主窗口交通灯不可点击，模态窗口关不掉
+- **原因：** macOS 上 `titleBarStyle: 'hidden'` 的窗口交通灯在 webContents 区域内，被 modal 子窗口遮挡
+- **解决：** 配置/连接窗口改为独立窗口（去掉 `parent`/`modal`），使用 `titleBarStyle: 'default'` 保证交通灯可用
+- **规则：** Electron macOS 上永远不要把 modal 窗口挂载到 `titleBarStyle: 'hidden'` 的 parent 上
+
+### Electron mainWindow 白框闪烁
+- **现象：** 模式选择对话框背后出现一个大白框（空白主窗口）
+- **原因：** `createWindow()` 在 URL 获取前执行，`ready-to-show` 事件让空窗口提前显示
+- **解决：** 先完成模式选择 + URL 获取，最后才 `createWindow()` + `loadURL()` + `show()`
+- **规则：** 主窗口延迟到有内容可显示时才创建
+
+### 端口检测用 bind 而非 connect
+- **现象：** TCP connect 方式检测端口，防火墙 drop 包导致 ETIMEDOUT 误判为"端口被占用"
+- **解决：** 改用 `net.createServer().listen(port)` 尝试绑定，EADDRINUSE = 被占，成功绑定后 close = 空闲
+- **规则：** 判断端口是否可用只用 bind 模式
+
+## Ask AI / @ Mention
+
+### @ mention 零结果时 submit 被锁死
+- **现象：** 输入 `@nonexistent` 后无匹配，但发送按钮变灰不可用；用户只能手动删除 `@` 才能继续
+- **原因：** `useMention.updateMentionFromInput` 设置了 `mentionQuery`（非 null）但 `mentionResults` 为空 → submit guard `mention.mentionQuery !== null` 锁死
+- **解决：** 当过滤结果为空时立即 `resetMention()`，不锁 submit
+- **规则：** 下拉式 mention/autocomplete 在零匹配时必须回归普通输入模式
+
+### @ mention 文件列表不刷新（新增/删除文件搜不到）
+- **现象：** 创建新文件后 `@` 搜索找不到新文件
+- **原因：** `useMention` 仅 mount 时 `fetch('/api/files')` 一次，后续文件变更不触发 refetch
+- **解决：** 监听 `window.dispatchEvent(new Event('mindos:files-changed'))`，自动 refetch
+- **规则：** 涉及"列表跟踪实体变更"的 hook，必须有重刷机制（事件/轮询/invalidation）
+
+### navigateMention 空结果产生负索引
+- **现象：** 零匹配状态按 ↓ 键后 `mentionIndex` 变为 -1（`length - 1 = -1`）
+- **解决：** `navigateMention` 在 `mentionResults.length === 0` 时直接 return
+
+### /api/files 异常响应导致 mention crash
+- **现象：** API 返回非数组（如 `{ error: ... }`）时 `allFiles.filter` 抛 TypeError
+- **解决：** `safeFetchFiles` 检查 `r.ok`、`Array.isArray(data)` 双重防御
+
+### `mindos mcp` stdio 模式因端口冲突 EADDRINUSE 崩溃
+- **现象：** `mindos start` 运行中（占用 3456 + 8781），MCP 客户端（Claude Code 等）调用 `mindos mcp` 报 EADDRINUSE
+- **原因：** `bin/cli.js` 的 `mcp` 命令处理器未设置 `MCP_TRANSPORT`，MCP server 默认 `"http"` → 尝试绑定已被占用的 8781 端口
+- **解决：** `mindos mcp` 默认 `MCP_TRANSPORT=stdio`（HTTP 模式由 `mindos start` → `spawnMcp()` 处理）；同时所有 HTTP 场景显式设置 `MCP_TRANSPORT=http` 消除隐式依赖
+- **规则：** 进程间 transport 类型必须显式声明，不能依赖接收端默认值——尤其当同一入口可能被不同上下文调用时
+
+### `/api/mcp/restart` 与 Desktop ProcessManager 竞争导致 EADDRINUSE
+- **现象：** 用户在 Desktop 中点击"重启 MCP"，MCP 进程被 kill 后连续崩溃 3 次
+- **原因：** `/api/mcp/restart` 路由杀死 MCP 后自行 spawn 新 MCP，但 Desktop 的 ProcessManager crash handler 也在 MCP exit 事件后重新 spawn，两个 MCP 进程争抢同一端口
+- **解决：** Desktop 的 spawnWeb 设置 `MINDOS_MANAGED=1` 环境变量；API 路由检测到此标志时只 kill 不 spawn，让 ProcessManager crash handler 独自负责重启
+- **规则：** 当子进程由父进程管理器托管时，其他组件不应绕过管理器自行重启子进程——通过环境变量/标志声明托管关系
+
+### `monitoring/route.ts` MCP 端口默认值 3457（应为 8781）
+- **现象：** 监控 API 返回错误的 MCP 端口号
+- **原因：** 读取 `MCP_PORT` 环境变量（MCP 进程内部使用），而 Web 进程中该变量未设置，fallback 硬编码为 3457（错误值）
+- **解决：** 优先读 `MINDOS_MCP_PORT`，再 fallback `MCP_PORT`，最终 fallback `8781`
+- **规则：** Web 进程内端口配置统一使用 `MINDOS_*` 前缀环境变量；`MCP_PORT` 仅在 MCP 进程内部使用
+
+### `bin/lib/stop.js` pkill 模式未覆盖 esbuild 产物路径
+- **现象：** 当 lsof/ss 不可用时，`mindos stop` 无法清理以 `mcp/dist/index.cjs` 启动的 MCP 进程
+- **原因：** pkill 模式只匹配旧路径 `mcp/src/index`，不匹配新的 `mcp/dist/index`
+- **解决：** 将 pkill 模式改为 `mcp/(src/index|dist/index)`，覆盖新旧两种路径
+- **规则：** 进程清理逻辑必须跟随进程启动方式同步更新
+
+### Setup Wizard MCP 端口误报"已被占用"（自我占用）
+- **现象：** Desktop/CLI 首次安装时，Setup Wizard Step 3 显示 "Port 8781 is already in use"，但占用者是自己的 MCP
+- **原因双重：**
+  1. `check-port` API 的 `isSelfPort()` 依赖 HTTP 探测 `/api/health`，但 MCP 在旧版本可能不响应此端点
+  2. 首次安装时 `loadConfig()` 无 config.json → `MINDOS_MCP_PORT` 环境变量未设置 → Web 进程不知道 MCP 使用的是哪个端口
+- **解决双重：**
+  1. `check-port` 新增 `MINDOS_MCP_PORT` env 快速路径，确定性判断自身端口（不依赖 HTTP 探测）
+  2. `bin/cli.js` 的 `start`/`dev` 命令在 `loadConfig()` 后补设默认值，确保 env 始终传播到子进程
+- **规则：** 进程间端口信息必须通过环境变量确定性传递，不能依赖"探测自己的服务"这种非确定性方式
+
+## 构建优化 / Bundle Size
+
+### Desktop 内置 runtime 过期导致 mcp/node_modules 73MB 冗余
+- **现象：** `desktop/resources/mindos-runtime/mcp/node_modules/` 占 73MB，但 v0.6.6 已改为 esbuild 预编译（`mcp/dist/index.cjs` 仅 1.2MB）
+- **原因：** `prepare-mindos-runtime.mjs` 脚本逻辑正确（先 copyTree → 再 rmSync node_modules → 复制 dist/index.cjs），但**脚本未被重新运行**，runtime 目录仍是旧版产物
+- **解决：** 每次发版 Desktop 前必须重跑 `pnpm --filter @mindos/desktop run prepare-mindos-runtime`
+- **验证：** 重跑后 runtime 从 198MB 降至 134MB（-64MB），mcp/node_modules 不存在，mcp/dist/index.cjs 1.2MB
+- **规则：** Desktop 发版 checklist 必须包含 prepare-mindos-runtime 步骤，不能复用旧产物
+
+### Turbopack standalone 不尊重 serverExternalPackages（Next.js 16.1.x 已知问题）
+- **现象：** `serverExternalPackages` 新增的包仍被复制到 `.next/standalone/node_modules/`，standalone 体积不变
+- **原因：** Turbopack 16.1.x 中 `serverExternalPackages` 仅控制"是否内联打包进 JS bundle"，但**不影响 standalone trace**——被标记的包仍会被复制到 standalone/node_modules。[GitHub discussion #88842](https://github.com/vercel/next.js/discussions/88842)
+- **验证（已确认）：**
+  - 在 `serverExternalPackages` 中加入 `koffi`/`sharp`/`typescript` 等 6 个包后 Turbopack build，standalone 体积**不变**（200MB），koffi 87MB、@img 33MB、typescript 20MB 仍在
+  - 用 `next build --webpack` 构建，koffi 被正确排除（standalone 降至 110MB），但 @img/typescript 仍被保留（Next.js runtime 依赖）
+- **已解决：** 生产构建已切换到 `next build --webpack`，v1 dev 入口也固定为 `next dev --webpack`，避免 pnpm workspace 下 Turbopack root/symlink 解析问题。standalone 从 200MB 降至 115MB（-85MB），koffi 87MB 被正确排除，verify-standalone 通过
+- **注意：** `optimizePackageImports: ['lucide-react']` 也已验证为冗余——Turbopack 16.1.6 已内置 lucide-react 优化，有无此配置构建产物**完全一致**（static 4.3M, server 22M）
+- **教训：** 配置改动必须做 before/after 对比验证。不能信赖文档描述或 agent 推断，要用 `du -sh` 实测
+
+### PDF 上传走 file.text() 导致 AI Organize 收到二进制垃圾
+- **现象：** 上传 PDF 文件后选择 AI Organize，AI 始终返回"没有更改"
+- **原因：** `useFileImport` 统一用 `file.text()` 读取所有文件类型。PDF 是二进制格式，`.text()` 返回乱码，AI 无法理解内容
+- **解决：** PDF 文件改用 `/api/extract-pdf` 提取纯文本（该 API 早已存在，但未集成到上传流程）
+- **教训：** 新功能复用现有代码路径时，必须检查路径是否覆盖所有文件类型
+
+### 大文件上传导致 "Failed to fetch"（请求体过大）
+- **现象：** 上传文件后选择 AI Organize，报 "整理失败 - Failed to fetch"
+- **原因：** 客户端将完整文件内容（最大 5MB）嵌入 JSON 请求体发送至 `/api/ask`。Next.js/HTTP 层有隐式请求体大小限制，超出时直接断开连接，浏览器报 `TypeError: Failed to fetch`
+- **根因链：** 服务端 `truncate()` 限制每文件 20k 字符，但截断发生在请求体解析之后——如果请求体本身超限，route handler 根本不会执行
+- **解决：** 在客户端发送前先截断文件内容到 20k 字符（`CLIENT_TRUNCATE_CHARS`），与服务端限制对齐。同时修复了 `AskContent.tsx`（常规对话）的同一模式
+- **教训：** 服务端截断不能替代客户端截断。如果请求体过大导致连接被拒，服务端代码根本不会执行
+
+### btoa() + reduce() 对大文件 base64 编码效率极差
+- **现象：** 大 PDF 文件 base64 编码极慢或导致浏览器卡死
+- **原因：** `new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), '')` 每次迭代都创建新字符串，对 5MB+ 文件产生海量中间对象
+- **解决：** 改用 `FileReader.readAsDataURL()` 让浏览器原生处理 base64 编码
+- **注意：** `useFileUpload.ts`（常规对话）使用分块 `String.fromCharCode(...chunk)` 方式，性能可接受无需修改
+
+### AI Organize 工具事件被服务端 SSE 序列化静默丢失
+- **现象：** AI 实际修改了文件（通知显示"4 条内容变更"），但 Organize 弹窗显示"没有做任何更改"
+- **原因（三层）：**
+  1. 服务端 `send()` 函数将 `tool_start` 事件的完整 `args`（含 20KB+ 文件内容）通过 `JSON.stringify` 序列化。如果序列化失败（非序列化值、极端编码），`catch {}` 静默吞掉错误，`tool_start` 事件不发送
+  2. 没有 `tool_start` 事件，客户端无法匹配后续的 `tool_end` 事件，`changes[]` 保持空数组
+  3. "no changes" 视图隐藏了 AI 的文字输出（summary），用户完全看不到 AI 做了什么
+- **解决：**
+  1. 新增 `sanitizeToolArgs()` — 发送 SSE 前将大字段（content/text）替换为 `[N chars]` 占位符，客户端只需 path 信息
+  2. `send()` 的 catch 块增加 TypeError 日志，不再完全静默
+  3. `FILE_WRITE_TOOLS` 扩展：增加 `delete_file`/`rename_file`/`move_file`/`append_csv` 四个遗漏的写操作工具
+  4. "no changes" 视图现在显示 AI 的文字总结 + toolCallCount 诊断信息
+  5. 组织中进度区域改为实时活动流：展示 AI 文字流、当前工具调用、已完成文件列表
+- **教训：** `catch {}` 是 bug 温床。SSE 事件只传递进度信息，不需要传完整文件内容。写操作工具集必须与服务端 `WRITE_TOOLS` 保持同步
+
+### AI Organize "no changes" 与 "N 个操作" 文案自相矛盾
+- **现象：** 弹窗同时显示"没有做任何更改"和"AI 执行了 7 个操作"，并附带 AI 的工作总结。三条信息互相矛盾
+- **原因：** `changes[]`（跟踪到的文件写入）和 `toolCallCount`（所有工具调用，含读操作）是两个独立指标。当 AI 执行了大量读操作但写操作未被 SSE 捕获时，两个指标不一致。另外 AI 的原始 Markdown 总结（##、表格、emoji）直接以纯文本 dump 给用户
+- **解决：**
+  1. 拆分为两个 UX 状态：有 summary 时以 AI 总结为主体（不显示"没有更改"），无 summary 时才显示"已是最新状态"
+  2. `organizeToolCallsInfo` 改为中性文案："共 N 步分析 · 请查看知识库确认"（不暗示写操作）
+  3. 新增 `cleanSummaryForDisplay()` 清洗 AI Markdown：去掉 ## heading、折叠多余空行、截断 500 字符
+  4. "has changes" 分支的 summary 也使用同一清洗函数
+- **教训：** 给用户看的文案不能基于内部技术指标的简单映射。`toolCallCount` 包含读写所有操作，不能用"执行了 N 个操作"暗示"改了 N 个文件"
+
+### Desktop CI: macOS codesign 卡死（手动 keychain 权限问题）
+- **现象：** CI macOS runner 上 `Package (mac)` 步骤卡在 `codesign` 调用超过 55 分钟，永不返回
+- **原因：** 手动创建的临时 keychain（`Import Apple certificate` step）跨 step 传递到 `electron-builder` 时，`codesign` 无法静默访问私钥，弹出隐藏的密码授权对话框。headless CI 无人操作，进程永久挂起
+- **根因链：** `security create-keychain` → `security import` → `security set-key-partition-list`（权限不完整）→ 新 step 中 `electron-builder` 调用 `codesign` → 系统弹隐藏授权框 → 卡死
+- **解决：** 删掉整个 `Import Apple certificate` 步骤，改用 `CSC_LINK`（base64 证书）+ `CSC_KEY_PASSWORD` 环境变量传给 electron-builder。electron-builder 在同一进程内自动创建临时 keychain、导入证书、正确设置权限、签名、清理，不会弹框
+- **规则：** macOS CI 签名永远不要手动管理 keychain，让 electron-builder 通过 `CSC_LINK` 自行管理。手动 keychain 脚本的权限配置极易出错且难以调试
+
+### Desktop CI: macOS keychain 创建失败 + Windows EPERM glob error（历史，已被上条取代）
+- **现象：**
+  - macOS: `security: SecKeychainCreate /tmp/keychain.XXXXXX: A keychain with the same name already exists.`
+  - Windows: `glob error [Error: EPERM: operation not permitted, scandir 'C:\Users\runneradmin\Application Data']`
+- **原因：**
+  - macOS: `mktemp` 创建了临时文件，`security create-keychain` 在同一路径失败（文件已存在）。CI runner 镜像更新后行为变化
+  - Windows: `C:\Users\runneradmin\Application Data` 是 NTFS 旧版 junction point（指向 AppData\Roaming），权限受限。webpack `next build` 期间 `@vercel/nft` 文件追踪扫描到此路径触发 EPERM
+- **解决：**
+  - macOS: ~~改用确定性路径~~ → 已彻底删掉手动 keychain 脚本，改用 `CSC_LINK`
+  - Windows: 在 build 前增加 `Fix Windows NTFS junctions` step + `outputFileTracingExcludes` 排除 AppData
+- **教训：** CI workflow 必须防御 runner 镜像更新带来的环境差异
+
+### Desktop CI: electron-builder 公证流程 5 个陷阱（已全部修复）
+- **现象：** macOS CI 公证步骤各种失败模式：Package 阶段提前公证失败、公证成功误判、ZIP 公证报错、超时、参数展开错误
+- **5 个问题及修复：**
+  1. **Package 步骤缺少 `ELECTRON_BUILDER_SKIP_NOTARIZE=true`** — electron-builder 在 `notarize: false` 配置外仍可能自动公证。加上环境变量双重保险
+  2. **`notarize_file` 管道退出码 bug** — `cmd | tee log` 的 `if` 判断的是 `tee` 的退出码（永远 0），不是 `notarytool` 的。改为直接 `tee` + `grep "status: Accepted"` 判断
+  3. **ZIP 不能公证** — Apple notarytool 只接受 DMG/PKG/APP，ZIP 会报 `Asset type not supported`。公证循环改为只遍历 `*.dmg`
+  4. **`--timeout 30m` 不够** — 新注册 Apple Developer 账号首次公证可能等数小时。改为 `--timeout 2h`
+  5. **`AUTH_ARGS` 字符串展开有 word-splitting 风险** — 改为 bash 数组 `AUTH_ARGS=(...)` + `"${AUTH_ARGS[@]}"`
+- **规则：** shell 管道中判断退出码要用 `$PIPESTATUS` 或拆开写。Apple 公证超时要留足余量。环境变量和配置文件双重防御
+
+### Desktop CI: Windows webpack EPERM（系统保护目录不可删除）
+- **现象：** Windows CI 上 `next build --webpack` 报 `EPERM: operation not permitted, scandir 'C:\Users\runneradmin\AppData\Local\Microsoft\Windows\INetCache\Content.IE5'`
+- **原因：** webpack compile 阶段的 glob 扫描 `USERPROFILE` 下的所有目录，碰到 OS 保护目录（INetCache、WindowsApps、History 等）返回 EPERM。`Remove-Item -Force` 对这些目录无效（OS 保护）。`outputFileTracingExcludes` 也无效（只影响 trace 阶段不影响 compile 阶段）
+- **解决：** 将 `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA` 全部重定向到 `$GITHUB_WORKSPACE/.home`（干净目录）。webpack glob 永远碰不到真实的系统保护路径
+- **规则：** Windows CI 上 webpack 问题不要逐个删系统目录（打地鼠），直接重定向 HOME 一劳永逸
+
+### Desktop CI: CDN 上传失败阻塞 GitHub Release
+- **现象：** finalize job 中 Cloudflare R2 上传报 `NoSuchBucket`，Alibaba OSS 安装 ossutil 报 `Permission denied`，导致整个 finalize 失败，GitHub Release 无法发布
+- **原因（双重）：**
+  1. `if: env.X != ''` 在 step 级别的 `if:` 中引用的是 step 的 env block（还没求值），无法正确跳过
+  2. `if: secrets.X != ''` 不合法——GitHub Actions 不允许在 `if:` 条件中直接引用 `secrets` context
+- **解决：** 改为 shell 内检查 `if [ -z "$VAR" ]; then exit 0; fi` + `continue-on-error: true`。CDN 上传失败不阻塞 release
+- **规则：** GitHub Actions 中跳过可选步骤，不要用 `if: env.X` 或 `if: secrets.X`，用 shell 内判空 + `continue-on-error`
+
+### Ask AI 自动重连：localStorage 同步时机
+- **现象：** 首次打开 App 时 AskContent 从 localStorage 读取 reconnectRetries，但用户尚未打开过 Settings 页 → localStorage 中无值 → fallback 为默认 3
+- **规则：** localStorage 作为 "热缓存" 供 AskContent 即时读取，Settings 首次加载时同步写入。首次使用默认值 3 是安全的 fallback
+
+### Desktop 子进程孤儿管理：stdin pipe 模式（VS Code 标准做法）
+- **现象：** Electron 崩溃 / SIGKILL 时子进程（Next.js、MCP）成为孤儿，PID 文件方案存在 PID 复用风险且依赖下次启动时清理
+- **解决：** spawn 子进程时 `stdio[0]` 从 `'ignore'` 改为 `'pipe'`。父进程死亡 → OS 关闭管道写端 → 子进程 stdin 收到 EOF → 自动退出
+  - **MCP server**：HTTP 模式下内置 stdin 监听（`!process.stdin.isTTY` 判断），先 `httpServer.close()` 再延迟 1s 退出
+  - **Web server**：通过 `node --require ~/.mindos/stdin-watchdog.cjs` 注入，延迟 500ms 退出
+  - **PID 文件**保留为二级安全网
+- **注意事项：**
+  - 父进程侧需 `proc.stdin?.on('error', () => {})` 防止子进程退出后 EPIPE 崩溃
+  - MCP stdio 传输模式 stdin 已被 MCP 协议使用，不能加 watchdog（通过 `MCP_TRANSPORT === 'http'` 条件隔离）
+  - CLI 启动的 MCP 用 `stdio: 'inherit'`，`isTTY === true`，不受影响
+- **规则：** 管理子进程生命周期优先用 stdin pipe 而非 PID 文件——零轮询、零文件 IO、管道断开即感知
+
+### Desktop 本地模式：bundled runtime 不完整时显示 "Install CLI"
+- **现象：** 打包后的 Desktop 点击"本地模式"，如果 `resources/mindos-runtime/` 存在但未构建（缺 `app/.next`），会 fallthrough 到 npm 全局检查 → 返回 `not-installed` → 显示"安装 MindOS CLI"按钮，用户困惑
+- **根因：** `checkMindosStatus` handler 在 bundled 检测失败后没有区分 packaged/dev 模式，直接 fallthrough 到 npm 检查路径。另外 `existsSync` 在 `connect-window.ts` 中未被 import（latent bug）
+- **解决：** 新增 `bundled-incomplete` 状态；packaged 模式下 bundled runtime 是唯一路径，不再 fallthrough；区分"有源码可构建"（`installed-not-built`）和"结构损坏需重装"（`bundled-incomplete`）
+- **规则：** packaged 模式的运行时检测不应 fallthrough 到 npm 全局安装路径——两者是完全不同的分发模式
+
+### 🔴 CI: 私有文件泄露到公开仓库（安全事故）
+- **严重等级：** 🔴 Critical — 私有内容泄露到公开仓库
+- **现象：** GeminiLight/MindOS (public repo) 包含大量不应公开的文件：`marketing/`、`.claude/`、`.claude-internal/`、`BUGS.md`、`TODO.md`、`TASKS.md`、`experience.md`、`knowledge.md`、`note.md`、`user-feedback.md`、`HUMAN-INSIGHTS.md`、`SKILL_BAD_CASES.md`、`my-skills/`、`startup/` 等私有内容
+- **根因：** sync workflow 用 rsync 白名单同步指定目录，但只能防止「新增同步」，无法清理「白名单建立之前已被推到 public repo 的文件」。rsync `--delete` 只在被 rsync 的目录内删除多余文件，不会碰 rsync 范围之外的已有文件。同时 `sync-to-mindos.yml`、`ci.yml` 等 private-only workflow 也因同样原因残留在 public repo
+- **解决：**
+  1. **Clean slate 策略**：clone public repo 后、rsync 之前，`find /tmp/mindos -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +` 清空所有内容（保留 `.git`），确保只有显式 rsync/cp 的内容存在
+  2. 为 `landing/` subtree split 和 gh-pages deploy 添加 `[ -d landing ]` 前置检查
+  3. 显式 `rm -f` 删除 excluded workflow 文件
+- **规则：**
+  - **private → public 同步必须用 clean slate（白名单模式），禁止 blacklist（排除模式）**。排除列表只防增不防存，一旦遗漏就是安全事故
+  - 每次修改 sync workflow 时，必须检查：「如果 public repo 已有不该有的文件，这次 sync 是否会删除它们？」
+  - 定期审计 public repo 内容：`gh api repos/GeminiLight/MindOS/contents/ --jq '.[].name'`
+
+### Desktop CI: DMG 损坏 —「此电脑不能读取你连接的磁盘」
+- **严重等级：** 🔴 Critical — 用户无法安装 Desktop
+- **现象：** 用户从 GitHub Release 下载 DMG 后，macOS 弹出「此电脑不能读取你连接的磁盘」，DMG 无法挂载
+- **根因（双重）：**
+  1. **electron-builder.yml 显式写了 `arch: [arm64, x64]`**：导致 CI 的 `--arm64`/`--x64` flag 失效，每个 job 构建两个架构的 DMG。arm64 和 x64 job 并发上传同名文件到同一 Release，后者覆盖前者
+  2. **ARM64 runner 上 `hdiutil create -fs APFS` 间歇性失败**：`macos-latest` 是 ARM64 runner，HFS+ 不可用，只能用 APFS。`hdiutil create -format UDRW -fs APFS` 偶发 exit code 1，electron-builder 重试 5 次后 swallow 错误，仍上传损坏 DMG
+  3. **附带：Release 上是未公证 DMG**：`--publish always` 在 Package 步骤上传 DMG，Notarize/Staple 修改本地文件但不重新上传
+- **解决：**
+  1. **移除 electron-builder.yml 中 mac/win target 的 `arch` 数组**：让 CI workflow 的 `--arm64`/`--x64` flag 单独控制架构，每个 job 只构建一个架构
+  2. **Staple 后重新上传公证 DMG**：新增 `Re-upload notarized DMGs to release` 步骤，用 `gh release delete-asset` + `gh release upload` 替换 Release 上的 DMG 为公证版本
+- **规则：**
+  - **electron-builder 多架构构建必须在 CI matrix 层控制（`--arch` flag），禁止在 electron-builder.yml 的 `target.arch` 中列出多个架构**。配置文件中的 `arch` 数组会覆盖 CLI flag，导致每个 job 构建所有架构
+  - **macOS `--publish always` 上传的是公证前版本**。如果使用独立公证流程（而非 electron-builder 内置公证），必须在公证+装订后重新上传
+  - `hdiutil create -fs APFS` 在 ARM64 runner 上不稳定，electron-builder 会 swallow 错误继续上传损坏文件。通过每 job 只构建一个架构来避免「损坏文件覆盖正常文件」的竞态
+
+---
+
+## UI / 前端交互
+
+### TOC 展开时内容和目录之间出现大片空白（2026-04-05）
+
+- **症状：** 宽屏（≥1280px）下查看有 TOC 的 Markdown 文件，内容区和右侧 TOC 之间出现 200-300px 空白，内容明显偏左
+- **根因：** `.content-width`（`max-width: 780px` + `margin: auto` 居中）上叠加了 `.toc-aware`（`margin-right: 220px`）。`margin-right` 被固定为 220px 后，`margin-left: auto` 吃掉所有剩余空间，内容被推到最左边，中间形成大空白
+- **本质：** 在 `margin: auto` 居中的元素上直接加 `margin-right` 固定值会破坏居中——`auto` 只剩一侧生效
+- **解决：** 将 TOC 偏移从内容元素的 `margin-right` 移到 `#main-content` 的 `padding-right`（通过 CSS 变量 `--toc-extra-right`）。`padding` 缩窄容器可用宽度后，内层 `.content-width` 的 `margin: auto` 仍在缩窄后的空间里正确居中
+- **文件：** `globals.css`（CSS 变量定义）、`SidebarLayout.tsx`（inline style 加入 `--toc-extra-right`）、`ViewPageClient.tsx`（移除 `toc-aware` class）
+- **规则：** 需要给 `margin: auto` 居中的元素避让 fixed 面板时，偏移加在**父容器的 padding** 上，不要加在元素自身的 margin 上
+
+### 按钮/链接：可视点击区域 ≠ 实际点击目标
+
+- **现象：** 用户看到一个有背景色、圆角、padding 的按钮（视觉上是一个清晰的盒子），但只有当鼠标移到文字或图标上时才能点击，背景区域无反应
+- **根因（三种常见模式）：**
+  1. **`<Link><span className="...bg-...rounded-lg...">` 反向嵌套**：Link 是透明的点击目标，所有视觉样式（bg、border、px/py）都在内部 span 上。用户看到的是 span 的边界，但期望整个 Link 包括 span 之外的 padding 也能点击。例：
+     ```tsx
+     // ❌ 错误：Link 无样式，span 有所有视觉样式
+     <Link href="..."><span className="px-3 py-2 rounded-lg border bg-muted">{icon} {text}</span></Link>
+     
+     // ✅ 正确：样式应该在 Link 上
+     <Link href="..." className="px-3 py-2 rounded-lg border bg-muted hover:bg-muted/80 transition-colors">{icon} {text}</Link>
+     ```
+  
+  2. **文本-only 链接，无 box 反馈**：某些链接只在文字上实现 `hover:text-foreground` 或 `hover:underline`，没有 box 样式。用户可能不知道这是可点击的区域。例：
+     ```tsx
+     // ❌ 难以发现
+     <Link href="..." className="hover:text-foreground">Breadcrumb</Link>
+     
+     // ✅ 清晰的点击目标
+     <Link href="..." className="px-2 py-0.5 rounded-md hover:bg-muted/50">Breadcrumb</Link>
+     ```
+  
+  3. **按钮内部图标无明确 hover 反馈**：某些按钮（如删除/关闭）的内部 icon 只有文本颜色变化，没有背景反馈。使用户难以辨别是否是单独的可点击元素。例：
+     ```tsx
+     // ❌ 删除按钮视觉不清晰
+     <button className="text-muted-foreground hover:text-foreground">
+       <X size={10} />
+     </button>
+     
+     // ✅ 明确的按钮反馈
+     <button className="p-1 rounded hover:bg-error/10 hover:text-error">
+       <X size={10} />
+     </button>
+     ```
+
+- **设计规则：**
+  - **规则 1：可视包装元素 = 点击目标元素**
+    - 如果 `<Link>` 或 `<button>` 有 padding、border、bg-color、rounded 样式，它们应该直接应用到该元素上，NOT 内部嵌套的 span
+    - 内部 span 应该只用于排列内容（gap、alignment），不添加新的 padding/border
+  
+  - **规则 2：确保点击 feedback 覆盖整个可视区域**
+    - `hover:` 和 `focus-visible:` 样式应该作用在可点击元素上，使用户看到整个区域都是可交互的
+    - 对于 pill/badge/chip 组件，避免在容器内放置独立按钮；如必须，确保按钮有明显的 visual boundaries（如 `p-1 rounded hover:bg-X`）
+  
+  - **规则 3：检查清单**
+    ```
+    对每个看起来像按钮的 UI 元素，问以下问题：
+    1. 可视盒子（背景色/border/圆角）在哪个元素上？
+    2. onClick/href 在哪个元素上？
+    3. 两者是同一个元素吗？如果不是，为什么？
+    4. hover/focus-visible 样式是否覆盖整个可视区域？
+    ```
+
+- **已修复的案例：**
+  - `HomeContent.tsx` FeatureChip（P1）：Link 现在直接应用样式，不再嵌套 span
+  - `Breadcrumb.tsx` 导航链接（P2）：添加了 box 样式 `px-2 py-0.5 rounded-md`
+  - `FileChip.tsx` 删除按钮（P2）：增加 `p-1 rounded hover:bg-muted` 使其视觉清晰
+
+- **预防策略：**
+  - Code review：检查所有 `<Link>` 和 `<button>` 是否直接应用了 visual styles（px/py/bg/border/rounded）
+  - 设计系统文档：记录标准按钮/链接模式
+  - Visual QA：进行 "click everywhere" 测试，确保看到的区域都能点击
+
+### 静默吞掉错误 — `.catch(() => {})` 导致用户无反馈
+
+- **严重等级：** 🔴 Critical — 操作失败时用户毫不知情
+- **现象：** 用户点"复制"按钮后以为已复制，实际 clipboard API 失败了；文件扫描/API 调用悄悄失败，数据不正确但无任何提示
+- **根因：** 代码中大量使用 `.catch(() => {})` 或 `catch {}` 空处理，Promise rejection 被完全吞掉
+- **涉及组件（12 处）：**
+  - `HelpContent.tsx:62` — 复制帮助内容失败
+  - `setup/index.tsx:153` — 复制 auth token 失败（用户可能输错值）
+  - `HomeContent.tsx:232` — 扫描示例文件失败
+  - `settings/UpdateTab.tsx:108` — 获取版本信息失败
+  - `settings/KnowledgeTab.tsx:200` — 扫描示例文件失败
+  - `panels/DiscoverPanel.tsx:88` — 获取插件文件列表失败
+  - `panels/PluginsPanel.tsx:88` — 获取插件路径失败
+  - `walkthrough/WalkthroughProvider.tsx:209,233` — 引导状态读写失败
+  - `GuideCard.tsx:127,138` — 引导卡片状态读写失败
+  - `renderers/summary/SummaryRenderer.tsx:114` — 获取摘要数据失败
+- **设计规则：**
+  ```tsx
+  // ❌ 永远不要这样写
+  fetchData().catch(() => {});
+
+  // ✅ 至少要 console.error + 设置错误状态
+  fetchData().catch((err) => {
+    console.error('[组件名] 操作描述失败:', err);
+    // 视情况选择一种反馈方式：
+    // 1. 设置 error state 显示 inline 错误信息
+    setError('操作失败，请重试');
+    // 2. 或使用全局 toast
+    toast.error('操作失败');
+  });
+
+  // ✅ 对于"允许失败"的非关键操作（如预加载），至少保留日志
+  prefetchData().catch((err) => console.warn('[prefetch]', err));
+  ```
+- **判断标准：** 如果操作失败会导致用户看到错误数据、功能不可用、或误以为成功 → **必须**有用户可见的错误反馈。只有纯优化/预加载类操作允许静默失败（但仍需 console.warn）。
+
+### 异步操作缺少加载态 — 用户点击后 UI "冻住"
+
+- **严重等级：** 🔴 Critical — 用户不知道操作是否在执行
+- **现象：** 用户点击按钮后什么都没发生（没有 spinner、没有文字变化、没有禁用状态），几秒后突然数据变了。用户可能会重复点击。
+- **根因：** `onClick` 调用 async 函数，但没有设置中间 loading 状态
+- **涉及组件（8 处）：**
+  - `CsvView.tsx:164-199` — 单元格编辑、删除行、添加行 → 保存时无反馈
+  - `ImportModal.tsx:340-380` — AI organize + 文件导入 → 无进度提示
+  - `settings/SyncTab.tsx:180+` — 连接远程/同步 → 无 "连接中..."
+  - `echo/EchoInsightCollapsible.tsx:450+` — 生成 insight → 按钮禁用但无 spinner
+  - `panels/DiscoverPanel.tsx:82-87` — 加载插件列表 → 无骨架屏
+- **设计规则：**
+  ```tsx
+  // ❌ 裸调 async — 用户无感知
+  const handleSave = async () => {
+    await saveAction(data);
+  };
+
+  // ✅ 标准异步操作模板
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveAction(data);
+    } catch (err) {
+      console.error('Save failed:', err);
+      // 用户反馈
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // JSX:
+  <button disabled={saving}>
+    {saving ? <><Loader2 className="animate-spin" size={12} /> 保存中...</> : '保存'}
+  </button>
+  ```
+- **时间阈值：**
+  - `< 200ms`：无需特殊处理（用户感知为即时）
+  - `200ms ~ 1s`：按钮 disabled + 文字变化（"保存中..."）
+  - `> 1s`：需要 spinner 或进度条
+  - `> 3s`：考虑 toast 提示 + 允许取消
+
+### 截断文本无 tooltip — 用户看不到完整内容
+
+- **严重等级：** 🟡 Medium — 信息丢失但功能未坏
+- **现象：** 长文件名、插件描述、路径被截断（`...`），鼠标移上去没有任何提示
+- **根因：** 使用了 `truncate` / `line-clamp-*` CSS 但未添加 `title` 属性
+- **涉及组件（18 处）：**
+  - `panels/PanelNavRow.tsx:23` — 导航行标题
+  - `panels/DiscoverPanel.tsx:35,173` — 插件名/用例名
+  - `panels/AgentsPanelAgentDetail.tsx:145,159` — Agent 名称
+  - `explore/UseCaseCard.tsx:34,43` — 用例标题和描述
+  - `panels/SearchPanel.tsx:156,159` — 搜索结果文件路径和片段
+  - `SearchModal.tsx:290,293` — 搜索弹窗结果
+  - `ask/SlashCommandPopover.tsx:115` — 斜杠命令描述
+  - `ask/MentionPopover.tsx:96,100` — @提及文件路径
+  - `Backlinks.tsx:79` — 反向链接预览
+  - `Breadcrumb.tsx:34` — 面包屑路径
+  - `DirView.tsx:113,167` — 目录/文件名
+- **设计规则：**
+  ```tsx
+  // ❌ 截断但无提示
+  <span className="truncate">{fileName}</span>
+  <p className="line-clamp-2">{description}</p>
+
+  // ✅ 截断 + title 属性（浏览器原生 tooltip）
+  <span className="truncate" title={fileName}>{fileName}</span>
+  <p className="line-clamp-2" title={description}>{description}</p>
+  ```
+- **Code review 规则：** 每次看到 `truncate` 或 `line-clamp-*`，立即检查同元素或父元素是否有 `title` 属性。没有就加。
+
+### 禁用按钮无说明 — 用户不知道为什么点不了
+
+- **严重等级：** 🟡 Medium — 用户困惑但非阻塞
+- **现象：** 按钮灰色不可点击，鼠标移上去无任何提示告诉用户"为什么"或"怎么才能用"
+- **涉及组件（10 处）：**
+  - `ImportModal.tsx:178,185` — 归档/摘要按钮（原因：无选中文件 / 整理中）
+  - `OnboardingView.tsx:213` — 模板选择按钮
+  - `CreateSpaceModal.tsx:142` — AI 切换（原因：AI 未配置）
+  - `settings/SyncTab.tsx:295` — 连接按钮（原因：URL 未填）
+  - `ask/AskContent.tsx:567` — 发送按钮（原因：@提及/命令输入中）
+  - `settings/KnowledgeTab.tsx:303` — 重置 token 按钮（原因：正在重置）
+  - `echo/EchoInsightCollapsible.tsx:319,328` — 生成按钮（原因：AI 未就绪）
+  - `setup/StepDots.tsx:85` — 步骤点（原因：未完成前序步骤）
+  - `settings/AiTab.tsx:286` — 获取模型按钮（原因：需要 API key）
+  - `renderers/workflow/WorkflowRenderer.tsx:445` — 运行按钮（原因：依赖未满足）
+- **设计规则：**
+  ```tsx
+  // ❌ 禁用但不解释
+  <button disabled={!apiKey}>获取模型</button>
+
+  // ✅ 始终用 title 解释 disabled 原因
+  <button
+    disabled={!apiKey}
+    title={!apiKey ? '请先填写 API Key' : undefined}
+  >
+    获取模型
+  </button>
+  ```
+- **文案模板：**
+  - 缺少前置条件：`"请先{完成前置操作}"`
+  - 正在执行中：`"{操作}中..."`
+  - 功能不可用：`"{功能}需要{条件}"`
+
+### onClick 非按钮元素缺少 cursor-pointer
+
+- **严重等级：** 🟢 Low — 可发现性降低但功能正常
+- **现象：** 鼠标移到可点击的 `<div>` 或 `<span>` 上，光标仍是默认箭头，用户不知道可以点击
+- **涉及组件（2 处需修）：**
+  - `DirView.tsx:210` — 文件行 `<div>` 有 onClick 但无 cursor-pointer
+  - `ask/ToolCallBlock.tsx:150+` — 可展开的工具调用区块
+- **设计规则：** 任何非 `<button>` / `<a>` / `<Link>` 元素如果有 `onClick`，必须加 `cursor-pointer`。更好的做法是直接用语义正确的 `<button>` 元素。
+
+### backdrop-filter 创建 containing block 导致 fixed dropdown 错位 (2026-04-10)
+
+**症状**：`ModelInput` 组件在 `ProviderModal` 内使用时，下拉列表位置错误（飘到页面顶部或被遮挡）。
+
+**根因**：CSS `backdrop-filter: blur()` 会创建新的 containing block，导致 `position: fixed` 的子元素相对于该 containing block 定位，而非 viewport。`modal-backdrop` 和 `overlay-backdrop` CSS class 都包含 `backdrop-filter`。
+
+**规则**：
+- 如果 modal 内部有使用 `position: fixed` 的下拉组件（如 `ModelInput`、`CustomSelect`、`DirPicker`），**禁止**在该 modal 的 backdrop 上使用 `backdrop-filter`
+- `ProviderModal` 必须保持 `bg-black/40`（无 blur），不能换成 `modal-backdrop` 或 `overlay-backdrop`
+- 新增 modal 时，先检查内部是否有 fixed-positioned dropdown 组件
+
+### UI/UX 批量审计发现的系统性问题 (2026-04-10)
+
+**审计范围**：全站 45 个 .tsx 文件
+
+**系统性问题及修复**：
+1. **Editor.tsx 使用 Zinc/Blue 冷色调**（10 处硬编码 hex）→ 全部改为 CSS var tokens（`--background`、`--amber`、`--card` 等）
+2. **focus: 与 focus-visible: 混用**（11 处）→ 输入框保留 `focus:outline-none` 去除原生轮廓，ring 改为 `focus-visible:ring-*` 仅在键盘导航时显示
+3. **z-[9999] 滥用**（5 处）→ 改为 z-50，符合项目 z-index 五层约束
+4. **Modal backdrop 不统一**（7 处）→ 核心 modal 用 `modal-backdrop`，轻量 dialog/overlay 用 `overlay-backdrop`
+5. **amber-500 Tailwind class**（9 处）→ 改为 `var(--amber)` token，确保 dark mode 正确
+6. **text-white 硬编码**（8 处）→ 改为 `text-[var(--amber-foreground)]` 或 `text-destructive-foreground`
+7. **重复 hardcoded hex (#8ab4d8/#c8a0d8)**（6 处跨 3 个文件）→ 新增 `--tool-read`/`--tool-search` CSS 变量
+8. **HomeContent tab 缺少 ARIA**→ 添加 `role="tablist"`/`role="tab"`/`aria-selected`/`role="tabpanel"`
+
+**关键教训**：
+- `focus:outline-none` 和 `focus-visible:ring-*` 是互补关系，不是替代关系。前者去除 mouse-click 时的原生轮廓，后者在 keyboard 时显示自定义 ring
+- 批量查找替换 `focus:` → `focus-visible:` 时，必须保留 `focus:outline-none`
+- 任何含 `backdrop-filter` 的元素都会成为 containing block，影响子元素 `position: fixed`
+
+
+
+## Agent 重试 / Retry
+
+### backend sleep() 未传 AbortSignal → 客户端断开仍浪费 LLM 配额（2026-04-01）
+
+- **症状：** 用户关闭对话窗口后，后端仍在 sleep 等待，睡醒后再次发起 LLM API 调用，浪费 token 配额
+- **根因：** `route.ts` 的 retry 循环调用 `sleep(delayMs)` 没有透传 `req.signal`，无法感知 HTTP 请求已被客户端取消
+- **解决：** 改为 `sleep(delayMs, req.signal)`；`sleep()` 内部已支持 AbortSignal，会提前 reject 并中止重试
+- **规则：** 任何在 HTTP handler 内的 `sleep()` 调用都必须传入 `req.signal`，防止僵尸重试
+
+### retry loop off-by-one: `attempt < MAX_RETRIES` 正确，`attempt <= MAX_RETRIES` 多跑一次
+
+- **含义：** 当 `attempt == MAX_RETRIES`（最后一次），`canRetry = false` → 直接 throw，避免第 4 次尝试
+- **助记：** 试了 MAX_RETRIES 次 → 放弃。`attempt < MAX_RETRIES` 保证只有前 N-1 次才会 sleep+retry
+
+## 性能 / Performance
+
+### useCallback 依赖不稳定 → 输入框打字卡顿（2026-03-25）
+
+- **症状：** AskContent 输入框打字有明显延迟/卡顿
+- **根因：** `handleInputChange`、`handleSubmit`、`handleInputKeyDown` 等核心回调的依赖数组包含了 `mention`、`slash`、`session`、`input` 等不稳定引用，导致每次击键都重建所有回调，触发整棵子树 re-render
+- **解决：** 用 `useRef` 持有不稳定值的最新引用（`mentionRef`、`slashRef`、`sessionRef`、`inputValueRef` 等），回调内通过 `.current` 读取，依赖数组清空或仅保留真正需要的 prop
+- **附加优化：** `syncTextareaToContent` 中将 `getComputedStyle` 结果缓存到 `WeakMap`，避免每次击键触发 style recalc + forced reflow
+- **规则：** 高频回调（onChange/onKeyDown）的 `useCallback` 依赖中禁止放入 hook 返回的对象（如 `useMention()`、`useSlashCommand()`），它们每次 render 都是新引用
+
+### useMention 文件过滤在大型知识库下的性能隐患（待修复）
+
+- **文件：** `app/hooks/useMention.ts` — `updateMentionFromInput` (L56-68)
+- **现状：** 每次触发 `@` 提及搜索时，对 `allFiles` 数组做 `.map().filter().sort().slice()`，全量遍历 + 排序。80ms debounce 缓解了频率，但在大型知识库（>1000 文件）下每次仍是 O(N log N)
+- **触发路径：** 用户在输入框输入 `@` 后每次击键 → 80ms debounce → `updateMentionFromInput` → 全量 map/filter/sort
+- **可能的优化方案（按复杂度递增）：**
+  1. **提前剪枝**：`filter` 先于 `map`——先 `includes(q)` 粗筛掉不匹配项，只对命中项计算 score + sort。减少排序规模
+  2. **预建索引**：在 `allFiles` 变化时（`setAllFiles` 后）预建文件名索引（Map<lowerName, path>），搜索时直接查索引而非遍历
+  3. **前缀树 / Trie**：对文件名建 trie，`startsWith` 查询 O(k) 而非 O(N)
+  4. **Web Worker**：将过滤/排序逻辑移到 Worker 线程，主线程不阻塞。适合 >5000 文件的场景
+  5. **服务端搜索**：将搜索请求发到 `/api/files?q=xxx`，服务端用 SQLite FTS 或内存索引处理，客户端只存结果
+- **推荐**：先做方案 1（零成本改动），再评估是否需要方案 2。方案 4/5 仅在用户反馈确实有大型 KB 时再做
+- **当前风险等级：** 低（80ms debounce + slice(0,30) 已足够应付 500-1000 文件规模）
+
+### CLI `utils.js` 反模式 — 已修复（2026-04-05）
+
+- **问题：** `bin/lib/utils.js` 是典型反模式（generic utility），包含不相关的函数（`run`, `npmInstall`, `expandHome`, `parseJsonc`），`expandHome` 还在 `agent.js` 和 `mcp-agents.js` 中各有一份重复定义
+- **解决：** 拆分为领域命名模块 `shell.js`、`path-expand.js`、`jsonc.js`，删除所有重复定义。所有消费者统一从新模块导入
+- **规则：** 禁止创建 `utils.js` / `helpers.js` / `common.js`。每个模块必须按领域命名
+
+### CLI `cli.js` 1466 行巨石文件 — 已修复（2026-04-05）
+
+- **问题：** `bin/cli.js` 包含 19 个内联命令实现（1466 行），只有 7 个命令模块化；加新命令需在巨石文件中编辑，维护成本高
+- **解决：** 将全部 19 个命令提取为 `bin/commands/*.js` 模块，`cli.js` 仅保留 134 行的路由 + help 生成。命令自动注册（`modules` 数组 + `meta.aliases` 支持别名）
+- **规则：** 新增 CLI 命令必须在 `bin/commands/` 下创建独立文件，导出 `{ meta, run }`
+
+### `stopSyncDaemon()` 是同步函数但被 `.catch()` 调用（2026-04-05）
+
+- **问题：** `stopSyncDaemon()` 返回 `undefined`，在 `process.on('exit')` 中被 `stopSyncDaemon().catch(...)` 调用 → `undefined.catch()` 抛 TypeError，导致 `clearPids()` 不执行
+- **解决：** 改为 `try { stopSyncDaemon(); } catch {}`
+- **规则：** 调用函数前检查其签名，同步函数不能用 `.catch()`
+
+### CLI `--help` 不安全 — 执行命令而非显示帮助（2026-04-05）
+
+- **问题：** `mindos build --help`、`mindos start --help` 等只有 6/24 个命令自行处理 `--help`，其余 18 个命令在 `--help` 时仍然执行实际操作（如触发构建、启动服务）
+- **解决：** 在 `cli.js` 路由层集中拦截 `--help`。路由发现 `hasHelp && resolvedCmd` 时，调用 `showCommandHelp()` 并 `process.exit(0)`，不分发到 `run()`。同时支持 `mindos help <cmd>` 和 `mindos --help <cmd>` 两种形式
+- **auto-help：** 无自定义 `printHelp` 的命令由 `printCommandHelp(meta)` 自动生成帮助页（展示 USAGE、flags、examples、aliases）
+- **规则：** 命令模块不再需要自行检查 `flags.help`——路由层统一处理。新增命令只需在 `meta` 中填写 `flags` 和 `examples`
+
+### `isTTY` 从常量改为函数 — 调用方必须加 `()`（2026-04-05）
+
+- **问题：** `colors.js` 导出 `isTTY` 从布尔常量改为函数，用于支持延迟求值。`skill-check.js` 中 `if (!isTTY)` 变为 `if (!function)` → 永远 false
+- **解决：** 所有消费方改为 `isTTY()` 调用
+- **规则：** 导出签名变更时，grep 所有消费方逐一确认
+
+### CLI 跨平台 17 处问题（2026-04-06）
+
+- **问题：** CLI 工具链大量 Unix-only 假设，Windows 用户几乎无法使用：`stop.js` 依赖 lsof/pkill/ss；`cli-shim.js` 向 `.cmd` 写入 shell 脚本；`file.js`/`space.js` 路径沙箱用 `root + '/'` 前缀匹配（Windows 反斜杠不匹配）；`doctor.js` 用 `:` 分割 PATH（Windows 是 `;`）；`update.js`/`gateway.js` 用 `which`/`readlink -f`；`mcp-agents.js` Cline/Roo/Copilot 配置路径缺少 `%APPDATA%` 分支
+- **解决：** 系统性修复 17 个文件：
+  - `stop.js`: Windows 用 `netstat -ano` + `taskkill /PID /T /F`；Unix 保持 lsof/ss
+  - `cli-shim.js`: Windows 写真正的 `.cmd` batch 脚本 + PowerShell profile PATH 注入
+  - `file.js`/`space.js`: 用 `path.relative()` + `..` 前缀检查替代 `startsWith(root + '/')`
+  - `doctor.js`: 用 `path.delimiter` 分割 PATH
+  - `update.js`/`gateway.js`: 用 `where`(win) / `which`(unix) + `fs.realpathSync` 替代 shell `readlink`/`realpath`
+  - `update.js`: `rm -rf` → `fs.rmSync()`
+  - `mcp-agents.js`: 添加 `win32` 分支使用 `%APPDATA%\Code\...` 路径
+  - `setup.js`: 识别 Windows 驱动器路径 `C:\`；`command -v` → `where`(win)
+  - `path-expand.js`: 支持 `~\` 和 bare `~`
+  - `jsonc.js`/`config.js`: 添加 UTF-8 BOM 剥离
+  - `open.js`: Windows `start "" "url"` 避免参数误解析
+  - `logs.js`: 用 Node fs API 实现 tail（替代 Unix `tail` 命令）
+  - `port.js`/`build.js`/`doctor.js`: 错误提示区分平台（lsof vs netstat）
+- **规则：** 新增 shell 命令前先问"Windows cmd.exe 支持吗？"；路径比较用 `path.relative()`，不用字符串拼接
+
+### Turbopack dev cache 与 webpack build cache 混用导致每请求 compile 7-8s（2026-04-05）
+
+- **症状：** 历史 `next dev`（Turbopack）每个请求 compile 7-8s，`/api/tree-version`（9 行代码）也要 15s 完成；view 页面 render 60-100s；3s 轮询不断积压，页面完全点不动
+- **根因：** `npm run build`（走 `next build --webpack`）向 `.next/cache/webpack/` 写入 490MB production cache，同时覆盖 `.next/cache/.tsbuildinfo` 等共享元数据。再次启动 Turbopack dev 时，Turbopack 检测到元数据与自身缓存不一致 → 整体 invalidate → 每个请求重新编译全部依赖链
+- **表现特征：** `.next` 总大小 2.8GB（turbopack dev cache 650MB + webpack production cache 490MB + 其他碎片）；连续多天开发不重启会逐步恶化
+- **解决：** `rm -rf .next` + 重启 dev server。冷启动首轮 100-300ms，缓存热后回到个位数 ms
+- **预防：** v1 dev 已固定为 webpack；如手动试验 Turbopack，先清理 `packages/web/.next`
+- **注意：** 仅影响 dev mode。Production build 所有 route 预编译，不存在 compile 阶段
+
+### Settings 关闭时 API Key 丢失（debounce 800ms + unmount race）（2026-04-06）
+
+- **现象：** 用户在 Settings UI 填写 API Key 后关闭面板/Modal，Key 未持久化到 config.json
+- **根因：** `SettingsContent` 使用 800ms debounce 自动保存。`SettingsModal` 在 `!open` 时 `return null`，导致组件 unmount → `useEffect` cleanup 清除 pending 的保存 timer → `doSave` 永远不会触发
+- **解决：** 增加两个 flush 机制：(1) `visible` 变 false 时立即 `doSave` (panel variant)；(2) 组件 unmount 时 fire-and-forget `apiFetch` POST (modal variant)
+- **规则：** 有 debounce + 可被关闭/卸载的组件 → 必须在关闭/卸载路径上 flush pending 操作
+
+### Agent 读取 PDF 返回乱码（readFile 未做 PDF 文本提取）（2026-04-06）
+
+- **现象：** MCP `mindos_read_file` 对 PDF 文件返回二进制乱码，Agent 无法理解内容
+- **根因：** `readFile` (fs-ops.ts) 对所有文件统一使用 `readFileSync(path, 'utf-8')`，PDF 是二进制格式。`extractPdfText` 函数仅接入了搜索索引，未接入 Agent 读取路径
+- **解决：** 在 `getFileContent` (fs.ts) 中检测 `.pdf` 扩展名，调用 `extractPdfText` 提取文本后返回。提取 PDF 处理函数到 `pdf-text.ts` 共享模块，搜索索引同步使用
+- **规则：** 新文件类型支持需检查所有读取路径（搜索索引、Agent 读取、Web UI 预览、导入/上传），不能只接入一条路径
+
+### gateway / MCP / start 三个 daemon 模式 bug（2026-04-07）
+
+**Bug 1: `getCurrentCliPath()` 把 shell shim 当 JS 交给 node**
+
+- **现象：** `mindos gateway install` 生成的 plist/systemd unit 把 `~/.mindos/bin/mindos`（shell shim）作为 ExecStart 参数传给 `node`，node 报语法错误
+- **根因：** `start.js` 在 PATH 开头注入 `~/.mindos/bin/`，`getCurrentCliPath()` 调用 `which mindos` 找到 shim（不是 symlink，`realpathSync` 不会跟踪），直接返回
+- **解决：** `getCurrentCliPath()` 和 `getUpdatedRoot()` 跳过 `dirname === resolve(MINDOS_DIR, 'bin')` 的路径
+- **同类：** `update.js:getUpdatedRoot()` 同一模式，一并修复
+- **规则：** `which` 结果可能是 shell wrapper，不能盲目传给 `node`；比较 dirname 排除已知 shim 目录
+
+**Bug 2: MCP HTTP 模式 launchd 下 stdin EOF 立即退出**
+
+- **现象：** launchd 启动的 MCP HTTP server 启动后立即关闭，日志显示 "Parent process exited (stdin closed)"
+- **根因：** launchd 将 stdin 设为 `/dev/null`（EOF on read），`mcp/src/index.ts` 的 `!process.stdin.isTTY` 条件为 true，`stdin.resume()` 后立即收到 `'end'` 事件 → 误判为父进程退出
+- **解决：** 增加 `!launchedByDaemon` 守卫（检查 `LAUNCHED_BY_LAUNCHD` / `INVOCATION_ID` 环境变量）
+- **规则：** stdin 监听用于 Desktop pipe 模式的孤儿清理；daemon 模式 stdin 是 `/dev/null`，不能作为父进程存活信号
+
+**Bug 3: `startMode=daemon` + launchd 导致递归 daemon 安装**
+
+- **现象：** launchd 通过 plist 执行 `mindos start`，`isDaemonMode()` 返回 true → 进入 daemon 分支 → 再次调用 `gateway install` → `launchctl bootout` 杀掉自己 → `KeepAlive` 重新拉起 → 无限循环
+- **根因：** `launchedByDaemon` 检查位于 `isDaemon` 分支之后（line 215），无法阻止 line 62 的 `isDaemon = isDaemonMode()` 进入 daemon 安装路径
+- **解决：** 将 `launchedByDaemon` 提前到 `isDaemon` 计算之前：`const isDaemon = !launchedByDaemon && (Boolean(flags.daemon) || isDaemonMode())`
+- **规则：** 环境检测守卫必须在分支决策之前；daemon 管理器启动的进程不应再次尝试安装自己
+
+### 对话附件文件（@ mention）在 organize 模式下丢失 + 全模式读取失败静默吞错
+
+- **严重等级：** 🟠 High — 用户看到附件图标但 AI 说读不到文件
+- **现象：** 对话框中使用 `@` 或点选知识库文件后，UI 显示附件标签，但 AI 回复"无法读取文件内容"
+- **根因 1（organize 模式）：** `route.ts` organize 分支遗漏了 `attachedFiles` 读取循环，chat/agent 模式都有但 organize 没有
+- **根因 2（全模式）：** `getFileContent()` 的 catch 块使用 `catch {}` 静默吞掉所有错误，文件读取失败时无任何日志
+- **根因 3（Ollama 等本地模型）：** 系统提示词可能超出本地模型的实际 context window，Ollama 会静默截断输入，导致附件内容丢失
+- **解决：**
+  1. organize 模式添加 `attachedFiles` 读取循环（与 chat/agent 一致）
+  2. 所有模式的 catch 块改为 `catch (err) { console.warn(...) }` 记录失败详情
+  3. 添加 systemPrompt 尺寸日志便于诊断 context truncation
+- **文件：** `app/app/api/ask/route.ts`
+- **规则：** 不要用空 `catch {}` 吞掉可能有用的错误信息；三路分支（organize/chat/agent）修改时要对齐检查
+
+### 首条消息自我介绍抢答任务 + 上传附件处理中被静默排除
+
+- **严重等级：** 🟠 High — 用户明明发了具体任务，AI 却先念模板式自我介绍；刚上传的附录文件也可能没进上下文
+- **现象 1：** 新对话第一条消息如果同时包含问候 + 具体任务，AI 按 system prompt 先自我介绍，导致回复机械、偏题
+- **现象 2：** 用户刚上传 PDF 等附录文件就立刻发送，UI 显示附件 chip，但请求里把 `status === 'loading'` 的附件过滤掉，模型拿不到文件内容
+- **根因 1：** `prompt.ts` 把“新对话第一条消息”也当成自我介绍触发条件，范围过宽
+- **根因 2：** `useAskChat.ts` 发送请求时直接过滤 loading 附件，但未阻止提交，也没有明确提示用户等待处理完成
+- **解决：**
+  1. 自我介绍只在**纯问候 / 纯身份询问**时触发；同一条消息里有具体任务就直接做事
+  2. 发送前检测 loading 附件；若仍在处理中，则禁用发送并显示明确提示，避免“看起来已附加，实际没进 context”
+- **文件：** `app/lib/agent/prompt.ts`、`app/hooks/useAskChat.ts`、`app/components/ask/AskContent.tsx`
+- **规则：** “首条消息”不是有效的意图信号；凡是会被注入 prompt 的上下文素材，只要尚未准备好，就不能静默跳过，必须阻止提交或显式告知
+
+### 只改 prompt 不改 UI/skill，导致 MindOS 身份文案分裂
+
+- **严重等级：** 🟡 Medium — 用户在不同入口看到不同的人格和命名，信任感被稀释
+- **现象：** 聊天行为里已经不再自称“第二大脑操作员”，但 Ask 标题、默认 Agent 名称、Onboarding、Skill 描述仍沿用旧表述或 `MindOS Agent`
+- **根因：** 身份文案分散在共享 prompt、i18n、默认 Agent 常量、skills/ 与 packages/web/data/skills/ 多份副本里，只改一层会留下半套体验
+- **解决：**
+  1. 先定义统一原则：产品名 `MindOS`，描述语 `local knowledge assistant / 本地知识助手`
+  2. 关键用户可见 surfaces 同步更新：prompt、默认 Agent 名称、Onboarding、Help、Channels、skills/
+  3. 对 `skills/` 与 `packages/web/data/skills/` 建一致性测试，避免再次漂移
+- **文件：** `packages/web/lib/agent/prompt.ts`、`packages/web/lib/ask-agent.ts`、`packages/web/lib/i18n/modules/*`、`skills/mindos*`、`packages/web/data/skills/mindos*`
+- **规则：** 只要是"产品身份 / 默认助手命名"这类跨入口文案，就不能局部修补；必须把 source-of-truth 与所有用户可见关键 surface 一起对齐
+
+### ACP killAllAgents/reapStaleSessions 在迭代中修改 Map (2026-04-13)
+
+**症状**：ACP 会话清理时偶发跳过部分进程清理，或者 reapStaleSessions 遗留僵尸 session。
+
+**根因**：
+1. `killAllAgents()` 遍历 `processes.values()` 时调用 `killAgent()` → `processes.delete(id)`，在迭代中修改 Map。JavaScript Map 迭代在 delete 后会跳过后续条目。
+2. `reapStaleSessions()` 同样在 `for...of sessions` 循环中调用 `closeSession()` → `sessions.delete(id)`。
+
+**修复**：两处都改为先收集要处理的 ID/value 快照，再在循环外处理。
+
+**规则**：不要在 `for...of Map/Set` 循环内调用 delete/set 修改正在迭代的集合。先收集到数组再处理。
+
+**文件**：v1 后为 `packages/protocols/acp/src/subprocess.ts`、`packages/protocols/acp/src/session.ts`；旧 Desktop runtime 副本只代表历史安装包。
+
+### useAskChat submit 依赖数组缺少 modelOverride (2026-04-13)
+
+**症状**：用户在 Ask 面板切换 model override 后发送消息，请求仍使用切换前的 model。
+
+**根因**：`useAskChat.submit` 的 `useCallback` 依赖数组包含 `providerOverride` 但遗漏了 `modelOverride`，导致闭包使用旧值。
+
+**修复**：将 `modelOverride` 加入 `useCallback` 依赖数组。
+
+**规则**：`useCallback` 体内引用的所有外部变量都必须列入依赖数组。使用 ESLint `exhaustive-deps` 规则自动检查。
+
+**文件**：`app/hooks/useAskChat.ts`
+
+### ACP npx wrapper 网络不可达时错误信息不明确 (2026-04-13)
+
+**症状**：在中国等网络受限环境中，Claude Code ACP 启动失败，错误信息只显示 "initialize failed" 或 "exited before initialization"，没有提示具体原因。
+
+**根因**：Claude Code 的 ACP 实现依赖 `npx --yes @agentclientprotocol/claude-agent-acp` 下载第三方 wrapper 包。在 npm registry 不可达时，npx 超时或连接被拒。`diagnoseInitFailure()` 没有针对 npm 网络错误的诊断分支。
+
+**修复**：在 `diagnoseInitFailure()` 中增加对 `npm ERR!`、`ERR_SOCKET_TIMEOUT`、`ETIMEDOUT`、`ECONNREFUSED` 等网络错误的专门诊断，明确告知用户检查网络连接和 npm proxy 设置。
+
+**文件**：v1 后为 `packages/protocols/acp/src/session.ts`
+
+### trash.ts 路径遍历漏洞 — moveToTrash 未使用 resolveSafe (2026-04-13)
+
+**严重等级：** 🔴 HIGH — 安全漏洞
+
+**症状**：恶意构造的 filePath (如 `../../etc/passwd`) 可以将 mindRoot 外的文件移入回收站，造成文件丢失。
+
+**根因**：`moveToTrash()` 使用 `path.join(mindRoot, filePath)` 拼接路径，没有调用 `resolveSafe()` 做路径边界校验。`restoreFromTrash` 的恢复目标路径同样缺少校验。
+
+**修复**：所有 trash 操作的路径都改用 `resolveSafe(mindRoot, filePath)` 代替 `path.join`。
+
+**规则**：任何接受用户提供路径的文件操作函数都必须通过 `resolveSafe()` 校验。直接 `path.join(root, userInput)` 是路径遍历漏洞。
+
+**文件**：`app/lib/core/trash.ts`
+
+### stream-consumer.ts tool_end 丢失工具结果 (2026-04-13)
+
+**严重等级：** 🟡 MEDIUM — 数据丢失
+
+**症状**：网络抖动导致 `tool_start` 事件丢失时，对应的 `tool_end` 被静默忽略，用户看不到工具执行结果。
+
+**根因**：`tool_end` 处理器只从 Map 查找已有 ToolCallPart (`toolCalls.get(id)`)，不存在时静默跳过。而 `findOrCreateToolCall()` 函数本可按需创建。
+
+**修复**：`tool_end` 改用 `findOrCreateToolCall()` 代替 `toolCalls.get()`，并增加 toolCallId 空值守卫。
+
+**规则**：SSE 流解析必须对事件乱序/丢失保持容错。不能假设事件严格按序到达。
+
+**文件**：`app/lib/agent/stream-consumer.ts`
+
+### fs-ops.ts deleteFile TOCTOU 竞态 (2026-04-13)
+
+**严重等级：** 🟡 LOW — 单用户环境下极少触发
+
+**症状**：`existsSync` 检查和 `unlinkSync` 之间文件被删除，抛出未包装的 ENOENT 错误。
+
+**根因**：检查-然后-操作 (TOCTOU) 模式。正确做法是直接执行操作并捕获 ENOENT。
+
+**修复**：去掉 `existsSync` 前置检查，直接 `unlinkSync` 并 catch ENOENT 转为 MindOSError。
+
+**规则**：文件删除/重命名操作不要用 existsSync 前置检查，直接操作并 catch 特定错误码。
+
+**文件**：`app/lib/core/fs-ops.ts`
+
+### npm 包 standalone 缺少路由 → /wiki 500 错误（2026-04-14）
+
+**症状**：用户通过 `npm install -g @geminilight/mindos` 安装后，访问 `/wiki` 返回 500 错误。
+
+**根因**：npm 发布流程问题导致 `_standalone` 目录不完整：
+1. 0.7.0 完全缺少 `_standalone` 目录（手动发布绕过 CI）
+2. 0.6.75 有 `_standalone` 但缺少 `/wiki/page.js` 路由（standalone 构建不完整）
+3. 0.6.76–0.6.82 的 CI 全部因版本号冲突 403 失败
+
+`runtime-health-contract.json` 只检查 `server.js` 和 `.next/server` 目录存在，不检查具体路由文件，所以不完整的构建通过了验证。
+
+**修复**：
+1. 在 `runtime-health-contract.json` 中添加 `critical-routes` feature，检查关键页面路由
+2. 在 `prepare-standalone.mjs` 中添加关键路由存在性验证
+3. 在 `bin/lib/build.js` 的 `hasPrebuiltStandalone()` 中增加 `page.js` 存在性检查
+
+**规则**：
+- **永远通过 CI 发布** npm 包，不要手动 `npm publish`
+- 添加新页面路由时，同步更新 `scripts/prepare-standalone.mjs` 的 `criticalRoutes` 数组（它现在动态读 manifest，所以列表只是备注）
+- 发版后执行冒烟验证（见 AGENTS.md）
+
+**长期防御**（见下面 "npm 发布流程安全加固"）：
+1. CI 中添加 `verify-standalone.mjs` 烟雾测试（实际启动 server 验证 /api/health）
+2. 加 git pre-push hook 防止意外手动发布
+3. 自动化验证 npm 包内 _standalone 的完整性
+
+**文件**：`desktop/runtime-health-contract.json`, `scripts/prepare-standalone.mjs`, `bin/lib/build.js`
+
+## npm 发布流程安全加固（长期方案）
+
+### 问题回顾
+
+/wiki 500 bug 的根本原因是发布流程有 **4 层漏洞**：
+
+1. **静态检查不完整**：`prepare-standalone.mjs` 只硬编码检查 5 个关键路由，新增路由容易遗漏
+   - 修复：改为动态读 `app-paths-manifest.json` 逐条验证 ✅ 已做
+
+2. **没有烟雾测试**：`verify-standalone.mjs` 脚本存在但 CI 没有调用
+   - 修复：在 `publish-npm.yml` 中 add `node scripts/verify-standalone.mjs` step
+
+3. **没有防手动发布机制**：用户可以在本地运行 `npm publish` 绕过 CI，导致 0.7.0 这样的残缺包
+   - 修复：git pre-push hook + `.npmrc` 配置 + 文档
+
+4. **版本号冲突检测缺失**：0.6.76–0.6.82 的 CI 全部因 403 失败但无告警
+   - 修复：CI 中添加发布前版本号检查 step
+
+### 方案 A：CI 中添加烟雾测试（立即可做）
+
+```bash
+# 在 publish-npm.yml 的 "Build standalone package" 之后插入：
+- name: Smoke test standalone
+  run: node scripts/verify-standalone.mjs
+```
+
+这会：
+- 实际启动 Next.js server
+- 检查 /api/health 端点是否响应
+- 捕获任何 MODULE_NOT_FOUND 或路由 500 错误
+- 如果失败，CI 停止发布
+
+### 方案 B：防止手动发布（git hook）
+
+创建 `.github/hooks/pre-push`：
+
+```bash
+#!/bin/bash
+# Prevent accidental `npm publish` — only publish via CI workflows
+if [[ $(git rev-parse --abbrev-ref HEAD) != "main" ]]; then
+  exit 0
+fi
+
+# Check if someone is trying to publish (has .npmrc changes or ran npm publish)
+if git status --porcelain | grep -q ".npmrc\|npm-debug.log"; then
+  echo "❌ Looks like a local npm publish attempt"
+  echo "ℹ️  Always publish via git tag: git tag v0.6.x && git push origin v0.6.x"
+  echo "📖 See wiki/82-release-process.md"
+  exit 1
+fi
+exit 0
+```
+
+在 CODEBUDDY.md 中文档化：
+```markdown
+## 发版流程
+
+1. 确保所有 tests 通过
+2. 更新 CHANGELOG.md
+3. 创建 tag：git tag v0.6.x
+4. 推送 tag：git push origin v0.6.x
+5. 等待 CI 发布完成（.github/workflows/publish-npm.yml）
+
+❌ **禁止**：本地运行 `npm publish`
+```
+
+### 方案 C：发布前版本号检查（CI step）
+
+在 `publish-npm.yml` 的 "Publish to npm" 之前插入：
+
+```yaml
+- name: Check for version conflict
+  run: |
+    VERSION=$(node -p "require('./package.json').version")
+    npm view "@geminilight/mindos@${VERSION}" version 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "❌ Version ${VERSION} already published!"
+      echo "   Update version in package.json to a higher number"
+      exit 1
+    fi
+    echo "✅ Version ${VERSION} is available"
+```
+
+### 方案 D：npm 包内容验证（post-publish）
+
+在 "Publish to npm" 之后添加：
+
+```yaml
+- name: Verify published package
+  run: |
+    VERSION=$(node -p "require('./package.json').version")
+    cd /tmp && rm -rf mindos-pkg-verify && mkdir mindos-pkg-verify && cd mindos-pkg-verify
+    npm pack "@geminilight/mindos@${VERSION}" --silent
+    tar -tzf *.tgz | grep -q "_standalone/.next/server/app-paths-manifest.json" || {
+      echo "❌ Published package missing _standalone manifest!"
+      exit 1
+    }
+    tar -tzf *.tgz | grep -q "_standalone/.next/server/app/page.js" || {
+      echo "❌ Published package missing home page.js!"
+      exit 1
+    }
+    echo "✅ Package integrity verified"
+```
+
+### 全景对比：修复前后
+
+| 检查点 | 修复前 | 修复后 |
+|--------|--------|--------|
+| 构建时 manifest 验证 | ❌ 硬编码 5 路由 | ✅ 动态逐条验证 |
+| 烟雾测试（实启动） | ❌ 脚本存在但未用 | ✅ CI 调用 verify |
+| 防手动发布 | ❌ 无 | ✅ git hook + 文档 |
+| 版本号冲突检查 | ❌ 无 | ✅ CI 检查 |
+| 发布后完整性验证 | ❌ 无 | ✅ CI 验证包内容 |
+
+### 实施优先级
+
+**L1（立即做）**：
+1. Add `verify-standalone.mjs` call to CI（1 行代码）
+2. Update `prepare-standalone.mjs` 到动态 manifest 验证（已做 ✅）
+
+**L2（本周）**：
+1. Add version conflict check to CI
+2. Add npm 包完整性验证到 CI
+
+**L3（下周）**：
+1. 添加 git pre-push hook
+2. 更新 CODEBUDDY.md release 文档
+
+**文件**：`.github/workflows/publish-npm.yml`, `.github/hooks/pre-push`（新创建）, `CODEBUDDY.md`（文档部分）
+**文件**：`.github/workflows/publish-npm.yml`, `.github/hooks/pre-push`（新创建）, `CODEBUDDY.md`（文档部分）
+
+## Desktop / Electron
+
+### Windows 下 ACP (Claude Code/Codex) 调用失败（2026-04-21）
+
+**症状**：Windows 用户在 Chatbot 中使用 ACP 功能时，子进程无法正常启动或终止，导致 Agent 执行失败。
+
+**根因**：历史 `app/lib/acp/subprocess.ts` 中的进程管理逻辑存在 3 个 Windows 兼容性问题；v1 后对应源码为 `packages/protocols/acp/src/subprocess.ts`：
+
+1. **负 PID 杀进程（Unix-only）**：
+   - `killAgent()` 使用 `process.kill(-pid)` 杀进程组
+   - Windows 不支持负 PID，会抛出 `EINVAL` 错误
+
+2. **detached + shell:false 配置冲突**：
+   - `spawnAndConnect()` 使用 `detached: true, shell: false`
+   - Windows 下 detached 进程需要 `shell: true` 才能正常工作
+
+3. **缺少 Windows 特定的进程树终止逻辑**：
+   - Unix 使用负 PID 杀进程组，Windows 需要 `taskkill /T` 递归杀子进程
+
+**修复**：
+
+```typescript
+// killAgent() - 添加 Windows 分支
+if (process.platform === 'win32') {
+  // Windows: use taskkill to kill process tree
+  try {
+    execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+  } catch (err) {
+    // Process may already be dead
+  }
+} else {
+  // Unix: kill process group with negative PID
+  try {
+    process.kill(-pid, 'SIGTERM');
+    setTimeout(() => {
+      try { process.kill(-pid, 'SIGKILL'); } catch {}
+    }, 3000);
+  } catch (err) {
+    // Process may already be dead
+  }
+}
+
+// spawnAcpAgent() - 修复 detached 配置
+const proc = spawn(cmd, args, {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: mergedEnv,
+  // Windows: detached requires shell:true to create new process group
+  // Unix: detached with shell:false creates new process group
+  shell: process.platform === 'win32',
+  detached: true,
+  ...(options?.cwd ? { cwd: options.cwd } : {}),
+});
+```
+
+**技术细节**：
+- Windows 进程模型不支持 Unix 的进程组概念（负 PID）
+- `detached: true` 在 Windows 下需要 `shell: true` 才能创建独立进程
+- `taskkill /T` 递归终止进程树，`/F` 强制终止
+
+**参考**：
+- `bin/lib/stop.js` 的 `killTree()` 函数（正确实现）
+- Node.js 文档：child_process.spawn options.detached
+
+**规则**：
+- 所有进程管理代码必须考虑 Windows 兼容性
+- 使用 `process.platform === 'win32'` 分支处理平台差异
+- 优先参考 bin/lib/stop.js 的成熟实现
+
+**测试**：
+- Mac: `pnpm --filter @mindos/web exec vitest run __tests__/acp/` (131 tests passed ✅)
+- Windows: 需要在 Windows 环境实际测试 ACP 功能
+
+## 性能优化
+
+### FileTree 过滤未缓存导致不必要的重新计算（2026-04-21）
+
+**症状**：文件树展开/折叠时有轻微卡顿，尤其是文件数量较多（100+ 个）时。
+
+**根因**：`app/components/FileTree.tsx:610-613` 每次渲染都重新执行过滤逻辑：
+```typescript
+const filtered = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
+const visibleNodes = isRoot
+  ? filtered.filter(n => !(n.type === 'directory' && n.name === 'Inbox'))
+  : filtered;
+```
+- 即使 `nodes`、`showHidden`、`isRoot` 没有变化，也会重新过滤
+- `filterHiddenNodes()` 是递归函数，对大型文件树开销较大
+- 每次父组件重新渲染（如状态更新）都会触发过滤
+
+**修复**：使用 `useMemo` 缓存过滤结果：
+```typescript
+const visibleNodes = useMemo(() => {
+  const filtered = showHidden ? nodes : filterHiddenNodes(nodes, isRoot);
+  return isRoot
+    ? filtered.filter(n => !(n.type === 'directory' && n.name === 'Inbox'))
+    : filtered;
+}, [nodes, showHidden, isRoot]);
+```
+
+**技术细节**：
+- `useMemo` 只在依赖项（`nodes`、`showHidden`、`isRoot`）变化时重新计算
+- 减少不必要的递归遍历和数组过滤操作
+- 对于 100+ 文件的文件树，减少约 30-50% 的计算开销
+
+**规则**：
+- 对于计算开销较大的操作（递归、大数组过滤、排序），使用 `useMemo` 缓存结果
+- 依赖项应该是最小集合，避免过度缓存
+- 对于简单计算（<10ms），不需要 `useMemo`（过度优化）
+
+**测试**：所有现有测试通过（1933 tests），无功能回归。
+
+## CI / Release
+
+### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
+
+**症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。
+
+**根因**：源码已经迁移到 pnpm workspace：
+- Web: `packages/web`
+- Desktop: `packages/desktop`
+- Mobile: `packages/mobile`
+- MCP: `packages/protocols/mcp-server`
+
+但 workflow、public sync 白名单或专项测试仍引用旧的 `app/`、`mcp/`、`desktop/`、`mobile/` 顶层目录。
+
+**修复**：
+- workflow 安装依赖统一使用根目录 `pnpm install --frozen-lockfile`
+- workspace 构建用 `pnpm --filter <package> run <script>`
+- npm standalone 校验使用 `_standalone/__next` / `_standalone/__node_modules`
+- `.syncinclude` 同步 `packages/`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`turbo.json` 等 v1 源码和 workspace 元数据；不要重新加入 `apps/`
+- Desktop tag dispatch 必须传 `inputs.tag`，否则安装包版本可能与 release tag 不一致
+
+**防回归**：`tests/workflow-migration-contract.test.ts` 会扫描 workflow 和 `.syncinclude`，禁止旧目录引用重新进入发布链路。
+
+### Browser Extension 也是 app，不要放回顶层目录（2026-04-27）
+
+**症状**：Web Clipper 发布 workflow 找不到目录，或 public sync 额外维护 `browser-extension/` 顶层白名单。
+
+**根因**：v1 monorepo 已经从 `apps/*` + `packages/*` 双根迁到 OpenCode-style `packages/*` 单根。浏览器扩展如果留在根目录，会成为 `.syncinclude`、README 链接、publish workflow 的例外路径。
+
+**规则**：
+- Web Clipper 源码固定在 `packages/browser-extension/`
+- 构建用 `pnpm --filter @mindos/browser-extension run build`
+- `publish-clipper.yml` 只引用 `packages/browser-extension`
+- `.syncinclude` 不单独列顶层 `browser-extension`，由 `packages/` 覆盖
+
+**验证**：`pnpm exec vitest run tests/workflow-migration-contract.test.ts`。
+
+### Tauri Desktop spike 也是 app，不要放回顶层目录（2026-04-27）
+
+**症状**：Tauri spike 留在顶层 `desktop-tauri/` 时，workspace、npm ignore、文档和后续 CI 都要为它维护例外路径。
+
+**根因**：v1 monorepo 已经迁到 OpenCode-style `packages/*` 单根；Tauri spike 是一个完整应用（Vite 前端 + `src-tauri/` Rust 壳），不属于根目录工具脚本。
+
+**修复**：
+- 源码固定在 `packages/desktop-tauri/`
+- npm tarball 通过 `.npmignore` 排除 `packages/desktop-tauri/`
+- `tauri.conf.json` 的 `beforeDevCommand` / `beforeBuildCommand` 使用 `pnpm run dev:web` / `pnpm run build:web`，避免 `dev -> tauri dev -> npm run dev` 递归
+
+**验证**：`pnpm exec vitest run tests/workflow-migration-contract.test.ts`。

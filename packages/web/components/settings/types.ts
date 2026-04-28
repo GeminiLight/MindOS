@@ -1,0 +1,224 @@
+import type { Locale, Messages } from '@/lib/i18n';
+import type React from 'react';
+import type { Provider } from '@/lib/custom-endpoints';
+
+export interface AiSettings {
+  activeProvider: string;
+  providers: Provider[];
+}
+
+export interface AgentSettings {
+  maxSteps?: number;
+  enableThinking?: boolean;
+  thinkingBudget?: number;
+  contextStrategy?: 'auto' | 'off';
+  reconnectRetries?: number;
+}
+
+export interface SettingsData {
+  ai: AiSettings;
+  agent?: AgentSettings;
+  embedding?: {
+    enabled: boolean;
+    provider: 'local' | 'api';
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  };
+  embeddingStatus?: {
+    enabled: boolean;
+    ready: boolean;
+    building: boolean;
+    docCount: number;
+  };
+  webSearch?: {
+    provider: string;
+    exaApiKey: string;
+    perplexityApiKey: string;
+    geminiApiKey: string;
+  };
+  mindRoot: string;
+  webPassword?: string;
+  authToken?: string;   // masked: first-xxxx-••••-last pattern
+  port?: number;
+  mcpPort?: number;
+  skillPaths?: {
+    enableAgentsDir?: boolean;
+    custom?: string[];
+  };
+  connectionMode?: {
+    cli: boolean;
+    mcp: boolean;
+  };
+  envOverrides?: Record<string, boolean>;
+  envValues?: Record<string, string>;
+}
+
+export type Tab = 'ai' | 'appearance' | 'knowledge' | 'plugins' | 'mcp' | 'sync' | 'update' | 'uninstall';
+
+export const CONTENT_WIDTH_DEFAULT = '80%';
+export const CONTENT_WIDTH_MIN = 50;
+export const CONTENT_WIDTH_MAX = 100;
+export const CONTENT_WIDTH_STEP = 5;
+
+export const FONT_SIZES = [
+  { value: '14px', label: '14', numericValue: 14 },
+  { value: '15px', label: '15', numericValue: 15, isDefault: true },
+  { value: '16px', label: '16', numericValue: 16 },
+  { value: '17px', label: '17', numericValue: 17 },
+];
+
+export const FONTS = [
+  { value: 'lora', label: 'Lora', category: 'Serif', style: { fontFamily: 'Lora, Georgia, serif' } },
+  { value: 'ibm-plex-sans', label: 'IBM Plex Sans', category: 'Sans', style: { fontFamily: "'IBM Plex Sans', sans-serif" } },
+  { value: 'inter', label: 'Inter', category: 'Sans', style: { fontFamily: 'var(--font-inter), sans-serif' } },
+  { value: 'ibm-plex-mono', label: 'IBM Plex Mono', category: 'Mono', style: { fontFamily: "'IBM Plex Mono', monospace" } },
+];
+
+/* ── MCP Types ────────────────────────────────────────────────── */
+
+export interface ConnectionMode {
+  cli: boolean;
+  mcp: boolean;
+}
+
+export interface McpStatus {
+  running: boolean;
+  transport: string;
+  endpoint: string;
+  port: number;
+  toolCount: number;
+  authConfigured: boolean;
+  maskedToken?: string;
+  authToken?: string;
+  localIP?: string | null;
+  connectionMode?: ConnectionMode;
+}
+
+export interface AgentInfo {
+  key: string;
+  name: string;
+  present: boolean;
+  installed: boolean;
+  scope?: string;
+  transport?: string;
+  configPath?: string;
+  hasProjectScope: boolean;
+  hasGlobalScope: boolean;
+  preferredTransport: 'stdio' | 'http';
+  // Snippet generation fields
+  format: 'json' | 'toml';
+  configKey: string;
+  globalNestedKey?: string;
+  globalPath: string;
+  projectPath?: string | null;
+  skillMode?: 'universal' | 'additional' | 'unsupported';
+  skillAgentName?: string;
+  skillWorkspacePath?: string;
+  hiddenRootPath?: string;
+  hiddenRootPresent?: boolean;
+  runtimeConversationSignal?: boolean;
+  runtimeUsageSignal?: boolean;
+  runtimeLastActivityAt?: string;
+  configuredMcpServers?: string[];
+  configuredMcpServerCount?: number;
+  configuredMcpSources?: string[];
+  installedSkillNames?: string[];
+  installedSkillCount?: number;
+  installedSkillSourcePath?: string;
+  /** True for user-defined agents (not built-in). */
+  isCustom?: boolean;
+  /** Base directory for custom agents (used for UI display). */
+  customBaseDir?: string;
+}
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  path: string;
+  source: 'builtin' | 'user';
+  enabled: boolean;
+  editable: boolean;
+}
+
+/** 🟢 MINOR #7: Moved from SyncTab.tsx for consistency */
+export interface SyncStatus {
+  enabled: boolean;
+  needsSetup?: boolean;
+  provider?: string;
+  remote?: string;
+  branch?: string;
+  lastSync?: string | null;
+  lastPull?: string | null;
+  unpushed?: string;
+  conflicts?: Array<{ file: string; time: string }>;
+  lastError?: string | null;
+  autoCommitInterval?: number;
+  autoPullInterval?: number;
+}
+
+export interface McpTabProps {
+  t: Messages;
+}
+
+export interface AppearanceTabProps {
+  font: string;
+  setFont: (v: string) => void;
+  fontSize: string;
+  setFontSize: (v: string) => void;
+  contentWidth: string;
+  setContentWidth: (v: string) => void;
+  dark: boolean;
+  setDark: (v: boolean) => void;
+  locale: Locale;
+  setLocale: (v: Locale) => void;
+  t: Messages;
+}
+
+export interface AiTabProps {
+  data: SettingsData;
+  setData: React.Dispatch<React.SetStateAction<SettingsData | null>>;
+  updateAi: (patch: Partial<AiSettings>) => void;
+  updateAgent: (patch: Partial<AgentSettings>) => void;
+  t: Messages;
+}
+
+export interface KnowledgeTabProps {
+  data: SettingsData;
+  setData: React.Dispatch<React.SetStateAction<SettingsData | null>>;
+  t: Messages;
+}
+
+export interface PluginsTabProps {
+  pluginStates: Record<string, boolean>;
+  setPluginStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  t: Messages;
+  mindRoot?: string;
+}
+
+export interface SyncTabProps {
+  t: Messages;
+  visible?: boolean;
+}
+
+export interface McpServerStatusProps {
+  status: McpStatus | null;
+  agents: AgentInfo[];
+  t: Messages;
+}
+
+export interface McpAgentInstallProps {
+  agents: AgentInfo[];
+  t: Messages;
+  onRefresh: () => void;
+  mode?: 'cli' | 'mcp';
+  activeSkillName?: string;
+}
+
+export interface McpSkillsSectionProps {
+  t: Messages;
+}
+
+export interface ShortcutsTabProps {
+  t: Messages;
+}

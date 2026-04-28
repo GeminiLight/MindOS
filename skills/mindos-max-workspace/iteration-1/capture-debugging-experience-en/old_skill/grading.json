@@ -1,0 +1,28 @@
+{
+  "eval_id": 3,
+  "eval_name": "capture-debugging-experience-en",
+  "run_type": "old_skill",
+  "skill": "mindos-original",
+  "expectations": [
+    {
+      "text": "Uses mindos CLI to save debugging experience note",
+      "passed": true,
+      "evidence": "Uses `mindos file insert-heading \"engineering/debugging-experiences.md\"` in Step 5 — chose to append to existing file rather than create new."
+    },
+    {
+      "text": "Structured note includes: problem description, root cause, solution, prevention tips",
+      "passed": true,
+      "evidence": "Content has Problem, Root Cause, Solution, Rule (with code review checklist), Debugging Approach, Tags sections."
+    },
+    {
+      "text": "Bootstraps KB tree before writing",
+      "passed": true,
+      "evidence": "Step 1 runs `mindos file list`."
+    },
+    {
+      "text": "Recognizes this as experience capture / lessons learned scenario",
+      "passed": true,
+      "evidence": "Decision tree analysis identifies 'save / record' path and Experience capture hook (high priority)."
+    }
+  ]
+}

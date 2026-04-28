@@ -1,0 +1,101 @@
+{
+  "name": "@geminilight/mindos",
+  "version": "1.0.0",
+  "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
+  "keywords": [
+    "mindos",
+    "mcp",
+    "knowledge-base",
+    "knowledge-management",
+    "ai-agent",
+    "local-first",
+    "markdown",
+    "second-brain"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "GeminiLight",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GeminiLight/MindOS"
+  },
+  "homepage": "https://mindos.you",
+  "bugs": {
+    "url": "https://github.com/GeminiLight/MindOS/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mindos": "bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./src/cli.d.ts",
+      "import": "./src/cli.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "import": "./dist/capabilities.js"
+    },
+    "./foundation": {
+      "types": "./dist/foundation.d.ts",
+      "import": "./dist/foundation.js"
+    },
+    "./knowledge": {
+      "types": "./dist/knowledge.d.ts",
+      "import": "./dist/knowledge.js"
+    },
+    "./retrieval": {
+      "types": "./dist/retrieval.d.ts",
+      "import": "./dist/retrieval.js"
+    },
+    "./protocols": {
+      "types": "./dist/protocols.d.ts",
+      "import": "./dist/protocols.js"
+    }
+  },
+  "files": [
+    "bin/",
+    "packages/protocols/acp/dist/",
+    "packages/protocols/acp/package.json",
+    "packages/protocols/acp/README.md",
+    "packages/protocols/mcp-server/dist/",
+    "packages/protocols/mcp-server/package.json",
+    "packages/protocols/mcp-server/README.md",
+    "dist/",
+    "src/cli.js",
+    "src/cli.d.ts",
+    "scripts/",
+    "assets/",
+    "skills/",
+    "templates/",
+    "_standalone/",
+    "README.md",
+    "README_zh.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "prepack": "cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs && rm -rf packages/web/.next && pnpm --filter @mindos/acp build && pnpm --filter @geminilight/mindos build && pnpm --filter @mindos/mcp-server build && pnpm --filter @mindos/web run build && node scripts/prepare-standalone.mjs && node scripts/stage-product-package.mjs && rm -rf packages/web/.next",
+    "postpack": "cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run --dir src",
+    "test:watch": "vitest",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "pino": "^8.17.0",
+    "pino-pretty": "^10.3.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

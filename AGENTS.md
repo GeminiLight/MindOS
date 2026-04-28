@@ -1,0 +1,356 @@
+# Agent 协作规则
+
+> 所有 Coding Agent（Claude Code、Cursor、Windsurf、Cline 等）在本项目中必须遵守的规则。
+> 流程编排见 Slash Commands（`.claude-internal/commands/`），本文件只定义标准和模板。
+
+## 代码规范
+
+### Spec 模板
+
+每个 spec 文件（`wiki/specs/spec-*.md`）必须包含以下段落，不能留空：
+
+```markdown
+# Spec: <标题>
+
+## 目标
+一句话说清楚要解决什么问题、达到什么效果。
+
+## 现状分析
+当前的行为/架构是什么，为什么不满足需求。
+
+## 数据流 / 状态流
+用文字或 ASCII 图描述改动涉及的数据流转路径。
+重点标注：哪些组件读数据、哪些组件写数据、中间经过几层缓存。
+（这一段是 self-review 时最重要的锚点——sidebar 不更新的 bug 就是因为缺这个分析）
+
+## 方案
+具体怎么做。包含技术选型和关键设计决策。
+
+## 影响范围
+- 变更文件列表
+- 受影响的其他模块（即使不改它，也要说明为什么不受影响）
+- 是否有破坏性变更
+
+## 边界 case 与风险
+列出至少 3 个边界 case 和对应处理方式。
+列出已知风险和 mitigation。
+
+## 验收标准
+可执行的 checklist，每条都能客观判断 pass/fail。
+```
+
+### 测试规范（每个改动必须遵守）
+
+#### 测试先行
+- 新功能：先写测试（红灯）→ 再写实现（绿灯）→ 再重构
+- Bug fix：先写能复现 bug 的测试 → 再修复 → 确认测试变绿
+- 重构：先确认现有测试通过 → 重构 → 确认测试仍然通过
+
+#### 三类 case 必须覆盖
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| **正常路径** | 典型输入，预期输出 | 创建文件成功、API 返回 200 |
+| **边界 case** | 极端/临界输入 | 空字符串、超长路径、并发调用、Unicode 文件名、磁盘满 |
+| **错误路径** | 非法输入、外部失败 | 文件不存在、网络断开、权限不足、JSON 格式错误 |
+
+#### 边界 case 发现清单
+
+写测试时逐条过：
+- **空值**：null / undefined / 空字符串 / 空数组 / 空对象
+- **类型边界**：0 / -1 / MAX_SAFE_INTEGER / NaN / Infinity
+- **字符串边界**：含空格 / 特殊字符 / Unicode / emoji / 超长（>1000字符）
+- **集合边界**：空集合 / 单元素 / 重复元素 / 超大集合
+- **时序边界**：并发调用 / 重复提交 / 超时 / 中途取消
+- **环境边界**：文件不存在 / 目录不存在 / 权限不足 / 磁盘满
+- **状态边界**：首次运行 / 已有数据迁移 / 降级模式
+
+#### 测试质量自检
+- 测试名是否描述了**行为**而非实现？（`'returns 404 for missing file'` 而非 `'test case 3'`）
+- 测试是否**独立**？（不依赖其他测试的执行顺序或副作用）
+- 测试是否**快速**？（单个测试 <100ms，全量 <30s）
+- 测试是否**明确**？（失败时能直接看出哪里错了）
+
+#### 测试目录分层
+
+测试按“归属边界”放置，不追求单一目录：
+- `packages/<domain>/<pkg>/src/*.test.ts`：package 内部单元测试，靠近源码；多模块 package 用行为/模块名，只有单模块或 public entrypoint contract 才用 `index.test.ts`
+- `packages/web/__tests__/`、`packages/desktop/src/*.test.ts`、`packages/mobile/__tests__/`：App 专属组件、运行时和业务逻辑测试
+- `tests/*.test.ts`：repo 级 contract（迁移、发布包、workflow、legacy cleanup）
+- `tests/unit/*.test.ts`：根 CLI、packaging、跨 package 的纯单元测试
+- `tests/integration/*.test.ts` 与 `tests/e2e/*.spec.ts`：真实服务/端口/浏览器测试，手动运行，不进入默认 `pnpm test`
+- `.next/`、`_standalone/`、`.turbo/` 中的测试文件是生成物/缓存，不作为源码测试入口
+
+### Package 依赖边界
+
+- `packages/{web,desktop,mobile,browser-extension,desktop-tauri}/package.json` 只声明该 app/client 源码直接 `import @mindos/*` 的 workspace package，不声明“以后可能用”的包
+- 间接依赖由被 import 的 package 自己声明；例如 Web import `@geminilight/mindos`，产品主包内部拥有 knowledge-ops / permissions / security 等能力
+- `packages/mindos/package.json.files` 是 npm 发布白名单，只包含 CLI/Web/MCP 运行时需要的包闭包，不等于 workspace 全量清单
+- `packages/web` 是唯一 Web 源码；npm 发布包不包含 `packages/mindos/packages/web` 源码副本，只包含 `packages/mindos/_standalone` 这种 Web runtime artifact
+- `packages/mindos/packages/`、`packages/mindos/_standalone/` 是 pack/publish 生成物，不是源码；正常开发后用 `pnpm run clean:product-stage` 清理，本地 `npm pack` 会通过 `postpack` 自动清理
+- 产品主包固定为 `packages/mindos`（`@geminilight/mindos`），foundation / knowledge 必须位于 `packages/mindos/src/*`，不再拆成 workspace package
+- 正式 `mindos` CLI 固定在 `packages/mindos/bin/*`，不再保留单独的 `packages/cli` 主入口 package；可复用逻辑沉到 `packages/mindos/src/*`
+- 当前保留的低层 domain 为 `retrieval`、`protocols`
+- `retrieval` 的核心 contracts / chunking / SearchEngine / VectorDatabase 抽象归 `@geminilight/mindos/retrieval`；`packages/retrieval/*` 只放 MeiliSearch / LanceDB / Express / chokidar 等可选 adapter/service，默认不进入 Web 直接依赖或主 runtime 闭包
+- `protocols` 只做 transport host / SDK adapter，MCP/ACP/A2A 的业务规则归 `@geminilight/mindos`，避免协议包复制产品逻辑
+- 长期方向是 OpenCode 式 `@geminilight/mindos` 内聚核心业务；不要为“目录好看”新增细碎 package
+
+### 视觉回归验证
+
+UI 改动（TSX / CSS / 布局）时，commit 前用 Playwright 截图关键页面，保存到 `/tmp/<component>-<state>.png`。纯后端 / 文档改动不需要。
+
+### 发版后冒烟验证
+
+`npm run release` 后执行：
+
+```bash
+cd /tmp && mkdir mindos-smoke-$$ && cd mindos-smoke-$$
+npx @geminilight/mindos@latest --version
+npx @geminilight/mindos@latest --help
+cd / && rm -rf /tmp/mindos-smoke-$$
+```
+
+失败则 hotfix + 重新 release。
+
+### 代码质量自检（code review 时逐条过）
+
+#### 正确性
+- [ ] 对照 spec 验收标准逐条验证
+- [ ] 查 `wiki/80-known-pitfalls.md`，确认没有重蹈覆辙
+- [ ] 所有新引入的依赖版本范围是否正确？（`^` range 的下界是否真的有需要的 API）
+
+#### 健壮性
+- [ ] 外部调用（API / 文件 / 网络）是否有 try-catch？错误信息是否对用户有帮助？
+- [ ] 用户输入是否做了验证和清洗？（空值、类型错误、注入攻击）
+- [ ] 异步操作是否有超时保护？是否处理了竞态条件？
+- [ ] 失败路径是否有 fallback 或 graceful degradation？
+
+#### 可维护性
+- [ ] 没有未使用的 import / 变量 / 函数
+- [ ] 没有重复代码（>3 行相同逻辑应提取函数）
+- [ ] 命名是否清晰、一致？（看名字就知道干什么）
+- [ ] 复杂逻辑是否有注释说明 **why**（不是 what）？
+
+#### 性能
+- [ ] 是否引入了 N+1 查询或不必要的循环？
+- [ ] 大数据量场景是否会 OOM？（数组、字符串拼接）
+- [ ] 缓存是否三层覆盖？（客户端 router cache / 服务端 revalidate / 内存 cache）
+
+### 设计系统合规（前端必须遵守）
+
+完整规范见 `wiki/21-design-principle.md`，预防指南见 `wiki/41-dev-pitfall-patterns.md`。
+
+- **色值**：禁止硬编码 hex。状态色用 `var(--success)` / `var(--error)` 或 `text-success` / `text-error`；品牌色用 `var(--amber)`。新增语义色必须先在 `globals.css` 定义变量 + `@theme inline` 注册 + 文档记录
+- **Amber 按钮文字**：`--amber-foreground` 固定为白色 `#ffffff`。Amber CTA 按钮统一 `bg-[var(--amber)] text-[var(--amber-foreground)]`。**禁止**在非 amber 背景上使用 `amber-foreground` 作为独立文字色
+- **Focus ring**：一律用 `focus-visible:`（不是 `focus:`），颜色走 `ring-ring`（= amber）
+- **字体**：用 `.font-display` / `font-mono` / `font-sans`，禁止 `style={{ fontFamily }}`
+- **z-index**：只用 10/20/30/40/50 五个层级，查表选最近语义层
+- **动效**：不超过 0.3s，`prefers-reduced-motion` 已全局处理，无需单独适配
+- **圆角**：查圆角表（rounded / rounded-md / rounded-lg / rounded-xl）
+
+### 前端状态变更检查（改组件时必须遵守）
+
+详细案例见 `wiki/41-dev-pitfall-patterns.md` 规则 6-8。
+
+- **加条件 UI 分支 → grep 旧 UI**：搜索同一 state 变量驱动的其他 UI 元素，确认旧的移除或互斥，不能重复显示
+- **加分支改变默认行为 → 验证初始值**：假设用户什么都不点直接 Next，`state` 初始值是否符合新分支的预期？不符合就在分支生效时主动 `setState`
+- **加 disabled → grep 所有触发入口**：搜索 `setXxx` 的所有调用方（按钮、步骤条、快捷键），逐一确认守卫，漏一个就是可绕过的通道
+
+### 代码更新后置流程
+
+开发中实时做，提交前 checklist 最后确认：
+
+```
+改代码 → tests（新功能写上，修 bug 视情况补）→ 更新 wiki
+```
+
+## 开发服务器
+
+MindOS 开发时使用 `mindos-srv` tmux session 运行，包含两个窗口：
+
+| 窗口 | 服务 | 端口 | 说明 |
+|------|------|------|------|
+| `web` | Next.js dev server | 4567 | **热更新**——改 `.tsx`/`.css` 自动刷新，不需要重启 |
+| `mcp` | MCP HTTP server | 8567 | Agent 通过 `http://localhost:8567/mcp` 调用 |
+
+### 启动
+
+```bash
+tmux attach -t mindos-srv       # 如果已存在，直接 attach
+
+# 或者手动创建：
+tmux new-session -s mindos-srv -n web -c /Users/geminilight/code/mindos-dev-v1
+# web 窗口：
+MINDOS_WEB_PORT=4567 pnpm --filter @mindos/web dev
+# 新建 mcp 窗口：
+MCP_TRANSPORT=http MINDOS_MCP_PORT=8567 MINDOS_WEB_PORT=4567 node packages/mindos/bin/cli.js mcp
+```
+
+### 访问
+
+- Web UI: `http://21.6.243.108:4567`
+- MCP endpoint: `http://127.0.0.1:8567/mcp`
+
+### 跑测试不杀 dev server
+
+`stopMindos()` 在 `NODE_ENV=test` 时自动跳过进程 kill，`npm test` 和 `git push` 都不会影响 dev server。
+
+```bash
+git push                          # 正常跑测试，不杀 dev server
+SKIP_TESTS=1 git push             # 跳过测试直接 push
+npm test                          # 手动跑测试，不杀 dev server
+```
+
+## Git 提交流程
+
+### Commit 前 Checklist
+
+- [ ] tests 通过（新功能已写 tests，修 bug 视情况补）
+- [ ] code review 完成
+- [ ] wiki 已更新（架构变更、API 变更、新坑等）
+- [ ] backlog 已打勾（完成的任务标记为完成）
+- [ ] changelog 已更新（发版时从 backlog 整理写入 `wiki/90-changelog.md`）
+- [ ] 文档一致性检查（README 双语、SKILL.md 副本）
+- [ ] 无 debug 代码 / console.log 遗留
+- [ ] 无敏感信息混入（API key、密码等）
+- [ ] 无不相关的临时文件混入
+
+### 提交步骤
+
+1. **公开仓同步检查**：跳过。**绝对禁止** `git merge public/main` 或 `git push public main`。
+   - public repo 只有 dev 的子集文件，merge 会删除 dev-only 文件（实际事故：219 文件丢失）
+   - dev → public 只通过 `sync-to-mindos.yml` CI 单向同步
+   - 唯一允许直接推 public 的是 tag：`git push public v0.6.27`（仅 tag，不推 branch）
+   - 如果 public 有外部 PR → 在 GitHub 上合并，CI 自动同步，不要手动 merge
+2. **检查改动**：`git status` + `git diff`，排除不相关的临时文件
+3. **写 commit message**：遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `docs:` 等）
+4. **提交并 push**：`git add <files> && git commit && git push origin main`（只 push origin，不 push public）
+5. 如果用户要求 release → 执行 `npm run release`（**始终使用 patch，除非用户明确指定 minor 或 major**）
+
+### 发版说明
+
+- **默认 patch**：除非用户明确说 minor 或 major，否则一律 `npm run release`（等同于 `npm run release patch`）。不要自行判断应该用 minor/major。
+
+- push 到 main 会触发 `sync-to-mindos` workflow（同步到公开仓 + 部署 landing page）
+- 只有打 `v*.*.*` tag 才会触发 `publish-npm` workflow（发布到 npm）
+- `npm run release` 会自动：检查工作区干净 → 跑测试 → bump 版本 → 打 tag → push → 等待 CI
+
+### 手动发版操作规范（避免浪费版本号）
+
+版本号一旦发到 npm 就不能复用，以下步骤**必须严格执行**，防止构建失败导致版本号跳跃：
+
+1. **确保 cwd 在项目根目录**：`cd /Users/geminilight/code/mindos-dev-v1`，不要在 `packages/web/` 子目录操作
+2. **先跑 tsc**：`pnpm --filter @mindos/web typecheck`（确认零编译错误再发版）
+3. **版本主轴**：npm 产品版本以 `packages/mindos/package.json` 为准；根目录 `package.json` 只作为 private monorepo 编排版本保持同步，`packages/web/package.json` 是 workspace 包元数据，不作为 npm 发布版本源
+4. **验证 tag 内容**：`git show vX.Y.Z:packages/mindos/package.json | grep version`，确认版本号正确后再 push tag
+5. **公开仓同步**：不要手动 push public branch；先等 `sync-to-mindos` workflow 同步完成，再只 push `vX.Y.Z` tag（如需要）
+6. **一次做对**：不要 "先发再修"，修了再发又占一个版本号
+
+**npm 与 MindOS Desktop 对齐（精简）**
+
+- **MindOS 产品版本** = `@geminilight/mindos` 的 `version` = git **`vX.Y.Z`**（npm 发布主轴）。
+- **Desktop 安装包**另有**壳版本**（Electron）；**内置 MindOS** 须从**同一 `vX.Y.Z`** 构建，勿手拷未 tag 目录。可只发 npm、不必每次发 Desktop；**一旦发 Desktop**，内置应对齐本次要推的 MindOS 版本。
+- **关于 / 诊断**：建议同时展示 **MindOS 版本** 与 **Desktop 壳版本**，避免用户只对不上号。
+- 全文与 checklist：`wiki/specs/spec-desktop-bundled-mindos.md`（「发布与版本」）、发版步骤 `wiki/refs/git-sync-workflow.md`。
+
+### Desktop 发版步骤
+
+**不要用 `npm run release` 发 Desktop**——它只发 npm 包。Desktop 通过 GitHub Actions workflow 构建和发布。
+
+1. **确认代码已 push 到 origin main**，且 `sync-to-mindos` CI 已完成（公开仓已同步）
+2. **确定 Desktop 版本号**：查看上一个 release tag（`gh release list --repo GeminiLight/MindOS | head -3`），patch +1
+3. **触发 Build Desktop workflow**：
+   ```bash
+   gh workflow run "Build Desktop" --repo GeminiLight/MindOS \
+     -f publish=true \
+     -f tag=desktop-v<VERSION>
+   ```
+   - `publish=true`：构建完成后自动创建 GitHub Release（默认已开启）
+   - `tag=desktop-v<VERSION>`：**必须传**，workflow 会从 tag 提取版本号写入 `packages/desktop/package.json`，确保安装包文件名正确（如 `MindOS-0.1.13.dmg`）
+   - `sign_mac=true`：macOS 签名+公证（默认已开启）
+4. **验证 Release**：`gh release view desktop-v<VERSION> --repo GeminiLight/MindOS`
+   - 检查 assets 包含所有平台：`.dmg`（arm64 + x64）、`.exe`、`.AppImage`、`.deb`
+   - 检查文件名版本号正确（不是旧版本号）
+5. **如果 Release 有问题**（文件名错误、缺文件等）：
+   ```bash
+   gh release delete desktop-v<VERSION> --repo GeminiLight/MindOS --yes
+   # 重新触发 step 3
+   ```
+
+**常见踩坑：**
+- 忘传 `tag` → 安装包文件名用 `packages/desktop/package.json` 的旧版本号
+- 忘传 `publish=true`（旧默认值）→ finalize job 跳过，不创建 Release
+- 公开仓未同步最新代码 → 构建的是旧版本，等 `sync-to-mindos` 完成再触发
+
+## 文档维护
+
+### 文档一致性规则
+
+- `CLAUDE.md` → `AGENTS.md` 的 symlink，无需单独维护
+- `README.md` 和 `README_zh.md` 必须保持一致
+- `skills/mindos/SKILL.md` 和 `packages/web/data/skills/mindos/SKILL.md` 必须保持一致（不一致时以 `skills/` 为准）
+
+### Backlog 与 Changelog
+
+- **Backlog**（`wiki/85-backlog.md`）：追踪待办 / 进行中 / 已完成任务，完成后打勾
+- **Changelog**（`wiki/90-changelog.md`）：发版时从已完成的 backlog 条目批量整理写入，面向用户描述变更
+
+### 对话记录
+
+记录每次对话，分类存入 MindOS 笔记，标注期望的 workflow 是否完成。
+
+<!-- TODO: 补充对话分类方式（如：需求讨论 / bug fix / 流程优化 / ...） -->
+
+## Skill 优化流程
+
+1. **收集 Bad Case**：用户描述或提供 `BAD_CASES.md`，记录具体的错误行为
+2. **读取 Skill**：读取 `skills/<name>/SKILL.md`，理解当前 description 和执行逻辑
+3. **定位根因**：判断问题出在 trigger 描述、执行模式、工具选型，还是边界条件缺失
+4. **提出修复方案**：给出具体的改动建议，说明改了什么、为什么
+5. **用户确认**：等用户确认方向后再动手
+6. **同步更新所有副本**：
+   - `skills/<name>/SKILL.md`（中文版同步修改英文版，反之亦然）
+   - `packages/web/data/skills/<name>/SKILL.md`（按 AGENTS.md 规则与 skills/ 保持一致）
+   - `.claude-internal/skills/<name>/SKILL.md`（若存在）
+7. **验证一致性**：用命令行 diff 确认所有副本内容相同
+
+## Landing Page
+
+content.md <-> landing/index.html
+
+## Design Context
+
+### Users
+
+同时使用 3+ AI Agent 的独立开发者/创始人。日常在 CLI、IDE、多个 AI 对话窗口之间切换，管理 500+ 文件的本地 Markdown 知识库。使用场景：快速查阅笔记、沉淀对话经验、跨 Agent 共享上下文。核心诉求是效率和掌控感，而非协作或社交。
+
+### Brand Personality
+
+**温暖、专业、克制。**
+
+Warm Amber 传递人机共生的温度，但绝不花哨。工具本身退到背景，内容是主角。品牌情感目标：让用户感到"安静的信赖"——像一本皮质笔记本，不是一个闪亮的 App。
+
+### Aesthetic Direction
+
+- **靠近**：Notion（留白与内容优先）、Obsidian（本地优先 + Graph 可视化）、Linear（键盘驱动 + 工程师审美）
+- **远离**：企业 SaaS（Jira/Salesforce 的蓝灰密集表单）、黑客终端（纯黑底绿字）、玩具感（过多圆角渐变卡通图标）
+- **色调**：低饱和暖土色系（Warm Amber #c8873a），完整 light/dark 双主题
+- **字体**：Lora serif（长文阅读）+ IBM Plex Sans（UI）+ IBM Plex Mono（代码/display）
+
+### Design Principles
+
+1. **Content is King** — 界面为内容服务。最大化阅读区域，最小化 chrome（工具栏、边框、装饰）。
+2. **Keyboard First, Mouse Welcome** — 核心操作都有快捷键（⌘K/⌘/ /⌘,），但鼠标用户不应感到被忽视。
+3. **Progressive Disclosure** — 功能按需展开，不在首屏堆砌所有选项。空状态引导而非空白。
+4. **Warm Industrial** — 琥珀色点缀工业克制的灰调骨架。交互反馈用颜色和微动效，不用弹窗打断。
+5. **Local & Transparent** — 所有操作可审计、可撤销、数据在本地。UI 传递"你掌控一切"的安全感。
+
+### Layout Direction
+
+目标演进方向：Activity Bar（48px 纯图标 Rail）+ 可切换 Panel + Content，替代当前的多 Modal 方案。详见 `wiki/22-page-design.md` 优化路线图。
+
+### Echo（内向内容面）
+
+- **标题不重复**：面包屑只保留父级（如「回响 / Echo」），当前小节名仅出现在 `h1`，避免同一词读两遍。
+- **主区内切换**：在 `/echo/*` 内提供横向 segment 导航（pill），减少「关面板 → 再点另一行」的往返。
+- **克制动效**：卡片 hover 仅用边框/阴影微变化（≤150ms），不大面积铺琥珀色块。

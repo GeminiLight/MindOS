@@ -1,0 +1,23 @@
+{
+  "skill_name": "mindos-max",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我昨天跟产品经理开会讨论了一个新的用户反馈系统的方案，他们建议用NPS打分加上开放式评论，我觉得挺好的。帮我把这个决策记下来，以后其他同事问起来可以查到。",
+      "expected_output": "Agent should recognize this as a 'save decision from meeting' task, use MindOS to store the meeting note with proper structure (date, attendees implied, decision, rationale), and place it in an appropriate directory in the KB.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "上周我记得我们讨论过API限流的方案，具体是怎么定的来着？好像是每分钟100次还是200次？我找不到了。",
+      "expected_output": "Agent should recognize this as a 'search for past decision' task, use MindOS search to find the API rate limiting discussion, and return the relevant content with file path citation.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I just finished debugging a really tricky race condition in our payment service - turns out the mutex wasn't being released properly in the error path. Took me 3 hours to figure out. I want to make sure the team doesn't hit this again.",
+      "expected_output": "Agent should recognize this as 'capture debugging experience/lessons learned', use MindOS to save a structured troubleshooting note with problem description, root cause, solution, and prevention tips.",
+      "files": []
+    }
+  ]
+}

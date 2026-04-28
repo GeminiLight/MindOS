@@ -1,0 +1,130 @@
+title: Sprint Release Workflow
+description: Weekly sprint release process with multi-agent collaboration and comprehensive QA
+
+# Global configuration - skills available across all steps
+skills:
+  - software-architecture
+  - code-review-quality
+  - document-release
+
+# Global tools guidance (advisory - LLM auto-selects based on context)
+tools:
+  - git
+  - npm
+  - github
+
+# Workflow steps - executed sequentially
+steps:
+  # Step 1: Run comprehensive test suite
+  - id: run_tests
+    name: Run tests
+    description: Execute full test suite and report results with coverage metrics
+    agent: cursor
+    prompt: |
+      Execute the full test suite for this project.
+      
+      Provide:
+      1. Total tests run, passed, failed
+      2. Coverage report (lines/branches/functions)
+      3. Any critical failures with recommendations
+      4. Time taken
+      
+      If failures exist, list the top 3 most critical with suggested fixes.
+    timeout: 120
+
+  # Step 2: Code review with dedicated AI agent
+  - id: code_review
+    name: Code review
+    description: Comprehensive code review using software architecture principles
+    agent: claude-code
+    skill: code-review-quality
+    prompt: |
+      Review the recent code changes using the code-review-quality standard.
+      
+      Evaluate:
+      1. Correctness - error handling, edge cases
+      2. Security - authentication, input validation, secrets
+      3. Performance - N+1 queries, caching, complexity
+      4. Maintainability - naming, tests, documentation
+      5. Architecture - follows project patterns, no anti-patterns
+      
+      Provide a rating (e.g., 8.5/10) and key recommendations.
+    timeout: 120
+
+  # Step 3: Automated security scan (no agent - use LLM with tools)
+  - id: security_check
+    name: Security scan
+    description: Run security analysis and dependency checks
+    tools:
+      - npm
+      - github
+    prompt: |
+      Perform security checks on this project:
+      
+      1. Check for known vulnerabilities in npm dependencies
+      2. Review recent dependency changes
+      3. Check for hardcoded secrets or credentials
+      4. Evaluate access control and authentication mechanisms
+      5. Assess error handling for information leaks
+      
+      Report severity and recommended fixes.
+    timeout: 60
+
+  # Step 4: Update documentation using document-release skill
+  - id: update_docs
+    name: Update documentation
+    description: Sync CHANGELOG, README, and API docs with shipped changes
+    skill: document-release
+    prompt: |
+      Update project documentation based on the shipped changes:
+      
+      1. Update CHANGELOG.md following semantic versioning
+      2. Update README.md if features or APIs changed
+      3. Update API documentation if endpoints changed
+      4. Verify all documentation links are valid
+      5. Check code examples match current implementation
+      
+      Provide a summary of all documentation updates made.
+    timeout: 60
+
+  # Step 5: Final checklist before release
+  - id: pre_release_check
+    name: Pre-release verification
+    description: Final comprehensive verification before shipping
+    agent: mindos
+    prompt: |
+      Perform final pre-release verification:
+      
+      Checklist:
+      ☐ All tests passing
+      ☐ Code review completed and issues resolved
+      ☐ Security scan passed or risks accepted
+      ☐ Documentation updated and links valid
+      ☐ Version bumped correctly (semver)
+      ☐ Git tags and commits clean
+      ☐ No uncommitted changes
+      ☐ Changelog entry present
+      ☐ Dependencies updated and locked
+      ☐ Performance benchmarks acceptable
+      
+      Confirm release readiness or list any blockers.
+    timeout: 60
+
+  # Step 6: Create release tag and prepare release notes
+  - id: create_release
+    name: Create release
+    description: Tag release and prepare release notes for publishing
+    tools:
+      - git
+      - npm
+    prompt: |
+      Prepare the project for release:
+      
+      1. Confirm version in package.json matches intended release
+      2. Create git tag for this version (vX.Y.Z)
+      3. Generate release notes from CHANGELOG.md
+      4. Prepare npm release command (do not execute yet)
+      5. List all deliverables included in this release
+      
+      Provide step-by-step commands for final publishing.
+    timeout: 60

@@ -1,0 +1,11 @@
+{
+  "eval_id": 2,
+  "eval_name": "search-past-decision-zh",
+  "prompt": "上周我记得我们讨论过API限流的方案，具体是怎么定的来着？好像是每分钟100次还是200次？我找不到了。",
+  "assertions": [
+    {"text": "Uses mindos search with multiple keyword variants (synonyms, Chinese/English)", "type": "behavioral"},
+    {"text": "Searches for API rate limiting related terms", "type": "content"},
+    {"text": "Read-only approach - does not write to KB", "type": "behavioral"},
+    {"text": "Would cite file path if results found", "type": "behavioral"}
+  ]
+}

@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+# $2 = "merge" when git is creating a merge commit
+if [ "${2:-}" = "merge" ]; then
+  if "$(dirname "$0")/block-public-merge.sh" 2>&1; then
+    : # not blocked, continue
+  else
+    # Block: wipe the commit message file so git aborts
+    echo "" > "$1"
+    exit 0
+  fi
+fi

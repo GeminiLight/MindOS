@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MindOS</title>
+  </head>
+  <body>
+    <div id="app">
+      <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+      ">
+        <h1>MindOS Desktop (Tauri)</h1>
+        <p id="status">Connecting to runtime...</p>
+        <div id="error" style="display: none; color: red; margin-top: 20px;"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

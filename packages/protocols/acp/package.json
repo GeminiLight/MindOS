@@ -1,0 +1,42 @@
+{
+  "name": "@mindos/acp",
+  "version": "1.0.0",
+  "description": "Agent Client Protocol integration core for MindOS",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "src/agent-descriptors.ts",
+    "src/detect-local.ts",
+    "src/index.ts",
+    "src/registry.ts",
+    "src/session.ts",
+    "src/subprocess.ts",
+    "src/types.ts",
+    "package.json",
+    "tsconfig.json",
+    "README.md"
+  ],
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.9"
+  }
+}

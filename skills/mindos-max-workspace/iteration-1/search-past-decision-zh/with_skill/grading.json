@@ -1,0 +1,28 @@
+{
+  "eval_id": 2,
+  "eval_name": "search-past-decision-zh",
+  "run_type": "with_skill",
+  "skill": "mindos-max",
+  "expectations": [
+    {
+      "text": "Uses mindos search with multiple keyword variants (synonyms, Chinese/English)",
+      "passed": true,
+      "evidence": "Fired 4 parallel searches: 'API限流', 'rate limit', '每分钟100次 OR 每分钟200次', 'rate limiting 100 200'."
+    },
+    {
+      "text": "Searches for API rate limiting related terms",
+      "passed": true,
+      "evidence": "All 4 search queries are relevant to API rate limiting."
+    },
+    {
+      "text": "Read-only approach - does not write to KB",
+      "passed": true,
+      "evidence": "Transcript explicitly states 'This was a read-only task. No writes were performed.' No write commands used."
+    },
+    {
+      "text": "Would cite file path if results found",
+      "passed": true,
+      "evidence": "Response cites both 'decisions/api-rate-limiting.md' and 'meetings/2026-04-01-api-design.md'."
+    }
+  ]
+}

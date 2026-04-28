@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "MindOS",
+    "slug": "mindos-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1917"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.geminilight.mindos",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MindOS needs camera access to scan QR codes for connecting to your MindOS server."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1917"
+      },
+      "package": "com.geminilight.mindos",
+      "permissions": ["CAMERA"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MindOS needs camera access to scan QR codes for connecting to your MindOS server."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "scheme": "mindos",
+    "extra": {
+      "eas": {
+        "projectId": "b24f8ff1-a88d-4501-884d-e15fe60855b0"
+      }
+    }
+  }
+}

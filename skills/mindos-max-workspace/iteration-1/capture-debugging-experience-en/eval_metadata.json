@@ -1,0 +1,11 @@
+{
+  "eval_id": 3,
+  "eval_name": "capture-debugging-experience-en",
+  "prompt": "I just finished debugging a really tricky race condition in our payment service - turns out the mutex wasn't being released properly in the error path. Took me 3 hours to figure out. I want to make sure the team doesn't hit this again.",
+  "assertions": [
+    {"text": "Uses mindos CLI to save debugging experience note", "type": "behavioral"},
+    {"text": "Structured note includes: problem description, root cause, solution, prevention tips", "type": "content"},
+    {"text": "Bootstraps KB tree before writing", "type": "behavioral"},
+    {"text": "Recognizes this as experience capture / lessons learned scenario", "type": "behavioral"}
+  ]
+}

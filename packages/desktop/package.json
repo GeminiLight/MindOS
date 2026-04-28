@@ -1,0 +1,41 @@
+{
+  "name": "@mindos/desktop",
+  "version": "0.3.13",
+  "description": "MindOS Desktop — Human-Agent Collaborative Mind System",
+  "author": {
+    "name": "MindOS Team",
+    "email": "tianfuwang.cs@gmail.com"
+  },
+  "homepage": "https://github.com/GeminiLight/MindOS",
+  "private": true,
+  "main": "dist-electron/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepare-mindos-runtime": "node scripts/prepare-mindos-runtime.mjs",
+    "dist:with-bundled": "npm run prepare-mindos-runtime && electron-builder",
+    "dist:mac-zip": "npm run build && npm run prepare-mindos-runtime && electron-builder --mac zip --x64 --arm64 --publish never"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "electron-updater": "^6.3.0",
+    "semver": "^7.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/semver": "^7.5.8",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-vite": "^1.0.29",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.6"
+  }
+}

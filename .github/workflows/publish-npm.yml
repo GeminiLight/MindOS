@@ -1,0 +1,109 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag (e.g. v0.5.32)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: packages/web/.next/cache
+          key: nextjs-npm-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('packages/web/**/*.ts', 'packages/web/**/*.tsx', 'packages/**/*.ts') }}
+          restore-keys: |
+            nextjs-npm-${{ hashFiles('pnpm-lock.yaml') }}-
+            nextjs-npm-
+
+      - name: Build standalone package
+        run: |
+          pnpm --filter @mindos/acp build
+          pnpm --filter @geminilight/mindos build
+          pnpm --filter @mindos/mcp-server build
+          NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @mindos/web run build
+          node scripts/prepare-standalone.mjs
+          node scripts/stage-product-package.mjs
+
+      - name: Smoke test standalone server
+        run: |
+          # Materialize assets and verify server starts + responds to health check
+          node scripts/verify-standalone.mjs
+
+      - name: Clean build artifacts before publish
+        run: |
+          rm -rf node_modules packages/web/node_modules packages/web/.next packages/protocols/acp/node_modules packages/mindos/node_modules packages/protocols/mcp-server/node_modules
+          # Remove symlinks inside staged standalone deps (cause infinite recursion)
+          find packages/mindos/_standalone/__node_modules -type l -delete 2>/dev/null || true
+          echo "=== Verifying _standalone exists ==="
+          ls -la packages/mindos/_standalone/server.js
+          echo "=== Checking tarball size ==="
+          cd packages/mindos && npm pack --dry-run --ignore-scripts 2>&1 | tail -5
+
+      - name: Publish to npm
+        run: cd packages/mindos && npm publish --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Ensure latest tag points to this version
+        run: |
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          echo "Setting latest dist-tag to ${VERSION}..."
+          npm dist-tag add "@geminilight/mindos@${VERSION}" latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published package integrity
+        run: |
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          echo "Verifying published package ${VERSION}..."
+          cd /tmp && rm -rf mindos-pkg-verify && mkdir mindos-pkg-verify && cd mindos-pkg-verify
+          npm pack "@geminilight/mindos@${VERSION}" 2>&1
+          TGZ=$(ls -1 geminilight-mindos-*.tgz 2>/dev/null | head -1)
+          if [ -z "$TGZ" ]; then
+            echo "❌ npm pack failed — no .tgz file found"
+            exit 1
+          fi
+          echo "Downloaded: $TGZ"
+
+          # Check _standalone structure
+          for f in "_standalone/server.js" "_standalone/__next/server/app-paths-manifest.json" "_standalone/__next/server/app/page.js" "_standalone/__node_modules"; do
+            if ! tar -tzf "$TGZ" | grep -q "$f"; then
+              echo "❌ Published package missing $f!"
+              exit 1
+            fi
+            echo "   ✓ $f"
+          done
+
+          echo "✅ Package integrity verified"

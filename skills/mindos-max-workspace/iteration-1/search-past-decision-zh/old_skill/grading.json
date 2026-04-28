@@ -1,0 +1,28 @@
+{
+  "eval_id": 2,
+  "eval_name": "search-past-decision-zh",
+  "run_type": "old_skill",
+  "skill": "mindos-original",
+  "expectations": [
+    {
+      "text": "Uses mindos search with multiple keyword variants (synonyms, Chinese/English)",
+      "passed": true,
+      "evidence": "Fired 4 parallel searches: 'API限流', '速率限制', 'rate limit', '每分钟100次'."
+    },
+    {
+      "text": "Searches for API rate limiting related terms",
+      "passed": true,
+      "evidence": "All 4 queries target API rate limiting concepts."
+    },
+    {
+      "text": "Read-only approach - does not write to KB",
+      "passed": true,
+      "evidence": "Post-task hooks section states 'Skipped (read-only task, no writes)'. No write commands used."
+    },
+    {
+      "text": "Would cite file path if results found",
+      "passed": true,
+      "evidence": "Two example responses both include file paths in citations."
+    }
+  ]
+}

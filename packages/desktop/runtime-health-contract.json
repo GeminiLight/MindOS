@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "features": {
+    "web-standalone": {
+      "description": "Next.js standalone server and traced server output",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/web/.next/standalone/server.js",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/.next/server",
+          "type": "directory"
+        },
+        {
+          "path": "packages/web/.next/static",
+          "type": "directory"
+        }
+      ]
+    },
+    "critical-routes": {
+      "description": "Server-rendered page bundles for core routes — missing any means 500 at runtime",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/web/.next/standalone/.next/server/app/page.js",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/.next/server/app/wiki/page.js",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/.next/server/app/explore/page.js",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/.next/server/app/changelog/page.js",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/.next/server/app/setup/page.js",
+          "type": "file"
+        }
+      ]
+    },
+    "pdf-runtime": {
+      "description": "PDF extraction entrypoint and parser runtime",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/web/.next/standalone/scripts/extract-pdf.cjs",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.mjs",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+          "type": "file"
+        }
+      ]
+    },
+    "mcp-dist": {
+      "description": "Built MCP bundle for packaged and archived runtimes",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/protocols/mcp-server/dist/index.cjs",
+          "type": "file"
+        }
+      ]
+    },
+    "skills-data": {
+      "description": "Bundled skill definitions required by runtime archive",
+      "required": false,
+      "files": [
+        {
+          "path": "packages/web/data/skills",
+          "type": "directory"
+        }
+      ]
+    },
+    "mcp-source": {
+      "description": "MCP source tree allowed in dev/user runtimes",
+      "required": false,
+      "files": [
+        {
+          "path": "packages/protocols/mcp-server/src",
+          "type": "directory"
+        }
+      ]
+    },
+    "cli-runtime": {
+      "description": "MindOS CLI entrypoint and product CLI helper required by bundled/archive runtimes",
+      "required": true,
+      "files": [
+        {
+          "path": "bin/cli.js",
+          "type": "file"
+        },
+        {
+          "path": "src/cli.js",
+          "type": "file"
+        }
+      ]
+    }
+  },
+  "checks": {
+    "standaloneAppRequiredFeatures": [
+      "web-standalone",
+      "critical-routes",
+      "pdf-runtime"
+    ],
+    "bundledRuntimeRequiredFiles": [
+      {
+        "path": "packages/web/.next",
+        "type": "directory"
+      }
+    ],
+    "bundledRuntimeRequiredFeatures": [
+      "web-standalone",
+      "critical-routes",
+      "pdf-runtime",
+      "mcp-dist",
+      "cli-runtime"
+    ],
+    "archiveRequiredFiles": [
+      {
+        "path": "package.json",
+        "type": "file"
+      }
+    ],
+    "archiveRequiredFeatures": [
+      "web-standalone",
+      "critical-routes",
+      "pdf-runtime",
+      "mcp-dist",
+      "cli-runtime",
+      "skills-data"
+    ],
+    "runtimeLayoutMcpAnyOf": [
+      [
+        "mcp-dist"
+      ],
+      [
+        "mcp-source"
+      ]
+    ]
+  }
+}

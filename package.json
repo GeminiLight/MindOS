@@ -1,0 +1,65 @@
+{
+  "name": "mindos-dev",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
+  "keywords": [
+    "mindos",
+    "mcp",
+    "knowledge-base",
+    "knowledge-management",
+    "ai-agent",
+    "local-first",
+    "markdown",
+    "second-brain"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "GeminiLight",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GeminiLight/MindOS"
+  },
+  "homepage": "https://mindos.you",
+  "bugs": {
+    "url": "https://github.com/GeminiLight/MindOS/issues"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "dev": "node packages/mindos/bin/cli.js dev",
+    "build": "node packages/mindos/bin/cli.js build",
+    "start": "node packages/mindos/bin/cli.js start",
+    "mcp": "node packages/mindos/bin/cli.js mcp",
+    "test": "pnpm run test:contracts && pnpm run test:unit && turbo run test",
+    "test:contracts": "vitest run tests/*.test.ts",
+    "test:unit": "vitest run tests/unit/*.test.ts",
+    "test:integration": "vitest run --config tests/integration/vitest.config.ts",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "verify:standalone": "node scripts/verify-standalone.mjs",
+    "clean:product-stage": "node scripts/clean-product-stage.mjs --include-package-docs",
+    "release": "bash scripts/release.sh",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "prepare": "git config core.hooksPath scripts/hooks 2>/dev/null || true"
+  },
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.0.0"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.21.0",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

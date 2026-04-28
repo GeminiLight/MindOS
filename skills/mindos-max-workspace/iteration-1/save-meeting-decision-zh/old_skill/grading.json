@@ -1,0 +1,28 @@
+{
+  "eval_id": 1,
+  "eval_name": "save-meeting-decision-zh",
+  "run_type": "old_skill",
+  "skill": "mindos-original",
+  "expectations": [
+    {
+      "text": "Uses mindos CLI commands (mindos file create/write/append) to save content",
+      "passed": true,
+      "evidence": "Transcript shows `mindos file create \"decisions/2026-04-06-user-feedback-system-nps.md\" --content \"...\"` in Step 4."
+    },
+    {
+      "text": "Includes structured meeting note with date, topic, decision, and rationale",
+      "passed": true,
+      "evidence": "Content includes 决策摘要, 背景, 决策内容, 参与者, 理由, and 后续 TODO sections."
+    },
+    {
+      "text": "Places file in appropriate subdirectory (not KB root)",
+      "passed": true,
+      "evidence": "File placed at `decisions/2026-04-06-user-feedback-system-nps.md`."
+    },
+    {
+      "text": "Bootstraps KB tree before writing (mindos file list)",
+      "passed": true,
+      "evidence": "Step 1 explicitly runs `mindos file list`."
+    }
+  ]
+}

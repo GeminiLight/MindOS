@@ -1,0 +1,9 @@
+# Desktop Tauri Spike
+
+node_modules/
+dist/
+target/
+.DS_Store
+*.log
+*.lock
+Cargo.lock

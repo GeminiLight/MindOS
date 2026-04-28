@@ -1,0 +1,44 @@
+/* ── Content Script — Extracts page content via Readability ── */
+/* Injected on demand by popup via chrome.scripting.executeScript() */
+
+import { Readability } from '@mozilla/readability';
+
+/** Extract article content from the current page */
+function extractPageContent() {
+  // Clone document so Readability mutations don't affect the live page
+  const docClone = document.cloneNode(true) as Document;
+
+  const reader = new Readability(docClone, {
+    charThreshold: 100,
+  });
+
+  const article = reader.parse();
+
+  const title = article?.title || document.title || 'Untitled';
+  const content = article?.content || document.body.innerHTML;
+  const textContent = article?.textContent || document.body.textContent || '';
+
+  // Word count: handle both space-separated languages and CJK
+  const latinWords = textContent.split(/\s+/).filter(Boolean).length;
+  // CJK characters (Chinese, Japanese kanji, Korean hangul)
+  const cjkChars = (textContent.match(/[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af]/g) || []).length;
+  // For CJK-heavy content, use character count; otherwise word count
+  const wordCount = cjkChars > latinWords ? cjkChars : latinWords;
+
+  return {
+    title,
+    byline: article?.byline || null,
+    excerpt: article?.excerpt || null,
+    content,
+    textContent,
+    siteName: article?.siteName || null,
+    url: window.location.href,
+    savedAt: new Date().toISOString(),
+    wordCount,
+  };
+}
+
+// Store result on window so popup can read it via a second executeScript call.
+// (esbuild IIFE wraps in `(() => { ... })()` which discards the return value,
+//  so we can't rely on executeScript capturing it directly.)
+(window as any).__mindosClipResult = extractPageContent();

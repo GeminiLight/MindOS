@@ -1,0 +1,23 @@
+{
+  "name": "@mindos/desktop-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MindOS Desktop (Tauri spike)",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "build:web": "vite build",
+    "build:tauri": "tauri build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.0.9"
+  }
+}

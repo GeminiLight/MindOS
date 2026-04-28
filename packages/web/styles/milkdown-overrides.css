@@ -1,0 +1,283 @@
+/**
+ * Milkdown / Crepe editor typography overrides.
+ *
+ * IMPORTANT: This file MUST be imported AFTER @milkdown/crepe/theme/common/style.css
+ * in WysiwygEditor.tsx. Crepe's reset.css contains aggressive resets
+ * (* { margin:0; padding:0 }, p { font-size:16px; line-height:24px }, etc.)
+ * that override our globals.css rules by cascade order.
+ * By loading this file last, our rules win naturally without needing !important
+ * (though we keep !important as extra safety).
+ */
+
+/* ─── Base: font + caret ─── */
+.milkdown,
+.milkdown .ProseMirror,
+.milkdown .ProseMirror.editor,
+.milkdown [class*="editor"],
+.milkdown .editor {
+  font-family: var(--prose-font-override, var(--font-ui)) !important;
+  font-size: var(--prose-font-size-override, 1rem) !important;
+  caret-color: var(--amber);
+}
+
+/* ─── ProseMirror content area ─── */
+.milkdown .ProseMirror {
+  padding: 1rem 0 !important;
+  line-height: 1.85 !important;
+  color: var(--prose-body) !important;
+}
+
+/* ─── Headings ─── */
+.milkdown .ProseMirror h1,
+.milkdown .ProseMirror h2,
+.milkdown .ProseMirror h3,
+.milkdown .ProseMirror h4 {
+  color: var(--prose-heading) !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: -0.01em !important;
+  padding: 0 !important;
+  font-family: var(--prose-font-override, var(--font-ui)) !important;
+}
+.milkdown .ProseMirror h1 { font-size: 1.85em !important; margin-top: 0 !important; margin-bottom: 0.6em !important; }
+.milkdown .ProseMirror h2 { font-size: 1.35em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; border-bottom: 1px solid var(--prose-border) !important; padding-bottom: 0.4em !important; }
+.milkdown .ProseMirror h3 { font-size: 1.15em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
+.milkdown .ProseMirror h4 { font-size: 1.05em !important; margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
+
+/* ─── Paragraph — override Crepe's p { font-size:16px; line-height:24px; padding:4px 0 } ─── */
+.milkdown .ProseMirror p {
+  margin-top: 0 !important;
+  margin-bottom: 0.9em !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  padding: 0 !important;
+}
+
+/* ─── Links ─── */
+.milkdown .ProseMirror a {
+  color: var(--amber) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+  text-decoration-color: rgba(200,135,58,0.35) !important;
+}
+.milkdown .ProseMirror a:hover { text-decoration-color: var(--amber) !important; }
+
+/* ─── Inline formatting ─── */
+.milkdown .ProseMirror strong { color: var(--prose-heading) !important; font-weight: 600 !important; }
+.milkdown .ProseMirror em { font-style: italic !important; color: var(--prose-muted) !important; }
+
+/* ─── Blockquote — hide Crepe's ::before bar, use our border-left ─── */
+.milkdown .ProseMirror blockquote {
+  border-left: 3px solid var(--amber) !important;
+  padding-left: 0.95em !important;
+  margin: 1em 0 !important;
+  color: var(--prose-subtle) !important;
+  font-style: italic !important;
+  font-weight: 500 !important;
+}
+.milkdown .ProseMirror blockquote::before { display: none !important; }
+
+/* ─── Lists — override Crepe's ul,ol { padding:0 } and * { margin:0 } ─── */
+.milkdown .ProseMirror ul,
+.milkdown .ProseMirror ol {
+  margin: 0.5em 0 0.8em 0 !important;
+  padding-left: 1.2em !important;
+}
+.milkdown .ProseMirror ul { list-style-type: disc !important; }
+.milkdown .ProseMirror ol { list-style-type: decimal !important; }
+.milkdown .ProseMirror li {
+  margin-bottom: 0.1em !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+/* Crepe list-item-block uses flex layout with 32px label wrappers;
+   tighten to match .prose density and align bullet/number properly */
+.milkdown .milkdown-list-item-block {
+  padding: 0 !important;
+}
+.milkdown .milkdown-list-item-block > .list-item {
+  gap: 4px !important;
+  align-items: flex-start !important;
+}
+.milkdown .milkdown-list-item-block li {
+  gap: 4px !important;
+}
+.milkdown .milkdown-list-item-block .label-wrapper {
+  height: auto !important;
+  width: 14px !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  color: var(--prose-muted) !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  line-height: 1.85 !important;
+}
+.milkdown .milkdown-list-item-block .label-wrapper svg {
+  fill: var(--prose-muted) !important;
+}
+.milkdown .milkdown-list-item-block .label-wrapper .label {
+  height: auto !important;
+  padding: 0 !important;
+  width: 14px !important;
+  font-size: 0.85em !important;
+  line-height: 1.85 !important;
+  text-align: center !important;
+}
+.milkdown .milkdown-list-item-block .children {
+  min-width: 0 !important;
+  flex: 1 !important;
+  line-height: 1.85 !important;
+}
+/* Nested lists: reduce top margin */
+.milkdown .milkdown-list-item-block .children ul,
+.milkdown .milkdown-list-item-block .children ol {
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+}
+/* Remove paragraph margin inside list items — it adds unwanted vertical space
+   because Milkdown wraps every list-item's text content in a <p> tag */
+.milkdown .milkdown-list-item-block .children p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ─── Horizontal rule — override Crepe's complex bg/height/padding hr ─── */
+.milkdown .ProseMirror hr {
+  border: none !important;
+  border-top: 1px solid var(--prose-border) !important;
+  margin: 1.8em 0 !important;
+  background: none !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+/* ─── Inline code — override Crepe's display:inline-block and color ─── */
+.milkdown .ProseMirror code:not(pre code) {
+  font-family: var(--font-code) !important;
+  background: var(--prose-code-border) !important;
+  color: var(--prose-heading) !important;
+  padding: 0.15em 0.45em !important;
+  border-radius: 4px !important;
+  font-size: 0.855em !important;
+  line-height: inherit !important;
+  display: inline !important;
+}
+
+/* ─── Code blocks (pre) — match .prose pre ─── */
+.milkdown .ProseMirror pre {
+  background: var(--prose-pre-bg) !important;
+  border: 1px solid var(--prose-code-border) !important;
+  border-radius: 8px !important;
+  padding: 0.9em 1em !important;
+  overflow-x: auto !important;
+  margin: 1em 0 !important;
+  color: var(--prose-pre-color) !important;
+}
+.milkdown .ProseMirror pre code {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  font-size: 0.82em !important;
+  font-family: var(--font-code) !important;
+  display: inline !important;
+  line-height: inherit !important;
+}
+
+/* ─── CodeMirror code blocks — disable active line highlight ─── */
+/* basicSetup includes highlightActiveLine/highlightActiveLineGutter which
+   causes line 1 to always appear "selected" even when not editing */
+.milkdown .cm-activeLine { background-color: transparent !important; }
+.milkdown .cm-activeLineGutter { background-color: transparent !important; color: inherit !important; }
+/* Match code block background/color to .prose pre */
+.milkdown .milkdown-code-block { background: var(--prose-pre-bg) !important; border-radius: 8px !important; border: 1px solid var(--prose-code-border) !important; margin: 1em 0 !important; }
+.milkdown .milkdown-code-block .cm-editor { background: transparent !important; }
+.milkdown .milkdown-code-block .cm-gutters { background: transparent !important; border-right: none !important; color: var(--prose-muted) !important; }
+.milkdown .milkdown-code-block .cm-content { font-family: var(--font-code) !important; font-size: 0.82em !important; color: var(--prose-pre-color) !important; }
+/* Code block tools — ensure copy button is visible and styled */
+.milkdown .milkdown-code-block .tools { padding: 4px 8px !important; }
+.milkdown .milkdown-code-block .tools-button-group button {
+  opacity: 0.7 !important;
+  background: var(--muted) !important;
+  color: var(--muted-foreground) !important;
+  border-radius: 4px !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+}
+.milkdown .milkdown-code-block:hover .tools-button-group button { opacity: 1 !important; }
+.milkdown .milkdown-code-block .tools-button-group button:hover {
+  background: var(--accent) !important;
+  color: var(--foreground) !important;
+}
+.milkdown .milkdown-code-block .tools-button-group button svg { fill: currentColor !important; width: 12px !important; height: 12px !important; }
+
+/* ─── Images ─── */
+.milkdown .ProseMirror img { max-width: 100% !important; border-radius: 6px; }
+
+/* ─── Emoji (twemoji extension protection) ─── */
+/* Browser extensions may replace emoji Unicode text with <img src="twemoji-cdn">.
+   We let them display normally in the editor (fighting back causes infinite loops),
+   but twemojiToNative() in WysiwygEditor.tsx converts any leaked ![](twemoji-url)
+   back to Unicode emoji when saving markdown. */
+.milkdown img[src*="twemoji"],
+.milkdown img[src*="emoji"],
+.milkdown img.emoji {
+  display: inline !important;
+  width: 1.2em !important;
+  height: 1.2em !important;
+  vertical-align: -0.15em !important;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 0.05em !important;
+}
+
+/* ─── Tables — match .prose table density ─── */
+.milkdown .ProseMirror table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 1em 0 !important;
+  font-size: 0.85em !important;
+}
+.milkdown .milkdown-table-block { margin: 1em 0 !important; }
+.milkdown .milkdown-table-block th {
+  background: var(--prose-th-bg) !important;
+  color: var(--prose-heading) !important;
+  font-weight: 600 !important;
+  padding: 0.4em 0.9em !important;
+  border: 1px solid var(--prose-border) !important;
+  text-align: left !important;
+  font-size: 0.78em !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+.milkdown .milkdown-table-block td {
+  padding: 0.35em 0.9em !important;
+  border: 1px solid var(--prose-code-border) !important;
+  color: var(--prose-muted) !important;
+}
+.milkdown .milkdown-table-block tr:nth-child(even) {
+  background: var(--prose-th-bg) !important;
+}
+/* Remove paragraph margin inside table cells — it adds unwanted vertical space */
+.milkdown .milkdown-table-block th p,
+.milkdown .milkdown-table-block td p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.milkdown .ProseMirror thead th {
+  background: var(--prose-th-bg) !important;
+  color: var(--prose-heading) !important;
+  font-weight: 600 !important;
+  padding: 0.4em 0.9em !important;
+  border: 1px solid var(--prose-border) !important;
+  text-align: left !important;
+}
+.milkdown .ProseMirror tbody td {
+  padding: 0.35em 0.9em !important;
+  border: 1px solid var(--prose-code-border) !important;
+  color: var(--prose-muted) !important;
+}
+.milkdown .ProseMirror tbody tr:nth-child(even) {
+  background: var(--prose-th-bg) !important;
+}

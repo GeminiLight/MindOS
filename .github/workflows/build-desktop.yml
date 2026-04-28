@@ -1,0 +1,430 @@
+name: Build Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GitHub Releases'
+        type: boolean
+        default: true
+      tag:
+        description: 'Tag to build (for release name, e.g. desktop-v0.1.0)'
+        type: string
+        required: false
+        default: ''
+      sign_mac:
+        description: 'Sign and notarize macOS builds'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            arch: arm64
+          - os: macos-latest
+            platform: mac
+            arch: x64
+          - os: windows-latest
+            platform: win
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # Windows: redirect USERPROFILE to prevent webpack from scanning protected
+      # system directories (INetCache, WindowsApps, etc.) that cause EPERM errors.
+      # This is the only reliable fix — deleting these dirs fails because they are
+      # OS-protected, and outputFileTracingExcludes doesn't affect compile-time glob.
+      - name: Fix Windows filesystem issues
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Create a clean home directory inside the workspace
+          $safeHome = Join-Path $env:GITHUB_WORKSPACE '.home'
+          New-Item -ItemType Directory -Path $safeHome -Force | Out-Null
+
+          # Copy essential dotfiles (npm config, etc.) but skip AppData
+          if (Test-Path (Join-Path $env:USERPROFILE '.npmrc')) {
+            Copy-Item (Join-Path $env:USERPROFILE '.npmrc') $safeHome -ErrorAction SilentlyContinue
+          }
+
+          # Redirect all home-related env vars for subsequent steps
+          echo "USERPROFILE=$safeHome" >> $env:GITHUB_ENV
+          echo "HOME=$safeHome" >> $env:GITHUB_ENV
+          echo "LOCALAPPDATA=$safeHome\AppData\Local" >> $env:GITHUB_ENV
+          echo "APPDATA=$safeHome\AppData\Roaming" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Path "$safeHome\AppData\Local" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$safeHome\AppData\Roaming" -Force | Out-Null
+
+          # Strip WindowsApps from PATH
+          $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'WindowsApps' }) -join ';'
+          echo "PATH=$cleanPath" >> $env:GITHUB_ENV
+
+          Write-Host "Redirected USERPROFILE to $safeHome"
+
+      # Install all workspace dependencies before mutating package versions.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Sync packages/desktop/package.json version from tag input (e.g. desktop-v0.1.13 -> 0.1.13)
+      # so electron-builder produces correctly versioned filenames and installers.
+      - name: Sync version from tag
+        if: inputs.tag != ''
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#desktop-v}"
+          echo "Setting desktop version to $VERSION (from tag: $TAG)"
+          cd packages/desktop && npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "packages/desktop/package.json version: $(node -p "require('./package.json').version")"
+
+      # Build Next.js standalone (required by prepare-mindos-runtime)
+      - name: Build MindOS (Next.js standalone)
+        run: |
+          pnpm --filter @geminilight/mindos build
+          pnpm --filter @mindos/mcp-server build
+          pnpm --filter @mindos/web run build
+
+      # Build Electron (compile TS → JS)
+      - name: Build Electron
+        run: pnpm --filter @mindos/desktop run build
+
+      # Bundle MindOS runtime + Node.js into desktop resources
+      - name: Prepare bundled runtime
+        env:
+          MINDOS_BUNDLE_NODE_ARCH: ${{ matrix.arch }}
+        run: pnpm --filter @mindos/desktop run prepare-mindos-runtime
+
+      # Get version (needed for tag name)
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(cd packages/desktop && node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # Package for the target platform.
+      # When publishing: electron-builder --publish always uploads to a GitHub Release
+      # named after package.json version (e.g. v0.1.0). We set EP_DRAFT=false so the
+      # release is immediately visible. The finalize job renames/edits it if needed.
+
+      # macOS: decode App Store Connect API Key (.p8) for notarization
+      - name: Prepare Apple API Key
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          if [ -z "$APPLE_API_KEY_BASE64" ] || [ -z "$APPLE_API_KEY_ID" ]; then
+            echo "API Key not configured, skipping (will fall back to Apple ID notarization)"
+            exit 0
+          fi
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          echo "✅ API Key written to ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
+
+      - name: Package (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_GH_IGNORE_TIME: true
+          EP_DRAFT: false
+        run: |
+          # macOS: set signing env vars (notarization is a separate step)
+          if [ "${{ matrix.platform }}" = "mac" ] && [ "${{ inputs.sign_mac }}" = "true" ]; then
+            export CSC_LINK="${{ secrets.APPLE_CERTIFICATE_BASE64 }}"
+            export CSC_KEY_PASSWORD="${{ secrets.APPLE_CERTIFICATE_PASSWORD }}"
+            export ELECTRON_BUILDER_SKIP_NOTARIZE=true
+          elif [ "${{ matrix.platform }}" = "mac" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+
+          if [ "${{ inputs.publish }}" = "true" ]; then
+            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish always
+          else
+            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+          fi
+
+      # macOS: verify DMGs are valid before notarization
+      # electron-builder can swallow hdiutil errors and produce corrupted DMGs
+      - name: Validate DMG integrity
+        if: matrix.platform == 'mac'
+        run: |
+          for file in packages/desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            echo "Validating: $(basename "$file")"
+            hdiutil verify "$file"
+            echo "  OK: $(basename "$file")"
+          done
+
+      # macOS: notarize DMG files with retry logic
+      - name: Notarize macOS builds
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Determine notarization auth method (array avoids word-splitting issues)
+          if [ -f ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 ] && [ -n "$APPLE_API_KEY_ID" ]; then
+            AUTH_ARGS=(--key ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
+            echo "Using API Key authentication"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            AUTH_ARGS=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
+            echo "Using Apple ID authentication"
+          else
+            echo "No notarization credentials configured, skipping"
+            exit 0
+          fi
+
+          notarize_file() {
+            local file="$1"
+            local max_retries=3
+            local retry=0
+            echo "Notarizing: $(basename "$file")"
+            while [ $retry -lt $max_retries ]; do
+              retry=$((retry + 1))
+              echo "  Attempt $retry/$max_retries..."
+              xcrun notarytool submit "$file" "${AUTH_ARGS[@]}" --wait --timeout 2h 2>&1 | tee /tmp/notarize.log
+              if grep -q "status: Accepted" /tmp/notarize.log; then
+                echo "  Notarized: $(basename "$file")"
+                return 0
+              fi
+              if [ $retry -lt $max_retries ]; then
+                echo "  Failed, retrying in 30s..."
+                sleep 30
+              fi
+            done
+            echo "  Failed after $max_retries attempts: $(basename "$file")"
+            cat /tmp/notarize.log
+            return 1
+          }
+
+          FAILED=0
+          for file in packages/desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            notarize_file "$file" || FAILED=1
+          done
+          [ $FAILED -eq 0 ] || exit 1
+
+      # macOS: staple notarization tickets to DMG files
+      - name: Staple notarization tickets
+        if: matrix.platform == 'mac' && inputs.sign_mac == true
+        run: |
+          for file in packages/desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            echo "📎 Stapling: $(basename "$file")"
+            xcrun stapler staple "$file"
+            echo "  ✅ Stapled: $(basename "$file")"
+          done
+
+      # macOS: replace pre-notarization DMGs on GitHub Release with notarized+stapled versions
+      - name: Re-upload notarized DMGs to release
+        if: matrix.platform == 'mac' && inputs.sign_mac == true && inputs.publish == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(cd packages/desktop && node -p "require('./package.json').version")
+          RELEASE_TAG="v${VERSION}"
+          for file in packages/desktop/dist/*.dmg; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            echo "Replacing with notarized version: ${BASENAME}"
+            gh release delete-asset "$RELEASE_TAG" "$BASENAME" --yes 2>/dev/null || true
+            gh release upload "$RELEASE_TAG" "$file"
+          done
+
+      # Upload artifacts (always, even if not publishing)
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindos-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            packages/desktop/dist/*.dmg
+            packages/desktop/dist/*.zip
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.AppImage
+            packages/desktop/dist/*.deb
+            packages/desktop/dist/*.yml
+            packages/desktop/dist/*.yaml
+          if-no-files-found: warn
+
+  # After all platforms finish: upload to CDN mirrors + finalize GitHub Release
+  finalize:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+            VERSION="${TAG#desktop-v}"
+          else
+            VERSION=$(cd packages/desktop && node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # Download all platform artifacts into a single directory
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # ── Cloudflare R2 upload (optional, non-blocking) ──
+      - name: Upload to Cloudflare R2
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "R2 not configured, skipping"
+            exit 0
+          fi
+          VERSION="${{ steps.version.outputs.version }}"
+          # Strip version from filename for CDN latest/ path so landing page URLs stay fixed.
+          # e.g. "MindOS-0.1.0-arm64.dmg" → "MindOS-arm64.dmg"
+          #      "MindOS Setup 0.1.0.exe" → "MindOS-Setup.exe"
+          #      "MindOS-0.1.0.AppImage"  → "MindOS.AppImage"
+          strip_version() {
+            echo "$1" | sed "s/-${VERSION}//g; s/ ${VERSION}//g; s/ /-/g"
+          }
+          for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            LATEST_NAME=$(strip_version "$BASENAME")
+            # Versioned path (original filename)
+            aws s3 cp "$file" "s3://mindos-releases/desktop/v${VERSION}/${BASENAME}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+            # Latest path (version-stripped filename)
+            aws s3 cp "$file" "s3://mindos-releases/desktop/latest/${LATEST_NAME}" \
+              --endpoint-url "$R2_ENDPOINT" --no-progress
+          done
+          echo "✅ Uploaded to Cloudflare R2: desktop/v${VERSION}/ + desktop/latest/"
+
+      # ── Alibaba Cloud OSS upload (optional, non-blocking) ──
+      # Uses ossutil for multipart + parallel upload (much faster than curl for large files)
+      - name: Install ossutil
+        continue-on-error: true
+        id: ossutil
+        run: |
+          OSSUTIL_VERSION="1.7.19"
+          curl -sSL -o /tmp/ossutil.zip \
+            "https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VERSION}/ossutil-v${OSSUTIL_VERSION}-linux-amd64.zip"
+          unzip -qo /tmp/ossutil.zip -d /tmp/ossutil_extract
+          mkdir -p "$HOME/.local/bin"
+          cp "/tmp/ossutil_extract/ossutil-v${OSSUTIL_VERSION}-linux-amd64/ossutil64" "$HOME/.local/bin/ossutil64"
+          chmod +x "$HOME/.local/bin/ossutil64"
+          rm -rf /tmp/ossutil.zip /tmp/ossutil_extract
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/ossutil64" --version
+
+      - name: Upload to Alibaba Cloud OSS
+        if: steps.ossutil.outcome == 'success'
+        continue-on-error: true
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+        run: |
+          if [ -z "$OSS_ACCESS_KEY_ID" ]; then
+            echo "OSS not configured, skipping"
+            exit 0
+          fi
+
+          # ossutil wrapper with inline auth (no config file needed)
+          oss() {
+            ossutil64 "$@" -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+          }
+
+          VERSION="${{ steps.version.outputs.version }}"
+          strip_version() {
+            echo "$1" | sed "s/-${VERSION}//g; s/ ${VERSION}//g; s/ /-/g"
+          }
+
+          # Parallel upload all files to versioned path (multipart + concurrent)
+          PIDS=()
+          for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            echo "Uploading: ${BASENAME}"
+            oss cp "$file" "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" \
+              -f --parallel 10 --part-size 10485760 &
+            PIDS+=($!)
+          done
+          ERRORS=0
+          for pid in "${PIDS[@]}"; do
+            wait "$pid" || ERRORS=$((ERRORS + 1))
+          done
+          [ "$ERRORS" -eq 0 ] && echo "All versioned uploads succeeded" || echo "WARNING: ${ERRORS} upload(s) failed"
+
+          # Server-side copy to latest/ (oss→oss, zero egress from runner)
+          for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
+            [ -f "$file" ] || continue
+            BASENAME=$(basename "$file")
+            LATEST_NAME=$(strip_version "$BASENAME")
+            oss cp "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" \
+                   "oss://${OSS_BUCKET}/desktop/latest/${LATEST_NAME}" -f &
+          done
+          wait
+          echo "Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
+
+      # ── Finalize GitHub Release ──
+      - name: Finalize release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EB_TAG="v${{ steps.version.outputs.version }}"
+          DESIRED_TAG="${{ inputs.tag }}"
+          if [ -z "$DESIRED_TAG" ]; then
+            DESIRED_TAG="desktop-v${{ steps.version.outputs.version }}"
+          fi
+
+          if [ "$EB_TAG" != "$DESIRED_TAG" ]; then
+            git tag "$DESIRED_TAG" 2>/dev/null || true
+            git push origin "$DESIRED_TAG" 2>/dev/null || true
+
+            if gh release view "$EB_TAG" >/dev/null 2>&1; then
+              gh release edit "$EB_TAG" \
+                --tag "$DESIRED_TAG" \
+                --title "MindOS Desktop $DESIRED_TAG" \
+                --draft=false \
+                --latest
+            fi
+          else
+            if gh release view "$EB_TAG" >/dev/null 2>&1; then
+              gh release edit "$EB_TAG" --draft=false --latest
+            fi
+          fi

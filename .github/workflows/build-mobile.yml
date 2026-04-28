@@ -1,0 +1,161 @@
+name: Build Mobile
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-build-${{ github.ref }}-${{ github.event.inputs.platform }}-${{ github.event.inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install mobile dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --filter @mindos/mobile run typecheck
+
+      - name: Test mobile app
+        run: pnpm --filter @mindos/mobile run test
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install mobile dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Expo token exists
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "EXPO_TOKEN is not configured. Add it in GitHub Secrets before running this workflow."
+            exit 1
+          fi
+
+      - name: Check EAS project config
+        run: |
+          if ! grep -q '"projectId"' packages/mobile/app.json; then
+            echo "## Warning" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- packages/mobile/app.json does not include expo.extra.eas.projectId." >> "$GITHUB_STEP_SUMMARY"
+            echo "- If this repository has not been linked to an EAS project yet, run one local 'eas build' first to initialize it." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Prepare Apple credentials for iOS builds
+        if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'all' }}
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_API_KEY_BASE64" ] && [ -n "$APPLE_API_KEY_ID" ] && [ -n "$APPLE_API_ISSUER" ]; then
+            API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+            echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+            echo "EXPO_ASC_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+            echo "EXPO_ASC_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+            echo "EXPO_ASC_ISSUER_ID=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+            if [ -n "$APPLE_TEAM_ID" ]; then
+              echo "EXPO_APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+            fi
+            echo "Prepared App Store Connect API key for iOS credential repair if needed."
+            echo "- iOS Apple credentials prepared from existing GitHub secrets." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Apple API key secrets are not fully configured. iOS builds can still work if EAS already has valid credentials stored." 
+            echo "- iOS build will rely on existing EAS-managed Apple credentials." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Build mobile app with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          pnpm --filter @mindos/mobile exec eas build \
+            --non-interactive \
+            --no-wait \
+            --json \
+            --message "GitHub Actions ${SHORT_SHA} (${GITHUB_REF_NAME}) - ${{ github.event.inputs.platform }} / ${{ github.event.inputs.profile }}" \
+            --platform "${{ github.event.inputs.platform }}" \
+            --profile "${{ github.event.inputs.profile }}" \
+            > eas-build.json
+
+      - name: Summarize submitted build
+        run: |
+          echo "## Mobile build submitted" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Platform: ${{ github.event.inputs.platform }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Profile: ${{ github.event.inputs.profile }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: ${GITHUB_REF_NAME}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat eas-build.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-eas-build-metadata
+          path: eas-build.json
+
+      - name: Next steps
+        run: |
+          echo "EAS build has been submitted."
+          echo "See the GitHub job summary for the submitted build metadata and Expo dashboard links."
+          echo "Platform: ${{ github.event.inputs.platform }}"
+          echo "Profile: ${{ github.event.inputs.profile }}"

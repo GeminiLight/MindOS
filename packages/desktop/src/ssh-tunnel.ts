@@ -1,0 +1,488 @@
+/**
+ * SSH Tunnel — parse ~/.ssh/config and manage SSH port-forwarding tunnels.
+ * Used by Remote mode to securely connect to MindOS servers without exposing ports.
+ */
+import { ChildProcess, spawn } from 'child_process';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import { app } from 'electron';
+
+const execAsync = promisify(exec);
+
+/** Sentinel error message indicating passphrase is needed */
+export const PASSPHRASE_NEEDED = '__PASSPHRASE_NEEDED__';
+
+// PID file for SSH tunnel — allows cleanup of orphaned tunnels on next launch
+const SSH_TUNNEL_PID_FILE = path.join(app.getPath('home'), '.mindos', 'ssh-tunnel.pid');
+
+/** Write SSH child PID to disk so we can clean up orphans on next launch */
+function writeTunnelPid(pid: number): void {
+  try { writeFileSync(SSH_TUNNEL_PID_FILE, String(pid), 'utf-8'); } catch { /* best effort */ }
+}
+
+/** Remove PID file when tunnel is intentionally stopped */
+function clearTunnelPid(): void {
+  try { if (existsSync(SSH_TUNNEL_PID_FILE)) unlinkSync(SSH_TUNNEL_PID_FILE); } catch { /* best effort */ }
+}
+
+/**
+ * Kill any orphaned SSH tunnel from a previous Desktop session.
+ * Call this once at app startup before starting new tunnels.
+ */
+export function cleanupOrphanedSshTunnel(): void {
+  try {
+    if (!existsSync(SSH_TUNNEL_PID_FILE)) return;
+    const pid = parseInt(readFileSync(SSH_TUNNEL_PID_FILE, 'utf-8').trim(), 10);
+    if (!pid || isNaN(pid)) { clearTunnelPid(); return; }
+    // Check if process is alive
+    try {
+      process.kill(pid, 0); // signal 0 = existence check
+      // Verify it's actually an ssh process (avoid killing unrelated PID reuse)
+      if (process.platform !== 'win32') {
+        try {
+          const { execSync } = require('child_process');
+          const comm = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', timeout: 2000 }).trim();
+          if (!comm.includes('ssh')) {
+            // PID was reused by a non-ssh process — don't kill it
+            clearTunnelPid();
+            return;
+          }
+        } catch { /* ps failed — conservative: don't kill */ clearTunnelPid(); return; }
+      }
+      console.warn(`[MindOS] Killing orphaned SSH tunnel (PID ${pid})`);
+      process.kill(pid, 'SIGTERM');
+      setTimeout(() => {
+        try { process.kill(pid, 0); process.kill(pid); } catch { /* already dead */ }
+      }, 2000);
+    } catch {
+      // Process already dead — just clean up the PID file
+    }
+    clearTunnelPid();
+  } catch { /* non-critical */ }
+}
+
+export interface SshHost {
+  name: string;
+  hostname?: string;
+  user?: string;
+  port?: number;
+  identityFile?: string;
+}
+
+/**
+ * Parse ~/.ssh/config and return a list of configured hosts.
+ * Excludes wildcard entries (* patterns).
+ */
+export function parseSshConfig(): SshHost[] {
+  const configPath = path.join(app.getPath('home'), '.ssh', 'config');
+  if (!existsSync(configPath)) return [];
+
+  try {
+    return parseSshConfigFile(configPath, new Set());
+  } catch {
+    return [];
+  }
+}
+
+/** Parse a single SSH config file, recursively resolving Include directives. */
+function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
+  // Prevent infinite Include loops
+  const resolved = path.resolve(filePath);
+  if (visited.has(resolved)) return [];
+  visited.add(resolved);
+
+  if (!existsSync(resolved)) return [];
+
+  const content = readFileSync(resolved, 'utf-8');
+  const hosts: SshHost[] = [];
+  let current: SshHost | null = null;
+  const home = app.getPath('home');
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const match = line.match(/^(\w[\w-]*)\s+(.+)$/i);
+    if (!match) continue;
+
+    const [, key, value] = match;
+    const k = key.toLowerCase();
+
+    // Handle Include directive — resolve paths relative to ~/.ssh/
+    if (k === 'include') {
+      // Expand tilde and normalize path separators for this platform
+      let expandedPath = value.startsWith('~')
+        ? value === '~' ? home : path.join(home, value.slice(2))
+        : value;
+      // If not absolute, resolve relative to the directory of the current config file
+      const absPattern = path.isAbsolute(expandedPath) ? expandedPath : path.join(path.dirname(resolved), expandedPath);
+      try {
+        // Simple glob: if pattern contains *, expand with readdirSync; otherwise treat as literal
+        if (absPattern.includes('*')) {
+          const dir = path.dirname(absPattern);
+          const base = path.basename(absPattern);
+          const regex = new RegExp('^' + base.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+          if (existsSync(dir)) {
+            const { readdirSync: rd } = require('fs');
+            for (const f of rd(dir) as string[]) {
+              if (regex.test(f)) {
+                hosts.push(...parseSshConfigFile(path.join(dir, f), visited));
+              }
+            }
+          }
+        } else {
+          hosts.push(...parseSshConfigFile(absPattern, visited));
+        }
+      } catch { /* ignore unresolvable includes */ }
+      continue;
+    }
+
+    if (k === 'host') {
+      // Skip wildcards and patterns
+      if (value.includes('*') || value.includes('?') || value.includes('!')) continue;
+      // A Host line can have multiple space-separated aliases; take the first
+      const name = value.split(/\s+/)[0];
+      current = { name };
+      hosts.push(current);
+    } else if (current) {
+      switch (k) {
+        case 'hostname': current.hostname = value; break;
+        case 'user': current.user = value; break;
+        case 'port': current.port = parseInt(value, 10) || 22; break;
+        case 'identityfile':
+          // Expand tilde and normalize path separators for this platform
+          current.identityFile = value.startsWith('~')
+            ? value === '~' ? home : path.join(home, value.slice(2))
+            : value;
+          break;
+      }
+    }
+  }
+
+  return hosts;
+}
+
+/**
+ * Check if ssh-agent has the key for `host` loaded.
+ * Returns true if ssh-agent is running and the key test passes.
+ */
+export async function isSshAgentLoaded(host: string, sshCmd: string = 'ssh'): Promise<boolean> {
+  try {
+    // Try a quick connection with BatchMode=yes — if it doesn't fail with permission denied,
+    // the key is loaded in ssh-agent
+    await execAsync(
+      `"${sshCmd}" -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new ${host} exit 2>&1`,
+      { timeout: 8000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add an SSH key to ssh-agent using ssh-add with a passphrase.
+ * Uses SSH_ASKPASS mechanism to feed the passphrase non-interactively.
+ * Returns true on success, false on failure.
+ */
+export async function addKeyToAgent(keyPath: string, passphrase: string): Promise<{ ok: boolean; error?: string }> {
+  const home = app.getPath('home');
+  // Resolve keyPath if relative
+  const resolvedKey = path.isAbsolute(keyPath) ? keyPath : path.join(home, '.ssh', keyPath);
+
+  if (process.platform === 'win32') {
+    // On Windows, use a temporary script that echoes the passphrase
+    const tmpScript = path.join(app.getPath('temp'), `mindos-askpass-${Date.now()}.bat`);
+    try {
+      // Escape batch special characters in passphrase
+      const escaped = passphrase.replace(/([&|<>^%!])/g, '^$1').replace(/"/g, '\\"');
+      writeFileSync(tmpScript, `@echo off\necho ${escaped}`, 'utf-8');
+      await execAsync(`ssh-add "${resolvedKey}"`, {
+        timeout: 10000,
+        env: { ...process.env, SSH_ASKPASS: tmpScript, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' },
+      });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    } finally {
+      try { unlinkSync(tmpScript); } catch { /* best effort */ }
+    }
+  }
+
+  // Unix/macOS: use a temporary script as SSH_ASKPASS
+  const tmpScript = path.join(app.getPath('temp'), `mindos-askpass-${Date.now()}.sh`);
+  try {
+    // Create a script that outputs the passphrase
+    writeFileSync(tmpScript, `#!/bin/sh\necho '${passphrase.replace(/'/g, "'\\''")}'
+`, { mode: 0o700 });
+    await execAsync(`ssh-add "${resolvedKey}"`, {
+      timeout: 10000,
+      env: { ...process.env, SSH_ASKPASS: tmpScript, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' },
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    try { unlinkSync(tmpScript); } catch { /* best effort */ }
+  }
+}
+
+/**
+ * Check if ssh-agent is running and accessible.
+ * On Unix/macOS: checks SSH_AUTH_SOCK env var.
+ * On Windows: checks if the OpenSSH Authentication Agent service is running.
+ */
+export function isSshAgentRunning(): boolean {
+  if (process.env.SSH_AUTH_SOCK) return true;
+  if (process.platform === 'win32') {
+    // On Windows, check if the OpenSSH agent service is running
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync('sc query ssh-agent', { encoding: 'utf-8', timeout: 3000 });
+      return out.includes('RUNNING');
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** Check if the `ssh` command is available on this system */
+export async function isSshAvailable(): Promise<boolean> {
+  // On Windows, try to find ssh.exe in common locations if not in PATH
+  if (process.platform === 'win32') {
+    const sshCandidates = [
+      'ssh.exe', // Already in PATH
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'OpenSSH', 'ssh.exe')] : []),
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'usr', 'bin', 'ssh.exe')] : []),
+      ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'bin', 'ssh.exe')] : []),
+      ...(process.env.USERPROFILE ? [path.join(process.env.USERPROFILE, 'scoop', 'shims', 'ssh.exe')] : []),
+    ];
+
+    for (const candidate of sshCandidates) {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`"${candidate}" -V`, { stdio: 'ignore', timeout: 3000 });
+        return true;
+      } catch {
+        // Try next candidate
+      }
+    }
+    return false;
+  }
+
+  // Unix/macOS: simple check
+  try {
+    await execAsync('ssh -V 2>&1', { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Manages a single SSH port-forwarding tunnel.
+ *
+ * Spawns: ssh -L localPort:localhost:remotePort host -N
+ *         -o ExitOnForwardFailure=yes
+ *         -o ServerAliveInterval=15
+ *         -o ServerAliveCountMax=3
+ *         -o StrictHostKeyChecking=accept-new
+ *         -o ConnectTimeout=10
+ */
+export class SshTunnel {
+  private process: ChildProcess | null = null;
+  private _host: string;
+  private _localPort: number;
+  private _remotePort: number;
+  private stopped = false;
+  /** Called when the tunnel process dies after a successful start. Not called if start() rejects. */
+  onDeath?: () => void;
+
+  constructor(host: string, localPort: number, remotePort: number) {
+    this._host = host;
+    this._localPort = localPort;
+    this._remotePort = remotePort;
+  }
+
+  get host(): string { return this._host; }
+  get localPort(): number { return this._localPort; }
+  get remotePort(): number { return this._remotePort; }
+
+  /** The last error message from a failed start() attempt */
+  lastError = '';
+
+  /**
+   * Start the SSH tunnel. Resolves when the tunnel is established
+   * (port forwarding active) or rejects on failure.
+   *
+   * If the SSH key requires a passphrase and none is cached in ssh-agent,
+   * rejects with an Error whose message is PASSPHRASE_NEEDED.
+   */
+  async start(): Promise<void> {
+    this.stopped = false;
+    this.lastError = '';
+
+    // On Windows, try to find ssh.exe before spawning
+    let sshCmd = process.platform === 'win32' ? 'ssh.exe' : 'ssh';
+    if (process.platform === 'win32') {
+      const sshCandidates = [
+        'ssh.exe',
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'OpenSSH', 'ssh.exe')] : []),
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'usr', 'bin', 'ssh.exe')] : []),
+        ...(process.env.ProgramFiles ? [path.join(process.env.ProgramFiles, 'Git', 'bin', 'ssh.exe')] : []),
+        ...(process.env.USERPROFILE ? [path.join(process.env.USERPROFILE, 'scoop', 'shims', 'ssh.exe')] : []),
+      ];
+
+      let foundSsh = false;
+      for (const candidate of sshCandidates) {
+        try {
+          const { execSync } = require('child_process');
+          execSync(`"${candidate}" -V`, { stdio: 'ignore', timeout: 2000 });
+          sshCmd = candidate;
+          foundSsh = true;
+          break;
+        } catch {
+          // Try next candidate
+        }
+      }
+      if (!foundSsh) {
+        throw new Error('SSH not found. Please install OpenSSH (e.g., via Git for Windows or Windows 10+ built-in OpenSSH).');
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const args = [
+        '-L', `${this._localPort}:localhost:${this._remotePort}`,
+        this._host,
+        '-N',                                    // No remote command
+        '-o', 'ExitOnForwardFailure=yes',        // Fail if port forward fails
+        '-o', 'ServerAliveInterval=15',          // Keepalive every 15s
+        '-o', 'ServerAliveCountMax=3',           // 3 missed = disconnect
+        '-o', 'StrictHostKeyChecking=accept-new', // Auto-accept new host keys
+        '-o', 'ConnectTimeout=10',               // 10s connection timeout
+        '-o', 'BatchMode=yes',                   // Never prompt for password/passphrase
+      ];
+
+      this.process = spawn(sshCmd, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',  // Use shell on Windows for path resolution
+        env: process.env,  // Inherit env so SSH_AUTH_SOCK is available for ssh-agent
+      });
+
+      // Write PID to disk for orphan cleanup on next launch
+      if (this.process.pid) writeTunnelPid(this.process.pid);
+
+      let stderr = '';
+      let settled = false;
+
+      this.process.stderr?.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+
+      // SSH with -N doesn't produce stdout on success.
+      // If it doesn't exit within 5s, probe the local port to confirm the tunnel is working.
+      const successTimer = setTimeout(async () => {
+        if (settled || this.stopped) return;
+        // TCP probe: try to connect to the forwarded local port
+        try {
+          const net = require('net');
+          const probeOk = await new Promise<boolean>((probeResolve) => {
+            const sock = net.createConnection({ host: '127.0.0.1', port: this.localPort, timeout: 3000 });
+            sock.on('connect', () => { sock.destroy(); probeResolve(true); });
+            sock.on('error', () => probeResolve(false));
+            sock.on('timeout', () => { sock.destroy(); probeResolve(false); });
+          });
+          if (settled || this.stopped) return;
+          if (probeOk) {
+            settled = true;
+            resolve();
+          } else {
+            // Port not responding yet — give it 3 more seconds then accept anyway
+            // (some servers take time to start accepting after tunnel is up)
+            setTimeout(() => {
+              if (!settled && !this.stopped) {
+                settled = true;
+                resolve();
+              }
+            }, 3000);
+          }
+        } catch {
+          // Probe failed — fall back to original behavior (trust the tunnel)
+          if (!settled && !this.stopped) {
+            settled = true;
+            resolve();
+          }
+        }
+      }, 5000);
+
+      this.process.on('exit', (code) => {
+        clearTimeout(successTimer);
+        clearTunnelPid();
+        const wasRunning = settled; // tunnel had been successfully started
+        if (!settled) {
+          settled = true;
+          const msg = stderr.trim() || `SSH exited with code ${code}`;
+          this.lastError = msg;
+          // Detect passphrase-needed errors
+          const lower = msg.toLowerCase();
+          if (
+            (lower.includes('permission denied') && !lower.includes('password')) ||
+            lower.includes('no identities') ||
+            lower.includes('identity file') ||
+            lower.includes('load key')
+          ) {
+            reject(new Error(PASSPHRASE_NEEDED));
+          } else {
+            reject(new Error(msg));
+          }
+        }
+        this.process = null;
+        // Notify if tunnel died after successful start (not during startup or explicit stop)
+        if (wasRunning && !this.stopped) {
+          console.warn(`[MindOS:ssh] tunnel to ${this._host} died (code=${code})`);
+          this.onDeath?.();
+        }
+      });
+
+      this.process.on('error', (err) => {
+        clearTimeout(successTimer);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
+      });
+    });
+  }
+
+  /** Gracefully stop the SSH tunnel */
+  async stop(): Promise<void> {
+    this.stopped = true;
+    clearTunnelPid();
+    if (!this.process || this.process.killed) return;
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        try { this.process?.kill(); } catch { /* dead */ }
+        resolve();
+      }, 3000);
+
+      this.process!.once('exit', () => {
+        clearTimeout(timer);
+        this.process = null;
+        resolve();
+      });
+
+      try { this.process!.kill('SIGTERM'); } catch {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  }
+
+  isAlive(): boolean {
+    return !!this.process && !this.process.killed;
+  }
+}

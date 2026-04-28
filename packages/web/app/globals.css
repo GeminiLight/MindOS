@@ -1,0 +1,601 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-ibm-plex-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-tool-read: var(--tool-read);
+  --color-tool-search: var(--tool-search);
+  --color-amber-foreground: var(--amber-foreground);
+  --color-logo-sparkle: var(--logo-sparkle);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+body {
+  font-family: var(--font-ui), 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  scrollbar-gutter: stable;
+}
+
+
+:root {
+  --font-inter: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-ibm-plex-sans: "IBM Plex Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-ibm-plex-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-lora: Lora, Georgia, "Times New Roman", serif;
+  --font-ui: 'IBM Plex Sans', var(--font-ibm-plex-sans), system-ui, sans-serif;
+  --font-code: 'IBM Plex Mono', var(--font-ibm-plex-mono), monospace;
+  --background: #f8f6f1;
+  --foreground: #1c1a17;
+  --card: #f2efe9;
+  --card-foreground: #1c1a17;
+  --popover: #f2efe9;
+  --popover-foreground: #1c1a17;
+  --primary: #1c1a17;
+  --primary-foreground: #f8f6f1;
+  --secondary: #e8e4db;
+  --secondary-foreground: #1c1a17;
+  --muted: #e8e4db;
+  --muted-foreground: #685f52;
+  --accent: #d9d3c6;
+  --accent-foreground: #1c1a17;
+  --destructive: #b33b3b;
+  --destructive-foreground: #ffffff;
+  --border: rgba(28, 26, 23, 0.1);
+  --input: rgba(28, 26, 23, 0.12);
+  --ring: var(--amber);
+  --radius: 0.5rem;
+  --amber: #c8873a;
+  --amber-text: #9a6a2b;
+  --amber-dim: rgba(200, 135, 58, 0.18);
+  --amber-subtle: rgba(200, 135, 30, 0.08);
+  --amber-foreground: #ffffff;
+  --logo-sparkle: #FEF3C7;
+  --success: #5a8d60;
+  --error: #c85050;
+  --tool-read: #5a8ab4;
+  --tool-search: #9a7ab4;
+  --sidebar: #ede9e1;
+  --sidebar-foreground: #1c1a17;
+  --sidebar-primary: #1c1a17;
+  --sidebar-primary-foreground: #f8f6f1;
+  --sidebar-accent: #d9d3c6;
+  --sidebar-accent-foreground: #1c1a17;
+  --sidebar-border: rgba(28, 26, 23, 0.08);
+  --sidebar-ring: rgba(28, 26, 23, 0.3);
+}
+
+.dark {
+  --background: #131210;
+  --foreground: #e8e4dc;
+  --card: #1c1a17;
+  --card-foreground: #e8e4dc;
+  --popover: #1c1a17;
+  --popover-foreground: #e8e4dc;
+  --primary: #e8e4dc;
+  --primary-foreground: #131210;
+  --secondary: #252219;
+  --secondary-foreground: #e8e4dc;
+  --muted: #252219;
+  --muted-foreground: #8a8275;
+  --accent: #2e2b22;
+  --accent-foreground: #e8e4dc;
+  --destructive: #b33636;
+  --destructive-foreground: #ffffff;
+  --border: rgba(232, 228, 220, 0.08);
+  --input: rgba(232, 228, 220, 0.1);
+  --ring: var(--amber);
+  --amber: #d4954a;
+  --amber-text: #e0a85e;
+  --amber-dim: rgba(212, 149, 74, 0.20);
+  --amber-subtle: rgba(212, 149, 74, 0.10);
+  --amber-foreground: #ffffff;
+  --logo-sparkle: #FEF3C7;
+  --success: #7aad80;
+  --error: #c85050;
+  --tool-read: #8ab4d8;
+  --tool-search: #c8a0d8;
+  --sidebar: #1c1a17;
+  --sidebar-foreground: #e8e4dc;
+  --sidebar-primary: #d4954a;
+  --sidebar-primary-foreground: #131210;
+  --sidebar-accent: #252219;
+  --sidebar-accent-foreground: #e8e4dc;
+  --sidebar-border: rgba(232, 228, 220, 0.07);
+  --sidebar-ring: rgba(232, 228, 220, 0.2);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* Utility: IBM Plex Mono display heading font */
+.font-display { font-family: var(--font-code); }
+
+/* Brand wordmark — premium sans with engineering precision */
+.font-brand {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* Content width — controlled by Settings > Appearance */
+:root { --content-width: 80%; --toc-width: 0px; }
+.content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
+
+/* TOC offset — only on xl screens where TOC is visible.
+   --toc-width is set by TableOfContents.tsx (212px when expanded, 0px when collapsed).
+   Applied as padding-right on #main-content so content-width's margin:auto
+   centers within the remaining space (not overlapping the fixed TOC).
+   Note: SidebarLayout also sets padding-right via inline style with !important
+   for Ask panel; the TOC offset is added via --toc-extra-right there. */
+@media (min-width: 1280px) {
+  :root { --toc-extra-right: var(--toc-width, 0px); }
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+.sidebar-panel {
+}
+.sidebar-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 1.5px;
+  background: linear-gradient(to bottom, transparent, var(--amber), transparent);
+  opacity: 0.45;
+  border-radius: 99px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.prose {
+  font-family: var(--prose-font-override, var(--font-ui));
+  color: var(--prose-body);
+  line-height: 1.85;
+  font-size: var(--prose-font-size-override, 0.95rem);
+}
+@media (min-width: 640px) {
+  .prose { font-size: var(--prose-font-size-override, 1rem); }
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--prose-font-override, var(--font-ui));
+  color: var(--prose-heading);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  letter-spacing: -0.01em;
+}
+@media (min-width: 640px) {
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    margin-top: 2em;
+    margin-bottom: 0.75em;
+  }
+}
+.prose h1 { font-size: 1.85em; margin-top: 0; }
+.prose h2 { font-size: 1.35em; border-bottom: 1px solid var(--prose-border); padding-bottom: 0.4em; }
+.prose h3 { font-size: 1.15em; }
+.prose h4 { font-size: 1.05em; }
+.prose p { margin-top: 0; margin-bottom: 0.9em; }
+.prose a { color: var(--amber); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(200,135,58,0.55); transition: text-decoration-color 0.15s; }
+.prose a:hover { text-decoration-color: var(--amber); }
+.prose strong { color: var(--prose-heading); font-weight: 600; }
+.prose em { font-style: italic; color: var(--prose-muted); }
+.prose ul, .prose ol { margin: 0.5em 0 0.8em 0; padding-left: 1.2em; }
+.prose ul { list-style-type: disc; }
+.prose ol { list-style-type: decimal; }
+.prose li { margin-bottom: 0.15em; }
+.prose blockquote { border-left: 3px solid var(--amber); padding-left: 0.95em; margin: 1em 0; color: var(--prose-subtle); font-style: italic; font-weight: 500; }
+.prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: var(--font-code); }
+.prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1em 0; color: var(--prose-pre-color); max-width: 100%; }
+@media (min-width: 640px) {
+  .prose pre { padding: 1.1em 1.3em; }
+}
+.prose pre code { background: transparent; color: inherit; padding: 0; font-size: 0.82em; font-family: var(--font-code); word-break: break-all; }
+@media (min-width: 640px) {
+  .prose pre code { font-size: 0.855em; word-break: normal; }
+}
+.prose table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.85em; font-family: var(--prose-font-override, var(--font-ui)); display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (min-width: 640px) {
+  .prose table { font-size: 0.9em; display: table; overflow-x: visible; }
+}
+.prose thead th { background: var(--prose-th-bg); color: var(--prose-heading); font-weight: 600; padding: 0.6em 0.9em; border: 1px solid var(--prose-border); text-align: left; font-size: 0.78em; letter-spacing: 0.05em; text-transform: uppercase; }
+.prose tbody td { padding: 0.6em 0.9em; border: 1px solid var(--prose-code-border); color: var(--prose-muted); }
+.prose tbody tr:nth-child(even) { background: var(--prose-th-bg); }
+.prose img { max-width: 100%; border-radius: 6px; border: 1px solid var(--prose-code-border); }
+/* Emoji images (twemoji etc.) — keep inline-sized, not block-level */
+.prose img[src*="twemoji"],
+.prose img[src*="emoji"],
+.prose img.emoji,
+.wysiwyg-editor img[src*="twemoji"],
+.wysiwyg-editor img[src*="emoji"],
+.wysiwyg-editor img.emoji {
+  display: inline !important;
+  width: 1.2em !important;
+  height: 1.2em !important;
+  vertical-align: -0.1em;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 0.05em 0 0.1em !important;
+}
+.prose hr { border: none; border-top: 1px solid var(--prose-border); margin: 1.8em 0; }
+
+/* Ask Panel — compact prose for side panel chat bubbles */
+.prose.prose-panel {
+  font-family: var(--prose-font-override, var(--font-ui));
+  font-size: var(--prose-font-size-override, 0.8125rem) !important;
+  line-height: 1.6;
+}
+.prose.prose-panel h1, .prose.prose-panel h2, .prose.prose-panel h3, .prose.prose-panel h4 {
+  font-size: 1em !important;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.prose.prose-panel p { margin-bottom: 0.6em; }
+.prose.prose-panel pre { padding: 0.6em 0.8em; margin: 0.8em 0; }
+.prose.prose-panel pre code { font-size: 0.78em; }
+.prose.prose-panel ul, .prose.prose-panel ol { margin: 0.4em 0 0.6em 0; padding-left: 1em; }
+.prose.prose-panel li { margin-bottom: 0.1em; }
+
+:root {
+  --prose-body: #3a3730;
+  --prose-heading: #1c1a17;
+  --prose-muted: #5a5750;
+  --prose-subtle: #7a7568;
+  --prose-border: #ddd9d0;
+  --prose-code-border: rgba(28,26,23,0.1);
+  --prose-th-bg: rgba(28,26,23,0.03);
+  --prose-pre-bg: #eae6de;
+  --prose-pre-color: #2a2724;
+  --hljs-comment: #8a8275;
+  --hljs-keyword: #9b4a1a;
+  --hljs-string: #4a7a46;
+  --hljs-variable: #7a6830;
+  --hljs-number: #2a5a8a;
+  --hljs-title: #6a3a8a;
+  --hljs-builtin: #2a6a40;
+  --hljs-deletion: #8a3030;
+}
+.dark {
+  --prose-body: #c8c2b8;
+  --prose-heading: #e8e4dc;
+  --prose-muted: #9a9488;
+  --prose-subtle: #7a7568;
+  --prose-border: rgba(232, 228, 220, 0.1);
+  --prose-code-border: rgba(232, 228, 220, 0.08);
+  --prose-th-bg: rgba(232, 228, 220, 0.03);
+  --prose-pre-bg: #0a0906;
+  --prose-pre-color: #c8c2b8;
+  --hljs-comment: #6a6560;
+  --hljs-keyword: #d4954a;
+  --hljs-string: #a5c4a0;
+  --hljs-variable: #d4c08a;
+  --hljs-number: #8ab4d8;
+  --hljs-title: #c8a0d8;
+  --hljs-builtin: #7aad80;
+  --hljs-deletion: #c86060;
+}
+
+.hljs { color: var(--prose-pre-color); background: var(--prose-pre-bg); }
+.hljs-comment, .hljs-meta { color: var(--hljs-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-tag { color: var(--hljs-keyword); }
+.hljs-string, .hljs-attr { color: var(--hljs-string); }
+.hljs-template-variable, .hljs-variable { color: var(--hljs-variable); }
+.hljs-number, .hljs-literal, .hljs-type { color: var(--hljs-number); }
+.hljs-title, .hljs-name, .hljs-selector-id, .hljs-selector-class { color: var(--hljs-title); }
+.hljs-symbol, .hljs-bullet, .hljs-link { color: var(--hljs-keyword); }
+.hljs-built_in, .hljs-addition { color: var(--hljs-builtin); }
+.hljs-deletion { color: var(--hljs-deletion); }
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-in { animation: fadeSlideUp 0.22s ease both; }
+
+/* Mobile bottom-sheet modal entrance */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@media (max-width: 767px) {
+  .modal-backdrop > [role="dialog"] {
+    animation: slideUp 0.3s ease-out both;
+  }
+}
+
+.modal-backdrop {
+  background: rgba(10, 9, 6, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.dark .modal-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.overlay-backdrop {
+  background: rgba(10, 9, 6, 0.35);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.dark .overlay-backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Micro type scale: text-2xs = 10px (between nothing and text-xs 12px) */
+@layer utilities {
+  .text-2xs { font-size: 10px; line-height: 1.4; }
+  .animate-spin-slow { animation: spin 3s linear infinite; }
+  /* Checkerboard background for transparent image preview */
+  .bg-checkerboard {
+    background-color: #f0f0f0;
+    background-image:
+      linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+      linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+      linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  :is(.dark) .bg-checkerboard {
+    background-color: #1a1a1a;
+    background-image:
+      linear-gradient(45deg, #252525 25%, transparent 25%),
+      linear-gradient(-45deg, #252525 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #252525 75%),
+      linear-gradient(-45deg, transparent 75%, #252525 75%);
+  }
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* iOS safe areas */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Tap highlight removal for mobile */
+@media (hover: none) {
+  button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Respect user's reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Global focus-visible ring for interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Milkdown typography overrides are in styles/milkdown-overrides.css ─── */
+/* (loaded after Crepe's CSS in WysiwygEditor.tsx for correct cascade order) */
+
+/* ── Theme: System (match app design system) ── */
+[data-editor-theme="system"] .milkdown {
+  --crepe-color-background: var(--background);
+  --crepe-color-on-background: var(--foreground);
+  --crepe-color-surface: var(--card);
+  --crepe-color-surface-low: var(--muted);
+  --crepe-color-on-surface: var(--foreground);
+  --crepe-color-on-surface-variant: var(--muted-foreground);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--amber);
+  --crepe-color-secondary: var(--muted);
+  --crepe-color-on-secondary: var(--foreground);
+  --crepe-color-inverse: var(--foreground);
+  --crepe-color-on-inverse: var(--background);
+  --crepe-color-inline-code: var(--prose-heading);
+  --crepe-color-hover: var(--muted);
+  --crepe-color-selected: var(--muted);
+  --crepe-color-inline-area: var(--muted);
+  --crepe-shadow-1: 0px 1px 3px 1px rgba(0,0,0,0.08), 0px 1px 2px 0px rgba(0,0,0,0.15);
+  --crepe-shadow-2: 0px 2px 6px 2px rgba(0,0,0,0.08), 0px 1px 2px 0px rgba(0,0,0,0.15);
+  background: transparent !important;
+  color: var(--foreground) !important;
+}
+[data-editor-theme="system"] .milkdown .ProseMirror {
+  background: transparent !important;
+}
+
+/* ── Theme: Crepe (warm parchment) ── */
+[data-editor-theme="crepe"] .milkdown {
+  --crepe-color-background: #fffdfb; --crepe-color-on-background: #1f1b16;
+  --crepe-color-surface: #fff8f4; --crepe-color-surface-low: #fff1e5;
+  --crepe-color-on-surface: #201b13; --crepe-color-on-surface-variant: #4f4539;
+  --crepe-color-outline: #817567; --crepe-color-primary: #805610;
+  --crepe-color-secondary: #fbdebc; --crepe-color-on-secondary: #271904;
+  --crepe-color-inverse: #362f27; --crepe-color-on-inverse: #fcefe2;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #f9ecdf; --crepe-color-selected: #ede0d4;
+  --crepe-color-inline-area: #e4d8cc;
+  --crepe-font-title: Georgia, Cambria, serif;
+}
+
+/* ── Theme: Crepe Dark ── */
+[data-editor-theme="crepe-dark"] .milkdown {
+  --crepe-color-background: #1f1b16; --crepe-color-on-background: #eae1d9;
+  --crepe-color-surface: #18120b; --crepe-color-surface-low: #201b13;
+  --crepe-color-on-surface: #ede0d4; --crepe-color-on-surface-variant: #d3c4b4;
+  --crepe-color-outline: #9c8f80; --crepe-color-primary: #f4bd6f;
+  --crepe-color-secondary: #56442a; --crepe-color-on-secondary: #fbdebc;
+  --crepe-color-inverse: #ede0d4; --crepe-color-on-inverse: #362f27;
+  --crepe-color-inline-code: #ffb4ab; --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #251f17; --crepe-color-selected: #3b342b;
+  --crepe-color-inline-area: #3f3830;
+  --crepe-font-title: Georgia, Cambria, serif;
+}
+
+/* ── Theme: Nord ── */
+[data-editor-theme="nord"] .milkdown {
+  --crepe-color-background: #fdfcff; --crepe-color-on-background: #1b1c1d;
+  --crepe-color-surface: #f8f9ff; --crepe-color-surface-low: #f2f3fa;
+  --crepe-color-on-surface: #191c20; --crepe-color-on-surface-variant: #43474e;
+  --crepe-color-outline: #73777f; --crepe-color-primary: #37618e;
+  --crepe-color-secondary: #d7e3f8; --crepe-color-on-secondary: #101c2b;
+  --crepe-color-inverse: #2e3135; --crepe-color-on-inverse: #eff0f7;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #eceef4; --crepe-color-selected: #e1e2e8;
+  --crepe-color-inline-area: #d8dae0;
+  --crepe-font-title: Rubik, Cambria, serif;
+}
+
+/* ── Theme: Nord Dark ── */
+[data-editor-theme="nord-dark"] .milkdown {
+  --crepe-color-background: #1b1c1d; --crepe-color-on-background: #f8f9ff;
+  --crepe-color-surface: #111418; --crepe-color-surface-low: #191c20;
+  --crepe-color-on-surface: #e1e2e8; --crepe-color-on-surface-variant: #c3c6cf;
+  --crepe-color-outline: #8d9199; --crepe-color-primary: #a1c9fd;
+  --crepe-color-secondary: #3c4858; --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-inverse: #e1e2e8; --crepe-color-on-inverse: #2e3135;
+  --crepe-color-inline-code: #ffb4ab; --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #1d2024; --crepe-color-selected: #32353a;
+  --crepe-color-inline-area: #111418;
+  --crepe-font-title: Rubik, Cambria, serif;
+}
+
+/* ── Theme: Frame ── */
+[data-editor-theme="frame"] .milkdown {
+  --crepe-color-background: #ffffff; --crepe-color-on-background: #000000;
+  --crepe-color-surface: #f7f7f7; --crepe-color-surface-low: #ededed;
+  --crepe-color-on-surface: #1c1c1c; --crepe-color-on-surface-variant: #4d4d4d;
+  --crepe-color-outline: #a8a8a8; --crepe-color-primary: #333333;
+  --crepe-color-secondary: #cfcfcf; --crepe-color-on-secondary: #000000;
+  --crepe-color-inverse: #f0f0f0; --crepe-color-on-inverse: #1a1a1a;
+  --crepe-color-inline-code: #ba1a1a; --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #e0e0e0; --crepe-color-selected: #d5d5d5;
+  --crepe-color-inline-area: #cacaca;
+  --crepe-font-title: 'Noto Serif', Cambria, serif;
+}
+
+/* ── Theme: Frame Dark ── */
+[data-editor-theme="frame-dark"] .milkdown {
+  --crepe-color-background: #1a1a1a; --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #121212; --crepe-color-surface-low: #1c1c1c;
+  --crepe-color-on-surface: #d1d1d1; --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575; --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d; --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inverse: #e5e5e5; --crepe-color-on-inverse: #2a2a2a;
+  --crepe-color-inline-code: #ff6666; --crepe-color-error: #ff6666;
+  --crepe-color-hover: #232323; --crepe-color-selected: #2f2f2f;
+  --crepe-color-inline-area: #2b2b2b;
+  --crepe-font-title: 'Noto Serif', Cambria, serif;
+}
+
+.wysiwyg-wrapper {
+  height: 100%;
+  cursor: text;
+}
+.wysiwyg-wrapper:focus-within {
+  outline: none;
+}
+
+/* ── Styled form controls ──────────────────────────────────── */
+
+input[type="checkbox"].form-check {
+  appearance: none;
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+input[type="checkbox"].form-check:checked {
+  background-color: var(--amber);
+  border-color: var(--amber);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+}
+input[type="checkbox"].form-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+input[type="checkbox"].form-check:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type="radio"].form-radio {
+  appearance: none;
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+input[type="radio"].form-radio:checked {
+  border: 4px solid var(--amber);
+}
+input[type="radio"].form-radio:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* macOS Electron: traffic-light safe zone. Actual CSS is injected by Electron
+   main process via webContents.insertCSS(); this is a no-op fallback. */
+.electron-mac-titlebar-pad { display: none; }

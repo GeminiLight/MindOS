@@ -1,0 +1,11 @@
+{
+  "eval_id": 1,
+  "eval_name": "save-meeting-decision-zh",
+  "prompt": "我昨天跟产品经理开会讨论了一个新的用户反馈系统的方案，他们建议用NPS打分加上开放式评论，我觉得挺好的。帮我把这个决策记下来，以后其他同事问起来可以查到。",
+  "assertions": [
+    {"text": "Uses mindos CLI commands (mindos file create/write/append) to save content", "type": "behavioral"},
+    {"text": "Includes structured meeting note with date, topic, decision, and rationale", "type": "content"},
+    {"text": "Places file in appropriate subdirectory (not KB root)", "type": "behavioral"},
+    {"text": "Bootstraps KB tree before writing (mindos file list)", "type": "behavioral"}
+  ]
+}

@@ -1,0 +1,65 @@
+appId: com.mindos.desktop
+productName: MindOS
+copyright: Copyright © 2026 MindOS
+
+directories:
+  buildResources: src/icons
+  output: dist
+
+files:
+  - dist-electron/**/*
+  - src/connect.html
+  - src/splash.html
+  - src/icons/**/*
+  - "!**/node_modules/.cache"
+  - "!**/.turbo"
+  - "!**/__tests__/**"
+  - "!**/test/**"
+
+mac:
+  category: public.app-category.productivity
+  icon: src/icons/icon.png
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Notarization is handled separately in CI with retry logic (not by electron-builder)
+  notarize: false
+  entitlements: src/entitlements.mac.plist
+  entitlementsInherit: src/entitlements.mac.plist
+
+asar: true
+# macOS Chromium often returns ERR_FAILED for file:// pages loaded from inside app.asar; mirror these out.
+asarUnpack:
+  - "**/src/connect.html"
+  - "**/src/splash.html"
+  - "**/dist-electron/preload/**"
+  - "**/dist-electron/renderer/connect-renderer.js"
+# Bundled MindOS: populate `resources/mindos-runtime` via `npm run prepare-mindos-runtime` before dist.
+
+extraResources:
+  - from: resources/mindos-runtime
+    to: mindos-runtime
+
+win:
+  icon: src/icons/icon.ico
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: src/icons/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Office
+
+publish:
+  provider: github
+  owner: GeminiLight
+  repo: MindOS

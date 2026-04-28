@@ -1,0 +1,64 @@
+name: Test Channel Cross Platform
+
+on:
+  pull_request:
+    paths:
+      - 'packages/mindos/bin/commands/channel.js'
+      - 'packages/mindos/bin/lib/channel-*.js'
+      - 'packages/web/app/api/channels/verify/route.ts'
+      - 'packages/web/lib/im/config.ts'
+      - 'packages/web/lib/im/verify.ts'
+      - 'packages/web/lib/im/adapters/dingtalk.ts'
+      - 'packages/web/lib/im/adapters/qq.ts'
+      - 'packages/web/lib/im/adapters/wechat.ts'
+      - 'packages/web/__tests__/channel-*.test.*'
+      - 'packages/web/__tests__/api/channels-verify.test.ts'
+      - 'packages/web/__tests__/im/dingtalk.test.ts'
+      - 'packages/web/__tests__/im/qq.test.ts'
+      - 'packages/web/__tests__/im/wechat.test.ts'
+      - 'packages/web/vitest.config.ts'
+      - 'packages/web/package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/test-channel-cross-platform.yml'
+  workflow_dispatch:
+
+jobs:
+  channel-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run channel typecheck
+        run: pnpm --filter @mindos/web run typecheck
+
+      - name: Run channel regression tests
+        run: >-
+          pnpm --filter @mindos/web exec vitest run
+          __tests__/channel-cli-layers.test.ts
+          __tests__/channel-command-env.test.ts
+          __tests__/channel-mgmt.test.js
+          __tests__/channel-prompts.test.ts
+          __tests__/channel-cli-subprocess.test.ts
+          __tests__/api/channels-verify.test.ts
+          __tests__/im/dingtalk.test.ts
+          __tests__/im/qq.test.ts
+          __tests__/im/wechat.test.ts

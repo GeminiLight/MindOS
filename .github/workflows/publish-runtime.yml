@@ -1,0 +1,177 @@
+name: Publish Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_desktop_version:
+        description: 'Minimum Desktop version required (e.g. 0.1.2)'
+        type: string
+        required: false
+        default: '0.1.2'
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @mindos/acp build
+          pnpm --filter @geminilight/mindos build
+          pnpm --filter @mindos/mcp-server build
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: packages/web/.next/cache
+          key: nextjs-runtime-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('packages/web/**/*.ts', 'packages/web/**/*.tsx', 'packages/**/*.ts') }}
+          restore-keys: |
+            nextjs-runtime-${{ hashFiles('pnpm-lock.yaml') }}-
+            nextjs-runtime-
+
+      - name: Build Next.js standalone
+        run: pnpm --filter @mindos/web run build
+        env:
+          NODE_ENV: production
+
+      - name: Smoke test standalone server
+        run: node scripts/verify-standalone.mjs
+
+      - name: Build runtime archive
+        id: archive
+        run: |
+          bash scripts/build-runtime-archive.sh
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          ARCHIVE="/tmp/mindos-runtime-${VERSION}.tar.gz"
+          SHA256=$(sha256sum "$ARCHIVE" | cut -d' ' -f1)
+          SIZE=$(stat -c%s "$ARCHIVE")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate manifest
+        run: |
+          VERSION="${{ steps.archive.outputs.version }}"
+          SHA256="${{ steps.archive.outputs.sha256 }}"
+          SIZE="${{ steps.archive.outputs.size }}"
+          MIN_DESKTOP="${{ inputs.min_desktop_version || '0.1.2' }}"
+          GH_URL="https://github.com/GeminiLight/MindOS/releases/download/runtime-latest/mindos-runtime-${VERSION}.tar.gz"
+          cat > /tmp/latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "minDesktopVersion": "${MIN_DESKTOP}",
+            "size": ${SIZE},
+            "sha256": "${SHA256}",
+            "urls": [
+              "${GH_URL}"
+            ]
+          }
+          EOF
+          echo "📄 latest.json:"
+          cat /tmp/latest.json
+
+      - name: Upload to GitHub Release (runtime-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          TAG="runtime-latest"
+          # Create or update the dedicated runtime release
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "MindOS Core Runtime (Latest)" \
+              --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}" \
+              --prerelease
+          # Delete old tarball assets (keep only current version)
+          for asset in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null); do
+            case "$asset" in
+              mindos-runtime-*.tar.gz) gh release delete-asset "$TAG" "$asset" --yes 2>/dev/null || true ;;
+            esac
+          done
+          # Upload new tarball + manifest
+          gh release upload "$TAG" "$ARCHIVE" /tmp/latest.json --clobber
+          # Update release notes with current version
+          gh release edit "$TAG" --notes "Auto-updated by Publish Runtime workflow. Current version: v${VERSION}"
+          echo "✅ Uploaded to GitHub Release: $TAG (v${VERSION})"
+
+      - name: Upload to Cloudflare R2
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "R2 not configured, skipping"
+            exit 0
+          fi
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          # Versioned tarball
+          aws s3 cp "$ARCHIVE" "s3://mindos-releases/runtime/mindos-runtime-${VERSION}.tar.gz" \
+            --endpoint-url "$R2_ENDPOINT" --no-progress
+          # Latest manifest (no-cache so clients always get fresh version)
+          aws s3 cp /tmp/latest.json "s3://mindos-releases/runtime/latest.json" \
+            --endpoint-url "$R2_ENDPOINT" --no-progress \
+            --cache-control "no-cache, max-age=60" --content-type "application/json"
+          echo "✅ Uploaded to R2: runtime/mindos-runtime-${VERSION}.tar.gz + runtime/latest.json"
+
+      - name: Install ossutil
+        continue-on-error: true
+        id: ossutil
+        run: |
+          OSSUTIL_VERSION="1.7.19"
+          curl -sSL -o /tmp/ossutil.zip \
+            "https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VERSION}/ossutil-v${OSSUTIL_VERSION}-linux-amd64.zip"
+          unzip -qo /tmp/ossutil.zip -d /tmp/ossutil_extract
+          mkdir -p "$HOME/.local/bin"
+          cp "/tmp/ossutil_extract/ossutil-v${OSSUTIL_VERSION}-linux-amd64/ossutil64" "$HOME/.local/bin/ossutil64"
+          chmod +x "$HOME/.local/bin/ossutil64"
+          rm -rf /tmp/ossutil.zip /tmp/ossutil_extract
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/ossutil64" --version
+
+      - name: Upload to Alibaba Cloud OSS
+        if: steps.ossutil.outcome == 'success'
+        continue-on-error: true
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+        run: |
+          if [ -z "$OSS_ACCESS_KEY_ID" ]; then
+            echo "OSS not configured, skipping"
+            exit 0
+          fi
+          oss() {
+            ossutil64 "$@" -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+          }
+          VERSION="${{ steps.archive.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive }}"
+          # Upload tarball with multipart (runtime archive is ~50-100MB)
+          oss cp "$ARCHIVE" "oss://${OSS_BUCKET}/runtime/mindos-runtime-${VERSION}.tar.gz" \
+            -f --parallel 5 --part-size 10485760
+          # Upload small manifest file
+          oss cp /tmp/latest.json "oss://${OSS_BUCKET}/runtime/latest.json" \
+            -f --meta "Content-Type:application/json"
+          echo "Uploaded to OSS: runtime/mindos-runtime-${VERSION}.tar.gz + runtime/latest.json"

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mindos": {
+      "type": "stdio",
+      "command": "mindos",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
