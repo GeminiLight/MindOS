@@ -37,16 +37,16 @@ try {
 const port = 31000 + Math.floor(Math.random() * 5000);
 const nodeBin = process.execPath;
 
-function waitHealth(timeoutMs) {
+function waitHttpOk(pathname, timeoutMs, validate = () => true) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (Date.now() > deadline) {
-        reject(new Error(`Timeout waiting for http://127.0.0.1:${port}/api/health`));
+        reject(new Error(`Timeout waiting for http://127.0.0.1:${port}${pathname}`));
         return;
       }
       const req = http.get(
-        `http://127.0.0.1:${port}/api/health`,
+        `http://127.0.0.1:${port}${pathname}`,
         { timeout: 2000 },
         (res) => {
           let body = '';
@@ -54,16 +54,9 @@ function waitHealth(timeoutMs) {
             body += c;
           });
           res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                const j = JSON.parse(body);
-                if (j.ok === true && j.service === 'mindos') {
-                  resolve();
-                  return;
-                }
-              } catch {
-                /* fall through */
-              }
+            if (res.statusCode === 200 && validate(body)) {
+              resolve();
+              return;
             }
             setTimeout(tick, 300);
           });
@@ -78,6 +71,17 @@ function waitHealth(timeoutMs) {
       });
     };
     tick();
+  });
+}
+
+function waitHealth(timeoutMs) {
+  return waitHttpOk('/api/health', timeoutMs, (body) => {
+    try {
+      const j = JSON.parse(body);
+      return j.ok === true && j.service === 'mindos';
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -109,6 +113,7 @@ function killChild() {
 async function main() {
   try {
     await waitHealth(90_000);
+    await waitHttpOk('/', 30_000, (body) => body.includes('MindOS') || body.includes('__next'));
     console.log(`[verify-standalone] OK (port ${port})`);
     return 0;
   } catch (e) {

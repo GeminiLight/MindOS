@@ -32,6 +32,19 @@
 
 **验证**：`pnpm exec vitest run tests/mcp-package-migration-contract.test.ts`，并确认 npm tarball 包含 `packages/protocols/mcp-server/dist/index.cjs`。
 
+### Standalone health 通过不代表 Web 首页可渲染
+
+**症状**：npm 包安装后 `mindos --version`、`/api/health` 都正常，但打开 Web 首页返回 500。
+
+**根因**：Next standalone tracing 可能漏掉被 `serverExternalPackages` 外置包在 server render 时才 import 的依赖。例如 `@mariozechner/pi-ai` 顶层 import 需要 `@sinclair/typebox` / `partial-json`，但 health route 不会触发这些模块。
+
+**规则**：
+- `scripts/verify-standalone.mjs` 必须同时请求 `/api/health` 和 `/`
+- 外置 runtime 包需要的依赖必须是 `packages/web/package.json` 的显式 runtime dependency
+- `scripts/prepare-standalone.mjs` 要把这些 runtime dependency 复制进 standalone `node_modules`，再 stage 到 `packages/mindos/_standalone/__node_modules`
+
+**验证**：发布前用全新 `/tmp` 安装 tarball，真实运行 `mindos start`，确认首页 `/` 返回 200，并用 token 调 `/api/files` / `/api/file` / `/api/search`。
+
 ## Git / 双仓同步
 
 ### 公开仓 tag push 与 workflow_dispatch 不要双触发同一个发布

@@ -152,11 +152,22 @@ describe('product npm publish contract', () => {
     expect(prepareStandalone).toContain('__next');
     expect(prepareStandalone).toContain('packages/mindos/_standalone');
     expect(prepareStandalone).toContain('prunePackageLocks');
+    expect(prepareStandalone).toContain('copyRuntimeDependencyClosure');
+    expect(prepareStandalone).toContain("'@sinclair/typebox'");
+    expect(prepareStandalone).toContain("'partial-json'");
+    expect(prepareStandalone).toContain("'openai'");
     expect(prepareStandalone).toContain('package-lock.json');
     expect(buildLib).toContain('__next');
     expect(startCommand).toContain('__next');
     expect(prepareStandalone).not.toContain('rm -rf _standalone/node_modules');
     expect(existsSync(resolve(root, 'packages/web/.npmignore'))).toBe(true);
+  });
+
+  it('standalone verification exercises server-rendered Web pages, not only health', () => {
+    const verifyStandalone = readText('scripts/verify-standalone.mjs');
+
+    expect(verifyStandalone).toContain("waitHttpOk('/', 30_000");
+    expect(verifyStandalone).toContain('/api/health');
   });
 
   it('documents the OpenCode-style artifact-only Web runtime direction', () => {
