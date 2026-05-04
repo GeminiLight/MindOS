@@ -53,6 +53,8 @@ describe('runtime health contract', () => {
     expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/partial-json/package.json');
     expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/ajv/package.json');
     expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/ajv-formats/package.json');
+    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/chalk/package.json');
+    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/cli-highlight/package.json');
     expect(archivePaths).toContain('packages/protocols/mcp-server/dist/index.cjs');
     expect(archivePaths).toContain('bin/cli.js');
     expect(archivePaths).toContain('src/cli.js');

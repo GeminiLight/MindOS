@@ -126,6 +126,14 @@
         {
           "path": "packages/web/.next/standalone/node_modules/ajv-formats/package.json",
           "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/chalk/package.json",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/cli-highlight/package.json",
+          "type": "file"
         }
       ]
     }

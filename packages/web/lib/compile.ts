@@ -9,7 +9,9 @@ import fs from 'fs';
 import path from 'path';
 import { complete } from '@mariozechner/pi-ai';
 import { getModelConfig } from '@/lib/agent/model';
-import { effectiveAiConfig } from '@/lib/settings';
+import { buildCompatEndpointCandidates } from '@/lib/agent/providers';
+import { reassembleSSE } from '@/lib/agent/non-streaming';
+import { effectiveAiConfig, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
 import { getMindRoot, collectAllFiles, invalidateCache } from '@/lib/fs';
 import { resolveSafe } from '@/lib/core/security';
 
@@ -239,6 +241,88 @@ Changed files (${changedFiles.length} total):
 ${fileList}`;
 }
 
+function extractTextContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((part: any) => part?.type === 'text')
+    .map((part: any) => part.text ?? '')
+    .join('');
+}
+
+async function completeWithOpenAiCompatFallback(
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { model, modelName, apiKey, provider, baseUrl } = getModelConfig();
+  const canUseFallback = provider === 'openai' && !!baseUrl;
+  const compatMode = canUseFallback ? readBaseUrlCompat()[baseUrl] : undefined;
+
+  if (compatMode !== 'non-streaming') {
+    try {
+      const result = await complete(model, {
+        messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
+      }, {
+        apiKey,
+        signal,
+      });
+
+      const content = extractTextContent(result.content);
+      if (content.trim() || !canUseFallback) return content;
+    } catch (err) {
+      if (!canUseFallback) throw err;
+    }
+  }
+
+  if (!canUseFallback) return '';
+  const content = await completeViaOpenAiCompatEndpoint({ baseUrl, apiKey, modelName, prompt, signal });
+  if (content.trim()) writeBaseUrlCompat(baseUrl, 'non-streaming');
+  return content;
+}
+
+async function completeViaOpenAiCompatEndpoint(opts: {
+  baseUrl: string;
+  apiKey: string;
+  modelName: string;
+  prompt: string;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const endpoints = buildCompatEndpointCandidates(opts.baseUrl, '/chat/completions', 'openai-completions');
+  let lastError = '';
+
+  for (const endpoint of endpoints) {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${opts.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: opts.modelName,
+        messages: [{ role: 'user', content: opts.prompt }],
+        stream: false,
+      }),
+      signal: opts.signal,
+    });
+
+    const rawText = await response.text();
+    if (!response.ok) {
+      lastError = `HTTP ${response.status} @ ${endpoint}: ${rawText.slice(0, 200)}`;
+      if (response.status === 404) continue;
+      throw new Error(`OpenAI-compatible API error ${lastError}`);
+    }
+
+    const trimmed = rawText.trimStart();
+    const data = trimmed.startsWith('data:') ? reassembleSSE(trimmed) : JSON.parse(rawText);
+    const message = data?.choices?.[0]?.message ?? data?.choices?.[0]?.delta ?? {};
+    const content = extractTextContent(message.content);
+    if (content.trim()) return content;
+    lastError = `empty response @ ${endpoint}`;
+  }
+
+  throw new Error(`OpenAI-compatible API returned no content${lastError ? `: ${lastError}` : ''}`);
+}
+
 /**
  * Generate a Space overview README using LLM.
  * Supports incremental mode: if README has a compile timestamp and
@@ -292,15 +376,7 @@ export async function compileSpaceOverview(
       const prompt = buildIncrementalPrompt(spaceName, existingReadme, changed, lang);
 
       try {
-        const { model, apiKey } = getModelConfig();
-        const result = await complete(model, {
-          messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
-        }, { apiKey, signal });
-
-        const content = result.content
-          .filter((c: any) => c.type === 'text')
-          .map((c: any) => c.text)
-          .join('');
+        const content = await completeWithOpenAiCompatFallback(prompt, signal);
 
         if (!content.trim()) {
           return { code: 'llm_error', message: 'AI returned empty response.' };
@@ -340,18 +416,7 @@ export async function compileSpaceOverview(
   const prompt = buildPrompt(spaceName, files, lang);
 
   try {
-    const { model, apiKey } = getModelConfig();
-    const result = await complete(model, {
-      messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
-    }, {
-      apiKey,
-      signal,
-    });
-
-    const content = result.content
-      .filter((c: any) => c.type === 'text')
-      .map((c: any) => c.text)
-      .join('');
+    const content = await completeWithOpenAiCompatFallback(prompt, signal);
 
     if (!content.trim()) {
       return { code: 'llm_error', message: 'AI returned empty response.' };
