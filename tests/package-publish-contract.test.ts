@@ -144,19 +144,25 @@ describe('product npm publish contract', () => {
 
   it('copies standalone builds with dereferenced dependencies for npm packing', () => {
     const prepareStandalone = readText('scripts/prepare-standalone.mjs');
+    const prepareMindosBundle = readText('packages/desktop/scripts/prepare-mindos-bundle.mjs');
+    const runtimeDependencyClosure = readText('scripts/lib/runtime-dependency-closure.mjs');
+    const buildRuntimeArchive = readText('scripts/build-runtime-archive.sh');
     const buildLib = readText('packages/mindos/bin/lib/build.js');
     const startCommand = readText('packages/mindos/bin/commands/start.js');
 
     expect(prepareStandalone).toContain('dereference: true');
+    expect(prepareMindosBundle).toContain("from '../../../scripts/lib/runtime-dependency-closure.mjs'");
+    expect(prepareMindosBundle).toContain('copyRuntimeDependencyClosure');
     expect(prepareStandalone).toContain('__node_modules');
     expect(prepareStandalone).toContain('__next');
     expect(prepareStandalone).toContain('packages/mindos/_standalone');
     expect(prepareStandalone).toContain('prunePackageLocks');
-    expect(prepareStandalone).toContain('copyRuntimeDependencyClosure');
-    expect(prepareStandalone).toContain("'@mariozechner/pi-coding-agent'");
-    expect(prepareStandalone).toContain("'@sinclair/typebox'");
-    expect(prepareStandalone).toContain("'partial-json'");
-    expect(prepareStandalone).toContain("'openai'");
+    expect(runtimeDependencyClosure).toContain("'@mariozechner/pi-coding-agent'");
+    expect(runtimeDependencyClosure).toContain("'@sinclair/typebox'");
+    expect(runtimeDependencyClosure).toContain("'partial-json'");
+    expect(runtimeDependencyClosure).toContain("'ajv-formats'");
+    expect(runtimeDependencyClosure).toContain("'openai'");
+    expect(buildRuntimeArchive).toContain('node scripts/copy-runtime-dependencies.mjs packages/web "$STANDALONE_NM"');
     expect(prepareStandalone).toContain('package-lock.json');
     expect(buildLib).toContain('__next');
     expect(startCommand).toContain('__next');
