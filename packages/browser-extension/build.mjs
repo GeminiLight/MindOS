@@ -1,5 +1,5 @@
 import { build, context } from 'esbuild';
-import { cpSync, mkdirSync } from 'fs';
+import { cpSync, mkdirSync, readdirSync } from 'fs';
 
 const isWatch = process.argv.includes('--watch');
 const OUT = 'extension';
@@ -22,7 +22,11 @@ async function run() {
   cpSync('src/manifest.json', `${OUT}/manifest.json`);
   cpSync('src/popup/popup.html', `${OUT}/popup/popup.html`);
   cpSync('src/popup/popup.css', `${OUT}/popup/popup.css`);
-  cpSync('src/icons', `${OUT}/icons`, { recursive: true });
+  for (const file of readdirSync('src/icons')) {
+    if (file.endsWith('.png')) {
+      cpSync(`src/icons/${file}`, `${OUT}/icons/${file}`);
+    }
+  }
 
   // ESM entries (popup + service worker)
   const esmOptions = {
