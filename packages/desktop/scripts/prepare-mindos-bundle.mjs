@@ -15,6 +15,10 @@ import {
 } from 'fs';
 import path from 'path';
 import { assertStandaloneAppFiles } from './runtime-health-contract.mjs';
+import {
+  copyRuntimeDependencyClosure,
+  runtimeDependencySeeds,
+} from '../../../scripts/lib/runtime-dependency-closure.mjs';
 
 export function materializeStandaloneAssets(appDir) {
   const standaloneDir = path.join(appDir, '.next', 'standalone');
@@ -41,6 +45,10 @@ export function materializeStandaloneAssets(appDir) {
   }
 
   materializeStandaloneNodeModules(appDir, standaloneDir);
+  copyRuntimeDependencyClosure(path.join(standaloneDir, 'node_modules'), runtimeDependencySeeds, {
+    appDir,
+    label: 'prepare-mindos-bundle',
+  });
   materializeNextServerLib(appDir, standaloneDir);
   assertStandaloneAppFiles(appDir, 'prepare-mindos-bundle');
 }

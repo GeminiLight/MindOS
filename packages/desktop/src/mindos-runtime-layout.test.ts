@@ -8,10 +8,14 @@ import {
   isNextBuildCurrent,
   BUILD_VERSION_FILE,
 } from './mindos-runtime-layout';
-import { getStandaloneAppRequiredEntries } from './runtime-health-contract';
+import {
+  getBundledRuntimeRequiredEntries,
+  getStandaloneAppRequiredEntries,
+} from './runtime-health-contract';
+import type { HealthContractEntry } from './runtime-health-contract';
 
-function writeEntries(baseDir: string, omit: string[] = []) {
-  for (const entry of getStandaloneAppRequiredEntries()) {
+function writeContractEntries(baseDir: string, entries: HealthContractEntry[], omit: string[] = []) {
+  for (const entry of entries) {
     if (omit.includes(entry.path)) continue;
     const target = path.join(baseDir, entry.path);
     if (entry.type === 'directory') {
@@ -21,6 +25,14 @@ function writeEntries(baseDir: string, omit: string[] = []) {
       writeFileSync(target, `// ${entry.path}`, 'utf-8');
     }
   }
+}
+
+function writeEntries(baseDir: string, omit: string[] = []) {
+  writeContractEntries(baseDir, getStandaloneAppRequiredEntries(), omit);
+}
+
+function writeBundledRuntimeEntries(root: string, omit: string[] = []) {
+  writeContractEntries(root, getBundledRuntimeRequiredEntries(), omit);
 }
 
 function writeBundledCliEntries(root: string) {
@@ -144,7 +156,7 @@ describe('runtime completeness', () => {
     const root = path.join(process.cwd(), 'tmp-mindos-bundled-missing-worker');
     try {
       rmSync(root, { recursive: true, force: true });
-      writeEntries(path.join(root, 'packages', 'web'), ['.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs']);
+      writeBundledRuntimeEntries(root, ['packages/web/.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs']);
       mkdirSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist'), { recursive: true });
       writeFileSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs'), '// mcp', 'utf-8');
 
@@ -158,7 +170,7 @@ describe('runtime completeness', () => {
     const root = path.join(process.cwd(), 'tmp-mindos-bundled-complete');
     try {
       rmSync(root, { recursive: true, force: true });
-      writeEntries(path.join(root, 'packages', 'web'));
+      writeBundledRuntimeEntries(root);
       mkdirSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist'), { recursive: true });
       writeFileSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs'), '// mcp', 'utf-8');
       writeBundledCliEntries(root);

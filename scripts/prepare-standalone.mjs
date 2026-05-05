@@ -8,8 +8,7 @@
  *
  * Prerequisites: `pnpm --filter @mindos/web run build` must have been run first.
  */
-import { cpSync, existsSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { cpSync, existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,16 +19,6 @@ const standaloneAppDir = resolve(appDir, '.next', 'standalone');
 const standaloneServerJs = resolve(standaloneAppDir, 'server.js');
 const productRoot = resolve(root, 'packages', 'mindos');
 const destDir = resolve(productRoot, '_standalone');
-const runtimeDependencySeeds = [
-  '@mariozechner/pi-coding-agent',
-  '@sinclair/typebox',
-  'partial-json',
-  'ajv',
-  'ajv-formats',
-  '@anthropic-ai/sdk',
-  'openai',
-];
-
 // ── Guard: ensure standalone build exists ────────────────────────────────────
 if (!existsSync(standaloneServerJs)) {
   console.error(
@@ -43,7 +32,6 @@ if (!existsSync(standaloneServerJs)) {
 // Reuse the same logic Desktop uses.
 import { materializeStandaloneAssets } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 materializeStandaloneAssets(appDir);
-copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
 
 // ── Step 2: Copy standalone to top-level _standalone/ ────────────────────────
 console.log('[prepare-standalone] Copying standalone build to packages/mindos/_standalone/ ...');
@@ -136,97 +124,4 @@ function prunePackageLocks(dir) {
   }
 
   return removed;
-}
-
-function copyRuntimeDependencyClosure(destNodeModules, seeds) {
-  if (!existsSync(destNodeModules)) return;
-
-  const visited = new Set();
-  const queue = seeds.map((name) => ({ name, required: true, strict: true, from: appDir }));
-
-  while (queue.length > 0) {
-    const next = queue.shift();
-    if (!next || visited.has(next.name)) continue;
-    visited.add(next.name);
-
-    const packageDir = resolvePackageDir(next.name, next.from);
-    if (!packageDir) {
-      if (next.strict) {
-        console.error(`[prepare-standalone] FAILED: runtime dependency not resolvable: ${next.name}`);
-        process.exit(1);
-      }
-      continue;
-    }
-
-    const packageJsonPath = resolve(packageDir, 'package.json');
-    if (!existsSync(packageJsonPath)) {
-      if (next.strict) {
-        console.error(`[prepare-standalone] FAILED: runtime dependency package.json missing: ${next.name}`);
-        process.exit(1);
-      }
-      continue;
-    }
-
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-    const destDir = resolve(destNodeModules, next.name);
-    if (!existsSync(destDir)) {
-      rmSync(destDir, { recursive: true, force: true });
-      cpSync(packageDir, destDir, {
-        recursive: true,
-        dereference: true,
-        filter: shouldCopyRuntimePackageEntry,
-      });
-    }
-
-    const peerMeta = packageJson.peerDependenciesMeta ?? {};
-    const deps = [
-      ...Object.keys(packageJson.dependencies ?? {}).map((name) => ({ name, required: true })),
-      ...Object.keys(packageJson.peerDependencies ?? {}).map((name) => ({
-        name,
-        required: peerMeta[name]?.optional !== true,
-      })),
-      ...Object.keys(packageJson.optionalDependencies ?? {}).map((name) => ({ name, required: false })),
-    ];
-
-    for (const dep of deps) {
-      if (!visited.has(dep.name)) queue.push({ ...dep, strict: false, from: packageDir });
-    }
-  }
-}
-
-function resolvePackageDir(packageName, fromDir) {
-  const directPath = resolve(appDir, 'node_modules', packageName);
-  if (existsSync(resolve(directPath, 'package.json'))) return realpathSync(directPath);
-
-  try {
-    const requireFromPackage = createRequire(resolve(fromDir, 'package.json'));
-    const entry = requireFromPackage.resolve(packageName);
-    return findPackageRoot(entry, packageName);
-  } catch {
-    return null;
-  }
-}
-
-function findPackageRoot(startPath, packageName) {
-  let dir = dirname(startPath);
-
-  while (dir !== dirname(dir)) {
-    const packageJsonPath = resolve(dir, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-        if (packageJson.name === packageName) return dir;
-      } catch {
-        return null;
-      }
-    }
-    dir = dirname(dir);
-  }
-
-  return null;
-}
-
-function shouldCopyRuntimePackageEntry(src) {
-  const name = src.split('/').pop();
-  return name !== 'node_modules' && name !== '.cache' && name !== '.turbo';
 }

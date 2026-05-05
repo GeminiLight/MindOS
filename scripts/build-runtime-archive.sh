@@ -44,6 +44,7 @@ rm -rf "$WORK/packages/web/.next/standalone/.next/cache" \
 # Strip dev-only files from node_modules to reduce archive size
 echo "  Stripping dev-only files from node_modules..."
 STANDALONE_NM="$WORK/packages/web/.next/standalone/node_modules"
+node scripts/copy-runtime-dependencies.mjs packages/web "$STANDALONE_NM"
 if [ -d "$STANDALONE_NM" ]; then
   # TypeScript declaration files (only needed for IDE, not runtime)
   find "$STANDALONE_NM" -name '*.d.ts' -delete

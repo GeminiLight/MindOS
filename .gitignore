@@ -82,6 +82,7 @@ image.png
 !assets/images/*.png
 !docs/images/*.png
 !packages/browser-extension/src/icons/*.png
+!packages/browser-extension/extension/icons/*.png
 !packages/web/public/icons/*.png
 !packages/desktop/src/icons/*.png
 .tmux.conf
