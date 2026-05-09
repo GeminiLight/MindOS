@@ -10,7 +10,7 @@
 import { app } from 'electron';
 import { createWriteStream, existsSync, mkdirSync, chmodSync, statSync } from 'fs';
 import { rm } from 'fs/promises';
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import path from 'path';
 import https from 'https';
 
@@ -140,10 +140,7 @@ export async function downloadNode(
     // Remove macOS quarantine attribute — Gatekeeper may silently kill quarantined binaries
     // spawned as child processes, causing the 120s health-check timeout.
     if (process.platform === 'darwin') {
-      try {
-        const { execSync } = require('child_process');
-        execSync(`xattr -dr com.apple.quarantine "${NODE_DIR}"`, { stdio: 'ignore' });
-      } catch { /* xattr may not exist or attribute already absent — safe to ignore */ }
+      removeMacQuarantineAttribute(NODE_DIR);
     }
   }
 
@@ -152,6 +149,19 @@ export async function downloadNode(
 
   onProgress?.(100, 'done');
   return nodeBin;
+}
+
+type ExecFileSyncLike = (command: string, args: string[], options: { stdio: 'ignore' }) => unknown;
+
+export function removeMacQuarantineAttribute(
+  nodeDir = NODE_DIR,
+  execFile: ExecFileSyncLike = execFileSync,
+): void {
+  try {
+    execFile('xattr', ['-dr', 'com.apple.quarantine', nodeDir], { stdio: 'ignore' });
+  } catch {
+    // xattr may not exist or the attribute may already be absent.
+  }
 }
 
 /**

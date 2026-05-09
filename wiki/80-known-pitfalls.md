@@ -2097,6 +2097,12 @@ mindos onboard
 - **解决：** 端口占用检测拆成可测的 argv 调用：Windows 解析 `netstat -ano` 的 LISTENING 行；Unix 先 `lsof -ti :PORT`，再用 `ss -tlnp` fallback，并在 `ss` 输出中继续按目标端口过滤。
 - **规则：** 产品运行时的进程控制不能假设 Unix 工具链；涉及端口的 kill/restart 逻辑必须覆盖 Windows 路径和 fallback 输出过滤。
 
+### Desktop 私有 Node 的 macOS quarantine 清理不能拼 shell 路径 (2026-05-10)
+
+- **问题：** `packages/desktop/src/node-bootstrap.ts` 下载私有 Node 后用 `execSync(\`xattr ... "${NODE_DIR}"\`)` 清理 quarantine。用户 home / app support 路径如果包含引号、`$` 等字符，会重新进入 shell 解析。
+- **解决：** 抽出 `removeMacQuarantineAttribute()`，用 `execFileSync('xattr', ['-dr', 'com.apple.quarantine', nodeDir])`；测试覆盖带引号和 `$` 的路径。
+- **规则：** Desktop 启动/修复流程里的系统工具调用也必须走 argv；即使路径通常来自系统目录，也按用户可控路径处理。
+
 ### VS Code 系 MCP Agent Windows 配置路径不能落到 `~/.config` (2026-05-10)
 
 - **问题：** `github-copilot`、`cline`、`roo`、`trae-cn` 的 MCP global config 只区分 macOS 和 Linux；Windows 下会落到 `~/.config/...`，导致安装成功但写到目标 Agent 不会读取的位置。
