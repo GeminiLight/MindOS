@@ -5,7 +5,7 @@
  * ~/.mindos/node/ and uses it exclusively for MindOS operations.
  * Does NOT touch system PATH or interfere with nvm/fnm.
  *
- * Platform support: macOS (arm64/x64), Linux (x64), Windows (x64).
+ * Platform support: macOS (arm64/x64), Linux (x64), Windows (arm64/x64).
  */
 import { app } from 'electron';
 import { createWriteStream, existsSync, mkdirSync, chmodSync, statSync } from 'fs';

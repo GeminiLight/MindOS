@@ -29,15 +29,28 @@ jobs:
           - os: macos-latest
             platform: mac
             arch: arm64
+            node_platform: darwin
+            publish_channel: latest
           - os: macos-latest
             platform: mac
             arch: x64
+            node_platform: darwin
+            publish_channel: latest
           - os: windows-latest
             platform: win
             arch: x64
+            node_platform: win32
+            publish_channel: latest
+          - os: windows-latest
+            platform: win
+            arch: arm64
+            node_platform: win32
+            publish_channel: latest-arm64
           - os: ubuntu-latest
             platform: linux
             arch: x64
+            node_platform: linux
+            publish_channel: latest
 
     runs-on: ${{ matrix.os }}
     defaults:
@@ -116,6 +129,7 @@ jobs:
       # Bundle MindOS runtime + Node.js into desktop resources
       - name: Prepare bundled runtime
         env:
+          MINDOS_BUNDLE_NODE_PLATFORM: ${{ matrix.node_platform }}
           MINDOS_BUNDLE_NODE_ARCH: ${{ matrix.arch }}
         run: pnpm --filter @mindos/desktop run prepare-mindos-runtime
 
@@ -161,10 +175,20 @@ jobs:
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
 
+          VERSION="${{ steps.version.outputs.version }}"
+          EXTRA_ARGS=(
+            --config.publish.channel="${{ matrix.publish_channel }}"
+          )
+          if [ "${{ matrix.platform }}" = "win" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+            EXTRA_ARGS+=(
+              --config.nsis.artifactName="MindOS-Setup-${VERSION}-arm64.\${ext}"
+            )
+          fi
+
           if [ "${{ inputs.publish }}" = "true" ]; then
-            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish always
+            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish always "${EXTRA_ARGS[@]}"
           else
-            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+            cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never "${EXTRA_ARGS[@]}"
           fi
 
       # macOS: verify DMGs are valid before notarization
@@ -269,6 +293,7 @@ jobs:
             packages/desktop/dist/*.exe
             packages/desktop/dist/*.AppImage
             packages/desktop/dist/*.deb
+            packages/desktop/dist/*.blockmap
             packages/desktop/dist/*.yml
             packages/desktop/dist/*.yaml
           if-no-files-found: warn

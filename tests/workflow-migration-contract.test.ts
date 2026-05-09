@@ -129,7 +129,13 @@ describe('GitHub workflow migration contract', () => {
     expect(desktop).toContain('pnpm --filter @geminilight/mindos build');
     expect(desktop).toContain('pnpm --filter @mindos/web run build');
     expect(desktop).toContain('pnpm --filter @mindos/desktop run build');
+    expect(desktop).toContain('platform: win\n            arch: arm64');
+    expect(desktop).toContain('MINDOS_BUNDLE_NODE_PLATFORM: ${{ matrix.node_platform }}');
+    expect(desktop).toContain('MINDOS_BUNDLE_NODE_ARCH: ${{ matrix.arch }}');
+    expect(desktop).toContain('publish_channel: latest-arm64');
+    expect(desktop).toContain('MindOS-Setup-${VERSION}-arm64.\\${ext}');
     expect(desktop).toContain('packages/desktop/dist/*.dmg');
+    expect(desktop).toContain('packages/desktop/dist/*.blockmap');
     expect(desktop).not.toMatch(/\bcd desktop\b|\bcd app\b|\bcd mcp\b|(^|\s)desktop\/dist\//m);
 
     expect(sync).toContain('\\"tag\\":\\"${TAG}\\"');

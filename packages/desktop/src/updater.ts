@@ -11,6 +11,10 @@ export interface UpdaterOptions {
 }
 
 export function setupUpdater(opts?: UpdaterOptions): () => void {
+  if (process.platform === 'win32' && process.arch === 'arm64') {
+    autoUpdater.channel = 'latest-arm64';
+  }
+
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.autoRunAppAfterInstall = true;

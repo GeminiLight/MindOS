@@ -109,7 +109,8 @@ API Key 和 Apple ID 同时配置时优先使用 API Key。
 | macOS ARM64 | `MindOS-{ver}-arm64.dmg` | Apple Silicon |
 | macOS Intel | `MindOS-{ver}.dmg` | Intel Mac |
 | macOS (更新用) | `MindOS-{ver}-arm64-mac.zip`, `MindOS-{ver}-mac.zip` | electron-updater 自动更新 |
-| Windows | `MindOS-Setup-{ver}.exe` | NSIS 安装程序 |
+| Windows x64 | `MindOS-Setup-{ver}.exe` | NSIS 安装程序 |
+| Windows ARM64 | `MindOS-Setup-{ver}-arm64.exe` | Native ARM64 NSIS 安装程序 |
 | Linux | `MindOS-{ver}.AppImage`, `mindos-desktop_{ver}_amd64.deb` | AppImage + deb |
 
 ## CDN 分发

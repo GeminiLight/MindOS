@@ -36,6 +36,8 @@ const mcpSourceDir = path.join(mindosDir, 'src', 'protocols', 'mcp-server');
 const mcpBundle = path.join(mindosDir, 'dist', 'protocols', 'mcp-server', 'index.cjs');
 const rootPkg = path.join(source, 'package.json');
 const productPkg = path.join(source, 'packages', 'mindos', 'package.json');
+const targetNodePlatform = process.env.MINDOS_BUNDLE_NODE_PLATFORM || process.platform;
+const targetNodeArch = process.env.MINDOS_BUNDLE_NODE_ARCH || process.arch;
 
 if (!existsSync(rootPkg)) fail(`Not a MindOS repo root (no package.json): ${source}`);
 if (!existsSync(productPkg)) fail(`Missing packages/mindos/package.json under ${source}`);
@@ -146,8 +148,8 @@ if (existsSync(productSrcFrom) && statSync(productSrcFrom).isDirectory()) {
 if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
   // IMPORTANT: Keep in sync with desktop/src/node-bootstrap.ts NODE_VERSION
   const NODE_VERSION = '22.16.0';
-  const plat = process.env.MINDOS_BUNDLE_NODE_PLATFORM || process.platform;
-  const arch = process.env.MINDOS_BUNDLE_NODE_ARCH || process.arch;
+  const plat = targetNodePlatform;
+  const arch = targetNodeArch;
 
   // Determine platform-specific download info
   const nodeArch = arch === 'arm64' ? 'arm64' : 'x64';
@@ -287,9 +289,9 @@ const productManifest = JSON.parse(readFileSync(productPkg, 'utf-8'));
 writeRuntimeManifest(dest, {
   productPkg: productManifest,
   packageName: '@geminilight/mindos-desktop-runtime',
-  platform: `${process.platform}-${process.arch}`,
-  os: process.platform,
-  cpu: process.arch,
+  platform: `${targetNodePlatform}-${targetNodeArch}`,
+  os: targetNodePlatform,
+  cpu: targetNodeArch,
   layout: 'desktop-bundled',
 });
 

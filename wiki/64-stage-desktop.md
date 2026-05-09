@@ -463,44 +463,69 @@ Windows: 用户需点击"更多信息" → "仍要运行"
 
 ---
 
-## CI/CD 构建流程
+## CI/CD 构建流程（当前 Electron Desktop）
 
 ```yaml
 # .github/workflows/build-desktop.yml
-trigger: push tag v*.*.*
+trigger: workflow_dispatch
+inputs:
+  tag: desktop-vX.Y.Z
+  publish: true
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build:
+    matrix:
+      - macos-latest / mac / arm64
+      - macos-latest / mac / x64
+      - windows-latest / win / x64
+      - windows-latest / win / arm64
+      - ubuntu-latest / linux / x64
     steps:
-      - next build (standalone)
-      - tauri build --target aarch64-apple-darwin
-      - tauri build --target x86_64-apple-darwin
-      - codesign + notarize (if cert available)
-      - upload: MindOS-{version}-arm64.dmg, MindOS-{version}-x64.dmg
+      - pnpm --filter @geminilight/mindos build
+      - pnpm --filter @mindos/web run build
+      - pnpm --filter @mindos/desktop run build
+      - pnpm --filter @mindos/desktop run prepare-mindos-runtime
+      - electron-builder --${platform} --${arch}
 
-  build-windows:
-    runs-on: windows-latest
+  finalize:
+    needs: build
     steps:
-      - next build (standalone)
-      - tauri build --target x86_64-pc-windows-msvc
-      - signtool (if cert available)
-      - upload: MindOS-{version}-x64.msi, MindOS-Setup-{version}.exe
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - next build (standalone)
-      - tauri build --target x86_64-unknown-linux-gnu
-      - upload: MindOS-{version}-x86_64.AppImage
-
-  release:
-    needs: [build-macos, build-windows, build-linux]
-    steps:
-      - create GitHub Release
-      - attach all artifacts
-      - generate update manifest (latest.json)
+      - upload versioned artifacts to GitHub Release / CDN mirrors
+      - rename electron-builder's vX.Y.Z release to desktop-vX.Y.Z
 ```
+
+### 平台产物
+
+```yaml
+macOS:
+    runs-on: macos-latest
+    upload:
+      - MindOS-{version}-arm64.dmg
+      - MindOS-{version}.dmg
+      - MindOS-{version}-arm64-mac.zip
+      - MindOS-{version}-mac.zip
+
+Windows x64:
+    runs-on: windows-latest
+    upload:
+      - MindOS-Setup-{version}.exe
+      - latest.yml
+
+Windows ARM64:
+    runs-on: windows-latest
+    upload:
+      - MindOS-Setup-{version}-arm64.exe
+      - latest-arm64.yml
+    note: uses native win-arm64 Electron and bundled Node; updater channel is latest-arm64 to avoid overwriting x64 update metadata.
+
+Linux x64:
+    runs-on: ubuntu-latest
+    upload:
+      - MindOS-{version}.AppImage
+      - mindos-desktop_{version}_amd64.deb
+```
+
+Linux deb 的 `packageName` 必须保持 `mindos-desktop`，不能回退到 scoped npm 包名 `@mindos/desktop`；否则 fpm 会把 `/` 当输出路径，尝试写入 `dist/@mindos/desktop_...deb` 并导致 CI 失败。
 
 ---
 

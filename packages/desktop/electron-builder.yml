@@ -60,6 +60,10 @@ linux:
     - deb
   category: Office
 
+deb:
+  packageName: mindos-desktop
+  artifactName: mindos-desktop_${version}_${arch}.${ext}
+
 publish:
   provider: github
   owner: GeminiLight
