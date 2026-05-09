@@ -2067,6 +2067,12 @@ mindos onboard
 - **解决：** Web 侧 `detectAgentPresence()`、产品 server handler 的默认 `commandExists()`、CLI `packages/mindos/bin/lib/mcp-agents.js` 都改成 `execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd])`，用 argv 传参。
 - **规则：** 只要是"查一个命令是否存在"，用 `execFileSync(bin, [arg])` 或 `spawn/execFile`，不要用 shell 字符串拼 `which/where`。
 
+### CLI update 查找 `mindos` binary 不要拼 `which mindos` (2026-05-10)
+
+- **问题：** `packages/mindos/bin/commands/update.js` 的 `getUpdatedRoot()` 用 `execSync('which mindos')` / `execSync('where mindos')` 查找更新后的全局安装路径，属于同一类 shell 字符串命令查找问题。
+- **解决：** 改为 `execFileSync(process.platform === 'win32' ? 'where' : 'which', ['mindos'], ...)`，并在 `tests/unit/cli-update-root.test.ts` 加 source contract，避免回退到 shell 字符串。
+- **规则：** CLI 里即使命令名是静态字符串，查 PATH 也必须走 argv；`execSync('which ...')` / `execSync('where ...')` 不允许新增。
+
 ### VS Code 系 MCP Agent Windows 配置路径不能落到 `~/.config` (2026-05-10)
 
 - **问题：** `github-copilot`、`cline`、`roo`、`trae-cn` 的 MCP global config 只区分 macOS 和 Linux；Windows 下会落到 `~/.config/...`，导致安装成功但写到目标 Agent 不会读取的位置。

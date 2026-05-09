@@ -53,6 +53,14 @@ afterEach(() => {
 });
 
 describe('mindos update root resolution', () => {
+  it('uses argv command lookup instead of shell strings when finding mindos binaries', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'commands', 'update.js'), 'utf-8');
+
+    expect(source).toContain("execFileSync(process.platform === 'win32' ? 'where' : 'which', ['mindos']");
+    expect(source).not.toContain("'where mindos'");
+    expect(source).not.toContain("'which mindos'");
+  });
+
   it('uses the resolved installed CLI path instead of falling back to the current repo root', () => {
     const stdout = execFileSync(process.execPath, [CLI, 'update'], {
       cwd: ROOT,

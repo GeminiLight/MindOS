@@ -4,7 +4,7 @@
  * Heavy dependencies are loaded on demand to keep CLI cold start fast.
  */
 
-import { execSync, spawn as nodeSpawn } from 'node:child_process';
+import { execFileSync, execSync, spawn as nodeSpawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
@@ -29,8 +29,7 @@ import { stripBom } from '../lib/jsonc.js';
 function getUpdatedRoot() {
   const shimBinDir = resolve(MINDOS_DIR, 'bin');
   try {
-    const whichCmd = process.platform === 'win32' ? 'where mindos' : 'which mindos';
-    const mindosBins = execSync(whichCmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
+    const mindosBins = execFileSync(process.platform === 'win32' ? 'where' : 'which', ['mindos'], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
       .trim()
       .split(/\r?\n/)
       .filter(Boolean);
