@@ -2103,6 +2103,12 @@ mindos onboard
 - **解决：** 改为 `execFileSync(command, args)`：`netstat -ano`、`lsof -ti :port`、`ss -tlnp`、`taskkill /PID <pid> /T /F`、`pkill -f <pattern>` 都保留结构化 argv。
 - **规则：** CLI stop/restart 的 cleanup 是最后防线，必须比启动路径更保守；重定向、管道、`|| true` 都用 stdio/catch 表达，不写进命令字符串。
 
+### `mindos doctor` 健康检查不要通过 shell 探测 npm/daemon (2026-05-10)
+
+- **问题：** `packages/mindos/bin/commands/doctor.js` 用 `execSync('npm --version')`、`execSync('systemctl ...')`、`execSync(\`launchctl print gui/${uid}/...\`)` 做诊断。doctor 是用户排障入口，shell 探测本身失败会制造误导性的诊断结果。
+- **解决：** npm、systemctl、id、launchctl 全部改成 `execFileSync(command, args)`；launchctl 的 `gui/<uid>/...` 作为单个 argv 参数传入。
+- **规则：** doctor/update 这类诊断命令尤其不能依赖 shell 解析；诊断失败应该反映真实环境问题，而不是命令字符串解析问题。
+
 ### Desktop 私有 Node 的 macOS quarantine 清理不能拼 shell 路径 (2026-05-10)
 
 - **问题：** `packages/desktop/src/node-bootstrap.ts` 下载私有 Node 后用 `execSync(\`xattr ... "${NODE_DIR}"\`)` 清理 quarantine。用户 home / app support 路径如果包含引号、`$` 等字符，会重新进入 shell 解析。

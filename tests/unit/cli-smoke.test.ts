@@ -65,6 +65,16 @@ describe('CLI smoke tests', () => {
     expect(output).toMatch(/onboard/i);
   });
 
+  it('mindos doctor uses argv-safe subprocess probes', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'commands', 'doctor.js'), 'utf-8');
+
+    expect(source).not.toContain('execSync(');
+    expect(source).toContain("execFileSync('npm', ['--version']");
+    expect(source).toContain("execFileSync('systemctl', ['--user', 'is-active', 'mindos']");
+    expect(source).toContain("execFileSync('id', ['-u']");
+    expect(source).toContain("execFileSync('launchctl', ['print', `gui/${uid}/com.mindos.app`]");
+  });
+
   it('mindos config show without config exits 1', () => {
     const { exitCode } = run(['config', 'show']);
     expect(exitCode).toBe(1);

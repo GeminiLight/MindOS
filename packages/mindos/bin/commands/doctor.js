@@ -3,7 +3,7 @@
  * listening ports, OS daemon, sync, and update availability.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, delimiter } from 'node:path';
 import { homedir } from 'node:os';
@@ -95,9 +95,9 @@ export const run = async (_args, flags) => {
     ok(`Node.js ${nodeVersion}`);
   }
 
-  // 4b. npm reachable from /bin/sh
+  // 4b. npm reachable from PATH
   try {
-    const npmVersion = execSync('npm --version', { stdio: 'pipe' }).toString().trim();
+    const npmVersion = execFileSync('npm', ['--version'], { stdio: 'pipe' }).toString().trim();
     ok(`npm ${npmVersion} reachable`);
   } catch {
     err('npm not found in PATH — app dependencies cannot be installed');
@@ -170,15 +170,15 @@ export const run = async (_args, flags) => {
   const platform = getPlatform();
   if (platform === 'systemd') {
     try {
-      execSync('systemctl --user is-active mindos', { stdio: 'pipe' });
+      execFileSync('systemctl', ['--user', 'is-active', 'mindos'], { stdio: 'pipe' });
       ok('Systemd service mindos is active');
     } catch {
       warn('Systemd service mindos is not active  (run `mindos gateway start` to start)');
     }
   } else if (platform === 'launchd') {
     try {
-      const uid = execSync('id -u').toString().trim();
-      execSync(`launchctl print gui/${uid}/com.mindos.app`, { stdio: 'pipe' });
+      const uid = execFileSync('id', ['-u'], { stdio: 'pipe' }).toString().trim();
+      execFileSync('launchctl', ['print', `gui/${uid}/com.mindos.app`], { stdio: 'pipe' });
       ok('LaunchAgent com.mindos.app is loaded');
     } catch {
       warn('LaunchAgent com.mindos.app is not loaded  (run `mindos gateway start` to start)');
