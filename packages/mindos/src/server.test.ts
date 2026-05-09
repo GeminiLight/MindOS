@@ -1399,7 +1399,8 @@ describe('MindOS product server contract', () => {
 
   it('restarts MCP through the product process-control handler', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-mcp-restart-'));
-    const bundlePath = join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs');
+    const bundlePath = join(root, 'packages', 'mindos', 'dist', 'protocols', 'mcp-server', 'index.cjs');
+    const packageRoot = join(root, 'packages', 'mindos');
     const killedPorts: number[] = [];
     const spawned: Array<{ command: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv }> = [];
 
@@ -1454,16 +1455,43 @@ describe('MindOS product server contract', () => {
       body: { ok: true, pid: 12345, port: 9994 },
     });
 
+    await expect(handleMcpRestartPost({
+      readSettings: () => ({ mcpPort: 9995 }),
+      env: { MINDOS_WEB_PORT: '5678' } as NodeJS.ProcessEnv,
+      projectRoot: packageRoot,
+      execPath: '/node',
+      killByPort: (port) => { killedPorts.push(port); },
+      waitForPortFree: async () => true,
+      pathExists: (path) => path === bundlePath,
+      spawnDetached: (command, args, options) => {
+        spawned.push({ command, args, cwd: options.cwd, env: options.env });
+        return { pid: 12346, unref: () => {} };
+      },
+    })).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, pid: 12346, port: 9995 },
+    });
+
     expect(spawned).toEqual([{
       command: '/node',
       args: [bundlePath],
-      cwd: join(root, 'packages', 'protocols', 'mcp-server'),
+      cwd: packageRoot,
       env: expect.objectContaining({
         MCP_TRANSPORT: 'http',
         MCP_PORT: '9994',
         MCP_HOST: '127.0.0.1',
         MINDOS_URL: 'http://127.0.0.1:4567',
         AUTH_TOKEN: 'from-settings',
+      }),
+    }, {
+      command: '/node',
+      args: [bundlePath],
+      cwd: packageRoot,
+      env: expect.objectContaining({
+        MCP_TRANSPORT: 'http',
+        MCP_PORT: '9995',
+        MCP_HOST: '0.0.0.0',
+        MINDOS_URL: 'http://127.0.0.1:5678',
       }),
     }]);
   });

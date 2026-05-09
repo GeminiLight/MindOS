@@ -1532,6 +1532,12 @@ mindos onboard
 - **解决：** Desktop 的 spawnWeb 设置 `MINDOS_MANAGED=1` 环境变量；API 路由检测到此标志时只 kill 不 spawn，让 ProcessManager crash handler 独自负责重启
 - **规则：** 当子进程由父进程管理器托管时，其他组件不应绕过管理器自行重启子进程——通过环境变量/标志声明托管关系
 
+### `/api/mcp/restart` bundle 路径必须跟随 MCP 内聚到产品包 (2026-05-10)
+- **现象：** 在 Web/产品 server 中点击"重启 MCP"会返回 `MCP bundle not found — reinstall @geminilight/mindos`，即使产品包已经构建过 MCP bundle。
+- **原因：** v1 后 MCP 源码和 bundle 已内聚到 `packages/mindos/src/protocols/mcp-server` / `packages/mindos/dist/protocols/mcp-server/index.cjs`，但 Product Server 的 `handleMcpRestartPost()` 仍按旧 workspace package 路径 `packages/protocols/mcp-server/dist/index.cjs` 查找。
+- **解决：** handler 先按 monorepo root 解析 `packages/mindos/dist/protocols/mcp-server/index.cjs`，再支持 npm/runtime package root 下的 `dist/protocols/mcp-server/index.cjs`。测试同时覆盖两种 `projectRoot` 输入。
+- **规则：** 迁移 package 边界时，除 CLI build helper 外，Web/Product Server process-control handler 也必须同步改路径；不能只靠 publish contract 覆盖发布清单。
+
 ### `monitoring/route.ts` MCP 端口默认值 3457（应为 8781）
 - **现象：** 监控 API 返回错误的 MCP 端口号
 - **原因：** 读取 `MCP_PORT` 环境变量（MCP 进程内部使用），而 Web 进程中该变量未设置，fallback 硬编码为 3457（错误值）

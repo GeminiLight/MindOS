@@ -54,9 +54,8 @@ export async function handleMcpRestartPost(
       return json({ error: `MCP port ${mcpPort} still in use after kill` }, { status: 500 });
     }
 
-    const mcpDir = resolve(services.projectRoot, 'packages', 'protocols', 'mcp-server');
-    const mcpBundle = resolve(mcpDir, 'dist', 'index.cjs');
     const pathExists = services.pathExists ?? existsSync;
+    const { mcpDir, mcpBundle } = resolveMcpRuntime(services.projectRoot, pathExists);
     if (!pathExists(mcpBundle)) {
       return json({ error: 'MCP bundle not found — reinstall @geminilight/mindos' }, { status: 500 });
     }
@@ -110,6 +109,27 @@ export function killMcpProcessesByPort(port: number): void {
   } catch {
     // No listener or no compatible process listing command.
   }
+}
+
+function resolveMcpRuntime(
+  projectRoot: string,
+  pathExists: (path: string) => boolean,
+): { mcpDir: string; mcpBundle: string } {
+  const candidates = [
+    resolve(projectRoot, 'packages', 'mindos'),
+    projectRoot,
+  ];
+
+  for (const mcpDir of candidates) {
+    const mcpBundle = resolve(mcpDir, 'dist', 'protocols', 'mcp-server', 'index.cjs');
+    if (pathExists(mcpBundle)) return { mcpDir, mcpBundle };
+  }
+
+  const fallbackDir = candidates[0] ?? projectRoot;
+  return {
+    mcpDir: fallbackDir,
+    mcpBundle: resolve(fallbackDir, 'dist', 'protocols', 'mcp-server', 'index.cjs'),
+  };
 }
 
 export function defaultWaitForPortFree(port: number, timeoutMs: number): Promise<boolean> {
