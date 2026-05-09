@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { EditorView, basicSetup } from 'codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -63,19 +63,20 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
 
   // Track whether update is from external value change
   const isExternalUpdate = useRef(false);
 
   const { uploadToMedia, isUploading } = useEditorImageUpload();
   const uploadRef = useRef(uploadToMedia);
-  uploadRef.current = uploadToMedia;
   const [isMarkdown] = useState(language === 'markdown');
 
-  // Stable image insertion function via ref
-  const insertImagesRef = useRef(async (files: File[]) => {});
-  insertImagesRef.current = async (files: File[]) => {
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+    uploadRef.current = uploadToMedia;
+  }, [onChange, uploadToMedia]);
+
+  const insertImages = useCallback(async (files: File[]) => {
     const view = viewRef.current;
     if (!view) return;
 
@@ -97,7 +98,7 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
       toast.error('Failed to insert images');
       console.error(err);
     }
-  };
+  }, []);
 
   // Handle file picker (image button click)
   const handlePickImages = useCallback(() => {
@@ -110,11 +111,11 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
     input.onchange = (e) => {
       const files = Array.from((e.target as HTMLInputElement).files ?? []);
       if (files.length > 0) {
-        insertImagesRef.current(files);
+        void insertImages(files);
       }
     };
     input.click();
-  }, [isMarkdown]);
+  }, [insertImages, isMarkdown]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -173,7 +174,7 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
 
       if (files.length > 0) {
         e.preventDefault();
-        insertImagesRef.current(files);
+        void insertImages(files);
       }
     };
 
@@ -184,7 +185,7 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
       if (files.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        insertImagesRef.current(files);
+        void insertImages(files);
       }
     };
 
@@ -195,7 +196,7 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
       container.removeEventListener('paste', handlePaste as EventListener);
       container.removeEventListener('drop', handleDrop as EventListener);
     };
-  }, [isMarkdown]);
+  }, [insertImages, isMarkdown]);
 
   // Sync external value changes to editor
   useEffect(() => {

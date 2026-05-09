@@ -2539,7 +2539,7 @@ const visibleNodes = useMemo(() => {
 - 如果 ref 只是缓存初始化快照，先用 lazy `useState` 读取外部存储，再用这个普通 state 值初始化 ref 和其他 state，避免在 render 阶段读取 `ref.current`
 - JSX handler 需要触发会读写 ref 的异步流程时，先进入普通 state / event callback，再由 effect 或事件路径调用该 ref-owning 函数，避免 compiler 把它视为 render 读 ref
 
-**防回归**：`packages/web/__tests__/hooks/useResizeDrag-lint.test.ts`、`packages/web/__tests__/renderers/useRendererState-lint.test.ts`、`packages/web/__tests__/lib/LocaleStoreInit-lint.test.ts`、`packages/web/__tests__/hooks/acp-hooks-lint.test.ts`、`packages/web/__tests__/hooks/hook-ref-lint.test.ts`、`packages/web/__tests__/components/find-in-page-lint.test.ts`、`packages/web/__tests__/ask/provider-model-capsule-lint.test.ts` 和 `packages/web/__tests__/ask/ask-content-lint.test.ts` 用 ESLint JSON 输出断言关键启动/render hook/component 不再出现 `react-hooks/refs` warning。
+**防回归**：`packages/web/__tests__/hooks/useResizeDrag-lint.test.ts`、`packages/web/__tests__/renderers/useRendererState-lint.test.ts`、`packages/web/__tests__/lib/LocaleStoreInit-lint.test.ts`、`packages/web/__tests__/hooks/acp-hooks-lint.test.ts`、`packages/web/__tests__/hooks/hook-ref-lint.test.ts`、`packages/web/__tests__/components/find-in-page-lint.test.ts`、`packages/web/__tests__/ask/provider-model-capsule-lint.test.ts`、`packages/web/__tests__/ask/ask-content-lint.test.ts` 和 `packages/web/__tests__/components/ref-cleanup-lint.test.ts` 用 ESLint JSON 输出断言关键启动/render hook/component 不再出现 `react-hooks/refs` warning。
 
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 

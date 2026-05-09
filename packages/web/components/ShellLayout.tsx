@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useRef } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import SidebarLayout from './SidebarLayout';
 import { FileNode } from '@/lib/types';
 
@@ -67,11 +67,13 @@ interface ShellLayoutProps {
 
 export default function ShellLayout({ fileTree, children }: ShellLayoutProps) {
   const pathname = usePathname();
-  const prevTreeRef = useRef<FileNode[]>(fileTree);
+  const [sharedTree, setSharedTree] = useState(fileTree);
 
-  // Apply structural sharing: reuse old node references where nothing changed
-  const sharedTree = shareFileTree(fileTree, prevTreeRef.current);
-  prevTreeRef.current = sharedTree;
+  // Apply structural sharing before paint: reuse old node references where nothing changed.
+  useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- update derived tree before paint after RSC refresh
+    setSharedTree(prev => shareFileTree(fileTree, prev));
+  }, [fileTree]);
 
   if (pathname === '/login') return <>{children}</>;
   return <SidebarLayout fileTree={sharedTree}>{children}</SidebarLayout>;

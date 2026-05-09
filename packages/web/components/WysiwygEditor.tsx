@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
@@ -15,7 +15,9 @@ interface InnerEditorProps {
 
 function InnerEditor({ value, onChange }: InnerEditorProps) {
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEditor((root) => {
     const crepe = new Crepe({
@@ -31,7 +33,7 @@ function InnerEditor({ value, onChange }: InnerEditorProps) {
     });
 
     crepe.on((listener) => {
-      listener.markdownUpdated((_ctx, markdown, _prevMarkdown) => {
+      listener.markdownUpdated((_ctx, markdown) => {
         onChangeRef.current(twemojiToNative(markdown));
       });
     });

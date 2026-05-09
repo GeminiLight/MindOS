@@ -18,29 +18,27 @@ interface SyncPopoverProps {
 
 export default function SyncPopover({ open, onClose, anchorRect, railWidth, onOpenSyncSettings, syncStatus, onSyncStatusRefresh }: SyncPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const { syncing, syncResult, syncNow } = useSyncAction(onSyncStatusRefresh);
 
   // Close on ESC
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCloseRef.current(); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open]);
+  }, [onClose, open]);
 
   // Close on click outside
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onCloseRef.current();
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const id = setTimeout(() => window.addEventListener('mousedown', handler), 0);
     return () => { clearTimeout(id); window.removeEventListener('mousedown', handler); };
-  }, [open]);
+  }, [onClose, open]);
 
   if (!open || !anchorRect) return null;
 

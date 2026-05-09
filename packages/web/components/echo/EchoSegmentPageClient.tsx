@@ -68,6 +68,25 @@ function echoSnapshotCopy(segment: EchoSegment, p: Messages['echoPages']): { tit
   }
 }
 
+function EchoAgentButton({
+  label,
+  onClick,
+  disabled,
+  className,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={cn(className, disabled && 'opacity-40 pointer-events-none')}>
+      {label}
+      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  );
+}
+
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t, locale } = useLocale();
   const p = t.echoPages;
@@ -185,13 +204,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     : segment === 'growth' ? p.growthChatLabel
     : p.selfChatLabel;
 
-  const agentBtn = (onClick: () => void, disabled?: boolean) => (
-    <button type="button" onClick={onClick} disabled={disabled} className={cn(secondaryBtnClass, disabled && 'opacity-40 pointer-events-none')}>
-      {chatLabel}
-      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-    </button>
-  );
-
   return (
     <article
       className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-11"
@@ -233,7 +245,12 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
                 onError={(err) => console.error('[EchoImprint]', err)}
                 locale={{ t: p }}
               />
-              {agentBtn(openImprintAsk, !dailyLine.trim())}
+              <EchoAgentButton
+                label={chatLabel}
+                onClick={openImprintAsk}
+                disabled={!dailyLine.trim()}
+                className={secondaryBtnClass}
+              />
             </div>
           </section>
           <DailyEchoReportDrawer
@@ -270,7 +287,12 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             </span>
           </p>
           <div className="mt-4">
-            {agentBtn(openSegmentAsk, !growthIntent.trim())}
+            <EchoAgentButton
+              label={chatLabel}
+              onClick={openSegmentAsk}
+              disabled={!growthIntent.trim()}
+              className={secondaryBtnClass}
+            />
           </div>
         </section>
       )}
@@ -284,7 +306,14 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             emptyTitle={snapshot.title}
             emptyBody={snapshot.body}
             icon={SEGMENT_ICON[segment]}
-            actions={agentBtn(openSegmentAsk, true)}
+            actions={(
+              <EchoAgentButton
+                label={chatLabel}
+                onClick={openSegmentAsk}
+                disabled
+                className={secondaryBtnClass}
+              />
+            )}
           />
         </div>
       )}
