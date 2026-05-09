@@ -1,9 +1,13 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
+import { handleA2aDelegationsGet, type A2aServices } from '@geminilight/mindos/server';
 import { getDelegationHistory } from '@/lib/a2a/client';
+import { toNextResponse } from '../../_mindos-adapter';
 
-export async function GET() {
-  const delegations = getDelegationHistory();
-  return NextResponse.json({ delegations });
+const services: A2aServices = {
+  getDelegationHistory,
+};
+
+export function GET() {
+  return toNextResponse(handleA2aDelegationsGet(services));
 }

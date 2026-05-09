@@ -206,6 +206,16 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           />
         </Field>
 
+        <SettingRow
+          label={k.allowNetworkAccess ?? 'Allow LAN access'}
+          hint={k.allowNetworkAccessHint ?? 'Bind the Web UI to 0.0.0.0 so other devices on your network can connect after restart.'}
+        >
+          <Toggle
+            checked={data.allowNetworkAccess === true}
+            onChange={() => setData(d => d ? { ...d, allowNetworkAccess: d.allowNetworkAccess !== true } : d)}
+          />
+        </SettingRow>
+
         <Field
           label={k.authToken}
           hint={hasToken ? k.authTokenHint : k.authTokenNone}

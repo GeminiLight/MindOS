@@ -6,9 +6,13 @@ import { NextRequest } from 'next/server';
  * Each test can configure the mock to succeed or throw.
  */
 let execSyncMock: ReturnType<typeof vi.fn>;
-vi.mock('child_process', () => ({
-  execSync: (...args: unknown[]) => execSyncMock(...args),
-}));
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  return {
+    ...actual,
+    execSync: (...args: unknown[]) => execSyncMock(...args),
+  };
+});
 
 /* Mock fs — only override existsSync, keep the rest real */
 let mockExistsSync: ((p: string) => boolean) | null = null;

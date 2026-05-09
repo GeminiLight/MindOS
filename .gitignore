@@ -5,6 +5,10 @@ packages/web/.next
 .next
 _standalone/
 packages/mindos/_standalone/
+packages/mindos/static-web/
+packages/mindos-platforms/*
+!packages/mindos-platforms/*/
+!packages/mindos-platforms/*/package.json
 packages/mindos/apps/
 packages/mindos/packages/
 packages/mindos/scripts/
@@ -82,9 +86,10 @@ image.png
 !assets/images/*.png
 !docs/images/*.png
 !packages/browser-extension/src/icons/*.png
-!packages/browser-extension/extension/icons/*.png
 !packages/web/public/icons/*.png
+!packages/mobile/assets/*.png
 !packages/desktop/src/icons/*.png
+!packages/desktop-tauri/src-tauri/icons/*.png
 .tmux.conf
 TMUX_DOC.md
 .mcp.json

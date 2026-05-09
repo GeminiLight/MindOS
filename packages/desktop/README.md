@@ -98,7 +98,7 @@ API Key 和 Apple ID 同时配置时优先使用 API Key。
 
 安装包将已构建的 MindOS 打进 `Resources/mindos-runtime`，离线时也能启动本地模式。
 
-手动准备：`pnpm --filter @mindos/web build && pnpm --filter @mindos/mcp-server build && pnpm --filter @mindos/desktop run prepare-mindos-runtime`
+手动准备：`pnpm --filter @geminilight/mindos build && pnpm --filter @mindos/web build && pnpm --filter @mindos/desktop run prepare-mindos-runtime`
 
 或一键：`npm run dist:with-bundled`
 

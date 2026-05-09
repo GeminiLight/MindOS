@@ -81,6 +81,7 @@ vi.mock('@/lib/settings', () => ({
     mindRoot: '',
   }),
   writeSettings: vi.fn(),
+  recordSkillInstall: vi.fn(),
   effectiveSopRoot: () => state.root,
   effectiveAiConfig: () => ({
     provider: 'anthropic',

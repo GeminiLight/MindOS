@@ -11,10 +11,10 @@ Help me upgrade my MindOS installation from the old source-based setup to the ne
 
 **Old setup (what I have now):**
 - Cloned the MindOS repo
-- Ran `pnpm install`, `pnpm --filter @mindos/web build`, and `pnpm --filter @mindos/mcp-server build`
+- Ran `pnpm install`, `pnpm --filter @geminilight/mindos build`, and `pnpm --filter @mindos/web build`
 - Configured via `packages/web/.env.local` (with MIND_ROOT, ANTHROPIC_API_KEY, etc.)
 - Started with `pnpm --filter @mindos/web dev`
-- MCP was started separately via `pnpm --filter @mindos/mcp-server start` or similar
+- MCP was started through `mindos mcp` or the product package runtime
 
 **New setup (target):**
 - Installed as a global npm package: `npm install -g mindos@latest`
@@ -83,7 +83,7 @@ Do not delete the old cloned repository — keep it as a backup. The `app/.env.l
 
 **旧版安装方式（我现在的状态）：**
 - 克隆了 MindOS 仓库
-- 执行过 `pnpm install`、`pnpm --filter @mindos/web build` 和 `pnpm --filter @mindos/mcp-server build`
+- 执行过 `pnpm install`、`pnpm --filter @geminilight/mindos build` 和 `pnpm --filter @mindos/web build`
 - 通过 `packages/web/.env.local` 配置（包含 MIND_ROOT、ANTHROPIC_API_KEY 等）
 - 用 `pnpm --filter @mindos/web dev` 启动
 - MCP 需要单独启动

@@ -52,7 +52,7 @@
 | `mindos mcp install -g -y` | One-shot global install with defaults |
 | `mindos token` | Show auth token and per-agent MCP config snippets |
 
-The MCP server source of truth is `packages/protocols/mcp-server`; packaged installs use the prebuilt `packages/protocols/mcp-server/dist/index.cjs` bundle.
+The MCP server source of truth is `packages/mindos/src/protocols/mcp-server`; packaged installs use the prebuilt `dist/protocols/mcp-server/index.cjs` bundle inside the MindOS runtime package.
 
 ## Sync
 

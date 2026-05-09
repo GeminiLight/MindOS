@@ -58,10 +58,10 @@ describe('GET /api/file', () => {
     expect(body.lines).toEqual(['line0', 'line1', 'line2']);
   });
 
-  it('returns 500 for non-existent file', async () => {
+  it('returns 404 for non-existent file', async () => {
     const req = new NextRequest('http://localhost/api/file?path=nope.md');
     const res = await GET(req);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -243,10 +243,10 @@ describe('POST /api/file', () => {
     expect(trashContent).toBe('bye');
   });
 
-  it('delete_file returns error for non-existent file', async () => {
+  it('delete_file returns 404 for non-existent file', async () => {
     invalidateCache();
     const res = await POST(post({ op: 'delete_file', path: 'does-not-exist.md' }));
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(404);
   });
 
   it('rename_file renames a file', async () => {

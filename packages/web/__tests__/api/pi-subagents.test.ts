@@ -38,27 +38,27 @@ describe('pi-subagents built-in extension', () => {
   });
 
   describe('extension path registration', () => {
-    let askRouteContent: string;
+    let runtimeAdapterContent: string;
 
     beforeAll(() => {
-      const routePath = path.join(PROJECT_ROOT, 'app', 'api', 'ask', 'route.ts');
-      askRouteContent = fs.readFileSync(routePath, 'utf-8');
+      const adapterPath = path.join(PROJECT_ROOT, 'lib', 'agent', 'mindos-pi-runtime-host.ts');
+      runtimeAdapterContent = fs.readFileSync(adapterPath, 'utf-8');
     });
 
-    it('ask/route.ts includes pi-subagents in additionalExtensionPaths', () => {
-      expect(askRouteContent).toContain('pi-subagents');
-      expect(askRouteContent).toContain("path.join(webAppDir, 'node_modules', 'pi-subagents', 'index.ts')");
+    it('runtime adapter includes pi-subagents in additionalExtensionPaths', () => {
+      expect(runtimeAdapterContent).toContain('pi-subagents');
+      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'node_modules', 'pi-subagents', 'index.ts')");
     });
 
-    it('ask/route.ts preserves the built-in schedule-prompt extension from the legacy app', () => {
-      expect(askRouteContent).toContain('schedule-prompt');
-      expect(askRouteContent).toContain("path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts')");
+    it('runtime adapter preserves the built-in schedule-prompt extension from the legacy app', () => {
+      expect(runtimeAdapterContent).toContain('schedule-prompt');
+      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts')");
     });
 
     it('pi-subagents path is after user extensions (scanExtensionPaths)', () => {
       // User extensions should have priority, so scanExtensionPaths() comes first
-      const scanIndex = askRouteContent.indexOf('scanExtensionPaths()');
-      const subagentsIndex = askRouteContent.indexOf('pi-subagents');
+      const scanIndex = runtimeAdapterContent.indexOf('scanExtensionPaths()');
+      const subagentsIndex = runtimeAdapterContent.indexOf('pi-subagents');
 
       expect(scanIndex).toBeGreaterThan(-1);
       expect(subagentsIndex).toBeGreaterThan(scanIndex);

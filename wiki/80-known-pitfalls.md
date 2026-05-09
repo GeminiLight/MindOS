@@ -11,26 +11,26 @@
 **根因**：v1 迁移时先复制目录再切入口，旧路径容易残留在 tests、docs、hooks 和动态路径解析里；单纯删除目录不足以证明运行时自洽。
 
 **规则**：
-- 源码入口固定为 `packages/web/`、`packages/desktop/`、`packages/mobile/`、`packages/protocols/acp/`、`packages/protocols/mcp-server/`
+- 源码入口固定为 `packages/web/`、`packages/desktop/`、`packages/mobile/`、`packages/mindos/src/protocols/acp/`、`packages/mindos/src/protocols/mcp-server/`
 - `packages/web/data/skills/` 是 Web 内置 skill copy；`skills/` 是项目级 source-of-truth copy
-- Desktop 新打包产物也使用 `packages/web/` + `packages/protocols/mcp-server/`，不再生成顶层 `app/` + `mcp/` 兼容布局
+- Desktop 新打包产物使用 `packages/web/` + `dist/protocols/mcp-server/index.cjs`，不再生成顶层 `app/` + `mcp/` 兼容布局
 - `packages/mindos/_standalone`、`packages/mindos/packages`、`packages/mindos/scripts` 等是 pack/publish staging output，不是源码；不要在那里修 bug
 
 **验证**：`pnpm exec vitest run tests/legacy-cleanup-contract.test.ts`，发布前再跑真实 `npm pack` tarball smoke。
 
-### MCP source path 迁移后不要再改顶层 `mcp/`
+### MCP source path 迁移后不要再改顶层 `mcp/` 或旧 `packages/protocols/`
 
 **症状**：v1 迁移后如果继续在顶层 `mcp/` 修 MCP，会出现"本地修了但发布包 / CLI / Desktop 没变化"的假修复。
 
-**根因**：v1 的 MCP 源码和新 Desktop runtime source of truth 都已迁移到 `packages/protocols/mcp-server/`。顶层 `mcp/` 只可能来自旧安装包或旧缓存，不能作为新版本入口。
+**根因**：MCP 源码和新 Desktop runtime source of truth 已迁入 `packages/mindos/src/protocols/mcp-server/`。顶层 `mcp/` 与旧 `packages/protocols/mcp-server/` 只可能来自旧安装包或旧缓存，不能作为新版本入口。
 
 **规则**：
-- MCP 源码只改 `packages/protocols/mcp-server/src/index.ts`
-- 构建用 `pnpm --filter @mindos/mcp-server build`
-- CLI 通过 `packages/mindos/bin/lib/mcp-build.js` 读取 `packages/protocols/mcp-server/dist/index.cjs`
-- Desktop runtime prepare 直接复制为 `packages/protocols/mcp-server/dist/index.cjs`
+- MCP 源码只改 `packages/mindos/src/protocols/mcp-server/index.ts`
+- 构建用 `pnpm --filter @geminilight/mindos build`
+- CLI 通过 `packages/mindos/bin/lib/mcp-build.js` 读取 `dist/protocols/mcp-server/index.cjs`
+- Desktop runtime prepare 直接复制为 `dist/protocols/mcp-server/index.cjs`
 
-**验证**：`pnpm exec vitest run tests/mcp-package-migration-contract.test.ts`，并确认 npm tarball 包含 `packages/protocols/mcp-server/dist/index.cjs`。
+**验证**：`pnpm exec vitest run tests/mcp-package-migration-contract.test.ts`，并确认 npm tarball 包含 `dist/protocols/mcp-server/index.cjs`。
 
 ### Standalone health 通过不代表 Web 首页可渲染
 
@@ -42,9 +42,60 @@
 - `scripts/verify-standalone.mjs` 必须同时请求 `/api/health` 和 `/`
 - 外置 runtime 包需要的依赖必须是 `packages/web/package.json` 的显式 runtime dependency
 - `scripts/prepare-standalone.mjs` 要把这些 runtime dependency 复制进 standalone `node_modules`，再 stage 到 `packages/mindos/_standalone/__node_modules`
-- Desktop/Core archive 的 `runtime-dependency-closure` health contract 要覆盖代表性传递依赖（如 `chalk`、`cli-highlight`），避免 `/api/skills`、`/api/mcp/agents` 这类非 health 路由在运行时才暴露缺包
 
 **验证**：发布前用全新 `/tmp` 安装 tarball，真实运行 `mindos start`，确认首页 `/` 返回 200；再用真实浏览器/Playwright 打开首页，要求无 4xx/5xx responses、无 console error，并用 token 调 `/api/files` / `/api/file` / `/api/search`。
+
+### v1 workspace 构建不能在 `packages/web` 内直接跑 npm install
+
+**症状**：根目录 `pnpm build` 在 `@geminilight/mindos` 的 web build 阶段失败，错误类似 `Unsupported URL Type "workspace:"`。
+
+**根因**：v1 的 Web 包使用 `workspace:*` 依赖指向 monorepo 内的 `@geminilight/mindos`。如果构建脚本进入 `packages/web` 后执行 `npm install --no-workspaces`，npm 会把 workspace protocol 当作普通包解析并失败。
+
+**规则**：
+- 只要检测到根目录 `pnpm-workspace.yaml` 且 `packages/web/package.json` 存在 `workspace:` 依赖，就必须在 monorepo 根目录执行 `pnpm install --no-frozen-lockfile`
+- dependency health check 只检查 Web 的直接关键依赖，例如 `next`、`react`、`react-dom`
+- 不要要求 pnpm 的传递依赖出现在 `packages/web/node_modules` 顶层；它们通常在 `.pnpm` store 内
+
+**验证**：`pnpm exec vitest run tests/unit/cli-build.test.ts`，再跑根目录 `pnpm build`。
+
+### Desktop runtime 打包不能依赖 `fs.cpSync({ dereference: true })` 处理 pnpm symlink tree
+
+**症状**：`pnpm --filter @mindos/desktop dist:mac-zip` 在 prepare runtime 阶段失败，常见报错包括复制 `@huggingface/transformers`、scoped package 或 broken symlink 时 `ENOENT`。
+
+**根因**：pnpm 的 `node_modules` 大量使用 symlink。Node 的 `fs.cpSync(..., { dereference: true })` 在复杂 scoped package、fallback `app/node_modules`、以及 broken symlink 场景下行为不够稳定，容易在 Desktop runtime materialize 阶段留下未展开或不可复制的路径。
+
+**规则**：
+- Desktop runtime prepare 必须显式 materialize symlink：先 `realpath`，再递归复制真实目录或文件
+- 替换 symlink 时使用 `unlink`，不要用 recursive remove 误处理目标路径
+- Electron Desktop 包当前不需要 native rebuild；如果生产依赖仍然是纯 JS，保持 `npmRebuild: false`，避免 electron-builder 扫到 dev-only pnpm optional symlink
+
+**验证**：`pnpm exec vitest run packages/desktop/src/prepare-mindos-bundle.test.ts packages/desktop/src/runtime-health-contract.test.ts`，再跑 `pnpm --filter @mindos/desktop dist:mac-zip`。
+
+### 测试不要假设本机默认端口空闲
+
+**症状**：单测在某些机器上超时或走进真实服务复用路径，例如默认 Web 端口 `3456` 或 MCP 端口 `8781` 已经被本地 dev server 占用。
+
+**根因**：迁移后 CLI/Desktop tests 更接近真实启动逻辑。如果测试沿用用户 HOME 或默认端口，就会被当前机器状态污染，导致 CI 和本地结果不一致。
+
+**规则**：
+- CLI 测试需要使用临时 `HOME`，并写入隔离的 `.mindos/config.json`
+- ProcessManager / Desktop host 测试使用高位测试端口，不要复用产品默认端口
+- 断言启动逻辑时优先 mock/spawn test fixture，不依赖本机是否已有 MindOS 进程
+
+**验证**：`pnpm exec vitest run tests/unit/cli-update-root.test.ts packages/desktop/src/process-manager-hostname.test.ts`。
+
+### Expo mobile export 需要显式声明 pnpm 下的运行时依赖和资源
+
+**症状**：`expo export` 报 `Unable to resolve "@babel/runtime/helpers/interopRequireDefault"`，或导出过程中提示缺少 `assets/favicon.png`。
+
+**根因**：pnpm 不保证未声明的 transitive dependency 能从 mobile 包解析到；Expo Web/All 平台导出还会读取 `react-dom`、`react-native-web` 和 app icon/favicon/splash 资源。
+
+**规则**：
+- `packages/mobile/package.json` 必须显式声明 `@babel/runtime`
+- 需要支持 `expo export --platform all` 时，必须声明 `react-dom` 和 `react-native-web`
+- `packages/mobile/assets/` 至少包含 `icon.png`、`adaptive-icon.png`、`splash.png`、`favicon.png`
+
+**验证**：`pnpm --filter @mindos/mobile typecheck`、`pnpm --filter @mindos/mobile test`、`pnpm --filter @mindos/mobile exec expo export --platform all --output-dir dist`。
 
 ## Git / 双仓同步
 
@@ -320,7 +371,7 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 ### Next 生产进程绑定机器 hostname，`127.0.0.1` 健康检查永远超时
 - **现象：** Desktop 或 `verify-standalone` 等不到 `/api/health`，但本机 `curl http://$(hostname):PORT/api/health` 有响应
 - **原因：** Next 默认把监听地址设成 **系统 hostname**，未监听 loopback
-- **解决：** Desktop `ProcessManager` 与 CLI `mindos start`（`next start`）**无条件**注入 `HOSTNAME=127.0.0.1`（旧版条件判断 `if (!env.HOSTNAME)` 在有系统 HOSTNAME 时不生效，已改为无条件赋值）；需要对外监听时用户自行 export `HOSTNAME=0.0.0.0`
+- **解决：** Desktop `ProcessManager` 与 CLI `mindos start` 默认绑定 `127.0.0.1`，不要默认暴露到 `0.0.0.0`。需要局域网访问时，在设置页「安全」打开 `allowNetworkAccess`，重启后才绑定 `0.0.0.0`；高级部署仍可用 `MINDOS_WEB_HOST` 显式覆盖。
 
 ### Web 进程启动即崩溃，`waitForReady` 傻等 120 秒才报超时
 - **现象：** Desktop 首次安装后报 "MindOS web server did not start within 120 seconds on port 3456"，但实际 Web 进程在数秒内就已崩溃退出
@@ -812,14 +863,14 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 - **原因：** 手写的 `sendAndWait()` 发送 JSON-RPC 后仅靠 `setTimeout` 等待响应，不监听进程 `close`/`error` 事件
 - **解决：** 迁移至 `@agentclientprotocol/sdk`，SDK 的 `ClientSideConnection` 自动将流关闭事件传播为 Promise rejection，消除了手写 JSON-RPC 解析/调度的整类 bug
 - **规则：** 协议层优先使用官方 SDK 而非手写实现。手写 JSON-RPC 解析/调度曾导致 5 类 bug（sessionId 丢失、streaming 格式不匹配、同步 prompt 无文本、进程死亡盲等、modes 解析错误）
-- **文件：** v1 后为 `packages/protocols/acp/src/subprocess.ts`, `packages/protocols/acp/src/session.ts`
+- **文件：** v1 后为 `packages/mindos/src/protocols/acp/subprocess.ts`, `packages/mindos/src/protocols/acp/session.ts`
 
 ### ACP waitForTerminalExit 竞态条件（#24）
 - **现象：** 如果终端子进程在 `exitCode !== null` 检查和 `.on('exit')` 监听之间退出，Promise 永远挂起
 - **原因：** Node.js 的 `exit` 事件已触发后不会重发，附加监听器后再也收不到
 - **解决：** 在附加 `.on('exit')` 后再次检查 `exitCode`，覆盖竞态窗口
 - **规则：** 任何 "先检查状态 → 再挂监听器" 的模式都必须在监听器挂上后重新检查状态
-- **文件：** v1 后为 `packages/protocols/acp/src/subprocess.ts`
+- **文件：** v1 后为 `packages/mindos/src/protocols/acp/subprocess.ts`
 
 ### pi-agent-core 迁移：compact 失败不能静默返回
 - **现象：** `compactMessages()` 调用 `complete()` 失败时直接返回未压缩的消息。如果上下文已超 70%，后续调用大概率超 token limit → 不可预测行为
@@ -1319,7 +1370,7 @@ mindos onboard
 - **原因：** 旧版 `mcp/package.json` 的 `@types/node` 写成了 `^25.4.0`，但 npm 上该包最新大版本对应 Node 22。开发机有缓存 `node_modules` 所以不触发安装，新机器首次 `npm install` 找不到匹配版本
 - **解决：** 改为 `^22`，与实际 Node 版本对齐
 - **规则：** `@types/node` 的大版本号 = Node.js 大版本号（如 Node 22 → `@types/node@^22`）。写 devDependencies 时不要凭感觉写版本号，先 `npm view @types/node versions` 确认存在
-- **文件：** v1 后为 `packages/protocols/mcp-server/package.json`
+- **文件：** v1 后曾为 `packages/protocols/mcp-server/package.json`；协议内聚后为 `packages/mindos/package.json`
 
 ### @modelcontextprotocol/sdk 版本范围过宽导致 express transport 缺失
 - **现象：** 新环境 / 缓存旧版本时，`npm install` 安装到 <1.25.0 的 SDK 版本，运行时 `import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js"` 报 `MODULE_NOT_FOUND`
@@ -1327,7 +1378,7 @@ mindos onboard
 - **触发条件：** lockfile 丢失 / 新环境首次 install / `--prefer-offline` 命中旧缓存版本
 - **解决：** 版本范围从 `^1.6.1` 改为 `^1.25.0`，确保最低安装到有 express.js 的版本
 - **规则：** 代码 import 了某个子路径（如 `sdk/server/express.js`），`package.json` 的版本范围**下界**必须 ≥ 该子路径首次出现的版本。用 `npm pack @pkg@x.y.z --dry-run | grep filename` 验证
-- **文件：** v1 后为 `packages/protocols/mcp-server/package.json`
+- **文件：** v1 后曾为 `packages/protocols/mcp-server/package.json`；协议内聚后为 `packages/mindos/package.json`
 
 ### --prefer-offline 首次安装失败无回退
 - **现象：** 新机器 `mindos start` 时 MCP 依赖安装失败，报 `npm error code ETARGET` 或 `No matching version found`
@@ -1393,7 +1444,7 @@ mindos onboard
 - **v0.6.4 方案：** 三层防御（postinstall + 运行时安装）——治标不治本，仍依赖网络 + npm 可用
 - **v0.6.6 根治：** esbuild 预编译 MCP → 单文件 `mcp/dist/index.cjs`（1.1MB），直接 `node dist/index.cjs` 运行。彻底消除 `node_modules`、`tsx`、跨平台原生依赖、运行时安装逻辑
 - **删除的文件：** `scripts/postinstall.js`、`desktop/src/ensure-mcp-native-deps.ts`（及其测试）
-- **规则：** MCP 服务器应始终以预编译 bundle 形态发布。v1 后修改 `packages/protocols/mcp-server/src/`，用 `pnpm --filter @mindos/mcp-server build` 重新打包。`npm pack` / `npm publish` 会通过 `prepack` 钩子自动触发构建
+- **规则：** MCP 服务器应始终以预编译 bundle 形态发布。v1 后修改 `packages/mindos/src/protocols/mcp-server/`，用 `pnpm --filter @geminilight/mindos build` 重新打包。`npm pack` / `npm publish` 会通过 `prepack` 钩子自动触发构建
 
 ### SameSite=None 必须搭配 Secure
 - **现象：** 跨域 auth cookie 被浏览器静默丢弃
@@ -1423,7 +1474,7 @@ mindos onboard
 - **原因：** 检测阶段会用目录兜底或 shell PATH 解析判断“已安装”，但启动阶段 `spawn()` 仍然直接执行裸命令（如 `gemini` / `codebuddy` / `npx`）。GUI 进程拿到的 PATH 往往比终端短，导致子进程启动即退出，随后 `initialize` 写 stdin 时触发 `EPIPE`
 - **解决：** 检测与启动必须复用同一套“运行时解析到的可执行路径”。优先使用用户 override 的绝对路径；否则先在当前环境 `which/where`，再回退到 login shell `command -v` 解析绝对路径；只有“检测到存在”且“启动命令可解析”时才视为 installed。目录存在但没有可执行命令，只能算 detected，不能算 runnable
 - **规则：** 对桌面端/GUI 进程，**installed = runnable**。不要让“目录兜底检测成功”与“spawn 裸命令启动成功”使用两套不同标准
-- **文件：** v1 后为 `packages/protocols/acp/src/detect-local.ts`、`packages/protocols/acp/src/subprocess.ts`
+- **文件：** v1 后为 `packages/mindos/src/protocols/acp/detect-local.ts`、`packages/mindos/src/protocols/acp/subprocess.ts`
 
 ### Desktop 本地模式：`mindos.pid` 存活时绕过 Bundled/User 择优
 - **现象：** 配置了 `mindosRuntimePolicy` 或内置 `mindos-runtime`，仍连上「旧」Web
@@ -2102,7 +2153,7 @@ mindos onboard
 
 **规则**：不要在 `for...of Map/Set` 循环内调用 delete/set 修改正在迭代的集合。先收集到数组再处理。
 
-**文件**：v1 后为 `packages/protocols/acp/src/subprocess.ts`、`packages/protocols/acp/src/session.ts`；旧 Desktop runtime 副本只代表历史安装包。
+**文件**：v1 后为 `packages/mindos/src/protocols/acp/subprocess.ts`、`packages/mindos/src/protocols/acp/session.ts`；旧 Desktop runtime 副本只代表历史安装包。
 
 ### useAskChat submit 依赖数组缺少 modelOverride (2026-04-13)
 
@@ -2124,7 +2175,7 @@ mindos onboard
 
 **修复**：在 `diagnoseInitFailure()` 中增加对 `npm ERR!`、`ERR_SOCKET_TIMEOUT`、`ETIMEDOUT`、`ECONNREFUSED` 等网络错误的专门诊断，明确告知用户检查网络连接和 npm proxy 设置。
 
-**文件**：v1 后为 `packages/protocols/acp/src/session.ts`
+**文件**：v1 后为 `packages/mindos/src/protocols/acp/session.ts`
 
 ### trash.ts 路径遍历漏洞 — moveToTrash 未使用 resolveSafe (2026-04-13)
 
@@ -2333,7 +2384,7 @@ exit 0
 
 **症状**：Windows 用户在 Chatbot 中使用 ACP 功能时，子进程无法正常启动或终止，导致 Agent 执行失败。
 
-**根因**：历史 `app/lib/acp/subprocess.ts` 中的进程管理逻辑存在 3 个 Windows 兼容性问题；v1 后对应源码为 `packages/protocols/acp/src/subprocess.ts`：
+**根因**：历史 `app/lib/acp/subprocess.ts` 中的进程管理逻辑存在 3 个 Windows 兼容性问题；v1 后对应源码为 `packages/mindos/src/protocols/acp/subprocess.ts`：
 
 1. **负 PID 杀进程（Unix-only）**：
    - `killAgent()` 使用 `process.kill(-pid)` 杀进程组
@@ -2448,7 +2499,7 @@ const visibleNodes = useMemo(() => {
 - Web: `packages/web`
 - Desktop: `packages/desktop`
 - Mobile: `packages/mobile`
-- MCP: `packages/protocols/mcp-server`
+- MCP: `packages/mindos/src/protocols/mcp-server`
 
 但 workflow、public sync 白名单或专项测试仍引用旧的 `app/`、`mcp/`、`desktop/`、`mobile/` 顶层目录。
 

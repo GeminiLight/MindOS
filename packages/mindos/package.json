@@ -26,7 +26,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "mindos": "bin/cli.js"
+    "mindos": "bin/mindos-shim.cjs"
   },
   "exports": {
     ".": {
@@ -40,6 +40,34 @@
     "./capabilities": {
       "types": "./dist/capabilities.d.ts",
       "import": "./dist/capabilities.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.ts",
+      "import": "./dist/tool.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
+    },
+    "./session/pi-coding-agent": {
+      "types": "./dist/session/pi-coding-agent-runtime.d.ts",
+      "import": "./dist/session/pi-coding-agent-runtime.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
     },
     "./foundation": {
       "types": "./dist/foundation.d.ts",
@@ -56,36 +84,31 @@
     "./protocols": {
       "types": "./dist/protocols.d.ts",
       "import": "./dist/protocols.js"
+    },
+    "./protocols/acp": {
+      "types": "./dist/protocols/acp/index.d.ts",
+      "import": "./dist/protocols/acp/index.js"
     }
   },
   "files": [
-    "bin/",
-    "packages/protocols/acp/dist/",
-    "packages/protocols/acp/package.json",
-    "packages/protocols/acp/README.md",
-    "packages/protocols/mcp-server/dist/",
-    "packages/protocols/mcp-server/package.json",
-    "packages/protocols/mcp-server/README.md",
+    "bin/mindos-shim.cjs",
     "dist/",
     "src/cli.js",
     "src/cli.d.ts",
-    "scripts/",
-    "assets/",
-    "skills/",
-    "templates/",
-    "_standalone/",
     "README.md",
     "README_zh.md",
     "LICENSE",
     "package.json"
   ],
   "scripts": {
-    "prepack": "cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs && rm -rf packages/web/.next && pnpm --filter @mindos/acp build && pnpm --filter @geminilight/mindos build && pnpm --filter @mindos/mcp-server build && pnpm --filter @mindos/web run build && node scripts/prepare-standalone.mjs && node scripts/stage-product-package.mjs && rm -rf packages/web/.next",
+    "prepack": "cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs --keep-standalone && pnpm --filter @geminilight/mindos build && node scripts/stage-product-package.mjs",
     "postpack": "cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs",
     "type-check": "tsc --noEmit",
     "test": "vitest run --dir src",
     "test:watch": "vitest",
-    "build": "tsc"
+    "build": "tsc && pnpm run build:protocols",
+    "build:protocols": "node ../../scripts/build-product-protocols.mjs",
+    "build:platform-packages": "node ../../scripts/build-platform-packages.mjs"
   },
   "dependencies": {
     "chokidar": "^4.0.3",
@@ -93,8 +116,22 @@
     "pino-pretty": "^10.3.0",
     "zod": "^3.22.4"
   },
+  "optionalDependencies": {
+    "@geminilight/mindos-darwin-arm64": "1.0.2",
+    "@geminilight/mindos-darwin-x64": "1.0.2",
+    "@geminilight/mindos-linux-arm64": "1.0.2",
+    "@geminilight/mindos-linux-arm64-musl": "1.0.2",
+    "@geminilight/mindos-linux-x64": "1.0.2",
+    "@geminilight/mindos-linux-x64-musl": "1.0.2",
+    "@geminilight/mindos-windows-arm64": "1.0.2",
+    "@geminilight/mindos-windows-x64": "1.0.2"
+  },
   "devDependencies": {
+    "@agentclientprotocol/sdk": "^0.18.2",
+    "@mariozechner/pi-coding-agent": "^0.61.1",
+    "@modelcontextprotocol/sdk": "^1.25.0",
     "@types/node": "^22.10.5",
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }

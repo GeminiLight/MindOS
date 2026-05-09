@@ -1,53 +1,29 @@
-import { NextResponse } from 'next/server';
-import { getPlatformConfig, readIMConfig, writeIMConfig } from '@/lib/im/config';
+import {
+  handleImFeishuLongConnectionDelete,
+  handleImFeishuLongConnectionGet,
+  handleImFeishuLongConnectionPost,
+  type ImFeishuLongConnectionServices,
+} from '@geminilight/mindos/server';
+import { readIMConfig, writeIMConfig } from '@/lib/im/config';
 import { getFeishuWSClientStatus, startFeishuWSClient, stopFeishuWSClient } from '@/lib/im/feishu-ws-client';
+import { toNextResponse } from '../../../_mindos-adapter';
 
-export async function GET() {
-  return NextResponse.json({ ok: true, ...getFeishuWSClientStatus() });
+const services: ImFeishuLongConnectionServices = {
+  readConfig: readIMConfig as ImFeishuLongConnectionServices['readConfig'],
+  writeConfig: writeIMConfig as ImFeishuLongConnectionServices['writeConfig'],
+  getFeishuWSClientStatus,
+  startFeishuWSClient: startFeishuWSClient as ImFeishuLongConnectionServices['startFeishuWSClient'],
+  stopFeishuWSClient,
+};
+
+export function GET() {
+  return toNextResponse(handleImFeishuLongConnectionGet(services));
 }
 
 export async function POST() {
-  try {
-    const config = getPlatformConfig('feishu');
-    if (!config) {
-      return NextResponse.json({ ok: false, error: 'Feishu is not configured. Save App ID and App Secret first.' }, { status: 422 });
-    }
-
-    // Persist transport=long_connection so it auto-starts on next server boot
-    const imConfig = readIMConfig();
-    const feishu = (imConfig.providers as Record<string, any>).feishu ?? {};
-    feishu.conversation = {
-      ...(feishu.conversation ?? {}),
-      enabled: true,
-      transport: 'long_connection',
-    };
-    (imConfig.providers as Record<string, any>).feishu = feishu;
-    writeIMConfig(imConfig);
-
-    await startFeishuWSClient(config);
-    return NextResponse.json({ ok: true, ...getFeishuWSClientStatus() });
-  } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Failed to start', ...getFeishuWSClientStatus() },
-      { status: 500 },
-    );
-  }
+  return toNextResponse(await handleImFeishuLongConnectionPost(services));
 }
 
-export async function DELETE() {
-  stopFeishuWSClient();
-
-  // Persist transport back to webhook
-  try {
-    const imConfig = readIMConfig();
-    const feishu = (imConfig.providers as Record<string, any>).feishu;
-    if (feishu?.conversation) {
-      feishu.conversation.transport = 'webhook';
-      writeIMConfig(imConfig);
-    }
-  } catch {
-    // best effort
-  }
-
-  return NextResponse.json({ ok: true, ...getFeishuWSClientStatus() });
+export function DELETE() {
+  return toNextResponse(handleImFeishuLongConnectionDelete(services));
 }

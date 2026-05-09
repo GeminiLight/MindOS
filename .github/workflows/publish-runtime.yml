@@ -34,9 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
-          pnpm --filter @mindos/acp build
           pnpm --filter @geminilight/mindos build
-          pnpm --filter @mindos/mcp-server build
 
       - name: Cache Next.js build
         uses: actions/cache@v4

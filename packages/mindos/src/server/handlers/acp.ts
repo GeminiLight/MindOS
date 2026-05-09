@@ -1,0 +1,395 @@
+import { execFile } from 'node:child_process';
+import {
+  detectLocalAcpAgents as defaultDetectLocalAcpAgents,
+  fetchAcpRegistry as defaultFetchAcpRegistry,
+  findAcpAgent as defaultFindAcpAgent,
+  createSession as defaultCreateSession,
+  loadSession as defaultLoadSession,
+  listSessions as defaultListSessions,
+  closeSession as defaultCloseSession,
+  prompt as defaultPrompt,
+  cancelPrompt as defaultCancelPrompt,
+  setMode as defaultSetMode,
+  setConfigOption as defaultSetConfigOption,
+  getSession as defaultGetSession,
+  getActiveSessions as defaultGetActiveSessions,
+  type AcpAgentOverride,
+} from '../../protocols/acp/index.js';
+import { errorResponse, json, type MindosServerResponse } from '../response.js';
+
+export type AcpSettings = {
+  acpAgents?: Record<string, AcpAgentOverride>;
+};
+
+export type AcpConfigServices = {
+  readSettings(): AcpSettings;
+  writeSettings(settings: AcpSettings): void;
+};
+
+export type AcpDetectServices = {
+  readSettings?(): AcpSettings;
+  detectLocalAcpAgents?(options?: { overrides?: Record<string, AcpAgentOverride> }): Promise<{
+    installed: unknown[];
+    notInstalled: unknown[];
+  }>;
+  now?(): number;
+};
+
+export type AcpInstallServices = {
+  installPackage?(agentId: string, packageName: string): Promise<{
+    status: 'installing';
+    agentId: string;
+    packageName: string;
+  }>;
+};
+
+export type AcpRegistryServices = {
+  fetchAcpRegistry?(): Promise<unknown | null>;
+  findAcpAgent?(agentId: string): Promise<unknown | null>;
+};
+
+export type AcpSessionServices = {
+  createSession?(agentId: string, options?: { env?: Record<string, string>; cwd?: string }): Promise<unknown>;
+  loadSession?(agentId: string, sessionId: string, options?: { env?: Record<string, string>; cwd?: string }): Promise<unknown>;
+  listSessions?(sessionId: string, options?: { cursor?: string; cwd?: string }): Promise<unknown>;
+  closeSession?(sessionId: string): Promise<unknown>;
+  prompt?(sessionId: string, text: string): Promise<unknown>;
+  cancelPrompt?(sessionId: string): Promise<unknown>;
+  setMode?(sessionId: string, modeId: string): Promise<unknown>;
+  setConfigOption?(sessionId: string, configId: string, value: string): Promise<unknown>;
+  getSession?(sessionId: string): unknown | null;
+  getActiveSessions?(): unknown[];
+};
+
+export type AcpServices =
+  & Partial<AcpConfigServices>
+  & AcpDetectServices
+  & AcpInstallServices
+  & AcpRegistryServices
+  & AcpSessionServices;
+
+const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
+let detectCache: { data: { installed: unknown[]; notInstalled: unknown[] }; ts: number } | null = null;
+
+export function handleAcpConfigGet(
+  services: AcpConfigServices,
+): MindosServerResponse<{ agents: Record<string, AcpAgentOverride> }> {
+  const settings = services.readSettings();
+  return json({ agents: settings.acpAgents ?? {} });
+}
+
+export function handleAcpConfigPost(
+  body: unknown,
+  services: AcpConfigServices,
+): MindosServerResponse<{ ok: true; agents: Record<string, AcpAgentOverride> } | { error: string }> {
+  const payload = body && typeof body === 'object' ? body as { agentId?: unknown; config?: unknown } : {};
+  if (!payload.agentId || typeof payload.agentId !== 'string') {
+    return json({ error: 'agentId is required' }, { status: 400 });
+  }
+
+  const settings = services.readSettings();
+  const existing = { ...(settings.acpAgents ?? {}) };
+  const sanitized = sanitizeAcpAgentOverride(payload.config);
+  if (sanitized) {
+    existing[payload.agentId] = sanitized;
+  }
+
+  services.writeSettings({ ...settings, acpAgents: existing });
+  return json({ ok: true, agents: existing });
+}
+
+export function handleAcpConfigDelete(
+  body: unknown,
+  services: AcpConfigServices,
+): MindosServerResponse<{ ok: true; agents: Record<string, AcpAgentOverride> } | { error: string }> {
+  const payload = body && typeof body === 'object' ? body as { agentId?: unknown } : {};
+  if (!payload.agentId || typeof payload.agentId !== 'string') {
+    return json({ error: 'agentId is required' }, { status: 400 });
+  }
+
+  const settings = services.readSettings();
+  const existing = { ...(settings.acpAgents ?? {}) };
+  delete existing[payload.agentId];
+  const next = Object.keys(existing).length > 0
+    ? { ...settings, acpAgents: existing }
+    : { ...settings, acpAgents: undefined };
+  services.writeSettings(next);
+  return json({ ok: true, agents: next.acpAgents ?? {} });
+}
+
+export async function handleAcpDetectGet(
+  searchParams: URLSearchParams,
+  services: AcpDetectServices = {},
+): Promise<MindosServerResponse<{ installed: unknown[]; notInstalled: unknown[] } | { error: string }>> {
+  try {
+    const force = searchParams.get('force') === '1';
+    const now = services.now?.() ?? Date.now();
+    if (!force && detectCache && now - detectCache.ts < DETECT_CACHE_TTL_MS) {
+      return json(detectCache.data);
+    }
+
+    const detectLocalAcpAgents = services.detectLocalAcpAgents ?? defaultDetectLocalAcpAgents;
+    const data = await detectLocalAcpAgents({ overrides: readAcpAgentOverrides(services) });
+    detectCache = { data, ts: now };
+    return json(data);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleAcpInstallPost(
+  body: unknown,
+  services: AcpInstallServices = {},
+): Promise<MindosServerResponse<{ status: 'installing'; agentId: string; packageName: string } | { error: string }>> {
+  try {
+    const payload = body && typeof body === 'object' ? body as { agentId?: unknown; packageName?: unknown } : {};
+    if (!payload.agentId || typeof payload.agentId !== 'string' || !payload.packageName || typeof payload.packageName !== 'string') {
+      return json({ error: 'agentId and packageName are required' }, { status: 400 });
+    }
+    if (!isValidNpmPackageName(payload.packageName)) {
+      return json({ error: 'Invalid package name' }, { status: 400 });
+    }
+
+    const installPackage = services.installPackage ?? defaultInstallPackage;
+    return json(await installPackage(payload.agentId, payload.packageName));
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleAcpRegistryGet(
+  searchParams: URLSearchParams,
+  services: AcpRegistryServices = {},
+): Promise<MindosServerResponse<{ registry: unknown } | { agent: unknown } | { error: string; agent?: null; registry?: null }>> {
+  try {
+    const agentId = searchParams.get('agent');
+    if (agentId) {
+      const findAcpAgent = services.findAcpAgent ?? defaultFindAcpAgent;
+      const agent = await findAcpAgent(agentId);
+      if (!agent) return json({ error: 'Agent not found', agent: null }, { status: 404 });
+      return json({ agent });
+    }
+
+    const fetchAcpRegistry = services.fetchAcpRegistry ?? defaultFetchAcpRegistry;
+    const registry = await fetchAcpRegistry();
+    if (!registry) return json({ error: 'Failed to fetch registry', registry: null }, { status: 502 });
+    return json({ registry });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export function handleAcpSessionGet(
+  services: AcpSessionServices = {},
+): MindosServerResponse<{ sessions: unknown[] } | { error: string }> {
+  try {
+    return json({ sessions: (services.getActiveSessions ?? defaultGetActiveSessions)() });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleAcpSessionPost(
+  body: unknown,
+  services: AcpSessionServices = {},
+): Promise<MindosServerResponse<Record<string, unknown> | { error: string }>> {
+  try {
+    const payload = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+    const action = typeof payload.action === 'string' ? payload.action : 'create';
+
+    switch (action) {
+      case 'create':
+        return await handleAcpSessionCreate(payload, services);
+      case 'load':
+        return await handleAcpSessionLoad(payload, services);
+      case 'prompt':
+        return await handleAcpSessionPrompt(payload, services);
+      case 'cancel':
+        return await handleAcpSessionCancel(payload, services);
+      case 'set_mode':
+        return await handleAcpSessionSetMode(payload, services);
+      case 'set_config':
+        return await handleAcpSessionSetConfig(payload, services);
+      case 'list_sessions':
+        return await handleAcpSessionList(payload, services);
+      default:
+        return json({ error: `Unknown action: ${action}` }, { status: 400 });
+    }
+  } catch (error) {
+    return acpSessionErrorResponse(error);
+  }
+}
+
+export async function handleAcpSessionDelete(
+  body: unknown,
+  services: AcpSessionServices = {},
+): Promise<MindosServerResponse<{ ok: true } | { error: string }>> {
+  try {
+    const sessionId = readString(body, 'sessionId');
+    if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
+
+    const getSession = services.getSession ?? defaultGetSession;
+    if (!getSession(sessionId)) return json({ error: 'Session not found' }, { status: 404 });
+
+    await (services.closeSession ?? defaultCloseSession)(sessionId);
+    return json({ ok: true });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+function sanitizeAcpAgentOverride(input: unknown): AcpAgentOverride | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const config = input as AcpAgentOverride;
+  const sanitized: AcpAgentOverride = {};
+
+  if (typeof config.command === 'string' && config.command.trim()) {
+    sanitized.command = config.command.trim();
+  }
+  if (Array.isArray(config.args)) {
+    sanitized.args = config.args.filter((arg): arg is string => typeof arg === 'string');
+  }
+  if (config.env && typeof config.env === 'object' && !Array.isArray(config.env)) {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(config.env)) {
+      if (typeof value === 'string') env[key] = value;
+    }
+    if (Object.keys(env).length > 0) sanitized.env = env;
+  }
+  if (typeof config.enabled === 'boolean') {
+    sanitized.enabled = config.enabled;
+  }
+
+  return sanitized;
+}
+
+function readAcpAgentOverrides(services: AcpDetectServices): Record<string, AcpAgentOverride> | undefined {
+  try {
+    const settings = services.readSettings?.();
+    return settings?.acpAgents && typeof settings.acpAgents === 'object' ? settings.acpAgents : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isValidNpmPackageName(packageName: string): boolean {
+  const value = packageName.trim();
+  if (value.length === 0 || value.length > 214 || value.includes('..') || value.includes('\\')) return false;
+  return /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(value);
+}
+
+async function defaultInstallPackage(agentId: string, packageName: string) {
+  const child = execFile('npm', ['install', '-g', packageName], { timeout: 120_000 });
+  child.unref();
+  return { status: 'installing' as const, agentId, packageName };
+}
+
+async function handleAcpSessionCreate(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const agentId = readString(payload, 'agentId');
+  if (!agentId) return json({ error: 'agentId is required' }, { status: 400 });
+
+  const options = {
+    env: readStringRecord(payload.env),
+    cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+  };
+  const createSession = services.createSession ?? defaultCreateSession;
+  const session = await createSession(agentId, options);
+  const promptText = typeof payload.prompt === 'string' ? payload.prompt : undefined;
+  if (!promptText) return json({ session });
+
+  const prompt = services.prompt ?? defaultPrompt;
+  const closeSession = services.closeSession ?? defaultCloseSession;
+  try {
+    const response = await prompt(readSessionId(session), promptText);
+    await closeSession(readSessionId(session)).catch(() => {});
+    return json({ session, response });
+  } catch (error) {
+    await closeSession(readSessionId(session)).catch(() => {});
+    return errorResponse(error);
+  }
+}
+
+async function handleAcpSessionLoad(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const agentId = readString(payload, 'agentId');
+  const sessionId = readString(payload, 'sessionId');
+  if (!agentId) return json({ error: 'agentId is required' }, { status: 400 });
+  if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
+
+  const session = await (services.loadSession ?? defaultLoadSession)(agentId, sessionId, {
+    env: readStringRecord(payload.env),
+    cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+  });
+  return json({ session });
+}
+
+async function handleAcpSessionPrompt(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const sessionId = readString(payload, 'sessionId');
+  const text = readString(payload, 'text');
+  if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
+  if (!text) return json({ error: 'text is required' }, { status: 400 });
+
+  const response = await (services.prompt ?? defaultPrompt)(sessionId, text);
+  return json({ response });
+}
+
+async function handleAcpSessionCancel(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const sessionId = readString(payload, 'sessionId');
+  if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
+  await (services.cancelPrompt ?? defaultCancelPrompt)(sessionId);
+  return json({ ok: true });
+}
+
+async function handleAcpSessionSetMode(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const sessionId = readString(payload, 'sessionId');
+  const modeId = readString(payload, 'modeId');
+  if (!sessionId || !modeId) return json({ error: 'sessionId and modeId are required' }, { status: 400 });
+  await (services.setMode ?? defaultSetMode)(sessionId, modeId);
+  return json({ ok: true });
+}
+
+async function handleAcpSessionSetConfig(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const sessionId = readString(payload, 'sessionId');
+  const configId = readString(payload, 'configId');
+  if (!sessionId || !configId || payload.value === undefined) {
+    return json({ error: 'sessionId, configId, and value are required' }, { status: 400 });
+  }
+  const configOptions = await (services.setConfigOption ?? defaultSetConfigOption)(sessionId, configId, String(payload.value));
+  return json({ configOptions });
+}
+
+async function handleAcpSessionList(payload: Record<string, unknown>, services: AcpSessionServices) {
+  const sessionId = readString(payload, 'sessionId');
+  if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
+  const result = await (services.listSessions ?? defaultListSessions)(sessionId, {
+    cursor: typeof payload.cursor === 'string' ? payload.cursor : undefined,
+    cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+  });
+  return json(result as Record<string, unknown>);
+}
+
+function acpSessionErrorResponse(error: unknown): MindosServerResponse<{ error: string }> {
+  const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+  const status = message.includes('not found') ? 404 : message.includes('not support') ? 501 : 500;
+  return json({ error: message }, { status });
+}
+
+function readString(body: unknown, key: string): string | undefined {
+  const value = body && typeof body === 'object' ? (body as Record<string, unknown>)[key] : undefined;
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function readStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') record[key] = entry;
+  }
+  return Object.keys(record).length > 0 ? record : undefined;
+}
+
+function readSessionId(session: unknown): string {
+  if (session && typeof session === 'object' && typeof (session as { id?: unknown }).id === 'string') {
+    return (session as { id: string }).id;
+  }
+  throw new Error('ACP session response did not include an id');
+}

@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation';
 import { readSettings } from '@/lib/settings';
 import { getRecentlyModified, getFileTree, getFileContent } from '@/lib/fs';
 import WikiHomeContent from '@/components/WikiHomeContent';
+import ClientRedirect from '@/components/ClientRedirect';
 import type { FileNode } from '@/lib/core/types';
 import type { SpaceInfo } from '@/app/page';
 
@@ -43,7 +43,7 @@ function getTopLevelDirs(): SpaceInfo[] {
 
 export default function WikiPage() {
   const settings = readSettings();
-  if (settings.setupPending) redirect('/setup');
+  if (settings.setupPending) return <ClientRedirect href="/setup" label="Opening setup..." />;
 
   let recent: { path: string; mtime: number }[] = [];
   try {

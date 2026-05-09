@@ -3,20 +3,20 @@ export {
   getProcess,
   killAgent,
   killAllAgents,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export type {
   AcpClientCallbacks,
   AcpConnection,
   AcpLaunchOptions,
   AcpProcess,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 
 import {
   spawnAcpAgent as spawnAcpAgentCore,
   spawnAndConnect as spawnAndConnectCore,
   type AcpLaunchOptions,
   type AcpRegistryEntry,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 import { readSettings } from '@/lib/settings';
 
 function withAcpOverrides(options?: AcpLaunchOptions): AcpLaunchOptions {

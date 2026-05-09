@@ -9,12 +9,12 @@ export {
   promptStream,
   setConfigOption,
   setMode,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export type {
   AcpRegistryEntry,
   AcpSession,
   AcpSessionOptions,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 
 import {
   createSession as createSessionCore,
@@ -22,7 +22,7 @@ import {
   loadSession as loadSessionCore,
   type AcpRegistryEntry,
   type AcpSessionOptions,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 import { readSettings } from '@/lib/settings';
 
 function withAcpOverrides(options?: AcpSessionOptions): AcpSessionOptions {

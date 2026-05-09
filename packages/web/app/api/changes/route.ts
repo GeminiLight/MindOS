@@ -1,63 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
-import {
-  listContentChanges,
-  getContentChangeSummary,
-  markContentChangesSeen,
-} from '@/lib/fs';
-import { handleRouteErrorSimple } from '@/lib/errors';
-
 export const dynamic = 'force-dynamic';
 
-function err(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
-}
+import { handleChangesGet, handleChangesPost } from '@geminilight/mindos/server';
+import { NextRequest } from 'next/server';
+import { getMindRoot } from '@/lib/fs';
+import { handleRouteErrorSimple } from '@/lib/errors';
+import { toNextResponse } from '../_mindos-adapter';
 
 export async function GET(req: NextRequest) {
-  const op = req.nextUrl.searchParams.get('op') ?? 'summary';
-
   try {
-    if (op === 'summary') {
-      const summary = getContentChangeSummary();
-      return NextResponse.json(summary);
-    }
-
-    if (op === 'list') {
-      const path = req.nextUrl.searchParams.get('path') ?? undefined;
-      const sourceParam = req.nextUrl.searchParams.get('source');
-      const source = sourceParam === 'user' || sourceParam === 'agent' || sourceParam === 'system'
-        ? sourceParam
-        : undefined;
-      const opFilter = req.nextUrl.searchParams.get('event_op') ?? undefined;
-      const q = req.nextUrl.searchParams.get('q') ?? undefined;
-      const limitParam = req.nextUrl.searchParams.get('limit');
-      const limit = limitParam ? Number(limitParam) : 50;
-      if (!Number.isFinite(limit) || limit <= 0) return err('invalid limit');
-      return NextResponse.json({ events: listContentChanges({ path, source, op: opFilter, q, limit }) });
-    }
-
-    return err(`unknown op: ${op}`);
+    return toNextResponse(await handleChangesGet(req.nextUrl.searchParams, {
+      mindRoot: getMindRoot(),
+    }));
   } catch (error) {
     return handleRouteErrorSimple(error);
   }
 }
 
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return err('invalid JSON');
+    body = undefined;
   }
 
-  const op = body.op;
-  if (typeof op !== 'string') return err('missing op');
-
   try {
-    if (op === 'mark_seen') {
-      markContentChangesSeen();
-      return NextResponse.json({ ok: true });
-    }
-    return err(`unknown op: ${op}`);
+    return toNextResponse(await handleChangesPost(body, {
+      mindRoot: getMindRoot(),
+    }));
   } catch (error) {
     return handleRouteErrorSimple(error);
   }

@@ -29,6 +29,9 @@ function makeFakeProcess(): EventEmitter & { killed: boolean; kill: () => void; 
 }
 
 describe('ProcessManager hostname binding', () => {
+  const testWebPort = 19876;
+  const testMcpPort = 19877;
+
   beforeEach(() => {
     spawnMock.mockClear();
     spawnMock.mockImplementation(() => makeFakeProcess());
@@ -39,8 +42,8 @@ describe('ProcessManager hostname binding', () => {
       nodePath: '/usr/bin/node',
       npxPath: '/usr/bin/npx',
       projectRoot: '/fake',
-      webPort: 3456,
-      mcpPort: 8781,
+      webPort: testWebPort,
+      mcpPort: testMcpPort,
       mindRoot: '/fake/mind',
     });
 
@@ -76,8 +79,8 @@ describe('ProcessManager hostname binding', () => {
       nodePath: '/usr/bin/node',
       npxPath: '/usr/bin/npx',
       projectRoot: '/fake',
-      webPort: 3456,
-      mcpPort: 8781,
+      webPort: testWebPort,
+      mcpPort: testMcpPort,
       mindRoot: '/fake/mind',
       // Simulate parent process with different HOSTNAME
       env: {
@@ -115,8 +118,8 @@ describe('ProcessManager hostname binding', () => {
       nodePath: '/usr/bin/node',
       npxPath: '/usr/bin/npx',
       projectRoot: '/fake',
-      webPort: 3456,
-      mcpPort: 8781,
+      webPort: testWebPort,
+      mcpPort: testMcpPort,
       mindRoot: '/fake/mind',
     });
 
@@ -155,8 +158,8 @@ describe('ProcessManager hostname binding', () => {
       nodePath: '/usr/bin/node',
       npxPath: '/usr/bin/npx',
       projectRoot: '/fake',
-      webPort: 3456,
-      mcpPort: 8781,
+      webPort: testWebPort,
+      mcpPort: testMcpPort,
       mindRoot: '/fake/mind',
       installDir: '/Applications/MindOS.app',
     });

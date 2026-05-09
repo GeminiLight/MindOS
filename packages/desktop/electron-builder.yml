@@ -30,6 +30,7 @@ mac:
   entitlementsInherit: src/entitlements.mac.plist
 
 asar: true
+npmRebuild: false
 # macOS Chromium often returns ERR_FAILED for file:// pages loaded from inside app.asar; mirror these out.
 asarUnpack:
   - "**/src/connect.html"

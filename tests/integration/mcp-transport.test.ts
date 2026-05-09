@@ -6,7 +6,7 @@
  *
  * Prerequisites:
  *   - App server running at MINDOS_URL (default http://localhost:3456)
- *   - MCP bundle built: `pnpm --filter @mindos/mcp-server build`
+ *   - MCP bundle built: `pnpm --filter @geminilight/mindos build`
  *
  * Run:
  *   cd tests/integration && npx vitest run mcp-transport.test.ts
@@ -35,7 +35,7 @@ function resolveAuthToken(): string {
 }
 
 const AUTH_TOKEN = resolveAuthToken();
-const MCP_BUNDLE = join(__dirname, '../../packages/protocols/mcp-server/dist/index.cjs');
+const MCP_BUNDLE = join(__dirname, '../../packages/mindos/dist/protocols/mcp-server/index.cjs');
 
 // Track spawned processes for cleanup
 const children: ChildProcess[] = [];

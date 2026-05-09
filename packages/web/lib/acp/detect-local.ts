@@ -5,17 +5,17 @@ export {
   resolveCommandPathSync,
   resolveDirectCommandPath,
   resolveExistingPresenceDir,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export type {
   InstalledAgent,
   LocalAcpDetectionOptions,
   NotInstalledAgent,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 
 import {
   detectLocalAcpAgents as detectLocalAcpAgentsCore,
   type LocalAcpDetectionOptions,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 import { readSettings, type ServerSettings } from '@/lib/settings';
 
 type LegacyDetectionSettings = Pick<ServerSettings, 'acpAgents'>;

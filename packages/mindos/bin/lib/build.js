@@ -11,12 +11,16 @@ import {
   STANDALONE_STAMP,
   PRODUCT_PACKAGE_JSON,
   PACKAGE_ROOT,
+  STATIC_WEB_INDEX,
+  STATIC_WEB_STAMP,
 } from './constants.js';
 import { red, dim, yellow } from './colors.js';
 import { execInherited as run, npmInstall } from './shell.js';
 import { safeRmSync, assertNotSymlink } from './safe-rm.js';
 
 export function needsBuild() {
+  if (hasPrebuiltStaticWeb()) return false;
+
   // Prefer prebuilt standalone shipped with the npm package.
   // If _standalone/server.js exists and its version stamp matches, skip build entirely.
   if (existsSync(STANDALONE_SERVER)) {
@@ -106,6 +110,76 @@ function writeDepsStamp() {
   }
 }
 
+function hasPnpmWorkspace() {
+  return existsSync(resolve(ROOT, 'pnpm-workspace.yaml'));
+}
+
+function hasWorkspaceProtocolDeps(packageJsonPath) {
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    const dependencyGroups = [
+      pkg.dependencies,
+      pkg.devDependencies,
+      pkg.optionalDependencies,
+      pkg.peerDependencies,
+    ];
+    return dependencyGroups.some((deps) =>
+      deps && Object.values(deps).some((version) => typeof version === 'string' && version.startsWith('workspace:')),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function shouldUsePnpmWorkspaceInstall() {
+  return hasPnpmWorkspace() && hasWorkspaceProtocolDeps(resolve(WEB_APP_DIR, 'package.json'));
+}
+
+function verifyInstallTool(usePnpmWorkspaceInstall) {
+  const command = usePnpmWorkspaceInstall ? 'pnpm --version' : 'npm --version';
+  try {
+    execSync(command, { stdio: 'pipe' });
+  } catch {
+    if (usePnpmWorkspaceInstall) {
+      console.error(red('\n✘ pnpm not found in PATH.\n'));
+      console.error('  This MindOS source checkout uses workspace:* dependencies, so `mindos build` must install from the workspace root with pnpm.');
+      console.error('  Fix: enable pnpm via Corepack or install it, then run `pnpm install` at the repository root.\n');
+      console.error(dim('    corepack enable'));
+      console.error(dim('    corepack prepare pnpm@10.18.3 --activate'));
+      console.error(dim('    pnpm install\n'));
+    } else {
+      console.error(red('\n✘ npm not found in PATH.\n'));
+      console.error('  MindOS needs npm to install its app dependencies on first run.');
+      if (process.platform === 'win32') {
+        console.error('  Ensure Node.js is installed and added to your system PATH.\n');
+        console.error('  Fix: reinstall Node.js from https://nodejs.org (the installer adds it to PATH).');
+        console.error('  Then open a new terminal and run `mindos start` again.\n');
+      } else {
+        console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
+        console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
+        console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
+        console.error('  Example:');
+        console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
+        console.error(dim('    source ~/.profile\n'));
+        console.error('  Then run `mindos start` again.\n');
+      }
+    }
+    process.exit(1);
+  }
+}
+
+function installAppDependencies(usePnpmWorkspaceInstall) {
+  if (usePnpmWorkspaceInstall) {
+    // Source workspaces can contain generated platform optionalDependencies
+    // that are intentionally exact-versioned for npm publishing but not stable
+    // in the local lockfile importer. `mindos build` should repair local deps;
+    // CI should run a separate frozen install check when lock consistency is required.
+    run('pnpm install --no-frozen-lockfile', ROOT);
+  } else {
+    npmInstall(WEB_APP_DIR, '--no-workspaces');
+  }
+}
+
 function standaloneServerDir() {
   const runtimeNextDir = resolve(PACKAGE_ROOT, '_standalone', '.next');
   const publishableNextDir = resolve(PACKAGE_ROOT, '_standalone', '__next');
@@ -113,8 +187,8 @@ function standaloneServerDir() {
   return resolve(nextDir, 'server');
 }
 
-/** Critical packages that must exist after npm install for the app to work. */
-const CRITICAL_DEPS = ['next', '@next/env', 'react', 'react-dom'];
+/** Critical packages that must exist after dependency install for the app to work. */
+const CRITICAL_DEPS = ['next', 'react', 'react-dom'];
 
 function verifyDeps() {
   const nm = resolve(WEB_APP_DIR, 'node_modules');
@@ -142,7 +216,20 @@ export function hasPrebuiltStandalone() {
   return true;
 }
 
+export function hasPrebuiltStaticWeb() {
+  if (!existsSync(STATIC_WEB_INDEX)) return false;
+  try {
+    const builtVersion = readFileSync(STATIC_WEB_STAMP, 'utf-8').trim();
+    const currentVersion = JSON.parse(readFileSync(PRODUCT_PACKAGE_JSON, 'utf-8')).version;
+    return builtVersion === currentVersion;
+  } catch {
+    return false;
+  }
+}
+
 export function ensureAppDeps({ force = false } = {}) {
+  if (!force && hasPrebuiltStaticWeb()) return;
+
   // Skip dependency installation when prebuilt standalone is available —
   // standalone bundles its own traced node_modules and doesn't need packages/web/node_modules.
   // force=true bypasses this (used by `mindos dev` which always needs packages/web/node_modules).
@@ -152,32 +239,14 @@ export function ensureAppDeps({ force = false } = {}) {
   const needsInstall = !existsSync(appNext) || depsChanged();
   if (!needsInstall) return;
 
-  try {
-    execSync('npm --version', { stdio: 'pipe' });
-  } catch {
-    console.error(red('\n\u2718 npm not found in PATH.\n'));
-    console.error('  MindOS needs npm to install its app dependencies on first run.');
-    if (process.platform === 'win32') {
-      console.error('  Ensure Node.js is installed and added to your system PATH.\n');
-      console.error('  Fix: reinstall Node.js from https://nodejs.org (the installer adds it to PATH).');
-      console.error('  Then open a new terminal and run `mindos start` again.\n');
-    } else {
-      console.error('  This usually means Node.js is installed via a version manager (nvm, fnm, volta, etc.)');
-      console.error('  that only loads in interactive shells, but not in /bin/sh.\n');
-      console.error('  Fix: add your Node.js bin directory to a profile that /bin/sh reads (~/.profile).');
-      console.error('  Example:');
-      console.error(dim('    echo \'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"\' >> ~/.profile'));
-      console.error(dim('    source ~/.profile\n'));
-      console.error('  Then run `mindos start` again.\n');
-    }
-    process.exit(1);
-  }
+  const usePnpmWorkspaceInstall = shouldUsePnpmWorkspaceInstall();
+  verifyInstallTool(usePnpmWorkspaceInstall);
 
   const label = existsSync(appNext)
     ? 'Updating app dependencies (dependency metadata changed)...\n'
     : 'Installing app dependencies (first run)...\n';
   console.log(yellow(label));
-  npmInstall(WEB_APP_DIR, '--no-workspaces');
+  installAppDependencies(usePnpmWorkspaceInstall);
 
     // Verify critical deps — npm tar extraction can silently fail (ENOENT race)
     if (!verifyDeps()) {
@@ -190,10 +259,14 @@ export function ensureAppDeps({ force = false } = {}) {
         console.error(red(`SECURITY: Failed to verify safe deletion of node_modules: ${err}`));
         process.exit(1);
       }
-      run('npm install --no-workspaces', WEB_APP_DIR);
+      installAppDependencies(usePnpmWorkspaceInstall);
       if (!verifyDeps()) {
         console.error(red('\n✘ Failed to install dependencies after retry.\n'));
         const appDir = WEB_APP_DIR;
+        if (usePnpmWorkspaceInstall) {
+          console.error(`  Try manually: cd ${ROOT} && pnpm install --no-frozen-lockfile`);
+          process.exit(1);
+        }
         if (process.platform === 'win32') {
           console.error(`  Try manually: cd "${appDir}" && rmdir /s /q node_modules && npm install`);
         } else {

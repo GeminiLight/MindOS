@@ -39,9 +39,10 @@ describe('GitHub workflow migration contract', () => {
   it('keeps the real CLI inside the product package instead of a separate CLI workspace', () => {
     expect(existsSync(resolve(root, 'packages/cli/package.json'))).toBe(false);
     expect(existsSync(resolve(root, 'packages/mindos/bin/cli.js'))).toBe(true);
+    expect(existsSync(resolve(root, 'packages/mindos/bin/mindos-shim.cjs'))).toBe(true);
 
     const productPkg = readJson<{ bin?: Record<string, string> }>('packages/mindos/package.json');
-    expect(productPkg.bin).toEqual({ mindos: 'bin/cli.js' });
+    expect(productPkg.bin).toEqual({ mindos: 'bin/mindos-shim.cjs' });
   });
 
   it('does not use legacy unscoped pnpm filters', () => {
@@ -49,6 +50,7 @@ describe('GitHub workflow migration contract', () => {
       'package.json',
       '.github/workflows/build-desktop.yml',
       '.github/workflows/build-mobile.yml',
+      '.github/workflows/build-tauri-desktop.yml',
       '.github/workflows/publish-clipper.yml',
       '.github/workflows/publish-npm.yml',
       '.github/workflows/publish-runtime.yml',
@@ -90,14 +92,18 @@ describe('GitHub workflow migration contract', () => {
     const yml = workflow('publish-npm.yml');
 
     expect(yml).toContain('pnpm/action-setup');
+    expect(yml).toContain('oven-sh/setup-bun');
     expect(yml).toContain('cache: pnpm');
     expect(yml).toContain('pnpm install --frozen-lockfile');
-    expect(yml).toContain('pnpm --filter @mindos/acp build');
     expect(yml).toContain('pnpm --filter @geminilight/mindos build');
-    expect(yml).toContain('pnpm --filter @mindos/mcp-server build');
+    expect(yml).not.toContain('pnpm --filter @mindos/acp build');
+    expect(yml).not.toContain('pnpm --filter @mindos/mcp-server build');
     expect(yml).toContain('pnpm --filter @mindos/web run build');
+    expect(yml).toContain('node scripts/build-platform-packages.mjs');
+    expect(yml).toContain('Publish platform packages to npm');
+    expect(yml).toContain('packages/mindos-platforms/*');
     expect(yml).toContain('packages/web/.next/cache');
-    expect(yml).toContain('_standalone/__next/server/app-paths-manifest.json');
+    expect(yml).toContain('packages/mindos-platforms/linux-x64/bin/mindos');
     expect(yml).not.toMatch(/\bcd app\b|\bcd mcp\b|app\/package-lock\.json|mcp\/node_modules/);
   });
 
@@ -108,7 +114,7 @@ describe('GitHub workflow migration contract', () => {
     expect(yml).toContain('cache: pnpm');
     expect(yml).toContain('pnpm install --frozen-lockfile');
     expect(yml).toContain('pnpm --filter @geminilight/mindos build');
-    expect(yml).toContain('pnpm --filter @mindos/mcp-server build');
+    expect(yml).not.toContain('pnpm --filter @mindos/mcp-server build');
     expect(yml).toContain('pnpm --filter @mindos/web run build');
     expect(yml).toContain('packages/web/.next/cache');
     expect(yml).not.toMatch(/\bcd app\b|\bcd \.\.\/mcp\b|app\/package-lock\.json/);
@@ -207,6 +213,33 @@ describe('GitHub workflow migration contract', () => {
     expect(tauriConfig).toContain('"beforeDevCommand": "pnpm run dev:web"');
     expect(tauriConfig).toContain('"beforeBuildCommand": "pnpm run build:web"');
     expect(npmignore).toMatch(/^packages\/desktop-tauri\/$/m);
+    expect(readText('.gitignore')).toMatch(/^!packages\/desktop-tauri\/src-tauri\/icons\/\*\.png$/m);
+  });
+
+  it('builds the Tauri desktop spike through an isolated manual workflow', () => {
+    const yml = workflow('build-tauri-desktop.yml');
+    const requiredIcons = [
+      '32x32.png',
+      '128x128.png',
+      '128x128@2x.png',
+      'icon.ico',
+      'icon.png',
+    ];
+
+    expect(yml).toContain('name: Build Tauri Desktop');
+    expect(yml).toContain('workflow_dispatch:');
+    expect(yml).toContain("'packages/desktop-tauri/**'");
+    expect(yml).toContain('pnpm --filter @mindos/desktop-tauri run build:web');
+    expect(yml).toContain('pnpm --filter @mindos/desktop-tauri run build:tauri');
+    expect(yml).toContain('libwebkit2gtk-4.1-dev');
+    expect(yml).toContain('libayatana-appindicator3-dev');
+    expect(yml).toContain('packages/desktop-tauri/src-tauri/target/release/bundle/**/*');
+    expect(yml).not.toContain('gh release create');
+    expect(yml).not.toContain('electron-builder');
+
+    for (const icon of requiredIcons) {
+      expect(existsSync(resolve(root, `packages/desktop-tauri/src-tauri/icons/${icon}`)), icon).toBe(true);
+    }
   });
 
   it('keeps the public sync whitelist aligned with the monorepo layout', () => {

@@ -1,25 +1,35 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { handleSpaceOverviewGet } from '@geminilight/mindos/server';
 import { compileSpaceOverview, isCompileError, collectSpaceFiles } from '@/lib/compile';
-import { getMindRoot } from '@/lib/fs';
-import { resolveSafe } from '@/lib/core/security';
+import * as mindFs from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import { toNextResponse } from '../_mindos-adapter';
 
 const COMPILE_TIMEOUT = 60_000;
 
 /** GET /api/space-overview?space=X — return file stats (lightweight, no LLM) */
 export async function GET(req: NextRequest) {
   try {
-    const space = req.nextUrl.searchParams.get('space');
-    if (!space) {
-      return NextResponse.json({ error: 'space parameter required' }, { status: 400 });
-    }
-    const mindRoot = getMindRoot();
-    resolveSafe(mindRoot, space);
-    const files = collectSpaceFiles(mindRoot, space);
-    return NextResponse.json({ fileCount: files.length });
+    const space = req.nextUrl.searchParams.get('space') ?? undefined;
+    const mindRoot = mindFs.getMindRoot();
+    const collectAllFiles = getOptionalCollectAllFiles();
+    return toNextResponse(handleSpaceOverviewGet(req.nextUrl.searchParams, {
+      mindRoot,
+      collectAllFiles: typeof collectAllFiles === 'function'
+        ? collectAllFiles
+        : () => collectSpaceFiles(mindRoot, space ?? '').map((_, index) => `${space}/${index}.md`),
+    }));
   } catch (e) {
     return handleRouteErrorSimple(e);
+  }
+}
+
+function getOptionalCollectAllFiles(): (() => string[]) | undefined {
+  try {
+    return (mindFs as { collectAllFiles?: () => string[] }).collectAllFiles;
+  } catch {
+    return undefined;
   }
 }
 

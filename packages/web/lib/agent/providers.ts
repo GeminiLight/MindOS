@@ -5,6 +5,7 @@ import {
   type Model,
   type KnownProvider,
 } from '@mariozechner/pi-ai';
+import { buildMindosCompatEndpointCandidates } from '@geminilight/mindos/session';
 
 /**
  * MindOS-supported provider IDs.
@@ -381,18 +382,7 @@ export function getProviderApiType(id: ProviderId): string {
  * a conservative fallback.
  */
 export function buildCompatEndpointCandidates(baseUrl: string, path: string, apiType: string): string[] {
-  const base = baseUrl.replace(/\/+$/, '');
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const hasVersionPrefix = /\/v\d+(?:$|\/)/.test(base);
-  const candidates = new Set<string>();
-
-  candidates.add(`${base}${cleanPath}`);
-
-  if (!hasVersionPrefix && (apiType === 'openai-completions' || apiType === 'openai-responses' || apiType === 'anthropic-messages')) {
-    candidates.add(`${base}/v1${cleanPath}`);
-  }
-
-  return Array.from(candidates);
+  return buildMindosCompatEndpointCandidates(baseUrl, path, apiType);
 }
 
 // ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ export interface SettingsData {
   mindRoot: string;
   webPassword?: string;
   authToken?: string;   // masked: first-xxxx-••••-last pattern
+  allowNetworkAccess?: boolean;
   port?: number;
   mcpPort?: number;
   skillPaths?: {

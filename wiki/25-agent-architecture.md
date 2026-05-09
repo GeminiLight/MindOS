@@ -155,7 +155,7 @@ MindOS 支持两种对话模式，用户可在 Ask 面板顶部切换：
 
 ### MCP Tools（外部服务工具）
 
-- **内置**：MindOS MCP server 始终可用（通过 `packages/protocols/mcp-server/` 目录内置）
+- **内置**：MindOS MCP server 始终可用（源码在 `packages/mindos/src/protocols/mcp-server/`，发布为 `dist/protocols/mcp-server/index.cjs`）
 - **扩展**：额外 MCP servers 通过 `~/.mindos/mcp.json` 配置
 - **接入方式**：
   - 静态桥接：`list_mcp_tools` / `call_mcp_tool`（通用入口）

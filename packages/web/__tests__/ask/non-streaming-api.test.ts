@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import {
+  mindosPiMessagesToOpenAI as piMessagesToOpenAI,
+  reassembleMindosOpenAISse as reassembleSSE,
+} from '@geminilight/mindos/session';
 
 /**
  * Tests for non-streaming API fallback.
@@ -6,94 +10,6 @@ import { describe, it, expect } from 'vitest';
  * 1. pi-ai → OpenAI message format conversion
  * 2. SSE response reassembly (for proxies that ignore stream:false)
  */
-
-// ─────────────────────────────────────────────────
-// Replicate helper functions from route.ts for unit testing
-// ─────────────────────────────────────────────────
-
-function piMessagesToOpenAI(piMessages: any[]): any[] {
-  return piMessages.map(msg => {
-    const role = msg.role;
-    if (role === 'system') return null;
-    if (role === 'user') {
-      return { role: 'user', content: typeof msg.content === 'string' ? msg.content : msg.content };
-    }
-    if (role === 'assistant') {
-      const content = msg.content;
-      let textContent = '';
-      const toolCalls: any[] = [];
-      if (Array.isArray(content)) {
-        for (const part of content) {
-          if (part.type === 'text' && part.text) {
-            textContent += part.text;
-          } else if (part.type === 'toolCall') {
-            toolCalls.push({
-              id: part.id ?? `call_fallback`,
-              type: 'function',
-              function: { name: part.name ?? 'unknown', arguments: JSON.stringify(part.arguments ?? {}) },
-            });
-          }
-        }
-      }
-      const result: any = { role: 'assistant' };
-      result.content = textContent || '';
-      if (toolCalls.length > 0) result.tool_calls = toolCalls;
-      return result;
-    }
-    if (role === 'toolResult') {
-      const contentText = Array.isArray(msg.content)
-        ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text ?? '').join('\n')
-        : String(msg.content ?? '');
-      return { role: 'tool', tool_call_id: msg.toolCallId ?? 'unknown', content: contentText };
-    }
-    return null;
-  }).filter(Boolean);
-}
-
-function reassembleSSE(sseText: string): any {
-  const lines = sseText.split('\n');
-  let content = '';
-  let role = 'assistant';
-  let finishReason = 'stop';
-  const toolCalls: Map<number, { id: string; type: string; function: { name: string; arguments: string } }> = new Map();
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) continue;
-    const payload = trimmed.slice(5).trim();
-    if (payload === '[DONE]') break;
-    let chunk: any;
-    try { chunk = JSON.parse(payload); } catch { continue; }
-    const delta = chunk?.choices?.[0]?.delta;
-    if (!delta) continue;
-    if (delta.role) role = delta.role;
-    if (delta.content) content += delta.content;
-    if (chunk.choices[0].finish_reason) finishReason = chunk.choices[0].finish_reason;
-    if (delta.tool_calls) {
-      for (const tc of delta.tool_calls) {
-        const idx = tc.index ?? 0;
-        const existing = toolCalls.get(idx);
-        if (!existing) {
-          toolCalls.set(idx, {
-            id: tc.id ?? '',
-            type: tc.type ?? 'function',
-            function: { name: tc.function?.name ?? '', arguments: tc.function?.arguments ?? '' },
-          });
-        } else {
-          if (tc.id) existing.id = tc.id;
-          if (tc.function?.name) existing.function.name += tc.function.name;
-          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-        }
-      }
-    }
-  }
-
-  const message: any = { role, content: content || null };
-  if (toolCalls.size > 0) {
-    message.tool_calls = Array.from(toolCalls.values());
-  }
-  return { choices: [{ message, finish_reason: finishReason }] };
-}
 
 // ─────────────────────────────────────────────────
 // piMessagesToOpenAI tests

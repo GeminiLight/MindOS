@@ -3,8 +3,8 @@ export {
   fetchAcpRegistry,
   findAcpAgent,
   getAcpAgents,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export type {
   AcpRegistry,
   AcpRegistryEntry,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';

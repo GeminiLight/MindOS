@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import ClientRedirect from '@/components/ClientRedirect';
 import { defaultEchoSegment } from '@/lib/echo-segments';
 
 export default function EchoIndexPage() {
-  redirect(`/echo/${defaultEchoSegment()}`);
+  return <ClientRedirect href={`/echo/${defaultEchoSegment()}`} label="Redirecting to Echo..." />;
 }

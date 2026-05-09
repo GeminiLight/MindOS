@@ -10,7 +10,7 @@
 #   packages/web/.next/standalone/public/
 #   packages/web/.next/static/       (isBundledRuntimeIntact checks this)
 #   packages/web/public/
-#   packages/protocols/mcp-server/dist/index.cjs
+#   dist/protocols/mcp-server/index.cjs
 #   package.json
 #   bin/ templates/ skills/
 set -euo pipefail
@@ -44,7 +44,6 @@ rm -rf "$WORK/packages/web/.next/standalone/.next/cache" \
 # Strip dev-only files from node_modules to reduce archive size
 echo "  Stripping dev-only files from node_modules..."
 STANDALONE_NM="$WORK/packages/web/.next/standalone/node_modules"
-node scripts/copy-runtime-dependencies.mjs packages/web "$STANDALONE_NM"
 if [ -d "$STANDALONE_NM" ]; then
   # TypeScript declaration files (only needed for IDE, not runtime)
   find "$STANDALONE_NM" -name '*.d.ts' -delete
@@ -83,10 +82,8 @@ fi
 # ── MCP server ──
 echo "  Copying MCP..."
 pnpm --filter @geminilight/mindos build
-pnpm --filter @mindos/mcp-server build
-mkdir -p "$WORK/packages/protocols/mcp-server/dist"
-cp packages/protocols/mcp-server/dist/index.cjs "$WORK/packages/protocols/mcp-server/dist/"
-cp packages/protocols/mcp-server/package.json "$WORK/packages/protocols/mcp-server/"
+mkdir -p "$WORK/dist/protocols/mcp-server"
+cp packages/mindos/dist/protocols/mcp-server/index.cjs "$WORK/dist/protocols/mcp-server/"
 
 # ── Metadata + auxiliary files ──
 echo "  Copying metadata..."
@@ -95,6 +92,11 @@ cp packages/mindos/package.json "$WORK/"
 [ -d packages/mindos/src ] && cp -r packages/mindos/src "$WORK/"
 [ -d templates ] && cp -r templates "$WORK/"
 [ -d skills ] && cp -r skills "$WORK/"
+node scripts/runtime-manifest.mjs \
+  --root "$WORK" \
+  --platform runtime-archive \
+  --layout runtime-archive \
+  --package-name "@geminilight/mindos-runtime"
 
 # ── Package (flat, no outer directory) ──
 echo "  Creating archive..."
@@ -118,6 +120,11 @@ while IFS= read -r f; do
     ERRORS=$((ERRORS + 1))
   fi
 done < <(node packages/desktop/scripts/print-runtime-health-paths.mjs)
+
+if [ ! -e "$VERIFY/runtime-manifest.json" ]; then
+  echo "  ❌ MISSING: runtime-manifest.json"
+  ERRORS=$((ERRORS + 1))
+fi
 
 # Verify version in package.json matches
 PKG_VER=$(node -p "require('$VERIFY/package.json').version" 2>/dev/null || echo "")

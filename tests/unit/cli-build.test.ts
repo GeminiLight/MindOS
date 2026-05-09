@@ -15,6 +15,8 @@ let appDir: string;
 let nextDir: string;
 let buildStamp: string;
 let depsStamp: string;
+let staticWebIndex: string;
+let staticWebStamp: string;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-build-test-'));
@@ -22,6 +24,8 @@ beforeEach(() => {
   nextDir = path.join(appDir, '.next');
   buildStamp = path.join(nextDir, '.mindos-build-version');
   depsStamp = path.join(tempDir, 'deps-hash');
+  staticWebIndex = path.join(tempDir, 'static-web', 'index.html');
+  staticWebStamp = path.join(tempDir, 'static-web', '.mindos-build-version');
 
   // Create app dir with a package.json
   fs.mkdirSync(appDir, { recursive: true });
@@ -46,6 +50,9 @@ beforeEach(() => {
     CLI_PATH: '',
     NODE_BIN: process.execPath,
     UPDATE_CHECK_PATH: path.join(tempDir, 'update-check.json'),
+    STATIC_WEB_ROOT: path.join(tempDir, 'static-web'),
+    STATIC_WEB_INDEX: staticWebIndex,
+    STATIC_WEB_STAMP: staticWebStamp,
     STANDALONE_SERVER: path.join(tempDir, '_standalone', 'server.js'),
     STANDALONE_STAMP: path.join(tempDir, '_standalone', '.mindos-build-version'),
   }));
@@ -63,6 +70,7 @@ async function importBuild() {
     cleanNextDir: () => void;
     clearBuildLock: () => void;
     ensureAppDeps: () => void;
+    hasPrebuiltStaticWeb: () => boolean;
   };
 }
 
@@ -92,6 +100,15 @@ describe('needsBuild', () => {
     fs.writeFileSync(buildStamp, '0.4.0', 'utf-8');
     const { needsBuild } = await importBuild();
     expect(needsBuild()).toBe(true);
+  });
+
+  it('returns false when a matching static Web artifact exists', async () => {
+    fs.mkdirSync(path.dirname(staticWebIndex), { recursive: true });
+    fs.writeFileSync(staticWebIndex, '<html></html>', 'utf-8');
+    fs.writeFileSync(staticWebStamp, '0.5.12', 'utf-8');
+    const { hasPrebuiltStaticWeb, needsBuild } = await importBuild();
+    expect(hasPrebuiltStaticWeb()).toBe(true);
+    expect(needsBuild()).toBe(false);
   });
 });
 
@@ -177,6 +194,9 @@ describe('ensureAppDeps', () => {
       CLI_PATH: '',
       NODE_BIN: process.execPath,
       UPDATE_CHECK_PATH: path.join(tempDir, 'update-check.json'),
+      STATIC_WEB_ROOT: path.join(tempDir, 'static-web'),
+      STATIC_WEB_INDEX: staticWebIndex,
+      STATIC_WEB_STAMP: staticWebStamp,
       STANDALONE_SERVER: path.join(tempDir, '_standalone', 'server.js'),
       STANDALONE_STAMP: path.join(tempDir, '_standalone', '.mindos-build-version'),
     }));
@@ -185,5 +205,67 @@ describe('ensureAppDeps', () => {
     build.ensureAppDeps();
     // npm install should not have been called
     expect(mockExec).not.toHaveBeenCalled();
+  });
+
+  it('uses pnpm at the workspace root when app dependencies include workspace protocol', async () => {
+    fs.writeFileSync(path.join(tempDir, 'pnpm-workspace.yaml'), "packages:\n  - 'app'\n");
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: '@mindos/web',
+        version: '1.0.0',
+        dependencies: {
+          '@geminilight/mindos': 'workspace:*',
+        },
+      }),
+    );
+
+    const mockExecSync = vi.fn(() => Buffer.from('10.0.0'));
+    vi.doMock('node:child_process', () => ({
+      execSync: mockExecSync,
+    }));
+
+    const mockNpmInstall = vi.fn();
+    const mockRun = vi.fn((_command: string, cwd: string) => {
+      expect(cwd).toBe(tempDir);
+      for (const dep of ['next', 'react', 'react-dom']) {
+        const depDir = path.join(appDir, 'node_modules', dep);
+        fs.mkdirSync(depDir, { recursive: true });
+        fs.writeFileSync(path.join(depDir, 'package.json'), '{}');
+      }
+    });
+    vi.doMock('../../packages/mindos/bin/lib/shell.js', () => ({
+      execInherited: mockRun,
+      npmInstall: mockNpmInstall,
+    }));
+
+    vi.resetModules();
+
+    vi.doMock('../../packages/mindos/bin/lib/constants.js', () => ({
+      ROOT: tempDir,
+      PACKAGE_ROOT: tempDir,
+      PRODUCT_PACKAGE_JSON: path.join(tempDir, 'package.json'),
+      WEB_APP_DIR: appDir,
+      BUILD_STAMP: buildStamp,
+      DEPS_STAMP: depsStamp,
+      CONFIG_PATH: path.join(tempDir, 'config.json'),
+      MINDOS_DIR: tempDir,
+      PID_PATH: path.join(tempDir, 'mindos.pid'),
+      LOG_PATH: path.join(tempDir, 'mindos.log'),
+      CLI_PATH: '',
+      NODE_BIN: process.execPath,
+      UPDATE_CHECK_PATH: path.join(tempDir, 'update-check.json'),
+      STATIC_WEB_ROOT: path.join(tempDir, 'static-web'),
+      STATIC_WEB_INDEX: staticWebIndex,
+      STATIC_WEB_STAMP: staticWebStamp,
+      STANDALONE_SERVER: path.join(tempDir, '_standalone', 'server.js'),
+      STANDALONE_STAMP: path.join(tempDir, '_standalone', '.mindos-build-version'),
+    }));
+
+    const build = await importBuild();
+    build.ensureAppDeps();
+
+    expect(mockRun).toHaveBeenCalledWith('pnpm install --no-frozen-lockfile', tempDir);
+    expect(mockNpmInstall).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,148 @@
+export type MindosWebApiRouteOwner =
+  | 'product-owned'
+  | 'host-owned'
+  | 'optional-capability';
+
+export type MindosWebApiRouteAdapter =
+  | 'next-response'
+  | 'stream'
+  | 'host'
+  | 'optional-capability';
+
+export type MindosWebApiRouteRisk = 'low' | 'medium' | 'high';
+
+export type MindosWebApiRouteOwnership = {
+  path: string;
+  webRouteFile: string;
+  owner: MindosWebApiRouteOwner;
+  adapter: MindosWebApiRouteAdapter;
+  phase: string;
+  risk: MindosWebApiRouteRisk;
+  residualRisk: string;
+};
+
+function route(
+  path: string,
+  owner: MindosWebApiRouteOwner,
+  adapter: MindosWebApiRouteAdapter,
+  phase: string,
+  risk: MindosWebApiRouteRisk,
+  residualRisk: string,
+): MindosWebApiRouteOwnership {
+  return {
+    path,
+    webRouteFile: `packages/web/app${path}/route.ts`,
+    owner,
+    adapter,
+    phase,
+    risk,
+    residualRisk,
+  };
+}
+
+const migrated = (path: string, risk: MindosWebApiRouteRisk = 'low') =>
+  route(
+    path,
+    'product-owned',
+    'next-response',
+    'Phase 1: migrated Product Server adapter',
+    risk,
+    'No residual product ownership expected; this route should remain a thin Next adapter.',
+  );
+
+const optional = (
+  path: string,
+  phase: string,
+  risk: MindosWebApiRouteRisk,
+  residualRisk: string,
+) => route(path, 'optional-capability', 'optional-capability', phase, risk, residualRisk);
+
+const host = (path: string, residualRisk: string, risk: MindosWebApiRouteRisk = 'medium') =>
+  route(path, 'host-owned', 'host', 'Host-owned', risk, residualRisk);
+
+export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
+  migrated('/api/a2a/agents', 'medium'),
+  migrated('/api/a2a/delegations', 'medium'),
+  migrated('/api/a2a/discover', 'medium'),
+  migrated('/api/a2a', 'medium'),
+  migrated('/api/acp/config', 'high'),
+  migrated('/api/acp/detect', 'medium'),
+  migrated('/api/acp/install', 'high'),
+  migrated('/api/acp/registry', 'medium'),
+  migrated('/api/acp/session', 'high'),
+  migrated('/api/agent-activity'),
+  migrated('/api/agents/copy-skill', 'high'),
+  migrated('/api/agents/custom/detect', 'medium'),
+  migrated('/api/agents/custom', 'high'),
+  migrated('/api/ask-sessions'),
+  route('/api/ask', 'product-owned', 'stream', 'Phase 6: generated client and stream adapter', 'high', 'Ask is mostly Product runtime-owned through session and agent modules, but the streaming Web route still owns host assembly and should become a generated stream adapter.'),
+  host('/api/auth', 'Auth cookie/session handling is host-specific today; Product Server will need an auth context adapter before direct HTTP exposure.', 'high'),
+  migrated('/api/backlinks'),
+  migrated('/api/bootstrap'),
+  migrated('/api/changes'),
+  migrated('/api/channels/verify', 'medium'),
+  migrated('/api/connect'),
+  migrated('/api/embedding', 'medium'),
+  optional('/api/export', 'Phase 5: content ingestion optional capabilities', 'high', 'Export/archive logic carries heavy dependencies and filesystem writes that need optional capability packaging.'),
+  optional('/api/extract-docx', 'Phase 5: content ingestion optional capabilities', 'high', 'DOCX extraction should be Product-owned but lazy-loaded so parser dependencies do not inflate the default package.'),
+  optional('/api/extract-pdf', 'Phase 5: content ingestion optional capabilities', 'high', 'PDF extraction should be Product-owned but lazy-loaded so parser dependencies do not inflate the default package.'),
+  optional('/api/file/import', 'Phase 5: content ingestion optional capabilities', 'high', 'File import is a content-ingestion write path and needs capability-level size limits, conflict checks, and rollback.'),
+  migrated('/api/file/raw'),
+  migrated('/api/file', 'high'),
+  migrated('/api/files'),
+  migrated('/api/git'),
+  migrated('/api/graph'),
+  migrated('/api/health'),
+  migrated('/api/im/activity', 'medium'),
+  migrated('/api/im/config', 'high'),
+  host('/api/im/feishu/long-connection/event', 'Raw long-connection event delivery is host-specific, but event parsing and state updates should stay behind Product protocol handlers.', 'medium'),
+  migrated('/api/im/feishu/long-connection', 'high'),
+  migrated('/api/im/status', 'medium'),
+  migrated('/api/im/test', 'medium'),
+  migrated('/api/im/webhook-status', 'medium'),
+  host('/api/im/webhook/feishu', 'Raw inbound Feishu webhook receipt is host-owned, while signature verification and state writes should move to Product protocol handlers.', 'high'),
+  optional('/api/inbox/clip', 'Phase 5: content ingestion optional capabilities', 'high', 'Inbox clipping is still Web-owned ingestion and needs optional capability packaging plus fetch timeout and content limits.'),
+  migrated('/api/inbox', 'medium'),
+  migrated('/api/init', 'high'),
+  optional('/api/lint', 'Phase 5: content ingestion optional capabilities', 'medium', 'Knowledge linting remains Web-owned and should become an optional Product capability with bounded filesystem traversal.'),
+  migrated('/api/mcp/agents', 'high'),
+  migrated('/api/mcp/direct-tools', 'medium'),
+  migrated('/api/mcp/install-skill', 'high'),
+  migrated('/api/mcp/install', 'high'),
+  migrated('/api/mcp/restart', 'high'),
+  migrated('/api/mcp/status'),
+  migrated('/api/mcp/tools', 'medium'),
+  migrated('/api/mcp/uninstall', 'high'),
+  migrated('/api/monitoring', 'medium'),
+  optional('/api/obsidian-plugins/settings', 'Phase 5: content ingestion optional capabilities', 'medium', 'Obsidian plugin settings remain Web-owned and should be modeled as an optional Product compatibility capability.'),
+  optional('/api/obsidian/compat-report', 'Phase 5: content ingestion optional capabilities', 'medium', 'Obsidian compatibility reporting remains Web-owned and should use optional capability diagnostics.'),
+  optional('/api/obsidian/import', 'Phase 5: content ingestion optional capabilities', 'high', 'Obsidian import remains a Web-owned bulk write path and needs optional capability size limits and rollback.'),
+  migrated('/api/recent-files'),
+  migrated('/api/restart', 'high'),
+  migrated('/api/search/prewarm'),
+  migrated('/api/search'),
+  migrated('/api/settings/list-models', 'medium'),
+  migrated('/api/settings/reset-token', 'high'),
+  migrated('/api/settings', 'medium'),
+  migrated('/api/settings/test-key', 'medium'),
+  migrated('/api/setup/check-path', 'medium'),
+  migrated('/api/setup/check-port', 'medium'),
+  migrated('/api/setup/generate-token', 'medium'),
+  migrated('/api/setup/ls', 'medium'),
+  migrated('/api/setup', 'high'),
+  migrated('/api/skills', 'high'),
+  migrated('/api/space-overview'),
+  migrated('/api/sync', 'high'),
+  migrated('/api/tree-version'),
+  migrated('/api/uninstall', 'high'),
+  migrated('/api/update-check'),
+  migrated('/api/update-status'),
+  migrated('/api/update', 'high'),
+  migrated('/api/workflows', 'medium'),
+];
+
+const ownershipByPath = new Map(MINDOS_WEB_API_ROUTE_OWNERSHIP.map((route) => [route.path, route]));
+
+export function getMindosWebApiRouteOwnership(path: string): MindosWebApiRouteOwnership | undefined {
+  return ownershipByPath.get(path);
+}

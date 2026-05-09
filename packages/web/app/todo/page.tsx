@@ -1,13 +1,13 @@
-import { redirect } from 'next/navigation';
 import { readSettings } from '@/lib/settings';
 import { getFileContent, saveFileContent } from '@/lib/fs';
 import TodoClient from './TodoClient';
+import ClientRedirect from '@/components/ClientRedirect';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TodoPage() {
   const settings = readSettings();
-  if (settings.setupPending) redirect('/setup');
+  if (settings.setupPending) return <ClientRedirect href="/setup" label="Opening setup..." />;
 
   let content = '';
   let exists = true;

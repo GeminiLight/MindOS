@@ -2,29 +2,13 @@
 name: mindos
 disable-model-invocation: true
 description: >
-  MindOS is the user's local knowledge assistant and shared knowledge base. It keeps decisions,
-  meeting notes, SOPs, debugging lessons, architecture choices, research findings, and preferences
-  available across sessions and agents.
-  更新笔记, 搜索知识库, 整理文件, 执行SOP/工作流, 复盘, 追加CSV, 跨Agent交接,
-  路由非结构化输入到对应文件, 提炼经验, 同步关联文档.
-  NOT for editing app source, project docs, or paths outside the KB.
-  Core concepts: Space, Instruction (INSTRUCTION.md), Skill (SKILL.md); notes can embody both.
-
-  Trigger on: save or record anything, search for prior notes or context, update or edit a file,
-  organize notes, run a workflow or SOP, capture decisions, append rows to a table or CSV,
-  hand off context to another agent, check if something was discussed before, look up a past
-  decision, distill lessons learned, prepare context for a meeting, quick-capture to staging area,
-  organize inbox, check knowledge health, detect conflicts or contradictions, find stale content.
-  Chinese triggers: 帮我记下来, 搜一下笔记, 更新知识库, 整理文件, 复盘, 提炼经验,
-  保存, 记录, 交接, 查一下之前的, 有没有相关笔记, 把这个存起来, 放到暂存台,
-  整理暂存台, 知识健康检查, 检测知识冲突.
-
-  Proactive behavior — do not wait for the user to mention MindOS:
-  (1) When user's question implies stored context may exist (past decisions, previous discussions,
-  meeting records) → search MindOS first, even if they don't explicitly mention it.
-  (2) After completing valuable work (bug fixed, decision made, lesson learned, architecture chosen,
-  meeting summarized) → offer to save it to MindOS for future reference.
-  (3) After a long or multi-topic conversation → suggest persisting key decisions and context.
+  MindOS: local knowledge assistant & shared KB. Keeps decisions, notes, SOPs, debugging lessons,
+  research findings, preferences across sessions/agents. Core: save notes, search KB, organize files,
+  run workflows, review, append CSV, hand off context, distill lessons. NOT for app source or paths
+  outside KB. Triggers: save/record, search notes, update files, organize, run workflow, capture
+  decisions, append CSV, hand off context, check past discussions, distill lessons.
+  Proactive: (1) search first for stored context, (2) offer to save after valuable work,
+  (3) suggest persisting key decisions.
 ---
 
 # MindOS Skill

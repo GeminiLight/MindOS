@@ -20,6 +20,7 @@ import {
   CONFIG_PATH,
   LOG_PATH,
   CLI_PATH,
+  STATIC_WEB_ROOT,
   STANDALONE_SERVER,
 } from '../lib/constants.js';
 import { dim, cyan, green, red, yellow } from '../lib/colors.js';
@@ -30,6 +31,7 @@ import {
   cleanNextDir,
   writeBuildStamp,
   hasPrebuiltStandalone,
+  hasPrebuiltStaticWeb,
 } from '../lib/build.js';
 import { assertPortFree } from '../lib/port.js';
 import { savePids, clearPids } from '../lib/pid.js';
@@ -71,9 +73,26 @@ function ensureStandaloneRuntimeLayout() {
   return ensureStandaloneRuntimeDir('node_modules', '__node_modules');
 }
 
+function runtimeJsExecutor() {
+  return process.env.MINDOS_BINARY_EXECUTOR || process.execPath;
+}
+
+function useProductServer() {
+  if (process.env.MINDOS_NEXT_STANDALONE === '1' && hasPrebuiltStandalone()) return false;
+  return process.env.MINDOS_PRODUCT_SERVER === '1' || hasPrebuiltStaticWeb();
+}
+
+export function resolveWebHost(config = {}, env = process.env) {
+  if (typeof env.MINDOS_WEB_HOST === 'string' && env.MINDOS_WEB_HOST.trim()) {
+    return env.MINDOS_WEB_HOST;
+  }
+  return config.allowNetworkAccess === true ? '0.0.0.0' : '127.0.0.1';
+}
+
 /** Command metadata for registry / help. */
 export const meta = {
   name: 'start',
+  aliases: ['serve'],
   group: 'Service',
   summary: 'Start MindOS services',
   usage: 'mindos start',
@@ -203,6 +222,7 @@ export const run = async (args, flags) => {
   try {
     startupCfg = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
   } catch { /* ignore */ }
+  const webHost = resolveWebHost(startupCfg);
   if (startupCfg.setupPort && Number(startupCfg.setupPort) !== Number(webPort)) {
     killByPort(Number(startupCfg.setupPort));
   }
@@ -268,9 +288,11 @@ export const run = async (args, flags) => {
   }
 
   process.env.MINDOS_CLI_PATH = CLI_PATH;
-  process.env.MINDOS_NODE_BIN = process.execPath;
-  ensureAppDeps();
-  if (needsBuild()) {
+  process.env.MINDOS_NODE_BIN = runtimeJsExecutor();
+  if (!useProductServer()) {
+    ensureAppDeps();
+  }
+  if (!useProductServer() && needsBuild()) {
     console.log(yellow('Building MindOS (first run or new version detected)...\n'));
     cleanNextDir();
     execInherited('node scripts/gen-renderer-index.js', ROOT);
@@ -296,18 +318,32 @@ export const run = async (args, flags) => {
 
   await printStartupInfo(webPort, mcpPort);
 
+  if (useProductServer()) {
+    const { createMindosHttpServer } = await import('../../dist/server.js');
+    const productServer = createMindosHttpServer({
+      hostname: webHost,
+      port: Number(webPort),
+      runtimeRoot: PACKAGE_ROOT,
+      staticRoot: STATIC_WEB_ROOT,
+    });
+    await productServer.listen();
+    console.log(`${green('✔ Product Server')} ${dim(productServer.url)}`);
+    await new Promise(() => {});
+    return;
+  }
+
   // Prefer prebuilt standalone server (shipped with npm package) over next start.
   // Standalone includes its own traced node_modules — no packages/web/node_modules needed.
   if (hasPrebuiltStandalone()) {
     const standaloneNodePath = ensureStandaloneRuntimeLayout();
     try {
-      execFileSync(process.execPath, [STANDALONE_SERVER], {
+      execFileSync(runtimeJsExecutor(), [STANDALONE_SERVER], {
         cwd: resolve(PACKAGE_ROOT, '_standalone'),
         stdio: 'inherit',
         env: {
           ...process.env,
           NODE_ENV: 'production',
-          HOSTNAME: process.env.MINDOS_WEB_HOST || '0.0.0.0',
+          HOSTNAME: webHost,
           PORT: webPort,
           NODE_PATH: [standaloneNodePath, process.env.NODE_PATH].filter(Boolean).join(pathSep),
         },
@@ -317,7 +353,7 @@ export const run = async (args, flags) => {
     }
   } else {
     execInherited(`${NEXT_BIN} start -p ${webPort} ${extra}`, WEB_APP_DIR, {
-      HOSTNAME: process.env.MINDOS_WEB_HOST || '0.0.0.0',
+      HOSTNAME: webHost,
     });
   }
 };

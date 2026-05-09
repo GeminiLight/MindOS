@@ -1,4 +1,4 @@
-export { ACP_ERRORS } from '@mindos/acp';
+export { ACP_ERRORS } from '@geminilight/mindos/protocols/acp';
 export type {
   AcpAgentCapabilities,
   AcpAuthMethod,
@@ -27,4 +27,4 @@ export type {
   AcpToolResult,
   AcpTransportType,
   AcpUpdateType,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';

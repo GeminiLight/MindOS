@@ -1,22 +1,21 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+
+import { handleSearchPrewarm } from '@geminilight/mindos/server';
 import { prewarmSearchIndex, getMindRoot } from '@/lib/fs';
 import { prewarmCoreSearchIndex } from '@/lib/core/search';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { telemetry } from '@/lib/telemetry';
+import { toNextResponse } from '../../_mindos-adapter';
 
 export async function GET() {
   const stop = telemetry.startTimer('search.prewarm.request');
   try {
     const uiResult = prewarmSearchIndex();
-
-    // Also prewarm Core (BM25) search index used by MCP/Agent
     let coreResult: { cacheState: string; fileCount: number } | undefined;
     try {
-      const mindRoot = getMindRoot();
-      coreResult = await prewarmCoreSearchIndex(mindRoot);
+      coreResult = await prewarmCoreSearchIndex(getMindRoot());
     } catch {
-      // Core prewarm failure is non-critical — UI search still works
+      // Core prewarm failure is non-critical; UI search still works.
     }
 
     stop({
@@ -26,15 +25,21 @@ export async function GET() {
       coreFileCount: coreResult?.fileCount ?? 0,
       success: true,
     });
-    return NextResponse.json({
-      ...uiResult,
-      core: coreResult ? { cacheState: coreResult.cacheState, fileCount: coreResult.fileCount } : undefined,
-    });
-  } catch (err) {
+
+    return toNextResponse(handleSearchPrewarm({
+      collectAllFiles: () => [],
+      prewarmSearch: () => ({
+        ...uiResult,
+        core: coreResult
+          ? { cacheState: coreResult.cacheState, fileCount: coreResult.fileCount }
+          : { cacheState: 'skipped', fileCount: 0 },
+      }),
+    }));
+  } catch (error) {
     telemetry.track('search.prewarm.error', {
-      errorType: err instanceof Error ? err.name : 'unknown',
+      errorType: error instanceof Error ? error.name : 'unknown',
     });
     stop({ success: false });
-    return handleRouteErrorSimple(err);
+    return handleRouteErrorSimple(error);
   }
 }

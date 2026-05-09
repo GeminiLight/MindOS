@@ -3,32 +3,27 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import {
+  handleInboxDelete,
+  handleInboxGet,
+  handleInboxPost,
+  type InboxArchiveResult,
+  type InboxSaveResult,
+} from '@geminilight/mindos/server';
 import { effectiveSopRoot } from '@/lib/settings';
-import { listInboxFiles, saveToInbox, ensureInboxSpace } from '@/lib/core/inbox';
 import { invalidateCache } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import { toNextResponse } from '../_mindos-adapter';
 
-export async function GET() {
-  const mindRoot = effectiveSopRoot().trim();
-  if (!mindRoot) {
-    return NextResponse.json({ error: 'MIND_ROOT is not configured' }, { status: 400 });
-  }
-
+export function GET() {
   try {
-    ensureInboxSpace(mindRoot);
-    const files = listInboxFiles(mindRoot);
-    return NextResponse.json({ files });
+    return toNextResponse(handleInboxGet({ mindRoot: effectiveMindRoot() }));
   } catch (err) {
     return handleRouteErrorSimple(err);
   }
 }
 
 export async function POST(req: NextRequest) {
-  const mindRoot = effectiveSopRoot().trim();
-  if (!mindRoot) {
-    return NextResponse.json({ error: 'MIND_ROOT is not configured' }, { status: 400 });
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -36,32 +31,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  if (!body || typeof body !== 'object' || !Array.isArray((body as { files?: unknown }).files)) {
-    return NextResponse.json({ error: 'Request body must contain a files array' }, { status: 400 });
-  }
-
-  const { files, source } = body as { files: Array<{ name: string; content: string; encoding?: 'text' | 'base64' }>, source?: string };
-
   try {
-    const result = saveToInbox(mindRoot, files, source);
-
-    if (result.saved.length > 0) {
-      invalidateCache();
-      try { revalidatePath('/', 'layout'); } catch { /* test env */ }
+    const response = handleInboxPost(body, { mindRoot: effectiveMindRoot() });
+    if (hasSavedFiles(response.body)) {
+      refreshKnowledgeViews();
     }
-
-    return NextResponse.json(result);
+    return toNextResponse(response);
   } catch (err) {
     return handleRouteErrorSimple(err);
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const mindRoot = effectiveSopRoot().trim();
-  if (!mindRoot) {
-    return NextResponse.json({ error: 'MIND_ROOT is not configured' }, { status: 400 });
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -69,22 +50,34 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { names } = (body ?? {}) as { names?: string[] };
-  if (!Array.isArray(names) || names.length === 0) {
-    return NextResponse.json({ error: 'Request body must contain a non-empty names array' }, { status: 400 });
-  }
-
   try {
-    const { archiveFromInbox } = await import('@/lib/core/inbox');
-    const result = archiveFromInbox(mindRoot, names);
-
-    if (result.archived.length > 0) {
-      invalidateCache();
-      try { revalidatePath('/', 'layout'); } catch { /* test env */ }
+    const response = handleInboxDelete(body, { mindRoot: effectiveMindRoot() });
+    if (hasArchivedFiles(response.body)) {
+      refreshKnowledgeViews();
     }
-
-    return NextResponse.json(result);
+    return toNextResponse(response);
   } catch (err) {
     return handleRouteErrorSimple(err);
+  }
+}
+
+function effectiveMindRoot() {
+  return effectiveSopRoot().trim();
+}
+
+function hasSavedFiles(body: unknown): body is InboxSaveResult {
+  return Boolean(body && typeof body === 'object' && Array.isArray((body as InboxSaveResult).saved) && (body as InboxSaveResult).saved.length > 0);
+}
+
+function hasArchivedFiles(body: unknown): body is InboxArchiveResult {
+  return Boolean(body && typeof body === 'object' && Array.isArray((body as InboxArchiveResult).archived) && (body as InboxArchiveResult).archived.length > 0);
+}
+
+function refreshKnowledgeViews() {
+  invalidateCache();
+  try {
+    revalidatePath('/', 'layout');
+  } catch {
+    // Next cache revalidation is unavailable in some test runtimes.
   }
 }

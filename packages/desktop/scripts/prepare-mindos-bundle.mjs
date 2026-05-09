@@ -3,7 +3,7 @@
  * @see wiki/specs/spec-desktop-standalone-runtime.md
  */
 import {
-  cpSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -12,13 +12,10 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
 } from 'fs';
 import path from 'path';
 import { assertStandaloneAppFiles } from './runtime-health-contract.mjs';
-import {
-  copyRuntimeDependencyClosure,
-  runtimeDependencySeeds,
-} from '../../../scripts/lib/runtime-dependency-closure.mjs';
 
 export function materializeStandaloneAssets(appDir) {
   const standaloneDir = path.join(appDir, '.next', 'standalone');
@@ -34,21 +31,17 @@ export function materializeStandaloneAssets(appDir) {
   if (existsSync(staticSrc)) {
     mkdirSync(path.dirname(staticDest), { recursive: true });
     rmSync(staticDest, { recursive: true, force: true });
-    cpSync(staticSrc, staticDest, { recursive: true });
+    copyDereferenced(staticSrc, staticDest);
   }
 
   const publicSrc = path.join(appDir, 'public');
   const publicDest = path.join(standaloneDir, 'public');
   if (existsSync(publicSrc)) {
     rmSync(publicDest, { recursive: true, force: true });
-    cpSync(publicSrc, publicDest, { recursive: true });
+    copyDereferenced(publicSrc, publicDest);
   }
 
   materializeStandaloneNodeModules(appDir, standaloneDir);
-  copyRuntimeDependencyClosure(path.join(standaloneDir, 'node_modules'), runtimeDependencySeeds, {
-    appDir,
-    label: 'prepare-mindos-bundle',
-  });
   materializeNextServerLib(appDir, standaloneDir);
   assertStandaloneAppFiles(appDir, 'prepare-mindos-bundle');
 }
@@ -74,8 +67,8 @@ function replaceSymlinksWithCopies(dir, nodeModulesRoot = dir, fallbackNodeModul
         if (!fallbackNodeModulesDir) throw err;
         target = realpathSync(path.join(fallbackNodeModulesDir, packageRel));
       }
-      rmSync(child, { recursive: true, force: true });
-      cpSync(target, child, { recursive: true, dereference: true });
+      unlinkSync(child);
+      copyDereferenced(target, child);
       if (existsSync(child) && lstatSync(child).isDirectory()) {
         replaceSymlinksWithCopies(child, nodeModulesRoot, fallbackNodeModulesDir);
       }
@@ -100,13 +93,11 @@ function materializeNextServerLib(appDir, standaloneDir) {
   // keeps Desktop/npm standalone health checks honest.
   for (const ent of readdirSync(sourceNext, { withFileTypes: true })) {
     if (!ent.isFile() && !ent.isSymbolicLink()) continue;
-    cpSync(path.join(sourceNext, ent.name), path.join(destNext, ent.name), {
-      dereference: true,
-    });
+    copyDereferenced(path.join(sourceNext, ent.name), path.join(destNext, ent.name));
   }
   materializeNextDependencies(appDir, standaloneDir, sourceNext);
   if (!existsSync(sourceDist) || !existsSync(destDist)) return;
-  cpSync(sourceDist, destDist, { recursive: true });
+  copyDereferenced(sourceDist, destDist);
 }
 
 function materializeNextDependencies(appDir, standaloneDir, sourceNext) {
@@ -127,7 +118,7 @@ function materializePackage(appDir, standaloneDir, packageName) {
   const destPackage = path.join(standaloneDir, 'node_modules', packageName);
   if (!existsSync(sourcePackage) || existsSync(destPackage)) return;
   mkdirSync(path.dirname(destPackage), { recursive: true });
-  cpSync(sourcePackage, destPackage, { recursive: true, dereference: true });
+  copyDereferenced(sourcePackage, destPackage);
 }
 
 function resolvePackageDir(appDir, packageName) {
@@ -222,13 +213,13 @@ function copyFiltered(fromAbs, toAbs, rel) {
     const nextRel = rel ? path.join(rel, name) : name;
 
     // Skip app-level node_modules but KEEP .next/standalone/node_modules (traced runtime deps).
-    // Copy the standalone node_modules in one shot (cpSync recursive) to preserve symlinks/structure.
+    // Copy the standalone node_modules with symlinks dereferenced for codesign-safe packaging.
     if (name === 'node_modules') {
       const standalonePrefix = path.join('.next', 'standalone');
       if (rel === standalonePrefix) {
         const fromChild = path.join(fromAbs, name);
         const toChild = path.join(toAbs, name);
-        cpSync(fromChild, toChild, { recursive: true, dereference: true });
+        copyDereferenced(fromChild, toChild);
         replaceSymlinksWithCopies(toChild, toChild, path.resolve(fromAbs, '..', '..', 'node_modules'));
       }
       continue;
@@ -244,7 +235,29 @@ function copyFiltered(fromAbs, toAbs, rel) {
     }
     if (ent.isFile() || ent.isSymbolicLink()) {
       mkdirSync(path.dirname(toChild), { recursive: true });
-      cpSync(fromChild, toChild, { dereference: true });
+      copyDereferenced(fromChild, toChild);
     }
+  }
+}
+
+function copyDereferenced(fromAbs, toAbs) {
+  const stat = lstatSync(fromAbs);
+  if (stat.isSymbolicLink()) {
+    copyDereferenced(realpathSync(fromAbs), toAbs);
+    return;
+  }
+
+  if (stat.isDirectory()) {
+    mkdirSync(path.dirname(toAbs), { recursive: true });
+    mkdirSync(toAbs, { recursive: true });
+    for (const name of readdirSync(fromAbs)) {
+      copyDereferenced(path.join(fromAbs, name), path.join(toAbs, name));
+    }
+    return;
+  }
+
+  if (stat.isFile()) {
+    mkdirSync(path.dirname(toAbs), { recursive: true });
+    copyFileSync(fromAbs, toAbs);
   }
 }

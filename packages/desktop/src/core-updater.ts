@@ -498,7 +498,7 @@ export class CoreUpdater extends EventEmitter {
       // Validate extracted content
       const layout = analyzeMindOsLayout(DOWNLOAD_DIR);
       if (!layout.runnable) {
-        throw new Error('Downloaded runtime is incomplete (missing packages/web server.js or packages/protocols/mcp-server/dist)');
+        throw new Error('Downloaded runtime is incomplete (missing packages/web server.js or dist/protocols/mcp-server)');
       }
       if (layout.version !== expectedVersion) {
         throw new Error(`Version mismatch: expected ${expectedVersion}, got ${layout.version}`);

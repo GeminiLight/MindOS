@@ -53,7 +53,6 @@ pnpm install --no-frozen-lockfile
 # ── Step 1: Build Next.js standalone ──
 echo -e "\n${YELLOW}Step 1/5: Building Next.js standalone...${NC}"
 cd "$REPO_ROOT"
-pnpm --filter @mindos/mcp-server build
 pnpm --filter @geminilight/mindos build
 pnpm --filter @mindos/web build
 

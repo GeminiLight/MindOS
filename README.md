@@ -98,8 +98,9 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 
 | Date | Update |
 |------|--------|
+| 2026-04 | **Protocol runtimes internalized** — ACP and MCP source now live under `packages/mindos/src/protocols/*`; the published package ships self-contained `dist/protocols/*` bundles instead of nested protocol packages. |
 | 2026-04 | **Product main package** — MindOS now follows an OpenCode-style core package: `packages/mindos` (`@geminilight/mindos`) is the product runtime facade and CLI kernel boundary; Web/CLI adapt around it. |
-| 2026-04 | **OpenCode-style workspace flattening** — all source workspaces now live under `packages/`: `packages/web`, `packages/desktop`, `packages/mobile`, `packages/mindos`, `packages/retrieval/*`, and `packages/protocols/*`. npm tarball, CLI, MCP, Web standalone, Desktop, and Mobile checks have passed. |
+| 2026-04 | **OpenCode-style workspace flattening** — all source workspaces now live under `packages/`: `packages/web`, `packages/desktop`, `packages/mobile`, `packages/mindos`, and optional `packages/retrieval/*` adapters. npm tarball, CLI, MCP, Web standalone, Desktop, and Mobile checks have passed. |
 | 2026-04 | **Clean publish package** — legacy top-level `app/`, `mcp/`, `desktop/`, and `mobile/` source roots are removed; publish entries exclude tests, caches, and nested `node_modules`. |
 | 2026-04 | **Web Clipper** — Browser extension to clip any web page to your MindOS Inbox with one click. [Get it →](packages/browser-extension/) |
 | 2026-04 | **PDF & Image Import** — Drag PDFs and images into MindOS, auto-converted to searchable Markdown. |
@@ -300,9 +301,8 @@ MindOS/
 ├── packages/mobile/      # Expo mobile app
 ├── packages/browser-extension/ # Web Clipper browser extension
 ├── packages/desktop-tauri/     # Tauri desktop spike
-├── packages/mindos/      # Published product package: runtime facade, foundation/knowledge internals, CLI kernel
+├── packages/mindos/      # Published product package: runtime facade, protocols, foundation/knowledge internals, CLI kernel
 ├── packages/retrieval/   # Optional retrieval stack: search, vector, indexer, API
-├── packages/protocols/   # External protocols: ACP and MCP server
 ├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — workflow guides for Agents
 ├── templates/        # Preset templates (`en/`, `zh/`, `empty/`) — copied to knowledge base on onboard
 ├── scripts/          # Setup wizard and helper scripts

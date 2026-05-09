@@ -8,10 +8,7 @@ let mcpDir: string;
 let srcDir: string;
 let distDir: string;
 let bundlePath: string;
-let sdkPkgPath: string;
-let esbuildPkgPath: string;
 let mockRun: ReturnType<typeof vi.fn>;
-let mockInstall: ReturnType<typeof vi.fn>;
 
 function setMtime(targetPath: string, timeMs: number) {
   const time = new Date(timeMs);
@@ -23,31 +20,19 @@ function writeBundle(content = '// bundle') {
   fs.writeFileSync(bundlePath, content);
 }
 
-function writeBuildDeps() {
-  fs.mkdirSync(path.dirname(sdkPkgPath), { recursive: true });
-  fs.writeFileSync(sdkPkgPath, '{}');
-  fs.mkdirSync(path.dirname(esbuildPkgPath), { recursive: true });
-  fs.writeFileSync(esbuildPkgPath, '{}');
-}
-
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-mcp-build-test-'));
-  mcpDir = path.join(tempDir, 'packages', 'protocols', 'mcp-server');
-  srcDir = path.join(mcpDir, 'src');
-  distDir = path.join(mcpDir, 'dist');
+  mcpDir = tempDir;
+  srcDir = path.join(mcpDir, 'src', 'protocols', 'mcp-server');
+  distDir = path.join(mcpDir, 'dist', 'protocols', 'mcp-server');
   bundlePath = path.join(distDir, 'index.cjs');
-  sdkPkgPath = path.join(mcpDir, 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
-  esbuildPkgPath = path.join(mcpDir, 'node_modules', 'esbuild', 'package.json');
 
   fs.mkdirSync(srcDir, { recursive: true });
   fs.writeFileSync(path.join(srcDir, 'index.ts'), 'export const ok = true;');
-  fs.writeFileSync(path.join(mcpDir, 'package.json'), JSON.stringify({ name: '@mindos/mcp-server', version: '1.0.0' }));
+  fs.writeFileSync(path.join(mcpDir, 'package.json'), JSON.stringify({ name: '@geminilight/mindos', version: '1.0.0' }));
 
-  mockInstall = vi.fn(() => {
-    writeBuildDeps();
-  });
   mockRun = vi.fn((command: string) => {
-    if (command === 'npm run build') {
+    if (command === 'npm run build:protocols') {
       writeBundle();
     }
   });
@@ -71,7 +56,6 @@ beforeEach(() => {
   }));
   vi.doMock('../../packages/mindos/bin/lib/shell.js', () => ({
     execInherited: mockRun,
-    npmInstall: mockInstall,
   }));
 });
 
@@ -129,18 +113,16 @@ describe('needsMcpBuild', () => {
 });
 
 describe('ensureMcpBundle', () => {
-  it('installs build deps and builds when the bundle is missing', async () => {
+  it('builds from product protocol sources when the bundle is missing', async () => {
     const { ensureMcpBundle } = await importMcpBuild();
 
     ensureMcpBundle();
 
-    expect(mockInstall).toHaveBeenCalledWith(mcpDir, '--no-workspaces');
-    expect(mockRun).toHaveBeenCalledWith('npm run build', mcpDir);
+    expect(mockRun).toHaveBeenCalledWith('npm run build:protocols', mcpDir);
     expect(fs.existsSync(bundlePath)).toBe(true);
   });
 
-  it('rebuilds stale bundles without reinstalling build deps', async () => {
-    writeBuildDeps();
+  it('rebuilds stale bundles', async () => {
     writeBundle();
     const now = Date.now();
     setMtime(bundlePath, now - 20_000);
@@ -150,12 +132,10 @@ describe('ensureMcpBundle', () => {
 
     ensureMcpBundle();
 
-    expect(mockInstall).not.toHaveBeenCalled();
-    expect(mockRun).toHaveBeenCalledWith('npm run build', mcpDir);
+    expect(mockRun).toHaveBeenCalledWith('npm run build:protocols', mcpDir);
   });
 
   it('does nothing when the bundle is already current', async () => {
-    writeBuildDeps();
     writeBundle();
     const now = Date.now();
     setMtime(srcDir, now - 10_000);
@@ -167,7 +147,6 @@ describe('ensureMcpBundle', () => {
 
     ensureMcpBundle();
 
-    expect(mockInstall).not.toHaveBeenCalled();
     expect(mockRun).not.toHaveBeenCalled();
   });
 });

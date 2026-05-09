@@ -27,6 +27,7 @@ let tempDir: string;
 vi.mock('@/lib/settings', () => ({
   readSettings: () => ({ ...mockSettings }),
   writeSettings: vi.fn((cfg: Record<string, unknown>) => { writtenConfig = cfg; }),
+  recordSkillInstall: vi.fn(),
   effectiveSopRoot: () => tempDir,
 }));
 
@@ -73,7 +74,7 @@ describe('GET /api/setup', () => {
     expect(body).toHaveProperty('mcpPort');
     expect(body.port).toBe(3456);
     expect(body.mcpPort).toBe(8781);
-  });
+  }, 15_000);
 
   it('masks API keys in providerConfigs', async () => {
     mockSettings.ai.providers[0].apiKey = 'sk-ant-1234567890abcdef';

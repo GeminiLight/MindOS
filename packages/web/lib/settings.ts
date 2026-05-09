@@ -77,6 +77,8 @@ export interface ServerSettings {
   port?: number;
   mcpPort?: number;
   authToken?: string;
+  /** Allow the Web UI server to bind 0.0.0.0 for LAN access. Default false. */
+  allowNetworkAccess?: boolean;
   webPassword?: string;
   startMode?: 'dev' | 'start' | 'daemon';
   setupPending?: boolean;  // true → / redirects to /setup
@@ -261,6 +263,7 @@ export function readSettings(): ServerSettings {
       mindRoot: (parsed.mindRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
       authToken:   typeof parsed.authToken   === 'string' ? parsed.authToken   : undefined,
+      allowNetworkAccess: parsed.allowNetworkAccess === true,
       mcpPort:     typeof parsed.mcpPort     === 'number' ? parsed.mcpPort     : undefined,
       port:        typeof parsed.port        === 'number' ? parsed.port        : undefined,
       startMode:   typeof parsed.startMode   === 'string' ? parsed.startMode as ServerSettings['startMode'] : undefined,
@@ -293,6 +296,7 @@ export function readSettings(): ServerSettings {
       ai: { ...DEFAULTS.ai, providers: [] },
       setupPending: true,
       connectionMode: { cli: true, mcp: false },
+      allowNetworkAccess: false,
     };
   }
 }
@@ -309,6 +313,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.webSearch !== undefined) merged.webSearch = settings.webSearch;
   if (settings.webPassword !== undefined) merged.webPassword = settings.webPassword;
   if (settings.authToken   !== undefined) merged.authToken   = settings.authToken;
+  if (typeof settings.allowNetworkAccess === 'boolean') merged.allowNetworkAccess = settings.allowNetworkAccess;
   if (settings.port        !== undefined) merged.port        = settings.port;
   if (settings.mcpPort     !== undefined) merged.mcpPort     = settings.mcpPort;
   if (settings.startMode   !== undefined) merged.startMode   = settings.startMode;

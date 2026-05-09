@@ -52,16 +52,25 @@ describe('MindOS runtime product kernel contract', () => {
     };
 
     expect(manifest.name).toBe('@geminilight/mindos');
-    expect(manifest.scripts?.build).toBe('tsc');
+    expect(manifest.scripts?.build).toBe('tsc && pnpm run build:protocols');
+    expect(manifest.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual(['chokidar', 'pino', 'pino-pretty', 'zod']);
     expect(Object.keys(manifest.exports ?? {}).sort()).toEqual([
       '.',
+      './agent',
       './capabilities',
       './cli',
+      './client',
       './foundation',
       './knowledge',
+      './plugin',
       './protocols',
+      './protocols/acp',
       './retrieval',
+      './server',
+      './session',
+      './session/pi-coding-agent',
+      './tool',
     ]);
   });
 
@@ -94,12 +103,14 @@ describe('MindOS runtime product kernel contract', () => {
 
   it('makes the CLI consume product command grouping from the main package', () => {
     const cli = read('packages/mindos/bin/cli.js');
+    const cliRuntime = read('packages/mindos/src/cli-runtime.js');
     const productCli = read('packages/mindos/src/cli.js');
 
-    expect(cli).toContain("from '../src/cli.js'");
-    expect(cli).toContain('MINDOS_CORE_COMMANDS');
-    expect(cli).toContain('MINDOS_ADDITIONAL_COMMANDS');
-    expect(cli).toContain('createCommandRegistry');
+    expect(cli).toContain("from '../src/cli-runtime.js'");
+    expect(cliRuntime).toContain("from './cli.js'");
+    expect(cliRuntime).toContain('MINDOS_CORE_COMMANDS');
+    expect(cliRuntime).toContain('MINDOS_ADDITIONAL_COMMANDS');
+    expect(cliRuntime).toContain('createCommandRegistry');
 
     expect(productCli).toContain('MINDOS_CORE_COMMANDS');
     expect(productCli).toContain('MINDOS_ADDITIONAL_COMMANDS');
@@ -116,8 +127,8 @@ describe('MindOS runtime product kernel contract', () => {
     };
 
     expect(existsSync(resolve(root, 'packages/cli'))).toBe(false);
-    expect(productPkg.bin).toEqual({ mindos: 'bin/cli.js' });
-    expect(productPkg.files).toContain('bin/');
+    expect(productPkg.bin).toEqual({ mindos: 'bin/mindos-shim.cjs' });
+    expect(productPkg.files).toContain('bin/mindos-shim.cjs');
     expect(rootPkg.scripts?.dev).toContain('packages/mindos/bin/cli.js dev');
     expect(rootPkg.scripts?.build).toContain('packages/mindos/bin/cli.js build');
   });
@@ -176,6 +187,7 @@ describe('MindOS runtime product kernel contract', () => {
 
     expect(protocols).toContain("productLogicOwner: '@geminilight/mindos'");
     expect(protocols).toContain("transportRole: 'host'");
+    expect(protocols).not.toContain('hostPackageRole');
     expect(protocols).not.toMatch(/from ['"]@mindos\/(?:acp|mcp-server)['"]/);
   });
 });

@@ -15,6 +15,7 @@
  * - parts: structured [TextPart | ReasoningPart | ToolCallPart] (for detailed view)
  */
 import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart } from '@/lib/types';
+import { parseMindosSseLine } from '@geminilight/mindos/session';
 
 /** Tools that modify files — trigger files-changed notification on completion */
 const FILE_MUTATING_TOOLS = new Set([
@@ -114,22 +115,10 @@ export async function consumeUIMessageStream(
       for (const line of lines) {
         const trimmed = line.trim();
 
-        // Standard SSE format: "data:{json}"
-        let jsonStr: string | null = null;
-        if (trimmed.startsWith('data:')) {
-          jsonStr = trimmed.slice(5).trim();
-        }
+        const event = parseMindosSseLine(trimmed);
+        if (!event) continue;
 
-        if (!jsonStr) continue;
-
-        let event: Record<string, unknown>;
-        try {
-          event = JSON.parse(jsonStr);
-        } catch {
-          continue; // skip malformed
-        }
-
-        const type = event.type as string;
+        const type = event.type;
 
         switch (type) {
           case 'text_delta': {

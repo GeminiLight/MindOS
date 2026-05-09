@@ -23,7 +23,7 @@ export {
   resolveCommandPathSync,
   resolveDirectCommandPath,
   resolveExistingPresenceDir,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export {
   cancelPrompt,
   closeAllSessions,
@@ -84,4 +84,4 @@ export type {
   LocalAcpDetectionOptions,
   NotInstalledAgent,
   ResolvedAgentCommand,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';

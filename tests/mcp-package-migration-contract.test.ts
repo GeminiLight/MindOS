@@ -13,14 +13,9 @@ function readText(relativePath: string): string {
 }
 
 describe('MCP package migration contract', () => {
-  it('uses packages/protocols/mcp-server as the MCP source package', () => {
-    const pkg = readJson<{ name: string; scripts?: Record<string, string> }>(
-      'packages/protocols/mcp-server/package.json'
-    );
-
-    expect(pkg.name).toBe('@mindos/mcp-server');
-    expect(pkg.scripts?.build).toContain('src/index.ts');
-    expect(existsSync(resolve(root, 'packages/protocols/mcp-server/src/index.ts'))).toBe(true);
+  it('internalizes the MCP server under the product package', () => {
+    expect(existsSync(resolve(root, 'packages/protocols/mcp-server/package.json'))).toBe(false);
+    expect(existsSync(resolve(root, 'packages/mindos/src/protocols/mcp-server/index.ts'))).toBe(true);
   });
 
   it('does not publish the legacy top-level mcp directory as source of truth', () => {
@@ -30,26 +25,22 @@ describe('MCP package migration contract', () => {
     }>('packages/mindos/package.json');
     const npmignore = readText('.npmignore');
 
-    expect(productPkg.files).toEqual(
-      expect.arrayContaining([
-        'packages/protocols/mcp-server/dist/',
-        'packages/protocols/mcp-server/package.json',
-      ])
-    );
+    expect(productPkg.files?.some((entry) => entry.startsWith('packages/protocols/mcp-server'))).toBe(false);
     expect(productPkg.files).not.toContain('mcp/');
     expect(productPkg.files).not.toContain('packages/protocols/mcp-server/src/');
     expect(productPkg.files).not.toContain('packages/protocols/mcp-server/tsconfig.json');
-    expect(productPkg.scripts?.prepack).toContain('pnpm --filter @mindos/mcp-server build');
+    expect(productPkg.scripts?.prepack).not.toContain('@mindos/mcp-server');
     expect(productPkg.scripts?.prepack).not.toContain('cd mcp');
     expect(npmignore).toMatch(/^packages\/protocols\/mcp-server\/node_modules\/$/m);
   });
 
-  it('routes CLI MCP build helpers through packages/protocols/mcp-server', () => {
+  it('routes CLI MCP build helpers through product-owned protocol runtime', () => {
     const mcpBuild = readText('packages/mindos/bin/lib/mcp-build.js');
     const mcpSpawn = readText('packages/mindos/bin/lib/mcp-spawn.js');
     const mcpCommand = readText('packages/mindos/bin/commands/mcp-cmd.js');
 
-    expect(mcpBuild).toContain("'packages', 'protocols', 'mcp-server'");
+    expect(mcpBuild).toContain("'dist', 'protocols', 'mcp-server', 'index.cjs'");
+    expect(mcpBuild).toContain("'src', 'protocols', 'mcp-server'");
     expect(mcpSpawn).not.toContain("resolve(ROOT, 'mcp')");
     expect(mcpCommand).not.toContain("resolve(ROOT, 'mcp')");
   });

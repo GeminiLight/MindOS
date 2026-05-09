@@ -28,6 +28,8 @@ else
   exit 1
 fi
 echo "🩺 Verifying standalone server (/api/health)..."
+node scripts/prepare-standalone.mjs
+node scripts/prepare-static-web.mjs
 if node scripts/verify-standalone.mjs; then
   echo "   ✅ Standalone smoke OK"
 else
@@ -38,23 +40,34 @@ echo ""
 
 # 4. Smoke test: pack → install in temp dir → verify CLI works
 echo "🔍 Smoke testing package..."
+if ! command -v bun >/dev/null 2>&1; then
+  echo "❌ Bun is required to build single-binary platform packages. Install Bun 1.2.9+ and retry."
+  exit 1
+fi
 SMOKE_DIR=$(mktemp -d)
+node scripts/stage-product-package.mjs
+node scripts/build-platform-packages.mjs --current --out "$SMOKE_DIR/platforms"
+PLATFORM_KEY=$(node -e "const fs=require('node:fs'); const p=process.platform==='win32'?'windows':process.platform; const musl=p==='linux'&&fs.existsSync('/etc/alpine-release'); console.log(p+'-'+process.arch+(musl?'-musl':''))")
 TARBALL=$(cd packages/mindos && npm pack --pack-destination "$SMOKE_DIR" 2>/dev/null | tail -1)
 TARBALL_PATH="$SMOKE_DIR/$TARBALL"
+PLATFORM_TARBALL=$(cd "$SMOKE_DIR/platforms/$PLATFORM_KEY" && npm pack --pack-destination "$SMOKE_DIR" --ignore-scripts 2>/dev/null | tail -1)
+PLATFORM_TARBALL_PATH="$SMOKE_DIR/$PLATFORM_TARBALL"
 
-if [ ! -f "$TARBALL_PATH" ]; then
+if [ ! -f "$TARBALL_PATH" ] || [ ! -f "$PLATFORM_TARBALL_PATH" ]; then
   echo "❌ npm pack failed — tarball not found"
   rm -rf "$SMOKE_DIR"
   exit 1
 fi
 
 TARBALL_SIZE=$(du -sh "$TARBALL_PATH" | cut -f1)
+PLATFORM_TARBALL_SIZE=$(du -sh "$PLATFORM_TARBALL_PATH" | cut -f1)
 echo "   📦 Tarball: $TARBALL ($TARBALL_SIZE)"
+echo "   📦 Platform: $PLATFORM_TARBALL ($PLATFORM_TARBALL_SIZE)"
 
 # Install from tarball in isolation (production deps only)
 cd "$SMOKE_DIR"
 npm init -y --silent >/dev/null 2>&1
-npm install "$TARBALL_PATH" --ignore-scripts >/dev/null 2>&1
+npm install "$PLATFORM_TARBALL_PATH" "$TARBALL_PATH" --ignore-scripts >/dev/null 2>&1
 
 # Verify bin entry exists and is executable
 if [ ! -f "$SMOKE_DIR/node_modules/.bin/mindos" ]; then
@@ -81,15 +94,27 @@ if ! echo "$HELP_OUTPUT" | grep -qi "mindos"; then
 fi
 echo "   ✅ mindos --help works"
 
-# Verify key files are present in the installed package
-for f in bin/cli.js _standalone/server.js _standalone/__next/server/app-paths-manifest.json skills/mindos/SKILL.md dist/foundation.js packages/protocols/acp/dist/index.js packages/protocols/mcp-server/dist/index.cjs; do
+# Verify key files are present in the installed main package
+for f in bin/mindos-shim.cjs dist/foundation.js dist/protocols/acp/index.js; do
   if [ ! -f "$SMOKE_DIR/node_modules/@geminilight/mindos/$f" ]; then
     echo "❌ Missing file in package: $f"
     rm -rf "$SMOKE_DIR"
     exit 1
   fi
 done
-echo "   ✅ Key files present"
+for f in bin/mindos runtime-manifest.json package.json; do
+  if [ ! -f "$SMOKE_DIR/node_modules/@geminilight/mindos-$PLATFORM_KEY/$f" ]; then
+    echo "❌ Missing file in platform package: $f"
+    rm -rf "$SMOKE_DIR"
+    exit 1
+  fi
+done
+if [ -d "$SMOKE_DIR/node_modules/@geminilight/mindos-$PLATFORM_KEY/_standalone" ]; then
+  echo "❌ Platform package exposes _standalone; expected Bun single-binary layout"
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+echo "   ✅ Main + platform key files present"
 
 # Cleanup
 rm -rf "$SMOKE_DIR"
@@ -101,8 +126,9 @@ echo ""
 echo "📦 Bumping version ($BUMP)..."
 npm version "$BUMP" --no-git-tag-version
 (cd packages/mindos && npm version "$BUMP" --no-git-tag-version)
+node scripts/sync-platform-package-versions.mjs
 VERSION="v$(node -p "require('./packages/mindos/package.json').version")"
-git add package.json packages/mindos/package.json
+git add package.json packages/mindos/package.json packages/mindos-platforms/*/package.json
 git commit -m "$VERSION"
 git tag "$VERSION"
 echo "   Version: $VERSION"

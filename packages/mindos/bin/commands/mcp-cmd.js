@@ -37,7 +37,7 @@ export const run = async (args) => {
 
   loadConfig();
 
-  const { ensureMcpBundle, MCP_DIR } = await import('../lib/mcp-build.js');
+  const { ensureMcpBundle, MCP_DIR, MCP_BUNDLE } = await import('../lib/mcp-build.js');
   await ensureMcpBundle();
 
   if (!process.env.MCP_TRANSPORT) {
@@ -51,5 +51,5 @@ export const run = async (args) => {
     process.env.MCP_PORT = process.env.MINDOS_MCP_PORT || '8781';
   }
 
-  execInherited(`node dist/index.cjs`, MCP_DIR);
+  execInherited(`node "${MCP_BUNDLE}"`, MCP_DIR);
 };

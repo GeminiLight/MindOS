@@ -1,51 +1,18 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
-import path from 'path';
-import { collectAllFiles, getLinkIndex } from '@/lib/fs';
-import { generateJsonETag, setPublicCacheHeaders } from '@/lib/api-cache-headers';
+
+import { handleGraph } from '@geminilight/mindos/server';
+import { collectAllFiles, getFileContent } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import { toNextResponse } from '../_mindos-adapter';
+export type { GraphData, GraphEdge, GraphNode } from '@geminilight/mindos/server';
 
-export interface GraphNode {
-  id: string;    // relative file path
-  label: string; // basename without extension
-  folder: string; // dirname
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-export async function GET() {
+export function GET() {
   try {
-    const allFiles = collectAllFiles().filter(f => f.endsWith('.md'));
-
-    const nodes: GraphNode[] = allFiles.map(f => ({
-      id: f,
-      label: path.basename(f, '.md'),
-      folder: path.dirname(f),
+    return toNextResponse(handleGraph({
+      collectAllFiles,
+      readTextFile: getFileContent,
     }));
-
-    // Use pre-built link index (O(1) per file) instead of extracting links
-    // from every file on each request (O(n * m))
-    const linkIndex = getLinkIndex();
-    const edges = linkIndex.getAllEdges();
-
-    const graphData: GraphData = { nodes, edges };
-    const response = NextResponse.json(graphData);
-    
-    // ── Cache control: 5 minutes ──
-    // Graph data is stable for knowledge base navigation.
-    // Changes only when files are created/deleted or links change.
-    const etag = generateJsonETag(graphData as unknown as Record<string, unknown>);
-    return setPublicCacheHeaders(response, 300, etag);
-  } catch (err) {
-    console.error('[graph] Error building graph:', err);
-    return handleRouteErrorSimple(err);
+  } catch (error) {
+    return handleRouteErrorSimple(error);
   }
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import {
@@ -49,13 +49,7 @@ describe('runtime health contract', () => {
     const archivePaths = getArchiveValidationEntries().map(entry => entry.path);
 
     expect(archivePaths).toContain('packages/web/.next/standalone/server.js');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/partial-json/package.json');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/ajv/package.json');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/ajv-formats/package.json');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/chalk/package.json');
-    expect(archivePaths).toContain('packages/web/.next/standalone/node_modules/cli-highlight/package.json');
-    expect(archivePaths).toContain('packages/protocols/mcp-server/dist/index.cjs');
+    expect(archivePaths).toContain('dist/protocols/mcp-server/index.cjs');
     expect(archivePaths).toContain('bin/cli.js');
     expect(archivePaths).toContain('src/cli.js');
     expect(archivePaths.some(entry => entry.startsWith('app/'))).toBe(false);
@@ -73,5 +67,10 @@ describe('runtime health contract', () => {
 
     unlinkSync(path.join(appDir, fileEntry.path));
     expect(hasRequiredStandaloneAppFiles(appDir)).toBe(false);
+  });
+
+  it('does not rebuild dev-only pnpm native dependencies during electron-builder packaging', () => {
+    const config = readFileSync(path.resolve(process.cwd(), 'electron-builder.yml'), 'utf-8');
+    expect(config).toMatch(/^npmRebuild:\s*false$/m);
   });
 });

@@ -16,8 +16,6 @@ description: >
   记录一下、整理笔记、复盘、提炼经验、同步文档、查一下之前的记录、有没有相关的笔记、
   我之前写过什么、把这个存起来、总结一下保存、交接给其他Agent、追加到表格、
   放到暂存台、整理暂存台、知识健康检查、检测知识冲突。
-  English triggers: save, record, search notes, organize, retrospective, handoff, lessons learned,
-  inbox, staging, knowledge health, detect conflicts.
 
   主动行为——不要等用户提到 MindOS：
   (1) 用户的问题暗示可能存在历史记录（过去的决策、之前的讨论、会议纪要）→ 先搜 MindOS，

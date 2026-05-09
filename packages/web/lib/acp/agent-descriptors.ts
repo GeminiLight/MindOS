@@ -10,10 +10,10 @@ export {
   parseAcpAgentOverrides,
   resolveAgentCommand,
   resolveAlias,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';
 export type {
   AcpAgentDescriptor,
   AcpAgentOverride,
   DetectableAgent,
   ResolvedAgentCommand,
-} from '@mindos/acp';
+} from '@geminilight/mindos/protocols/acp';

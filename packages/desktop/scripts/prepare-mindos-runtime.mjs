@@ -14,6 +14,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { copyAppForBundledRuntime, materializeStandaloneAssets } from './prepare-mindos-bundle.mjs';
+import { writeRuntimeManifest } from '../../../scripts/runtime-manifest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.join(__dirname, '..');
@@ -30,14 +31,16 @@ function fail(msg) {
 
 const appDir = path.join(source, 'packages', 'web');
 const appNext = path.join(appDir, '.next');
-const mcpDir = path.join(source, 'packages', 'protocols', 'mcp-server');
+const mindosDir = path.join(source, 'packages', 'mindos');
+const mcpSourceDir = path.join(mindosDir, 'src', 'protocols', 'mcp-server');
+const mcpBundle = path.join(mindosDir, 'dist', 'protocols', 'mcp-server', 'index.cjs');
 const rootPkg = path.join(source, 'package.json');
 const productPkg = path.join(source, 'packages', 'mindos', 'package.json');
 
 if (!existsSync(rootPkg)) fail(`Not a MindOS repo root (no package.json): ${source}`);
 if (!existsSync(productPkg)) fail(`Missing packages/mindos/package.json under ${source}`);
 if (!existsSync(appNext)) fail(`Missing packages/web/.next — from repo root run: pnpm --filter @mindos/web build`);
-if (!existsSync(mcpDir)) fail(`Missing packages/protocols/mcp-server under ${source}`);
+if (!existsSync(mcpSourceDir)) fail(`Missing packages/mindos/src/protocols/mcp-server under ${source}`);
 
 try {
   materializeStandaloneAssets(appDir);
@@ -79,31 +82,29 @@ try {
   console.warn('[prepare-mindos-runtime] Failed to write build version stamp:', e.message);
 }
 
-// MCP: source of truth and Desktop runtime layout both use packages/protocols/mcp-server.
-const destMcp = path.join(dest, 'packages', 'protocols', 'mcp-server');
-const destMcpBundle = path.join(destMcp, 'dist', 'index.cjs');
-rmSync(destMcp, { recursive: true, force: true });
-mkdirSync(path.join(destMcp, 'dist'), { recursive: true });
+// MCP: product-owned protocol runtime lives under packages/mindos/dist/protocols/mcp-server.
+const destMcp = path.join(dest, 'dist', 'protocols', 'mcp-server');
+const destMcpBundle = path.join(destMcp, 'index.cjs');
+rmSync(path.join(dest, 'dist', 'protocols'), { recursive: true, force: true });
+mkdirSync(destMcp, { recursive: true });
 
 // Build bundle if not already present
 if (!existsSync(destMcpBundle)) {
-  const sourceMcpBundle = path.join(mcpDir, 'dist', 'index.cjs');
-  if (existsSync(sourceMcpBundle)) {
-    cpSync(sourceMcpBundle, destMcpBundle);
+  if (existsSync(mcpBundle)) {
+    cpSync(mcpBundle, destMcpBundle);
   } else {
     // Build from source
     const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const build = spawnSync(pnpmCmd, ['--filter', '@mindos/mcp-server', 'build'], {
+    const build = spawnSync(pnpmCmd, ['--filter', '@geminilight/mindos', 'build'], {
       cwd: source,
       stdio: 'inherit',
       shell: process.platform === 'win32',
     });
-    if (build.status !== 0) fail('Failed to build @mindos/mcp-server');
-    cpSync(path.join(mcpDir, 'dist', 'index.cjs'), destMcpBundle);
+    if (build.status !== 0) fail('Failed to build @geminilight/mindos protocol runtimes');
+    cpSync(mcpBundle, destMcpBundle);
   }
 }
-if (!existsSync(destMcpBundle)) fail('MCP bundle not found after build — check packages/protocols/mcp-server/dist/index.cjs');
-cpSync(path.join(mcpDir, 'package.json'), path.join(destMcp, 'package.json'));
+if (!existsSync(destMcpBundle)) fail('MCP bundle not found after build - check packages/mindos/dist/protocols/mcp-server/index.cjs');
 
 if (existsSync(path.join(source, 'scripts'))) {
   copyTree('scripts');
@@ -281,5 +282,15 @@ const symlinkCount = removeSymlinks(dest) || 0;
 if (symlinkCount > 0) {
   console.log(`[prepare-mindos-runtime] Removed ${symlinkCount} symlinks from runtime bundle`);
 }
+
+const productManifest = JSON.parse(readFileSync(productPkg, 'utf-8'));
+writeRuntimeManifest(dest, {
+  productPkg: productManifest,
+  packageName: '@geminilight/mindos-desktop-runtime',
+  platform: `${process.platform}-${process.arch}`,
+  os: process.platform,
+  cpu: process.arch,
+  layout: 'desktop-bundled',
+});
 
 console.log(`[prepare-mindos-runtime] OK → ${dest} (from ${source})`);

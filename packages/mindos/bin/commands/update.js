@@ -43,7 +43,9 @@ function getUpdatedRoot() {
       const candidateRoot = resolve(dirname(cliPath), '..');
       try {
         const pkg = JSON.parse(readFileSync(resolve(candidateRoot, 'package.json'), 'utf-8'));
-        if (pkg.name === '@geminilight/mindos' && existsSync(resolve(candidateRoot, 'bin', 'cli.js'))) {
+        const hasLegacyCli = existsSync(resolve(candidateRoot, 'bin', 'cli.js'));
+        const hasRuntimeShim = existsSync(resolve(candidateRoot, 'bin', 'mindos-shim.cjs'));
+        if (pkg.name === '@geminilight/mindos' && (hasLegacyCli || hasRuntimeShim)) {
           return candidateRoot;
         }
       } catch {
@@ -60,6 +62,12 @@ function getUpdatedRoot() {
  * @param {string} newRoot
  */
 function buildIfNeeded(newRoot) {
+  const hasRuntimeShim = existsSync(resolve(newRoot, 'bin', 'mindos-shim.cjs'));
+  const hasSourceWeb = existsSync(resolve(newRoot, 'packages', 'web', 'package.json'));
+  if (hasRuntimeShim && !hasSourceWeb) {
+    return;
+  }
+
   // Check for prebuilt standalone first (npm package ships with it)
   const standaloneServer = resolve(newRoot, '_standalone', 'server.js');
   const standaloneStamp = resolve(newRoot, '_standalone', '.mindos-build-version');
@@ -267,7 +275,9 @@ export const run = async () => {
       // Stage 4: Restart — always attempt, even if pre-build failed
       // (`mindos start` has its own build-on-startup logic)
       writeUpdateStatus('restarting', vOpts);
-      const newCliPath = resolve(updatedRoot, 'bin', 'cli.js');
+      const legacyCliPath = resolve(updatedRoot, 'bin', 'cli.js');
+      const runtimeShimPath = resolve(updatedRoot, 'bin', 'mindos-shim.cjs');
+      const newCliPath = existsSync(legacyCliPath) ? legacyCliPath : runtimeShimPath;
       const childEnv = cleanEnvForRestart();
       const child = nodeSpawn(
         process.execPath, [newCliPath, 'start'],

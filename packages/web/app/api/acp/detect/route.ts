@@ -1,23 +1,15 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
-import { detectLocalAcpAgents, type InstalledAgent, type NotInstalledAgent } from '@/lib/acp/detect-local';
-import { handleRouteErrorSimple } from '@/lib/errors';
+import { handleAcpDetectGet, type AcpDetectServices } from '@geminilight/mindos/server';
+import { detectLocalAcpAgents } from '@/lib/acp/detect-local';
+import { readSettings } from '@/lib/settings';
+import { toNextResponse } from '../../_mindos-adapter';
 
-const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
-let detectCache: { data: { installed: InstalledAgent[]; notInstalled: NotInstalledAgent[] }; ts: number } | null = null;
+const services: AcpDetectServices = {
+  readSettings: readSettings as AcpDetectServices['readSettings'],
+  detectLocalAcpAgents: detectLocalAcpAgents as AcpDetectServices['detectLocalAcpAgents'],
+};
 
 export async function GET(req: Request) {
-  try {
-    const force = new URL(req.url).searchParams.get('force') === '1';
-    if (!force && detectCache && Date.now() - detectCache.ts < DETECT_CACHE_TTL_MS) {
-      return NextResponse.json(detectCache.data);
-    }
-
-    const data = await detectLocalAcpAgents();
-    detectCache = { data, ts: Date.now() };
-    return NextResponse.json(data);
-  } catch (err) {
-    return handleRouteErrorSimple(err);
-  }
+  return toNextResponse(await handleAcpDetectGet(new URL(req.url).searchParams, services));
 }

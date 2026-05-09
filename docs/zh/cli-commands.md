@@ -52,7 +52,7 @@
 | `mindos mcp install -g -y` | 一键全局安装 |
 | `mindos token` | 查看当前 Auth token 及 MCP 配置片段 |
 
-MCP Server 的源码入口是 `packages/protocols/mcp-server`；npm/桌面运行时使用预构建的 `packages/protocols/mcp-server/dist/index.cjs`。
+MCP Server 的源码入口是 `packages/mindos/src/protocols/mcp-server`；npm/桌面运行时使用 MindOS runtime package 内预构建的 `dist/protocols/mcp-server/index.cjs`。
 
 ## 同步
 

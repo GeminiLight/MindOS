@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { describe, expect, it, afterEach } from 'vitest';
@@ -70,6 +70,25 @@ describe('materializeStandaloneAssets', () => {
     ]);
     expect(() => materializeStandaloneAssets(appDir)).toThrow(/Incomplete standalone runtime/);
   });
+
+  it('replaces broken standalone package symlinks from app node_modules fallback', () => {
+    const appDir = makeTemp('mindos-app-broken-symlink-');
+    writeStandaloneApp(appDir);
+
+    const fallbackPackage = path.join(appDir, 'node_modules', '@huggingface', 'transformers');
+    mkdirSync(path.join(fallbackPackage, 'dist'), { recursive: true });
+    writeFileSync(path.join(fallbackPackage, 'dist', 'index.js'), 'ok');
+
+    const standalonePackage = path.join(appDir, '.next', 'standalone', 'node_modules', '@huggingface', 'transformers');
+    rmSync(standalonePackage, { recursive: true, force: true });
+    mkdirSync(path.dirname(standalonePackage), { recursive: true });
+    symlinkSync('../../../../node_modules/.pnpm/missing/node_modules/@huggingface/transformers', standalonePackage);
+
+    materializeStandaloneAssets(appDir);
+
+    expect(lstatSync(standalonePackage).isSymbolicLink()).toBe(false);
+    expect(readFileSync(path.join(standalonePackage, 'dist', 'index.js'), 'utf-8')).toBe('ok');
+  });
 });
 
 describe('copyAppForBundledRuntime', () => {
@@ -118,5 +137,25 @@ describe('copyAppForBundledRuntime', () => {
     writeFileSync(path.join(src, 'a.txt'), 'v2');
     copyAppForBundledRuntime(src, dest);
     expect(readFileSync(path.join(dest, 'a.txt'), 'utf-8')).toBe('v2');
+  });
+
+  it('materializes scoped package symlinks inside standalone node_modules', () => {
+    const src = makeTemp('mindos-src-symlink-');
+    const dest = path.join(makeTemp('mindos-dest-symlink-'), 'app');
+    const packageStore = path.join(src, '..', 'store', '@huggingface', 'transformers');
+    const standaloneNodeModules = path.join(src, '.next', 'standalone', 'node_modules');
+    const packageLink = path.join(standaloneNodeModules, '@huggingface', 'transformers');
+
+    mkdirSync(path.join(packageStore, 'dist'), { recursive: true });
+    writeFileSync(path.join(packageStore, 'package.json'), '{"name":"@huggingface/transformers"}');
+    writeFileSync(path.join(packageStore, 'dist', 'index.js'), 'module.exports = {};');
+    mkdirSync(path.dirname(packageLink), { recursive: true });
+    symlinkSync(packageStore, packageLink);
+
+    copyAppForBundledRuntime(src, dest);
+
+    const copiedPackage = path.join(dest, '.next', 'standalone', 'node_modules', '@huggingface', 'transformers');
+    expect(lstatSync(copiedPackage).isSymbolicLink()).toBe(false);
+    expect(readFileSync(path.join(copiedPackage, 'dist', 'index.js'), 'utf-8')).toBe('module.exports = {};');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AcpRegistryEntry } from '../../../../packages/protocols/acp/src/types';
+import type { AcpRegistryEntry } from '../../../../packages/mindos/src/protocols/acp/types';
 
 // Mock SDK connection that records calls
 let mockInitialize: ReturnType<typeof vi.fn>;
@@ -14,11 +14,11 @@ let mockLoadSession: ReturnType<typeof vi.fn>;
 let mockListSessions: ReturnType<typeof vi.fn>;
 let capturedCallbacks: { onSessionUpdate?: (params: unknown) => void } = {};
 
-vi.mock('../../../../packages/protocols/acp/src/registry.js', () => ({
+vi.mock('../../../../packages/mindos/src/protocols/acp/registry.js', () => ({
   findAcpAgent: vi.fn(),
 }));
 
-vi.mock('../../../../packages/protocols/acp/src/subprocess.js', () => ({
+vi.mock('../../../../packages/mindos/src/protocols/acp/subprocess.js', () => ({
   spawnAndConnect: vi.fn(() => {
     capturedCallbacks = {};
     return {
@@ -43,8 +43,8 @@ vi.mock('../../../../packages/protocols/acp/src/subprocess.js', () => ({
   killAgent: vi.fn((p: { alive: boolean }) => { p.alive = false; }),
 }));
 
-import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions } from '../../../../packages/protocols/acp/src/session';
-import { findAcpAgent } from '../../../../packages/protocols/acp/src/registry.js';
+import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions } from '../../../../packages/mindos/src/protocols/acp/session';
+import { findAcpAgent } from '../../../../packages/mindos/src/protocols/acp/registry.js';
 
 const MOCK_ENTRY: AcpRegistryEntry = {
   id: 'test-agent',

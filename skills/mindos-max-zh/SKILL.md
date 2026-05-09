@@ -18,8 +18,6 @@ description: >
   交接、把这个存起来、查一下之前的、有没有相关笔记、我之前写过什么、总结一下保存、
   追加到表格、更新进度、查找模板、准备会议资料、记录今天的工作、
   放到暂存台、整理暂存台、知识健康检查、检测知识冲突。
-  以及对应英文：save, record, search notes, organize, retrospective, handoff, lessons learned,
-  inbox, staging, knowledge health, detect conflicts。
 
   拿不准是否该用——大概率该用。查一下不会错。
   不用于：改代码仓库、项目源码、KB 外路径。

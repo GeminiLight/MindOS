@@ -1,0 +1,157 @@
+name: Build Tauri Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: linux
+        type: choice
+        options:
+          - linux
+          - mac
+          - win
+          - all
+      upload_artifacts:
+        description: 'Upload packaged artifacts'
+        required: true
+        default: true
+        type: boolean
+  pull_request:
+    paths:
+      - 'packages/desktop-tauri/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/build-tauri-desktop.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-desktop-${{ github.ref }}-${{ github.event.inputs.platform || 'verify' }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop-tauri/src-tauri
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            wget
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify configured icons exist
+        run: |
+          for icon in 32x32.png 128x128.png 128x128@2x.png icon.ico icon.png; do
+            test -f "packages/desktop-tauri/src-tauri/icons/${icon}"
+          done
+
+      - name: Build Tauri web frontend
+        run: pnpm --filter @mindos/desktop-tauri run build:web
+
+      - name: Check Rust sources
+        run: cd packages/desktop-tauri/src-tauri && cargo check
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            artifact: mindos-tauri-linux
+          - platform: mac
+            os: macos-latest
+            artifact: mindos-tauri-mac
+          - platform: win
+            os: windows-latest
+            artifact: mindos-tauri-win
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop-tauri/src-tauri
+
+      - name: Install Linux Tauri dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            wget
+
+      - name: Install dependencies
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri desktop app
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        run: pnpm --filter @mindos/desktop-tauri run build:tauri
+
+      - name: Upload artifacts
+        if: inputs.upload_artifacts == true && (inputs.platform == 'all' || inputs.platform == matrix.platform)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            packages/desktop-tauri/src-tauri/target/release/bundle/**/*
+          if-no-files-found: warn

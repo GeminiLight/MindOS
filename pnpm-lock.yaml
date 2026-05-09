@@ -89,7 +89,7 @@ importers:
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
       electron-vite:
         specifier: ^1.0.29
-        version: 1.0.29(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
+        version: 1.0.29(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -111,7 +111,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^8.0.9
-        version: 8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
+        version: 8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/mindos:
     dependencies:
@@ -127,10 +127,47 @@ importers:
       zod:
         specifier: ^3.22.4
         version: 3.25.76
+    optionalDependencies:
+      '@geminilight/mindos-darwin-arm64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/darwin-arm64
+      '@geminilight/mindos-darwin-x64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/darwin-x64
+      '@geminilight/mindos-linux-arm64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/linux-arm64
+      '@geminilight/mindos-linux-arm64-musl':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/linux-arm64-musl
+      '@geminilight/mindos-linux-x64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/linux-x64
+      '@geminilight/mindos-linux-x64-musl':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/linux-x64-musl
+      '@geminilight/mindos-windows-arm64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/windows-arm64
+      '@geminilight/mindos-windows-x64':
+        specifier: 1.0.2
+        version: link:../mindos-platforms/windows-x64
     devDependencies:
+      '@agentclientprotocol/sdk':
+        specifier: ^0.18.2
+        version: 0.18.2(zod@3.25.76)
+      '@mariozechner/pi-coding-agent':
+        specifier: ^0.61.1
+        version: 0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.25.0
+        version: 1.29.0(zod@3.25.76)
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.17
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -138,8 +175,27 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.17)(jsdom@29.0.2(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.46.1)
 
+  packages/mindos-platforms/darwin-arm64: {}
+
+  packages/mindos-platforms/darwin-x64: {}
+
+  packages/mindos-platforms/linux-arm64: {}
+
+  packages/mindos-platforms/linux-arm64-musl: {}
+
+  packages/mindos-platforms/linux-x64: {}
+
+  packages/mindos-platforms/linux-x64-musl: {}
+
+  packages/mindos-platforms/windows-arm64: {}
+
+  packages/mindos-platforms/windows-x64: {}
+
   packages/mobile:
     dependencies:
+      '@babel/runtime':
+        specifier: ^7.29.2
+        version: 7.29.2
       '@expo/vector-icons':
         specifier: ~14.0.4
         version: 14.0.4
@@ -154,7 +210,7 @@ importers:
         version: 11.0.5(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       expo-camera:
         specifier: ~16.0.0
-        version: 16.0.18(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+        version: 16.0.18(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       expo-clipboard:
         specifier: ~7.0.1
         version: 7.0.1(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
@@ -169,7 +225,7 @@ importers:
         version: 7.0.5(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       expo-router:
         specifier: ~4.0.0
-        version: 4.0.22(1add4c84f7464d9050b57c8f1be4c442)
+        version: 4.0.22(2aadfa68eb42a6a460df226ce2251b1e)
       expo-splash-screen:
         specifier: ~0.29.24
         version: 0.29.24(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))
@@ -179,6 +235,9 @@ importers:
       react:
         specifier: 18.3.1
         version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
       react-native:
         specifier: 0.76.9
         version: 0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)
@@ -197,6 +256,9 @@ importers:
       react-native-screens:
         specifier: ~4.4.0
         version: 4.4.0(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
+      react-native-web:
+        specifier: ~0.19.13
+        version: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       zustand:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
@@ -213,44 +275,6 @@ importers:
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.17)(jsdom@29.0.2(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.46.1)
-
-  packages/protocols/acp:
-    dependencies:
-      '@agentclientprotocol/sdk':
-        specifier: ^0.18.2
-        version: 0.18.2(zod@4.3.6)
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.39
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.46.1)
-
-  packages/protocols/mcp-server:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.25.0
-        version: 1.29.0(zod@3.25.76)
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
-      esbuild:
-        specifier: ^0.25.0
-        version: 0.25.12
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5
-        version: 5.9.3
 
   packages/retrieval/api:
     dependencies:
@@ -411,9 +435,6 @@ importers:
       '@milkdown/react':
         specifier: ^7.20.0
         version: 7.20.0(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.41.1)(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
-      '@mindos/acp':
-        specifier: workspace:*
-        version: link:../protocols/acp
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -497,7 +518,7 @@ importers:
         version: 0.1.2(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
       pi-subagents:
         specifier: ^0.12.5
-        version: 0.12.5(@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-coding-agent@0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-tui@0.70.5)(@sinclair/typebox@0.34.49)
+        version: 0.12.5(@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-coding-agent@0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-tui@0.73.1)(@sinclair/typebox@0.34.49)
       pi-web-access:
         specifier: ^0.10.6
         version: 0.10.6(@napi-rs/canvas@0.1.99)
@@ -576,10 +597,10 @@ importers:
         version: 2.1.9(vitest@2.1.9(@types/node@20.19.39)(jsdom@29.0.2(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.46.1))
       eslint:
         specifier: ^9
-        version: 9.39.4(jiti@2.6.1)
+        version: 9.39.4(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.1.6
-        version: 16.1.6(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+        version: 16.1.6(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       jsdom:
         specifier: ^29.0.2
         version: 29.0.2(@noble/hashes@1.8.0)
@@ -637,8 +658,8 @@ packages:
       zod:
         optional: true
 
-  '@anthropic-ai/sdk@0.90.0':
-    resolution: {integrity: sha512-MzZtPabJF1b0FTDl6Z6H5ljphPwACLGP13lu8MTiB8jXaW/YXlpOp+Po2cVou3MPM5+f5toyLnul9whKCy7fBg==}
+  '@anthropic-ai/sdk@0.91.1':
+    resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -3210,12 +3231,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@mariozechner/clipboard@0.3.2':
-    resolution: {integrity: sha512-IHQpksNjo7EAtGuHFU+tbWDp5LarH3HU/8WiB9O70ZEoBPHOg0/6afwSLK0QyNMMmx4Bpi/zl6+DcBXe95nWYA==}
-    engines: {node: '>= 10'}
-
   '@mariozechner/clipboard@0.3.3':
     resolution: {integrity: sha512-e7jASirzfm+ROiOGFh843+cFZTy3DfzP+jldCvh8RnEk0C3QihDTn7dd7Yh7KAJydwIJ18FJSZ2swHvCJhk18g==}
+    engines: {node: '>= 10'}
+
+  '@mariozechner/clipboard@0.3.5':
+    resolution: {integrity: sha512-D3F+UrU9CR7roJt0zDLp6Oc+4/KlLDIrN4frH+6V90SJNW2KKUec1oCQIPaaDjCqeOsQyX9dyqYbImIQIM45PA==}
     engines: {node: '>= 10'}
 
   '@mariozechner/jiti@2.6.5':
@@ -3225,47 +3246,57 @@ packages:
   '@mariozechner/pi-agent-core@0.60.0':
     resolution: {integrity: sha512-1zQcfFp8r0iwZCxCBQ9/ccFJoagns68cndLPTJJXl1ZqkYirzSld1zBOPxLAgeAKWIz3OX8dB2WQwTJFhmEojQ==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-agent-core instead going forward
 
   '@mariozechner/pi-agent-core@0.61.1':
     resolution: {integrity: sha512-ELZsyx6INGBYXPAbYTAiRWtkmnwAlcXOOVPY434BE605TBdpzMrXF5gNckKdEyCCWYJiLzSKpHaAzWwB7Vx2nA==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-agent-core instead going forward
 
-  '@mariozechner/pi-agent-core@0.70.5':
-    resolution: {integrity: sha512-ZUnJ7fFeJog97KG8FewEyqaObY2sLWvfDurKHl9kImVEbgt3l1LJ9A5pb+4/5KXnCVsoF/Brd0h+7yBEd1Aj5g==}
+  '@mariozechner/pi-agent-core@0.73.1':
+    resolution: {integrity: sha512-Y/KVOhuKSgRQgYBlwmRtO2gPkUcoavOSqGF9bpQIINvNZvc19k6Z1H3bFDTce3Vp5ApMmTsfLH3+tNvOg75fAQ==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-agent-core instead going forward
 
   '@mariozechner/pi-ai@0.60.0':
     resolution: {integrity: sha512-OiMuXQturnEDPmA+ho7eLe4G8plO2z21yjNMs9niQREauoblWOz7Glv58I66KPzczLED4aZTlQLTRdU6t1rz8A==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-ai instead going forward
     hasBin: true
 
   '@mariozechner/pi-ai@0.61.1':
     resolution: {integrity: sha512-BOk8xwluIgauX93qgC9qyrWteKKnk6pNDM8szE1m/EJKMhcJ/jIJpgAUQgj4yXiwSMtcZm30h2Po97gqqXTIIg==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-ai instead going forward
     hasBin: true
 
-  '@mariozechner/pi-ai@0.70.5':
-    resolution: {integrity: sha512-eyeyOfu/YiqzY6q391oRYdmnPIIU1VTKAn3hWIvzqkRHkcArd41/YynG8mw6bgoLdmCnIBoY3fD6nzEHEHLIMA==}
+  '@mariozechner/pi-ai@0.73.1':
+    resolution: {integrity: sha512-Jh4lXawZYuC83HzSIYuVum9NBqJD49i4JOt3H96cGW/924cwJMOyUs1Mv/e4QPzTXnzrqMoGviNQnvGgSu1LSg==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-ai instead going forward
     hasBin: true
 
   '@mariozechner/pi-coding-agent@0.61.1':
     resolution: {integrity: sha512-w0QTn+LFFdyFhpaaYDOacGwBjW4MKYrl40b6LPfKDuVJ+9fDfHl3kWkbx6xJb9brk6M5lEFMheC82UIQdkeK3Q==}
     engines: {node: '>=20.6.0'}
+    deprecated: please use @earendil-works/pi-coding-agent instead going forward
     hasBin: true
 
-  '@mariozechner/pi-coding-agent@0.70.5':
-    resolution: {integrity: sha512-5sQjY2LQLvYfMjo4Dn6P6iy3LFm3MZYgrYmgCQSwQSUM5yqzWceidYYXS4knloW7gNkko+nnhKB2u4NF3w+dVw==}
+  '@mariozechner/pi-coding-agent@0.73.1':
+    resolution: {integrity: sha512-gXQh3SaZmWTfVMc4Ao5+LGbVeKvzyO7tolok0nLsZgq9nGjZx/EEU3NM8C+qUnB4Nvs2rswG5qOVgLzQkq0fHQ==}
     engines: {node: '>=20.6.0'}
+    deprecated: please use @earendil-works/pi-coding-agent instead going forward
     hasBin: true
 
   '@mariozechner/pi-tui@0.61.1':
     resolution: {integrity: sha512-J3EI1gU5knUf1dXiHJsimDP4IRXLG7QJ1NVykU/yWOJoBPAgG6/qjjPPRcaUA7MYMUfKi+Z/zzGOyQSCVAajPA==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-tui instead going forward
 
-  '@mariozechner/pi-tui@0.70.5':
-    resolution: {integrity: sha512-5Ol9weTqpsQ85gg1C6Mo8M8o/HYz4uN7nM7QTPrw/Rm/UoFgO1/T/Irago5aGfzlIj/nmsGcqb7NlkWtT4vXUg==}
+  '@mariozechner/pi-tui@0.73.1':
+    resolution: {integrity: sha512-ybVsRnUbzQRtbocltJ2OXb2QogrO67N2BlUyKjZz9BHcZYiDJtNkcKQockxDjsVvDc0uBCLDX6iZJoBElBd8fw==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-tui instead going forward
 
   '@milkdown/components@7.20.0':
     resolution: {integrity: sha512-Qn91/oZugGjf17ARE51nbEsH4YklZQaomRSsfxOAtIcwGEJe5osq+zhhKGtgAYFfUb6rU3W86Pe4XDlXN6vFjg==}
@@ -3670,6 +3701,9 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@babel/core': '*'
+
+  '@react-native/normalize-colors@0.74.89':
+    resolution: {integrity: sha512-qoMMXddVKVhZ8PA1AbUCk83trpd6N+1nF2A6k1i6LsQObyS92fELuk8kU/lQs6M7BsMHwqyLCpQJ1uFgNvIQXg==}
 
   '@react-native/normalize-colors@0.76.2':
     resolution: {integrity: sha512-ICoOpaTLPsFQjNLSM00NgQr6wal300cZZonHVSDXKntX+BfkLeuCHRtr/Mn+klTtW+/1v2/2FRm9dXjvyGf9Dw==}
@@ -5994,6 +6028,9 @@ packages:
     resolution: {integrity: sha512-FyyrDHZKEjXDpNJYvVsV960FiqQyXc/LlYmsxl2BcdMb2WPx0OGRVgTg55rPSyLSNMqP52R9r8geSp7apN3Ofg==}
     engines: {node: '>=4'}
 
+  css-in-js-utils@3.1.0:
+    resolution: {integrity: sha512-fJAcud6B3rRu+KHYk+Bwf+WFL2MDCJJ1XG9x137tJQ0xYxor7XziQtuGFbWNdqrvF4Tk26O3H73nfVqXt/fW1A==}
+
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
 
@@ -6890,6 +6927,9 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
+  fast-loops@1.1.4:
+    resolution: {integrity: sha512-8dbd3XWoKCTms18ize6JmQF1SFnnfj5s0B7rRry22EofgMu7B6LKHVh+XfFqFGsqnbH54xgeO83PzpKI+ODhlg==}
+
   fast-redact@3.5.0:
     resolution: {integrity: sha512-dwsoQlS7h9hMeYUq1W++23NDcBLV4KqONnITDV9DjfS3q1SgDGVrBdvvTLUotWtPSD7asWDV9/CmsZPy8Hf70A==}
     engines: {node: '>=6'}
@@ -7478,6 +7518,9 @@ packages:
     resolution: {integrity: sha512-Ty8UblRWFEcfSuIaajM34LdPXIhbs1ajEX/BBPv24J+enSVaEVY63xQ6lTO9VRYS5LAoghIG0IDJ+p+IPzKUQQ==}
     engines: {node: '>=4'}
 
+  hyphenate-style-name@1.1.0:
+    resolution: {integrity: sha512-WDC/ui2VVRrz3jOVi+XtjqkDjiVjTtFaAGiW37k6b+ohyQ5wYDOGkvCZa8+H0nx3gyvv0+BST9xuOgIyGQ00gw==}
+
   iconv-corefoundation@1.1.7:
     resolution: {integrity: sha512-T10qvkw0zz4wnm560lOEg0PovVqUXuOFhhHAkixw8/sycy7TJt7v/RrkEKEQnAw2viPSJu6iAkErxnzR0g8PpQ==}
     engines: {node: ^8.11.2 || >=10}
@@ -7549,6 +7592,9 @@ packages:
 
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
+
+  inline-style-prefixer@6.0.4:
+    resolution: {integrity: sha512-FwXmZC2zbeeS7NzGjJ6pAiqRhXR0ugUShSNb6GApMl6da0/XGc4MOJsoWAywia52EEWbXNSy0pzkwz/+Y+swSg==}
 
   internal-ip@4.3.0:
     resolution: {integrity: sha512-S1zBo1D6zcsyuC6PMmY5+55YMILQ9av8lotMx447Bq6SAgo/sDK6y6uUKmuYhW7eacnIhFfsPmCNYdDzsnnDCg==}
@@ -7882,6 +7928,10 @@ packages:
 
   jiti@2.6.1:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
+    hasBin: true
+
+  jiti@2.7.0:
+    resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
   jks-js@1.1.0:
@@ -8465,6 +8515,9 @@ packages:
 
   memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}
+
+  memoize-one@6.0.0:
+    resolution: {integrity: sha512-rkpe71W0N0c0Xz6QD0eJETuWAJGnJ9afsl1srmwPrI+yBCkge5EycXXbYRyvL29zZVUWQCY7InPRCv3GDXuZNw==}
 
   merge-descriptors@1.0.3:
     resolution: {integrity: sha512-gaNvAS7TZ897/rVaZ0nMtAyxNyi/pdbjbAwUpFQpN70GqnVfOiXpeUUMKRBmzXaSQ8DdTX4/0ms62r2K+hE6mQ==}
@@ -9622,6 +9675,11 @@ packages:
   react-devtools-core@5.3.2:
     resolution: {integrity: sha512-crr9HkVrDiJ0A4zot89oS0Cgv0Oa4OG1Em4jit3P3ZxZSKPMYyMjfwMqgcJna9o625g8oN87rBm8SWWrSTBZxg==}
 
+  react-dom@18.3.1:
+    resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
+    peerDependencies:
+      react: ^18.3.1
+
   react-dom@19.2.3:
     resolution: {integrity: sha512-yELu4WmLPw5Mr/lmeEpox5rw3RETacE++JgHqQzd2dg+YbJuat3jH4ingc+WPZhxaoFzdv9y33G+F7Nl5O0GBg==}
     peerDependencies:
@@ -9701,6 +9759,12 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-web@0.19.13:
+    resolution: {integrity: sha512-etv3bN8rJglrRCp/uL4p7l8QvUNUC++QwDbdZ8CB7BvZiMvsxfFIRM1j04vxNldG3uo2puRd6OSWR3ibtmc29A==}
+    peerDependencies:
+      react: ^18.0.0
+      react-dom: ^18.0.0
 
   react-native@0.76.9:
     resolution: {integrity: sha512-+LRwecWmTDco7OweGsrECIqJu0iyrREd6CTCgC/uLLYipiHvk+MH9nd6drFtCw/6Blz6eoKTcH9YTTJusNtrWg==}
@@ -10009,6 +10073,9 @@ packages:
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
     engines: {node: '>=v12.22.7'}
+
+  scheduler@0.23.2:
+    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
   scheduler@0.24.0-canary-efb381bbf-20230505:
     resolution: {integrity: sha512-ABvovCDe/k9IluqSh4/ISoq8tIJnW8euVAWYt5j/bg6dRnqwQwiGO1F/V4AyK96NGF/FB04FhOUDuWj8IKfABA==}
@@ -10426,6 +10493,9 @@ packages:
         optional: true
       babel-plugin-macros:
         optional: true
+
+  styleq@0.1.3:
+    resolution: {integrity: sha512-3ZUifmCDCQanjeej1f6kyl/BeP/Vae5EYkQ9iJfUm/QwZvlgnZzyflqAsAWYURdtea8Vkvswu2GrC57h3qffcA==}
 
   sucrase@3.35.0:
     resolution: {integrity: sha512-8EbVDiu9iN/nESwxeSxDKe0dunta1GOlHufmSSXxMD2z2/tMZpDMpvXQGsc+ajGo8y2uYUmixaSRUc/QPoQ0GA==}
@@ -10947,14 +11017,17 @@ packages:
 
   uuid@7.0.3:
     resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -11469,10 +11542,6 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  '@agentclientprotocol/sdk@0.18.2(zod@4.3.6)':
-    dependencies:
-      zod: 4.3.6
-
   '@alloc/quick-lru@5.2.0': {}
 
   '@ampproject/remapping@2.3.0':
@@ -11486,7 +11555,7 @@ snapshots:
     optionalDependencies:
       zod: 3.25.76
 
-  '@anthropic-ai/sdk@0.90.0(zod@3.25.76)':
+  '@anthropic-ai/sdk@0.91.1(zod@3.25.76)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
@@ -13675,9 +13744,9 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@eslint-community/eslint-utils@4.9.1(eslint@9.39.4(jiti@2.6.1))':
+  '@eslint-community/eslint-utils@4.9.1(eslint@9.39.4(jiti@2.7.0))':
     dependencies:
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.2': {}
@@ -14679,20 +14748,6 @@ snapshots:
   '@mariozechner/clipboard-win32-x64-msvc@0.3.3':
     optional: true
 
-  '@mariozechner/clipboard@0.3.2':
-    optionalDependencies:
-      '@mariozechner/clipboard-darwin-arm64': 0.3.2
-      '@mariozechner/clipboard-darwin-universal': 0.3.2
-      '@mariozechner/clipboard-darwin-x64': 0.3.2
-      '@mariozechner/clipboard-linux-arm64-gnu': 0.3.2
-      '@mariozechner/clipboard-linux-arm64-musl': 0.3.2
-      '@mariozechner/clipboard-linux-riscv64-gnu': 0.3.2
-      '@mariozechner/clipboard-linux-x64-gnu': 0.3.2
-      '@mariozechner/clipboard-linux-x64-musl': 0.3.2
-      '@mariozechner/clipboard-win32-arm64-msvc': 0.3.2
-      '@mariozechner/clipboard-win32-x64-msvc': 0.3.2
-    optional: true
-
   '@mariozechner/clipboard@0.3.3':
     optionalDependencies:
       '@mariozechner/clipboard-darwin-arm64': 0.3.3
@@ -14705,6 +14760,20 @@ snapshots:
       '@mariozechner/clipboard-linux-x64-musl': 0.3.3
       '@mariozechner/clipboard-win32-arm64-msvc': 0.3.3
       '@mariozechner/clipboard-win32-x64-msvc': 0.3.3
+    optional: true
+
+  '@mariozechner/clipboard@0.3.5':
+    optionalDependencies:
+      '@mariozechner/clipboard-darwin-arm64': 0.3.2
+      '@mariozechner/clipboard-darwin-universal': 0.3.2
+      '@mariozechner/clipboard-darwin-x64': 0.3.2
+      '@mariozechner/clipboard-linux-arm64-gnu': 0.3.2
+      '@mariozechner/clipboard-linux-arm64-musl': 0.3.2
+      '@mariozechner/clipboard-linux-riscv64-gnu': 0.3.2
+      '@mariozechner/clipboard-linux-x64-gnu': 0.3.2
+      '@mariozechner/clipboard-linux-x64-musl': 0.3.2
+      '@mariozechner/clipboard-win32-arm64-msvc': 0.3.2
+      '@mariozechner/clipboard-win32-x64-msvc': 0.3.2
     optional: true
 
   '@mariozechner/jiti@2.6.5':
@@ -14736,9 +14805,9 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-agent-core@0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
+  '@mariozechner/pi-agent-core@0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
     dependencies:
-      '@mariozechner/pi-ai': 0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
       typebox: 1.1.31
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -14797,9 +14866,9 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
+  '@mariozechner/pi-ai@0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
     dependencies:
-      '@anthropic-ai/sdk': 0.90.0(zod@3.25.76)
+      '@anthropic-ai/sdk': 0.91.1(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1035.0
       '@google/genai': 1.50.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
       '@mistralai/mistralai': 2.2.1
@@ -14841,7 +14910,7 @@ snapshots:
       undici: 7.25.0
       yaml: 2.8.3
     optionalDependencies:
-      '@mariozechner/clipboard': 0.3.2
+      '@mariozechner/clipboard': 0.3.3
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -14851,12 +14920,11 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
+  '@mariozechner/pi-coding-agent@0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)':
     dependencies:
-      '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
-      '@mariozechner/pi-tui': 0.70.5
+      '@mariozechner/pi-agent-core': 0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@mariozechner/pi-tui': 0.73.1
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
       cli-highlight: 2.1.11
@@ -14866,6 +14934,7 @@ snapshots:
       glob: 13.0.6
       hosted-git-info: 9.0.2
       ignore: 7.0.5
+      jiti: 2.7.0
       marked: 15.0.12
       minimatch: 10.2.5
       proper-lockfile: 4.1.2
@@ -14875,7 +14944,7 @@ snapshots:
       uuid: 14.0.0
       yaml: 2.8.3
     optionalDependencies:
-      '@mariozechner/clipboard': 0.3.3
+      '@mariozechner/clipboard': 0.3.5
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -14895,7 +14964,7 @@ snapshots:
     optionalDependencies:
       koffi: 2.16.1
 
-  '@mariozechner/pi-tui@0.70.5':
+  '@mariozechner/pi-tui@0.73.1':
     dependencies:
       '@types/mime-types': 2.1.4
       chalk: 5.6.2
@@ -15603,6 +15672,8 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/preset-env'
       - supports-color
+
+  '@react-native/normalize-colors@0.74.89': {}
 
   '@react-native/normalize-colors@0.76.2': {}
 
@@ -16663,15 +16734,15 @@ snapshots:
       '@types/node': 22.19.17
     optional: true
 
-  '@typescript-eslint/eslint-plugin@8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@typescript-eslint/eslint-plugin@8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       '@typescript-eslint/scope-manager': 8.59.0
-      '@typescript-eslint/type-utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/type-utils': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       '@typescript-eslint/visitor-keys': 8.59.0
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       ignore: 7.0.5
       natural-compare: 1.4.0
       ts-api-utils: 2.5.0(typescript@5.9.3)
@@ -16679,14 +16750,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
       '@typescript-eslint/scope-manager': 8.59.0
       '@typescript-eslint/types': 8.59.0
       '@typescript-eslint/typescript-estree': 8.59.0(typescript@5.9.3)
       '@typescript-eslint/visitor-keys': 8.59.0
       debug: 4.4.3(supports-color@8.1.1)
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -16709,13 +16780,13 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  '@typescript-eslint/type-utils@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@typescript-eslint/type-utils@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
       '@typescript-eslint/types': 8.59.0
       '@typescript-eslint/typescript-estree': 8.59.0(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       debug: 4.4.3(supports-color@8.1.1)
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -16738,13 +16809,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@typescript-eslint/utils@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.6.1))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0))
       '@typescript-eslint/scope-manager': 8.59.0
       '@typescript-eslint/types': 8.59.0
       '@typescript-eslint/typescript-estree': 8.59.0(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -18255,6 +18326,10 @@ snapshots:
 
   css-color-keywords@1.0.0: {}
 
+  css-in-js-utils@3.1.0:
+    dependencies:
+      hyphenate-style-name: 1.1.0
+
   css-select@5.2.2:
     dependencies:
       boolbase: 1.0.0
@@ -18761,7 +18836,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron-vite@1.0.29(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)):
+  electron-vite@1.0.29(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)):
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-arrow-functions': 7.27.1(@babel/core@7.29.0)
@@ -18769,7 +18844,7 @@ snapshots:
       esbuild: 0.18.20
       magic-string: 0.30.21
       picocolors: 1.1.1
-      vite: 8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
+      vite: 8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -19097,18 +19172,18 @@ snapshots:
     optionalDependencies:
       source-map: 0.6.1
 
-  eslint-config-next@16.1.6(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3):
+  eslint-config-next@16.1.6(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3):
     dependencies:
       '@next/eslint-plugin-next': 16.1.6
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.6.1))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.6.1))
-      eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.6.1))
-      eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.6.1))
-      eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.7.0))
       globals: 16.4.0
-      typescript-eslint: 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      typescript-eslint: 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
     optionalDependencies:
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -19125,33 +19200,33 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.6.1)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3(supports-color@8.1.1)
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       get-tsconfig: 4.14.0
       is-bun-module: 2.0.0
       stable-hash: 0.0.5
       tinyglobby: 0.2.16
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.6.1))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
-      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.6.1)
+      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.6.1)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -19160,9 +19235,9 @@ snapshots:
       array.prototype.flatmap: 1.3.3
       debug: 3.2.7
       doctrine: 2.1.0
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.3
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -19174,13 +19249,13 @@ snapshots:
       string.prototype.trimend: 1.0.9
       tsconfig-paths: 3.15.0
     optionalDependencies:
-      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
     transitivePeerDependencies:
       - eslint-import-resolver-typescript
       - eslint-import-resolver-webpack
       - supports-color
 
-  eslint-plugin-jsx-a11y@6.10.2(eslint@9.39.4(jiti@2.6.1)):
+  eslint-plugin-jsx-a11y@6.10.2(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       aria-query: 5.3.2
       array-includes: 3.1.9
@@ -19190,7 +19265,7 @@ snapshots:
       axobject-query: 4.1.0
       damerau-levenshtein: 1.0.8
       emoji-regex: 9.2.2
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       hasown: 2.0.3
       jsx-ast-utils: 3.3.5
       language-tags: 1.0.9
@@ -19199,18 +19274,18 @@ snapshots:
       safe-regex-test: 1.1.0
       string.prototype.includes: 2.0.1
 
-  eslint-plugin-react-hooks@7.1.1(eslint@9.39.4(jiti@2.6.1)):
+  eslint-plugin-react-hooks@7.1.1(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@babel/core': 7.29.0
       '@babel/parser': 7.29.2
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       hermes-parser: 0.25.1
       zod: 3.25.76
       zod-validation-error: 4.0.2(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react@7.37.5(eslint@9.39.4(jiti@2.6.1)):
+  eslint-plugin-react@7.37.5(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       array-includes: 3.1.9
       array.prototype.findlast: 1.2.5
@@ -19218,7 +19293,7 @@ snapshots:
       array.prototype.tosorted: 1.1.4
       doctrine: 2.1.0
       es-iterator-helpers: 1.3.2
-      eslint: 9.39.4(jiti@2.6.1)
+      eslint: 9.39.4(jiti@2.7.0)
       estraverse: 5.3.0
       hasown: 2.0.3
       jsx-ast-utils: 3.3.5
@@ -19243,9 +19318,9 @@ snapshots:
 
   eslint-visitor-keys@5.0.1: {}
 
-  eslint@9.39.4(jiti@2.6.1):
+  eslint@9.39.4(jiti@2.7.0):
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.6.1))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0))
       '@eslint-community/regexpp': 4.12.2
       '@eslint/config-array': 0.21.2
       '@eslint/config-helpers': 0.4.2
@@ -19280,7 +19355,7 @@ snapshots:
       natural-compare: 1.4.0
       optionator: 0.9.4
     optionalDependencies:
-      jiti: 2.6.1
+      jiti: 2.7.0
     transitivePeerDependencies:
       - supports-color
 
@@ -19384,12 +19459,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  expo-camera@16.0.18(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1):
+  expo-camera@16.0.18(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1):
     dependencies:
       expo: 52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       invariant: 2.2.4
       react: 18.3.1
       react-native: 0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)
+    optionalDependencies:
+      react-native-web: 0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   expo-clipboard@7.0.1(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1):
     dependencies:
@@ -19448,7 +19525,7 @@ snapshots:
     dependencies:
       invariant: 2.2.4
 
-  expo-router@4.0.22(1add4c84f7464d9050b57c8f1be4c442):
+  expo-router@4.0.22(2aadfa68eb42a6a460df226ce2251b1e):
     dependencies:
       '@expo/metro-runtime': 4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))
       '@expo/server': 0.5.3
@@ -19460,7 +19537,7 @@ snapshots:
       expo: 52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       expo-constants: 17.0.8(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))
       expo-linking: 7.0.5(expo@52.0.49(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)))(encoding@0.1.13)(graphql@16.8.1)(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
-      react-helmet-async: 1.3.0(react-dom@19.2.3(react@18.3.1))(react@18.3.1)
+      react-helmet-async: 1.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-native-helmet-async: 2.0.4(react@18.3.1)
       react-native-is-edge-to-edge: 1.3.1(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
       react-native-safe-area-context: 4.12.0(react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1))(react@18.3.1)
@@ -19648,6 +19725,8 @@ snapshots:
   fast-json-stable-stringify@2.1.0: {}
 
   fast-levenshtein@2.0.6: {}
+
+  fast-loops@1.1.4: {}
 
   fast-redact@3.5.0: {}
 
@@ -20410,6 +20489,8 @@ snapshots:
 
   hyperlinker@1.0.0: {}
 
+  hyphenate-style-name@1.1.0: {}
+
   iconv-corefoundation@1.1.7:
     dependencies:
       cli-truncate: 2.1.0
@@ -20468,6 +20549,11 @@ snapshots:
   ini@1.3.8: {}
 
   inline-style-parser@0.2.7: {}
+
+  inline-style-prefixer@6.0.4:
+    dependencies:
+      css-in-js-utils: 3.1.0
+      fast-loops: 1.1.4
 
   internal-ip@4.3.0:
     dependencies:
@@ -20814,6 +20900,8 @@ snapshots:
   jimp-compact@0.16.1: {}
 
   jiti@2.6.1: {}
+
+  jiti@2.7.0: {}
 
   jks-js@1.1.0:
     dependencies:
@@ -21525,6 +21613,8 @@ snapshots:
       - encoding
 
   memoize-one@5.2.1: {}
+
+  memoize-one@6.0.0: {}
 
   merge-descriptors@1.0.3: {}
 
@@ -22595,9 +22685,9 @@ snapshots:
 
   pi-schedule-prompt@0.1.2(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76):
     dependencies:
-      '@mariozechner/pi-ai': 0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
-      '@mariozechner/pi-coding-agent': 0.70.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
-      '@mariozechner/pi-tui': 0.70.5
+      '@mariozechner/pi-ai': 0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@mariozechner/pi-coding-agent': 0.73.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
+      '@mariozechner/pi-tui': 0.73.1
       '@sinclair/typebox': 0.34.49
       croner: 8.1.2
       nanoid: 5.1.9
@@ -22610,12 +22700,12 @@ snapshots:
       - ws
       - zod
 
-  pi-subagents@0.12.5(@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-coding-agent@0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-tui@0.70.5)(@sinclair/typebox@0.34.49):
+  pi-subagents@0.12.5(@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-coding-agent@0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76))(@mariozechner/pi-tui@0.73.1)(@sinclair/typebox@0.34.49):
     dependencies:
       '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
       '@mariozechner/pi-coding-agent': 0.61.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.0)(zod@3.25.76)
-      '@mariozechner/pi-tui': 0.70.5
+      '@mariozechner/pi-tui': 0.73.1
       '@sinclair/typebox': 0.34.49
 
   pi-web-access@0.10.6(@napi-rs/canvas@0.1.99):
@@ -22980,10 +23070,11 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  react-dom@19.2.3(react@18.3.1):
+  react-dom@18.3.1(react@18.3.1):
     dependencies:
+      loose-envify: 1.4.0
       react: 18.3.1
-      scheduler: 0.27.0
+      scheduler: 0.23.2
 
   react-dom@19.2.3(react@19.2.3):
     dependencies:
@@ -22996,13 +23087,13 @@ snapshots:
     dependencies:
       react: 18.3.1
 
-  react-helmet-async@1.3.0(react-dom@19.2.3(react@18.3.1))(react@18.3.1):
+  react-helmet-async@1.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@babel/runtime': 7.29.2
       invariant: 2.2.4
       prop-types: 15.8.1
       react: 18.3.1
-      react-dom: 19.2.3(react@18.3.1)
+      react-dom: 18.3.1(react@18.3.1)
       react-fast-compare: 3.2.2
       shallowequal: 1.1.0
 
@@ -23094,6 +23185,21 @@ snapshots:
       react-freeze: 1.0.4(react@18.3.1)
       react-native: 0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1)
       warn-once: 0.1.1
+
+  react-native-web@0.19.13(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@babel/runtime': 7.29.2
+      '@react-native/normalize-colors': 0.74.89
+      fbjs: 3.0.5(encoding@0.1.13)
+      inline-style-prefixer: 6.0.4
+      memoize-one: 6.0.0
+      nullthrows: 1.1.1
+      postcss-value-parser: 4.2.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      styleq: 0.1.3
+    transitivePeerDependencies:
+      - encoding
 
   react-native@0.76.9(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@19.2.14)(encoding@0.1.13)(react@18.3.1):
     dependencies:
@@ -23557,6 +23663,10 @@ snapshots:
   saxes@6.0.0:
     dependencies:
       xmlchars: 2.2.0
+
+  scheduler@0.23.2:
+    dependencies:
+      loose-envify: 1.4.0
 
   scheduler@0.24.0-canary-efb381bbf-20230505:
     dependencies:
@@ -24036,6 +24146,8 @@ snapshots:
       client-only: 0.0.1
       react: 19.2.3
 
+  styleq@0.1.3: {}
+
   sucrase@3.35.0:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
@@ -24430,13 +24542,13 @@ snapshots:
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
 
-  typescript-eslint@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3):
+  typescript-eslint@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
-      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       '@typescript-eslint/typescript-estree': 8.59.0(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.6.1)
+      '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      eslint: 9.39.4(jiti@2.7.0)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -24741,7 +24853,7 @@ snapshots:
       lightningcss: 1.32.0
       terser: 5.46.1
 
-  vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3):
+  vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -24752,7 +24864,7 @@ snapshots:
       '@types/node': 22.19.17
       esbuild: 0.27.7
       fsevents: 2.3.3
-      jiti: 2.6.1
+      jiti: 2.7.0
       terser: 5.46.1
       tsx: 4.21.0
       yaml: 2.8.3

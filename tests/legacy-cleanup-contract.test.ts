@@ -14,7 +14,7 @@ describe('legacy top-level source cleanup contract', () => {
       expect(existsSync(resolve(root, legacyDir)), `${legacyDir}/ should not exist`).toBe(false);
     }
 
-    for (const activeDir of ['packages/web', 'packages/desktop', 'packages/mobile', 'packages/protocols/acp', 'packages/mindos/src/foundation/permissions', 'packages/protocols/mcp-server']) {
+    for (const activeDir of ['packages/web', 'packages/desktop', 'packages/mobile', 'packages/mindos/src/protocols/acp', 'packages/mindos/src/foundation/permissions', 'packages/mindos/src/protocols/mcp-server']) {
       expect(existsSync(resolve(root, activeDir)), `${activeDir}/ should exist`).toBe(true);
     }
   });
@@ -25,16 +25,14 @@ describe('legacy top-level source cleanup contract', () => {
     expect(pkg.files).not.toEqual(expect.arrayContaining(['app/', 'mcp/', 'desktop/', 'mobile/', 'packages/web/']));
     expect(pkg.files).toEqual(
       expect.arrayContaining([
-        '_standalone/',
-        'packages/protocols/acp/dist/',
-        'packages/protocols/acp/package.json',
+        'bin/mindos-shim.cjs',
         'dist/',
         'src/cli.js',
         'package.json',
-        'packages/protocols/mcp-server/dist/',
-        'packages/protocols/mcp-server/package.json',
       ])
     );
+    expect(pkg.files).not.toContain('_standalone/');
+    expect(pkg.files?.some((entry) => entry.startsWith('packages/protocols/'))).toBe(false);
   });
 
   it('does not keep live source references to deleted top-level app code', () => {

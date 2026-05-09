@@ -39,26 +39,25 @@ describe('product npm publish contract', () => {
 
     expect(pkg.name).toBe('@geminilight/mindos');
     expect(pkg.private).not.toBe(true);
-    expect(pkg.bin).toEqual({ mindos: 'bin/cli.js' });
+    expect(pkg.bin).toEqual({ mindos: 'bin/mindos-shim.cjs' });
     expect(pkg.files).toEqual(
       expect.arrayContaining([
-        'bin/',
-        'packages/protocols/acp/dist/',
+        'bin/mindos-shim.cjs',
         'dist/',
         'src/cli.js',
         'src/cli.d.ts',
-        'packages/protocols/mcp-server/dist/',
-        'scripts/',
-        'assets/',
-        'skills/',
-        'templates/',
-        '_standalone/',
         'README.md',
         'README_zh.md',
         'LICENSE',
       ])
     );
+    expect(pkg.files).not.toContain('_standalone/');
+    expect(pkg.files).not.toContain('scripts/');
+    expect(pkg.files).not.toContain('assets/');
+    expect(pkg.files).not.toContain('skills/');
+    expect(pkg.files).not.toContain('templates/');
     expect(pkg.files).not.toContain('packages/web/');
+    expect(pkg.files?.some((entry) => entry.startsWith('packages/protocols/'))).toBe(false);
     expect(pkg.files).not.toContain('packages/protocols/acp/src/');
     expect(pkg.files).not.toContain('packages/protocols/acp/tsconfig.json');
     expect(pkg.files).not.toContain('packages/protocols/mcp-server/src/');
@@ -69,11 +68,13 @@ describe('product npm publish contract', () => {
     expect(pkg.files?.some((entry) => entry.startsWith('src/knowledge/'))).toBe(false);
     expect(pkg.files?.some((entry) => entry.startsWith('packages/foundation/'))).toBe(false);
     expect(pkg.files?.some((entry) => entry.startsWith('packages/knowledge/'))).toBe(false);
-    expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('packages/web'));
-    expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('@mindos/mcp-server'));
-    expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('@mindos/acp'));
     expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('@geminilight/mindos'));
-    expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('node scripts/clean-product-stage.mjs --include-package-docs'));
+    expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('@mindos/web'));
+    expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('prepare-standalone'));
+    expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('packages/web'));
+    expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('@mindos/mcp-server'));
+    expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('@mindos/acp'));
+    expect(pkg.scripts?.prepack).toEqual(expect.stringContaining('node scripts/clean-product-stage.mjs --include-package-docs --keep-standalone'));
     expect(pkg.scripts?.postpack).toBe('cd ../.. && node scripts/clean-product-stage.mjs --include-package-docs');
     expect(pkg.scripts?.prepack).not.toContain('rm -rf packages/mindos/_standalone');
     expect(pkg.scripts?.prepack).not.toEqual(expect.stringContaining('@mindos/shared'));
@@ -93,7 +94,8 @@ describe('product npm publish contract', () => {
     expect(pkg.scripts?.prepack).not.toContain('packages/mindos/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/protocols/mcp-server/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/web/node_modules');
-    expect(pkg.scripts?.build).toBe('tsc');
+    expect(pkg.scripts?.build).toBe('tsc && pnpm run build:protocols');
+    expect(pkg.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(pkg.scripts?.['type-check']).toBe('tsc --noEmit');
   });
 
@@ -135,8 +137,8 @@ describe('product npm publish contract', () => {
     expect(appNpmignore).toMatch(/^eslint\.config\.mjs$/m);
     expect(appNpmignore).toMatch(/^tsconfig\.tsbuildinfo$/m);
     expect(stageScript).not.toContain("copyTree('packages/web', 'packages/web')");
-    expect(stageScript).toContain("copyBuiltPackage('packages/protocols/acp')");
-    expect(stageScript).toContain("copyBuiltPackage('packages/protocols/mcp-server')");
+    expect(stageScript).not.toContain("copyBuiltPackage('packages/protocols/acp')");
+    expect(stageScript).not.toContain("copyBuiltPackage('packages/protocols/mcp-server')");
     expect(stageScript).not.toContain("copyTree('packages/protocols/acp', 'packages/protocols/acp')");
     expect(stageScript).not.toContain("copyTree('packages/protocols/mcp-server', 'packages/protocols/mcp-server')");
     expect(stageScript).not.toContain('rewriteStagedWebWorkspaceDependencies');
@@ -144,26 +146,25 @@ describe('product npm publish contract', () => {
 
   it('copies standalone builds with dereferenced dependencies for npm packing', () => {
     const prepareStandalone = readText('scripts/prepare-standalone.mjs');
-    const prepareMindosBundle = readText('packages/desktop/scripts/prepare-mindos-bundle.mjs');
-    const runtimeDependencyClosure = readText('scripts/lib/runtime-dependency-closure.mjs');
-    const buildRuntimeArchive = readText('scripts/build-runtime-archive.sh');
     const buildLib = readText('packages/mindos/bin/lib/build.js');
     const startCommand = readText('packages/mindos/bin/commands/start.js');
 
     expect(prepareStandalone).toContain('dereference: true');
-    expect(prepareMindosBundle).toContain("from '../../../scripts/lib/runtime-dependency-closure.mjs'");
-    expect(prepareMindosBundle).toContain('copyRuntimeDependencyClosure');
     expect(prepareStandalone).toContain('__node_modules');
     expect(prepareStandalone).toContain('__next');
     expect(prepareStandalone).toContain('packages/mindos/_standalone');
     expect(prepareStandalone).toContain('prunePackageLocks');
-    expect(runtimeDependencyClosure).toContain("'@mariozechner/pi-coding-agent'");
-    expect(runtimeDependencyClosure).toContain("'@sinclair/typebox'");
-    expect(runtimeDependencyClosure).toContain("'partial-json'");
-    expect(runtimeDependencyClosure).toContain("'ajv-formats'");
-    expect(runtimeDependencyClosure).toContain("'openai'");
-    expect(buildRuntimeArchive).toContain('node scripts/copy-runtime-dependencies.mjs packages/web "$STANDALONE_NM"');
+    expect(prepareStandalone).toContain('pruneStandalonePayload');
+    expect(prepareStandalone).toContain('pruneRuntimeNodeModules');
+    expect(prepareStandalone).toContain('copyRuntimeDependencyClosure');
+    expect(prepareStandalone).toContain("'@mariozechner/pi-coding-agent'");
+    expect(prepareStandalone).toContain("'@sinclair/typebox'");
+    expect(prepareStandalone).toContain("'partial-json'");
+    expect(prepareStandalone).toContain("'openai'");
     expect(prepareStandalone).toContain('package-lock.json');
+    expect(prepareStandalone).toContain('tsconfig.tsbuildinfo');
+    expect(prepareStandalone).toContain("'.map'");
+    expect(prepareStandalone).toContain("'@types'");
     expect(buildLib).toContain('__next');
     expect(startCommand).toContain('__next');
     expect(prepareStandalone).not.toContain('rm -rf _standalone/node_modules');

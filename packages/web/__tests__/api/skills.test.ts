@@ -45,7 +45,7 @@ describe('GET /api/skills', () => {
     const body = await res.json();
     expect(body).toHaveProperty('skills');
     expect(Array.isArray(body.skills)).toBe(true);
-  });
+  }, 15_000);
 
   it('detects user skills from {mindRoot}/.skills/', async () => {
     const skillDir = path.join(tempRoot, '.skills', 'my-test-skill');

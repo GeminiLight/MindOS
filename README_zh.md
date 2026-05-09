@@ -98,8 +98,9 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 
 | 日期 | 更新 |
 |------|------|
+| 2026-04 | **协议 runtime 内聚** — ACP 与 MCP 源码已迁入 `packages/mindos/src/protocols/*`；发布包只带自包含的 `dist/protocols/*` bundle，不再嵌套协议 workspace package。 |
 | 2026-04 | **产品主包落地** — MindOS 采用 OpenCode 式核心包：`packages/mindos`（`@geminilight/mindos`）承载产品 runtime facade 与 CLI kernel 边界；Web/CLI 围绕它做适配。 |
-| 2026-04 | **OpenCode 式 workspace 扁平化** — 所有源码 workspace 已统一到 `packages/`：`packages/web`、`packages/desktop`、`packages/mobile`、`packages/mindos`、`packages/retrieval/*`、`packages/protocols/*`。npm tarball / CLI / MCP / Web standalone / Desktop / Mobile 均已验证。 |
+| 2026-04 | **OpenCode 式 workspace 扁平化** — 所有源码 workspace 已统一到 `packages/`：`packages/web`、`packages/desktop`、`packages/mobile`、`packages/mindos`，以及可选 `packages/retrieval/*` adapters。npm tarball / CLI / MCP / Web standalone / Desktop / Mobile 均已验证。 |
 | 2026-04 | **发布包清理** — 旧顶层 `app/`、`mcp/`、`desktop/`、`mobile/` 源码根已移除，发布清单精确排除测试、缓存与 nested `node_modules`。 |
 | 2026-04 | **网页剪藏插件** — 浏览器扩展，一键剪藏任意网页到 MindOS 暂存台。[安装 →](packages/browser-extension/) |
 | 2026-04 | **PDF & 图片导入** — 拖拽 PDF 和图片到 MindOS，自动转换为可搜索的 Markdown。 |
@@ -300,9 +301,8 @@ MindOS/
 ├── packages/mobile/      # Expo 移动端
 ├── packages/browser-extension/ # Web Clipper 浏览器扩展
 ├── packages/desktop-tauri/     # Tauri 桌面 spike
-├── packages/mindos/      # 已发布产品包：runtime facade、foundation/knowledge 内部模块、CLI kernel
+├── packages/mindos/      # 已发布产品包：runtime facade、protocols、foundation/knowledge 内部模块、CLI kernel
 ├── packages/retrieval/   # 可选检索栈：search/vector/indexer/API
-├── packages/protocols/   # 外部协议：ACP 与 MCP server
 ├── skills/           # MindOS Skills（`mindos`、`mindos-zh`）— Agent 工作流指南
 ├── templates/        # 预设模板（`en/`、`zh/`、`empty/`）— onboard 时复制到知识库目录
 ├── scripts/          # 配置向导与辅助脚本

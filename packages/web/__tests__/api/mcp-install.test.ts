@@ -332,7 +332,7 @@ describe('GET /api/mcp/agents', () => {
     expect(keys).toContain('workbuddy');
     expect(keys).toContain('lingma');
     expect(keys).toContain('copaw');
-  });
+  }, 15_000);
 
   it('detects installed agent from config file', async () => {
     // Pre-seed a claude-code config

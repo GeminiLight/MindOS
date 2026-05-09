@@ -34,7 +34,6 @@
     "@milkdown/crepe": "^7.20.0",
     "@milkdown/kit": "^7.20.0",
     "@milkdown/react": "^7.20.0",
-    "@mindos/acp": "workspace:*",
     "@mozilla/readability": "^0.6.0",
     "@sinclair/typebox": "^0.34.33",
     "@slack/web-api": "^7.15.0",

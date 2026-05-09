@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation';
+import ClientRedirect from '@/components/ClientRedirect';
 
 export const dynamic = 'force-dynamic';
 
 export default function ChangesPage() {
-  redirect('/changelog');
+  return <ClientRedirect href="/changelog" label="Redirecting to changelog..." />;
 }

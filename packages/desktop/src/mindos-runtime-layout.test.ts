@@ -8,14 +8,10 @@ import {
   isNextBuildCurrent,
   BUILD_VERSION_FILE,
 } from './mindos-runtime-layout';
-import {
-  getBundledRuntimeRequiredEntries,
-  getStandaloneAppRequiredEntries,
-} from './runtime-health-contract';
-import type { HealthContractEntry } from './runtime-health-contract';
+import { getStandaloneAppRequiredEntries } from './runtime-health-contract';
 
-function writeContractEntries(baseDir: string, entries: HealthContractEntry[], omit: string[] = []) {
-  for (const entry of entries) {
+function writeEntries(baseDir: string, omit: string[] = []) {
+  for (const entry of getStandaloneAppRequiredEntries()) {
     if (omit.includes(entry.path)) continue;
     const target = path.join(baseDir, entry.path);
     if (entry.type === 'directory') {
@@ -27,14 +23,6 @@ function writeContractEntries(baseDir: string, entries: HealthContractEntry[], o
   }
 }
 
-function writeEntries(baseDir: string, omit: string[] = []) {
-  writeContractEntries(baseDir, getStandaloneAppRequiredEntries(), omit);
-}
-
-function writeBundledRuntimeEntries(root: string, omit: string[] = []) {
-  writeContractEntries(root, getBundledRuntimeRequiredEntries(), omit);
-}
-
 function writeBundledCliEntries(root: string) {
   mkdirSync(path.join(root, 'bin'), { recursive: true });
   mkdirSync(path.join(root, 'src'), { recursive: true });
@@ -43,13 +31,13 @@ function writeBundledCliEntries(root: string) {
 }
 
 describe('analyzeMindOsLayout', () => {
-  it('returns runnable for the v1 runtime layout packages/web plus packages/protocols/mcp-server', () => {
+  it('returns runnable for the product runtime layout packages/web plus dist/protocols/mcp-server', () => {
     const root = path.join(process.cwd(), 'tmp-mindos-layout-v1');
     try {
       rmSync(root, { recursive: true, force: true });
       writeEntries(path.join(root, 'packages', 'web'));
-      mkdirSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist'), { recursive: true });
-      writeFileSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs'), '// mcp', 'utf-8');
+      mkdirSync(path.join(root, 'dist', 'protocols', 'mcp-server'), { recursive: true });
+      writeFileSync(path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs'), '// mcp', 'utf-8');
       writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '9.9.9-v1' }), 'utf-8');
 
       const r = analyzeMindOsLayout(root);
@@ -156,9 +144,9 @@ describe('runtime completeness', () => {
     const root = path.join(process.cwd(), 'tmp-mindos-bundled-missing-worker');
     try {
       rmSync(root, { recursive: true, force: true });
-      writeBundledRuntimeEntries(root, ['packages/web/.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs']);
-      mkdirSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist'), { recursive: true });
-      writeFileSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs'), '// mcp', 'utf-8');
+      writeEntries(path.join(root, 'packages', 'web'), ['.next/standalone/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs']);
+      mkdirSync(path.join(root, 'dist', 'protocols', 'mcp-server'), { recursive: true });
+      writeFileSync(path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs'), '// mcp', 'utf-8');
 
       expect(isBundledRuntimeIntact(root)).toBe(false);
     } finally {
@@ -170,9 +158,9 @@ describe('runtime completeness', () => {
     const root = path.join(process.cwd(), 'tmp-mindos-bundled-complete');
     try {
       rmSync(root, { recursive: true, force: true });
-      writeBundledRuntimeEntries(root);
-      mkdirSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist'), { recursive: true });
-      writeFileSync(path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs'), '// mcp', 'utf-8');
+      writeEntries(path.join(root, 'packages', 'web'));
+      mkdirSync(path.join(root, 'dist', 'protocols', 'mcp-server'), { recursive: true });
+      writeFileSync(path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs'), '// mcp', 'utf-8');
       writeBundledCliEntries(root);
 
       expect(isBundledRuntimeIntact(root)).toBe(true);

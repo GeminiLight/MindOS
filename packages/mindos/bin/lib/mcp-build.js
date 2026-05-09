@@ -1,16 +1,14 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { PACKAGE_ROOT, ROOT } from './constants.js';
+import { PACKAGE_ROOT } from './constants.js';
 import { yellow } from './colors.js';
-import { execInherited as run, npmInstall } from './shell.js';
+import { execInherited as run } from './shell.js';
 
-export const MCP_DIR = resolve(ROOT, 'packages', 'protocols', 'mcp-server');
-export const MCP_SRC_DIR = resolve(MCP_DIR, 'src');
-export const MCP_BUNDLE = resolve(MCP_DIR, 'dist', 'index.cjs');
+export const MCP_DIR = PACKAGE_ROOT;
+export const MCP_SRC_DIR = resolve(PACKAGE_ROOT, 'src', 'protocols', 'mcp-server');
+export const MCP_BUNDLE = resolve(PACKAGE_ROOT, 'dist', 'protocols', 'mcp-server', 'index.cjs');
 
-const MCP_PACKAGE_JSON = resolve(MCP_DIR, 'package.json');
-const MCP_SDK = resolve(MCP_DIR, 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
-const MCP_ESBUILD = resolve(MCP_DIR, 'node_modules', 'esbuild', 'package.json');
+const MCP_PACKAGE_JSON = resolve(PACKAGE_ROOT, 'package.json');
 
 function safeMtime(filePath) {
   try {
@@ -33,10 +31,6 @@ function latestTreeMtime(dirPath) {
     }
   }
   return latest;
-}
-
-function hasBuildDeps() {
-  return existsSync(MCP_SDK) && existsSync(MCP_ESBUILD);
 }
 
 function isPackagedNpmRuntime() {
@@ -70,15 +64,10 @@ export function ensureMcpBundle() {
     throw new Error(`MCP bundle not found and source directory missing: ${MCP_SRC_DIR}`);
   }
 
-  if (!hasBuildDeps()) {
-    console.log(yellow('Installing MCP build dependencies...\n'));
-    npmInstall(MCP_DIR, '--no-workspaces');
-  }
-
   console.log(yellow(hadBundle
     ? 'Rebuilding MCP bundle (source changed)...\n'
     : 'Building MCP bundle (first run)...\n'));
-  run('npm run build', MCP_DIR);
+  run('npm run build:protocols', MCP_DIR);
 
   if (!existsSync(MCP_BUNDLE)) {
     throw new Error(`MCP bundle build did not produce ${MCP_BUNDLE}`);

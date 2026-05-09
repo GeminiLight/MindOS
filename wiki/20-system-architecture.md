@@ -11,7 +11,7 @@
            │ Browser (GUI)         │ MCP Protocol (stdio/HTTP)
            ▼                       ▼
 ┌─────────────────────┐  ┌────────────────────────┐
-│ packages/web (Next.js)  │  │ packages/protocols/mcp-server    │
+│ packages/web (Next.js)  │  │ packages/mindos protocol runtime │
 │   ─────────────────  │  │  ────────────────────  │
 │   • 前端 UI 组件     │  │  • MCP ↔ App API       │
 │   • API Routes       │  │  • stdio + HTTP 传输   │
@@ -31,9 +31,9 @@
 ```
 mindos/
 ├── packages/
-│   ├── mindos/                 # @geminilight/mindos 产品主包：foundation/knowledge 内部模块 + CLI kernel
-│   │   ├── bin/                # CLI 入口；npm 安装后仍暴露包内 bin/cli.js
-│   │   └── src/                # product facade + foundation/knowledge/retrieval internals
+│   ├── mindos/                 # @geminilight/mindos 产品主包：OpenCode-style product runtime
+│   │   ├── bin/                # thin shim/CLI 入口；npm 主包通过平台 runtime 执行完整 CLI
+│   │   └── src/                # product facade + server/client/plugin/tool/session/agent + internals
 │   ├── web/                    # Next.js 16 Web 源码；发布包只包含 _standalone artifact
 │   │   ├── app/                # App Router 页面 + API Routes
 │   │   ├── components/         # UI 组件
@@ -52,7 +52,7 @@ mindos/
 └── wiki/                       # 项目文档（本文件所在）
 ```
 
-> `packages/mindos` 是 OpenCode 式产品主包，当前承载 `@geminilight/mindos` runtime facade、foundation/knowledge 内部模块、能力归属 contract 与 CLI kernel 边界。可选 retrieval 与外部 protocols 继续使用 `packages/*/*` package 边界；Web/Desktop/Mobile/CLI 逐步变薄。
+> `packages/mindos` 是 OpenCode 式产品主包，当前承载 `@geminilight/mindos` runtime facade、foundation/knowledge 内部模块、server/client/plugin/tool/session/agent 边界、能力归属 contract 与 CLI kernel 边界。Web/Desktop/Mobile/extension 是 client/adapter；默认 runtime 通过平台包承载。
 >
 > `packages/mindos/_standalone`、`packages/mindos/packages`、`packages/mindos/scripts`、`packages/mindos/assets`、`packages/mindos/skills`、`packages/mindos/templates` 是 `npm pack` / publish 期间 materialize 的 staging output，不是源码目录。它们被 `.gitignore` 和 `pnpm-workspace.yaml` 排除，必要时用 `pnpm run clean:product-stage` 清理。
 
@@ -180,15 +180,19 @@ mindos/
 - `@geminilight/mindos/foundation`：shared/errors/core/config/logger/permissions/security。
 - `@geminilight/mindos/knowledge`：storage/spaces/graph/audit/git/knowledge-ops。
 - `@geminilight/mindos/retrieval`：retrieval 核心 contracts、chunking 策略、index/search/vector 抽象与能力边界；默认不启用 MeiliSearch / LanceDB / Express 等重型后端。
-- `@geminilight/mindos/protocols`：MCP/ACP/A2A 的产品逻辑归属规则，协议包只做 transport host。
-- `@geminilight/mindos/cli`：CLI command grouping / registry helpers，让 `packages/mindos/bin/cli.js` 保持薄入口。
+- `@geminilight/mindos/server`：API route contract、response/error/cache/CORS shape、health/files/file.raw/search/settings/mcp.status handlers。Web route 只做 Next Request/Response adapter。
+- `@geminilight/mindos/client`：HTTP client、typed health/files/search/settings/updateSettings/mcpStatus/askStream helpers、server launcher lifecycle。
+- `@geminilight/mindos/plugin` / `tool` / `session` / `agent`：OpenCode-style extension/runtime contracts；先作为 product subpath exports，后续再评估是否拆独立 npm 包。
+- `@geminilight/mindos/protocols`：MCP/ACP/A2A 的产品逻辑归属规则；ACP/MCP 默认 runtime 源码位于 `packages/mindos/src/protocols/*`，发布为 `dist/protocols/*` bundle。
+- `@geminilight/mindos/cli`：CLI command grouping / registry helpers，让 `packages/mindos/bin/cli.js` 保持薄入口；npm 主包 `bin/mindos-shim.cjs` 负责解析当前平台 runtime package。
 
 它不能 import `packages/web`、Next.js、React 或协议 host。Web 的 `packages/web/app/api/file/operation-kernel.ts` 与 `packages/web/lib/core/security.ts` 只直接 import `@geminilight/mindos`；`NextResponse`、cache refresh、UI state 仍留在 Web adapter。
 
 发布边界：
 - repo root `package.json` 是 `private: true` 的 monorepo orchestrator，不再拥有 npm `bin` / `files` / `prepack` 发布契约。
-- `packages/mindos/package.json` 是实际发布的 `@geminilight/mindos`，拥有 `bin: { "mindos": "bin/cli.js" }`、`exports`、`files` 和 `prepack`。
-- product `prepack` 会构建 Web standalone 到 `packages/mindos/_standalone`，并只 stage ACP/MCP 的 `dist/`、`package.json`、README；不会把 `packages/web` 源码复制进 npm tarball。
+- `packages/mindos/package.json` 是实际发布的 `@geminilight/mindos`，拥有 `bin: { "mindos": "bin/mindos-shim.cjs" }`、`exports`、`files` 和 `prepack`。
+- product `prepack` 会构建 Web standalone 到 `packages/mindos/_standalone` 并 stage runtime assets；正式 npm 发布时平台包承载完整 runtime root，主包只保留 shim + public JS exports。
+- `scripts/build-platform-packages.mjs` 生成 `@geminilight/mindos-<platform>` 包，并写入 `runtime-manifest.json`（product version、platform、entrypoints、health route、included artifacts）。
 - local `npm pack` 后 product `postpack` 会清理 staging output，避免 generated copies 被误当成源码。
 
 `packages/retrieval/*` 只保留可选 adapter / service：
@@ -213,11 +217,11 @@ Web 的 `packages/web/app/api/file/operation-kernel.ts` 只保留 Next.js adapte
 
 后续 MCP / CLI 如果需要绕过 HTTP 直接执行知识库操作，应优先复用 `@geminilight/mindos`，不要重新实现权限和 tree-change 规则。
 
-### 4. packages/protocols/mcp-server — MCP Server
+### 4. packages/mindos/src/protocols/mcp-server — MCP Server
 
 **传输：** stdio (本地 Agent) / Streamable HTTP (远程设备，Bearer Token)
 
-**工具覆盖：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move) — 完整列表以 `packages/protocols/mcp-server/src/index.ts` 注册为准。
+**工具覆盖：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move) — 完整列表以 `packages/mindos/src/protocols/mcp-server/index.ts` 注册为准。
 
 **安全边界：** 路径沙箱 (`MIND_ROOT` 内) + `INSTRUCTION.md` 写保护 + 25,000 字符上限
 
@@ -301,7 +305,7 @@ Web 的 `packages/web/app/api/file/operation-kernel.ts` 只保留 Next.js adapte
 
 **Agent 工具 (6)：** `list_remote_agents`, `discover_agent`, `discover_agents`, `delegate_to_agent`, `check_task_status`, `orchestrate`
 
-### 7. packages/protocols/acp + Web ACP adapters — Agent Client Protocol
+### 7. packages/mindos/src/protocols/acp + Web ACP adapters — Agent Client Protocol
 
 **协议：** ACP 标准协议，基于 `@agentclientprotocol/sdk` 官方 SDK，通过 JSON-RPC 2.0 over stdio 与本地 Agent 子进程通信
 
@@ -309,11 +313,11 @@ Web 的 `packages/web/app/api/file/operation-kernel.ts` 只保留 Next.js adapte
 
 **注册表：** 31+ 个 ACP Agent 可用
 
-**核心包：** `packages/protocols/acp` 是 ACP source of truth，负责类型、Agent descriptor、注册表、安装探测、subprocess 生命周期和 session 管理。
+**核心源码：** `packages/mindos/src/protocols/acp` 是 ACP source of truth，负责类型、Agent descriptor、注册表、安装探测、subprocess 生命周期和 session 管理，并通过 `@geminilight/mindos/protocols/acp` 暴露给 Web adapters。
 
 **Web 适配：** `packages/web/lib/acp` 只保留 thin adapters、A2A bridge 和 `acp-tools`。用户配置通过 Web settings 注入为 `overrides`，核心包不读取 Web-only settings。
 
-**SDK 集成：** `packages/protocols/acp/src/subprocess.ts` 使用 SDK `ClientSideConnection` + `ndJsonStream` 建立连接，`packages/protocols/acp/src/session.ts` 通过 SDK 方法管理完整生命周期（initialize → authenticate → session/new → prompt → cancel → close）
+**SDK 集成：** `packages/mindos/src/protocols/acp/subprocess.ts` 使用 SDK `ClientSideConnection` + `ndJsonStream` 建立连接，`packages/mindos/src/protocols/acp/session.ts` 通过 SDK 方法管理完整生命周期（initialize → authenticate → session/new → prompt → cancel → close）
 
 **Agent 工具 (2)：** `list_acp_agents`, `call_acp_agent`
 
@@ -383,7 +387,7 @@ Web 的 `packages/web/app/api/file/operation-kernel.ts` 只保留 Next.js adapte
 ### 外部 Agent (MCP)
 
 ```
-Agent → stdio: spawn node packages/protocols/mcp-server/dist/index.cjs ← stdin/stdout → MCP Server ← App API → my-mind/
+Agent → stdio: spawn node dist/protocols/mcp-server/index.cjs ← stdin/stdout → MCP Server ← App API → my-mind/
      → HTTP:  POST http://host:8781/mcp ← Bearer Token → MCP Server ← fs → my-mind/
 ```
 

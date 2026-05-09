@@ -8,7 +8,8 @@
  *
  * Prerequisites: `pnpm --filter @mindos/web run build` must have been run first.
  */
-import { cpSync, existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,16 @@ const standaloneAppDir = resolve(appDir, '.next', 'standalone');
 const standaloneServerJs = resolve(standaloneAppDir, 'server.js');
 const productRoot = resolve(root, 'packages', 'mindos');
 const destDir = resolve(productRoot, '_standalone');
+const runtimeDependencySeeds = [
+  '@mariozechner/pi-coding-agent',
+  '@sinclair/typebox',
+  'partial-json',
+  'ajv',
+  'ajv-formats',
+  '@anthropic-ai/sdk',
+  'openai',
+];
+
 // ── Guard: ensure standalone build exists ────────────────────────────────────
 if (!existsSync(standaloneServerJs)) {
   console.error(
@@ -32,6 +43,7 @@ if (!existsSync(standaloneServerJs)) {
 // Reuse the same logic Desktop uses.
 import { materializeStandaloneAssets } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 materializeStandaloneAssets(appDir);
+copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
 
 // ── Step 2: Copy standalone to top-level _standalone/ ────────────────────────
 console.log('[prepare-standalone] Copying standalone build to packages/mindos/_standalone/ ...');
@@ -46,6 +58,11 @@ const publishableNodeModules = resolve(destDir, '__node_modules');
 if (existsSync(standaloneNodeModules)) {
   rmSync(publishableNodeModules, { recursive: true, force: true });
   renameSync(standaloneNodeModules, publishableNodeModules);
+}
+
+const removedRuntimeEntries = pruneRuntimeNodeModules(publishableNodeModules);
+if (removedRuntimeEntries > 0) {
+  console.log(`[prepare-standalone] Pruned ${removedRuntimeEntries} dev-only runtime dependency file(s)/dir(s)`);
 }
 
 const removedPackageLocks = prunePackageLocks(destDir);
@@ -104,7 +121,105 @@ if (existsSync(standaloneNextDir)) {
   renameSync(standaloneNextDir, publishableNextDir);
 }
 
+const removedStandaloneEntries = pruneStandalonePayload(destDir);
+if (removedStandaloneEntries > 0) {
+  console.log(`[prepare-standalone] Pruned ${removedStandaloneEntries} standalone source/dev file(s)/dir(s)`);
+}
+
 console.log(`[prepare-standalone] OK — server.js + ${Object.keys(manifest).length} manifest entries verified (${pageRoutes.length} pages, v${version})`);
+
+function pruneStandalonePayload(dir) {
+  const topLevelDevEntries = new Set([
+    '.antigravity',
+    '.npmignore',
+    '.turbo',
+    '__tests__',
+    'app',
+    'components.json',
+    'components',
+    'hooks',
+    'lib',
+    'scripts',
+    'styles',
+    'types',
+    'eslint.config.mjs',
+    'instrumentation.ts',
+    'next-env.d.ts',
+    'next.config.ts',
+    'postcss.config.mjs',
+    'proxy.ts',
+    'tsconfig.json',
+    'tsconfig.tsbuildinfo',
+    'vitest.config.ts',
+  ]);
+
+  let removed = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (topLevelDevEntries.has(entry.name) || entry.name.endsWith('.md')) {
+      rmSync(resolve(dir, entry.name), { recursive: true, force: true });
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+function pruneRuntimeNodeModules(dir) {
+  if (!existsSync(dir)) return 0;
+
+  const directRuntimeDepsToDrop = new Set(['@types', 'typescript', 'caniuse-lite']);
+  const devDirNames = new Set([
+    '.cache',
+    '.github',
+    '.turbo',
+    '__tests__',
+    'benchmark',
+    'benchmarks',
+    'coverage',
+    'doc',
+    'docs',
+    'example',
+    'examples',
+    'test',
+    'tests',
+  ]);
+
+  return pruneTree(dir, (entryPath, entry, depth) => {
+    if (entry.isDirectory()) {
+      if (depth === 1 && directRuntimeDepsToDrop.has(entry.name)) return true;
+      return devDirNames.has(entry.name);
+    }
+
+    if (!entry.isFile()) return false;
+    if (entry.name === 'package-lock.json') return true;
+    if (entry.name.endsWith('.map')) return true;
+    if (entry.name.endsWith('.d.ts') || entry.name.endsWith('.d.cts') || entry.name.endsWith('.d.mts')) return true;
+    if (entry.name.endsWith('.tsbuildinfo')) return true;
+    if (/^(readme|changelog|history|contributing|security)(\..*)?$/i.test(entry.name)) return true;
+    return false;
+  });
+}
+
+function pruneTree(dir, shouldRemove, depth = 0) {
+  if (!existsSync(dir)) return 0;
+
+  let removed = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = resolve(dir, entry.name);
+    const entryDepth = depth + 1;
+
+    if (shouldRemove(entryPath, entry, entryDepth)) {
+      rmSync(entryPath, { recursive: true, force: true });
+      removed += 1;
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      removed += pruneTree(entryPath, shouldRemove, entryDepth);
+    }
+  }
+
+  return removed;
+}
 
 function prunePackageLocks(dir) {
   let removed = 0;
@@ -124,4 +239,97 @@ function prunePackageLocks(dir) {
   }
 
   return removed;
+}
+
+function copyRuntimeDependencyClosure(destNodeModules, seeds) {
+  if (!existsSync(destNodeModules)) return;
+
+  const visited = new Set();
+  const queue = seeds.map((name) => ({ name, required: true, strict: true, from: appDir }));
+
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next || visited.has(next.name)) continue;
+    visited.add(next.name);
+
+    const packageDir = resolvePackageDir(next.name, next.from);
+    if (!packageDir) {
+      if (next.strict) {
+        console.error(`[prepare-standalone] FAILED: runtime dependency not resolvable: ${next.name}`);
+        process.exit(1);
+      }
+      continue;
+    }
+
+    const packageJsonPath = resolve(packageDir, 'package.json');
+    if (!existsSync(packageJsonPath)) {
+      if (next.strict) {
+        console.error(`[prepare-standalone] FAILED: runtime dependency package.json missing: ${next.name}`);
+        process.exit(1);
+      }
+      continue;
+    }
+
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    const destDir = resolve(destNodeModules, next.name);
+    if (!existsSync(destDir)) {
+      rmSync(destDir, { recursive: true, force: true });
+      cpSync(packageDir, destDir, {
+        recursive: true,
+        dereference: true,
+        filter: shouldCopyRuntimePackageEntry,
+      });
+    }
+
+    const peerMeta = packageJson.peerDependenciesMeta ?? {};
+    const deps = [
+      ...Object.keys(packageJson.dependencies ?? {}).map((name) => ({ name, required: true })),
+      ...Object.keys(packageJson.peerDependencies ?? {}).map((name) => ({
+        name,
+        required: peerMeta[name]?.optional !== true,
+      })),
+      ...Object.keys(packageJson.optionalDependencies ?? {}).map((name) => ({ name, required: false })),
+    ];
+
+    for (const dep of deps) {
+      if (!visited.has(dep.name)) queue.push({ ...dep, strict: false, from: packageDir });
+    }
+  }
+}
+
+function resolvePackageDir(packageName, fromDir) {
+  const directPath = resolve(appDir, 'node_modules', packageName);
+  if (existsSync(resolve(directPath, 'package.json'))) return realpathSync(directPath);
+
+  try {
+    const requireFromPackage = createRequire(resolve(fromDir, 'package.json'));
+    const entry = requireFromPackage.resolve(packageName);
+    return findPackageRoot(entry, packageName);
+  } catch {
+    return null;
+  }
+}
+
+function findPackageRoot(startPath, packageName) {
+  let dir = dirname(startPath);
+
+  while (dir !== dirname(dir)) {
+    const packageJsonPath = resolve(dir, 'package.json');
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+        if (packageJson.name === packageName) return dir;
+      } catch {
+        return null;
+      }
+    }
+    dir = dirname(dir);
+  }
+
+  return null;
+}
+
+function shouldCopyRuntimePackageEntry(src) {
+  const name = src.split('/').pop();
+  return name !== 'node_modules' && name !== '.cache' && name !== '.turbo';
 }

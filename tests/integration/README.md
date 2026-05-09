@@ -5,7 +5,7 @@ Cross-service tests that verify the MCP server correctly communicates with the A
 ## Prerequisites
 
 ```bash
-pnpm --filter @mindos/mcp-server build
+pnpm --filter @geminilight/mindos build
 ```
 
 ## Running

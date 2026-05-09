@@ -1,5 +1,5 @@
 /**
- * Filesystem probes for a MindOS package root (packages/web/.next + packages/protocols/mcp-server).
+ * Filesystem probes for a MindOS package root (packages/web/.next + dist/protocols/mcp-server).
  */
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
@@ -23,6 +23,12 @@ export function resolveWebAppDir(root: string): string {
 }
 
 export function resolveMcpDir(root: string): string {
+  const productMcpDir = path.join(root, 'dist', 'protocols', 'mcp-server');
+  if (existsSync(productMcpDir)) return productMcpDir;
+
+  const sourceProductMcpDir = path.join(root, 'packages', 'mindos', 'src', 'protocols', 'mcp-server');
+  if (existsSync(sourceProductMcpDir)) return sourceProductMcpDir;
+
   const domainMcpDir = path.join(root, 'packages', 'protocols', 'mcp-server');
   if (existsSync(domainMcpDir)) return domainMcpDir;
 
@@ -127,6 +133,7 @@ export function analyzeMindOsLayout(root: string): MindOsLayoutAnalysis {
   const resolvedMcpDir = resolveMcpDir(root);
   const mcpRunnable = isRuntimeLayoutMcpRunnable(root)
     || existsSync(path.join(resolvedMcpDir, 'dist', 'index.cjs'))
+    || existsSync(path.join(resolvedMcpDir, 'index.cjs'))
     || existsSync(path.join(resolvedMcpDir, 'src'));
   const runnable = runtimeRunnable && mcpRunnable;
 

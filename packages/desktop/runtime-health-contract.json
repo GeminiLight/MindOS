@@ -68,7 +68,7 @@
       "required": true,
       "files": [
         {
-          "path": "packages/protocols/mcp-server/dist/index.cjs",
+          "path": "dist/protocols/mcp-server/index.cjs",
           "type": "file"
         }
       ]
@@ -88,7 +88,7 @@
       "required": false,
       "files": [
         {
-          "path": "packages/protocols/mcp-server/src",
+          "path": "packages/mindos/src/protocols/mcp-server",
           "type": "directory"
         }
       ]
@@ -103,36 +103,6 @@
         },
         {
           "path": "src/cli.js",
-          "type": "file"
-        }
-      ]
-    },
-    "runtime-dependency-closure": {
-      "description": "External server packages and their runtime dependency closure used by SSR routes",
-      "required": true,
-      "files": [
-        {
-          "path": "packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json",
-          "type": "file"
-        },
-        {
-          "path": "packages/web/.next/standalone/node_modules/partial-json/package.json",
-          "type": "file"
-        },
-        {
-          "path": "packages/web/.next/standalone/node_modules/ajv/package.json",
-          "type": "file"
-        },
-        {
-          "path": "packages/web/.next/standalone/node_modules/ajv-formats/package.json",
-          "type": "file"
-        },
-        {
-          "path": "packages/web/.next/standalone/node_modules/chalk/package.json",
-          "type": "file"
-        },
-        {
-          "path": "packages/web/.next/standalone/node_modules/cli-highlight/package.json",
           "type": "file"
         }
       ]
@@ -154,7 +124,6 @@
       "web-standalone",
       "critical-routes",
       "pdf-runtime",
-      "runtime-dependency-closure",
       "mcp-dist",
       "cli-runtime"
     ],
@@ -168,7 +137,6 @@
       "web-standalone",
       "critical-routes",
       "pdf-runtime",
-      "runtime-dependency-closure",
       "mcp-dist",
       "cli-runtime",
       "skills-data"

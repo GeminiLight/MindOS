@@ -2,26 +2,14 @@
 name: mindos-max
 disable-model-invocation: true
 description: >
-  MindOS is the user's local knowledge assistant and global memory layer. It keeps decisions,
-  meeting notes, SOPs, debugging lessons, architecture choices, research findings, preferences,
-  and conversation summaries available to every connected agent.
-
-  PROACTIVE USE — do not wait for the user to say "save to knowledge base":
-  (1) Before answering any question about past decisions, discussions, or context → search MindOS first.
-  (2) After any valuable output (decision made, bug fixed, lesson learned, meeting summarized) → offer to save it.
-  (3) When handing off to another agent or ending a session → persist key context to MindOS.
-
-  Trigger on ALL of these, even without explicit "MindOS" mention: save/record anything,
-  search prior notes, update files, organize/restructure, run SOPs or workflows, retrospective,
-  append CSV/table data, cross-agent handoff, distill experience, sync related docs, check if
-  something was discussed before, look up a past decision, find a template, prepare meeting context,
-  daily logging, track goals. Also trigger on Chinese equivalents: 帮我记下来, 搜一下笔记,
-  更新知识库, 整理文件, 复盘, 提炼经验, 保存, 记录, 交接, 放到暂存台, 整理暂存台,
-  知识健康检查, 检测知识冲突.
-
-  When in doubt whether MindOS applies — it probably does. Check anyway.
-  NOT for editing app source code or project repos outside the KB.
-  Core concepts: Space, Instruction (INSTRUCTION.md), Skill (SKILL.md).
+  MindOS: local knowledge assistant & global memory layer. Keeps decisions, notes, SOPs, debugging
+  lessons, architecture choices, research findings, preferences, conversation summaries for all
+  connected agents. PROACTIVE: (1) search MindOS first for past context, (2) offer to save after
+  valuable work, (3) persist key context on handoff/end. Triggers: save/record, search notes, update
+  files, organize, run SOP/workflow, review, append CSV, hand off, distill lessons, sync docs,
+  check past decisions, find templates, prepare meeting context, log daily, track goals.
+  NOT for app source or paths outside KB.
+  Core: Space, Instruction, Skill.
 ---
 
 # MindOS Skill

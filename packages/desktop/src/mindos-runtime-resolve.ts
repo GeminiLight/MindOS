@@ -69,8 +69,8 @@ export async function resolveLocalMindOsProjectRoot(
       return {
         ok: false,
         messageEn:
-          `MindOS runtime at ${explicitPath} is incomplete (need packages/web/.next and packages/protocols/mcp-server/). Check mindosRuntimeRoot / MINDOS_RUNTIME_ROOT.`,
-        messageZh: `运行目录不完整（需要 packages/web/.next 与 packages/protocols/mcp-server/）：${explicitPath}`,
+          `MindOS runtime at ${explicitPath} is incomplete (need packages/web/.next and dist/protocols/mcp-server/). Check mindosRuntimeRoot / MINDOS_RUNTIME_ROOT.`,
+        messageZh: `运行目录不完整（需要 packages/web/.next 与 dist/protocols/mcp-server/）：${explicitPath}`,
       };
     }
     overrideRoot = explicitPath;

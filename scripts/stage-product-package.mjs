@@ -17,8 +17,6 @@ const productRoot = resolve(root, 'packages', 'mindos');
 
 cleanProductStage({ includePackageDocs: true, includeStandalone: false });
 
-copyBuiltPackage('packages/protocols/acp');
-copyBuiltPackage('packages/protocols/mcp-server');
 copyTree('scripts', 'scripts');
 copyIfExists('assets', 'assets');
 copyIfExists('skills', 'skills');
@@ -40,12 +38,6 @@ function copyFile(from, to) {
   const dest = resolve(productRoot, to);
   mkdirSync(dirname(dest), { recursive: true });
   cpSync(src, dest, { dereference: true });
-}
-
-function copyBuiltPackage(packagePath) {
-  copyTree(`${packagePath}/dist`, `${packagePath}/dist`);
-  copyFile(`${packagePath}/package.json`, `${packagePath}/package.json`);
-  copyFile(`${packagePath}/README.md`, `${packagePath}/README.md`);
 }
 
 function copyTree(from, to) {

@@ -35,6 +35,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.9'
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -49,12 +54,12 @@ jobs:
 
       - name: Build standalone package
         run: |
-          pnpm --filter @mindos/acp build
           pnpm --filter @geminilight/mindos build
-          pnpm --filter @mindos/mcp-server build
           NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @mindos/web run build
           node scripts/prepare-standalone.mjs
+          node scripts/prepare-static-web.mjs
           node scripts/stage-product-package.mjs
+          node scripts/build-platform-packages.mjs
 
       - name: Smoke test standalone server
         run: |
@@ -63,15 +68,22 @@ jobs:
 
       - name: Clean build artifacts before publish
         run: |
-          rm -rf node_modules packages/web/node_modules packages/web/.next packages/protocols/acp/node_modules packages/mindos/node_modules packages/protocols/mcp-server/node_modules
-          # Remove symlinks inside staged standalone deps (cause infinite recursion)
-          find packages/mindos/_standalone/__node_modules -type l -delete 2>/dev/null || true
-          echo "=== Verifying _standalone exists ==="
-          ls -la packages/mindos/_standalone/server.js
-          echo "=== Checking tarball size ==="
+          rm -rf node_modules packages/web/node_modules packages/web/.next packages/mindos/node_modules
+          echo "=== Verifying platform binary exists ==="
+          ls -la packages/mindos-platforms/linux-x64/bin/mindos
+          echo "=== Checking main tarball size ==="
           cd packages/mindos && npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 
-      - name: Publish to npm
+      - name: Publish platform packages to npm
+        run: |
+          for pkg in packages/mindos-platforms/*; do
+            echo "Publishing $pkg"
+            (cd "$pkg" && npm publish --access public --ignore-scripts)
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish main package to npm
         run: cd packages/mindos && npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -97,13 +109,33 @@ jobs:
           fi
           echo "Downloaded: $TGZ"
 
-          # Check _standalone structure
-          for f in "_standalone/server.js" "_standalone/__next/server/app-paths-manifest.json" "_standalone/__next/server/app/page.js" "_standalone/__node_modules"; do
+          # Main package should be lightweight and only contain the shim/runtime exports.
+          for f in "bin/mindos-shim.cjs" "dist/index.js" "dist/protocols/acp/index.js"; do
             if ! tar -tzf "$TGZ" | grep -q "$f"; then
               echo "❌ Published package missing $f!"
               exit 1
             fi
             echo "   ✓ $f"
           done
+
+          PLATFORM="@geminilight/mindos-linux-x64@${VERSION}"
+          npm pack "$PLATFORM" 2>&1
+          PTGZ=$(ls -1 geminilight-mindos-linux-x64-*.tgz 2>/dev/null | head -1)
+          if [ -z "$PTGZ" ]; then
+            echo "❌ npm pack failed — no platform .tgz file found"
+            exit 1
+          fi
+          for f in "bin/mindos" "runtime-manifest.json" "package.json"; do
+            if ! tar -tzf "$PTGZ" | grep -q "$f"; then
+              echo "❌ Published platform package missing $f!"
+              exit 1
+            fi
+            echo "   ✓ platform:$f"
+          done
+
+          if tar -tzf "$PTGZ" | grep -q "_standalone/"; then
+            echo "❌ Published Bun single-binary platform package should not expose _standalone/"
+            exit 1
+          fi
 
           echo "✅ Package integrity verified"

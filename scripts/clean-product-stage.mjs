@@ -16,6 +16,7 @@ const productRoot = resolve(root, 'packages', 'mindos');
 
 export const STAGED_PRODUCT_PATHS = [
   'packages/mindos/_standalone',
+  'packages/mindos/static-web',
   'packages/mindos/apps',
   'packages/mindos/packages',
   'packages/mindos/scripts',
@@ -38,7 +39,10 @@ export function cleanProductStage(options = {}) {
   } = options;
 
   const paths = [
-    ...STAGED_PRODUCT_PATHS.filter((rel) => includeStandalone || rel !== 'packages/mindos/_standalone'),
+    ...STAGED_PRODUCT_PATHS.filter((rel) => (
+      includeStandalone
+      || (rel !== 'packages/mindos/_standalone' && rel !== 'packages/mindos/static-web')
+    )),
     ...(includePackageDocs ? PACKAGE_DOC_PATHS : []),
   ];
 

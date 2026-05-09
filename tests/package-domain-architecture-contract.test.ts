@@ -6,10 +6,9 @@ const root = resolve(__dirname, '..');
 
 const domains = {
   retrieval: ['search', 'vector', 'indexer', 'api'],
-  protocols: ['acp', 'mcp-server'],
 } as const;
 
-const internalizedDomains = ['foundation', 'knowledge'] as const;
+const internalizedDomains = ['foundation', 'knowledge', 'protocols'] as const;
 
 const topLevelWorkspacePackages = [
   'mindos',
@@ -79,7 +78,6 @@ describe('package domain architecture contract', () => {
       .filter((name) => name.startsWith('@mindos/') || name === '@geminilight/mindos')
       .sort()).toEqual([
       '@geminilight/mindos',
-      '@mindos/acp',
     ]);
 
     expect(webPackage.dependencies).not.toHaveProperty('@mindos/indexer');

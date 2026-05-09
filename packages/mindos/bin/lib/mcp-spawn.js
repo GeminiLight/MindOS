@@ -4,6 +4,10 @@ import { CONFIG_PATH } from './constants.js';
 import { bold, red } from './colors.js';
 import { ensureMcpBundle, MCP_BUNDLE, MCP_DIR } from './mcp-build.js';
 
+function runtimeJsExecutor() {
+  return process.env.MINDOS_BINARY_EXECUTOR || process.execPath;
+}
+
 export function spawnMcp(verbose = false) {
   const mcpPort = process.env.MINDOS_MCP_PORT || '8781';
   const webPort = process.env.MINDOS_WEB_PORT || '3456';
@@ -33,7 +37,7 @@ export function spawnMcp(verbose = false) {
     ...(configAuthToken ? { AUTH_TOKEN: configAuthToken } : {}),
     ...(verbose ? { MCP_VERBOSE: '1' } : {}),
   };
-  const child = spawn(process.execPath, [MCP_BUNDLE], {
+  const child = spawn(runtimeJsExecutor(), [MCP_BUNDLE], {
     cwd: MCP_DIR,
     stdio: 'inherit',
     env,

@@ -15,7 +15,7 @@ To ship a **runnable** built-in MindOS (so users can run without `npm i -g`):
 
 3. Then `npm run dist` (or your platform script).
 
-The prepared **`packages/web/`** does **not** include root **`packages/web/node_modules`** (standalone carries traced deps). MCP is pre-bundled into `packages/protocols/mcp-server/dist/index.cjs` via esbuild — no MCP `node_modules` is needed at runtime. The prepare script copies the bundle if it already exists, or builds it from source otherwise.
+The prepared runtime does **not** include root **`packages/web/node_modules`** (standalone carries traced deps). MCP is pre-bundled into `dist/protocols/mcp-server/index.cjs` via esbuild inside the MindOS runtime package, so no MCP `node_modules` is needed at runtime. The prepare script copies the bundle if it already exists, or builds it from source otherwise.
 
 If you skip step 1–2, only this README may be packaged; **prefer-newer** will fall back to the global install as before.
 
