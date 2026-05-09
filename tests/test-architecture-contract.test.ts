@@ -49,6 +49,7 @@ describe('test architecture contract', () => {
     const workspacePackageDirs = [
       'packages/browser-extension',
       'packages/desktop-tauri',
+      'examples',
       'packages/mindos',
       'packages/web',
       'packages/desktop',
