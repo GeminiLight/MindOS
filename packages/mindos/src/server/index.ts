@@ -141,6 +141,7 @@ export {
   handleAcpSessionDelete,
   handleAcpSessionGet,
   handleAcpSessionPost,
+  resolveNpmInvocation,
   type AcpConfigServices,
   type AcpDetectServices,
   type AcpInstallServices,
@@ -148,6 +149,8 @@ export {
   type AcpServices,
   type AcpSessionServices,
   type AcpSettings,
+  type MindosNpmInvocation,
+  type MindosNpmInvocationOptions,
 } from './handlers/acp.js';
 
 export {

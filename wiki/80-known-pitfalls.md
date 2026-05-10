@@ -2923,6 +2923,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/web/__tests__/core/node-executor.test.ts` 覆盖 helper 行为，`packages/web/__tests__/api/extract-subprocess.test.ts` 扫描提取入口，禁止重新出现 `execFileSync('node', ...)`。
 
+### ACP 安装不要在 Windows 直接执行 npm.cmd（2026-05-10）
+
+**症状**：Windows 上从 Web/ACP 控制面安装 Agent 包时，`execFile('npm', ['install', ...])` 可能因为 npm 是 `.cmd` shim 而启动失败；Desktop/Web runtime 的 PATH 也可能和终端不一致。
+
+**根因**：ACP install handler 直接执行裸 `npm`，没有复用 CLI update/uninstall 已经采用的 Windows shell-free npm 解析策略。
+
+**修复**：为 ACP handler 增加 `resolveNpmInvocation()`；Windows 下定位 `npm-cli.js` 后用当前 Node 执行，Unix 保留 PATH 查找。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 Windows 解析为 `node.exe npm-cli.js install ...`，并确认非 Windows 仍保持 `npm` PATH 行为。
+
 ### Web 全量测试中的动态 import smoke test 要给足超时预算（2026-05-10）
 
 **症状**：`@mindos/web` 全量 Vitest 并发执行时，`__tests__/core/request-scoped-tools.test.ts` 偶发在默认 5s 超时。单独运行约 0.7s 通过，但与多个 ESLint 合约测试、Next build 后续测试并发时，动态 import `@/lib/agent/tools` 会被 CPU/transform 竞争拖慢。

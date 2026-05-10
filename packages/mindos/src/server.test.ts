@@ -20,6 +20,7 @@ import {
   handleAcpSessionDelete,
   handleAcpSessionGet,
   handleAcpSessionPost,
+  resolveNpmInvocation,
   handleAskSessionsDelete,
   handleAskSessionsGet,
   handleAskSessionsPost,
@@ -2997,6 +2998,27 @@ describe('MindOS product server contract', () => {
     await expect(handleAcpSessionDelete({ sessionId: 'ses-1' }, services)).resolves.toMatchObject({
       status: 200,
       body: { ok: true },
+    });
+  });
+
+  it('resolves ACP npm installs through node on Windows instead of npm.cmd', () => {
+    const invocation = resolveNpmInvocation(['install', '-g', '@agent/package'], {
+      platform: 'win32',
+      nodeExecPath: 'C:\\Program Files\\MindOS\\node.exe',
+      env: { npm_execpath: 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js' },
+      pathExists: (filePath) => filePath.endsWith('npm-cli.js'),
+    });
+
+    expect(invocation).toEqual({
+      command: 'C:\\Program Files\\MindOS\\node.exe',
+      args: ['C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js', 'install', '-g', '@agent/package'],
+    });
+  });
+
+  it('keeps ACP npm installs on PATH lookup outside Windows', () => {
+    expect(resolveNpmInvocation(['install', '-g', '@agent/package'], { platform: 'darwin' })).toEqual({
+      command: 'npm',
+      args: ['install', '-g', '@agent/package'],
     });
   });
 

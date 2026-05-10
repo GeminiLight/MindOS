@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import {
   detectLocalAcpAgents as defaultDetectLocalAcpAgents,
   fetchAcpRegistry as defaultFetchAcpRegistry,
@@ -70,6 +72,18 @@ export type AcpServices =
 
 const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
 let detectCache: { data: { installed: unknown[]; notInstalled: unknown[] }; ts: number } | null = null;
+
+export type MindosNpmInvocation = {
+  command: string;
+  args: string[];
+};
+
+export type MindosNpmInvocationOptions = {
+  platform?: NodeJS.Platform;
+  nodeExecPath?: string;
+  env?: NodeJS.ProcessEnv;
+  pathExists?: (path: string) => boolean;
+};
 
 export function handleAcpConfigGet(
   services: AcpConfigServices,
@@ -279,9 +293,51 @@ function isValidNpmPackageName(packageName: string): boolean {
 }
 
 async function defaultInstallPackage(agentId: string, packageName: string) {
-  const child = execFile('npm', ['install', '-g', packageName], { timeout: 120_000 });
+  const invocation = resolveNpmInvocation(['install', '-g', packageName]);
+  const child = execFile(invocation.command, invocation.args, { timeout: 120_000 });
   child.unref();
   return { status: 'installing' as const, agentId, packageName };
+}
+
+export function resolveNpmInvocation(
+  args: string[],
+  options: MindosNpmInvocationOptions = {},
+): MindosNpmInvocation {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') return { command: 'npm', args };
+
+  const env = options.env ?? process.env;
+  const nodeExecPath = options.nodeExecPath ?? process.execPath;
+  const pathExists = options.pathExists ?? existsSync;
+  const npmCliPath = findNpmCliPath(nodeExecPath, env, pathExists);
+  if (!npmCliPath) {
+    throw new Error('Unable to locate npm-cli.js for shell-free ACP package installation on Windows');
+  }
+  return { command: nodeExecPath, args: [npmCliPath, ...args] };
+}
+
+function findNpmCliPath(
+  nodeExecPath: string,
+  env: NodeJS.ProcessEnv,
+  pathExists: (path: string) => boolean,
+): string | null {
+  const candidates = new Set<string>();
+  if (env.npm_execpath) {
+    if (env.npm_execpath.endsWith('npm-cli.js')) {
+      candidates.add(env.npm_execpath);
+    } else {
+      candidates.add(join(dirname(env.npm_execpath), 'npm-cli.js'));
+    }
+  }
+
+  const nodeDir = dirname(nodeExecPath);
+  candidates.add(join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+  candidates.add(resolve(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+
+  for (const candidate of candidates) {
+    if (pathExists(candidate)) return candidate;
+  }
+  return null;
 }
 
 async function handleAcpSessionCreate(payload: Record<string, unknown>, services: AcpSessionServices) {
