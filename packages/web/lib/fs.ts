@@ -410,7 +410,12 @@ export function getContentChangeSummary(): ContentChangeSummary {
 /** Returns space preview (INSTRUCTION + README excerpts) for a directory, or null if not a space. */
 export function getSpacePreview(dirPath: string): SpacePreview | null {
   const root = getMindRoot();
-  const abs = path.join(root, dirPath);
+  let abs: string;
+  try {
+    abs = resolveSafe(root, dirPath);
+  } catch {
+    return null;
+  }
   const instructionPath = path.join(abs, 'INSTRUCTION.md');
   if (!fs.existsSync(instructionPath)) return null;
   return buildSpacePreview(abs);
@@ -424,8 +429,7 @@ export function collectAllFiles(): string[] {
 /** Returns whether a relative path is a directory within MIND_ROOT. */
 export function isDirectory(filePath: string): boolean {
   try {
-    const root = path.resolve(getMindRoot());
-    const resolved = path.resolve(path.join(root, filePath));
+    const resolved = resolveSafe(getMindRoot(), filePath);
     return fs.statSync(resolved).isDirectory();
   } catch {
     return false;
@@ -436,7 +440,12 @@ export function isDirectory(filePath: string): boolean {
 export function getDirEntries(dirPath: string): FileNode[] {
   const root = getMindRoot();
   const rootResolved = path.resolve(root);
-  const resolved = path.resolve(path.join(rootResolved, dirPath));
+  let resolved: string;
+  try {
+    resolved = resolveSafe(rootResolved, dirPath);
+  } catch {
+    return [];
+  }
 
   let entries: fs.Dirent[];
   try {
@@ -935,4 +944,3 @@ export function findBacklinks(targetPath: string): BacklinkEntry[] {
   const linkingSources = linkIndex.getBacklinks(targetPath);
   return coreFindBacklinks(mindRoot, targetPath, linkingSources);
 }
-

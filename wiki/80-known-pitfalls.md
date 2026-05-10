@@ -3265,6 +3265,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/web/__tests__/lib/sync-config-path.test.ts` 覆盖 `..\\outside.md` 在 POSIX host 上必须返回 `false`，同时保留 `..notes/todo.md` 这种合法单段 dotted 目录。
 
+### Web 目录 helper 不能绕过 resolveSafe（2026-05-10）
+
+**症状**：`/view/[...path]` 这类目录视图调用 `isDirectory()`、`getDirEntries()`、`getSpacePreview()` 时，`../sibling-dir` 可以让 Web 层探测或列出 `MIND_ROOT` 同级目录。文件读取已经走 `resolveSafe()`，但目录 helper 仍使用直接 `path.resolve(path.join(...))`。
+
+**根因**：目录 helper 把非法路径当作普通目录查询，并在 UI 层用空数组/null 处理读取失败；解析失败和路径越界没有统一进入安全模块。
+
+**修复**：三个目录 helper 统一先走 `resolveSafe()`。非法路径沿用原有 UI fallback：`isDirectory=false`、`getDirEntries=[]`、`getSpacePreview=null`。
+
+**防回归**：`packages/web/__tests__/core/fs-public-paths.test.ts` 创建 `MIND_ROOT` 同级目录，用相对 traversal 验证目录探测、列表和 space preview 都不会泄露。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。
