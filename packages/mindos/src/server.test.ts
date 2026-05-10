@@ -2284,6 +2284,10 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: 'Invalid file path' },
     });
+    expect(await handleSyncPost({ action: 'conflict-preview', remote: '..\\outside.md' }, services)).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid file path' },
+    });
     expect(await handleSyncPost({ action: 'update-intervals', autoCommitInterval: 1 }, services)).toMatchObject({
       status: 400,
       body: { error: 'autoCommitInterval must be an integer between 10 and 300 seconds' },

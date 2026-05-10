@@ -1,7 +1,8 @@
 import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { resolveSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
 
 export type MindosSyncConfig = Record<string, any> & {
@@ -229,8 +230,11 @@ function handleResolveConflict(
     return json({ error: 'Invalid file path' }, { status: 400 });
   }
 
-  const conflictPath = resolve(mindRoot, `${file}.sync-conflict`);
-  const originalPath = resolve(mindRoot, file);
+  const conflictPath = resolveMindRootPath(mindRoot, `${file}.sync-conflict`);
+  const originalPath = resolveMindRootPath(mindRoot, file);
+  if (!conflictPath || !originalPath) {
+    return json({ error: 'Invalid file path' }, { status: 400 });
+  }
   if (strategy === 'keep-remote' && existsSync(conflictPath)) {
     writeFileSync(originalPath, readFileSync(conflictPath, 'utf-8'), 'utf-8');
   }
@@ -258,8 +262,11 @@ function handleConflictPreview(
     return json({ error: 'Invalid file path' }, { status: 400 });
   }
 
-  const localPath = resolve(mindRoot, file);
-  const remotePath = resolve(mindRoot, `${file}.sync-conflict`);
+  const localPath = resolveMindRootPath(mindRoot, file);
+  const remotePath = resolveMindRootPath(mindRoot, `${file}.sync-conflict`);
+  if (!localPath || !remotePath) {
+    return json({ error: 'Invalid file path' }, { status: 400 });
+  }
   return json({
     local: existsSync(localPath) ? readFileSync(localPath, 'utf-8') : '',
     remote: existsSync(remotePath) ? readFileSync(remotePath, 'utf-8') : '',
@@ -364,10 +371,15 @@ function runGit(cwd: string, args: string[]): string {
 }
 
 function isPathWithinMindRoot(mindRoot: string, filePath: string): boolean {
-  const root = resolve(mindRoot);
-  const target = resolve(root, filePath);
-  const rel = relative(root, target);
-  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+  return resolveMindRootPath(mindRoot, filePath) !== null;
+}
+
+function resolveMindRootPath(mindRoot: string, filePath: string): string | null {
+  try {
+    return resolveSafe(mindRoot, filePath);
+  } catch {
+    return null;
+  }
 }
 
 async function runCli(args: string[], timeoutMs: number, services: MindosSyncServices): Promise<void> {

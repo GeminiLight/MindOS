@@ -3245,6 +3245,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/desktop/src/node-bootstrap.test.ts` 模拟 `302 Location: /mirrors/node.tar.gz`，确认第二次请求是 `https://node.example/mirrors/node.tar.gz`。
 
+### Sync conflict 路径校验必须复用 resolveSafe（2026-05-10）
+
+**症状**：`/api/sync` 的 `conflict-preview` / `resolve-conflict` 在 POSIX 主机上会接受 `..\\outside.md`，返回空 preview 或继续处理；这和文件 API / CLI 已经修复的 backslash traversal 规则不一致。
+
+**根因**：sync handler 自己用 `path.resolve()` + `path.relative()` 做 containment，且只按当前平台的 `path.sep` 判断 `..`。在 POSIX 上反斜杠不是分隔符，Windows 风格 traversal 没有被拦截。
+
+**修复**：sync conflict 路径解析统一走 `resolveSafe()`，让 backslash normalization、Windows absolute path 和 root containment 逻辑与全局安全模块一致。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 `conflict-preview` 对 `..\\outside.md` 返回 `Invalid file path`，同时保留 `..notes/note.md` 这类合法单段 dotted 目录。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。
