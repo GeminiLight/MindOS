@@ -40,7 +40,7 @@
     "verify:standalone": "node scripts/verify-standalone.mjs",
     "clean:product-stage": "node scripts/clean-product-stage.mjs --include-package-docs",
     "release": "bash scripts/release.sh",
-    "clean": "turbo run clean && rm -rf node_modules",
+    "clean": "turbo run clean && node scripts/remove-node-modules.mjs",
     "prepare": "git config core.hooksPath scripts/hooks 2>/dev/null || true"
   },
   "packageManager": "pnpm@10.18.3",

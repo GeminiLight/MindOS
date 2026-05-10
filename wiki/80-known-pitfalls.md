@@ -2775,6 +2775,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`tests/workflow-migration-contract.test.ts` 断言 Browser Extension package/workflow 不再包含 `zip -r` 或 `rm -rf`，并要求 `archiver` 和 Node package 脚本存在。
 
+### 根 clean 脚本不要直接写 `rm -rf node_modules`（2026-05-10）
+
+**症状**：`pnpm run clean` 在 macOS/Linux 正常，但 Windows cmd/PowerShell 没有 `rm -rf`，导致开发者想清理 workspace 时第一步就失败。
+
+**根因**：根 package script 是所有平台共享入口，不能把 POSIX 删除命令写进脚本尾部。
+
+**修复**：改成 `node scripts/remove-node-modules.mjs`，脚本用 `fs.rmSync(..., { recursive: true, force: true })` 删除根 `node_modules/`。
+
+**防回归**：`tests/workflow-migration-contract.test.ts` 检查根 `clean` 脚本不再包含 `rm -rf`，并要求 Node 清理脚本存在。
+
 ### Hook / Component 不要在 render 阶段读写 ref.current（2026-05-10）
 
 **症状**：React compiler lint 报 `react-hooks/refs`，典型位置是 hook / component 为了避免事件回调 stale closure，在组件 render 阶段直接执行 `someRef.current = value`，用 `someRef.current` 初始化 state，或在 JSX handler 中直接调用会读写 ref 的 callback。

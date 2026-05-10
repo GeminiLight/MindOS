@@ -88,6 +88,16 @@ describe('GitHub workflow migration contract', () => {
     }
   });
 
+  it('keeps the root clean script cross-platform', () => {
+    const rootPkg = readJson<{ scripts?: Record<string, string> }>('package.json');
+    const cleaner = readText('scripts/remove-node-modules.mjs');
+
+    expect(rootPkg.scripts?.clean).toBe('turbo run clean && node scripts/remove-node-modules.mjs');
+    expect(rootPkg.scripts?.clean).not.toContain('rm -rf');
+    expect(cleaner).toContain('rmSync');
+    expect(cleaner).not.toContain('rm -rf');
+  });
+
   it('publishes npm from the pnpm workspace and current source paths', () => {
     const yml = workflow('publish-npm.yml');
 
