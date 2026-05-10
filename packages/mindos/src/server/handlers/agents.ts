@@ -116,18 +116,36 @@ export function generateUniqueCustomAgentKey(name: string, existingKeys: Set<str
 }
 
 export function inferCustomAgentDefaults(name: string, baseDir: string): Omit<CustomAgentDef, 'key'> {
-  const dir = baseDir.endsWith('/') ? baseDir : `${baseDir}/`;
+  const dir = ensureAgentDirTrailingSeparator(baseDir);
   return {
     name,
     baseDir: dir,
-    global: `${dir}mcp.json`,
+    global: appendAgentPathSegment(dir, 'mcp.json'),
     project: null,
     configKey: 'mcpServers',
     format: 'json',
     preferredTransport: 'stdio',
     presenceDirs: [dir],
-    skillDir: `${dir}skills/`,
+    skillDir: appendAgentPathSegment(dir, 'skills/'),
   };
+}
+
+function hasAgentTrailingSeparator(input: string): boolean {
+  return input.endsWith('/') || input.endsWith('\\');
+}
+
+function ensureAgentDirTrailingSeparator(input: string): string {
+  return hasAgentTrailingSeparator(input) ? input : `${input}/`;
+}
+
+function appendAgentPathSegment(baseDir: string, segment: string): string {
+  return `${ensureAgentDirTrailingSeparator(baseDir)}${segment}`;
+}
+
+function isAgentAbsoluteInputPath(input: string): boolean {
+  if (input.startsWith('~/') || input.startsWith('~\\') || input.startsWith('/')) return true;
+  if (process.platform === 'win32' && (/^[A-Z]:[\\/]/i.test(input) || input.startsWith('\\\\'))) return true;
+  return false;
 }
 
 export function validateCustomAgentInput(
@@ -140,11 +158,7 @@ export function validateCustomAgentInput(
   if (!input.baseDir?.trim()) return 'Config directory is required';
 
   const dir = input.baseDir.trim();
-  if (!dir.startsWith('~/') && !dir.startsWith('/')) {
-    if (!(process.platform === 'win32' && /^[A-Z]:\\/i.test(dir))) {
-      return 'Must be an absolute path (e.g. ~/.qclaw/)';
-    }
-  }
+  if (!isAgentAbsoluteInputPath(dir)) return 'Must be an absolute path (e.g. ~/.qclaw/)';
 
   if (!isEdit) {
     const key = input.key || slugifyCustomAgentName(input.name.trim());
@@ -228,7 +242,7 @@ export function handleCustomAgentsPut(
     }
     if (updates.baseDir) {
       const dir = updates.baseDir.trim();
-      if (!dir.startsWith('~/') && !dir.startsWith('/')) {
+      if (!isAgentAbsoluteInputPath(dir)) {
         return json({ error: 'baseDir must be an absolute path' }, { status: 400 });
       }
     }
@@ -253,12 +267,11 @@ export function handleCustomAgentsPut(
     if (updates.presenceDirs) {
       updated.presenceDirs = updates.presenceDirs;
     } else if (updates.baseDir) {
-      updated.presenceDirs = [updates.baseDir.endsWith('/') ? updates.baseDir : `${updates.baseDir}/`];
+      updated.presenceDirs = [ensureAgentDirTrailingSeparator(updates.baseDir)];
     }
 
     if (!updates.skillDir && updates.baseDir) {
-      const bd = updates.baseDir.endsWith('/') ? updates.baseDir : `${updates.baseDir}/`;
-      updated.skillDir = `${bd}skills/`;
+      updated.skillDir = appendAgentPathSegment(updates.baseDir, 'skills/');
     }
 
     const nextAgents = customs.slice();
@@ -293,7 +306,7 @@ export function handleCustomAgentsDelete(
 }
 
 export function expandAgentHome(input: string, homeDir = homedir()): string {
-  return input.startsWith('~/') ? resolve(homeDir, input.slice(2)) : input;
+  return input.startsWith('~/') || input.startsWith('~\\') ? resolve(homeDir, input.slice(2)) : input;
 }
 
 function parseJsonc(text: string): Record<string, unknown> {
@@ -377,7 +390,7 @@ export function detectCustomAgentProfile(
   }
 
   const skillDirPath = join(expanded, 'skills');
-  result.skillDir = baseDir.endsWith('/') ? `${baseDir}skills/` : `${baseDir}/skills/`;
+  result.skillDir = appendAgentPathSegment(baseDir, 'skills/');
   if (!existsSync(skillDirPath)) return result;
 
   try {
@@ -396,7 +409,7 @@ export function detectCustomAgentBaseDir(baseDir: string, homeDir = homedir()): 
   const expanded = expandAgentHome(baseDir, homeDir);
 
   if (!existsSync(expanded)) {
-    const dirName = basename(expanded.replace(/\/$/, ''));
+    const dirName = basename(expanded.replace(/[\\/]+$/, ''));
     return {
       exists: false,
       hasSkillsDir: false,
@@ -409,13 +422,13 @@ export function detectCustomAgentBaseDir(baseDir: string, homeDir = homedir()): 
     hasSkillsDir: false,
   };
 
-  const dirName = basename(expanded.replace(/\/$/, ''));
+  const dirName = basename(expanded.replace(/[\\/]+$/, ''));
   result.suggestedName = dirName.charAt(0).toUpperCase() + dirName.slice(1);
 
   const skillsPath = join(expanded, 'skills');
   if (existsSync(skillsPath)) {
     result.hasSkillsDir = true;
-    result.detectedSkillDir = baseDir.endsWith('/') ? `${baseDir}skills/` : `${baseDir}/skills/`;
+    result.detectedSkillDir = appendAgentPathSegment(baseDir, 'skills/');
     try {
       const skillNames = readdirSync(skillsPath, { withFileTypes: true })
         .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.'))
@@ -443,13 +456,13 @@ export function detectCustomAgentBaseDir(baseDir: string, homeDir = homedir()): 
       if (!stat.isFile() || stat.size > 1_000_000) continue;
       const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
       if ('mcpServers' in raw) {
-        result.detectedConfig = baseDir.endsWith('/') ? `${baseDir}${entry}` : `${baseDir}/${entry}`;
+        result.detectedConfig = appendAgentPathSegment(baseDir, entry);
         result.detectedFormat = 'json';
         result.detectedConfigKey = 'mcpServers';
         return result;
       }
       if ('servers' in raw) {
-        result.detectedConfig = baseDir.endsWith('/') ? `${baseDir}${entry}` : `${baseDir}/${entry}`;
+        result.detectedConfig = appendAgentPathSegment(baseDir, entry);
         result.detectedFormat = 'json';
         result.detectedConfigKey = 'servers';
         return result;
@@ -469,7 +482,7 @@ export function detectCustomAgentBaseDir(baseDir: string, homeDir = homedir()): 
       for (const line of lines) {
         if (/^\s*\[mcp_servers/i.test(line) || /^\s*\[mcpServers/i.test(line)) {
           const lower = line.toLowerCase();
-          result.detectedConfig = baseDir.endsWith('/') ? `${baseDir}${entry}` : `${baseDir}/${entry}`;
+          result.detectedConfig = appendAgentPathSegment(baseDir, entry);
           result.detectedFormat = 'toml';
           result.detectedConfigKey = lower.includes('mcp_servers') ? 'mcp_servers' : 'mcpServers';
           return result;
@@ -490,8 +503,8 @@ export function handleCustomAgentDetectPost(
   try {
     if (!body.baseDir?.trim()) return json({ error: 'baseDir is required' }, { status: 400 });
     const dir = body.baseDir.trim();
-    if (!dir.startsWith('~/')) {
-      return json({ error: 'baseDir must start with ~/ (e.g. ~/.qclaw/)' }, { status: 400 });
+    if (!isAgentAbsoluteInputPath(dir)) {
+      return json({ error: 'baseDir must be an absolute path (e.g. ~/.qclaw/)' }, { status: 400 });
     }
 
     const result = detectCustomAgentBaseDir(dir, options.homeDir);
@@ -544,7 +557,7 @@ export async function handleAgentCopySkillPost(
 
     const targetPath = body.targetPath.trim();
     if (targetPath.includes('..')) return json({ error: 'Invalid target path' }, { status: 400 });
-    if (!targetPath.startsWith('~/') && !targetPath.startsWith('/')) {
+    if (!isAgentAbsoluteInputPath(targetPath)) {
       return json({ error: 'Target path must be absolute (starting with / or ~/)' }, { status: 400 });
     }
 

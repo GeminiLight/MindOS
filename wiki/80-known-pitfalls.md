@@ -2953,6 +2953,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/web/__tests__/lib/sync-config-path.test.ts` 覆盖尾斜杠 root 的正常子路径和 traversal 拦截。
 
+### 自定义 Agent 路径校验要覆盖编辑入口和 Windows 分隔符（2026-05-10）
+
+**症状**：Windows 上新建自定义 Agent 时 `C:\Users\Ada\.qclaw\` 可以通过校验，但编辑同一个 Agent 的 `baseDir` 会返回 `baseDir must be an absolute path`。
+
+**根因**：create 入口有 Windows drive-letter 特判，PUT/edit 入口仍只接受 `~/` 或 `/`；其他 detect/copy 入口也各自手写路径判断，行为不一致。
+
+**修复**：抽出共享路径输入判断，统一接受 `~/`、`~\`、Unix 绝对路径，以及 Windows 下的 drive-letter/UNC 绝对路径；路径拼接 helper 同时识别 `/` 和 `\` 尾部分隔符。
+
+**防回归**：`packages/mindos/src/server.test.ts` 在 `win32` 平台 mock 下覆盖自定义 Agent 编辑 Windows `baseDir`。
+
 ### Web 全量测试中的动态 import smoke test 要给足超时预算（2026-05-10）
 
 **症状**：`@mindos/web` 全量 Vitest 并发执行时，`__tests__/core/request-scoped-tools.test.ts` 偶发在默认 5s 超时。单独运行约 0.7s 通过，但与多个 ESLint 合约测试、Next build 后续测试并发时，动态 import `@/lib/agent/tools` 会被 CPU/transform 竞争拖慢。

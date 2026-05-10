@@ -1020,6 +1020,26 @@ describe('MindOS product server contract', () => {
       },
     });
 
+    const originalPlatform = process.platform;
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      expect(handleCustomAgentsPut({
+        key: 'qclaw-local',
+        baseDir: 'C:\\Users\\Ada\\.qclaw\\',
+      }, services)).toMatchObject({
+        status: 200,
+        body: {
+          agent: {
+            baseDir: 'C:\\Users\\Ada\\.qclaw\\',
+            presenceDirs: ['C:\\Users\\Ada\\.qclaw\\'],
+            skillDir: 'C:\\Users\\Ada\\.qclaw\\skills/',
+          },
+        },
+      });
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+
     expect(handleCustomAgentsDelete({ key: 'qclaw-local' }, services)).toMatchObject({
       status: 200,
       body: { removed: 'qclaw-local' },
@@ -1048,8 +1068,8 @@ describe('MindOS product server contract', () => {
       },
     });
     expect(handleCustomAgentDetectPost({ baseDir: '/tmp/qclaw' }, { homeDir: home })).toMatchObject({
-      status: 400,
-      body: { error: expect.stringContaining('baseDir must start with ~/') },
+      status: 200,
+      body: { exists: false, hasSkillsDir: false },
     });
 
     const skillRoot = join(home, 'mindos-skills');
