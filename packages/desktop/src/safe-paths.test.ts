@@ -27,4 +27,28 @@ describe('safe runtime paths', () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('allows runtime paths when the home directory name contains consecutive dots', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos..desktop-home-'));
+    process.env.MINDOS_DESKTOP_HOME_DIR = home;
+
+    try {
+      const paths = getRuntimePaths();
+
+      expect(validateRuntimePath(paths.runtimeDir)).toBe(paths.runtimeDir);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects paths outside the desktop config directory', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-desktop-home-'));
+    process.env.MINDOS_DESKTOP_HOME_DIR = home;
+
+    try {
+      expect(() => validateRuntimePath(join(home, '.mindos-other', 'runtime'))).toThrow(/outside \.mindos/);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });

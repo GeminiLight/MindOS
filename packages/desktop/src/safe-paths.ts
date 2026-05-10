@@ -21,6 +21,15 @@ const ALLOWED_SUBDIRS = [
   'bin',
 ];
 
+function hasParentDirectorySegment(input: string): boolean {
+  return input.split(/[\\/]+/).includes('..');
+}
+
+function isOutsideDirectory(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
 /**
  * Validate that a path is safe and within boundaries.
  * 
@@ -42,23 +51,23 @@ export function validateRuntimePath(targetPath: string): string {
 
   // Normalize the path
   const normalized = path.normalize(targetPath);
-  if (normalized.split(path.sep).includes('..') || targetPath.includes('..')) {
+  if (hasParentDirectorySegment(normalized) || hasParentDirectorySegment(targetPath)) {
     throw new Error(`SECURITY: Path traversal detected (..) in: ${targetPath}`);
   }
 
   // ✅ Check 2: Must be within ~/.mindos/
   const homeDir = getHomeDir();
-  const configDir = path.join(homeDir, '.mindos');
+  const configDir = path.resolve(homeDir, '.mindos');
   const resolved = path.resolve(configDir, targetPath);
 
   // Verify resolved path is within config directory
-  if (!resolved.startsWith(configDir + path.sep) && resolved !== configDir) {
+  if (isOutsideDirectory(configDir, resolved)) {
     throw new Error(`SECURITY: Path outside .mindos/: ${resolved}`);
   }
 
   // ✅ Check 3: Must not contain .. after resolution
   const relative = path.relative(configDir, resolved);
-  if (relative.includes('..')) {
+  if (hasParentDirectorySegment(relative)) {
     throw new Error(`SECURITY: Path traversal detected (..) in: ${relative}`);
   }
 

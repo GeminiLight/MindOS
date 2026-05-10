@@ -3023,6 +3023,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/server.test.ts` 覆盖 `target..skills` 正常复制，以及显式 `parent/../target-skills` 仍返回 400。
 
+### Desktop runtime path containment 不要用点号 substring 判断（2026-05-10）
+
+**症状**：用户 home 目录或测试临时目录名包含连续点号（如 `mindos..desktop-home-*`）时，Desktop updater 的合法 runtime 路径会报 `SECURITY: Path traversal detected`。
+
+**根因**：`validateRuntimePath()` 同时用 `targetPath.includes('..')` 和 `relative.includes('..')` 判断路径穿越，误伤普通目录名。路径是否越界应由 resolved path 与 `.mindos` root 的相对关系决定，不能用整串 substring。
+
+**修复**：只拒绝完整的 `..` 路径段；目录边界统一用 `path.relative(root, target)` 判断 `..` / absolute relative path。
+
+**防回归**：`packages/desktop/src/safe-paths.test.ts` 覆盖连续点号 home 目录下的合法 runtime path，以及 `.mindos-other` sibling 目录必须被拒绝。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。
