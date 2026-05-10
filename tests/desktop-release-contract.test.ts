@@ -71,7 +71,8 @@ describe('Desktop release packaging contract', () => {
     expect(smoke).toContain("process.platform === 'linux' ? ['--no-sandbox'] : []");
     expect(smoke).toContain("desktopMode: 'local'");
     expect(smoke).toContain('setupPending: false');
-    expect(smoke).toContain("writeFileSync(join(configDir, 'config.json')");
+    expect(smoke).toContain("join(homedir(), '.mindos', 'config.json')");
+    expect(smoke).toContain('restoreSeededConfigs');
     expect(smoke).toContain("resolve('packages/desktop/dist')");
     expect(smoke).toContain("resolve('dist')");
     expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'MindOS')");

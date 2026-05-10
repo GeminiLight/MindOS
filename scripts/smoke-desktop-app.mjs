@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -11,6 +11,7 @@ const webPort = Number(args.webPort ?? 3456);
 const home = mkdtempSync(join(tmpdir(), 'mindos-desktop-smoke-home-'));
 const mindRoot = mkdtempSync(join(tmpdir(), 'mindos-desktop-smoke-mind-'));
 const logPath = join(tmpdir(), `mindos-desktop-smoke-${Date.now()}.log`);
+const seededConfigs = [];
 const fatalPatterns = [
   /MCP bundle not found/i,
   /ERR_MODULE_NOT_FOUND/i,
@@ -74,6 +75,7 @@ try {
 } finally {
   child.kill('SIGTERM');
   setTimeout(() => child.kill('SIGKILL'), 2_000).unref();
+  restoreSeededConfigs();
   rmSync(home, { recursive: true, force: true });
   rmSync(mindRoot, { recursive: true, force: true });
 }
@@ -123,15 +125,39 @@ function appendLog(chunk) {
 }
 
 function seedDesktopConfig() {
-  const configDir = join(home, '.mindos');
-  mkdirSync(configDir, { recursive: true });
-  writeFileSync(join(configDir, 'config.json'), JSON.stringify({
+  const config = JSON.stringify({
     desktopMode: 'local',
     mindRoot,
     setupPending: false,
     port: webPort,
     mcpPort: Number(args.mcpPort ?? 8781),
-  }, null, 2), 'utf-8');
+  }, null, 2);
+
+  seedConfigPath(join(home, '.mindos', 'config.json'), config);
+  // Electron's app.getPath('home') can resolve to the OS account home instead
+  // of the HOME env passed to child_process.spawn, especially on macOS runners.
+  seedConfigPath(join(homedir(), '.mindos', 'config.json'), config);
+}
+
+function seedConfigPath(configPath, contents) {
+  if (seededConfigs.some((entry) => entry.configPath === configPath)) return;
+  const configDir = dirname(configPath);
+  const previous = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : null;
+  seededConfigs.push({ configPath, previous });
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(configPath, contents, 'utf-8');
+}
+
+function restoreSeededConfigs() {
+  for (const { configPath, previous } of seededConfigs.reverse()) {
+    try {
+      if (previous === null) rmSync(configPath, { force: true });
+      else writeFileSync(configPath, previous, 'utf-8');
+    } catch {
+      // Best effort only: CI homes are disposable, and local runs should not fail
+      // after the app itself has already been validated.
+    }
+  }
 }
 
 function scanFatalLog(throwOnMatch = true) {
