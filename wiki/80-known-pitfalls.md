@@ -3275,6 +3275,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/web/__tests__/core/fs-public-paths.test.ts` 创建 `MIND_ROOT` 同级目录，用相对 traversal 验证目录探测、列表和 space preview 都不会泄露。
 
+### Server Action 路径 containment 禁止字符串 startsWith（2026-05-10）
+
+**症状**：`revertSpaceInitAction()` 使用 `path.resolve(mindRoot, spacePath)` 后再 `absDir.startsWith(mindRoot)` 判断越界。若 `MIND_ROOT=/tmp/root`，输入 `../root-outside` 会解析到 `/tmp/root-outside`，字符串前缀仍匹配，导致 README/INSTRUCTION scaffold 写到 vault 外。
+
+**根因**：字符串前缀不是路径 containment。它无法区分真实子路径和同名前缀 sibling，也无法统一处理 Windows 分隔符、绝对路径和 traversal。
+
+**修复**：server action 内所有用户传入的 vault 相对路径先走 `resolveSafe()`，禁止自行实现 containment。
+
+**防回归**：`packages/web/__tests__/actions/revert-space-init-path.test.ts` 创建 `MIND_ROOT` 同名前缀 sibling 目录，验证 `revertSpaceInitAction()` 不返回 success，也不会在 sibling 写 scaffold 文件。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。

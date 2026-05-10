@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { createFile, deleteFile, deleteDirectory, convertToSpace, renameFile, renameSpace, getMindRoot, invalidateCache, collectAllFiles } from '@/lib/fs';
 import { moveToTrash, restoreFromTrash, restoreAsCopy, permanentlyDelete, listTrash, emptyTrash, purgeExpired, type TrashMeta } from '@/lib/core/trash';
+import { resolveSafe } from '@/lib/core/security';
 import { createSpaceFilesystem, generateReadmeTemplate } from '@/lib/core/create-space';
 import { INSTRUCTION_TEMPLATE, cleanDirName } from '@/lib/core/space-scaffold';
 import { revalidatePath } from 'next/cache';
@@ -147,10 +148,7 @@ export async function revertSpaceInitAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const mindRoot = getMindRoot();
-    const absDir = path.resolve(mindRoot, spacePath);
-    if (!absDir.startsWith(mindRoot)) {
-      return { success: false, error: 'Invalid path' };
-    }
+    const absDir = resolveSafe(mindRoot, spacePath);
 
     const readmePath = path.join(absDir, 'README.md');
     const instructionPath = path.join(absDir, 'INSTRUCTION.md');
