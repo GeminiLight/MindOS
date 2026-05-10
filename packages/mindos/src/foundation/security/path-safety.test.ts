@@ -26,6 +26,14 @@ describe('@mindos/security', () => {
     it('should allow root itself', () => {
       expect(() => assertWithinRoot(testRoot, testRoot)).not.toThrow();
     });
+
+    it('should allow paths within a root that has a trailing separator', () => {
+      expect(() => assertWithinRoot('/test/root/file.txt', `${testRoot}/`)).not.toThrow();
+    });
+
+    it('should reject sibling paths that only share the root prefix', () => {
+      expect(() => assertWithinRoot('/test/rooted/file.txt', testRoot)).toThrow();
+    });
   });
 
   describe('isWithinRoot', () => {
@@ -42,6 +50,22 @@ describe('@mindos/security', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value).toBe(true);
+      }
+    });
+
+    it('should return true for paths within a root that has a trailing separator', () => {
+      const result = isWithinRoot('/test/root/file.txt', `${testRoot}/`);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe(true);
+      }
+    });
+
+    it('should return false for sibling paths that only share the root prefix', () => {
+      const result = isWithinRoot('/test/rooted/file.txt', testRoot);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe(false);
       }
     });
   });

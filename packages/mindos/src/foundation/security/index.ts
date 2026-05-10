@@ -25,12 +25,19 @@ function err<T>(error: Error): Result<T> {
  */
 const ROOT_PROTECTED_FILES = new Set(['INSTRUCTION.md']);
 
+function isPathWithinRoot(resolved: string, root: string): boolean {
+  const normalizedRoot = path.resolve(root);
+  const normalizedResolved = path.resolve(resolved);
+  const relative = path.relative(normalizedRoot, normalizedResolved);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
 /**
  * Asserts that a resolved path is within the given root.
  * Throws AppError if the path is outside the root.
  */
 export function assertWithinRoot(resolved: string, root: string): void {
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+  if (!isPathWithinRoot(resolved, root)) {
     throw createError(
       'VALIDATION_ERROR',
       'Access denied: path outside root',
@@ -45,8 +52,7 @@ export function assertWithinRoot(resolved: string, root: string): void {
  */
 export function isWithinRoot(resolved: string, root: string): Result<boolean> {
   try {
-    const isWithin = resolved.startsWith(root + path.sep) || resolved === root;
-    return ok(isWithin);
+    return ok(isPathWithinRoot(resolved, root));
   } catch (error) {
     return err(
       createError(

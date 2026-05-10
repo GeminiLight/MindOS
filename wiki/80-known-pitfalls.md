@@ -2993,6 +2993,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/protocols/acp/detect-local.test.ts` 覆盖 Windows 风格 home-relative direct command 和 presence directory。
 
+### 共享 root containment 不要手写 `startsWith(root + path.sep)`（2026-05-10）
+
+**症状**：调用 `assertWithinRoot('/test/root/file.txt', '/test/root/')` 或 `isWithinRoot(..., '/test/root/')` 时会被误判为 outside root。部分调用方会先 normalize root 避开，但共享 helper 本身暴露这个坑。
+
+**根因**：`packages/mindos/src/foundation/security/index.ts` 用字符串拼接 `root + path.sep` 做边界判断；root 自带尾部分隔符时变成双分隔符，跨平台和直接调用都容易出现 false negative。
+
+**修复**：root containment 统一走 `path.resolve()` + `path.relative()`，只允许 relative 为空、非 `..` 开头且非绝对路径的目标。
+
+**防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖尾斜杠 root 正常子路径和 sibling prefix 拒绝。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。
