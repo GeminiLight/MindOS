@@ -2145,6 +2145,12 @@ mindos onboard
 - **解决：** 改为 `execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })`，保留 Windows 进程树终止语义，同时避免 shell 字符串。
 - **防回归：** `packages/mindos/src/protocols/acp/subprocess.test.ts` 覆盖 Windows killAgent 行为，并禁止 subprocess 源码重新出现 `execSync(` / `taskkill /PID ${pid}`。
 
+### Desktop 启动清理 launchd/systemd 不要走 shell (2026-05-10)
+
+- **问题：** `packages/desktop/src/main.ts` 的历史 CLI daemon 清理用 `execAsync('launchctl ...')`、`execAsync('pkill -f "...")`、`execAsync('systemctl ... 2>/dev/null || true')`。这些路径在 Desktop 启动修复阶段执行，失败会影响用户从旧 daemon / 旧端口占用里恢复；`gui/$(id -u)` 和 `pkill -f` 字符串也会重新进入 shell。
+- **解决：** 把 Desktop main 里的清理命令统一到 `execFileAsync(command, args)`；launchd 先用 `id -u` argv 取 uid，再把 `gui/<uid>/com.mindos.app` 作为单个参数传给 `launchctl`；systemd inactive 用异常分支表达，不再用 shell 重定向和 `|| true`。
+- **防回归：** `packages/desktop/src/main-subprocess-contract.test.ts` 禁止 Desktop main 重新引入 cleanup shell 字符串，并断言 launchctl/pkill/systemctl 的关键调用保持 argv 形式。
+
 ### Desktop 私有 Node 的 macOS quarantine 清理不能拼 shell 路径 (2026-05-10)
 
 - **问题：** `packages/desktop/src/node-bootstrap.ts` 下载私有 Node 后用 `execSync(\`xattr ... "${NODE_DIR}"\`)` 清理 quarantine。用户 home / app support 路径如果包含引号、`$` 等字符，会重新进入 shell 解析。

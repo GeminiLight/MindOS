@@ -15,7 +15,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync, rmSync } from 'fs';
 import { randomBytes } from 'crypto';
-import { spawn as spawnChild } from 'child_process';
+import { execFile as execFileChild, spawn as spawnChild } from 'child_process';
+import { promisify } from 'util';
 import { ProcessManager } from './process-manager';
 import { findAvailablePort, waitForPortRelease, isPortInUse } from './port-finder';
 import { createTray, updateTrayMenu, type TrayCallbacks } from './tray';
@@ -62,6 +63,7 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const PID_PATH = path.join(CONFIG_DIR, 'mindos.pid');
 const DEFAULT_WEB_PORT = 3456;
 const DEFAULT_MCP_PORT = 8781;
+const execFileAsync = promisify(execFileChild);
 
 function getDesktopInstallPath(): string {
   let appPath = app.getPath('exe');
@@ -954,9 +956,6 @@ async function validatePrivateNode(): Promise<'missing' | 'ok' | 'removed'> {
   }
 
   try {
-    const { execFile } = require('child_process');
-    const { promisify } = require('util');
-    const execFileAsync = promisify(execFile);
     const { stdout } = await execFileAsync(nodeBin, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
@@ -1029,15 +1028,12 @@ async function cleanupConflictingLaunchdService(): Promise<void> {
   if (process.platform !== 'darwin') return;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
     const execOpts = { encoding: 'utf-8' as const, timeout: 3000 };
 
     // Check if com.mindos.app service is registered with launchd
     let serviceExists = false;
     try {
-      const { stdout } = await execAsync('launchctl list com.mindos.app', execOpts);
+      const { stdout } = await execFileAsync('launchctl', ['list', 'com.mindos.app'], execOpts);
       serviceExists = stdout.includes('com.mindos.app');
     } catch {
       // launchctl list exits non-zero if service doesn't exist — that's fine
@@ -1050,12 +1046,14 @@ async function cleanupConflictingLaunchdService(): Promise<void> {
 
     // Step 1: bootout the service so launchd stops restarting it
     try {
-      await execAsync(`launchctl bootout gui/$(id -u)/com.mindos.app`, { ...execOpts, timeout: 5000 });
+      const { stdout: uidOutput } = await execFileAsync('id', ['-u'], execOpts);
+      const uid = uidOutput.trim();
+      await execFileAsync('launchctl', ['bootout', `gui/${uid}/com.mindos.app`], { ...execOpts, timeout: 5000 });
       console.info('[MindOS] Stopped launchd service com.mindos.app');
     } catch (err) {
       // Try `launchctl remove` as fallback (works on some macOS versions)
       try {
-        await execAsync('launchctl remove com.mindos.app', { ...execOpts, timeout: 5000 });
+        await execFileAsync('launchctl', ['remove', 'com.mindos.app'], { ...execOpts, timeout: 5000 });
         console.info('[MindOS] Removed launchd service com.mindos.app via fallback');
       } catch {
         console.warn('[MindOS] Could not stop launchd service:', err instanceof Error ? err.message : err);
@@ -1076,15 +1074,15 @@ async function cleanupConflictingLaunchdService(): Promise<void> {
     // Step 3: Kill residual CLI mindos processes still holding ports.
     // Use full path pattern to avoid killing our own Desktop process.
     try {
-      await execAsync('pkill -f "node_modules/@geminilight/mindos/bin/cli.js start"', execOpts);
+      await execFileAsync('pkill', ['-f', 'node_modules/@geminilight/mindos/bin/cli.js start'], execOpts);
     } catch { /* no matching processes — fine */ }
     // Also kill Next.js workers spawned by the CLI. Keep the old app/ pattern
     // as a cleanup-only fallback for users upgrading from pre-v1 packages.
     try {
-      await execAsync('pkill -f "node_modules/@geminilight/mindos/packages/web/node_modules/.bin/next"', execOpts);
+      await execFileAsync('pkill', ['-f', 'node_modules/@geminilight/mindos/packages/web/node_modules/.bin/next'], execOpts);
     } catch { /* no matching processes — fine */ }
     try {
-      await execAsync('pkill -f "node_modules/@geminilight/mindos/app/node_modules/.bin/next"', execOpts);
+      await execFileAsync('pkill', ['-f', 'node_modules/@geminilight/mindos/app/node_modules/.bin/next'], execOpts);
     } catch { /* no matching processes — fine */ }
 
     // Note: no explicit wait needed — findAvailablePort will retry if ports haven't released yet
@@ -1106,36 +1104,37 @@ async function cleanupLinuxSystemdService(): Promise<void> {
   if (process.platform !== 'linux') return;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
     const opts = { encoding: 'utf-8' as const, timeout: 5000 };
+    const isSystemdServiceActive = async (service: string) => {
+      try {
+        const { stdout } = await execFileAsync('systemctl', ['--user', 'is-active', service], opts);
+        const state = stdout.trim();
+        return state === 'active' || state === 'activating';
+      } catch {
+        return false;
+      }
+    };
+    const stopSystemdService = async (service: string) => {
+      try { await execFileAsync('systemctl', ['--user', 'stop', service], opts); } catch { /* ok */ }
+      try { await execFileAsync('systemctl', ['--user', 'disable', service], opts); } catch { /* ok */ }
+    };
 
     // Check if the service is active or enabled
-    let isActive = false;
-    try {
-      const { stdout } = await execAsync('systemctl --user is-active mindos 2>/dev/null || true', opts);
-      isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
-    } catch { /* systemctl not available */ return; }
+    let isActive = await isSystemdServiceActive('mindos');
 
     if (!isActive) {
       // Also check by alternative service name com.mindos.app
-      try {
-        const { stdout } = await execAsync('systemctl --user is-active com.mindos.app 2>/dev/null || true', opts);
-        isActive = stdout.trim() === 'active' || stdout.trim() === 'activating';
-        if (isActive) {
-          console.warn('[MindOS] Detected conflicting systemd service com.mindos.app — stopping it');
-          try { await execAsync('systemctl --user stop com.mindos.app', opts); } catch { /* ok */ }
-          try { await execAsync('systemctl --user disable com.mindos.app', opts); } catch { /* ok */ }
-          return;
-        }
-      } catch { /* ok */ }
+      isActive = await isSystemdServiceActive('com.mindos.app');
+      if (isActive) {
+        console.warn('[MindOS] Detected conflicting systemd service com.mindos.app — stopping it');
+        await stopSystemdService('com.mindos.app');
+        return;
+      }
       return;
     }
 
     console.warn('[MindOS] Detected conflicting systemd service mindos — stopping it');
-    try { await execAsync('systemctl --user stop mindos', opts); } catch { /* ok */ }
-    try { await execAsync('systemctl --user disable mindos', opts); } catch { /* ok */ }
+    await stopSystemdService('mindos');
     console.info('[MindOS] Stopped systemd user service');
   } catch {
     // Non-critical
