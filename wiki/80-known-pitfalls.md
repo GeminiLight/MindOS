@@ -2825,6 +2825,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/desktop/src/node-bootstrap.test.ts` mock `https.get` 并用 fake timers 触发整体 timeout，断言 active request 会被 `destroy()`，避免 fallback 下载与旧请求并发写入同一 temp 文件。
 
+### Desktop Core updater fallback 必须清理当前下载 attempt（2026-05-10）
+
+**症状**：Core runtime 更新下载多个 URL fallback 时，如果某个 URL 在已经开始响应后 timeout，旧 attempt 可能还持有 response / file stream；此时立即尝试下一个 URL 会让两个 attempt 竞争写入同一个 tarball。
+
+**根因**：`core-updater.ts` 的 `downloadFile()` 对 request timeout 只调用 `req.destroy()` 并马上 `tryNext()`，没有统一销毁 active response / write stream，也没有移除当前 attempt 的 abort listener。旧 request 后续触发的 error 还可能误伤新的 attempt。
+
+**修复**：为每个 attempt 跟踪 active request、response、write stream 和 abort handler；timeout / HTTP fallback / redirect / abort / stream error 都先清理当前 attempt，再继续或失败；旧 attempt 的异步事件通过 request/file/response 身份检查忽略。
+
+**防回归**：`packages/desktop/src/core-updater.test.ts` mock `https.get`，模拟响应已开始后的 request timeout，断言 request 和 response 都被 destroy，避免 fallback 并发写同一 runtime tarball。
+
 ### Hook / Component 不要在 render 阶段读写 ref.current（2026-05-10）
 
 **症状**：React compiler lint 报 `react-hooks/refs`，典型位置是 hook / component 为了避免事件回调 stale closure，在组件 render 阶段直接执行 `someRef.current = value`，用 `someRef.current` 初始化 state，或在 JSX handler 中直接调用会读写 ref 的 callback。

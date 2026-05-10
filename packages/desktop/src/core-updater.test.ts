@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'events';
+
+const httpsGetMock = vi.hoisted(() => vi.fn());
 
 vi.hoisted(() => {
   process.env.MINDOS_DESKTOP_HOME_DIR = '/tmp/mock-home';
@@ -11,9 +14,14 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('https', () => ({
+  default: { get: httpsGetMock },
+  get: httpsGetMock,
+}));
+
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import path from 'path';
-import { CoreUpdater } from './core-updater';
+import { CoreUpdater, _downloadFile_forTest } from './core-updater';
 import { getStandaloneAppRequiredEntries } from './runtime-health-contract';
 
 const CONFIG_DIR = '/tmp/mock-home/.mindos';
@@ -72,5 +80,40 @@ describe('CoreUpdater.cleanupOnBoot', () => {
     updater.cleanupOnBoot('0.6.78');
 
     expect(existsSync(RUNTIME_DIR)).toBe(false);
+  });
+});
+
+describe('CoreUpdater download fallback cleanup', () => {
+  it('destroys the active response before retrying after a URL timeout', async () => {
+    const request = Object.assign(new EventEmitter(), { destroy: vi.fn() });
+    const response = Object.assign(new EventEmitter(), {
+      statusCode: 200,
+      headers: {},
+      destroyed: false,
+      destroy: vi.fn(function (this: { destroyed: boolean }) {
+        this.destroyed = true;
+      }),
+      pipe: vi.fn(),
+      resume: vi.fn(),
+    });
+    httpsGetMock.mockImplementation((_url, _options, callback) => {
+      callback(response);
+      return request;
+    });
+
+    const controller = new AbortController();
+    const download = _downloadFile_forTest(
+      ['https://updates.example/runtime.tar.gz'],
+      path.join(CONFIG_DIR, 'runtime.tar.gz'),
+      0,
+      controller.signal,
+      () => {},
+    );
+
+    request.emit('timeout');
+
+    await expect(download).rejects.toThrow('All download URLs failed: timeout');
+    expect(request.destroy).toHaveBeenCalledTimes(1);
+    expect(response.destroy).toHaveBeenCalledTimes(1);
   });
 });

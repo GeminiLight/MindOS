@@ -11,12 +11,14 @@ import path from 'path';
 import {
   existsSync, mkdirSync, renameSync, rmSync, lstatSync,
   createWriteStream, createReadStream, readFileSync, unlinkSync, writeFileSync,
+  type WriteStream,
 } from 'fs';
 import { createHash } from 'crypto';
 import { createGunzip } from 'zlib';
 import { execFile } from 'child_process';
 import https from 'https';
 import http from 'http';
+import type { ClientRequest, IncomingMessage } from 'http';
 import semver from 'semver';
 import { analyzeMindOsLayout } from './mindos-runtime-layout';
 import { assertNotSymlink, safeRmSync, isSymlink } from './safe-rm';
@@ -117,6 +119,40 @@ function downloadFile(
     let urlIdx = 0;
     let settled = false;
     let lastErr: Error | undefined; // Track last error for better diagnostics
+    let activeReq: ClientRequest | null = null;
+    let activeRes: IncomingMessage | null = null;
+    let activeFile: WriteStream | null = null;
+    let activeAbortHandler: (() => void) | null = null;
+
+    const cleanupAttempt = (destroyActive: boolean) => {
+      if (activeAbortHandler) {
+        signal.removeEventListener('abort', activeAbortHandler);
+        activeAbortHandler = null;
+      }
+      if (destroyActive) {
+        if (activeRes && !activeRes.destroyed) activeRes.destroy();
+        if (activeReq && !activeReq.destroyed) activeReq.destroy();
+        if (activeFile && !activeFile.destroyed) activeFile.destroy();
+      }
+      activeReq = null;
+      activeRes = null;
+      activeFile = null;
+    };
+
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanupAttempt(true);
+      reject(err);
+    };
+
+    const retryAfterAttemptFailure = (url: string, err: Error, req?: ClientRequest) => {
+      if (req && activeReq !== req) return;
+      lastErr = err;
+      console.warn(`[CoreUpdater] ${url} → ${err.message}, trying next`);
+      cleanupAttempt(true);
+      tryNext();
+    };
 
     const tryNext = () => {
       if (settled) return;
@@ -132,26 +168,28 @@ function downloadFile(
       const url = urlQueue[urlIdx++];
       const transport = url.startsWith('https') ? https : http;
 
-      const req = transport.get(url, { timeout: URL_TIMEOUT }, (res) => {
+      let req: ClientRequest;
+      req = transport.get(url, { timeout: URL_TIMEOUT }, (res) => {
+        activeRes = res;
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           // Follow redirect — insert into queue
           urlQueue.splice(urlIdx, 0, res.headers.location);
           res.resume();
+          cleanupAttempt(true);
           tryNext();
           return;
         }
         if (res.statusCode !== 200) {
           res.resume();
           const msg = `HTTP ${res.statusCode}`;
-          lastErr = new Error(msg);
-          console.warn(`[CoreUpdater] ${url} → ${msg}, trying next`);
-          tryNext();
+          retryAfterAttemptFailure(url, new Error(msg), req);
           return;
         }
 
         const total = parseInt(res.headers['content-length'] || '0', 10) || expectedSize;
         let transferred = 0;
         const file = createWriteStream(destPath);
+        activeFile = file;
 
         res.on('data', (chunk: Buffer) => {
           transferred += chunk.length;
@@ -163,42 +201,44 @@ function downloadFile(
         });
 
         res.pipe(file);
-        file.on('finish', () => { file.close(); if (!settled) { settled = true; resolve(); } });
+        file.on('finish', () => {
+          if (activeFile !== file) return;
+          file.close();
+          if (!settled) {
+            settled = true;
+            cleanupAttempt(false);
+            resolve();
+          }
+        });
         file.on('error', (err) => { 
+          if (activeFile !== file) return;
           file.close(); 
-          if (!settled) { 
-            settled = true; 
-            reject(err); 
-          } 
+          fail(err);
         });
         res.on('error', (err) => { 
+          if (activeRes !== res) return;
           file.close(); 
-          if (!settled) { 
-            settled = true; 
-            reject(err); 
-          } 
+          fail(err);
         });
       });
+      activeReq = req;
 
       req.on('error', (err) => {
-        lastErr = err instanceof Error ? err : new Error(String(err));
-        console.warn(`[CoreUpdater] ${url} → ${lastErr.message}, trying next`);
-        tryNext();
+        retryAfterAttemptFailure(url, err instanceof Error ? err : new Error(String(err)), req);
       });
       req.on('timeout', () => {
-        req.destroy();
-        lastErr = new Error('timeout');
-        console.warn(`[CoreUpdater] ${url} → timeout, trying next`);
-        tryNext();
+        retryAfterAttemptFailure(url, new Error('timeout'), req);
       });
 
-      const onAbort = () => { req.destroy(); if (!settled) { settled = true; reject(new Error('aborted')); } };
-      signal.addEventListener('abort', onAbort, { once: true });
+      activeAbortHandler = () => { fail(new Error('aborted')); };
+      signal.addEventListener('abort', activeAbortHandler, { once: true });
     };
 
     tryNext();
   });
 }
+
+export const _downloadFile_forTest = downloadFile;
 
 /**
  * Extract a tar.gz archive.
