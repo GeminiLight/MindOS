@@ -24,6 +24,26 @@ interface DeepLinkPayload {
   query?: string;
 }
 
+function renderConnectionFailure(container: HTMLElement) {
+  const message = document.createElement('p');
+  message.textContent = `Could not connect to MindOS runtime at ${RUNTIME_URL}.`;
+
+  const hint = document.createElement('p');
+  hint.textContent = 'Please ensure the runtime is running with "mindos start".';
+
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = 'Retry';
+  retry.style.marginTop = '10px';
+  retry.style.padding = '8px 16px';
+  retry.style.cursor = 'pointer';
+  retry.addEventListener('click', () => {
+    location.reload();
+  });
+
+  container.replaceChildren(message, hint, retry);
+}
+
 async function checkRuntime(): Promise<boolean> {
   try {
     // Try /api/health first, fallback to root if not found
@@ -67,13 +87,7 @@ async function connectToRuntime(targetPath?: string) {
     }
     if (errorEl) {
       errorEl.style.display = 'block';
-      errorEl.innerHTML = `
-        <p>Could not connect to MindOS runtime at ${RUNTIME_URL}.</p>
-        <p>Please ensure the runtime is running with "mindos start".</p>
-        <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
-          Retry
-        </button>
-      `;
+      renderConnectionFailure(errorEl);
     }
     return;
   }
