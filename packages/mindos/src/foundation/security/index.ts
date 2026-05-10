@@ -29,7 +29,11 @@ function isPathWithinRoot(resolved: string, root: string): boolean {
   const normalizedRoot = path.resolve(root);
   const normalizedResolved = path.resolve(resolved);
   const relative = path.relative(normalizedRoot, normalizedResolved);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return relative === '' || (
+    relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative)
+  );
 }
 
 /**

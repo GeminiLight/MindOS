@@ -34,6 +34,10 @@ describe('@mindos/security', () => {
     it('should reject sibling paths that only share the root prefix', () => {
       expect(() => assertWithinRoot('/test/rooted/file.txt', testRoot)).toThrow();
     });
+
+    it('should allow in-root child paths whose segment starts with consecutive dots', () => {
+      expect(() => assertWithinRoot('/test/root/..notes/file.txt', testRoot)).not.toThrow();
+    });
   });
 
   describe('isWithinRoot', () => {
@@ -68,6 +72,14 @@ describe('@mindos/security', () => {
         expect(result.value).toBe(false);
       }
     });
+
+    it('should return true for in-root child paths whose segment starts with consecutive dots', () => {
+      const result = isWithinRoot('/test/root/..notes/file.txt', testRoot);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe(true);
+      }
+    });
   });
 
   describe('resolveSafe', () => {
@@ -82,6 +94,11 @@ describe('@mindos/security', () => {
 
     it('should throw for absolute paths', () => {
       expect(() => resolveSafe(testRoot, '/etc/passwd')).toThrow();
+    });
+
+    it('should resolve safe paths whose segment starts with consecutive dots', () => {
+      const resolved = resolveSafe(testRoot, '..notes/file.txt');
+      expect(resolved).toBe(path.join(testRoot, '..notes/file.txt'));
     });
   });
 

@@ -3043,6 +3043,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/web/__tests__/lib/sync-config-path.test.ts` 覆盖 `..notes/todo.md`；`packages/mindos/src/server.test.ts` 覆盖 product sync conflict preview 读取 `..notes/note.md`。
 
+### 共享 root containment 也要允许普通 `..name` 路径段（2026-05-10）
+
+**症状**：`resolveSafe(root, '..notes/file.txt')` 会抛 `Access denied: path outside root`，虽然目标文件实际仍在 root 内。
+
+**根因**：`@mindos/security` 的 `isPathWithinRoot()` 用 `relative.startsWith('..')` 判断越界，和 sync 路径 bug 一样误伤普通文件名。这个 helper 是共享安全边界，误判会扩散到多个文件/API 能力。
+
+**修复**：共享 containment 只拒绝完整父目录段：`rel === '..'`、`rel.startsWith('..' + path.sep)` 或 absolute relative path。
+
+**防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖 `assertWithinRoot()`、`isWithinRoot()`、`resolveSafe()` 对 `..notes/file.txt` 的允许行为。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。
