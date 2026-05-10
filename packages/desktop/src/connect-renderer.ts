@@ -60,6 +60,16 @@ let sshConnectCancelled = false;
 // ── Helpers ──
 function $(id: string): HTMLElement | null { return document.getElementById(id); }
 
+function renderCommandFailure(statusEl: HTMLElement, prefix: string, error: string, stderr?: string): void {
+  statusEl.replaceChildren(document.createTextNode(`${prefix}: ${error}`));
+  if (!stderr) return;
+
+  statusEl.appendChild(document.createElement('br'));
+  const details = document.createElement('small');
+  details.textContent = stderr;
+  statusEl.appendChild(details);
+}
+
 // ── Theme / language preferences (default: follow system; no flicker — head script + connect-hydrating) ──
 type ThemePreference = 'system' | 'light' | 'dark';
 type LangPreference = 'system' | Lang;
@@ -335,7 +345,7 @@ async function buildMindOS(modulePath: string): Promise<void> {
       buildBtn.style.opacity = '1';
       buildBtn.innerHTML = t('retryBuild');
       statusEl.className = 'install-progress error';
-      statusEl.innerHTML = `${t('buildFailed')}: ${result?.error ?? '?'}${result?.stderr ? `<br><small>${result.stderr}</small>` : ''}`;
+      renderCommandFailure(statusEl, t('buildFailed'), result?.error ?? '?', result?.stderr);
     }
   } catch (err) {
     buildBtn.disabled = false;
@@ -391,7 +401,7 @@ async function installMindOS(): Promise<void> {
       installBtn.style.opacity = '1';
       installBtn.innerHTML = t('retryInstall');
       statusEl.className = 'install-progress error';
-      statusEl.innerHTML = `${t('installFailed')}: ${result?.error ?? '?'}${result?.stderr ? `<br><small>${result.stderr}</small>` : ''}`;
+      renderCommandFailure(statusEl, t('installFailed'), result?.error ?? '?', result?.stderr);
     }
   } catch (err) {
     installBtn.disabled = false;
