@@ -323,7 +323,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 ### 8. Agent 支持体系
 
-**当前支持 26 个 Agent**（`packages/web/lib/mcp-agents.ts` 为 Web/API 单一真实来源，`packages/mindos/bin/lib/mcp-agents.js` 为 CLI 同步入口）：
+**MCP Agent：26 个**（`packages/web/lib/mcp-agents.ts` 为 Web/API 单一真实来源，`packages/mindos/bin/lib/mcp-agents.js` 为 CLI 同步入口）；**ACP 注册表：31+ 个**（独立计数）。
 
 | # | Agent | 全局配置路径 | 格式 | 配置 Key | CLI |
 |---|-------|-------------|------|---------|-----|
