@@ -53,6 +53,9 @@ describe('Desktop release packaging contract', () => {
     expect(workflow.indexOf('Upload artifacts')).toBeGreaterThan(workflow.indexOf('Smoke packaged app'));
 
     expect(verifier).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
+    expect(verifier).toContain("import { fileURLToPath } from 'node:url'");
+    expect(verifier).toContain("fileURLToPath(new URL('..', import.meta.url))");
+    expect(verifier).not.toContain("new URL('..', import.meta.url).pathname");
     expect(verifier).toContain('optional local embedding runtime should not be bundled by default');
     expect(verifier).toContain('@huggingface/transformers/package.json');
     expect(verifier).toContain('dist/protocols/mcp-server/index.cjs');
@@ -61,6 +64,8 @@ describe('Desktop release packaging contract', () => {
     expect(verifier).toContain('path.join is not a function');
 
     expect(smoke).toContain('/api/health');
+    expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'MindOS')");
+    expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'mindos')");
     expect(smoke).toContain('root/login did not return the MindOS HTML shell');
     expect(smoke).toContain('MCP bundle not found');
     expect(smoke).toContain('Cannot find module');

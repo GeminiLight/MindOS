@@ -141,6 +141,7 @@ function findPackagedApp() {
   const candidates = [
     join(desktopDist, 'mac-arm64', 'MindOS.app'),
     join(desktopDist, 'mac', 'MindOS.app'),
+    join(desktopDist, 'linux-unpacked', 'MindOS'),
     join(desktopDist, 'linux-unpacked', 'mindos'),
     join(desktopDist, 'win-unpacked', 'MindOS.exe'),
     join(desktopDist, 'win-arm64-unpacked', 'MindOS.exe'),

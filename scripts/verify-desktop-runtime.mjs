@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = resolve(new URL('..', import.meta.url).pathname);
+const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
 const runtimeRoot = resolve(root, args.runtimeRoot ?? 'packages/desktop/resources/mindos-runtime');
 const mainBundle = resolve(root, args.mainBundle ?? 'packages/desktop/dist-electron/main/main.js');
