@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: `Invalid format: ${format}. Use: ${[...VALID_FORMATS].join(', ')}` }, { status: 400 });
   }
 
-  // Path traversal defense-in-depth
-  if (filePath.includes('..') || filePath.startsWith('/')) {
+  // Absolute paths are never valid API inputs; traversal is handled by resolveSafe().
+  if (path.isAbsolute(filePath) || path.win32.isAbsolute(filePath)) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
   }
 

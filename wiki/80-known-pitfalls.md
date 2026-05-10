@@ -3003,6 +3003,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖尾斜杠 root 正常子路径和 sibling prefix 拒绝。
 
+### API route 不要用 `includes('..')` 代替 safe resolver（2026-05-10）
+
+**症状**：导出合法文件 `notes..md` 会直接返回 400 `Invalid path`，用户无法下载文件名里包含连续点号的笔记。
+
+**根因**：`packages/web/app/api/export/route.ts` 在 route 层用 `filePath.includes('..')` 做粗粒度拦截，误伤合法文件名；真正的 traversal 其实已经由 `resolveSafe()` / `collectExportFiles()` 处理。
+
+**修复**：route 层只提前拒绝 POSIX/Windows 绝对路径；相对路径交给 core safe resolver 判断，避免重复且过宽的字符串规则。
+
+**防回归**：`packages/web/__tests__/api/export.test.ts` 覆盖 `notes..md` 正常导出与 `../secret.md` traversal 拦截。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。
