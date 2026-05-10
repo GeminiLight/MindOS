@@ -2883,6 +2883,26 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/desktop/src/install-cli-shim.test.ts` 覆盖 Windows `pathAppended=true` 的成功对话框，断言不会再提示 “add this folder”。
 
+### CLI doctor 的 PATH 激活提示要区分 Windows registry 与 Unix rc（2026-05-10）
+
+**症状**：Windows 上 `mindos doctor` 触发 CLI shim / PATH 修复后，仍提示 “PATH injected into shell rc files”。实际修复路径已经是 User PATH registry，不是 `.zshrc` / `.bashrc`。
+
+**根因**：doctor 命令复用了 Unix 文案，未按 `process.platform` 区分 PATH 注入机制。跨平台修复完成后，用户提示也要同步，否则会误导 Windows 用户去找不存在的 shell rc 文件。
+
+**修复**：抽出 `formatShimActivationWarning()`，Windows 返回 “added to your user PATH”，Unix 保留 shell rc 文案。
+
+**防回归**：`tests/unit/cli-smoke.test.ts` 直接覆盖 Windows / Darwin 两种提示，确保 Windows 文案不再包含 `shell rc`。
+
+### Web 全量测试中的动态 import smoke test 要给足超时预算（2026-05-10）
+
+**症状**：`@mindos/web` 全量 Vitest 并发执行时，`__tests__/core/request-scoped-tools.test.ts` 偶发在默认 5s 超时。单独运行约 0.7s 通过，但与多个 ESLint 合约测试、Next build 后续测试并发时，动态 import `@/lib/agent/tools` 会被 CPU/transform 竞争拖慢。
+
+**根因**：这个测试验证的是工具注册 contract，不是性能 SLA；默认 5s 超时在全量 gate 高负载下过紧，导致无产品回归的 push 被阻断。
+
+**修复**：只给该 contract test 设置 15s 超时，保留行为断言不变。
+
+**防回归**：pre-push `turbo run test` 会覆盖 `@mindos/web` 全量测试，避免该 smoke contract 在高负载下继续随机失败。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。

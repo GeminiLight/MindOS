@@ -15,5 +15,5 @@ describe('getRequestScopedTools', () => {
     expect(names).not.toContain('list_mcp_tools');
     expect(names).not.toContain('call_mcp_tool');
     expect(names.some((n) => n.startsWith('mcp__'))).toBe(false);
-  });
+  }, 15_000);
 });

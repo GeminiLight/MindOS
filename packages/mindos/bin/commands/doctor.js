@@ -27,6 +27,12 @@ export const meta = {
   ],
 };
 
+export function formatShimActivationWarning(platform = process.platform) {
+  return platform === 'win32'
+    ? '~/.mindos/bin added to your user PATH — open a new terminal to activate'
+    : '~/.mindos/bin PATH injected into shell rc files — open a new terminal to activate';
+}
+
 export const run = async (_args, flags) => {
   const jsonMode = flags.json === true;
   const checks = [];
@@ -123,7 +129,7 @@ export const run = async (_args, flags) => {
       if (isShimInPath()) {
         ok(`~/.mindos/bin is in PATH`);
       } else {
-        warn(`~/.mindos/bin PATH injected into shell rc files — open a new terminal to activate`);
+        warn(formatShimActivationWarning());
       }
     } catch {
       if (existsSync(resolve(mindosBin, 'mindos'))) {

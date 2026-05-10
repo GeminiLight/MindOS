@@ -75,6 +75,16 @@ describe('CLI smoke tests', () => {
     expect(source).toContain("execFileSync('launchctl', ['print', `gui/${uid}/com.mindos.app`]");
   });
 
+  it('mindos doctor uses Windows PATH registry wording after shim injection', async () => {
+    const doctor = await import('../../packages/mindos/bin/commands/doctor.js') as {
+      formatShimActivationWarning: (platform: NodeJS.Platform) => string;
+    };
+
+    expect(doctor.formatShimActivationWarning('win32')).toContain('user PATH');
+    expect(doctor.formatShimActivationWarning('win32')).not.toContain('shell rc');
+    expect(doctor.formatShimActivationWarning('darwin')).toContain('shell rc files');
+  });
+
   it('mindos config show without config exits 1', () => {
     const { exitCode } = run(['config', 'show']);
     expect(exitCode).toBe(1);
