@@ -2983,6 +2983,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/server.test.ts` 覆盖 Windows 风格 home-relative MCP config 的卸载和 custom Agent discovery。
 
+### ACP 本地检测的 override / presence path 也要支持 Windows `~\`（2026-05-10）
+
+**症状**：Windows 用户把 ACP Agent override command 或 presence directory 配成 `~\Tools\agent.exe`、`~\.codex\` 时，本地检测会当成普通路径，导致已安装 Agent 显示为未安装。
+
+**根因**：`packages/mindos/src/protocols/acp/detect-local.ts` 的 `expandHome()` 只处理 `~` 和 `~/`，但 `isPathLikeCommand()` 又会把带反斜杠的 command 识别为 path-like，最后 lookup 不走 PATH，也不正确展开 home。
+
+**修复**：ACP local detection 的 home expansion 同时支持 `~/` 和 `~\`，并用 `path.resolve()` 组合 home 与剩余路径。
+
+**防回归**：`packages/mindos/src/protocols/acp/detect-local.test.ts` 覆盖 Windows 风格 home-relative direct command 和 presence directory。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { findUserOverride, getDetectableAgents, resolveAgentCommand } from './agent-descriptors.js';
 import type { AcpAgentOverride } from './agent-descriptors.js';
@@ -30,14 +31,14 @@ export function expandHome(filePath: string): string {
   let homeExpanded = filePath;
   if (filePath === '~') {
     homeExpanded = os.homedir();
-  } else if (filePath.startsWith('~/')) {
-    homeExpanded = `${os.homedir()}/${filePath.slice(2)}`;
+  } else if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+    homeExpanded = path.resolve(os.homedir(), filePath.slice(2));
   }
   return homeExpanded.replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (match, name: string) => process.env[name] ?? match);
 }
 
 export function isPathLikeCommand(command: string): boolean {
-  return command.startsWith('~/') || command.startsWith('/') || command.startsWith('./') || command.startsWith('../') || command.includes('\\') || /^[A-Za-z]:[\\/]/.test(command);
+  return command.startsWith('~/') || command.startsWith('~\\') || command.startsWith('/') || command.startsWith('./') || command.startsWith('../') || command.includes('\\') || /^[A-Za-z]:[\\/]/.test(command);
 }
 
 export function resolveDirectCommandPath(command: string | undefined): string | null {
