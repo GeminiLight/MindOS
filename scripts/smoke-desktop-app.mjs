@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -44,6 +44,7 @@ const child = spawn(executable, [], {
     ...process.env,
     HOME: home,
     USERPROFILE: home,
+    APPIMAGE_EXTRACT_AND_RUN: process.platform === 'linux' ? '1' : process.env.APPIMAGE_EXTRACT_AND_RUN,
     MIND_ROOT: mindRoot,
     MINDOS_WEB_PORT: String(webPort),
     MINDOS_MCP_PORT: String(args.mcpPort ?? 8781),
@@ -137,16 +138,24 @@ function resolveExecutable(app) {
 }
 
 function findPackagedApp() {
-  const desktopDist = resolve('packages/desktop/dist');
-  const candidates = [
+  const distRoots = [resolve('packages/desktop/dist'), resolve('dist')];
+  const candidates = distRoots.flatMap((desktopDist) => [
     join(desktopDist, 'mac-arm64', 'MindOS.app'),
     join(desktopDist, 'mac', 'MindOS.app'),
     join(desktopDist, 'linux-unpacked', 'MindOS'),
     join(desktopDist, 'linux-unpacked', 'mindos'),
     join(desktopDist, 'win-unpacked', 'MindOS.exe'),
     join(desktopDist, 'win-arm64-unpacked', 'MindOS.exe'),
-  ];
+    ...findDistFiles(desktopDist, /\.AppImage$/),
+  ]);
   return candidates.find((candidate) => existsSync(candidate));
+}
+
+function findDistFiles(dir, pattern) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((entry) => pattern.test(entry))
+    .map((entry) => join(dir, entry));
 }
 
 function isArchMismatch(app) {

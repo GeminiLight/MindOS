@@ -64,8 +64,12 @@ describe('Desktop release packaging contract', () => {
     expect(verifier).toContain('path.join is not a function');
 
     expect(smoke).toContain('/api/health');
+    expect(smoke).toContain('APPIMAGE_EXTRACT_AND_RUN');
+    expect(smoke).toContain("resolve('packages/desktop/dist')");
+    expect(smoke).toContain("resolve('dist')");
     expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'MindOS')");
     expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'mindos')");
+    expect(smoke).toContain('/\\.AppImage$/');
     expect(smoke).toContain('root/login did not return the MindOS HTML shell');
     expect(smoke).toContain('MCP bundle not found');
     expect(smoke).toContain('Cannot find module');
