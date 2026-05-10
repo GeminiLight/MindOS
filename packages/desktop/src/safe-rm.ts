@@ -14,6 +14,11 @@
 import path from 'path';
 import { lstatSync, rmSync, existsSync, statSync } from 'fs';
 
+function isOutsideDirectory(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
 /**
  * Check if a path is a symbolic link.
  * Returns false if path doesn't exist (doesn't throw).
@@ -196,8 +201,7 @@ export function assessDeletionRisk(
 
   // Check if path is outside expected boundaries
   try {
-    const relative = path.relative(configDir, filePath);
-    if (relative.startsWith('..')) {
+    if (isOutsideDirectory(configDir, filePath)) {
       risks.isSystemPath = true;
     }
   } catch {

@@ -3063,6 +3063,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/server.test.ts` 覆盖 bootstrap `target_dir=..Notes` 与 `../secret`；`packages/web/__tests__/core/create-space.test.ts` 覆盖 `..Parent` 嵌套 Space 与 `../Parent` traversal。
 
+### Desktop 删除风险评估不要把 `..name` 当成系统路径（2026-05-10）
+
+**症状**：`assessDeletionRisk()` 会把 `.mindos/..cache/runtime` 这种仍在配置目录内的路径标记为 `isSystemPath: true`，误报为系统路径风险。
+
+**根因**：风险评估用 `path.relative(configDir, filePath).startsWith('..')` 判断越界，和其他 containment bug 一样误伤 `..cache` 这类普通目录名。
+
+**修复**：用 `path.relative(path.resolve(root), path.resolve(target))` 判断 containment，只把 `..`、`../...` 或 absolute relative path 视为越界。
+
+**防回归**：`packages/desktop/src/safe-rm.test.ts` 覆盖 `.mindos/..cache/runtime` 不算系统路径，以及 `.mindos-other/runtime` sibling 仍算系统路径。
+
 ### Desktop updater 路径白名单要覆盖 getRuntimePaths 全量输出（2026-05-10）
 
 **症状**：Desktop updater 下载运行时后，`getRuntimePaths()` 生成的 `tarballPath` 是 `~/.mindos/runtime-download.tar.gz`，但 `validateRuntimePath()` 会报 `SECURITY: Subdirectory not whitelisted: runtime-download.tar.gz`。
