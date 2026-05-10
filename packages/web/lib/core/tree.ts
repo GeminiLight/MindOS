@@ -26,6 +26,28 @@ export interface TreeOptions {
   allowedExtensions?: Set<string>;
 }
 
+function isPathWithinRoot(resolved: string, root: string): boolean {
+  const relative = path.relative(root, resolved);
+  return relative === '' || (
+    relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative)
+  );
+}
+
+function resolveStartDirectory(mindRoot: string, dirPath?: string): { root: string; dir: string } | null {
+  const root = path.resolve(mindRoot);
+  const dir = dirPath ? path.resolve(dirPath) : root;
+  try {
+    const rootReal = fs.realpathSync(root);
+    const dirReal = fs.realpathSync(dir);
+    if (!isPathWithinRoot(dirReal, rootReal)) return null;
+  } catch {
+    return null;
+  }
+  return { root, dir };
+}
+
 /**
  * Builds a recursive file tree from dirPath.
  * Only includes files with allowed extensions and non-ignored directories.
@@ -35,8 +57,9 @@ export function getFileTree(
   dirPath?: string,
   opts: TreeOptions = {}
 ): FileNode[] {
-  const root = path.resolve(mindRoot);
-  const dir = dirPath ?? root;
+  const start = resolveStartDirectory(mindRoot, dirPath);
+  if (!start) return [];
+  const { root, dir } = start;
   const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
 
@@ -82,8 +105,9 @@ export function collectAllFiles(
   dirPath?: string,
   opts: TreeOptions = {}
 ): string[] {
-  const root = path.resolve(mindRoot);
-  const dir = dirPath ?? root;
+  const start = resolveStartDirectory(mindRoot, dirPath);
+  if (!start) return [];
+  const { root, dir } = start;
   const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
 
@@ -221,8 +245,9 @@ export async function collectAllFilesAsync(
   dirPath?: string,
   opts: TreeOptions = {}
 ): Promise<string[]> {
-  const root = path.resolve(mindRoot);
-  const dir = dirPath ?? root;
+  const start = resolveStartDirectory(mindRoot, dirPath);
+  if (!start) return [];
+  const { root, dir } = start;
   const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
 

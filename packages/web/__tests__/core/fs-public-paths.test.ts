@@ -29,4 +29,23 @@ describe('web fs public directory helpers', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('does not follow symlinked directories outside MIND_ROOT', () => {
+    const root = getTestMindRoot();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-outside-symlink-dir-'));
+    const linkPath = path.join(root, 'linked-outside');
+    try {
+      fs.writeFileSync(path.join(outside, 'leak.md'), 'outside', 'utf-8');
+      fs.writeFileSync(path.join(outside, 'INSTRUCTION.md'), '# Outside', 'utf-8');
+      fs.writeFileSync(path.join(outside, 'README.md'), '# Outside Readme', 'utf-8');
+      fs.symlinkSync(outside, linkPath, 'dir');
+
+      expect(isDirectory('linked-outside')).toBe(false);
+      expect(getDirEntries('linked-outside')).toEqual([]);
+      expect(getSpacePreview('linked-outside')).toBeNull();
+    } finally {
+      fs.rmSync(linkPath, { force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });

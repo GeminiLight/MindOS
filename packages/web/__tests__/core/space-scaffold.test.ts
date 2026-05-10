@@ -117,4 +117,17 @@ describe('scaffoldIfNewSpace', () => {
       fs.chmodSync(dir, 0o755); // restore for cleanup
     }
   });
+
+  it('does not scaffold through symlinked directories outside mindRoot', () => {
+    const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-scaffold-outside-'));
+    try {
+      fs.symlinkSync(outsideRoot, path.join(mindRoot, 'Linked'), 'dir');
+
+      expect(() => scaffoldIfNewSpace(mindRoot, 'Linked/note.md')).not.toThrow();
+      expect(fs.existsSync(path.join(outsideRoot, 'INSTRUCTION.md'))).toBe(false);
+      expect(fs.existsSync(path.join(outsideRoot, 'README.md'))).toBe(false);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });

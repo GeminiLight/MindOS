@@ -3335,6 +3335,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts`、`packages/mindos/src/server.test.ts`、`packages/web/__tests__/core/fs-ops.test.ts`、`packages/web/__tests__/core/lines.test.ts` 覆盖 symlink escape 的读、写、新建和 raw file 场景。
 
+### Web 目录 helper 和元数据日志也要做 realpath containment（2026-05-10）
+
+**症状**：`isDirectory()`、`getDirEntries()`、`getSpacePreview()`、tree start directory、Space scaffold、`.mindos/change-log.json`、`.mindos/agent-audit-log.json` 这类入口不是普通文件内容读写，但同样会触碰用户 vault 内路径。若目录或 `.mindos` 是指向 root 外的 symlink，可能列出外部目录或把日志写到外部位置。
+
+**根因**：这些 helper 容易被当成“内部路径”而直接 `path.join()` / `fs.statSync()`；但 vault 是用户可写目录，内部目录名本身也不能被信任。
+
+**修复**：Web 目录 helper、tree 显式 start directory、Space scaffold/create-space、content change log、agent audit log 统一在访问前做 `resolveExistingSafe()` 或等价 realpath containment。
+
+**防回归**：`packages/web/__tests__/core/fs-public-paths.test.ts`、`packages/web/__tests__/core/tree.test.ts`、`packages/web/__tests__/core/tree-async.test.ts`、`packages/web/__tests__/core/space-scaffold.test.ts`、`packages/web/__tests__/core/create-space.test.ts`、`packages/web/__tests__/core/content-changes.test.ts`、`packages/web/__tests__/core/agent-audit-log.test.ts` 覆盖 symlinked directory / `.mindos` 场景。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。

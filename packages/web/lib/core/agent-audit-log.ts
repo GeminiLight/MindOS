@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { resolveExistingSafe } from './security';
 
 export interface AgentAuditEvent {
   id: string;
@@ -71,12 +72,12 @@ function defaultState(): AgentAuditState {
 }
 
 function logPath(mindRoot: string) {
-  return path.join(mindRoot, LOG_DIR_NAME, LOG_FILE_NAME);
+  return resolveExistingSafe(mindRoot, path.posix.join(LOG_DIR_NAME, LOG_FILE_NAME));
 }
 
 function readState(mindRoot: string): AgentAuditState {
-  const file = logPath(mindRoot);
   try {
+    const file = logPath(mindRoot);
     if (!fs.existsSync(file)) return defaultState();
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8')) as Partial<AgentAuditState>;
     if (!Array.isArray(parsed.events)) return defaultState();
@@ -163,77 +164,75 @@ function toEvent(entry: LegacyAgentOp, op: AgentAuditEvent['op'], idx: number): 
 }
 
 function importLegacyMdIfNeeded(mindRoot: string, state: AgentAuditState): AgentAuditState {
-  const legacyPath = path.join(mindRoot, LEGACY_MD_FILE);
-  if (!fs.existsSync(legacyPath)) return state;
-
-  let raw = '';
   try {
+    const legacyPath = resolveExistingSafe(mindRoot, LEGACY_MD_FILE);
+    if (!fs.existsSync(legacyPath)) return state;
+
+    let raw = '';
     raw = fs.readFileSync(legacyPath, 'utf-8');
+    const blocks = parseLegacyMdBlocks(raw);
+    const importedCount = state.legacy?.mdImportedCount ?? 0;
+    if (blocks.length <= importedCount) {
+      if (blocks.length > 0) removeLegacyFile(legacyPath);
+      return state;
+    }
+
+    const incoming = blocks.slice(importedCount);
+    const imported = incoming.map((entry, idx) => toEvent(entry, 'legacy_agent_audit_md_import', idx));
+    const merged = [...state.events, ...imported]
+      .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+      .slice(0, MAX_EVENTS);
+
+    const next = {
+      ...state,
+      events: merged,
+      legacy: {
+        mdImportedCount: blocks.length,
+        jsonlImportedCount: state.legacy?.jsonlImportedCount ?? 0,
+        lastImportedAt: nowIso(),
+      },
+    };
+    removeLegacyFile(legacyPath);
+    return next;
   } catch {
     return state;
   }
-
-  const blocks = parseLegacyMdBlocks(raw);
-  const importedCount = state.legacy?.mdImportedCount ?? 0;
-  if (blocks.length <= importedCount) {
-    if (blocks.length > 0) removeLegacyFile(legacyPath);
-    return state;
-  }
-
-  const incoming = blocks.slice(importedCount);
-  const imported = incoming.map((entry, idx) => toEvent(entry, 'legacy_agent_audit_md_import', idx));
-  const merged = [...state.events, ...imported]
-    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
-    .slice(0, MAX_EVENTS);
-
-  const next = {
-    ...state,
-    events: merged,
-    legacy: {
-      mdImportedCount: blocks.length,
-      jsonlImportedCount: state.legacy?.jsonlImportedCount ?? 0,
-      lastImportedAt: nowIso(),
-    },
-  };
-  removeLegacyFile(legacyPath);
-  return next;
 }
 
 function importLegacyJsonlIfNeeded(mindRoot: string, state: AgentAuditState): AgentAuditState {
-  const legacyPath = path.join(mindRoot, LEGACY_JSONL_FILE);
-  if (!fs.existsSync(legacyPath)) return state;
-
-  let raw = '';
   try {
+    const legacyPath = resolveExistingSafe(mindRoot, LEGACY_JSONL_FILE);
+    if (!fs.existsSync(legacyPath)) return state;
+
+    let raw = '';
     raw = fs.readFileSync(legacyPath, 'utf-8');
+    const lines = parseJsonLines(raw);
+    const importedCount = state.legacy?.jsonlImportedCount ?? 0;
+    if (lines.length <= importedCount) {
+      if (lines.length > 0) removeLegacyFile(legacyPath);
+      return state;
+    }
+
+    const incoming = lines.slice(importedCount);
+    const imported = incoming.map((entry, idx) => toEvent(entry, 'legacy_agent_log_jsonl_import', idx));
+    const merged = [...state.events, ...imported]
+      .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+      .slice(0, MAX_EVENTS);
+
+    const next = {
+      ...state,
+      events: merged,
+      legacy: {
+        mdImportedCount: state.legacy?.mdImportedCount ?? 0,
+        jsonlImportedCount: lines.length,
+        lastImportedAt: nowIso(),
+      },
+    };
+    removeLegacyFile(legacyPath);
+    return next;
   } catch {
     return state;
   }
-
-  const lines = parseJsonLines(raw);
-  const importedCount = state.legacy?.jsonlImportedCount ?? 0;
-  if (lines.length <= importedCount) {
-    if (lines.length > 0) removeLegacyFile(legacyPath);
-    return state;
-  }
-
-  const incoming = lines.slice(importedCount);
-  const imported = incoming.map((entry, idx) => toEvent(entry, 'legacy_agent_log_jsonl_import', idx));
-  const merged = [...state.events, ...imported]
-    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
-    .slice(0, MAX_EVENTS);
-
-  const next = {
-    ...state,
-    events: merged,
-    legacy: {
-      mdImportedCount: state.legacy?.mdImportedCount ?? 0,
-      jsonlImportedCount: lines.length,
-      lastImportedAt: nowIso(),
-    },
-  };
-  removeLegacyFile(legacyPath);
-  return next;
 }
 
 function loadState(mindRoot: string): AgentAuditState {
@@ -284,4 +283,3 @@ export function parseAgentAuditJsonLines(raw: string): AgentAuditInput[] {
     agentName: typeof entry.agentName === 'string' ? entry.agentName : undefined,
   }));
 }
-

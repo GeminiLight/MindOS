@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { testMindRoot } from '../setup';
 import {
@@ -127,5 +128,24 @@ describe('core/content-changes', () => {
     expect(importedLegacy.length).toBe(2);
     expect(importedLegacy.map((e) => e.path)).toEqual(expect.arrayContaining(['a.md', 'b.md']));
     expect(fs.existsSync(legacyPath)).toBe(false);
+  });
+
+  it('does not write change logs through a symlinked .mindos directory outside mindRoot', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-content-log-root-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-content-log-outside-'));
+    try {
+      fs.symlinkSync(outside, path.join(root, '.mindos'), 'dir');
+
+      expect(() => appendContentChange(root, {
+        op: 'save_file',
+        path: 'note.md',
+        source: 'user',
+        summary: 'updated',
+      })).toThrow('Access denied');
+      expect(fs.existsSync(path.join(outside, 'change-log.json'))).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

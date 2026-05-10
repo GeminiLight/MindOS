@@ -413,7 +413,7 @@ export function getSpacePreview(dirPath: string): SpacePreview | null {
   const root = getMindRoot();
   let abs: string;
   try {
-    abs = resolveSafe(root, dirPath);
+    abs = resolveExistingSafe(root, dirPath);
   } catch {
     return null;
   }
@@ -430,7 +430,7 @@ export function collectAllFiles(): string[] {
 /** Returns whether a relative path is a directory within MIND_ROOT. */
 export function isDirectory(filePath: string): boolean {
   try {
-    const resolved = resolveSafe(getMindRoot(), filePath);
+    const resolved = resolveExistingSafe(getMindRoot(), filePath);
     return fs.statSync(resolved).isDirectory();
   } catch {
     return false;
@@ -443,7 +443,7 @@ export function getDirEntries(dirPath: string): FileNode[] {
   const rootResolved = path.resolve(root);
   let resolved: string;
   try {
-    resolved = resolveSafe(rootResolved, dirPath);
+    resolved = resolveExistingSafe(rootResolved, dirPath);
   } catch {
     return [];
   }

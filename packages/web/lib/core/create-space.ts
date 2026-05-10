@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
 import { createFile } from './fs-ops';
+import { resolveExistingSafe } from './security';
 import { INSTRUCTION_TEMPLATE, cleanDirName } from './space-scaffold';
 
 function hasParentDirectorySegment(input: string): boolean {
@@ -49,7 +50,7 @@ export function createSpaceFilesystem(
 
   // Explicitly create INSTRUCTION.md for ALL spaces (including nested ones).
   // scaffoldIfNewSpace only handles top-level dirs; nested spaces need this.
-  const absDir = path.resolve(mindRoot, fullPath);
+  const absDir = resolveExistingSafe(mindRoot, fullPath);
   const instructionPath = path.join(absDir, 'INSTRUCTION.md');
   if (!fs.existsSync(instructionPath)) {
     fs.writeFileSync(instructionPath, INSTRUCTION_TEMPLATE(cleanDirName(trimmed)), 'utf-8');

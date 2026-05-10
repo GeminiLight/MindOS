@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { resolveExistingSafe } from './security';
 
 export type ContentChangeSource = 'user' | 'agent' | 'system';
 
@@ -63,7 +64,7 @@ function nowIso() {
 }
 
 function changeLogPath(mindRoot: string) {
-  return path.join(mindRoot, LOG_DIR_NAME, LOG_FILE_NAME);
+  return resolveExistingSafe(mindRoot, path.posix.join(LOG_DIR_NAME, LOG_FILE_NAME));
 }
 
 function defaultState(): ChangeLogState {
@@ -88,8 +89,8 @@ function normalizeText(value: string | undefined): { value: string | undefined; 
 }
 
 function readState(mindRoot: string): ChangeLogState {
-  const file = changeLogPath(mindRoot);
   try {
+    const file = changeLogPath(mindRoot);
     if (!fs.existsSync(file)) return defaultState();
     const raw = fs.readFileSync(file, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<ChangeLogState>;
@@ -158,61 +159,60 @@ function removeLegacyFile(filePath: string): void {
 }
 
 function importLegacyAgentDiffIfNeeded(mindRoot: string, state: ChangeLogState): ChangeLogState {
-  const legacyPath = path.join(mindRoot, 'Agent-Diff.md');
-  if (!fs.existsSync(legacyPath)) return state;
-
-  let raw = '';
   try {
+    const legacyPath = resolveExistingSafe(mindRoot, 'Agent-Diff.md');
+    if (!fs.existsSync(legacyPath)) return state;
+
+    let raw = '';
     raw = fs.readFileSync(legacyPath, 'utf-8');
+    const blocks = parseLegacyAgentDiffBlocks(raw);
+    const importedCount = state.legacy?.agentDiffImportedCount ?? 0;
+    if (blocks.length <= importedCount) {
+      // Already migrated before: remove legacy file to avoid stale duplicate source.
+      if (blocks.length > 0) removeLegacyFile(legacyPath);
+      return state;
+    }
+
+    const incoming = blocks.slice(importedCount);
+    const importedEvents: ContentChangeEvent[] = incoming.map((entry, idx) => {
+      const before = normalizeText(entry.before);
+      const after = normalizeText(entry.after);
+      const toolName = typeof entry.tool === 'string' && entry.tool.trim()
+        ? entry.tool.trim()
+        : 'unknown-tool';
+      const targetPath = typeof entry.path === 'string' && entry.path.trim()
+        ? entry.path
+        : 'Agent-Diff.md';
+      return {
+        id: `legacy-${Date.now().toString(36)}-${idx.toString(36)}`,
+        ts: toValidIso(entry.ts),
+        op: 'legacy_agent_diff_import',
+        path: targetPath,
+        source: 'agent',
+        summary: `Imported legacy agent diff (${toolName})`,
+        before: before.value,
+        after: after.value,
+        truncated: before.truncated || after.truncated || undefined,
+      };
+    });
+
+    const merged = [...state.events, ...importedEvents].sort(
+      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
+    );
+
+    const nextState = {
+      ...state,
+      events: merged.slice(0, MAX_EVENTS),
+      legacy: {
+        agentDiffImportedCount: blocks.length,
+        lastImportedAt: nowIso(),
+      },
+    };
+    removeLegacyFile(legacyPath);
+    return nextState;
   } catch {
     return state;
   }
-
-  const blocks = parseLegacyAgentDiffBlocks(raw);
-  const importedCount = state.legacy?.agentDiffImportedCount ?? 0;
-  if (blocks.length <= importedCount) {
-    // Already migrated before: remove legacy file to avoid stale duplicate source.
-    if (blocks.length > 0) removeLegacyFile(legacyPath);
-    return state;
-  }
-
-  const incoming = blocks.slice(importedCount);
-  const importedEvents: ContentChangeEvent[] = incoming.map((entry, idx) => {
-    const before = normalizeText(entry.before);
-    const after = normalizeText(entry.after);
-    const toolName = typeof entry.tool === 'string' && entry.tool.trim()
-      ? entry.tool.trim()
-      : 'unknown-tool';
-    const targetPath = typeof entry.path === 'string' && entry.path.trim()
-      ? entry.path
-      : 'Agent-Diff.md';
-    return {
-      id: `legacy-${Date.now().toString(36)}-${idx.toString(36)}`,
-      ts: toValidIso(entry.ts),
-      op: 'legacy_agent_diff_import',
-      path: targetPath,
-      source: 'agent',
-      summary: `Imported legacy agent diff (${toolName})`,
-      before: before.value,
-      after: after.value,
-      truncated: before.truncated || after.truncated || undefined,
-    };
-  });
-
-  const merged = [...state.events, ...importedEvents].sort(
-    (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
-  );
-
-  const nextState = {
-    ...state,
-    events: merged.slice(0, MAX_EVENTS),
-    legacy: {
-      agentDiffImportedCount: blocks.length,
-      lastImportedAt: nowIso(),
-    },
-  };
-  removeLegacyFile(legacyPath);
-  return nextState;
 }
 
 function loadState(mindRoot: string): ChangeLogState {

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkTempMindRoot, cleanupMindRoot, seedFile } from './helpers';
 import { getFileTree, collectAllFiles, renderTree, buildFileIndex } from '@/lib/core/tree';
+import fs from 'fs';
+import path from 'path';
 
 describe('tree', () => {
   let mindRoot: string;
@@ -64,6 +66,18 @@ describe('tree', () => {
       const tree = getFileTree(mindRoot);
       expect(tree.map(n => n.name)).toEqual(['dir', 'a.md', 'z.md']);
     });
+
+    it('does not build a tree from a symlinked start directory outside root', () => {
+      const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-tree-outside-'));
+      try {
+        fs.writeFileSync(path.join(outsideRoot, 'leak.md'), 'outside', 'utf-8');
+        fs.symlinkSync(outsideRoot, path.join(mindRoot, 'linked-outside'), 'dir');
+
+        expect(getFileTree(mindRoot, path.join(mindRoot, 'linked-outside'))).toEqual([]);
+      } finally {
+        fs.rmSync(outsideRoot, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('collectAllFiles', () => {
@@ -73,6 +87,18 @@ describe('tree', () => {
       seedFile(mindRoot, 'sub/c.txt', '');
       const files = collectAllFiles(mindRoot);
       expect(files.sort()).toEqual(['a.md', 'sub/b.csv']);
+    });
+
+    it('does not collect files from a symlinked start directory outside root', () => {
+      const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-tree-collect-outside-'));
+      try {
+        fs.writeFileSync(path.join(outsideRoot, 'leak.md'), 'outside', 'utf-8');
+        fs.symlinkSync(outsideRoot, path.join(mindRoot, 'linked-outside'), 'dir');
+
+        expect(collectAllFiles(mindRoot, path.join(mindRoot, 'linked-outside'))).toEqual([]);
+      } finally {
+        fs.rmSync(outsideRoot, { recursive: true, force: true });
+      }
     });
   });
 

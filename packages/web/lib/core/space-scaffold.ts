@@ -13,6 +13,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { resolveExistingSafe } from './security';
 
 export const INSTRUCTION_TEMPLATE = (dirName: string) =>
   `# ${dirName} Instruction Set
@@ -81,7 +82,7 @@ export function scaffoldIfNewSpace(mindRoot: string, filePath: string): void {
     const topDir = parts[0];
     if (topDir.startsWith('.')) return; // skip hidden directories
 
-    const topDirAbs = path.join(mindRoot, topDir);
+    const topDirAbs = resolveExistingSafe(mindRoot, topDir);
     const instructionPath = path.join(topDirAbs, 'INSTRUCTION.md');
 
     // Already has INSTRUCTION.md → not a new Space, skip

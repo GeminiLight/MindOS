@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { testMindRoot } from '../setup';
 import {
@@ -67,5 +68,23 @@ describe('core/agent-audit-log', () => {
     expect(events[0].tool).toBe('mindos_update_lines');
     expect(fs.existsSync(legacyPath)).toBe(false);
   });
-});
 
+  it('does not write audit logs through a symlinked .mindos directory outside mindRoot', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-audit-log-root-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-audit-log-outside-'));
+    try {
+      fs.symlinkSync(outside, path.join(root, '.mindos'), 'dir');
+
+      expect(() => appendAgentAuditEvent(root, {
+        ts: '2026-03-25T00:00:00.000Z',
+        tool: 'mindos_write_file',
+        params: { path: 'note.md' },
+        result: 'ok',
+      })).toThrow('Access denied');
+      expect(fs.existsSync(path.join(outside, 'agent-audit-log.json'))).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});

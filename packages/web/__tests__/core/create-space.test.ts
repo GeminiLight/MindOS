@@ -47,4 +47,16 @@ describe('createSpaceFilesystem', () => {
     createSpaceFilesystem(mindRoot, 'Dup', 'a', '');
     expect(() => createSpaceFilesystem(mindRoot, 'Dup', 'b', '')).toThrow('already exists');
   });
+
+  it('does not create nested spaces below symlinked parents outside mindRoot', () => {
+    const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-create-space-outside-'));
+    try {
+      fs.symlinkSync(outsideRoot, path.join(mindRoot, 'LinkedParent'), 'dir');
+
+      expect(() => createSpaceFilesystem(mindRoot, 'Child', 'nested', 'LinkedParent')).toThrow('Access denied');
+      expect(fs.existsSync(path.join(outsideRoot, 'Child'))).toBe(false);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });
