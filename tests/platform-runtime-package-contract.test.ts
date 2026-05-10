@@ -102,6 +102,15 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).toContain("'bin/cli.js'");
   });
 
+  it('verifies npm release tarballs include runtime-critical assets', () => {
+    const workflow = readText('.github/workflows/publish-npm.yml');
+
+    expect(workflow).toContain('"dist/protocols/mcp-server/index.cjs"');
+    expect(workflow).toContain('"static-web/index.html"');
+    expect(workflow).toContain('Published package missing $f');
+    expect(workflow).toContain('Published platform package missing $f');
+  });
+
   it('documents the migration plan and acceptance criteria', () => {
     const specPath = 'wiki/specs/spec-opencode-style-platform-runtime.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);

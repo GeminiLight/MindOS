@@ -3,10 +3,11 @@
  */
 
 import { existsSync, readFileSync, mkdirSync, cpSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { ROOT, CONFIG_PATH } from '../lib/constants.js';
 import { bold, dim, cyan, green, red } from '../lib/colors.js';
 import { EXIT } from '../lib/command.js';
+import { resolveInsideRoot } from '../lib/safe-path.js';
 
 export const meta = {
   name: 'init-skills',
@@ -15,6 +16,29 @@ export const meta = {
   usage: 'mindos init-skills',
   hidden: true,
 };
+
+export function initializeUserPreferences(config, options = {}) {
+  const mindRoot = config.mindRoot;
+  const templateRoot = options.templateRoot ?? resolve(ROOT, 'templates', 'skill-rules');
+
+  let dest;
+  try {
+    dest = resolveInsideRoot(mindRoot, '.mindos/user-preferences.md');
+  } catch {
+    return { status: 'unsafe-path' };
+  }
+
+  if (existsSync(dest)) return { status: 'exists' };
+  mkdirSync(dirname(dest), { recursive: true });
+
+  const isZh = config.disabledSkills?.includes('mindos');
+  const lang = isZh ? 'zh' : 'en';
+  const src = resolve(templateRoot, lang, 'user-rules.md');
+  if (!existsSync(src)) return { status: 'template-missing' };
+
+  cpSync(src, dest);
+  return { status: 'created', dir: dirname(dest) };
+}
 
 export const run = () => {
   console.log(`\n${bold('📦 Initialize Skill Rules')}\n`);
@@ -36,21 +60,16 @@ export const run = () => {
     process.exit(EXIT.ERROR);
   }
 
-  const mindosDir = resolve(mindRoot, '.mindos');
-  const dest = resolve(mindosDir, 'user-preferences.md');
-  if (existsSync(dest)) {
+  const result = initializeUserPreferences(config);
+  if (result.status === 'exists') {
     console.log(`  ${dim('skip')}  .mindos/user-preferences.md (already exists)\n`);
+  } else if (result.status === 'created') {
+    console.log(`  ${green('✓')}  .mindos/user-preferences.md created at ${dim(result.dir)}\n`);
+  } else if (result.status === 'unsafe-path') {
+    console.log(`  ${red('✘')} Unsafe .mindos path. Refusing to write outside the knowledge base.\n`);
+    process.exit(EXIT.ERROR);
   } else {
-    if (!existsSync(mindosDir)) mkdirSync(mindosDir, { recursive: true });
-    const isZh = config.disabledSkills?.includes('mindos');
-    const lang = isZh ? 'zh' : 'en';
-    const src = resolve(ROOT, 'templates', 'skill-rules', lang, 'user-rules.md');
-    if (existsSync(src)) {
-      cpSync(src, dest);
-      console.log(`  ${green('✓')}  .mindos/user-preferences.md created at ${dim(mindosDir)}\n`);
-    } else {
-      console.log(`  ${dim('skip')}  Template not found, create .mindos/user-preferences.md manually if needed.\n`);
-    }
+    console.log(`  ${dim('skip')}  Template not found, create .mindos/user-preferences.md manually if needed.\n`);
   }
   console.log(`  ${dim('Note: Operating rules are now built into the app. No install needed.')}\n`);
 };

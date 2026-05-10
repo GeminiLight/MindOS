@@ -4,6 +4,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
 
 // Mock @huggingface/transformers to avoid real downloads
 vi.mock('@huggingface/transformers', () => ({
@@ -273,6 +276,32 @@ describe('embedding-provider retry logic', () => {
       // which improves error messages for the UI
       const networkError = new Error('ENOTFOUND hub.huggingface.co');
       expect(networkError.message.toLowerCase()).toContain('enotfound');
+    });
+  });
+
+  describe('optional runtime installer', () => {
+    it('uses bundled npm cli when running from a Desktop runtime', async () => {
+      const originalProjectRoot = process.env.MINDOS_PROJECT_ROOT;
+      const originalNodeBin = process.env.MINDOS_NODE_BIN;
+      const runtimeRoot = mkdtempSync(path.join(tmpdir(), 'mindos-runtime-npm-'));
+      const npmCli = path.join(runtimeRoot, 'node', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+      mkdirSync(path.dirname(npmCli), { recursive: true });
+      writeFileSync(npmCli, '#!/usr/bin/env node\n');
+      process.env.MINDOS_PROJECT_ROOT = runtimeRoot;
+      process.env.MINDOS_NODE_BIN = '/opt/MindOS/node/bin/node';
+
+      try {
+        const { resolveLocalEmbeddingNpmInvocation } = await import('@/lib/core/embedding-provider');
+        expect(resolveLocalEmbeddingNpmInvocation()).toEqual({
+          command: '/opt/MindOS/node/bin/node',
+          args: [npmCli],
+        });
+      } finally {
+        if (originalProjectRoot === undefined) delete process.env.MINDOS_PROJECT_ROOT;
+        else process.env.MINDOS_PROJECT_ROOT = originalProjectRoot;
+        if (originalNodeBin === undefined) delete process.env.MINDOS_NODE_BIN;
+        else process.env.MINDOS_NODE_BIN = originalNodeBin;
+      }
     });
   });
 });

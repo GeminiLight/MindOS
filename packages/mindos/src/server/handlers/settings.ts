@@ -130,6 +130,23 @@ function resolveConnectionMode(current: MindosConnectionMode | undefined, incomi
   return { cli: mode.cli, mcp: mode.mcp };
 }
 
+function resolveSkillPathsPatch(current: Record<string, unknown> | undefined, incoming: unknown): Record<string, unknown> | undefined {
+  if (incoming === undefined) return current;
+  if (!incoming || typeof incoming !== 'object') return current;
+  const source = incoming as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...(current ?? {}) };
+
+  if (typeof source.enableAgentsDir === 'boolean') next.enableAgentsDir = source.enableAgentsDir;
+  if (Array.isArray(source.custom)) {
+    next.custom = source.custom
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return next;
+}
+
 function resolveWebSearchPatch(incoming: unknown, current: MindosWebSearchConfig): MindosWebSearchConfig | undefined {
   if (!incoming || typeof incoming !== 'object') return undefined;
   const ws = incoming as Record<string, unknown>;
@@ -215,7 +232,7 @@ export function handleSettingsPost(
       embedding: body.embedding && typeof body.embedding === 'object' ? resolveEmbedding(body.embedding) : current.embedding,
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
-      skillPaths: body.skillPaths ?? current.skillPaths,
+      skillPaths: resolveSkillPathsPatch(current.skillPaths, body.skillPaths),
       webPassword: body.webPassword ?? current.webPassword,
       authToken: resolvedAuthToken,
       allowNetworkAccess: typeof body.allowNetworkAccess === 'boolean'

@@ -25,6 +25,8 @@ function err<T>(error: Error): Result<T> {
  * Set of root-level protected files that cannot be modified via automated tools.
  */
 const ROOT_PROTECTED_FILES = new Set(['INSTRUCTION.md']);
+const WINDOWS_RESERVED_SEGMENT = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+const WINDOWS_INVALID_SEGMENT_CHARS = /[<>:"|?*\x00-\x1f]/;
 
 function hasWindowsDrivePrefix(filePath: string): boolean {
   return /^[A-Za-z]:/.test(filePath);
@@ -103,11 +105,30 @@ export function resolveSafe(root: string, filePath: string): string {
       { context: { root, filePath } }
     );
   }
+  assertCrossPlatformPathSegments(root, filePath, normalizedFilePath);
 
   const rootResolved = path.resolve(root);
   const resolved = path.resolve(path.join(rootResolved, normalizedFilePath));
   assertWithinRoot(resolved, rootResolved);
   return resolved;
+}
+
+function assertCrossPlatformPathSegments(root: string, filePath: string, normalizedFilePath: string): void {
+  for (const segment of normalizedFilePath.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (
+      segment.endsWith('.') ||
+      segment.endsWith(' ') ||
+      WINDOWS_RESERVED_SEGMENT.test(segment) ||
+      WINDOWS_INVALID_SEGMENT_CHARS.test(segment)
+    ) {
+      throw createError(
+        'VALIDATION_ERROR',
+        'Access denied: path contains a Windows-invalid file name segment',
+        { context: { root, filePath, segment } }
+      );
+    }
+  }
 }
 
 /**

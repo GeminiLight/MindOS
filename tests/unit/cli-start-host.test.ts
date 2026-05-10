@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -31,5 +32,23 @@ describe('mindos start host binding', () => {
     expect(source).toContain("execFileSync('osascript', [");
     expect(source).toContain("'-e'");
     expect(source).toContain("execFileSync('notify-send', ['MindOS Ready', `http://localhost:${webPort}`]");
+  });
+
+  it('skips user preference migration when .mindos is a symlink outside the knowledge base', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-start-migrate-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-start-outside-'));
+    try {
+      fs.writeFileSync(path.join(root, 'user-skill-rules.md'), 'legacy rules', 'utf-8');
+      fs.symlinkSync(outside, path.join(root, '.mindos'), 'dir');
+
+      const { migrateUserPreferences } = await import('../../packages/mindos/bin/commands/start.js');
+
+      expect(migrateUserPreferences({ mindRoot: root })).toEqual({ migrated: false, reason: 'unsafe-path' });
+      expect(fs.existsSync(path.join(outside, 'user-preferences.md'))).toBe(false);
+      expect(fs.readFileSync(path.join(root, 'user-skill-rules.md'), 'utf-8')).toBe('legacy rules');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

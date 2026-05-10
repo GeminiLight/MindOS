@@ -24,13 +24,15 @@ describe('knowledge operation package extraction contract', () => {
   });
 
   it('keeps the Web file route as the Next.js adapter over the runtime facade', () => {
-    const adapter = readText('packages/web/app/api/file/operation-kernel.ts');
+    const adapter = readText('packages/web/app/api/file/route.ts');
     const webPkg = readJson<{ dependencies?: Record<string, string> }>('packages/web/package.json');
 
     expect(webPkg.dependencies?.['@geminilight/mindos']).toBe('workspace:*');
     expect(webPkg.dependencies?.['@mindos/knowledge-ops']).toBeUndefined();
-    expect(adapter).toContain("from '@geminilight/mindos'");
-    expect(adapter).toContain('executeKernel');
+    expect(adapter).toContain("from '@geminilight/mindos/server'");
+    expect(adapter).toContain('handleFilePost');
+    expect(existsSync(resolve(root, 'packages/web/app/api/file/operation-kernel.ts'))).toBe(false);
+    expect(existsSync(resolve(root, 'packages/web/app/api/file/handlers.ts'))).toBe(false);
     expect(adapter).not.toContain('evaluatePermission');
     expect(adapter).not.toContain('TREE_CHANGING_OPS');
   });

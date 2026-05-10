@@ -1,15 +1,19 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { CONFIG_PATH, MINDOS_DIR } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
+import { stripBom } from './jsonc.js';
+import { resolveInsideRoot } from './safe-path.js';
 
 // ── Atomic write helper ────────────────────────────────────────────────────
 
 function atomicWriteJSON(filePath, data) {
   const content = JSON.stringify(data, null, 2) + '\n';
   const tmp = filePath + '.tmp';
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(tmp, content, 'utf-8');
   renameSync(tmp, filePath);
 }
@@ -18,7 +22,7 @@ function atomicWriteJSON(filePath, data) {
 
 function loadSyncConfig() {
   try {
-    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    const config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
     return config.sync || {};
   } catch {
     return {};
@@ -27,14 +31,14 @@ function loadSyncConfig() {
 
 function saveSyncConfig(syncConfig) {
   let config = {};
-  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+  try { config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8'))); } catch {}
   config.sync = syncConfig;
   atomicWriteJSON(CONFIG_PATH, config);
 }
 
 function getMindRoot() {
   try {
-    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    const config = JSON.parse(stripBom(readFileSync(CONFIG_PATH, 'utf-8')));
     return config.mindRoot;
   } catch {
     return null;
@@ -45,7 +49,7 @@ const SYNC_STATE_PATH = resolve(MINDOS_DIR, 'sync-state.json');
 
 function loadSyncState() {
   try {
-    return JSON.parse(readFileSync(SYNC_STATE_PATH, 'utf-8'));
+    return JSON.parse(stripBom(readFileSync(SYNC_STATE_PATH, 'utf-8')));
   } catch {
     return {};
   }
@@ -138,6 +142,14 @@ function getUnpushedCount(cwd) {
   }
 }
 
+export function getSyncConflictBackupPath(mindRoot, file) {
+  return resolveInsideRoot(mindRoot, `${file}.sync-conflict`);
+}
+
+export function getSyncGitignorePath(mindRoot) {
+  return resolveInsideRoot(mindRoot, '.gitignore');
+}
+
 // ── Core sync functions ─────────────────────────────────────────────────────
 
 function autoCommitAndPush(mindRoot, isSshUrl = false) {
@@ -187,7 +199,7 @@ function autoPull(mindRoot, isSshUrl = false) {
         for (const file of conflicts) {
           try {
             const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
-            writeFileSync(resolve(mindRoot, file + '.sync-conflict'), theirs, 'utf-8');
+            writeFileSync(getSyncConflictBackupPath(mindRoot, file), theirs, 'utf-8');
           } catch {
             conflictWarnings.push(file);
           }
@@ -294,7 +306,7 @@ export async function initSync(mindRoot, opts = {}) {
 
   // 1b. Ensure .gitignore exists
   // 1b. Ensure .gitignore has system file exclusions
-  const gitignorePath = resolve(mindRoot, '.gitignore');
+  const gitignorePath = getSyncGitignorePath(mindRoot);
   const SYSTEM_IGNORES = [
     'INSTRUCTION.md',
   ];
@@ -558,8 +570,9 @@ export function listConflicts(mindRoot) {
   console.log(bold(`${conflicts.length} conflict(s):\n`));
   for (const c of conflicts) {
     console.log(`  ${yellow('●')} ${c.file}  ${dim(c.time)}`);
-    const conflictPath = resolve(mindRoot, c.file + '.sync-conflict');
-    if (existsSync(conflictPath)) {
+    let conflictPath = null;
+    try { conflictPath = getSyncConflictBackupPath(mindRoot, c.file); } catch {}
+    if (conflictPath && existsSync(conflictPath)) {
       console.log(dim(`    Remote version saved: ${c.file}.sync-conflict`));
     }
   }

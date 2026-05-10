@@ -33,11 +33,20 @@ const registry: RendererDefinition[] = [];
 // Disabled plugin IDs — persisted to localStorage on client
 let _disabledIds: Set<string> = new Set();
 
+function parseDisabledIds(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) return new Set();
+
+  return new Set(parsed.filter((id): id is string => typeof id === 'string' && id.length > 0));
+}
+
 export function loadDisabledState() {
   if (typeof window === 'undefined') return;
   try {
     const raw = localStorage.getItem('mindos-disabled-renderers');
-    _disabledIds = new Set(raw ? JSON.parse(raw) : []);
+    _disabledIds = parseDisabledIds(raw);
   } catch {
     _disabledIds = new Set();
   }
@@ -53,7 +62,11 @@ export function setRendererEnabled(id: string, enabled: boolean) {
     _disabledIds.add(id);
   }
   if (typeof window !== 'undefined') {
-    localStorage.setItem('mindos-disabled-renderers', JSON.stringify([..._disabledIds]));
+    try {
+      localStorage.setItem('mindos-disabled-renderers', JSON.stringify([..._disabledIds]));
+    } catch {
+      // Keep the in-memory setting for the current session if localStorage is unavailable.
+    }
   }
 }
 

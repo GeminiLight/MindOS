@@ -35,6 +35,28 @@ describe('install-cli-shim', () => {
     expect(script).not.toContain('TODO: uninstall.bat');
   });
 
+  it('verifies Windows PID command lines before killing uninstall leftovers', async () => {
+    const { buildWindowsUninstallScript } = await import('./install-cli-shim');
+
+    const script = buildWindowsUninstallScript();
+
+    expect(script).toContain('Get-CimInstance Win32_Process');
+    expect(script).toContain('CommandLine');
+    expect(script).toContain('@geminilight\\mindos');
+    expect(script).not.toContain('do taskkill /PID %%P /T /F');
+  });
+
+  it('verifies Unix PID command lines before killing uninstall leftovers', async () => {
+    const { buildUnixUninstallScript } = await import('./install-cli-shim');
+
+    const script = buildUnixUninstallScript();
+
+    expect(script).toContain('ps -p "$pid" -o args=');
+    expect(script).toContain('is_mindos_cmd()');
+    expect(script).toContain('*/.mindos/runtime/*');
+    expect(script).not.toContain('while IFS= read -r pid; do\n      kill "$pid"');
+  });
+
   it('does not tell Windows users to manually add PATH after PATH was appended', async () => {
     const { buildRefreshCliSuccessDialog } = await import('./install-cli-shim');
 

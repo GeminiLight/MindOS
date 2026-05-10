@@ -73,6 +73,25 @@ export type AcpServices =
 const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
 let detectCache: { data: { installed: unknown[]; notInstalled: unknown[] }; ts: number } | null = null;
 
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
+}
+
+function isValidAcpAgentId(agentId: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(agentId) && !isUnsafeObjectKey(agentId);
+}
+
+function readAcpAgentId(body: unknown, key = 'agentId'): string | null {
+  const value = body && typeof body === 'object' ? (body as Record<string, unknown>)[key] : undefined;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return isValidAcpAgentId(trimmed) ? trimmed : null;
+}
+
+function isValidEnvKey(key: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !isUnsafeObjectKey(key);
+}
+
 export type MindosNpmInvocation = {
   command: string;
   args: string[];
@@ -89,7 +108,7 @@ export function handleAcpConfigGet(
   services: AcpConfigServices,
 ): MindosServerResponse<{ agents: Record<string, AcpAgentOverride> }> {
   const settings = services.readSettings();
-  return json({ agents: settings.acpAgents ?? {} });
+  return json({ agents: sanitizeAcpAgentOverrides(settings.acpAgents) ?? {} });
 }
 
 export function handleAcpConfigPost(
@@ -97,15 +116,16 @@ export function handleAcpConfigPost(
   services: AcpConfigServices,
 ): MindosServerResponse<{ ok: true; agents: Record<string, AcpAgentOverride> } | { error: string }> {
   const payload = body && typeof body === 'object' ? body as { agentId?: unknown; config?: unknown } : {};
-  if (!payload.agentId || typeof payload.agentId !== 'string') {
+  const agentId = readAcpAgentId(payload);
+  if (!agentId) {
     return json({ error: 'agentId is required' }, { status: 400 });
   }
 
   const settings = services.readSettings();
-  const existing = { ...(settings.acpAgents ?? {}) };
+  const existing = { ...(sanitizeAcpAgentOverrides(settings.acpAgents) ?? {}) };
   const sanitized = sanitizeAcpAgentOverride(payload.config);
   if (sanitized) {
-    existing[payload.agentId] = sanitized;
+    existing[agentId] = sanitized;
   }
 
   services.writeSettings({ ...settings, acpAgents: existing });
@@ -117,13 +137,14 @@ export function handleAcpConfigDelete(
   services: AcpConfigServices,
 ): MindosServerResponse<{ ok: true; agents: Record<string, AcpAgentOverride> } | { error: string }> {
   const payload = body && typeof body === 'object' ? body as { agentId?: unknown } : {};
-  if (!payload.agentId || typeof payload.agentId !== 'string') {
+  const agentId = readAcpAgentId(payload);
+  if (!agentId) {
     return json({ error: 'agentId is required' }, { status: 400 });
   }
 
   const settings = services.readSettings();
-  const existing = { ...(settings.acpAgents ?? {}) };
-  delete existing[payload.agentId];
+  const existing = { ...(sanitizeAcpAgentOverrides(settings.acpAgents) ?? {}) };
+  delete existing[agentId];
   const next = Object.keys(existing).length > 0
     ? { ...settings, acpAgents: existing }
     : { ...settings, acpAgents: undefined };
@@ -157,7 +178,8 @@ export async function handleAcpInstallPost(
 ): Promise<MindosServerResponse<{ status: 'installing'; agentId: string; packageName: string } | { error: string }>> {
   try {
     const payload = body && typeof body === 'object' ? body as { agentId?: unknown; packageName?: unknown } : {};
-    if (!payload.agentId || typeof payload.agentId !== 'string' || !payload.packageName || typeof payload.packageName !== 'string') {
+    const agentId = readAcpAgentId(payload);
+    if (!agentId || !payload.packageName || typeof payload.packageName !== 'string') {
       return json({ error: 'agentId and packageName are required' }, { status: 400 });
     }
     if (!isValidNpmPackageName(payload.packageName)) {
@@ -165,7 +187,7 @@ export async function handleAcpInstallPost(
     }
 
     const installPackage = services.installPackage ?? defaultInstallPackage;
-    return json(await installPackage(payload.agentId, payload.packageName));
+    return json(await installPackage(agentId, payload.packageName));
   } catch (error) {
     return errorResponse(error);
   }
@@ -178,8 +200,9 @@ export async function handleAcpRegistryGet(
   try {
     const agentId = searchParams.get('agent');
     if (agentId) {
+      if (!isValidAcpAgentId(agentId.trim())) return json({ error: 'Invalid agent id', agent: null }, { status: 400 });
       const findAcpAgent = services.findAcpAgent ?? defaultFindAcpAgent;
-      const agent = await findAcpAgent(agentId);
+      const agent = await findAcpAgent(agentId.trim());
       if (!agent) return json({ error: 'Agent not found', agent: null }, { status: 404 });
       return json({ agent });
     }
@@ -266,7 +289,7 @@ function sanitizeAcpAgentOverride(input: unknown): AcpAgentOverride | null {
   if (config.env && typeof config.env === 'object' && !Array.isArray(config.env)) {
     const env: Record<string, string> = {};
     for (const [key, value] of Object.entries(config.env)) {
-      if (typeof value === 'string') env[key] = value;
+      if (typeof value === 'string' && isValidEnvKey(key)) env[key] = value;
     }
     if (Object.keys(env).length > 0) sanitized.env = env;
   }
@@ -277,10 +300,21 @@ function sanitizeAcpAgentOverride(input: unknown): AcpAgentOverride | null {
   return sanitized;
 }
 
+function sanitizeAcpAgentOverrides(input: unknown): Record<string, AcpAgentOverride> | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const result: Record<string, AcpAgentOverride> = {};
+  for (const [agentId, config] of Object.entries(input)) {
+    if (!isValidAcpAgentId(agentId)) continue;
+    const sanitized = sanitizeAcpAgentOverride(config);
+    if (sanitized) result[agentId] = sanitized;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function readAcpAgentOverrides(services: AcpDetectServices): Record<string, AcpAgentOverride> | undefined {
   try {
     const settings = services.readSettings?.();
-    return settings?.acpAgents && typeof settings.acpAgents === 'object' ? settings.acpAgents : undefined;
+    return sanitizeAcpAgentOverrides(settings?.acpAgents);
   } catch {
     return undefined;
   }
@@ -341,7 +375,7 @@ function findNpmCliPath(
 }
 
 async function handleAcpSessionCreate(payload: Record<string, unknown>, services: AcpSessionServices) {
-  const agentId = readString(payload, 'agentId');
+  const agentId = readAcpAgentId(payload);
   if (!agentId) return json({ error: 'agentId is required' }, { status: 400 });
 
   const options = {
@@ -366,7 +400,7 @@ async function handleAcpSessionCreate(payload: Record<string, unknown>, services
 }
 
 async function handleAcpSessionLoad(payload: Record<string, unknown>, services: AcpSessionServices) {
-  const agentId = readString(payload, 'agentId');
+  const agentId = readAcpAgentId(payload);
   const sessionId = readString(payload, 'sessionId');
   if (!agentId) return json({ error: 'agentId is required' }, { status: 400 });
   if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
@@ -438,7 +472,7 @@ function readStringRecord(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record: Record<string, string> = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry === 'string') record[key] = entry;
+    if (typeof entry === 'string' && isValidEnvKey(key)) record[key] = entry;
   }
   return Object.keys(record).length > 0 ? record : undefined;
 }

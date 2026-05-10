@@ -411,6 +411,21 @@ describe('archiveFromInbox', () => {
     }
   });
 
+  it('does not archive through symlinked .processed directories outside mindRoot', () => {
+    const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-inbox-processed-outside-'));
+    try {
+      ensureInboxSpace(mindRoot);
+      seedFile(mindRoot, `${INBOX_DIR}/notes.md`, '# Notes');
+      fs.symlinkSync(outsideRoot, path.join(mindRoot, INBOX_DIR, '.processed'), 'dir');
+
+      expect(() => archiveFromInbox(mindRoot, ['notes.md'])).toThrow('Access denied');
+      expect(fs.existsSync(path.join(mindRoot, INBOX_DIR, 'notes.md'))).toBe(true);
+      expect(fs.readdirSync(outsideRoot)).toEqual([]);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
   it('archived files are hidden from listInboxFiles', () => {
     ensureInboxSpace(mindRoot);
     seedFile(mindRoot, `${INBOX_DIR}/visible.md`, 'visible');

@@ -6,6 +6,7 @@ import {
   isBundledRuntimeIntact,
   isNextBuildValid,
   isNextBuildCurrent,
+  resolveMcpBundlePath,
   BUILD_VERSION_FILE,
 } from './mindos-runtime-layout';
 import { getStandaloneAppRequiredEntries } from './runtime-health-contract';
@@ -117,6 +118,34 @@ describe('analyzeMindOsLayout', () => {
       writeFileSync(path.join(root, 'package.json'), '{}', 'utf-8');
       const r = analyzeMindOsLayout(root);
       expect(r.runnable).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('resolveMcpBundlePath', () => {
+  it('resolves the product runtime MCP bundle without appending a second dist segment', () => {
+    const root = path.join(process.cwd(), 'tmp-mindos-mcp-bundle-product');
+    try {
+      rmSync(root, { recursive: true, force: true });
+      mkdirSync(path.join(root, 'dist', 'protocols', 'mcp-server'), { recursive: true });
+      writeFileSync(path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs'), '// mcp', 'utf-8');
+
+      expect(resolveMcpBundlePath(root)).toBe(path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs'));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps legacy cached MCP runtimes compatible', () => {
+    const root = path.join(process.cwd(), 'tmp-mindos-mcp-bundle-legacy');
+    try {
+      rmSync(root, { recursive: true, force: true });
+      mkdirSync(path.join(root, 'mcp', 'dist'), { recursive: true });
+      writeFileSync(path.join(root, 'mcp', 'dist', 'index.cjs'), '// mcp', 'utf-8');
+
+      expect(resolveMcpBundlePath(root)).toBe(path.join(root, 'mcp', 'dist', 'index.cjs'));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

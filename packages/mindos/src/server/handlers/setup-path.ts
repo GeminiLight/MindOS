@@ -38,6 +38,14 @@ export function validateMindRootPath(absPath: string, options: SetupPathOptions 
   const home = options.homeDir ?? homedir();
   const homeNorm = normalizeForPathCheck(home);
 
+  if (!isSetupPathAbsolute(absPath)) {
+    return {
+      safe: false,
+      reason: 'Knowledge base path must be an absolute path or start with ~/.',
+      reasonZh: '知识库路径必须是绝对路径，或以 ~/ 开头。',
+    };
+  }
+
   const mindosDir = `${homeNorm}/.mindos`;
   if (isSameOrSubPath(normalized, mindosDir)) {
     return {
@@ -161,6 +169,9 @@ export function handleSetupListDirectories(
   }
 
   const abs = expandSetupPathHome(requestedPath.trim(), options);
+  if (!isSetupPathAbsolute(abs)) {
+    return json({ dirs: [] });
+  }
   if (!existsSync(abs)) {
     return json({ dirs: [] });
   }
@@ -185,6 +196,10 @@ export function handleSetupListDirectories(
 
 function normalizeForPathCheck(input: string): string {
   return path.normalize(input).toLowerCase().replace(/\\/g, '/');
+}
+
+function isSetupPathAbsolute(input: string): boolean {
+  return path.isAbsolute(input) || path.win32.isAbsolute(input);
 }
 
 function isSameOrSubPath(candidate: string, parent: string): boolean {

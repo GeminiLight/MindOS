@@ -11,6 +11,7 @@ import { Plugin } from './shims/plugin';
 import { createObsidianModule } from './shims/obsidian';
 import { AppShim } from './shims/app';
 import { PluginManifest } from './types';
+import { resolveExistingSafe } from '@/lib/core/security';
 
 export interface LoadedPlugin {
   manifest: PluginManifest;
@@ -33,21 +34,23 @@ export class PluginLoader {
     if (!pluginId || pluginId.includes('..') || pluginId.includes('/') || pluginId.includes('\\')) {
       throw new CompatError(`Plugin path escapes .plugins directory: ${pluginId}`, CompatErrorCodes.PLUGIN_NOT_FOUND, { pluginId });
     }
-    const pluginsDir = path.resolve(path.join(this.mindRoot, '.plugins'));
-    const pluginDir = path.resolve(path.join(pluginsDir, pluginId));
-
-    if (!pluginDir.startsWith(pluginsDir + path.sep)) {
+    try {
+      return resolveExistingSafe(this.mindRoot, `.plugins/${pluginId}`);
+    } catch {
       throw new CompatError(`Plugin path escapes .plugins directory: ${pluginId}`, CompatErrorCodes.PLUGIN_NOT_FOUND, { pluginId });
     }
-
-    return pluginDir;
   }
 
   /**
    * Scan .plugins/ directory and discover all plugins.
    */
   discoverPlugins(): PluginManifest[] {
-    const pluginsDir = path.join(this.mindRoot, '.plugins');
+    let pluginsDir: string;
+    try {
+      pluginsDir = resolveExistingSafe(this.mindRoot, '.plugins');
+    } catch {
+      return [];
+    }
 
     if (!fs.existsSync(pluginsDir)) {
       return [];

@@ -68,8 +68,16 @@ export function handleMcpInstallSkillPost(
       return json({ error: 'Invalid skill name' }, { status: 400 });
     }
 
+    const requestedAgents = Array.isArray(payload.agents) ? payload.agents : [];
+    const invalidAgent = requestedAgents.find((agent) => (
+      typeof agent !== 'string' || !isValidSkillAgentName(agent.trim())
+    ));
+    if (invalidAgent !== undefined) {
+      return json({ error: 'Invalid agent name' }, { status: 400 });
+    }
+
     const additionalAgents = filterAdditionalSkillAgents(
-      Array.isArray(payload.agents) ? payload.agents : [],
+      requestedAgents.map((agent) => agent.trim()),
       services.skillAgentRegistry ?? {},
     );
 
@@ -125,11 +133,22 @@ export function filterAdditionalSkillAgents(
   registry: Record<string, MindosSkillAgentRegistration>,
 ): string[] {
   return agentKeys.flatMap((key) => {
-    const registration = registry[key];
+    if (!isValidSkillAgentName(key)) return [];
+    const registration = Object.prototype.hasOwnProperty.call(registry, key) ? registry[key] : undefined;
     if (!registration) return [key];
     if (registration.mode === 'unsupported' || registration.mode === 'universal') return [];
-    return [registration.skillAgentName || key];
+    const skillAgentName = registration.skillAgentName || key;
+    return isValidSkillAgentName(skillAgentName) ? [skillAgentName] : [];
   });
+}
+
+function isValidSkillAgentName(value: string): boolean {
+  return (
+    /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
+    && value !== '__proto__'
+    && value !== 'prototype'
+    && value !== 'constructor'
+  );
 }
 
 export function buildMcpInstallSkillCommand(

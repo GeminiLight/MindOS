@@ -47,9 +47,26 @@ const coerceValue = (v) => {
   if (v === 'false') return false;
   if (v === 'null') return null;
   if (v === '""' || v === "''") return '';
-  if (v.trim() !== '' && !isNaN(Number(v))) return Number(v);
+  if (v.trim() !== '') {
+    const numeric = Number(v);
+    if (Number.isFinite(numeric)) return numeric;
+  }
   return v;
 };
+
+const BLOCKED_KEY_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
+
+export function isSafeConfigKeyPath(key) {
+  if (typeof key !== 'string') return false;
+  const parts = key.split('.');
+  return parts.length > 0 && parts.every((part) => part && !BLOCKED_KEY_SEGMENTS.has(part));
+}
+
+function assertSafeConfigKey(key) {
+  if (isSafeConfigKeyPath(key)) return;
+  console.error(red('Invalid config key.'));
+  process.exit(EXIT.ARGS);
+}
 
 export const run = (args, flags) => {
   const sub = args[0];
@@ -115,6 +132,7 @@ export const run = (args, flags) => {
       console.error(dim('    mindos config set ai.provider openai'));
       process.exit(EXIT.ARGS);
     }
+    assertSafeConfigKey(key);
     const config = readConfig();
     const parts = key.split('.');
     let obj = config;
@@ -135,6 +153,7 @@ export const run = (args, flags) => {
       console.error(red('Usage: mindos config unset <key>'));
       process.exit(EXIT.ARGS);
     }
+    assertSafeConfigKey(key);
     const config = readConfig();
     const parts = key.split('.');
     let obj = config;

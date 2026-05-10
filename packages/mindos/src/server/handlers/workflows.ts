@@ -46,7 +46,12 @@ export function handleWorkflowsPost(
     return json({ error: 'name is required' }, { status: 400 });
   }
 
-  const safeName = name.replace(/[/\\:*?"<>|]/g, '-');
+  const title = normalizeWorkflowTitle(name);
+  const safeName = sanitizeWorkflowFileBase(title);
+  if (!safeName) {
+    return json({ error: 'name must contain at least one valid filename character' }, { status: 400 });
+  }
+
   const fileName = `${safeName}.flow.yaml`;
   try {
     const dir = resolveExistingSafe(services.mindRoot, WORKFLOWS_DIR);
@@ -59,7 +64,7 @@ export function handleWorkflowsPost(
     const templateName = body && typeof body === 'object' && typeof (body as { template?: unknown }).template === 'string'
       ? (body as { template: string }).template
       : 'blank';
-    const content = resolveWorkflowTemplate(services.mindRoot, templateName, name);
+    const content = resolveWorkflowTemplate(services.mindRoot, templateName, title);
     writeFileSync(fullPath, content, 'utf-8');
     return json({ path: `${WORKFLOWS_DIR}/${fileName}` });
   } catch (error) {
@@ -125,14 +130,14 @@ function resolveWorkflowTemplate(mindRoot: string, templateName: string, title: 
       );
       if (templateFile) {
         const templatePath = resolveExistingSafe(mindRoot, `${WORKFLOWS_DIR}/${templateFile}`);
-        return readFileSync(templatePath, 'utf-8').replace(/^title:.*$/m, `title: ${title}`);
+        return readFileSync(templatePath, 'utf-8').replace(/^title:.*$/m, `title: ${yamlSingleQuoted(title)}`);
       }
     } catch {
       // Fall through to blank template.
     }
   }
 
-  return BLANK_TEMPLATE.replace('{TITLE}', title);
+  return BLANK_TEMPLATE.replace('{TITLE}', yamlSingleQuoted(title));
 }
 
 function scalarValue(raw: string | undefined): string {
@@ -141,4 +146,21 @@ function scalarValue(raw: string | undefined): string {
 
 function titleFromFileName(fileName: string): string {
   return fileName.replace(/\.flow\.(yaml|yml)$/i, '');
+}
+
+function normalizeWorkflowTitle(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 200);
+}
+
+function sanitizeWorkflowFileBase(title: string): string {
+  return title
+    .replace(/[/\\:*?"<>|\x00-\x1F]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-.\s]+|[-.\s]+$/g, '')
+    .slice(0, 120)
+    .trim();
+}
+
+function yamlSingleQuoted(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }

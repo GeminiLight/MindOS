@@ -5,6 +5,7 @@ import { mkTempMindRoot, cleanupMindRoot, seedFile } from './helpers';
 import {
   moveToTrash,
   permanentlyDelete,
+  restoreAsCopy,
   restoreFromTrash,
   type TrashMeta,
 } from '@/lib/core/trash';
@@ -52,6 +53,22 @@ describe('trash', () => {
     }
   });
 
+  it('does not move files into a symlinked trash directory outside the root parent', () => {
+    const outsideRoot = fs.mkdtempSync(path.join(path.dirname(mindRoot), 'mindos-trash-target-outside-'));
+    const trashPath = path.join(path.dirname(mindRoot), '.trash');
+    try {
+      seedFile(mindRoot, 'note.md', 'hello');
+      fs.symlinkSync(outsideRoot, trashPath, 'dir');
+
+      expect(() => moveToTrash(mindRoot, 'note.md')).toThrow('Access denied');
+      expect(fs.existsSync(path.join(mindRoot, 'note.md'))).toBe(true);
+      expect(fs.readdirSync(outsideRoot)).toEqual([]);
+    } finally {
+      try { fs.rmSync(trashPath, { recursive: true, force: true }); } catch {}
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
   it('does not restore trash items through symlinked original parents outside mindRoot', () => {
     seedFile(mindRoot, 'safe.md', 'hello');
     const meta = moveToTrash(mindRoot, 'safe.md');
@@ -70,6 +87,17 @@ describe('trash', () => {
     } finally {
       fs.rmSync(outsideRoot, { recursive: true, force: true });
     }
+  });
+
+  it('restores copies with POSIX relative paths in nested directories', () => {
+    seedFile(mindRoot, 'Folder/note.md', 'hello');
+    const meta = moveToTrash(mindRoot, 'Folder/note.md');
+    seedFile(mindRoot, 'Folder/note (copy).md', 'existing');
+
+    const result = restoreAsCopy(mindRoot, meta.id);
+
+    expect(result.restoredPath).toBe('Folder/note (copy 2).md');
+    expect(fs.existsSync(path.join(mindRoot, 'Folder', 'note (copy 2).md'))).toBe(true);
   });
 
   it('rejects trash ids with path separators', () => {

@@ -783,7 +783,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
                 >
                   <Download size={14} />
-                  {e.downloadModel as string ?? 'Download Model'}
+                  {e.downloadModel as string ?? 'Install Runtime & Download Model'}
                 </button>
               )}
               {downloadState === 'starting' && (
@@ -805,7 +805,7 @@ function EmbeddingSearchCard({ data, setData, t }: {
                     <span>{downloadError ?? 'Download failed'}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {e.downloadFailedHint as string ?? 'If download keeps failing, try API mode or set HF_ENDPOINT=https://hf-mirror.com'}
+                    {e.downloadFailedHint as string ?? 'If install or download keeps failing, try API mode or set HF_ENDPOINT=https://hf-mirror.com'}
                   </p>
                   <button
                     type="button"

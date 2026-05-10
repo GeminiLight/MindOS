@@ -684,7 +684,8 @@ async function handleRequest(
     writeResponse(res, json({ error: 'Not found' }, { status: 404 }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    writeResponse(res, json({ error: message }, { status: 500 }));
+    const status = error instanceof HttpBodyError ? error.status : 500;
+    writeResponse(res, json({ error: message }, { status }));
   }
 }
 
@@ -827,20 +828,32 @@ function optionsStaticRoot(services: MindosHttpServices, runtimeRoot?: string): 
     ?? (runtimeRoot ? `${runtimeRoot}/static-web` : undefined);
 }
 
+class HttpBodyError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'HttpBodyError';
+  }
+}
+
 function readJsonBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<unknown> {
   return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let rejected = false;
     req.on('data', (chunk: Buffer) => {
+      if (rejected) return;
       size += chunk.length;
       if (size > maxBytes) {
-        reject(new Error('Request body too large'));
-        req.destroy();
+        rejected = true;
+        chunks.length = 0;
+        reject(new HttpBodyError('Request body too large', 413));
+        req.resume();
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
+      if (rejected) return;
       const raw = Buffer.concat(chunks).toString('utf-8');
       if (!raw.trim()) {
         resolveBody({});
@@ -849,10 +862,12 @@ function readJsonBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<unkno
       try {
         resolveBody(JSON.parse(raw));
       } catch {
-        reject(new Error('Invalid JSON body'));
+        reject(new HttpBodyError('Invalid JSON body', 400));
       }
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      if (!rejected) reject(error);
+    });
   });
 }
 

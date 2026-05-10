@@ -236,6 +236,15 @@ describe('mindos uninstall — config read ordering (regression)', () => {
 });
 
 describe('mindos uninstall — tilde expansion in mindRoot', () => {
+  it('normalizes only absolute or home-relative knowledge base paths', async () => {
+    const { normalizeUninstallMindRoot } = await import('../../packages/mindos/bin/commands/uninstall.js');
+
+    expect(normalizeUninstallMindRoot('~/MyNotes', tempHome)).toBe(path.join(tempHome, 'MyNotes'));
+    expect(normalizeUninstallMindRoot('.', tempHome)).toBeNull();
+    expect(normalizeUninstallMindRoot('relative/notes', tempHome)).toBeNull();
+    expect(normalizeUninstallMindRoot('~other/notes', tempHome)).toBeNull();
+  });
+
   it('expands ~ in mindRoot to HOME', () => {
     const mindRoot = path.join(tempHome, 'MyNotes');
     fs.mkdirSync(mindRoot, { recursive: true });

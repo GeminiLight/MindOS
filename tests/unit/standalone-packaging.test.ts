@@ -77,10 +77,10 @@ describe('standalone runtime packaging', () => {
     );
     writeFile(join(app, 'node_modules', 'next', 'server.js'), 'module.exports = require("./dist/server/next")');
     writeFile(join(app, 'node_modules', 'next', 'dist', 'server', 'next.js'), 'module.exports = {}');
-    writeFile(join(app, 'node_modules', 'styled-jsx', 'package.json'), '{"name":"styled-jsx"}');
-    writeFile(join(app, 'node_modules', '@swc', 'helpers', 'package.json'), '{"name":"@swc/helpers"}');
-    writeFile(join(app, 'node_modules', 'react', 'package.json'), '{"name":"react"}');
-    writeFile(join(app, 'node_modules', 'react-dom', 'package.json'), '{"name":"react-dom"}');
+    writeFile(join(app, 'node_modules', 'styled-jsx', 'package.json'), '{"name":"styled-jsx","version":"1.0.0"}');
+    writeFile(join(app, 'node_modules', '@swc', 'helpers', 'package.json'), '{"name":"@swc/helpers","version":"1.0.0"}');
+    writeFile(join(app, 'node_modules', 'react', 'package.json'), '{"name":"react","version":"1.0.0"}');
+    writeFile(join(app, 'node_modules', 'react-dom', 'package.json'), '{"name":"react-dom","version":"1.0.0"}');
 
     materializeStandaloneAssets(app);
 

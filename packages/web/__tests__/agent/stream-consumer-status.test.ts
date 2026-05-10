@@ -51,6 +51,19 @@ describe('consumeUIMessageStream — status event handling', () => {
     expect(result.content).toBe('Hello, world!');
   });
 
+  it('processes a final SSE line without a trailing newline', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data:${JSON.stringify({ type: 'text_delta', delta: 'final' })}`));
+        controller.close();
+      },
+    });
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    expect(result.content).toBe('final');
+  });
+
   it('handles stream with status event followed by successful text', async () => {
     const stream = makeStream(
       { type: 'status', message: 'Request failed, retrying (1/3)...' },

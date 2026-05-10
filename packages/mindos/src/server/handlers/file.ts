@@ -3,7 +3,9 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  realpathSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -247,9 +249,18 @@ function markdownTargetName(name: string): string {
   return `${base || 'untitled'}.md`;
 }
 
+function relativeKnowledgePath(mindRoot: string, absPath: string): string {
+  return relative(resolve(mindRoot), absPath).split('\\').join('/');
+}
+
+function existingKnowledgePath(mindRoot: string, filePath: string): string {
+  return relativeKnowledgePath(mindRoot, resolveExistingSafe(mindRoot, filePath));
+}
+
 function saveFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
   const content = requireString(params.content, 'content');
   const abs = resolveExistingSafe(mindRoot, filePath);
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   if (typeof params.expectedMtime === 'number' && existsSync(abs) && statSync(abs).mtimeMs > params.expectedMtime) {
     return {
       response: json({ error: 'conflict', serverMtime: statSync(abs).mtimeMs } as unknown as { error: string }, { status: 409 }),
@@ -259,19 +270,20 @@ function saveFile(mindRoot: string, filePath: string, params: Record<string, unk
   const before = safeRead(mindRoot, filePath);
   atomicWriteFile(abs, content);
   return {
-    response: json({ ok: true, path: filePath, mtime: statSync(abs).mtimeMs }),
-    changeEvent: { op: 'save_file', path: filePath, summary: 'Updated file content', before, after: content },
+    response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs }),
+    changeEvent: { op: 'save_file', path: normalizedPath, summary: 'Updated file content', before, after: content },
   };
 }
 
 function createFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
   const content = readString(params.content, '');
   const abs = resolveExistingSafe(mindRoot, filePath);
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, content, { encoding: 'utf-8', flag: 'wx' });
   return {
-    response: json({ ok: true, path: filePath, mtime: statSync(abs).mtimeMs }),
-    changeEvent: { op: 'create_file', path: filePath, summary: 'Created file', before: '', after: content },
+    response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs }),
+    changeEvent: { op: 'create_file', path: normalizedPath, summary: 'Created file', before: '', after: content },
   };
 }
 
@@ -284,11 +296,12 @@ function appendToFile(mindRoot: string, filePath: string, params: Record<string,
   }
   const before = safeRead(mindRoot, filePath);
   const abs = resolveExistingSafe(mindRoot, filePath);
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   mkdirSync(dirname(abs), { recursive: true });
   appendFileSync(abs, appendSeparator(abs) + content, 'utf-8');
   return {
-    response: json({ ok: true, path: filePath, mtime: statSync(abs).mtimeMs }),
-    changeEvent: { op: 'append_to_file', path: filePath, summary: 'Appended content to file', before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs }),
+    changeEvent: { op: 'append_to_file', path: normalizedPath, summary: 'Appended content to file', before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -297,12 +310,13 @@ function insertLinesOperation(mindRoot: string, filePath: string, params: Record
   const lines = requireStringArray(params.lines, 'lines');
   const before = safeRead(mindRoot, filePath);
   const existing = readLines(mindRoot, filePath);
+  const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   if (afterIndex >= existing.length) throw new Error(`Invalid after_index: ${afterIndex} >= total lines (${existing.length})`);
   existing.splice(afterIndex < 0 ? 0 : afterIndex + 1, 0, ...lines);
-  writeText(mindRoot, filePath, existing.join('\n'));
+  writeText(mindRoot, normalizedPath, existing.join('\n'));
   return {
-    response: json({ ok: true, path: filePath }),
-    changeEvent: { op: 'insert_lines', path: filePath, summary: `Inserted ${lines.length} line(s)`, before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath }),
+    changeEvent: { op: 'insert_lines', path: normalizedPath, summary: `Inserted ${lines.length} line(s)`, before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -314,12 +328,13 @@ function updateLinesOperation(mindRoot: string, filePath: string, params: Record
   if (start > end) throw new Error('start must be <= end');
   const before = safeRead(mindRoot, filePath);
   const existing = readLines(mindRoot, filePath);
+  const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   if (start >= existing.length) throw new Error(`Invalid line index: start (${start}) >= total lines (${existing.length})`);
   existing.splice(start, end - start + 1, ...lines);
-  writeText(mindRoot, filePath, existing.join('\n'));
+  writeText(mindRoot, normalizedPath, existing.join('\n'));
   return {
-    response: json({ ok: true, path: filePath }),
-    changeEvent: { op: 'update_lines', path: filePath, summary: `Updated lines ${start}-${end}`, before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath }),
+    changeEvent: { op: 'update_lines', path: normalizedPath, summary: `Updated lines ${start}-${end}`, before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -328,15 +343,16 @@ function insertAfterHeadingOperation(mindRoot: string, filePath: string, params:
   const content = requireString(params.content, 'content');
   const before = safeRead(mindRoot, filePath);
   const lines = readLines(mindRoot, filePath);
+  const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   const idx = findHeading(lines, heading);
   if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
   let insertAt = idx + 1;
   while (insertAt < lines.length && (lines[insertAt] ?? '').trim() === '') insertAt++;
   lines.splice(insertAt, 0, '', content);
-  writeText(mindRoot, filePath, lines.join('\n'));
+  writeText(mindRoot, normalizedPath, lines.join('\n'));
   return {
-    response: json({ ok: true, path: filePath }),
-    changeEvent: { op: 'insert_after_heading', path: filePath, summary: `Inserted content after heading "${heading}"`, before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath }),
+    changeEvent: { op: 'insert_after_heading', path: normalizedPath, summary: `Inserted content after heading "${heading}"`, before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -345,6 +361,7 @@ function updateSectionOperation(mindRoot: string, filePath: string, params: Reco
   const content = requireString(params.content, 'content');
   const before = safeRead(mindRoot, filePath);
   const lines = readLines(mindRoot, filePath);
+  const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   const idx = findHeading(lines, heading);
   if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
   const headingLine = lines[idx] ?? '';
@@ -360,10 +377,10 @@ function updateSectionOperation(mindRoot: string, filePath: string, params: Reco
   }
   while (sectionEnd > idx && (lines[sectionEnd] ?? '').trim() === '') sectionEnd--;
   lines.splice(idx + 1, sectionEnd - idx, '', content);
-  writeText(mindRoot, filePath, lines.join('\n'));
+  writeText(mindRoot, normalizedPath, lines.join('\n'));
   return {
-    response: json({ ok: true, path: filePath }),
-    changeEvent: { op: 'update_section', path: filePath, summary: `Updated section "${heading}"`, before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath }),
+    changeEvent: { op: 'update_section', path: normalizedPath, summary: `Updated section "${heading}"`, before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -371,11 +388,13 @@ function deleteFile(mindRoot: string, filePath: string) {
   if (!filePath.includes('/') && basename(filePath) === 'TODO.md') {
     return { response: json({ error: `"${filePath}" is a protected file and cannot be deleted` }, { status: 403 }), changeEvent: null };
   }
+  const abs = resolveExistingSafe(mindRoot, filePath);
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   const before = safeRead(mindRoot, filePath);
-  const trash = moveToTrash(mindRoot, filePath);
+  const trash = moveToTrash(mindRoot, normalizedPath);
   return {
-    response: json({ ok: true, path: filePath, trashId: trash.id }),
-    changeEvent: { op: 'delete_file', path: filePath, summary: 'Moved to trash', before, after: '' },
+    response: json({ ok: true, path: normalizedPath, trashId: trash.id }),
+    changeEvent: { op: 'delete_file', path: normalizedPath, summary: 'Moved to trash', before, after: '' },
   };
 }
 
@@ -383,16 +402,17 @@ function renameFile(mindRoot: string, filePath: string, params: Record<string, u
   const newName = requireString(params.new_name, 'new_name');
   validateLeafName(newName, 'filename');
   const oldAbs = resolveExistingSafe(mindRoot, filePath);
-  const newRelPath = posix.join(posix.dirname(filePath), newName);
+  const oldPath = relativeKnowledgePath(mindRoot, oldAbs);
+  const newRelPath = posix.join(posix.dirname(oldPath), newName);
   const newAbs = resolveSafe(mindRoot, newRelPath);
   if (dirname(newAbs) !== dirname(oldAbs)) throw new Error('Invalid filename: must stay in the same directory');
   if (existsSync(newAbs)) throw new Error('A file with that name already exists');
   const before = safeRead(mindRoot, filePath);
   renameSync(oldAbs, newAbs);
-  const newPath = relative(resolve(mindRoot), newAbs).split('\\').join('/');
+  const newPath = relativeKnowledgePath(mindRoot, newAbs);
   return {
     response: json({ ok: true, newPath }),
-    changeEvent: { op: 'rename_file', path: newPath, summary: `Renamed file to ${newName}`, before, after: safeRead(mindRoot, newPath), beforePath: filePath, afterPath: newPath },
+    changeEvent: { op: 'rename_file', path: newPath, summary: `Renamed file to ${newName}`, before, after: safeRead(mindRoot, newPath), beforePath: oldPath, afterPath: newPath },
   };
 }
 
@@ -401,12 +421,14 @@ function moveFile(mindRoot: string, filePath: string, params: Record<string, unk
   const before = safeRead(mindRoot, filePath);
   const fromAbs = resolveExistingSafe(mindRoot, filePath);
   const toAbs = resolveExistingSafe(mindRoot, toPath);
+  const fromPath = relativeKnowledgePath(mindRoot, fromAbs);
+  const normalizedToPath = relativeKnowledgePath(mindRoot, toAbs);
   if (existsSync(toAbs)) throw new Error(`Destination already exists: ${toPath}`);
   mkdirSync(dirname(toAbs), { recursive: true });
   renameSync(fromAbs, toAbs);
   return {
-    response: json({ ok: true, path: toPath, newPath: toPath, affectedFiles: [] }),
-    changeEvent: { op: 'move_file', path: toPath, summary: `Moved file to ${toPath}`, before, after: safeRead(mindRoot, toPath), beforePath: filePath, afterPath: toPath },
+    response: json({ ok: true, path: normalizedToPath, newPath: normalizedToPath, affectedFiles: [] }),
+    changeEvent: { op: 'move_file', path: normalizedToPath, summary: `Moved file to ${normalizedToPath}`, before, after: safeRead(mindRoot, normalizedToPath), beforePath: fromPath, afterPath: normalizedToPath },
   };
 }
 
@@ -418,12 +440,13 @@ function createSpace(mindRoot: string, params: Record<string, unknown>) {
   const abs = resolveExistingSafe(mindRoot, spacePath);
   if (existsSync(abs)) throw new Error('Space already exists');
   mkdirSync(abs, { recursive: true });
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   const description = readString(params.description, '');
   writeFileSync(join(abs, 'INSTRUCTION.md'), `# ${name}\n\n${description}\n`, 'utf-8');
   writeFileSync(join(abs, 'README.md'), `# ${name}\n\n${description}\n`, 'utf-8');
   return {
-    response: json({ ok: true, path: spacePath }),
-    changeEvent: { op: 'create_space', path: spacePath, summary: 'Created space', before: '', after: description },
+    response: json({ ok: true, path: normalizedPath }),
+    changeEvent: { op: 'create_space', path: normalizedPath, summary: 'Created space', before: '', after: description },
   };
 }
 
@@ -435,10 +458,11 @@ function renameSpace(mindRoot: string, filePath: string, params: Record<string, 
   const newAbs = join(dirname(oldAbs), newName);
   if (existsSync(newAbs)) throw new Error('A space with that name already exists');
   renameSync(oldAbs, newAbs);
-  const newPath = relative(resolve(mindRoot), newAbs).split('\\').join('/');
+  const oldPath = relativeKnowledgePath(mindRoot, oldAbs);
+  const newPath = relativeKnowledgePath(mindRoot, newAbs);
   return {
     response: json({ ok: true, newPath }),
-    changeEvent: { op: 'rename_space', path: newPath, summary: `Renamed space to ${newName}`, beforePath: filePath, afterPath: newPath },
+    changeEvent: { op: 'rename_space', path: newPath, summary: `Renamed space to ${newName}`, beforePath: oldPath, afterPath: newPath },
   };
 }
 
@@ -455,12 +479,13 @@ function appendCsv(mindRoot: string, filePath: string, params: Record<string, un
   const before = safeRead(mindRoot, filePath);
   const escaped = row.map((cell) => cell.includes(',') || cell.includes('"') || cell.includes('\n') ? `"${cell.replace(/"/g, '""')}"` : cell);
   const abs = resolveExistingSafe(mindRoot, filePath);
+  const normalizedPath = relativeKnowledgePath(mindRoot, abs);
   mkdirSync(dirname(abs), { recursive: true });
   appendFileSync(abs, `${escaped.join(',')}\n`, 'utf-8');
   const newRowCount = readFileSync(abs, 'utf-8').trim().split('\n').filter(Boolean).length;
   return {
-    response: json({ ok: true, path: filePath, newRowCount }),
-    changeEvent: { op: 'append_csv', path: filePath, summary: `Appended CSV row (${row.length} cell${row.length === 1 ? '' : 's'})`, before, after: safeRead(mindRoot, filePath) },
+    response: json({ ok: true, path: normalizedPath, newRowCount }),
+    changeEvent: { op: 'append_csv', path: normalizedPath, summary: `Appended CSV row (${row.length} cell${row.length === 1 ? '' : 's'})`, before, after: safeRead(mindRoot, normalizedPath) },
   };
 }
 
@@ -513,8 +538,8 @@ function moveToTrash(mindRoot: string, filePath: string): TrashMeta {
   if (!existsSync(src)) throw new Error(`File not found: ${filePath}`);
   const isDirectory = statSync(src).isDirectory();
   const id = `${Date.now()}_${basename(filePath).replace(/[^a-zA-Z0-9._\-\u4e00-\u9fff]/g, '_')}`;
-  const trashDir = join(dirname(mindRoot), '.trash');
-  const metaDir = join(dirname(mindRoot), '.trash-meta');
+  const trashDir = resolveSafeSiblingDir(mindRoot, '.trash');
+  const metaDir = resolveSafeSiblingDir(mindRoot, '.trash-meta');
   mkdirSync(trashDir, { recursive: true });
   mkdirSync(metaDir, { recursive: true });
   const dest = join(trashDir, id);
@@ -542,6 +567,33 @@ function moveToTrash(mindRoot: string, filePath: string): TrashMeta {
   };
   writeFileSync(join(metaDir, `${id}.json`), JSON.stringify(meta, null, 2), 'utf-8');
   return meta;
+}
+
+function resolveSafeSiblingDir(mindRoot: string, name: string): string {
+  if (!name || name.includes('/') || name.includes('\\') || basename(name) !== name) {
+    throw new Error('Invalid sibling directory name');
+  }
+
+  const parent = resolve(dirname(mindRoot));
+  const target = resolve(parent, name);
+  const relativeToParent = relative(parent, target);
+  if (relativeToParent === '..' || relativeToParent.startsWith('..') || resolve(relativeToParent) === relativeToParent) {
+    throw new Error('Access denied: sibling directory outside root parent');
+  }
+
+  if (existsSync(target)) {
+    if (lstatSync(target).isSymbolicLink()) {
+      throw new Error('Access denied: sibling directory must not be a symlink');
+    }
+    const parentReal = realpathSync(parent);
+    const targetReal = realpathSync(target);
+    const realRelative = relative(parentReal, targetReal);
+    if (realRelative === '..' || realRelative.startsWith('..') || resolve(realRelative) === realRelative) {
+      throw new Error('Access denied: sibling directory outside root parent');
+    }
+  }
+
+  return target;
 }
 
 type AgentAuditInput = {

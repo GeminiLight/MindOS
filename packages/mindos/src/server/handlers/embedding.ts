@@ -106,6 +106,12 @@ export function classifyEmbeddingDownloadError(error: unknown): string {
   if (lower.includes('permission denied') || lower.includes('eacces')) {
     return 'Permission denied. Check cache directory permissions (~/.cache/huggingface/).';
   }
+  if (lower.includes('npm is required')) {
+    return 'npm is required to install the optional local embedding runtime. Install Node.js/npm, or use API mode.';
+  }
+  if (lower.includes('local embedding runtime')) {
+    return 'Local embedding runtime is not installed. Click Download Model to install it, or use API embedding mode.';
+  }
   if (lower.includes('disk quota') || lower.includes('no space')) {
     return 'Not enough disk space. Free up space and try again.';
   }

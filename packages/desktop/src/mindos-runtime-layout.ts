@@ -36,6 +36,22 @@ export function resolveMcpDir(root: string): string {
   return existsSync(v1FlatMcpDir) ? v1FlatMcpDir : path.join(root, 'mcp');
 }
 
+export function resolveMcpBundlePath(root: string): string {
+  const productBundle = path.join(root, 'dist', 'protocols', 'mcp-server', 'index.cjs');
+  if (existsSync(productBundle)) return productBundle;
+
+  const workspaceProductBundle = path.join(root, 'packages', 'mindos', 'dist', 'protocols', 'mcp-server', 'index.cjs');
+  if (existsSync(workspaceProductBundle)) return workspaceProductBundle;
+
+  const domainBundle = path.join(root, 'packages', 'protocols', 'mcp-server', 'dist', 'index.cjs');
+  if (existsSync(domainBundle)) return domainBundle;
+
+  const flatBundle = path.join(root, 'packages', 'mcp-server', 'dist', 'index.cjs');
+  if (existsSync(flatBundle)) return flatBundle;
+
+  return path.join(resolveMcpDir(root), 'dist', 'index.cjs');
+}
+
 export function resolveCliPath(root: string): string {
   const packageCli = path.join(root, 'packages', 'mindos', 'bin', 'cli.js');
   return existsSync(packageCli) ? packageCli : path.join(root, 'bin', 'cli.js');

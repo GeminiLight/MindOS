@@ -215,7 +215,7 @@ export function saveToInbox(mindRoot: string, files: InboxSaveInput[], source?: 
 
 export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiveResult {
   const inboxDir = resolveExistingSafe(mindRoot, INBOX_DIR);
-  const processedDir = join(inboxDir, PROCESSED_DIR);
+  const processedDir = resolveExistingSafe(mindRoot, `${INBOX_DIR}/${PROCESSED_DIR}`);
   mkdirSync(processedDir, { recursive: true });
 
   const archived: InboxArchiveResult['archived'] = [];
@@ -236,10 +236,11 @@ export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiv
         continue;
       }
       const archivedName = `${ts}_${baseName}`;
-      renameSync(srcPath, join(processedDir, archivedName));
+      const archivedPath = `${INBOX_DIR}/${PROCESSED_DIR}/${archivedName}`;
+      renameSync(srcPath, resolveExistingSafe(mindRoot, archivedPath));
       archived.push({
         original: name,
-        archivedPath: `${INBOX_DIR}/${PROCESSED_DIR}/${archivedName}`,
+        archivedPath,
       });
     } catch {
       notFound.push(name);
@@ -258,7 +259,19 @@ function mapInboxError(error: unknown): MindosServerResponse<{ error: string }> 
 }
 
 function decodeContent(encoding: string | undefined, content: string): string {
-  return encoding === 'base64' ? Buffer.from(content, 'base64').toString('utf-8') : content;
+  return encoding === 'base64' ? decodeBase64Buffer(content).toString('utf-8') : content;
+}
+
+function decodeBase64Buffer(content: string): Buffer {
+  const normalized = content.replace(/\s/g, '');
+  if (
+    normalized.length % 4 === 1 ||
+    /[^A-Za-z0-9+/=]/.test(normalized) ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)
+  ) {
+    throw new Error('Invalid base64 content');
+  }
+  return Buffer.from(normalized, 'base64');
 }
 
 function resolveUniqueName(inboxDir: string, targetName: string): string {
@@ -280,9 +293,11 @@ function resolveUniqueName(inboxDir: string, targetName: string): string {
 function sanitizeFileName(name: string): string {
   let base = name.replace(/\\/g, '/').split('/').pop() ?? '';
   base = base.replace(/\.\./g, '').replace(/^\/+/, '');
-  base = base.replace(/[\\:*?"<>|]/g, '-');
+  base = base.replace(/[\\/:*?"<>|\x00-\x1f]/g, '-');
   base = base.replace(/-{2,}/g, '-');
   base = base.replace(/^[-\s]+|[-\s]+$/g, '');
+  base = base.replace(/[. ]+$/g, '');
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(base)) base = `_${base}`;
   return base || 'imported-file';
 }
 

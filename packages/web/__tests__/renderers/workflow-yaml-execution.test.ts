@@ -193,6 +193,59 @@ describe('Workflow Execution — Skill Injection', () => {
     expect(capturedBodies[0]).not.toContain('Skill Reference');
   });
 
+  it('throws streamed error events instead of swallowing them (error path)', async () => {
+    mockFetch((url) => {
+      if (url === '/api/ask') {
+        return streamResponse(['data:{"type":"error","message":"ACP agent failed"}\n\n']);
+      }
+      return jsonResponse({}, 404);
+    });
+
+    const { runStepWithAI } = await import('@/components/renderers/workflow-yaml/execution');
+
+    const step = {
+      id: 's1', name: 'Step 1', prompt: 'Simple task',
+      index: 0, status: 'running' as const, output: '',
+    };
+    const workflow = {
+      title: 'Simple',
+      steps: [{ id: 's1', name: 'Step 1', prompt: 'Simple task' }],
+    };
+
+    const ctrl = new AbortController();
+    await expect(runStepWithAI(step, workflow, '/test.yaml', () => {}, ctrl.signal))
+      .rejects.toThrow('ACP agent failed');
+  });
+
+  it('handles SSE lines split across network chunks (boundary path)', async () => {
+    mockFetch((url) => {
+      if (url === '/api/ask') {
+        return streamResponse([
+          'data:{"type":"text_delta",',
+          '"delta":"Split"}\n\n',
+        ]);
+      }
+      return jsonResponse({}, 404);
+    });
+
+    const { runStepWithAI } = await import('@/components/renderers/workflow-yaml/execution');
+
+    const step = {
+      id: 's1', name: 'Step 1', prompt: 'Simple task',
+      index: 0, status: 'running' as const, output: '',
+    };
+    const workflow = {
+      title: 'Simple',
+      steps: [{ id: 's1', name: 'Step 1', prompt: 'Simple task' }],
+    };
+
+    const chunks: string[] = [];
+    const ctrl = new AbortController();
+    await runStepWithAI(step, workflow, '/test.yaml', (acc) => chunks.push(acc), ctrl.signal);
+
+    expect(chunks).toEqual(['Split']);
+  });
+
   it('caches skill content across calls (boundary: same skill used twice)', async () => {
     let skillFetchCount = 0;
 

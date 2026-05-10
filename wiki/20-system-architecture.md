@@ -186,7 +186,7 @@ mindos/
 - `@geminilight/mindos/protocols`：MCP/ACP/A2A 的产品逻辑归属规则；ACP/MCP 默认 runtime 源码位于 `packages/mindos/src/protocols/*`，发布为 `dist/protocols/*` bundle。
 - `@geminilight/mindos/cli`：CLI command grouping / registry helpers，让 `packages/mindos/bin/cli.js` 保持薄入口；npm 主包 `bin/mindos-shim.cjs` 负责解析当前平台 runtime package。
 
-它不能 import `packages/web`、Next.js、React 或协议 host。Web 的 `packages/web/app/api/file/operation-kernel.ts` 与 `packages/web/lib/core/security.ts` 只直接 import `@geminilight/mindos`；`NextResponse`、cache refresh、UI state 仍留在 Web adapter。
+它不能 import `packages/web`、Next.js、React 或协议 host。Web 的 `packages/web/app/api/file/route.ts` 直接调用 `@geminilight/mindos/server` facade；`packages/web/lib/core/security.ts` 只直接 import `@geminilight/mindos`。`NextResponse`、cache refresh、UI state 仍留在 Web adapter。
 
 发布边界：
 - repo root `package.json` 是 `private: true` 的 monorepo orchestrator，不再拥有 npm `bin` / `files` / `prepack` 发布契约。
@@ -213,7 +213,7 @@ mindos/
 - 调度 Web 注入的 operation handler
 - 统一判断哪些操作会改变文件树（触发 Web sidebar/cache refresh）
 
-Web 的 `packages/web/app/api/file/operation-kernel.ts` 只保留 Next.js adapter：读取 headers/body、创建 `NextResponse`、注入 `fileOperations`，通过 `@geminilight/mindos` 调用操作内核，再把结果交给 route 做 `revalidatePath()` 和 change log 写入。
+Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 request body/headers，调用 `@geminilight/mindos/server` 的 `handleFilePost()`，再做 `revalidatePath()` 和 change log 写入。旧的 Web-local `operation-kernel.ts` / `handlers.ts` 已删除，避免和 Product Server file handler 形成两套写入逻辑。
 
 后续 MCP / CLI 如果需要绕过 HTTP 直接执行知识库操作，应优先复用 `@geminilight/mindos`，不要重新实现权限和 tree-change 规则。
 

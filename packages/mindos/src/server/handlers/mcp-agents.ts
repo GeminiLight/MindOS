@@ -233,8 +233,8 @@ export function detectCustomAgentConfiguredMcp(
 export function parseJsonForServers(content: string, key: string): string[] {
   try {
     const config = parseJsonc(content);
-    const servers = config[key];
-    if (servers && typeof servers === 'object') {
+    const servers = readOwnRecord(config, key);
+    if (servers) {
       return Object.keys(servers).sort();
     }
   } catch {
@@ -371,7 +371,7 @@ function detectCustomAgentInstalled(
     const configObj = agent.globalNestedKey
       ? readNestedRecord(parsed, agent.globalNestedKey) ?? {}
       : parsed;
-    const servers = configObj?.[agent.key] ?? {};
+    const servers = readOwnRecord(configObj, agent.key) ?? {};
     if (servers && typeof servers === 'object' && 'mindos' in servers) {
       return { installed: true, scope: 'global', configPath: globalPath };
     }
@@ -459,14 +459,27 @@ function resolveHiddenRootPath(agent: MindosMcpAgentRegistryDef, services: Mindo
 }
 
 function readNestedRecord(obj: unknown, nestedPath: string): Record<string, unknown> | null {
-  const parts = nestedPath.split('.').filter(Boolean);
+  const parts = nestedPath.split('.').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0 || parts.some(isUnsafeObjectKey)) return null;
   let current = obj;
   for (const part of parts) {
     if (!current || typeof current !== 'object') return null;
+    if (!Object.prototype.hasOwnProperty.call(current, part)) return null;
     current = (current as Record<string, unknown>)[part];
   }
   if (!current || typeof current !== 'object') return null;
   return current as Record<string, unknown>;
+}
+
+function readOwnRecord(obj: unknown, key: string): Record<string, unknown> | null {
+  if (!obj || typeof obj !== 'object' || isUnsafeObjectKey(key)) return null;
+  if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
+  const value = (obj as Record<string, unknown>)[key];
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
 }
 
 function readSettingsNumber(settings: unknown, key: string): number | undefined {

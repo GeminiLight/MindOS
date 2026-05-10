@@ -133,6 +133,9 @@ jobs:
           MINDOS_BUNDLE_NODE_ARCH: ${{ matrix.arch }}
         run: pnpm --filter @mindos/desktop run prepare-mindos-runtime
 
+      - name: Verify bundled runtime
+        run: node scripts/verify-desktop-runtime.mjs
+
       # Get version (needed for tag name)
       - name: Get version
         id: version
@@ -189,6 +192,15 @@ jobs:
             cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish always "${EXTRA_ARGS[@]}"
           else
             cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never "${EXTRA_ARGS[@]}"
+          fi
+
+      - name: Smoke packaged app
+        if: matrix.platform == 'mac' || matrix.platform == 'linux'
+        run: |
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            xvfb-run -a node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000
+          else
+            node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000
           fi
 
       # macOS: verify DMGs are valid before notarization

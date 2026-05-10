@@ -147,6 +147,15 @@ describe('stop.js subprocess contract', () => {
     expect(source).toContain("execFileSync('lsof', ['-ti', `:${port}`]");
     expect(source).toContain("execFileSync('taskkill', ['/PID', String(pid), '/T', '/F']");
   });
+
+  it('does not use broad fallback kills that can stop unrelated Node apps', () => {
+    const source = stopSource();
+
+    expect(source).not.toContain("'IMAGENAME eq node.exe'");
+    expect(source).not.toContain("pkill', ['-f', 'next start|next dev']");
+    expect(source).not.toContain("pkill', ['-f', '(mcp|mcp-server)/(src/index|dist/index)']");
+    expect(source).toContain('killMindosFallbackProcesses');
+  });
 });
 
 // ── setup.js finish() contract ───────────────────────────────────────────────

@@ -116,6 +116,18 @@ function isAbsoluteAgentInputPath(input: string): boolean {
   return false;
 }
 
+function hasParentDirectorySegment(input: string): boolean {
+  return input.split(/[\\/]+/).includes('..');
+}
+
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
+}
+
+function isValidCustomAgentKey(key: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/.test(key) && !isUnsafeObjectKey(key);
+}
+
 /* ─── Auto-detection ─── */
 
 export function detectBaseDir(baseDir: string): DetectResult {
@@ -424,11 +436,13 @@ export function validateCustomAgentInput(input: {
   }
 
   const dir = input.baseDir.trim();
+  if (hasParentDirectorySegment(dir)) return 'Config directory cannot contain parent directory segments';
   if (!isAbsoluteAgentInputPath(dir)) return 'Must be an absolute path (e.g. ~/.qclaw/)';
 
   if (!isEdit) {
     const key = input.key || slugify(input.name.trim());
     if (!key) return 'Cannot generate a valid key from this name';
+    if (!isValidCustomAgentKey(key)) return 'Agent key must use lowercase letters, numbers, and hyphens only';
     if (key in MCP_AGENTS) {
       const builtIn = MCP_AGENTS[key];
       return `Conflicts with built-in agent "${builtIn.name}"`;

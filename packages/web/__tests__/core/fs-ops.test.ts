@@ -153,7 +153,7 @@ describe('fs-ops', () => {
     it('renames in subdirectory', () => {
       seedFile(mindRoot, 'sub/old.md', 'content');
       const newPath = renameFile(mindRoot, 'sub/old.md', 'renamed.md');
-      expect(newPath).toBe(path.join('sub', 'renamed.md'));
+      expect(newPath).toBe('sub/renamed.md');
     });
 
     it('throws if new name has path separators', () => {
@@ -182,7 +182,7 @@ describe('fs-ops', () => {
       fs.mkdirSync(path.join(mindRoot, 'Parent', 'Child'), { recursive: true });
       seedFile(mindRoot, 'Parent/Child/README.md', '# c');
       const newPath = renameSpaceDirectory(mindRoot, 'Parent/Child', 'Kid');
-      expect(path.normalize(newPath)).toBe(path.normalize(path.join('Parent', 'Kid')));
+      expect(newPath).toBe('Parent/Kid');
       expect(fs.existsSync(path.join(mindRoot, 'Parent', 'Kid', 'README.md'))).toBe(true);
     });
 

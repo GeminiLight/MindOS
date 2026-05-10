@@ -97,15 +97,6 @@ export function handleSkillsPost(
     return json({ error: 'Invalid skill name. Use lowercase letters, numbers, and hyphens only.' }, { status: 400 });
   }
 
-  let userSkillsDir: string;
-  try {
-    userSkillsDir = resolveUserSkillsDir(services.mindRoot);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/access denied|outside root|absolute paths/i.test(message)) return json({ error: 'Access denied' }, { status: 403 });
-    return json({ error: message }, { status: 500 });
-  }
-
   switch (action) {
     case 'toggle':
       if (!name) return json({ error: 'name required' }, { status: 400 });
@@ -113,21 +104,33 @@ export function handleSkillsPost(
 
     case 'create':
       if (!name) return json({ error: 'name required' }, { status: 400 });
-      return createUserSkill({
-        name,
-        description: payload.description,
-        content: payload.content,
-        userSkillsDir,
-        skillRoots: services.skillRoots,
-      });
+      {
+        const userSkillsDir = resolveUserSkillsDirForWrite(services.mindRoot);
+        if ('response' in userSkillsDir) return userSkillsDir.response;
+        return createUserSkill({
+          name,
+          description: payload.description,
+          content: payload.content,
+          userSkillsDir: userSkillsDir.path,
+          skillRoots: services.skillRoots,
+        });
+      }
 
     case 'update':
       if (!name) return json({ error: 'name required' }, { status: 400 });
-      return updateUserSkill(name, payload.content, userSkillsDir);
+      {
+        const userSkillsDir = resolveUserSkillsDirForWrite(services.mindRoot);
+        if ('response' in userSkillsDir) return userSkillsDir.response;
+        return updateUserSkill(name, payload.content, userSkillsDir.path);
+      }
 
     case 'delete':
       if (!name) return json({ error: 'name required' }, { status: 400 });
-      return deleteUserSkill(name, userSkillsDir);
+      {
+        const userSkillsDir = resolveUserSkillsDirForWrite(services.mindRoot);
+        if ('response' in userSkillsDir) return userSkillsDir.response;
+        return deleteUserSkill(name, userSkillsDir.path);
+      }
 
     case 'read':
       if (!name) return json({ error: 'name required' }, { status: 400 });
@@ -137,13 +140,25 @@ export function handleSkillsPost(
       if (!name || !payload.sourcePath) {
         return json({ error: 'name and sourcePath required' }, { status: 400 });
       }
-      return readNativeSkill(name, payload.sourcePath);
+      return readNativeSkill(name, payload.sourcePath, services.skillRoots);
 
     case 'record-install':
       return recordSkillInstall(payload, settings, services);
 
     default:
       return json({ error: `Unknown action: ${String(action)}` }, { status: 400 });
+  }
+}
+
+function resolveUserSkillsDirForWrite(mindRoot: string):
+  | { path: string }
+  | { response: MindosServerResponse<{ error: string }> } {
+  try {
+    return { path: resolveUserSkillsDir(mindRoot) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/access denied|outside root|absolute paths/i.test(message)) return { response: json({ error: 'Access denied' }, { status: 403 }) };
+    return { response: json({ error: message }, { status: 500 }) };
   }
 }
 
@@ -288,8 +303,12 @@ function readSkillByName(
 function readNativeSkill(
   name: string,
   sourcePath: string,
+  skillRoots: MindosSkillRoot[],
 ): MindosServerResponse<{ content: string; description?: string } | { error: string }> {
   const nativeBase = resolve(sourcePath);
+  if (!isRegisteredSkillRoot(nativeBase, skillRoots)) {
+    return json({ error: 'Invalid sourcePath' }, { status: 400 });
+  }
   const nativeSkillFile = resolve(nativeBase, name, 'SKILL.md');
   const rel = relative(nativeBase, nativeSkillFile);
   if (rel.startsWith('..') || isAbsolute(rel)) {
@@ -300,6 +319,10 @@ function readNativeSkill(
   }
   const content = readFileSync(nativeSkillFile, 'utf-8');
   return json({ content, description: parseSkillMd(content).description });
+}
+
+function isRegisteredSkillRoot(sourcePath: string, skillRoots: MindosSkillRoot[]): boolean {
+  return skillRoots.some((root) => resolve(root.path) === sourcePath);
 }
 
 function recordSkillInstall(

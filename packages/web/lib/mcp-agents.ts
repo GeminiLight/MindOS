@@ -401,14 +401,27 @@ function detectSignalsFromName(name: string): { conversation: boolean; usage: bo
 }
 
 function readNestedRecord(obj: Record<string, unknown>, nestedPath: string): Record<string, unknown> | null {
-  const parts = nestedPath.split('.').filter(Boolean);
+  const parts = nestedPath.split('.').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0 || parts.some(isUnsafeObjectKey)) return null;
   let current: unknown = obj;
   for (const part of parts) {
     if (!current || typeof current !== 'object') return null;
+    if (!Object.prototype.hasOwnProperty.call(current, part)) return null;
     current = (current as Record<string, unknown>)[part];
   }
   if (!current || typeof current !== 'object') return null;
   return current as Record<string, unknown>;
+}
+
+function readOwnRecord(obj: unknown, key: string): Record<string, unknown> | null {
+  if (!obj || typeof obj !== 'object' || isUnsafeObjectKey(key)) return null;
+  if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
+  const value = (obj as Record<string, unknown>)[key];
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
 }
 
 function parseJsonServerNames(content: string, configKey: string, globalNestedKey?: string): string[] {
@@ -416,9 +429,9 @@ function parseJsonServerNames(content: string, configKey: string, globalNestedKe
     const config = parseJsonc(content) as Record<string, unknown>;
     const section = globalNestedKey
       ? readNestedRecord(config, globalNestedKey)
-      : (config[configKey] as unknown);
-    if (!section || typeof section !== 'object') return [];
-    return Object.keys(section as Record<string, unknown>);
+      : readOwnRecord(config, configKey);
+    if (!section) return [];
+    return Object.keys(section);
   } catch {
     return [];
   }
@@ -641,7 +654,7 @@ export function detectInstalled(agentKey: string): { installed: boolean; scope?:
         const config = parseJsonc(content);
         const servers = scopeType === 'global' && agent.globalNestedKey
           ? readNestedRecord(config as Record<string, unknown>, agent.globalNestedKey)
-          : (config[agent.key] as Record<string, unknown> | undefined);
+          : readOwnRecord(config, agent.key) ?? undefined;
         if (servers?.mindos) {
           const entry = servers.mindos as Record<string, unknown>;
           const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';

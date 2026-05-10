@@ -13,6 +13,11 @@
 
 import { readSettings } from '@/lib/settings';
 import type { EmbeddingConfig } from '@/lib/settings';
+import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { pathToFileURL } from 'url';
 
 // ── Config ───────────────────────────────────────────────────────
 
@@ -80,6 +85,39 @@ export const LOCAL_MODEL_OPTIONS = [
   { id: 'Xenova/bge-small-en-v1.5', label: 'BGE Small EN (33MB)', size: '~33MB', lang: 'en' },
 ];
 
+const LOCAL_EMBEDDING_RUNTIME_PACKAGES = [
+  '@huggingface/transformers@4.2.0',
+  'onnxruntime-node@1.24.3',
+  'onnxruntime-web@1.26.0-dev.20260416-b7804b056c',
+];
+
+const LOCAL_EMBEDDING_RUNTIME_INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+const importOptionalRuntimeModule = new Function(
+  'specifier',
+  'return import(specifier)',
+) as (specifier: string) => Promise<any>;
+
+class LocalEmbeddingRuntimeMissingError extends Error {
+  constructor(message = 'Local embedding runtime is not installed. Install it from Settings > AI > Embedding Search, or use API mode.') {
+    super(message);
+    this.name = 'LocalEmbeddingRuntimeMissingError';
+  }
+}
+
+export function getLocalEmbeddingRuntimeDir(): string {
+  return process.env.MINDOS_LOCAL_EMBEDDING_RUNTIME_DIR
+    || path.join(os.homedir(), '.mindos', 'local-embedding-runtime');
+}
+
+export async function isLocalEmbeddingRuntimeInstalled(): Promise<boolean> {
+  try {
+    await loadTransformersModule({ installIfMissing: false });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Check whether the local model is available (downloaded).
  * Checks ~/.cache/huggingface/ for the model directory.
@@ -117,6 +155,7 @@ const INITIAL_BACKOFF_MS = 1000; // 1 second
 export async function downloadLocalModel(modelId?: string): Promise<boolean> {
   const id = modelId || DEFAULT_LOCAL_MODEL;
   try {
+    await ensureLocalEmbeddingRuntimeInstalled();
     console.log(`[embedding] Downloading local model: ${id}...`);
     const pipeline = await loadLocalPipeline(id);
     if (pipeline) {
@@ -126,8 +165,115 @@ export async function downloadLocalModel(modelId?: string): Promise<boolean> {
     return false;
   } catch (err) {
     console.error('[embedding] Download failed:', err instanceof Error ? err.message : err);
+    if (err instanceof LocalEmbeddingRuntimeMissingError || (
+      err instanceof Error && (
+        err.message.includes('optional local embedding runtime')
+        || err.message.includes('Local embedding runtime install')
+        || err.message.includes('npm is required')
+      )
+    )) {
+      throw err;
+    }
     return false;
   }
+}
+
+async function ensureLocalEmbeddingRuntimeInstalled(): Promise<void> {
+  if (await isLocalEmbeddingRuntimeInstalled()) return;
+  if (process.env.MINDOS_DISABLE_LOCAL_EMBEDDING_RUNTIME_AUTO_INSTALL === '1') {
+    throw new LocalEmbeddingRuntimeMissingError();
+  }
+
+  await installLocalEmbeddingRuntime();
+  if (!(await isLocalEmbeddingRuntimeInstalled())) {
+    throw new LocalEmbeddingRuntimeMissingError('Local embedding runtime installation finished, but @huggingface/transformers is still not resolvable.');
+  }
+}
+
+export async function installLocalEmbeddingRuntime(): Promise<void> {
+  const runtimeDir = getLocalEmbeddingRuntimeDir();
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  const packageJsonPath = path.join(runtimeDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    fs.writeFileSync(packageJsonPath, JSON.stringify({
+      private: true,
+      name: 'mindos-local-embedding-runtime',
+      description: 'Optional MindOS local embedding runtime installed on user request.',
+    }, null, 2) + '\n');
+  }
+
+  const npm = resolveLocalEmbeddingNpmInvocation();
+  const args = [
+    ...npm.args,
+    'install',
+    '--prefix',
+    runtimeDir,
+    '--omit=dev',
+    '--no-audit',
+    '--no-fund',
+    '--ignore-scripts',
+    ...LOCAL_EMBEDDING_RUNTIME_PACKAGES,
+  ];
+
+  await runInstallCommand(npm.command, args, LOCAL_EMBEDDING_RUNTIME_INSTALL_TIMEOUT_MS);
+}
+
+export function resolveLocalEmbeddingNpmInvocation(): { command: string; args: string[] } {
+  if (process.env.MINDOS_NPM_BIN) {
+    return { command: process.env.MINDOS_NPM_BIN, args: [] };
+  }
+
+  const runtimeRoot = process.env.MINDOS_PROJECT_ROOT;
+  if (runtimeRoot) {
+    const bundledNpmCli = path.join(runtimeRoot, 'node', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    if (fs.existsSync(bundledNpmCli)) {
+      return {
+        command: process.env.MINDOS_NODE_BIN || process.execPath,
+        args: [bundledNpmCli],
+      };
+    }
+  }
+
+  return { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args: [] };
+}
+
+async function runInstallCommand(command: string, args: string[], timeoutMs: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    });
+    let output = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error('Local embedding runtime install timed out. Check your network and try again, or use API mode.'));
+    }, timeoutMs);
+
+    child.stdout.on('data', chunk => {
+      output += chunk.toString();
+      if (output.length > 8_000) output = output.slice(-8_000);
+    });
+    child.stderr.on('data', chunk => {
+      output += chunk.toString();
+      if (output.length > 8_000) output = output.slice(-8_000);
+    });
+    child.on('error', error => {
+      clearTimeout(timer);
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        reject(new Error('npm is required to install the optional local embedding runtime. Install Node.js/npm, or use API embedding mode.'));
+      } else {
+        reject(error);
+      }
+    });
+    child.on('exit', code => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Local embedding runtime install failed with exit code ${code}. ${output.trim().slice(-1000)}`));
+      }
+    });
+  });
 }
 
 /**
@@ -166,7 +312,7 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
       let timedOut = false;
       let lastError: Error | null = null;
       try {
-        const { pipeline, env } = await import('@huggingface/transformers');
+        const { pipeline, env } = await loadTransformersModule({ installIfMissing: false });
 
         // Configure mirror for China network (only if HF_ENDPOINT env var is not set)
         // Check both process.env and the transformers env object
@@ -229,6 +375,46 @@ async function loadLocalPipeline(modelId: string): Promise<any> {
   })();
 
   return _loadingPromise;
+}
+
+async function loadTransformersModule({ installIfMissing }: { installIfMissing: boolean }): Promise<any> {
+  try {
+    return await import('@huggingface/transformers');
+  } catch (error) {
+    const optionalEntrypoint = resolveOptionalTransformersEntrypoint();
+    if (optionalEntrypoint) {
+      return await importOptionalRuntimeModule(pathToFileURL(optionalEntrypoint).href);
+    }
+    if (installIfMissing) {
+      await installLocalEmbeddingRuntime();
+      const installedEntrypoint = resolveOptionalTransformersEntrypoint();
+      if (installedEntrypoint) {
+        return await importOptionalRuntimeModule(pathToFileURL(installedEntrypoint).href);
+      }
+    }
+    throw new LocalEmbeddingRuntimeMissingError(
+      error instanceof Error && error.message.includes('@huggingface/transformers')
+        ? undefined
+        : `Local embedding runtime is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function resolveOptionalTransformersEntrypoint(): string | null {
+  const packageDir = path.join(getLocalEmbeddingRuntimeDir(), 'node_modules', '@huggingface', 'transformers');
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) return null;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const nodeImport = pkg.exports?.node?.import?.default;
+    const main = typeof nodeImport === 'string' ? nodeImport : (typeof pkg.module === 'string' ? pkg.module : pkg.main);
+    if (typeof main !== 'string') return null;
+    const entrypoint = path.resolve(packageDir, main);
+    return fs.existsSync(entrypoint) ? entrypoint : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Batch size for local model (smaller than API — limited by RAM/CPU). */

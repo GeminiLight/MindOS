@@ -50,6 +50,18 @@ describe('A2A Client', () => {
       );
     });
 
+    it('returns null for non-http discovery URL without fetching', async () => {
+      const agent = await discoverAgent('file:///tmp/a2a');
+      expect(agent).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('returns null for discovery URL with embedded credentials', async () => {
+      const agent = await discoverAgent('https://user:pass@test:3000');
+      expect(agent).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it('returns null for unreachable URL', async () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
       const agent = await discoverAgent('http://dead:9999');
@@ -70,6 +82,42 @@ describe('A2A Client', () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardNoRpc });
       const agent = await discoverAgent('http://grpc-only:3000');
       expect(agent).toBeNull();
+    });
+
+    it('returns null for card with non-http JSONRPC endpoint', async () => {
+      const cardFileRpc = {
+        ...MOCK_CARD,
+        supportedInterfaces: [{ url: 'file:///tmp/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardFileRpc });
+      const agent = await discoverAgent('http://file-endpoint:3000');
+      expect(agent).toBeNull();
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
+    it('returns null for card with credentialed JSONRPC endpoint', async () => {
+      const cardCredentialedRpc = {
+        ...MOCK_CARD,
+        supportedInterfaces: [{ url: 'https://user:pass@test:3000/api/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardCredentialedRpc });
+      const agent = await discoverAgent('http://credentialed-endpoint:3000');
+      expect(agent).toBeNull();
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
+    it('uses the first valid JSONRPC endpoint and trims whitespace', async () => {
+      const cardMixedRpc = {
+        ...MOCK_CARD,
+        supportedInterfaces: [
+          { url: 'file:///tmp/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+          { url: ' https://valid.example/api/a2a ', protocolBinding: 'JSONRPC', protocolVersion: '1.0' },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardMixedRpc });
+      const agent = await discoverAgent('http://mixed-endpoint:3000');
+      expect(agent).not.toBeNull();
+      expect(agent!.endpoint).toBe('https://valid.example/api/a2a');
     });
 
     it('returns null for malformed card (missing name)', async () => {
@@ -193,6 +241,15 @@ describe('A2A Client', () => {
       await expect(delegateTask(agent!.id, 'fail')).rejects.toThrow('A2A error [-32603]');
     });
 
+    it('throws on malformed RPC task result', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+      const agent = await discoverAgent('http://test:3000');
+
+      mockFetch.mockResolvedValueOnce(mockRpcResponse({ id: 'task-without-status' }));
+
+      await expect(delegateTask(agent!.id, 'malformed')).rejects.toThrow('Invalid A2A task response');
+    });
+
     it('throws on HTTP error', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
       const agent = await discoverAgent('http://test:3000');
@@ -259,6 +316,15 @@ describe('A2A Client', () => {
       mockFetch.mockResolvedValueOnce(mockRpcError(-32001, 'Task not found'));
 
       await expect(checkRemoteTaskStatus(agent!.id, 'gone')).rejects.toThrow('A2A error [-32001]');
+    });
+
+    it('throws on malformed task status result', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+      const agent = await discoverAgent('http://test:3000');
+
+      mockFetch.mockResolvedValueOnce(mockRpcResponse({ id: 'task-without-status' }));
+
+      await expect(checkRemoteTaskStatus(agent!.id, 'bad')).rejects.toThrow('Invalid A2A task response');
     });
   });
 });

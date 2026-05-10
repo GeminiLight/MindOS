@@ -41,4 +41,29 @@ describe('Desktop release packaging contract', () => {
     expect(config).toContain('plugins: [externalizeDepsPlugin');
     expect(config).toContain('external: electronMainExternal');
   });
+
+  it('smokes packaged Desktop runtime before release artifacts are uploaded', () => {
+    const workflow = readText('.github/workflows/build-desktop.yml');
+    const verifier = readText('scripts/verify-desktop-runtime.mjs');
+    const smoke = readText('scripts/smoke-desktop-app.mjs');
+
+    expect(workflow).toContain('node scripts/verify-desktop-runtime.mjs');
+    expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000');
+    expect(workflow.indexOf('Smoke packaged app')).toBeGreaterThan(workflow.indexOf('Package (${{ matrix.platform }})'));
+    expect(workflow.indexOf('Upload artifacts')).toBeGreaterThan(workflow.indexOf('Smoke packaged app'));
+
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
+    expect(verifier).toContain('optional local embedding runtime should not be bundled by default');
+    expect(verifier).toContain('@huggingface/transformers/package.json');
+    expect(verifier).toContain('dist/protocols/mcp-server/index.cjs');
+    expect(verifier).toContain('ERR_MODULE_NOT_FOUND');
+    expect(verifier).toContain('Cannot find module');
+    expect(verifier).toContain('path.join is not a function');
+
+    expect(smoke).toContain('/api/health');
+    expect(smoke).toContain('root/login did not return the MindOS HTML shell');
+    expect(smoke).toContain('MCP bundle not found');
+    expect(smoke).toContain('Cannot find module');
+    expect(smoke).toContain('Internal Error');
+  });
 });

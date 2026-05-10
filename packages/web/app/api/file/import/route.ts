@@ -54,13 +54,25 @@ function decodeFileContent(
   sanitizedName: string,
 ): string {
   if (encoding === 'base64') {
-    const buf = Buffer.from(content, 'base64');
+    const buf = decodeBase64Buffer(content);
     if (sanitizedName.toLowerCase().endsWith('.pdf')) {
       return buf.toString('latin1');
     }
     return buf.toString('utf-8');
   }
   return content;
+}
+
+function decodeBase64Buffer(content: string): Buffer {
+  const normalized = content.replace(/\s/g, '');
+  if (
+    normalized.length % 4 === 1 ||
+    /[^A-Za-z0-9+/=]/.test(normalized) ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)
+  ) {
+    throw new Error('Invalid base64 content');
+  }
+  return Buffer.from(normalized, 'base64');
 }
 
 function resolveUniquePath(
@@ -153,7 +165,7 @@ export async function POST(req: NextRequest) {
 
       // Binary files (images, audio, video, PDF): write raw buffer, skip text conversion
       if (encoding === 'base64' && isBinaryFile(sanitized)) {
-        const buf = Buffer.from(entry.content, 'base64');
+        const buf = decodeBase64Buffer(entry.content);
 
         let relPath = targetSpaceNorm
           ? path.posix.join(targetSpaceNorm, sanitized)

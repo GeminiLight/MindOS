@@ -141,11 +141,20 @@ describe('A2A Orchestrator', () => {
   });
 
   describe('executePlan', () => {
+    it('fails empty plans with completedAt set', async () => {
+      const plan = createPlan('', 'parallel');
+      const result = await executePlan(plan);
+      expect(result.status).toBe('failed');
+      expect(result.aggregatedResult).toContain('No subtasks');
+      expect(result.completedAt).toBeTruthy();
+    });
+
     it('fails when no agents assigned to any subtask', async () => {
       const plan = createPlan('no agents', 'parallel', ['task A']);
       const result = await executePlan(plan);
       expect(result.status).toBe('failed');
       expect(result.aggregatedResult).toContain('No agents available');
+      expect(result.completedAt).toBeTruthy();
     });
 
     it('executes parallel plan with assigned agents', async () => {
@@ -262,9 +271,9 @@ describe('A2A Orchestrator', () => {
   });
 
   describe('decompose edge cases', () => {
-    it('handles empty string', () => {
+    it('drops empty string requests', () => {
       const tasks = decompose('');
-      expect(tasks).toHaveLength(1);
+      expect(tasks).toHaveLength(0);
     });
 
     it('handles numbered list with periods in content', () => {
@@ -275,6 +284,11 @@ describe('A2A Orchestrator', () => {
     it('trims whitespace from subtask descriptions', () => {
       const tasks = decompose('x', ['  task with spaces  ']);
       expect(tasks[0].description).toBe('task with spaces');
+    });
+
+    it('drops blank provided subtasks', () => {
+      const tasks = decompose('x', ['  ', 'task A', '\n\t', 'task B']);
+      expect(tasks.map(t => t.description)).toEqual(['task A', 'task B']);
     });
   });
 });

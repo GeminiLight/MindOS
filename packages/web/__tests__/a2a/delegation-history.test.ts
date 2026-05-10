@@ -117,6 +117,20 @@ describe('Delegation History', () => {
     expect(history[0].error).toContain('A2A RPC failed');
   });
 
+  it('records malformed task responses as failed delegations', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+    const agent = await discoverAgent('http://test:3000');
+
+    mockFetch.mockResolvedValueOnce(mockRpcResponse({ id: 'task-without-status' }));
+
+    await expect(delegateTask(agent!.id, 'malformed')).rejects.toThrow('Invalid A2A task response');
+
+    const history = getDelegationHistory();
+    expect(history).toHaveLength(1);
+    expect(history[0].status).toBe('failed');
+    expect(history[0].error).toContain('Invalid A2A task response');
+  });
+
   it('returns a copy from getDelegationHistory, not a reference', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
     const agent = await discoverAgent('http://test:3000');

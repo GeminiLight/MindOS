@@ -11,7 +11,7 @@ import {
   symlinkSync,
   unlinkSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 import {
   ROOT,
@@ -25,6 +25,7 @@ import {
 } from '../lib/constants.js';
 import { dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { loadConfig, isDaemonMode } from '../lib/config.js';
+import { resolveInsideRoot } from '../lib/safe-path.js';
 import {
   ensureAppDeps,
   needsBuild,
@@ -87,6 +88,68 @@ export function resolveWebHost(config = {}, env = process.env) {
     return env.MINDOS_WEB_HOST;
   }
   return config.allowNetworkAccess === true ? '0.0.0.0' : '127.0.0.1';
+}
+
+export function migrateUserPreferences(startupCfg = {}, options = {}) {
+  const log = options.log ?? console.log;
+  const mr = startupCfg.mindRoot;
+  if (!mr || !existsSync(mr)) return { migrated: false, reason: 'missing-root' };
+
+  let newPath;
+  try {
+    newPath = resolveInsideRoot(mr, '.mindos/user-preferences.md');
+  } catch {
+    return { migrated: false, reason: 'unsafe-path' };
+  }
+
+  if (existsSync(newPath)) return { migrated: false, reason: 'exists' };
+
+  try {
+    const mindosDir = dirname(newPath);
+    if (!existsSync(mindosDir)) mkdirSync(mindosDir, { recursive: true });
+
+    const prevPaths = [
+      { rel: '.mindos/user-rules.md', removeSource: true },
+      { rel: 'user-skill-rules.md', removeSource: true },
+    ];
+
+    for (const candidate of prevPaths) {
+      let prev;
+      try {
+        prev = resolveInsideRoot(mr, candidate.rel);
+      } catch {
+        continue;
+      }
+      if (!existsSync(prev)) continue;
+      cpSync(prev, newPath);
+      if (candidate.removeSource) unlinkSync(prev);
+      log(
+        `  ${green('✓')} ${dim(`Migrated ${basename(prev)} → .mindos/user-preferences.md`)}`,
+      );
+      return { migrated: true, source: candidate.rel };
+    }
+
+    const isZh = startupCfg.disabledSkills?.includes('mindos');
+    const sName = isZh ? 'mindos-zh' : 'mindos';
+    const legacyRel = `.agents/skills/${sName}/user-rules.md`;
+    let oldPath;
+    try {
+      oldPath = resolveInsideRoot(mr, legacyRel);
+    } catch {
+      return { migrated: false, reason: 'not-found' };
+    }
+    if (existsSync(oldPath)) {
+      cpSync(oldPath, newPath);
+      log(
+        `  ${green('✓')} ${dim('Migrated .agents/skills/ user-rules.md → .mindos/user-preferences.md')}`,
+      );
+      return { migrated: true, source: legacyRel };
+    }
+
+    return { migrated: false, reason: 'not-found' };
+  } catch {
+    return { migrated: false, reason: 'error' };
+  }
 }
 
 /** Command metadata for registry / help. */
@@ -227,48 +290,7 @@ export const run = async (args, flags) => {
   }
 
   // ── Auto-migrate user preferences → .mindos/user-preferences.md ────────
-  try {
-    const mr = startupCfg.mindRoot;
-    if (mr && existsSync(mr)) {
-      const mindosDir = resolve(mr, '.mindos');
-      const newPath = resolve(mindosDir, 'user-preferences.md');
-
-      if (!existsSync(newPath)) {
-        // Ensure .mindos/ directory exists
-        if (!existsSync(mindosDir)) mkdirSync(mindosDir, { recursive: true });
-
-        // Try migrate from previous locations (newest → oldest)
-        const prevPaths = [
-          resolve(mindosDir, 'user-rules.md'), // v0.6.x interim
-          resolve(mr, 'user-skill-rules.md'), // v0.5.x root
-        ];
-        let migrated = false;
-        for (const prev of prevPaths) {
-          if (existsSync(prev)) {
-            cpSync(prev, newPath);
-            unlinkSync(prev);
-            console.log(
-              `  ${green('✓')} ${dim(`Migrated ${prev.split('/').pop()} → .mindos/user-preferences.md`)}`,
-            );
-            migrated = true;
-            break;
-          }
-        }
-        if (!migrated) {
-          // Try legacy location (.agents/skills/{name}/user-rules.md)
-          const isZh = startupCfg.disabledSkills?.includes('mindos');
-          const sName = isZh ? 'mindos-zh' : 'mindos';
-          const oldPath = resolve(mr, '.agents', 'skills', sName, 'user-rules.md');
-          if (existsSync(oldPath)) {
-            cpSync(oldPath, newPath);
-            console.log(
-              `  ${green('✓')} ${dim('Migrated .agents/skills/ user-rules.md → .mindos/user-preferences.md')}`,
-            );
-          }
-        }
-      }
-    }
-  } catch { /* best-effort, don't block startup */ }
+  migrateUserPreferences(startupCfg);
 
   // When launched by a daemon manager (launchd/systemd), wait for ports to
   // free instead of exiting immediately — the previous instance may still be

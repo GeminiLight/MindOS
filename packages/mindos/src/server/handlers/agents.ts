@@ -152,6 +152,81 @@ function hasParentDirectorySegment(input: string): boolean {
   return input.split(/[\\/]+/).includes('..');
 }
 
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
+}
+
+function isValidCustomAgentKey(key: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/.test(key) && !isUnsafeObjectKey(key);
+}
+
+function validateObjectKeyPath(input: string, label: string): string | null {
+  const parts = input.split('.');
+  if (parts.length === 0 || parts.some((part) => !part.trim() || isUnsafeObjectKey(part.trim()))) {
+    return `${label} contains an unsafe key`;
+  }
+  return null;
+}
+
+function validateAgentPathInput(input: string, label: string): string | null {
+  const value = input.trim();
+  if (!value) return `${label} is required`;
+  if (hasParentDirectorySegment(value)) return `${label} cannot contain parent directory segments`;
+  if (!isAgentAbsoluteInputPath(value)) return `${label} must be an absolute path`;
+  return null;
+}
+
+function validateOptionalAgentPath(value: unknown, label: string): string | null {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') return `${label} must be a string`;
+  return validateAgentPathInput(value, label);
+}
+
+function validateCustomAgentOverrides(input: Partial<CustomAgentDef>): string | null {
+  if (input.key !== undefined) {
+    if (typeof input.key !== 'string') return 'Agent key must be a string';
+    if (!isValidCustomAgentKey(input.key.trim())) {
+      return 'Agent key must use lowercase letters, numbers, and hyphens only';
+    }
+  }
+  if (input.format !== undefined && !['json', 'toml'].includes(String(input.format))) {
+    return 'format must be "json" or "toml"';
+  }
+  if (input.preferredTransport !== undefined && !['stdio', 'http'].includes(String(input.preferredTransport))) {
+    return 'preferredTransport must be "stdio" or "http"';
+  }
+  if (input.configKey !== undefined) {
+    if (typeof input.configKey !== 'string') return 'configKey must be a string';
+    const error = validateObjectKeyPath(input.configKey.trim(), 'configKey');
+    if (error) return error;
+  }
+  if (input.globalNestedKey !== undefined && input.globalNestedKey !== '') {
+    if (typeof input.globalNestedKey !== 'string') return 'globalNestedKey must be a string';
+    const error = validateObjectKeyPath(input.globalNestedKey.trim(), 'globalNestedKey');
+    if (error) return error;
+  }
+  for (const [field, label] of [
+    ['baseDir', 'baseDir'],
+    ['global', 'global'],
+    ['skillDir', 'skillDir'],
+  ] as const) {
+    const error = validateOptionalAgentPath(input[field], label);
+    if (error) return error;
+  }
+  if (input.presenceDirs !== undefined) {
+    if (!Array.isArray(input.presenceDirs)) return 'presenceDirs must be an array';
+    for (const dir of input.presenceDirs) {
+      if (typeof dir !== 'string') return 'presenceDirs must contain only strings';
+      const error = validateAgentPathInput(dir, 'presenceDirs');
+      if (error) return error;
+    }
+  }
+  if (input.presenceCli !== undefined && input.presenceCli !== '' && typeof input.presenceCli !== 'string') {
+    return 'presenceCli must be a string';
+  }
+  return null;
+}
+
 export function validateCustomAgentInput(
   input: { name?: string; baseDir?: string; key?: string },
   existingKeys: Set<string>,
@@ -162,11 +237,13 @@ export function validateCustomAgentInput(
   if (!input.baseDir?.trim()) return 'Config directory is required';
 
   const dir = input.baseDir.trim();
+  if (hasParentDirectorySegment(dir)) return 'Config directory cannot contain parent directory segments';
   if (!isAgentAbsoluteInputPath(dir)) return 'Must be an absolute path (e.g. ~/.qclaw/)';
 
   if (!isEdit) {
     const key = input.key || slugifyCustomAgentName(input.name.trim());
     if (!key) return 'Cannot generate a valid key from this name';
+    if (!isValidCustomAgentKey(key)) return 'Agent key must use lowercase letters, numbers, and hyphens only';
     if (builtInAgentKeys.has(key)) return `Conflicts with built-in agent "${key}"`;
     if (existingKeys.has(key)) return `An agent with key "${key}" already exists`;
   }
@@ -198,7 +275,11 @@ export function handleCustomAgentsPost(
     const customs = loadCustomAgentsFromSettings(settings);
     const builtInAgentKeys = new Set(services.builtInAgentKeys ?? DEFAULT_BUILT_IN_AGENT_KEYS);
     const existingKeys = new Set([...builtInAgentKeys, ...customs.map((agent) => agent.key)]);
-    const key = overrides.key?.trim() || generateUniqueCustomAgentKey(name.trim(), existingKeys);
+    const overrideError = validateCustomAgentOverrides(overrides);
+    if (overrideError) return json({ error: overrideError }, { status: 400 });
+    const key = typeof overrides.key === 'string' && overrides.key.trim()
+      ? overrides.key.trim()
+      : generateUniqueCustomAgentKey(name.trim(), existingKeys);
 
     const error = validateCustomAgentInput({ name, baseDir, key }, existingKeys, builtInAgentKeys);
     if (error) return json({ error }, { status: 400 });
@@ -230,26 +311,18 @@ export function handleCustomAgentsPut(
   services: CustomAgentSettingsServices,
 ): MindosServerResponse<{ agent: CustomAgentDef } | { error: string }> {
   try {
-    const { key, ...updates } = body;
+    const { key: rawKey, ...updates } = body;
+    const key = typeof rawKey === 'string' ? rawKey.trim() : '';
     if (!key) return json({ error: 'key is required' }, { status: 400 });
+    if (!isValidCustomAgentKey(key)) return json({ error: 'Invalid agent key' }, { status: 400 });
 
     const settings = services.readSettings();
     const customs = loadCustomAgentsFromSettings(settings);
     const idx = customs.findIndex((agent) => agent.key === key);
     if (idx === -1) return json({ error: `Custom agent "${key}" not found` }, { status: 404 });
 
-    if (updates.format && !['json', 'toml'].includes(updates.format)) {
-      return json({ error: 'format must be "json" or "toml"' }, { status: 400 });
-    }
-    if (updates.preferredTransport && !['stdio', 'http'].includes(updates.preferredTransport)) {
-      return json({ error: 'preferredTransport must be "stdio" or "http"' }, { status: 400 });
-    }
-    if (updates.baseDir) {
-      const dir = updates.baseDir.trim();
-      if (!isAgentAbsoluteInputPath(dir)) {
-        return json({ error: 'baseDir must be an absolute path' }, { status: 400 });
-      }
-    }
+    const updateError = validateCustomAgentOverrides(updates);
+    if (updateError) return json({ error: updateError }, { status: 400 });
 
     const existing = customs[idx];
     if (!existing) return json({ error: `Custom agent "${key}" not found` }, { status: 404 });

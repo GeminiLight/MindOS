@@ -32,19 +32,35 @@ const STORAGE_KEY = 'mindos:acp-detection';
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
 
-interface DetectionCache {
+export interface DetectionCache {
   installed: DetectedAgent[];
   notInstalled: NotInstalledAgent[];
   ts: number;
 }
 
-function readStorage(): DetectionCache | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function readAcpDetectionCacheFromStorage(): DetectionCache | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (typeof parsed.ts !== 'number' || Date.now() - parsed.ts > STALE_TTL_MS) return null;
-    return parsed;
+    if (
+      !isRecord(parsed) ||
+      !Array.isArray(parsed.installed) ||
+      !Array.isArray(parsed.notInstalled) ||
+      typeof parsed.ts !== 'number' ||
+      Date.now() - parsed.ts > STALE_TTL_MS
+    ) {
+      return null;
+    }
+    return {
+      installed: parsed.installed as DetectedAgent[],
+      notInstalled: parsed.notInstalled as NotInstalledAgent[],
+      ts: parsed.ts,
+    };
   } catch {
     return null;
   }
@@ -57,7 +73,7 @@ function writeStorage(installed: DetectedAgent[], notInstalled: NotInstalledAgen
 }
 
 export function useAcpDetection(): AcpDetectionState {
-  const [initialCache] = useState<DetectionCache | null>(() => readStorage());
+  const [initialCache] = useState<DetectionCache | null>(() => readAcpDetectionCacheFromStorage());
   const cached = useRef<DetectionCache | null>(initialCache);
   const [installedAgents, setInstalledAgents] = useState<DetectedAgent[]>(() => initialCache?.installed ?? []);
   const [notInstalledAgents, setNotInstalledAgents] = useState<NotInstalledAgent[]>(() => initialCache?.notInstalled ?? []);

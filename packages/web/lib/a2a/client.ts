@@ -18,6 +18,16 @@ import type {
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const RPC_TIMEOUT_MS = 30_000;
 const CARD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const MAX_A2A_URL_LENGTH = 2048;
+const A2A_TASK_STATES = new Set([
+  'TASK_STATE_SUBMITTED',
+  'TASK_STATE_WORKING',
+  'TASK_STATE_INPUT_REQUIRED',
+  'TASK_STATE_COMPLETED',
+  'TASK_STATE_FAILED',
+  'TASK_STATE_CANCELED',
+  'TASK_STATE_REJECTED',
+]);
 
 /* ── Agent Registry (in-memory cache) ──────────────────────────────────── */
 
@@ -47,6 +57,62 @@ function urlToId(url: string): string {
   } catch {
     return url.replace(/[^a-zA-Z0-9]/g, '-');
   }
+}
+
+function normalizeHttpUrl(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+
+  const value = input.trim();
+  if (!value || value.length > MAX_A2A_URL_LENGTH) return null;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (!url.hostname) return null;
+    if (url.username || url.password) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeDiscoveryBaseUrl(input: unknown): string | null {
+  const url = normalizeHttpUrl(input);
+  if (!url) return null;
+
+  const parsed = new URL(url);
+  if (parsed.search || parsed.hash) return null;
+
+  return url.replace(/\/+$/, '');
+}
+
+function findJsonRpcEndpoint(card: AgentCard): string | null {
+  for (const agentInterface of card.supportedInterfaces) {
+    if (!agentInterface || typeof agentInterface !== 'object') continue;
+    if (agentInterface.protocolBinding !== 'JSONRPC') continue;
+
+    const endpoint = normalizeHttpUrl(agentInterface.url);
+    if (endpoint) return endpoint;
+  }
+
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function assertA2ATask(value: unknown): A2ATask {
+  if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.status)) {
+    throw new Error('Invalid A2A task response from remote agent');
+  }
+
+  const state = value.status.state;
+  if (typeof state !== 'string' || !A2A_TASK_STATES.has(state)) {
+    throw new Error('Invalid A2A task response from remote agent');
+  }
+
+  return value as unknown as A2ATask;
 }
 
 /* ── HTTP helpers ──────────────────────────────────────────────────────── */
@@ -96,7 +162,9 @@ async function jsonRpcCall(endpoint: string, method: string, params: unknown, to
  * Fetches /.well-known/agent-card.json and caches the result.
  */
 export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null> {
-  const cleanUrl = baseUrl.replace(/\/+$/, '');
+  const cleanUrl = normalizeDiscoveryBaseUrl(baseUrl);
+  if (!cleanUrl) return null;
+
   const cardUrl = `${cleanUrl}/.well-known/agent-card.json`;
   const id = urlToId(cleanUrl);
 
@@ -117,14 +185,15 @@ export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null
       return null;
     }
 
-    // Find JSON-RPC endpoint
-    const jsonRpcInterface = card.supportedInterfaces.find(i => i.protocolBinding === 'JSONRPC');
-    if (!jsonRpcInterface) return null;
+    // Find a usable JSON-RPC endpoint. Agent cards are remote input, so the
+    // endpoint URL needs the same trust-boundary checks as the discovery URL.
+    const jsonRpcEndpoint = findJsonRpcEndpoint(card);
+    if (!jsonRpcEndpoint) return null;
 
     const agent: RemoteAgent = {
       id,
       card,
-      endpoint: jsonRpcInterface.url,
+      endpoint: jsonRpcEndpoint,
       discoveredAt: new Date().toISOString(),
       reachable: true,
     };
@@ -198,7 +267,7 @@ export async function delegateTask(
       throw new Error(record.error);
     }
 
-    const task = response.result as A2ATask;
+    const task = assertA2ATask(response.result);
     record.status = 'completed';
     record.completedAt = new Date().toISOString();
     record.result = task.artifacts?.[0]?.parts?.[0]?.text ?? null;
@@ -230,7 +299,7 @@ export async function checkRemoteTaskStatus(
     throw new Error(`A2A error [${response.error.code}]: ${response.error.message}`);
   }
 
-  return response.result as A2ATask;
+  return assertA2ATask(response.result);
 }
 
 /* ── Registry Access ───────────────────────────────────────────────────── */

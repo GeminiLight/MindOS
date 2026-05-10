@@ -84,21 +84,45 @@ function expandHome(input: string, homeDir = homedir()): string {
   return input.startsWith('~/') || input.startsWith('~\\') ? resolve(homeDir, input.slice(2)) : input;
 }
 
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
+}
+
+function assertSafeObjectKeyPath(dotPath: string, label: string): string[] {
+  const parts = dotPath.split('.').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0 || parts.some(isUnsafeObjectKey)) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return parts;
+}
+
+function assertSafeObjectKey(key: string, label: string): void {
+  if (!key || isUnsafeObjectKey(key)) throw new Error(`Invalid ${label}`);
+}
+
+function readOwnRecord(obj: Record<string, unknown>, key: string): Record<string, unknown> | null {
+  if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
+  const value = obj[key];
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
 function ensureNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> {
-  const parts = dotPath.split('.').filter(Boolean);
+  const parts = assertSafeObjectKeyPath(dotPath, 'nested config path');
   let current = obj;
   for (const part of parts) {
-    if (!current[part] || typeof current[part] !== 'object') current[part] = {};
+    const existing = readOwnRecord(current, part);
+    if (!existing) current[part] = {};
     current = current[part] as Record<string, unknown>;
   }
   return current;
 }
 
 function getNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> | null {
-  const parts = dotPath.split('.').filter(Boolean);
+  const parts = assertSafeObjectKeyPath(dotPath, 'nested config path');
   let current: unknown = obj;
   for (const part of parts) {
     if (!current || typeof current !== 'object') return null;
+    if (!Object.prototype.hasOwnProperty.call(current, part)) return null;
     current = (current as Record<string, unknown>)[part];
   }
   return current && typeof current === 'object' ? current as Record<string, unknown> : null;
@@ -371,7 +395,8 @@ export async function handleMcpInstallPost(
           const container = scope === 'global' && agent.globalNestedKey
             ? ensureNestedPath(config, agent.globalNestedKey)
             : (() => {
-                if (!config[agent.key] || typeof config[agent.key] !== 'object') config[agent.key] = {};
+                assertSafeObjectKey(agent.key, 'agent config key');
+                if (!readOwnRecord(config, agent.key)) config[agent.key] = {};
                 return config[agent.key] as Record<string, unknown>;
               })();
           container.mindos = entry;
@@ -461,7 +486,10 @@ export function handleMcpUninstallPost(
           const config = parseJsonc(readFileSync(absPath, 'utf-8'));
           const container = scope === 'global' && agent.globalNestedKey
             ? getNestedPath(config, agent.globalNestedKey)
-            : config[agent.key] as Record<string, unknown> | undefined;
+            : (() => {
+                assertSafeObjectKey(agent.key, 'agent config key');
+                return readOwnRecord(config, agent.key) ?? undefined;
+              })();
           if (container && 'mindos' in container) {
             delete container.mindos;
             writeFileSync(absPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');

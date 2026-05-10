@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderMarkdown as renderSkillMarkdown } from '@/components/agents/SkillDetailPopover';
-import { renderMarkdown } from '@/components/renderers/summary/SummaryRenderer';
+import { appendSummaryStreamChunk, renderMarkdown } from '@/components/renderers/summary/SummaryRenderer';
 import { renderBody } from '@/components/renderers/timeline/TimelineRenderer';
 
 describe('generated renderer HTML safety', () => {
@@ -11,6 +11,21 @@ describe('generated renderer HTML safety', () => {
     expect(html).not.toContain('<img');
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('&lt;img');
+  });
+
+  it('parses MindOS summary SSE without rendering raw event JSON', () => {
+    const text = appendSummaryStreamChunk('', [
+      'data:{"type":"text_delta","delta":"Hello "}',
+      'data:{"type":"thinking_delta","delta":"world"}',
+      '',
+    ].join('\n'));
+
+    expect(text).toBe('Hello world');
+  });
+
+  it('throws summary stream errors instead of appending them as text', () => {
+    expect(() => appendSummaryStreamChunk('', 'data:{"type":"error","message":"Model failed"}\n'))
+      .toThrow('Model failed');
   });
 
   it('escapes timeline body HTML and rejects unsafe links', () => {

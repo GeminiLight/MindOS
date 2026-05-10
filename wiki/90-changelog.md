@@ -4,6 +4,12 @@
 
 ## v0.6.82+ (未发布)
 
+### 发布与打包
+
+- **Desktop 默认不再内置本地 embedding runtime**：HuggingFace Transformers / ONNX runtime 改为用户首次选择本地 embedding 并点击下载时安装到 `~/.mindos/local-embedding-runtime`，默认 Desktop 包和 npm runtime 不再携带这些可选依赖。
+- **Desktop runtime 发布门禁增强**：新增 runtime verifier 和 packaged app smoke，发版前检查 MCP bundle、Next standalone 依赖闭包、fatal error pattern，以及默认包内不得出现 optional HuggingFace/ONNX runtime。
+- **Next standalone 依赖闭包修复**：`prepare-mindos-bundle` 在复制 Next runtime deps 后再递归补齐 transitive dependencies，避免 `postcss -> nanoid`、`react-dom -> scheduler` 等后引入依赖缺失。
+
 ### 架构
 
 - **v1 package domain layout**：`packages/` 从平铺的 `packages/<pkg>` 收敛为 `packages/<domain>/<pkg>`，当前域为 `foundation`、`knowledge`、`retrieval`、`protocols`。包名和 import surface 保持稳定，目录结构更清楚地区分基础设施、知识库领域、检索能力和外部协议。

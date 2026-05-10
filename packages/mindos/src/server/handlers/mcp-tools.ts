@@ -81,6 +81,10 @@ export function handleMcpDirectToolsPost(
   if (!payload.server || typeof payload.server !== 'string') {
     return json({ error: 'Missing or invalid "server" field' }, { status: 400 });
   }
+  const server = payload.server.trim();
+  if (!server || isUnsafeObjectKey(server)) {
+    return json({ error: 'Invalid server name' }, { status: 400 });
+  }
 
   const directTools = payload.directTools;
   if (directTools !== true && directTools !== false && !Array.isArray(directTools)) {
@@ -92,12 +96,12 @@ export function handleMcpDirectToolsPost(
   }
 
   try {
-    services.updateServerDirectTools(payload.server, directTools);
+    services.updateServerDirectTools(server, directTools);
   } catch (error) {
     return errorResponse(error);
   }
 
-  return json({ ok: true, server: payload.server, directTools });
+  return json({ ok: true, server, directTools });
 }
 
 function normalizeMcpConfig(config: MindosMcpConfigFile | undefined | null): MindosMcpConfigFile {
@@ -109,4 +113,8 @@ function normalizeMcpConfig(config: MindosMcpConfigFile | undefined | null): Min
 
 function normalizeDirectToolsRequest(body: unknown): MindosMcpDirectToolsRequest {
   return body && typeof body === 'object' ? body as MindosMcpDirectToolsRequest : {};
+}
+
+function isUnsafeObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'prototype' || key === 'constructor';
 }

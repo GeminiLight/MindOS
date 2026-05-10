@@ -12,12 +12,16 @@ export interface ConvertResult {
   metadata?: Record<string, string>;
 }
 
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+
 export function sanitizeFileName(name: string): string {
   let base = name.replace(/\\/g, '/').split('/').pop() ?? '';
   base = base.replace(/\.\./g, '').replace(/^\/+/, '');
-  base = base.replace(/[\\:*?"<>|]/g, '-');
+  base = base.replace(/[\\/:*?"<>|\x00-\x1f]/g, '-');
   base = base.replace(/-{2,}/g, '-');
   base = base.replace(/^[-\s]+|[-\s]+$/g, '');
+  base = base.replace(/[. ]+$/g, '');
+  if (WINDOWS_RESERVED_NAME.test(base)) base = `_${base}`;
   return base || 'imported-file';
 }
 

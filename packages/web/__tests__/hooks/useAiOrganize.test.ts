@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripThinkingTags, deriveStageHint, CLIENT_TRUNCATE_CHARS, type OrganizeStageHint } from '@/hooks/useAiOrganize';
+import { consumeOrganizeStream, stripThinkingTags, deriveStageHint, CLIENT_TRUNCATE_CHARS, type OrganizeStageHint } from '@/hooks/useAiOrganize';
 
 /**
  * Unit tests for the AI Organize SSE stream parser, helper functions,
@@ -12,6 +12,15 @@ const FILE_WRITE_TOOLS = new Set([
   'append_to_file', 'insert_after_heading', 'update_section',
   'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
 ]);
+
+function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    },
+  });
+}
 
 function extractPathFromArgs(toolName: string, args: unknown): string {
   if (!args || typeof args !== 'object') return '';
@@ -258,6 +267,18 @@ describe('parseOrganizeEvents', () => {
     ];
     const { changes } = parseOrganizeEvents(events);
     expect(changes[0].action).toBe('update');
+  });
+});
+
+describe('consumeOrganizeStream', () => {
+  it('processes a final text_delta line without a trailing newline', async () => {
+    const result = await consumeOrganizeStream(
+      streamFrom(['data:{"type":"text_delta","delta":"final summary"}']),
+      () => {},
+      () => {},
+    );
+
+    expect(result.summary).toBe('final summary');
   });
 });
 

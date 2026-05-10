@@ -14,19 +14,23 @@ const STORAGE_KEY = 'mindos:acp-registry';
 const STALE_TTL_MS = 30 * 60 * 1000; // 30 min — show stale data instantly
 const REVALIDATE_TTL_MS = 10 * 60 * 1000; // 10 min — background refresh interval
 
-interface RegistryCache {
+export interface RegistryCache {
   agents: AcpRegistryEntry[];
   ts: number;
 }
 
-function readStorage(): RegistryCache | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function readAcpRegistryCacheFromStorage(): RegistryCache | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.agents) || typeof parsed.ts !== 'number') return null;
+    if (!isRecord(parsed) || !Array.isArray(parsed.agents) || typeof parsed.ts !== 'number') return null;
     if (Date.now() - parsed.ts > STALE_TTL_MS) return null;
-    return parsed;
+    return { agents: parsed.agents as AcpRegistryEntry[], ts: parsed.ts };
   } catch {
     return null;
   }
@@ -39,7 +43,7 @@ function writeStorage(agents: AcpRegistryEntry[]) {
 }
 
 export function useAcpRegistry(): AcpRegistryState {
-  const [initialCache] = useState<RegistryCache | null>(() => readStorage());
+  const [initialCache] = useState<RegistryCache | null>(() => readAcpRegistryCacheFromStorage());
   const cached = useRef<RegistryCache | null>(initialCache);
   const [agents, setAgents] = useState<AcpRegistryEntry[]>(() => initialCache?.agents ?? []);
   const [loading, setLoading] = useState(() => !initialCache);

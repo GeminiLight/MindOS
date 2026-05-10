@@ -126,7 +126,7 @@ async function captureSnapshot(path: string): Promise<string> {
   }
 }
 
-async function consumeOrganizeStream(
+export async function consumeOrganizeStream(
   body: ReadableStream<Uint8Array>,
   onProgress: (state: Partial<AiOrganizeState> & { summary?: string }) => void,
   onSnapshot: (path: string, content: string) => void,
@@ -146,11 +146,11 @@ async function consumeOrganizeStream(
     while (true) {
       if (signal?.aborted) break;
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done && !buffer) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+      if (!done) buffer += decoder.decode(value, { stream: true });
+      const lines = done ? [buffer] : buffer.split('\n');
+      buffer = done ? '' : lines.pop() ?? '';
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -225,6 +225,7 @@ async function consumeOrganizeStream(
             break;
         }
       }
+      if (done) break;
     }
   } finally {
     reader.releaseLock();

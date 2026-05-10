@@ -239,6 +239,22 @@ describe('validateCustomAgentInput', () => {
     expect(err).toContain('absolute path');
   });
 
+  it('rejects parent directory segments', () => {
+    const err = validateCustomAgentInput(
+      { name: 'Test', baseDir: '~/../test/' },
+      new Set(),
+    );
+    expect(err).toContain('parent directory');
+  });
+
+  it('rejects unsafe explicit keys', () => {
+    const err = validateCustomAgentInput(
+      { name: 'Test', baseDir: '~/.test/', key: '__proto__' },
+      new Set(),
+    );
+    expect(err).toContain('Agent key');
+  });
+
   it('rejects key conflict with built-in agent', () => {
     const err = validateCustomAgentInput(
       { name: 'Cursor', baseDir: '~/.my-cursor/' },

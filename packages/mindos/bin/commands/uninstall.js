@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { isAbsolute, resolve, win32 } from 'node:path';
 
 import { CONFIG_PATH, MINDOS_DIR } from '../lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
@@ -19,6 +20,24 @@ export const meta = {
   summary: 'Fully uninstall MindOS',
   usage: 'mindos uninstall',
 };
+
+export function normalizeUninstallMindRoot(value, homeDir = homedir(), platform = process.platform) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '~') return null;
+  if (trimmed.startsWith('~') && !(trimmed.startsWith('~/') || trimmed.startsWith('~\\'))) {
+    return null;
+  }
+
+  const expanded = trimmed.startsWith('~/') || trimmed.startsWith('~\\')
+    ? resolve(homeDir, trimmed.slice(2))
+    : trimmed;
+
+  const isNativeAbsolute = platform === 'win32'
+    ? win32.isAbsolute(expanded)
+    : isAbsolute(expanded);
+  return isNativeAbsolute ? expanded : null;
+}
 
 export const run = async () => {
   const readline = await import('node:readline');
@@ -103,7 +122,7 @@ export const run = async () => {
   // Read config before potentially deleting ~/.mindos/
   let config = {};
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
-  const mindRoot = config.mindRoot?.replace(/^~/, homedir());
+  const mindRoot = normalizeUninstallMindRoot(config.mindRoot);
 
   // 3. Ask to remove ~/.mindos/
   if (existsSync(MINDOS_DIR)) {

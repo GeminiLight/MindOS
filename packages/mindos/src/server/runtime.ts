@@ -178,7 +178,9 @@ export function getSkillRootsFromRuntime(options: {
     });
   }
 
-  for (const custom of settings.skillPaths?.custom ?? []) {
+  const customSkillPaths = Array.isArray(settings.skillPaths?.custom) ? settings.skillPaths.custom : [];
+  for (const custom of customSkillPaths) {
+    if (typeof custom !== 'string') continue;
     const trimmed = custom.trim();
     if (!trimmed) continue;
     roots.push({

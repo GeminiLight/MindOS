@@ -89,13 +89,14 @@ describe('MindOS runtime product kernel contract', () => {
     }
   });
 
-  it('makes Web use the product main facade instead of low-level operation packages', () => {
-    const operationKernel = read('packages/web/app/api/file/operation-kernel.ts');
+  it('makes Web file routes use the product server facade without duplicate local kernels', () => {
+    const fileRoute = read('packages/web/app/api/file/route.ts');
     const webSecurity = read('packages/web/lib/core/security.ts');
 
-    expect(operationKernel).toContain("from '@geminilight/mindos'");
-    expect(operationKernel).not.toContain("from '@mindos/knowledge-ops'");
-    expect(operationKernel).not.toContain("from '@mindos/permissions'");
+    expect(fileRoute).toContain("from '@geminilight/mindos/server'");
+    expect(fileRoute).toContain('handleFilePost');
+    expect(existsSync(resolve(root, 'packages/web/app/api/file/operation-kernel.ts'))).toBe(false);
+    expect(existsSync(resolve(root, 'packages/web/app/api/file/handlers.ts'))).toBe(false);
 
     expect(webSecurity).toContain("from '@geminilight/mindos'");
     expect(webSecurity).not.toContain("from '@mindos/security'");

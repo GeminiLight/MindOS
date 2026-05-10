@@ -110,7 +110,7 @@ jobs:
           echo "Downloaded: $TGZ"
 
           # Main package should be lightweight and only contain the shim/runtime exports.
-          for f in "bin/mindos-shim.cjs" "dist/index.js" "dist/protocols/acp/index.js"; do
+          for f in "bin/mindos-shim.cjs" "dist/index.js" "dist/protocols/acp/index.js" "dist/protocols/mcp-server/index.cjs"; do
             if ! tar -tzf "$TGZ" | grep -q "$f"; then
               echo "❌ Published package missing $f!"
               exit 1
@@ -125,7 +125,7 @@ jobs:
             echo "❌ npm pack failed — no platform .tgz file found"
             exit 1
           fi
-          for f in "bin/mindos" "runtime-manifest.json" "package.json"; do
+          for f in "bin/mindos" "runtime-manifest.json" "package.json" "dist/protocols/mcp-server/index.cjs" "static-web/index.html"; do
             if ! tar -tzf "$PTGZ" | grep -q "$f"; then
               echo "❌ Published platform package missing $f!"
               exit 1

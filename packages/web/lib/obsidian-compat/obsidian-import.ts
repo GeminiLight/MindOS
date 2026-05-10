@@ -8,6 +8,7 @@ import path from 'path';
 import { analyzePluginCompatibility, getCompatibilityLevel, type CompatibilityLevel, type PluginCompatibilityReport } from './compatibility-report';
 import { validateManifest } from './manifest';
 import type { PluginManifest } from './types';
+import { resolveExistingSafe } from '@/lib/core/security';
 
 export interface ScannedObsidianPlugin {
   id: string;
@@ -41,18 +42,18 @@ export interface ImportedObsidianPlugin {
 }
 
 function resolveVaultPluginsDir(vaultRoot: string): string {
-  return path.resolve(path.join(vaultRoot, '.obsidian', 'plugins'));
+  return resolveExistingSafe(vaultRoot, '.obsidian/plugins');
 }
 
-function resolvePluginDir(pluginsDir: string, pluginId: string): string {
+function resolvePluginDir(root: string, basePath: string, pluginId: string): string {
   if (!pluginId || pluginId.includes('..') || pluginId.includes('/') || pluginId.includes('\\')) {
     throw new Error(`Plugin path escapes plugins directory: ${pluginId}`);
   }
-  const pluginDir = path.resolve(path.join(pluginsDir, pluginId));
-  if (!pluginDir.startsWith(pluginsDir + path.sep)) {
+  try {
+    return resolveExistingSafe(root, `${basePath}/${pluginId}`);
+  } catch {
     throw new Error(`Plugin path escapes plugins directory: ${pluginId}`);
   }
-  return pluginDir;
 }
 
 function readManifest(pluginDir: string): PluginManifest {
@@ -66,7 +67,12 @@ function readMainCode(pluginDir: string): string {
 }
 
 export async function scanObsidianVaultPlugins(vaultRoot: string): Promise<ScanResult> {
-  const pluginsDir = resolveVaultPluginsDir(vaultRoot);
+  let pluginsDir: string;
+  try {
+    pluginsDir = resolveVaultPluginsDir(vaultRoot);
+  } catch {
+    return { plugins: [], skipped: [] };
+  }
   if (!fs.existsSync(pluginsDir)) {
     return { plugins: [], skipped: [] };
   }
@@ -77,7 +83,7 @@ export async function scanObsidianVaultPlugins(vaultRoot: string): Promise<ScanR
 
   for (const entry of entries) {
     const pluginDir = path.resolve(path.join(pluginsDir, entry));
-    if (!fs.existsSync(pluginDir) || !fs.statSync(pluginDir).isDirectory()) {
+    if (!fs.existsSync(pluginDir) || !fs.lstatSync(pluginDir).isDirectory()) {
       continue;
     }
 
@@ -109,15 +115,16 @@ export async function scanObsidianVaultPlugins(vaultRoot: string): Promise<ScanR
 }
 
 export async function importObsidianPlugin(options: ImportObsidianPluginOptions): Promise<ImportedObsidianPlugin> {
-  const sourcePluginsDir = resolveVaultPluginsDir(options.vaultRoot);
-  const sourceDir = resolvePluginDir(sourcePluginsDir, options.pluginId);
+  const sourceDir = resolvePluginDir(options.vaultRoot, '.obsidian/plugins', options.pluginId);
   if (!fs.existsSync(sourceDir) || !fs.statSync(sourceDir).isDirectory()) {
     throw new Error(`Obsidian plugin not found: ${options.pluginId}`);
   }
 
-  const targetPluginsDir = path.resolve(path.join(options.targetMindRoot, '.plugins'));
-  const targetDir = path.resolve(path.join(targetPluginsDir, options.pluginId));
-  if (targetDir !== targetPluginsDir && !targetDir.startsWith(targetPluginsDir + path.sep)) {
+  let targetDir: string;
+  try {
+    resolveExistingSafe(options.targetMindRoot, '.plugins');
+    targetDir = resolveExistingSafe(options.targetMindRoot, `.plugins/${options.pluginId}`);
+  } catch {
     throw new Error(`Plugin target path escapes .plugins directory: ${options.pluginId}`);
   }
 

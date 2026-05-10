@@ -99,6 +99,7 @@ import {
   createMindosHealth,
   collectAllFilesFromMindRoot,
   getDefaultMindRoot,
+  getSkillRootsFromRuntime,
   getMindosServerContract,
   getRecentlyModifiedFromMindRoot,
   readTextFileFromMindRoot,
@@ -651,6 +652,71 @@ describe('MindOS product server contract', () => {
     expect(existsSync(join(root, '..', '.trash', (deleted.body as { trashId: string }).trashId))).toBe(true);
   });
 
+  it('returns POSIX knowledge paths after Product Server file moves', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-file-move-paths-'));
+    mkdirSync(join(root, 'Source'), { recursive: true });
+    writeFileSync(join(root, 'Source', 'note.md'), 'content', 'utf-8');
+
+    const moved = await handleFilePost(
+      { op: 'move_file', path: 'Source\\note.md', to_path: 'Archive\\moved.md' },
+      { mindRoot: root },
+    );
+
+    expect(moved.status).toBe(200);
+    expect(moved.body).toMatchObject({
+      ok: true,
+      path: 'Archive/moved.md',
+      newPath: 'Archive/moved.md',
+    });
+    expect(moved.changeEvent).toMatchObject({
+      op: 'move_file',
+      path: 'Archive/moved.md',
+      beforePath: 'Source/note.md',
+      afterPath: 'Archive/moved.md',
+    });
+    expect(existsSync(join(root, 'Source', 'note.md'))).toBe(false);
+    expect(readFileSync(join(root, 'Archive', 'moved.md'), 'utf-8')).toBe('content');
+  });
+
+  it('returns POSIX knowledge paths after Product Server content edits', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-file-edit-paths-'));
+    mkdirSync(join(root, 'Space'), { recursive: true });
+    writeFileSync(join(root, 'Space', 'note.md'), '# Title\n\nBody', 'utf-8');
+    writeFileSync(join(root, 'Space', 'table.csv'), 'name\n', 'utf-8');
+
+    const inserted = await handleFilePost(
+      { op: 'insert_after_heading', path: 'Space\\note.md', heading: 'Title', content: 'Inserted' },
+      { mindRoot: root },
+    );
+    expect(inserted.status).toBe(200);
+    expect(inserted.body).toMatchObject({ ok: true, path: 'Space/note.md' });
+    expect(inserted.changeEvent).toMatchObject({ path: 'Space/note.md' });
+
+    const appended = await handleFilePost(
+      { op: 'append_csv', path: 'Space\\table.csv', row: ['Ada'] },
+      { mindRoot: root },
+    );
+    expect(appended.status).toBe(200);
+    expect(appended.body).toMatchObject({ ok: true, path: 'Space/table.csv', newRowCount: 2 });
+    expect(appended.changeEvent).toMatchObject({ path: 'Space/table.csv' });
+  });
+
+  it('rejects Product Server delete when trash directory is a symlink outside root parent', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'mindos-file-trash-parent-'));
+    const root = join(parent, 'mind');
+    const outside = mkdtempSync(join(tmpdir(), 'mindos-file-trash-outside-'));
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'note.md'), 'hello', 'utf-8');
+    symlinkSync(outside, join(parent, '.trash'), 'dir');
+
+    const deleted = await handleFilePost({ op: 'delete_file', path: 'note.md' }, { mindRoot: root });
+
+    expect(deleted.status).toBe(403);
+    expect(deleted.body).toEqual({ error: 'Access denied' });
+    expect(existsSync(join(root, 'note.md'))).toBe(true);
+    expect(existsSync(join(outside, 'note.md'))).toBe(false);
+  });
+
   it('rejects Product Server writes through symlinks that resolve outside mindRoot', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-file-symlink-root-'));
     const outside = mkdtempSync(join(tmpdir(), 'mindos-file-symlink-outside-'));
@@ -786,6 +852,38 @@ describe('MindOS product server contract', () => {
       expect(await (await fetch(`${base}/api/file?path=Space/note.md`)).json()).toEqual({ content: 'hello' });
       expect(await (await fetch(`${base}/api/file/raw?path=image.png`)).arrayBuffer()).toHaveProperty('byteLength', 3);
       expect((await fetch(`${base}/missing`)).status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('returns client errors for invalid HTTP JSON bodies', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-json-errors-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      runtime: { readSettings: () => ({ mindRoot: root }) },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const invalid = await fetch(`${base}/api/setup/generate-token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+        body: '{bad json',
+      });
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toEqual({ error: 'Invalid JSON body' });
+
+      const oversized = await fetch(`${base}/api/setup/generate-token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+        body: JSON.stringify({ seed: 'x'.repeat(1_000_001) }),
+      });
+      expect(oversized.status).toBe(413);
+      expect(await oversized.json()).toEqual({ error: 'Request body too large' });
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }
@@ -1051,6 +1149,18 @@ describe('MindOS product server contract', () => {
       status: 200,
       body: { content: expect.stringContaining('Updated') },
     });
+    expect(handleSkillsPost({ action: 'read-native', name: 'builtin-skill', sourcePath: builtinRoot }, services)).toMatchObject({
+      status: 200,
+      body: { content: expect.stringContaining('Builtin') },
+    });
+
+    const outsideRoot = mkdtempSync(join(tmpdir(), 'mindos-skill-read-native-outside-'));
+    mkdirSync(join(outsideRoot, 'secret-skill'), { recursive: true });
+    writeFileSync(join(outsideRoot, 'secret-skill', 'SKILL.md'), '---\nname: secret-skill\n---\nsecret');
+    expect(handleSkillsPost({ action: 'read-native', name: 'secret-skill', sourcePath: outsideRoot }, services)).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid sourcePath' },
+    });
 
     expect(handleSkillsPost({ action: 'toggle', name: 'user-skill', enabled: false }, services)).toMatchObject({
       status: 200,
@@ -1073,13 +1183,17 @@ describe('MindOS product server contract', () => {
   it('rejects product skill writes through symlinked user skill directories', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-skill-symlink-root-'));
     const mindRoot = join(root, 'mind');
+    const builtinRoot = join(root, 'builtin-skills');
     const outside = mkdtempSync(join(tmpdir(), 'mindos-skill-symlink-outside-'));
     mkdirSync(mindRoot, { recursive: true });
+    mkdirSync(join(builtinRoot, 'builtin-skill'), { recursive: true });
+    writeFileSync(join(builtinRoot, 'builtin-skill', 'SKILL.md'), '---\nname: builtin-skill\n---\nBuiltin');
     symlinkSync(outside, join(mindRoot, '.skills'), 'dir');
 
     const services = {
       mindRoot,
       skillRoots: [
+        { path: builtinRoot, source: 'builtin' as const, origin: 'project-builtin' as const, editable: false },
         { path: join(mindRoot, '.skills'), source: 'user' as const, origin: 'mindos-user' as const, editable: true },
       ],
       readSettings: () => ({}),
@@ -1088,7 +1202,13 @@ describe('MindOS product server contract', () => {
 
     expect(handleSkillsGet({
       skillRoots: services.skillRoots,
-    }).body.skills).toEqual([]);
+    }).body.skills).toEqual([
+      expect.objectContaining({ name: 'builtin-skill' }),
+    ]);
+    expect(handleSkillsPost({ action: 'read', name: 'builtin-skill' }, services)).toMatchObject({
+      status: 200,
+      body: { content: expect.stringContaining('Builtin') },
+    });
     expect(handleSkillsPost({ action: 'create', name: 'external-skill' }, services)).toMatchObject({
       status: 403,
       body: { error: 'Access denied' },
@@ -1124,6 +1244,30 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: expect.stringContaining('Conflicts with built-in agent') },
     });
+    expect(handleCustomAgentsPost({ name: 'Pollute', baseDir: '~/.pollute/', key: '__proto__' }, services)).toMatchObject({
+      status: 400,
+      body: { error: expect.stringContaining('Agent key') },
+    });
+    expect(handleCustomAgentsPost({ name: 'Bad Path', baseDir: '~/../bad/' }, services)).toMatchObject({
+      status: 400,
+      body: { error: expect.stringContaining('parent directory') },
+    });
+    expect(handleCustomAgentsPost({
+      name: 'Bad Config',
+      baseDir: '~/.bad/',
+      configKey: '__proto__.servers',
+    }, services)).toMatchObject({
+      status: 400,
+      body: { error: expect.stringContaining('unsafe key') },
+    });
+    expect(handleCustomAgentsPost({
+      name: 'Bad Format',
+      baseDir: '~/.bad/',
+      format: 'yaml' as never,
+    }, services)).toMatchObject({
+      status: 400,
+      body: { error: 'format must be "json" or "toml"' },
+    });
 
     const created = handleCustomAgentsPost({ name: 'QClaw Local', baseDir: '~/.qclaw/' }, services);
     expect(created).toMatchObject({
@@ -1137,6 +1281,21 @@ describe('MindOS product server contract', () => {
       },
     });
     expect(settings.customAgents).toEqual([expect.objectContaining({ key: 'qclaw-local' })]);
+
+    expect(handleCustomAgentsPut({
+      key: 'qclaw-local',
+      globalNestedKey: 'mcp.__proto__',
+    }, services)).toMatchObject({
+      status: 400,
+      body: { error: expect.stringContaining('unsafe key') },
+    });
+    expect(handleCustomAgentsPut({
+      key: 'qclaw-local',
+      presenceDirs: ['~/../bad/'],
+    }, services)).toMatchObject({
+      status: 400,
+      body: { error: expect.stringContaining('parent directory') },
+    });
 
     expect(handleCustomAgentsPut({
       key: 'qclaw-local',
@@ -1291,6 +1450,44 @@ describe('MindOS product server contract', () => {
       status: 200,
       body: { results: [{ agent: 'missing', status: 'error', message: 'Unknown agent: missing' }] },
     });
+    await expect(handleMcpInstallPost({
+      agents: [{ key: 'unsafe-key', scope: 'global' }],
+      transport: 'stdio',
+    }, {
+      agents: {
+        'unsafe-key': {
+          name: 'Unsafe',
+          project: null,
+          global: '~/.unsafe/config.json',
+          key: '__proto__',
+          preferredTransport: 'stdio',
+        },
+      },
+      homeDir: home,
+    })).resolves.toMatchObject({
+      status: 200,
+      body: { results: [{ agent: 'unsafe-key', status: 'error', message: expect.stringContaining('Invalid agent config key') }] },
+    });
+    await expect(handleMcpInstallPost({
+      agents: [{ key: 'unsafe-nested', scope: 'global' }],
+      transport: 'stdio',
+    }, {
+      agents: {
+        'unsafe-nested': {
+          name: 'Unsafe Nested',
+          project: null,
+          global: '~/.unsafe-nested/config.json',
+          key: 'mcp',
+          globalNestedKey: 'mcp.__proto__',
+          preferredTransport: 'stdio',
+        },
+      },
+      homeDir: home,
+    })).resolves.toMatchObject({
+      status: 200,
+      body: { results: [{ agent: 'unsafe-nested', status: 'error', message: expect.stringContaining('Invalid nested config path') }] },
+    });
+    expect(({} as Record<string, unknown>).mindos).toBeUndefined();
 
     await expect(handleMcpInstallPost({
       agents: [{ key: 'codex', scope: 'global' }],
@@ -1442,6 +1639,16 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: 'Missing or invalid "server" field' },
     });
+
+    expect(handleMcpDirectToolsPost({ server: '__proto__', directTools: true }, {
+      updateServerDirectTools: () => {
+        throw new Error('should not update unsafe server name');
+      },
+    })).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid server name' },
+    });
+    expect(({} as Record<string, unknown>).directTools).toBeUndefined();
 
     expect(handleMcpDirectToolsPost({ server: 'github', directTools: ['search'] }, {
       updateServerDirectTools: (_server, next) => { directTools = next; },
@@ -1657,6 +1864,22 @@ describe('MindOS product server contract', () => {
     })).toMatchObject({
       status: 400,
       body: { error: 'Invalid skill name' },
+    });
+    expect(handleMcpInstallSkillPost({ skill: 'mindos', agents: ['--help'] }, {
+      runCommand: () => {
+        throw new Error('should not run invalid agent request');
+      },
+    })).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid agent name' },
+    });
+    expect(handleMcpInstallSkillPost({ skill: 'mindos', agents: ['__proto__'] }, {
+      runCommand: () => {
+        throw new Error('should not run invalid agent request');
+      },
+    })).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid agent name' },
     });
 
     expect(handleMcpInstallSkillPost({
@@ -2065,6 +2288,16 @@ describe('MindOS product server contract', () => {
     });
     expect(readFileSync(join(root, 'Inbox', 'todo.md'), 'utf-8')).toContain('# Todo');
 
+    const invalidBase64 = handleInboxPost({
+      files: [{ name: 'broken.txt', content: 'not base64!!!', encoding: 'base64' }],
+    }, { mindRoot: root });
+    expect(invalidBase64.status).toBe(200);
+    expect(invalidBase64.body).toMatchObject({
+      saved: [],
+      skipped: [{ name: 'broken.txt', reason: expect.stringContaining('Invalid base64 content') }],
+    });
+    expect(existsSync(join(root, 'Inbox', 'broken.md'))).toBe(false);
+
     const listed = handleInboxGet({ mindRoot: root });
     expect(listed.body.files).toEqual([
       expect.objectContaining({ name: 'todo.md', path: 'Inbox/todo.md' }),
@@ -2105,6 +2338,21 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('rejects inbox archive when .processed is a symlink outside mindRoot', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-inbox-processed-symlink-root-'));
+    const outside = mkdtempSync(join(tmpdir(), 'mindos-inbox-processed-symlink-outside-'));
+    mkdirSync(join(root, 'Inbox'), { recursive: true });
+    writeFileSync(join(root, 'Inbox', 'todo.md'), '# Todo', 'utf-8');
+    symlinkSync(outside, join(root, 'Inbox', '.processed'), 'dir');
+
+    expect(handleInboxDelete({ names: ['todo.md'] }, { mindRoot: root })).toMatchObject({
+      status: 403,
+      body: { error: 'Access denied' },
+    });
+    expect(existsSync(join(root, 'Inbox', 'todo.md'))).toBe(true);
+    expect(existsSync(join(outside, 'todo.md'))).toBe(false);
+  });
+
   it('handles setup path checks and directory listing without Web dependencies', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-setup-path-'));
     mkdirSync(join(root, 'Documents'), { recursive: true });
@@ -2128,6 +2376,20 @@ describe('MindOS product server contract', () => {
         unsafe: true,
         reason: expect.stringContaining('system directory'),
       },
+    });
+    expect(handleSetupCheckPath({ path: 'relative-notes' })).toMatchObject({
+      status: 200,
+      body: {
+        exists: false,
+        empty: true,
+        count: 0,
+        unsafe: true,
+        reason: expect.stringContaining('absolute path'),
+      },
+    });
+    expect(handleSetupListDirectories({ path: '.' })).toMatchObject({
+      status: 200,
+      body: { dirs: [] },
     });
     expect(handleSetupCheckPath({ path: '' })).toMatchObject({
       status: 400,
@@ -2860,7 +3122,7 @@ describe('MindOS product server contract', () => {
       status: 200,
       body: { path: '.mindos/workflows/New Flow.flow.yaml' },
     });
-    expect(readFileSync(join(root, '.mindos', 'workflows', 'New Flow.flow.yaml'), 'utf-8')).toContain('title: New Flow');
+    expect(readFileSync(join(root, '.mindos', 'workflows', 'New Flow.flow.yaml'), 'utf-8')).toContain("title: 'New Flow'");
     expect(handleWorkflowsPost({}, { mindRoot: root })).toMatchObject({
       status: 400,
       body: { error: 'name is required' },
@@ -2868,6 +3130,28 @@ describe('MindOS product server contract', () => {
     expect(handleWorkflowsPost({ name: 'New Flow' }, { mindRoot: root })).toMatchObject({
       status: 409,
       body: { error: 'Workflow already exists' },
+    });
+  });
+
+  it('escapes workflow titles and sanitizes workflow filenames', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-workflows-title-'));
+    mkdirSync(join(root, '.mindos', 'workflows'), { recursive: true });
+
+    const created = handleWorkflowsPost({
+      name: "Bad\nsteps:\n  - id: injected 'quote'",
+    }, { mindRoot: root });
+
+    expect(created).toMatchObject({
+      status: 200,
+      body: { path: ".mindos/workflows/Bad steps- - id- injected 'quote'.flow.yaml" },
+    });
+    const content = readFileSync(join(root, '.mindos', 'workflows', "Bad steps- - id- injected 'quote'.flow.yaml"), 'utf-8');
+    expect(content).toContain("title: 'Bad steps: - id: injected ''quote'''");
+    expect(content.match(/^\s*-\s+/gm)).toHaveLength(1);
+
+    expect(handleWorkflowsPost({ name: '////' }, { mindRoot: root })).toMatchObject({
+      status: 400,
+      body: { error: 'name must contain at least one valid filename character' },
     });
   });
 
@@ -3065,11 +3349,12 @@ describe('MindOS product server contract', () => {
   });
 
   it('handles settings write without accepting incoming auth token replacement', () => {
-    let settings = {
+    let settings: any = {
       ai: { activeProvider: 'openai', providers: { openai: {} } },
       authToken: 'keep-me',
       allowNetworkAccess: false,
       mindRoot: '/old',
+      skillPaths: { enableAgentsDir: true, custom: ['/old-skills'] },
       baseUrlCompat: { openai: { streaming: false } },
     };
     let webSearch = { provider: 'exa', exaApiKey: 'old-key' };
@@ -3082,6 +3367,7 @@ describe('MindOS product server contract', () => {
       mindRoot: '/new',
       webSearch: { provider: 'perplexity', exaApiKey: '••••••' },
       connectionMode: { cli: false, mcp: true },
+      skillPaths: { enableAgentsDir: false, custom: ['/custom-skills', 42, '  '] } as never,
     }, {
       readSettings: () => settings,
       writeSettings: (next) => {
@@ -3108,9 +3394,25 @@ describe('MindOS product server contract', () => {
     expect(settings.allowNetworkAccess).toBe(true);
     expect(settings.mindRoot).toBe('/new');
     expect(settings.connectionMode).toEqual({ cli: false, mcp: true });
+    expect(settings.skillPaths).toEqual({ enableAgentsDir: false, custom: ['/custom-skills'] });
     expect(settings.baseUrlCompat).toEqual({});
     expect(webSearch).toEqual({ provider: 'perplexity', exaApiKey: 'old-key' });
     expect(invalidated).toBe(true);
+  });
+
+  it('ignores malformed runtime custom skill paths', () => {
+    const roots = getSkillRootsFromRuntime({
+      mindRoot: '/mind',
+      runtimeRoot: '/runtime',
+      homeDir: '/home/ada',
+      settings: {
+        skillPaths: {
+          custom: ['/extra-skills', 42 as never, '  '],
+        },
+      },
+    });
+
+    expect(roots.filter((root) => root.origin === 'custom').map((root) => root.path)).toEqual(['/extra-skills']);
   });
 
   it('tests AI provider keys with product-owned validation and error classification', async () => {
@@ -3268,6 +3570,30 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('surfaces optional local embedding runtime install errors clearly', async () => {
+    const services = {
+      isLocalModelDownloaded: async () => false,
+      downloadLocalModel: async () => {
+        throw new Error('npm is required to install the optional local embedding runtime.');
+      },
+    };
+
+    await expect(handleEmbeddingPost({ action: 'download', model: 'custom-model' }, services)).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, message: 'Downloading custom-model...' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(handleEmbeddingPost({ action: 'status', model: 'custom-model' }, services)).resolves.toMatchObject({
+      status: 200,
+      body: {
+        downloading: false,
+        downloaded: false,
+        error: 'npm is required to install the optional local embedding runtime. Install Node.js/npm, or use API mode.',
+      },
+    });
+  });
+
   it('handles A2A JSON-RPC and discovery facades through injected protocol services', async () => {
     const task = { id: 'task-1', status: { state: 'TASK_STATE_COMPLETED', timestamp: '2026-05-09T00:00:00.000Z' } };
     const services = {
@@ -3316,6 +3642,14 @@ describe('MindOS product server contract', () => {
     await expect(handleA2aDiscoverPost({ url: '' }, services)).resolves.toMatchObject({
       status: 400,
       body: { error: 'URL is required' },
+    });
+    await expect(handleA2aDiscoverPost({ url: 'file:///etc/passwd' }, services)).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'Invalid URL', agent: null },
+    });
+    await expect(handleA2aDiscoverPost({ url: 'https://user:pass@example.com' }, services)).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'Invalid URL', agent: null },
     });
     await expect(handleA2aDiscoverPost({ url: 'http://agent' }, services)).resolves.toMatchObject({
       status: 200,
@@ -3366,11 +3700,19 @@ describe('MindOS product server contract', () => {
     });
     expect(handleAcpConfigPost({
       agentId: 'claude',
-      config: { command: ' claude ', args: ['--acp', 1], env: { GOOD: 'yes', BAD: 1 }, enabled: false },
+      config: { command: ' claude ', args: ['--acp', 1], env: { GOOD: 'yes', BAD: 1, ['__proto__']: 'polluted' }, enabled: false },
     }, services)).toMatchObject({
       status: 200,
       body: { ok: true, agents: { claude: { command: 'claude', args: ['--acp'], env: { GOOD: 'yes' }, enabled: false } } },
     });
+    expect(handleAcpConfigPost({
+      agentId: '__proto__',
+      config: { command: 'bad' },
+    }, services)).toMatchObject({
+      status: 400,
+      body: { error: 'agentId is required' },
+    });
+    expect(({} as Record<string, unknown>).command).toBeUndefined();
     expect(handleAcpConfigDelete({ agentId: 'claude' }, services)).toMatchObject({
       status: 200,
       body: { ok: true },
@@ -3392,6 +3734,10 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: 'Invalid package name' },
     });
+    await expect(handleAcpInstallPost({ agentId: '--help', packageName: 'agent-plugin' }, services)).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'agentId and packageName are required' },
+    });
     await expect(handleAcpInstallPost({ agentId: 'claude', packageName: 'agent..plugin' }, services)).resolves.toMatchObject({
       status: 200,
       body: { status: 'installing', agentId: 'claude', packageName: 'agent..plugin' },
@@ -3409,6 +3755,10 @@ describe('MindOS product server contract', () => {
       status: 404,
       body: { error: 'Agent not found', agent: null },
     });
+    await expect(handleAcpRegistryGet(new URLSearchParams('agent=__proto__'), services)).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'Invalid agent id', agent: null },
+    });
     await expect(handleAcpRegistryGet(new URLSearchParams(), services)).resolves.toMatchObject({
       status: 200,
       body: { registry: { agents: [{ id: 'gemini' }] } },
@@ -3421,6 +3771,10 @@ describe('MindOS product server contract', () => {
     await expect(handleAcpSessionPost({ agentId: 'gemini', cwd: '/tmp' }, services)).resolves.toMatchObject({
       status: 200,
       body: { session: { id: 'ses-1', cwd: '/tmp' } },
+    });
+    await expect(handleAcpSessionPost({ agentId: '__proto__' }, services)).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'agentId is required' },
     });
     await expect(handleAcpSessionPost({ action: 'prompt', sessionId: 'ses-1', text: 'hi' }, services)).resolves.toMatchObject({
       status: 200,

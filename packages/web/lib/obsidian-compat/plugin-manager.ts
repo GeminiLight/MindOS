@@ -9,6 +9,7 @@ import { analyzePluginCompatibility, getCompatibilityLevel, type CompatibilityLe
 import { importObsidianPlugin, scanObsidianVaultPlugins, type ScanResult } from './obsidian-import';
 import { PluginLoader } from './loader';
 import type { PluginManifest } from './types';
+import { resolveExistingSafe } from '@/lib/core/security';
 
 interface PluginManagerState {
   enabled: Record<string, boolean>;
@@ -34,12 +35,10 @@ const EMPTY_STATE: PluginManagerState = { enabled: {} };
 
 export class PluginManager {
   private readonly loader: PluginLoader;
-  private readonly stateFilePath: string;
   private plugins = new Map<string, ManagedPlugin>();
 
   constructor(private mindRoot: string) {
     this.loader = new PluginLoader(mindRoot);
-    this.stateFilePath = path.join(mindRoot, '.plugins', '.plugin-manager.json');
   }
 
   async discover(): Promise<ManagedPlugin[]> {
@@ -118,9 +117,13 @@ export class PluginManager {
 
   private toManagedPlugin(manifest: PluginManifest, state: PluginManagerState): ManagedPlugin {
     const loaded = this.loader.getLoadedPlugins().some((plugin) => plugin.manifest.id === manifest.id);
-    const pluginDir = path.join(this.mindRoot, '.plugins', manifest.id);
-    const mainPath = path.join(pluginDir, 'main.js');
-    const code = fs.existsSync(mainPath) ? fs.readFileSync(mainPath, 'utf-8') : '';
+    let code = '';
+    try {
+      const mainPath = resolveExistingSafe(this.mindRoot, `.plugins/${manifest.id}/main.js`);
+      code = fs.existsSync(mainPath) ? fs.readFileSync(mainPath, 'utf-8') : '';
+    } catch {
+      code = '';
+    }
     const compatibility = analyzePluginCompatibility(code);
 
     return {
@@ -143,12 +146,19 @@ export class PluginManager {
   }
 
   private readState(): PluginManagerState {
-    if (!fs.existsSync(this.stateFilePath)) {
+    let stateFilePath: string;
+    try {
+      stateFilePath = resolveExistingSafe(this.mindRoot, '.plugins/.plugin-manager.json');
+    } catch {
+      return { ...EMPTY_STATE, enabled: {} };
+    }
+
+    if (!fs.existsSync(stateFilePath)) {
       return { ...EMPTY_STATE, enabled: {} };
     }
 
     try {
-      const raw = fs.readFileSync(this.stateFilePath, 'utf-8');
+      const raw = fs.readFileSync(stateFilePath, 'utf-8');
       const parsed = JSON.parse(raw) as Partial<PluginManagerState>;
       return {
         enabled: parsed.enabled ?? {},
@@ -167,8 +177,9 @@ export class PluginManager {
     }
 
     try {
-      fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true });
-      fs.writeFileSync(this.stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+      const stateFilePath = resolveExistingSafe(this.mindRoot, '.plugins/.plugin-manager.json');
+      fs.mkdirSync(path.dirname(stateFilePath), { recursive: true });
+      fs.writeFileSync(stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
     } catch (err) {
       console.error(`[obsidian-compat] Failed to write plugin state: ${err instanceof Error ? err.message : String(err)}`);
     }

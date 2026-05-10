@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { green, yellow } from './colors.js';
 import { loadPids, clearPids } from './pid.js';
-import { CONFIG_PATH } from './constants.js';
+import { CLI_PATH, CONFIG_PATH, WEB_APP_DIR } from './constants.js';
+import { MCP_BUNDLE } from './mcp-build.js';
 import { stripBom } from './jsonc.js';
 
 const isWin = process.platform === 'win32';
@@ -126,6 +127,29 @@ function killTree(pid) {
   return true;
 }
 
+function escapeRegexLiteral(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function killMindosFallbackProcesses() {
+  if (isWin) return 0;
+
+  const patterns = [
+    `${escapeRegexLiteral(CLI_PATH)} start`,
+    escapeRegexLiteral(MCP_BUNDLE),
+    `${escapeRegexLiteral(WEB_APP_DIR)}.*node_modules/.bin/next`,
+  ];
+
+  let killed = 0;
+  for (const pattern of patterns) {
+    try {
+      execFileSync('pkill', ['-f', pattern], { stdio: ['ignore', 'inherit', 'inherit'] });
+      killed++;
+    } catch { /* no matching MindOS process */ }
+  }
+  return killed;
+}
+
 /**
  * Stop MindOS processes.
  * @param {Object} [opts] - Optional overrides.
@@ -179,14 +203,9 @@ export function stopMindos(opts = {}) {
   }
 
   if (!pids.length && portKilled === 0) {
-    // Last resort: pattern match (for envs without lsof/netstat)
+    // Last resort: pattern match MindOS-owned command lines only.
     if (process.env.NODE_ENV !== 'test') {
-      if (isWin) {
-        try { execFileSync('taskkill', ['/FI', 'IMAGENAME eq node.exe', '/F'], { stdio: 'ignore' }); } catch {}
-      } else {
-        try { execFileSync('pkill', ['-f', 'next start|next dev'], { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
-        try { execFileSync('pkill', ['-f', '(mcp|mcp-server)/(src/index|dist/index)'], { stdio: ['ignore', 'inherit', 'inherit'] }); } catch {}
-      }
+      killMindosFallbackProcesses();
     }
   }
 

@@ -122,6 +122,26 @@ describe('obsidian import scanner', () => {
     expect(JSON.parse(fs.readFileSync(path.join(imported.targetDir, 'data.json'), 'utf-8'))).toEqual({ count: 2 });
   });
 
+  it('rejects importing into a symlinked MindOS .plugins directory outside mindRoot', async () => {
+    writeVaultPlugin(
+      'import-me',
+      `const { Plugin } = require('obsidian'); module.exports = class ImportMe extends Plugin {};`,
+    );
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-target-outside-'));
+    fs.symlinkSync(outsideRoot, path.join(mindRoot, '.plugins'), 'dir');
+
+    try {
+      await expect(importObsidianPlugin({
+        vaultRoot,
+        pluginId: 'import-me',
+        targetMindRoot: mindRoot,
+      })).rejects.toThrow(/escapes/i);
+      expect(fs.existsSync(path.join(outsideRoot, 'import-me', 'manifest.json'))).toBe(false);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
   it('rejects importing plugins that escape the source plugins directory', async () => {
     await expect(
       importObsidianPlugin({

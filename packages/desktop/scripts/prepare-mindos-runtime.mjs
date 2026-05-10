@@ -45,7 +45,11 @@ if (!existsSync(appNext)) fail(`Missing packages/web/.next — from repo root ru
 if (!existsSync(mcpSourceDir)) fail(`Missing packages/mindos/src/protocols/mcp-server under ${source}`);
 
 try {
-  materializeStandaloneAssets(appDir);
+  materializeStandaloneAssets(appDir, {
+    targetPlatform: targetNodePlatform,
+    targetArch: targetNodeArch,
+    bundleLocalEmbeddingRuntime: process.env.MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME === '1',
+  });
 } catch (e) {
   fail(e instanceof Error ? e.message : String(e));
 }

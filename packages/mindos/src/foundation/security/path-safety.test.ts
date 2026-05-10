@@ -119,6 +119,15 @@ describe('@mindos/security', () => {
       const resolved = resolveSafe(testRoot, '..notes/file.txt');
       expect(resolved).toBe(path.join(testRoot, '..notes/file.txt'));
     });
+
+    it('should reject Windows-invalid path segments on every platform', () => {
+      expect(() => resolveSafe(testRoot, 'CON.md')).toThrow();
+      expect(() => resolveSafe(testRoot, 'Projects/prn.txt')).toThrow();
+      expect(() => resolveSafe(testRoot, 'notes/bad:name.md')).toThrow();
+      expect(() => resolveSafe(testRoot, 'notes/trailing-dot.md.')).toThrow();
+      expect(() => resolveSafe(testRoot, 'notes/trailing-space.md ')).toThrow();
+      expect(() => resolveSafe(testRoot, 'notes/line\nbreak.md')).toThrow();
+    });
   });
 
   describe('resolveSafeResult', () => {

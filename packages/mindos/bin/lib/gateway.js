@@ -106,6 +106,107 @@ export function parseLogHint(line) {
   return null;
 }
 
+function assertUnitValue(value) {
+  if (/[\0\r\n]/.test(value)) {
+    throw new Error('Invalid daemon unit value: contains control characters');
+  }
+}
+
+function escapeSystemdValue(value) {
+  const raw = String(value);
+  assertUnitValue(raw);
+  return raw
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/%/g, '%%');
+}
+
+function quoteSystemdValue(value) {
+  return `"${escapeSystemdValue(value)}"`;
+}
+
+function escapePlistString(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+export function buildSystemdUnit({
+  nodeBin = NODE_BIN,
+  cliPath = getCurrentCliPath(),
+  home = homedir(),
+  path = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+  mindosEnvPath = resolve(MINDOS_DIR, 'env'),
+  logPath = LOG_PATH,
+} = {}) {
+  return [
+    '[Unit]',
+    'Description=MindOS app + MCP server',
+    'After=network.target',
+    '',
+    '[Service]',
+    'Type=simple',
+    `ExecStart=${quoteSystemdValue(nodeBin)} ${quoteSystemdValue(cliPath)} start`,
+    'Restart=on-failure',
+    'RestartSec=3',
+    `Environment=${quoteSystemdValue(`HOME=${home}`)}`,
+    `Environment=${quoteSystemdValue(`PATH=${path}`)}`,
+    `EnvironmentFile=-${quoteSystemdValue(mindosEnvPath)}`,
+    `StandardOutput=append:${quoteSystemdValue(logPath)}`,
+    `StandardError=append:${quoteSystemdValue(logPath)}`,
+    '',
+    '[Install]',
+    'WantedBy=default.target',
+  ].join('\n');
+}
+
+export function buildLaunchdPlist({
+  label = LAUNCHD_LABEL,
+  nodeBin = NODE_BIN,
+  cliPath = getCurrentCliPath(),
+  home = homedir(),
+  path = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+  logPath = LOG_PATH,
+} = {}) {
+  const xmlLabel = escapePlistString(label);
+  const xmlNodeBin = escapePlistString(nodeBin);
+  const xmlCliPath = escapePlistString(cliPath);
+  const xmlHome = escapePlistString(home);
+  const xmlPath = escapePlistString(path);
+  const xmlLogPath = escapePlistString(logPath);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${xmlLabel}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xmlNodeBin}</string>
+    <string>${xmlCliPath}</string>
+    <string>start</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>StandardOutPath</key><string>${xmlLogPath}</string>
+  <key>StandardErrorPath</key><string>${xmlLogPath}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>${xmlHome}</string>
+    <key>PATH</key><string>${xmlPath}</string>
+    <key>LAUNCHED_BY_LAUNCHD</key><string>1</string>
+  </dict>
+</dict>
+</plist>
+`;
+}
+
 export async function waitForHttp(port, { retries = 60, intervalMs = 2000, label = 'service', logFile = null, expectedVersion = null } = {}) {
   const start = Date.now();
   const elapsed = () => {
@@ -233,27 +334,7 @@ const systemd = {
     if (!existsSync(SYSTEMD_DIR)) mkdirSync(SYSTEMD_DIR, { recursive: true });
     ensureMindosDir();
     rotateLogs();
-    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
-    const cliPath = getCurrentCliPath();
-    const unit = [
-      '[Unit]',
-      'Description=MindOS app + MCP server',
-      'After=network.target',
-      '',
-      '[Service]',
-      'Type=simple',
-      `ExecStart=${NODE_BIN} ${cliPath} start`,
-      'Restart=on-failure',
-      'RestartSec=3',
-      `Environment=HOME=${homedir()}`,
-      `Environment=PATH=${currentPath}`,
-      `EnvironmentFile=-${resolve(MINDOS_DIR, 'env')}`,
-      `StandardOutput=append:${LOG_PATH}`,
-      `StandardError=append:${LOG_PATH}`,
-      '',
-      '[Install]',
-      'WantedBy=default.target',
-    ].join('\n');
+    const unit = buildSystemdUnit();
     writeFileSync(SYSTEMD_UNIT, unit, 'utf-8');
     console.log(green(`\u2714 Wrote ${SYSTEMD_UNIT}`));
     execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: ['ignore', 'inherit', 'inherit'] });
@@ -318,36 +399,7 @@ const launchd = {
     if (!existsSync(LAUNCHD_DIR)) mkdirSync(LAUNCHD_DIR, { recursive: true });
     ensureMindosDir();
     rotateLogs();
-    const currentPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
-    const cliPath = getCurrentCliPath();
-    const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>${LAUNCHD_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${NODE_BIN}</string>
-    <string>${cliPath}</string>
-    <string>start</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key>
-  <dict>
-    <key>SuccessfulExit</key><false/>
-  </dict>
-  <key>ThrottleInterval</key><integer>5</integer>
-  <key>StandardOutPath</key><string>${LOG_PATH}</string>
-  <key>StandardErrorPath</key><string>${LOG_PATH}</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>HOME</key><string>${homedir()}</string>
-    <key>PATH</key><string>${currentPath}</string>
-    <key>LAUNCHED_BY_LAUNCHD</key><string>1</string>
-  </dict>
-</dict>
-</plist>
-`;
+    const plist = buildLaunchdPlist();
     writeFileSync(LAUNCHD_PLIST, plist, 'utf-8');
     console.log(green(`\u2714 Wrote ${LAUNCHD_PLIST}`));
     try { execFileSync('launchctl', ['bootout', `gui/${launchctlUid()}/${LAUNCHD_LABEL}`], { stdio: 'pipe' }); } catch {}

@@ -47,6 +47,8 @@ const A2A_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, A2A-Version',
 };
 
+const MAX_DISCOVERY_URL_LENGTH = 2048;
+
 export async function handleA2aPost(
   input: A2aPostInput,
   services: A2aServices = {},
@@ -130,9 +132,13 @@ export async function handleA2aDiscoverPost(
   if (!payload.url || typeof payload.url !== 'string') {
     return json({ error: 'URL is required' }, { status: 400 });
   }
+  const url = payload.url.trim();
+  if (!isValidDiscoveryUrl(url)) {
+    return json({ error: 'Invalid URL', agent: null }, { status: 400 });
+  }
 
   const discoverAgent = services.discoverAgent ?? defaultDiscoverAgent;
-  const agent = await discoverAgent(payload.url);
+  const agent = await discoverAgent(url);
   if (!agent) {
     return json({ error: 'No A2A agent found', agent: null });
   }
@@ -178,4 +184,16 @@ function defaultHandleCancelTask(): { task: null; reason: 'not_found' } {
 
 async function defaultDiscoverAgent(): Promise<null> {
   return null;
+}
+
+function isValidDiscoveryUrl(input: string): boolean {
+  if (!input || input.length > MAX_DISCOVERY_URL_LENGTH) return false;
+  try {
+    const url = new URL(input);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    if (url.username || url.password) return false;
+    return Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 }

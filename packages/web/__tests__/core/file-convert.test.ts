@@ -36,6 +36,13 @@ describe('sanitizeFileName', () => {
   it('handles backslash paths', () => {
     expect(sanitizeFileName('C:\\Users\\docs\\file.md')).toBe('file.md');
   });
+
+  it('normalizes Windows-reserved and invalid filename segments', () => {
+    expect(sanitizeFileName('CON.md')).toBe('_CON.md');
+    expect(sanitizeFileName('bad:name?.md')).toBe('bad-name-.md');
+    expect(sanitizeFileName('note.md. ')).toBe('note.md');
+    expect(sanitizeFileName('line\nbreak.md')).toBe('line-break.md');
+  });
 });
 
 describe('titleFromFileName', () => {

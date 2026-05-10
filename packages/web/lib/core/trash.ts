@@ -20,7 +20,7 @@ const EXPIRY_DAYS = 30;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function siblingDir(mindRoot: string, name: string): string {
-  return path.join(path.dirname(mindRoot), name);
+  return resolveSafeSiblingDir(mindRoot, name);
 }
 
 function trashRoot(mindRoot: string): string {
@@ -34,6 +34,30 @@ function metaRoot(mindRoot: string): string {
 function ensureDirs(mindRoot: string): void {
   fs.mkdirSync(trashRoot(mindRoot), { recursive: true });
   fs.mkdirSync(metaRoot(mindRoot), { recursive: true });
+}
+
+function resolveSafeSiblingDir(mindRoot: string, name: string): string {
+  assertTrashId(name);
+  const parent = path.resolve(path.dirname(mindRoot));
+  const target = path.resolve(parent, name);
+  const relativeToParent = path.relative(parent, target);
+  if (relativeToParent === '..' || relativeToParent.startsWith(`..${path.sep}`) || path.isAbsolute(relativeToParent)) {
+    throw new Error('Access denied: trash directory outside root parent');
+  }
+
+  if (fs.existsSync(target)) {
+    if (fs.lstatSync(target).isSymbolicLink()) {
+      throw new Error('Access denied: trash directory must not be a symlink');
+    }
+    const parentReal = fs.realpathSync(parent);
+    const targetReal = fs.realpathSync(target);
+    const realRelative = path.relative(parentReal, targetReal);
+    if (realRelative === '..' || realRelative.startsWith(`..${path.sep}`) || path.isAbsolute(realRelative)) {
+      throw new Error('Access denied: trash directory outside root parent');
+    }
+  }
+
+  return target;
 }
 
 function assertTrashId(id: string): void {
@@ -166,13 +190,15 @@ export function restoreAsCopy(mindRoot: string, trashId: string): { restoredPath
   if (!fs.existsSync(trashPath)) throw new Error('Trash file missing from disk');
 
   // Generate a unique copy name
-  const dir = path.dirname(meta.originalPath);
+  const originalPath = meta.originalPath.replace(/\\/g, '/');
+  const dir = path.posix.dirname(originalPath);
   const ext = path.extname(meta.fileName);
   const base = path.basename(meta.fileName, ext);
-  let copyPath = path.join(dir, `${base} (copy)${ext}`);
+  const joinRel = (fileName: string) => dir && dir !== '.' ? path.posix.join(dir, fileName) : fileName;
+  let copyPath = joinRel(`${base} (copy)${ext}`);
   let counter = 2;
   while (fs.existsSync(resolveExistingSafe(mindRoot, copyPath))) {
-    copyPath = path.join(dir, `${base} (copy ${counter})${ext}`);
+    copyPath = joinRel(`${base} (copy ${counter})${ext}`);
     counter++;
   }
 

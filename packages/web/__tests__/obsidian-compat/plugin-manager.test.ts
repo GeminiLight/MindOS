@@ -54,6 +54,32 @@ describe('PluginManager', () => {
     expect(plugins[0]).toMatchObject({ id: 'persist-plugin', enabled: true });
   });
 
+  it('does not discover or persist state through a symlinked .plugins directory outside mindRoot', async () => {
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-manager-outside-'));
+    fs.rmSync(path.join(mindRoot, '.plugins'), { recursive: true, force: true });
+    fs.mkdirSync(path.join(outsideRoot, 'external-plugin'), { recursive: true });
+    fs.writeFileSync(
+      path.join(outsideRoot, 'external-plugin', 'manifest.json'),
+      JSON.stringify({ id: 'external-plugin', name: 'external-plugin', version: '1.0.0' }, null, 2),
+      'utf-8',
+    );
+    fs.writeFileSync(
+      path.join(outsideRoot, 'external-plugin', 'main.js'),
+      `const { Plugin } = require('obsidian'); module.exports = class ExternalPlugin extends Plugin {};`,
+      'utf-8',
+    );
+    fs.symlinkSync(outsideRoot, path.join(mindRoot, '.plugins'), 'dir');
+
+    try {
+      const manager = new PluginManager(mindRoot);
+      await expect(manager.discover()).resolves.toEqual([]);
+      await expect(manager.importFromObsidianVault(mindRoot, 'external-plugin')).rejects.toThrow(/escapes|not found/i);
+      expect(fs.existsSync(path.join(outsideRoot, '.plugin-manager.json'))).toBe(false);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
   it('loads only enabled plugins', async () => {
     writePlugin('enabled-plugin', `
       const { Plugin } = require('obsidian');

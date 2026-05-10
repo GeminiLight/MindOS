@@ -113,6 +113,20 @@
 
 **验证**：`pnpm exec vitest run packages/desktop/src/prepare-mindos-bundle.test.ts packages/desktop/src/runtime-health-contract.test.ts`，再跑 `pnpm --filter @mindos/desktop dist:mac-zip`。
 
+### 本地 embedding runtime 不应默认打进 Desktop 包（2026-05-10）
+
+**症状**：Desktop 安装体积异常膨胀，或 `mindos-runtime` 中出现 `@huggingface/transformers`、`onnxruntime-node`、`onnxruntime-web`。
+
+**根因**：本地 embedding 的 HuggingFace/ONNX runtime 是可选能力，不是启动 MindOS、API embedding、搜索 UI、MCP runtime 的必需依赖。把它放进默认 Desktop bundle 会让所有用户承担额外下载和安装体积。
+
+**规则**：
+- 默认 Desktop/npm runtime 不内置 HuggingFace/ONNX 本地 embedding runtime
+- 用户选择本地 embedding 并点击下载时，再安装到 `~/.mindos/local-embedding-runtime`
+- 只有显式设置 `MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME=1` 才允许把 optional runtime 打进包
+- `prepare-mindos-bundle` 必须在复制 Next runtime deps 后再递归补齐 package dependency closure；否则 postcss/react-dom/styled-jsx 这类后引入包会缺 transitive deps
+
+**验证**：`pnpm --filter @mindos/desktop test -- prepare-mindos-bundle`、`pnpm --filter @mindos/web exec vitest run __tests__/core/embedding-provider.test.ts`、`pnpm run test:contracts`，再跑 `node scripts/verify-desktop-runtime.mjs --runtime-root packages/desktop/resources/mindos-runtime`。
+
 ### 测试不要假设本机默认端口空闲
 
 **症状**：单测在某些机器上超时或走进真实服务复用路径，例如默认 Web 端口 `3456` 或 MCP 端口 `8781` 已经被本地 dev server 占用。
@@ -3444,6 +3458,356 @@ const visibleNodes = useMemo(() => {
 **修复**：`mindos-user` skill root 若自身是 symlink 则不参与列表；create/update/delete 前通过 `resolveExistingSafe(mindRoot, '.skills')` 校验。mindRoot 首次不存在时保留原有创建行为。
 
 **防回归**：`packages/mindos/src/server.test.ts` 覆盖 symlinked `.skills` 不列出外部 skill，且 create 返回 403、不写外部目录。
+
+### Obsidian `.plugins` 导入和状态文件也不能跟随 symlink（2026-05-10）
+
+**症状**：Obsidian compatibility 的 plugin import / loader / manager 会扫描、复制、读取和写入 `mindRoot/.plugins`。若 `.plugins` 指向 root 外，导入插件、读取 manifest/main.js、写 `.plugin-manager.json` 都可能触碰外部目录。
+
+**根因**：兼容层绕过主文件 API，且 `.plugins` 是用户 vault 内目录，不能当成可信内部目录。
+
+**修复**：plugin loader、Obsidian import target、manager state/main.js 读取统一通过 `resolveExistingSafe()`；扫描时跳过 symlink plugin directory。
+
+**防回归**：`packages/web/__tests__/obsidian-compat/obsidian-import.test.ts` 覆盖 symlinked target `.plugins` 导入拒绝；`packages/web/__tests__/obsidian-compat/plugin-manager.test.ts` 覆盖 symlinked `.plugins` 不发现外部 plugin、不写外部 state。
+
+### CLI daemon / stop 逻辑不能假设路径简单，也不能广泛杀进程（2026-05-10）
+
+**症状**：`mindos start --daemon` 写 systemd / launchd 配置时，如果 Node、CLI、HOME 或 log 路径里有空格、`&`、`<`、`%` 等字符，daemon 配置可能解析失败或生成非法 plist。`mindos stop` 在 PID 和端口兜底都失败时，如果用全局 `node.exe` 或宽泛 `next start|next dev` 匹配，会误杀用户其它 Node / Next 项目。
+
+**根因**：daemon 配置文件不是 shell 字符串，systemd 和 plist 都有自己的转义规则；进程清理兜底也必须证明目标属于 MindOS，不能用“端口没查到就杀常见进程名”的策略。
+
+**修复**：systemd unit / launchd plist 生成统一走可测 builder，并按目标格式转义；stop 兜底只匹配 MindOS CLI、MCP bundle、Web app 路径，Windows 不再做全局 `node.exe` 清理。sync 配置写入同批修复首次运行时父目录不存在和 BOM config 读取问题。
+
+**防回归**：`tests/unit/cli-gateway.test.ts` 覆盖 systemd 路径和 plist XML 转义；`tests/unit/stop-restart.test.ts` 覆盖 stop 不再使用宽泛杀进程；`tests/unit/cli-sync.test.ts` 覆盖 sync 首次写配置和 BOM config 读取。
+
+### Desktop orphan cleanup 不能只按 `node` / `next` 进程名杀进程（2026-05-10）
+
+**症状**：Desktop 启动时会清理上次异常退出留下的 child PID，也会在端口被占用时尝试清理占用者。若 PID 文件过期且 PID 被系统复用，或端口刚好被用户其它 Node / Next 项目占用，只校验进程名包含 `node` / `next` 会误杀无关进程。
+
+**根因**：PID 和端口都只能说明“可能相关”，不能证明进程属于 MindOS。Desktop 的清理动作必须进一步检查命令行是否来自 `.mindos/runtime`、`mindos-runtime`、`@geminilight/mindos`、MindOS Web standalone 或 MCP bundle。
+
+**修复**：`ProcessManager.killIfNodeProcess` 改为读取命令行归属；Windows 用 PowerShell / wmic 取 `CommandLine`，Unix 用 `ps -o args=`，只有 `isMindosOwnedCommandLine()` 通过时才发送 SIGTERM。
+
+**防回归**：`packages/desktop/src/process-manager-subprocess-contract.test.ts` 覆盖无关 Node / Next 命令行不被视为 MindOS，Desktop runtime / MCP / npm CLI 路径才允许清理。
+
+### Desktop uninstall 脚本也不能无条件信任 PID 文件（2026-05-10）
+
+**症状**：Desktop 写出的 `~/.mindos/uninstall.sh` / `uninstall.bat` 会读取 `mindos.pid`、`desktop-children.pid`、`ssh-tunnel.pid` 并清理残留进程。如果这些 PID 文件过期，PID 可能已被系统复用，卸载脚本会误杀用户其它进程。
+
+**根因**：安装后残留清理脚本是独立文件，不会自动继承 `ProcessManager.killIfNodeProcess` 的运行时保护；脚本自身也必须校验命令行归属。
+
+**修复**：Windows uninstall 通过 PowerShell `Get-CimInstance Win32_Process` 读取 `CommandLine` 后再 `taskkill`；Unix uninstall 通过 `ps -p "$pid" -o args=` 和 `is_mindos_cmd()` 判断。只有 `.mindos/runtime`、`mindos-runtime`、`@geminilight/mindos`、Web standalone 或 MCP bundle 路径才允许清理。
+
+**防回归**：`packages/desktop/src/install-cli-shim.test.ts` 覆盖 Windows / Unix uninstall 脚本必须先检查命令行，且仍不触碰知识库。
+
+### 本地 CLI `file` / `space` 命令也必须做 realpath containment（2026-05-10）
+
+**症状**：`mindos file create/read`、`mindos space mkdir` 等本地 CLI 命令绕过 Web/Product Server handler，直接使用 `bin/lib/safe-path.js` 解析知识库路径。如果该 helper 只做 `..` / 绝对路径的词法检查，`mindRoot/Linked -> /outside` 这类 symlink parent 会让 CLI 写到 root 外；symlinked file 也会让 `file read` 读出外部内容。
+
+**根因**：CLI command 是另一套文件入口，不能假设 Web 层的 `resolveExistingSafe()` 已覆盖。凡是会触碰真实文件系统的本地入口，都需要校验 nearest existing path 的 realpath 仍在 root realpath 内。
+
+**修复**：`packages/mindos/bin/lib/safe-path.js` 在词法 containment 之后，对 nearest existing path 执行 `realpathSync` containment。新文件创建会校验已存在父目录，已有文件读取会校验目标本身。
+
+**防回归**：`tests/unit/cli-file-safe-path.test.ts` 覆盖 symlink parent 写入拒绝、symlink file 读取拒绝；`tests/unit/cli-space-safe-path.test.ts` 覆盖 symlink parent 目录创建拒绝。
+
+### CLI 启动迁移和同步备份也不能绕过 safe path helper（2026-05-10）
+
+**症状**：`mindos start` 会把旧版 `user-rules.md` / `user-skill-rules.md` 迁移到 `.mindos/user-preferences.md`；`mindos init-skills` 会初始化同一文件；sync 初始化会维护 `.gitignore`，冲突时会写 `<file>.sync-conflict`。如果这些路径直接 `resolve(mindRoot, ...)`，`.mindos` 或 `.gitignore` symlink 指向 root 外时可能把文件写到外部目录，损坏用户不期望被 MindOS 管理的位置。
+
+**根因**：这些不是常规 `file` / `space` 命令，但同样会写知识库目录。只要是基于 `mindRoot` 组合出的文件写入，都必须走同一套 realpath containment，而不是把“系统文件路径”当成可信内部路径。
+
+**修复**：`start` 的偏好迁移、`init-skills` 的偏好初始化、sync `.gitignore` 和 conflict backup path 都改用 `resolveInsideRoot()`。发现 unsafe path 时跳过 best-effort migration 或显式拒绝初始化；冲突备份路径异常时只标记 `noBackup`，不写 root 外。
+
+**防回归**：`tests/unit/cli-start-host.test.ts` 覆盖 `.mindos` symlink 时启动迁移不会写外部目录；`tests/unit/cli-init-skills-safe-path.test.ts` 覆盖 init-skills 拒绝 symlinked `.mindos`；`tests/unit/cli-sync.test.ts` 覆盖 conflict backup path 拒绝 `../` 越界，也覆盖 symlinked `.gitignore` 不会被写穿。
+
+### 卸载命令不能信任相对 mindRoot（2026-05-10）
+
+**症状**：`mindos uninstall` 会在三重确认后删除配置中的 knowledge base。若配置被错误写成 `.`、`relative/notes` 或 `~other/notes` 这类非明确绝对路径，卸载流程可能把当前工作目录或其它非预期位置当作知识库。
+
+**根因**：卸载是高风险破坏性操作，不能只因为路径存在就进入删除确认。配置层通常写绝对路径，但卸载层仍必须对损坏配置做最后防线。
+
+**修复**：新增 `normalizeUninstallMindRoot()`，只接受原生绝对路径或 `~/...` / `~\...` home-relative 路径；拒绝裸 `~`、`~user` 和所有相对路径。
+
+**防回归**：`tests/unit/cli-uninstall.test.ts` 覆盖相对路径和 `~other` 被规范化为 `null`，同时保留 `~/MyNotes` 的原有行为。
+
+### Setup 路径检查不能把相对路径当作知识库候选（2026-05-10）
+
+**症状**：Onboarding / Settings 的路径检查接口如果收到 `relative-notes` 或 `.`，会按服务进程 cwd 去检查或列目录。这会误导用户把相对路径当作可用知识库位置，也可能把开发/运行目录的子目录暴露给目录选择 UI。
+
+**根因**：`expandSetupPathHome()` 只负责展开 `~`，不会证明结果是绝对路径；`validateMindRootPath()` 原来只过滤已知危险目录，没有先校验路径形态。
+
+**修复**：`validateMindRootPath()` 现在要求路径是 POSIX absolute 或 Windows absolute；`handleSetupListDirectories()` 对非绝对路径直接返回空列表。Windows 风格的 `D:/...` 仍可被跨平台 validator 正确识别为 absolute，保留现有 Desktop install-dir 判断。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖相对路径 check/list 行为，并通过 Windows-style absolute path 既有用例保留跨平台 validator 行为。
+
+### Config dot-path 不能允许原型污染 key（2026-05-10）
+
+**症状**：`mindos config set <key> <value>` / `unset <key>` 支持 dot notation。如果允许 `__proto__.polluted`、`constructor.x` 或 `ai..provider` 这类 key，可能造成运行中对象原型被污染，或写出用户无法理解的异常配置结构。另一个相邻坑是把 `Infinity` / `1e309` 当 number 写入 JSON，`JSON.stringify` 会把非有限数字变成 `null`。
+
+**根因**：配置命令把用户输入的 key 直接 `split('.')` 后逐层创建对象，没有先校验 key segment。
+
+**修复**：新增 config key path 校验，拒绝空 segment 和 `__proto__` / `prototype` / `constructor`；数值 coercion 只接受 finite number，非有限数字保持为字符串。
+
+**防回归**：`tests/unit/cli-config-command.test.ts` 覆盖危险 key set 被拒绝、配置文件不变、unset 空 segment 被拒绝，以及 `Infinity` 不会被写成 JSON `null`。
+
+### MCP direct-tools 的 server key 也要防原型污染（2026-05-10）
+
+**症状**：Settings 里调整 MCP server 的 direct tool exposure 时，接口接收 `{ server, directTools }`。如果 `server` 是 `__proto__` / `constructor` 这类特殊 key，底层配置更新可能拿到对象原型而不是普通 server entry。
+
+**根因**：即使 UI 只会传真实 server name，API handler 仍是信任边界。所有被当作 object key 使用的用户输入都要做 unsafe key 过滤。
+
+**修复**：`handleMcpDirectToolsPost()` trim server name，并拒绝空字符串、`__proto__`、`prototype`、`constructor`；更新和响应都使用规范化后的 server name。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 unsafe server name 返回 400，且不会调用更新服务或污染对象原型。
+
+### Custom Agent key / MCP config path 也要防原型污染（2026-05-10）
+
+**症状**：自定义 Agent 的 `key`、`configKey`、`globalNestedKey` 最终会进入 Agent registry、MCP install JSON 容器或 dot-path 读写。如果允许 `__proto__` / `constructor` 这类 key，安装和检测链路可能读取或写入对象原型；如果允许 `~/../...`，路径展示和后续写入语义也会变得不可预测。
+
+**根因**：自定义 Agent 是用户可配置入口，不能沿用内置 Agent descriptor 的信任边界。MCP install/detect 读取 JSON 配置时也不能用普通 `obj[key]` 访问来自配置的 key。
+
+**修复**：Custom Agent 创建/更新统一校验 agent key、dot-path key、format/transport 和绝对路径；MCP install/detect 对 nested path 与 agent config key 使用 reserved-key guard，并只读取 own property。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 unsafe custom agent key、unsafe nested config path、unsafe MCP install key；`tests/unit/custom-agents.test.ts` 覆盖 web helper 对 parent segment 和 unsafe key 的拒绝。
+
+### MCP skill install 的 agent 参数不能直接透传（2026-05-10）
+
+**症状**：`/api/mcp/install-skill` 会把请求里的 agent name 传给 `npx skills add -a <agent>`。即使底层使用 `execFileSync()` 而不是 shell 字符串，`--help`、`__proto__` 或空白值这类 agent name 仍可能被下游 CLI 当成选项、特殊 key 或脏配置。
+
+**根因**：argv-safe 只解决 shell injection，不等于业务参数可信。凡是被转交给另一个 CLI 的用户输入，都要先按目标参数语义校验。
+
+**修复**：安装 MindOS skill 前先校验 agent name 只能是安全标识符，拒绝 prototype sentinel 和以 `-` 开头的值；registry 里解析出的 `skillAgentName` 也要二次校验。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖非法 agent name 不会调用 `runCommand()`。
+
+### Settings skillPaths.custom 要按脏配置处理（2026-05-10）
+
+**症状**：Settings API 如果把非数组或混有非字符串的 `skillPaths.custom` 写进 config，Product runtime 枚举 skill roots 时会对非字符串调用 `.trim()`，轻则加入异常 root，重则 runtime 崩溃。
+
+**根因**：settings 是持久化信任边界，不能假设 UI 一定只写合法 shape；runtime 读取配置时也要按可能被用户手改过的 JSON 处理。
+
+**修复**：Settings 写入时只保留字符串 custom skill path；runtime 枚举时再次确认 `custom` 是数组并跳过非字符串项。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 settings write 的 custom path 过滤，以及 runtime 对混合类型 custom paths 的容错。
+
+### ACP agentId / env key 是 settings 信任边界（2026-05-10）
+
+**症状**：ACP config API 接收 `{ agentId, config }` 后把 `agentId` 写进 `settings.acpAgents[agentId]`；session/install/registry 路径也会把 agentId 传给协议层。如果允许 `__proto__`、`--help` 或空白值，可能污染 settings 对象、误触下游参数语义，或让脏配置进入 ACP detection。
+
+**根因**：ACP registry 中的 agent id 是可信 descriptor，但 API 请求里的 agentId 不是。env override key 同样会被写入对象，不能直接复制用户传入的 key。
+
+**修复**：ACP config/install/registry/session 入口统一校验 agentId；读取已有 `acpAgents` 时也重新 sanitize；override env 只保留合法环境变量名并拒绝 prototype sentinel。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 unsafe ACP config agentId、install agentId、registry query 和 session create 都必须拒绝，且 env 里的 unsafe key 不会保留。
+
+### A2A discovery URL 不能只检查非空字符串（2026-05-10）
+
+**症状**：A2A discovery API 接收 `{ url }` 后直接交给 discovery service。如果允许 `file://...`、带用户名密码的 URL 或超长字符串，可能造成下游 fetch/日志/缓存行为不可预测，也会让用户以为本地文件或 credential URL 是支持的 discovery target。
+
+**根因**：远端 Agent discovery 是网络边界，必须先按 URL 语义校验；“是字符串”不足以表达可发现的 A2A endpoint。
+
+**修复**：`handleA2aDiscoverPost()` trim URL，只允许 `http:` / `https:`，拒绝 credentials、空 hostname 和过长 URL，再传给 discovery service。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 `file://` 和带 credentials 的 URL 都返回 400，合法 `http://agent` 仍可发现。
+
+### Workflow SSE error event 不要被 JSON parse fallback 吞掉（2026-05-10）
+
+**症状**：Workflow YAML 运行步骤时，如果 `/api/ask` 返回 `data:{"type":"error","message":"..."}`，步骤没有进入失败态，用户只看到空输出或假成功。
+
+**根因**：SSE 行解析把 `JSON.parse()` 和业务事件处理放在同一个 `try/catch` 中。处理 `error` event 时主动 `throw` 的异常被同一个 catch 捕获，然后当成“不是合法 JSON，尝试 legacy 格式”处理掉了。
+
+**修复**：先单独 parse SSE JSON；parse 失败才进入 legacy fallback。业务事件处理在 parse 成功后执行，`error` event 会真正 throw 给 `WorkflowRunner`。
+
+**防回归**：`packages/web/__tests__/renderers/workflow-yaml-execution.test.ts` 覆盖 streamed error event 必须 reject。
+
+### Summary renderer 不能把 MindOS SSE JSON 当普通文本（2026-05-10）
+
+**症状**：近期文件 Summary 生成调用 `/api/ask` 后，如果后端返回 MindOS SSE（如 `data:{"type":"text_delta","delta":"..."}`），摘要区域会显示原始 JSON 行；如果返回 `type:error`，错误也会被当成普通文本拼进 summary。
+
+**根因**：SummaryRenderer 只解析旧 Vercel `0:"..."` text stream，并把非 `0:` / `d:` / `e:` 的行当 plain text fallback。MindOS SSE 的 `data:` 行没有先按事件解析。
+
+**修复**：抽出 `appendSummaryStreamChunk()`，先解析 MindOS SSE 的 `text_delta` / `thinking_delta` / `error`，parse 失败才忽略；保留旧 `0:"..."` 和 plain text fallback。
+
+**防回归**：`packages/web/__tests__/renderers/generated-html-safety.test.ts` 覆盖 summary SSE 不渲染 raw JSON，且 error event 会 throw。
+
+### Space AI init 不能只 drain stream 就标记 done（2026-05-10）
+
+**症状**：新建 Space 后触发 AI 初始化 README/INSTRUCTION 时，如果 `/api/ask` stream 返回 `data:{"type":"error","message":"..."}`，前端仍会派发 `mindos:ai-init` 的 `state: done`，toast 显示成功但文件没有按预期生成。
+
+**根因**：`triggerSpaceAiInit()` 只读取 stream 到结束，没有解析 MindOS SSE 事件；HTTP 200 + stream 结束被误认为业务成功。
+
+**修复**：新增 `consumeSpaceAiInitStream()`，drain stream 时解析 `type:error` 并抛错；只有没有 stream error 才派发 `done` 和 `mindos:files-changed`。
+
+**防回归**：`packages/web/__tests__/lib/space-ai-init.test.ts` 覆盖 error event 必须 reject、正常 done/malformed non-error line 可继续 drain。
+
+### 前端 SSE 消费必须处理跨 chunk 行边界（2026-05-10）
+
+**症状**：Workflow YAML 或 Summary 生成偶发丢字、空输出，或把半截 SSE JSON 当普通文本。这通常只在网络把 `data:{"type":"text_delta"...}` 拆成两个 chunk 时出现，本地快路径不容易复现。
+
+**根因**：部分前端消费者直接对每个 `reader.read()` chunk 做 `raw.split('\n')`，没有保存最后一个未完成行。SSE 的一行不是 chunk 边界，必须用 buffer 拼到完整换行后再 parse。
+
+**修复**：Workflow YAML 和 Summary renderer 的 stream loop 都加入 line buffer；读完后也处理剩余 buffer。
+
+**防回归**：`packages/web/__tests__/renderers/workflow-yaml-execution.test.ts` 覆盖 `text_delta` SSE 行被拆成两个 chunk 时仍能输出完整文本；summary renderer 保留同一 buffer 处理模式并由 summary SSE 解析测试覆盖事件格式。
+
+### 前端 SSE 消费也要处理无尾换行的最后一行（2026-05-10）
+
+**症状**：Ask 消息或 AI organize 偶发丢失最后一段文本，尤其是代理/浏览器把最后一个 `data:...` chunk 直接结束、没有附带尾随 `\n` 时。
+
+**根因**：部分消费者已经有跨 chunk `buffer`，但遇到 `reader.read()` 的 `done=true` 就直接 break，没有再 parse buffer 里剩下的最后一行。
+
+**修复**：`consumeUIMessageStream()` 与 `consumeOrganizeStream()` 在 stream done 时，如果 buffer 非空，会按同一 SSE line 逻辑处理最后一行后再退出。
+
+**防回归**：`packages/web/__tests__/agent/stream-consumer-status.test.ts` 覆盖无尾换行 `text_delta`；`packages/web/__tests__/hooks/useAiOrganize.test.ts` 覆盖无尾换行 organize summary。
+
+### A2A agent-card 端点也属于远端输入（2026-05-10）
+
+**症状**：A2A discovery 的用户输入 URL 已经做了 server-side 校验，但前端 A2A client 仍会直接信任远端 agent-card 里的 `supportedInterfaces[].url`，把 `file://`、带用户名密码的 URL 或畸形 endpoint 缓存成后续 JSON-RPC 目标。
+
+**根因**：发现入口和 agent-card endpoint 是两条不同的信任边界。只校验用户提交的 discovery URL 不够；agent-card 本身来自远端服务，里面声明的 JSON-RPC URL 也必须重新校验。
+
+**修复**：`discoverAgent()` 先规范化 discovery base URL，只允许无凭据的 `http`/`https`；解析 agent-card 时只接受第一个合法的 `JSONRPC` endpoint，非法 endpoint 不进入 registry。
+
+**防回归**：`packages/web/__tests__/a2a/client.test.ts` 覆盖非 HTTP discovery URL、credentialed discovery URL、非 HTTP JSON-RPC endpoint、credentialed endpoint，以及跳过非法 endpoint 后使用第一个合法 endpoint。
+
+### A2A RPC result 不能直接 type cast 成 task（2026-05-10）
+
+**症状**：远端 A2A agent 如果返回 `{ result: { id: "..." } }` 这类缺少 `status.state` 的 JSON-RPC 响应，`delegateTask()` 会先把 delegation history 标为 completed，后续 UI/工具读取 `task.status.state` 时才报错。
+
+**根因**：JSON-RPC 成功只代表 transport 成功，不代表 `result` 符合 A2A task contract。`response.result as A2ATask` 会绕过运行时校验，把远端 malformed payload 当作可信对象。
+
+**修复**：`delegateTask()` 和 `checkRemoteTaskStatus()` 在返回前校验 task 形状：必须有 string `id`、对象 `status`、合法 `status.state`。不合法时抛 `Invalid A2A task response`，delegation history 记录为 failed。
+
+**防回归**：`packages/web/__tests__/a2a/client.test.ts` 覆盖 delegate/status malformed result；`packages/web/__tests__/a2a/delegation-history.test.ts` 覆盖 malformed result 不会被记成 completed。
+
+### Orchestration plan 不能执行空 subtask（2026-05-10）
+
+**症状**：空请求或预分解结果里混入空字符串时，orchestrator 会创建空 description 的 subtask；`executePlan()` 在没有任何 subtask 或所有 subtask 未分配时早退，部分失败路径没有设置 `completedAt`。
+
+**根因**：`decompose()` 在 trim 前就 slice/map，没有过滤 trim 后为空的 description；`executePlan()` 的早退失败路径没有统一完成态收尾。
+
+**修复**：`decompose()` 先 trim 并过滤空 subtask，再限制最多 10 个；`executePlan()` 对空 plan 返回 `No subtasks to execute.`，所有早退失败路径都设置 `completedAt`。
+
+**防回归**：`packages/web/__tests__/a2a/orchestrator.test.ts` 覆盖空请求、空 provided subtasks、空计划执行、无 agent 早退时的 `completedAt`。
+
+### 浏览器 storage 缓存必须验证 shape 并容忍写入失败（2026-05-10）
+
+**症状**：用户浏览器里的 `sessionStorage` / `localStorage` 被旧版本、手动调试或隐私模式污染时，ACP agent 列表、detection 缓存或 renderer 开关可能在组件初始化时变成非数组对象，后续 `.map()` / `.length` 直接崩溃；Safari private mode 或 quota 满时，renderer 开关写入也可能抛错。
+
+**根因**：前端缓存是跨版本、用户可改的输入，不能只 `JSON.parse` 后按 TypeScript 类型使用；storage 写入也不是可靠 IO。
+
+**修复**：ACP registry/detection cache 读取时先验证顶层对象、数组字段和 timestamp；renderer disabled IDs 只接受非空字符串数组；renderer 开关写入 localStorage 失败时保留当前 session 的内存状态而不让 UI 崩。
+
+**防回归**：`packages/web/__tests__/hooks/acp-storage-cache.test.ts` 覆盖 corrupted JSON 和 malformed shape；`packages/web/__tests__/renderers/renderer-registry-storage.test.ts` 覆盖 corrupted disabled renderer storage、非法 ID 过滤和 quota 写入失败。
+
+### localStorage 里的业务对象不能直接 merge 或当数组用（2026-05-10）
+
+**症状**：AI organize history 或 Daily Echo 配置如果被旧版本/手动调试写坏，`loadHistory()` 可能返回对象，随后 `appendEntry()` 调用 `.unshift()` 崩溃；Daily Echo 会把 `enabled: "yes"`、`scheduleTime: "99:99"` 这类错误类型 merge 进运行时配置。
+
+**根因**：浏览器持久化数据跨版本存在，类型不受 TypeScript 保护。解析成功不等于 shape 合法；直接 spread 或直接当数组使用会把坏缓存扩散到 UI。
+
+**修复**：`organize-history` 增加 `normalizeHistoryEntries()`，只保留合法 entry/file/status/source；Daily Echo 配置增加 `normalizeDailyEchoConfig()`，逐字段接受合法值并从 `DEFAULT_DAILY_ECHO_CONFIG` 回退。
+
+**防回归**：`packages/web/__tests__/lib/organize-history-storage.test.ts` 覆盖非数组缓存、malformed entry 过滤、坏缓存 append；`packages/web/__tests__/lib/daily-echo-config-storage.test.ts` 覆盖坏 JSON、非法字段类型、合法覆盖和保存前 normalize。
+
+### HTTP body 解析错误不能统一返回 500（2026-05-10）
+
+**症状**：Product HTTP server 收到 malformed JSON 或超过限制的请求体时，顶层 catch 会统一返回 500。前端和 API 调用方会看到“服务器错误”，但实际是客户端请求格式或大小问题。
+
+**根因**：`readJsonBody()` 用普通 `Error` 表示 body 解析失败，`handleRequest()` 无法区分业务异常、JSON 格式错误和 payload too large。
+
+**修复**：新增 `HttpBodyError` 携带 HTTP status；invalid JSON 返回 400，body too large 返回 413。超过限制后停止积累 chunk 并继续 drain 请求，避免重复 reject。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 `returns client errors for invalid HTTP JSON bodies` 覆盖 400 invalid JSON 和 413 oversized body。
+
+### Workflow 名称不能直接拼进 YAML title（2026-05-10）
+
+**症状**：创建 workflow 时如果名称包含换行，例如 `Bad\nsteps:\n- id: injected`，服务端会把它直接替换到 `title: {TITLE}`，生成的 `.flow.yaml` 被注入额外字段或步骤；极端文件名也可能落到平台文件系统错误。
+
+**根因**：同一个用户输入同时用于文件名和 YAML 内容，没有分开做 filename sanitize 与 YAML scalar escaping。
+
+**修复**：workflow 创建先把显示标题压成单行，再生成安全文件名；写入 YAML 时使用单引号 scalar，并按 YAML 规则把 `'` 转成 `''`。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 `escapes workflow titles and sanitizes workflow filenames` 覆盖换行注入、单引号转义、空安全文件名拒绝。
+
+### 归档目录也要做 symlink realpath 校验（2026-05-10）
+
+**症状**：Inbox 归档文件时会把文件移动到 `Inbox/.processed/<timestamp>_name`。如果 `.processed` 已经被替换成指向 mindRoot 外部的 symlink，直接 `join(inboxDir, '.processed')` 后 `renameSync()` 会把文件移出知识库边界。
+
+**根因**：只校验了 `Inbox` 和源文件路径，没有对归档目标目录及目标文件做 `resolveExistingSafe()` realpath 校验。新建目录和移动目标同样是写边界。
+
+**修复**：Product Server 与 Web core 两份 `archiveFromInbox()` 都对 `Inbox/.processed` 和最终 archived path 使用 `resolveExistingSafe()`；`.processed` 是外部 symlink 时直接拒绝，不移动源文件。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 `rejects inbox archive when .processed is a symlink outside mindRoot` 与 `packages/web/__tests__/core/inbox.test.ts` 的 `.processed` symlink 用例覆盖两条运行时路径。
+
+### Trash 目录是 sibling 时也不能信任已有 symlink（2026-05-10）
+
+**症状**：删除文件会移动到 `dirname(mindRoot)/.trash` 并写 `dirname(mindRoot)/.trash-meta`。如果这些 sibling 目录已被替换成指向外部位置的 symlink，删除操作会把用户文件移到不可控目录。
+
+**根因**：Trash 不在 mindRoot 内，不能用 `resolveExistingSafe(mindRoot, ...)`，但仍要验证 sibling 目录的 realpath 没有逃出 mindRoot 的父目录。
+
+**修复**：Product Server `moveToTrash()` 与 Web core trash 都通过 `resolveSafeSiblingDir()` 校验 `.trash` / `.trash-meta`：目标名必须是 leaf；已有目标不能是 symlink，且 realpath 必须仍在 mindRoot 父目录下。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖 Product Server delete 遇到 symlinked `.trash` 时返回 403；`packages/web/__tests__/core/trash.test.ts` 覆盖 Web core `moveToTrash()` 不移动源文件、不写外部目录。
+
+### 知识库相对路径输出必须统一用 POSIX 分隔符（2026-05-10）
+
+**症状**：部分 Web core 操作返回知识库相对路径时用 `path.join()` 组装。Windows 下会返回 `Folder\\note.md`，但路由、索引、前端链接和大多数 API 都按 `Folder/note.md` 处理。
+
+**根因**：文件系统绝对路径可以用 Node `path`，但知识库内部相对路径是跨平台协议值，应使用 `path.posix` 或显式 `/`。
+
+**修复**：`restoreAsCopy()` 生成 copy path 时改用 `path.posix.join()`，并把 fs-ops 测试里的返回值断言改成 POSIX 字符串，避免 Windows 上测试期望跟着平台漂移。
+
+**防回归**：`packages/web/__tests__/core/trash.test.ts` 覆盖 nested restore copy 返回 `Folder/note (copy 2).md`；`packages/web/__tests__/core/fs-ops.test.ts` 覆盖 rename 返回 POSIX path。
+
+### Product Server 写操作不要回显原始请求路径（2026-05-10）
+
+**症状**：客户端用 Windows 风格路径调用 `move_file` 时，底层 `resolveSafe()` 会正确写到 `Archive/moved.md`，但响应体和 `changeEvent` 仍回显原始 `Archive\\moved.md`。前端路由、索引刷新、审计事件和跨 Agent 调用会收到同一文件的两种路径写法。
+
+**根因**：handler 在文件系统层已经拿到了安全绝对路径，但返回值直接使用请求里的 `path` / `to_path`。请求参数是输入，不应该作为知识库协议路径输出。
+
+**修复**：Product Server file handler 对 save/create/append/delete/rename/move/create space/rename space、行级编辑、heading/section 编辑和 CSV append 的成功响应和 changeEvent 路径，统一从已校验绝对路径反算 mindRoot 相对路径，并替换为 `/` 分隔符。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 `returns POSIX knowledge paths after Product Server file moves` 覆盖反斜杠输入下的响应路径、`beforePath`、`afterPath`；`returns POSIX knowledge paths after Product Server content edits` 覆盖内容编辑和 CSV append 的响应路径。
+
+### 跨平台路径校验要拒绝 Windows 无效文件名（2026-05-10）
+
+**症状**：macOS/Linux 上可以创建 `CON.md`、`bad:name.md`、`note.md.` 或带控制字符的文件名，但这些路径在 Windows 上是保留设备名或非法段名。跨平台同步后会出现创建失败、无法打开、索引路径不可还原等问题。
+
+**根因**：路径安全层只处理 traversal、绝对路径和 symlink realpath，没有把知识库路径当成跨平台协议值校验。导入文件名清洗也只替换了部分符号，漏掉控制字符、尾随点/空格和 Windows 保留名。
+
+**修复**：`@geminilight/mindos` 的 `resolveSafe()` 在所有平台拒绝 Windows 无效 path segment；Web 导入和 Product Inbox 的 `sanitizeFileName()` 会把保留名加 `_` 前缀，并去掉尾随点/空格、替换控制字符。
+
+**防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖底层拒绝规则；`packages/web/__tests__/core/file-convert.test.ts` 覆盖导入文件名清洗。
+
+### base64 上传必须严格校验，不能让损坏文件静默落盘（2026-05-10）
+
+**症状**：`Buffer.from(content, 'base64')` 会宽松解码。用户上传非法 base64 的 PDF/文本时，API 可能仍返回成功并创建一个损坏文件，后续打开、解析、索引都会表现成随机失败。
+
+**根因**：Web import 与 Product Inbox 都直接调用 Node 的 base64 decoder，没有先校验字符集、padding 和长度结构。
+
+**修复**：两条导入路径都先移除空白并用严格 base64 正则校验；非法内容返回 `Invalid base64 content`，不写文件。
+
+**防回归**：`packages/web/__tests__/api/file-import.test.ts` 覆盖非法 base64 上传不创建文件；`packages/mindos/src/server.test.ts` 的 Inbox 用例覆盖 Product Server 路径。
+
+### read-native skill 只能读取已登记 skill root（2026-05-10）
+
+**症状**：`POST /api/skills` 的 `read-native` 接收客户端传入的 `sourcePath`。如果直接用 `resolve(sourcePath, name, 'SKILL.md')` 读取，攻击者或误用的前端状态可以读取任意本地目录下同名 `SKILL.md`。
+
+**根因**：`name` 做了 skill-name 正则校验，但 `sourcePath` 没有限制到服务器已登记的 `skillRoots`。
+
+**修复**：`read-native` 现在要求 `sourcePath` 的 resolved path 必须等于 `services.skillRoots` 中的一个 root path，否则返回 `Invalid sourcePath`。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 skill runtime 用例同时覆盖已登记 builtin root 可读、未登记外部 root 被拒绝。
+
+### skills 读操作不要被 user .skills 写目录校验阻断（2026-05-10）
+
+**症状**：`POST /api/skills` 过去在进入 switch 前统一解析 `{mindRoot}/.skills`。如果用户的 `.skills` 被错误替换成外部 symlink，连读取 builtin skill 这种只读操作也会返回 `Access denied`。
+
+**根因**：写路径校验放在所有 action 的公共前置流程里，扩大了失败影响范围。
+
+**修复**：只在 `create` / `update` / `delete` 这类真正写 user skill 目录的分支解析并校验 `.skills`；`read` / `read-native` / `toggle` / `record-install` 不依赖该目录。
+
+**防回归**：`packages/mindos/src/server.test.ts` 的 symlinked user skill directory 用例覆盖 builtin skill 仍可读取，同时 create 仍因 symlinked `.skills` 被拒绝。
 
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 

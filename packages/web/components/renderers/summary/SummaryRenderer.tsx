@@ -42,6 +42,39 @@ export function renderMarkdown(md: string): string {
     .replace(/^(?!<[hulo])(.+)$/gm, '<p style="margin:.5em 0;font-size:.85rem;line-height:1.7;color:var(--foreground)">$1</p>');
 }
 
+export function appendSummaryStreamChunk(acc: string, raw: string): string {
+  let next = acc;
+  for (const line of raw.split('\n')) {
+    const sseMatch = line.match(/^data:(.+)$/);
+    if (sseMatch) {
+      let event: unknown;
+      try {
+        event = JSON.parse(sseMatch[1]);
+      } catch {
+        continue;
+      }
+      if (event && typeof event === 'object' && 'type' in event) {
+        const typedEvent = event as { type?: unknown; delta?: unknown; message?: unknown };
+        if ((typedEvent.type === 'text_delta' || typedEvent.type === 'thinking_delta') && typeof typedEvent.delta === 'string') {
+          next += typedEvent.delta;
+        } else if (typedEvent.type === 'error') {
+          throw new Error(String(typedEvent.message || 'Stream error'));
+        }
+      }
+      continue;
+    }
+
+    const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
+    if (legacyMatch) {
+      next += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    } else if (line && !line.startsWith('d:') && !line.startsWith('e:') && !line.startsWith('0:')) {
+      // plain text stream fallback
+      next += line;
+    }
+  }
+  return next;
+}
+
 const LIMIT = 8;
 
 export function SummaryRenderer({ filePath }: RendererContext) {
@@ -105,21 +138,19 @@ Be specific. Reference actual content from the files. Keep the total response un
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        // Vercel AI SDK text stream: each chunk may have "0:..." prefix
-        const raw = decoder.decode(value, { stream: true });
-        for (const line of raw.split('\n')) {
-          const m = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
-          if (m) {
-            acc += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          } else if (line && !line.startsWith('d:') && !line.startsWith('e:') && !line.startsWith('0:')) {
-            // plain text stream fallback
-            acc += line;
-          }
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        acc = appendSummaryStreamChunk(acc, lines.join('\n'));
+        setSummary(acc);
+      }
+      if (buffer) {
+        acc = appendSummaryStreamChunk(acc, buffer);
         setSummary(acc);
       }
       setGenerated(true);

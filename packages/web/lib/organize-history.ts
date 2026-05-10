@@ -30,13 +30,52 @@ export interface OrganizeHistoryEntry {
 
 const STORAGE_KEY = 'mindos:organize-history';
 const MAX_ENTRIES = 50;
+const VALID_ACTIONS = new Set(['create', 'update', 'unknown']);
+const VALID_STATUSES = new Set(['completed', 'partial', 'undone']);
+const VALID_SOURCES = new Set(['upload', 'drag-drop', 'inbox-organize', 'import-modal', 'plugin', 'web-clipper', 'conversation']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isHistoryFile(value: unknown): value is OrganizeHistoryFile {
+  return (
+    isRecord(value) &&
+    typeof value.path === 'string' &&
+    typeof value.ok === 'boolean' &&
+    typeof value.action === 'string' &&
+    VALID_ACTIONS.has(value.action) &&
+    (value.undone === undefined || typeof value.undone === 'boolean')
+  );
+}
+
+function isHistoryEntry(value: unknown): value is OrganizeHistoryEntry {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    Number.isFinite(value.timestamp) &&
+    Array.isArray(value.sourceFiles) &&
+    value.sourceFiles.every((file) => typeof file === 'string') &&
+    Array.isArray(value.files) &&
+    value.files.every(isHistoryFile) &&
+    typeof value.status === 'string' &&
+    VALID_STATUSES.has(value.status) &&
+    (value.source === undefined || (typeof value.source === 'string' && VALID_SOURCES.has(value.source))) &&
+    (value.durationMs === undefined || Number.isFinite(value.durationMs))
+  );
+}
+
+export function normalizeHistoryEntries(value: unknown): OrganizeHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isHistoryEntry).slice(0, MAX_ENTRIES);
+}
 
 export function loadHistory(): OrganizeHistoryEntry[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as OrganizeHistoryEntry[];
+    return normalizeHistoryEntries(JSON.parse(raw));
   } catch {
     return [];
   }
@@ -45,8 +84,8 @@ export function loadHistory(): OrganizeHistoryEntry[] {
 export function saveHistory(entries: OrganizeHistoryEntry[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
-  } catch { /* quota exceeded — silently drop oldest */ }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeHistoryEntries(entries)));
+  } catch { /* quota exceeded — ignore */ }
 }
 
 export function appendEntry(entry: OrganizeHistoryEntry): OrganizeHistoryEntry[] {

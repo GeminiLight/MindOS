@@ -102,13 +102,12 @@ export async function consumeUIMessageStream(
     while (true) {
       if (signal?.aborted) break;
       const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
+      if (done && !buffer) break;
+      if (!done) buffer += decoder.decode(value, { stream: true });
 
       // Process complete SSE lines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? ''; // keep incomplete last line
+      const lines = done ? [buffer] : buffer.split('\n');
+      buffer = done ? '' : lines.pop() ?? ''; // keep incomplete last line
 
       let changed = false;
 
@@ -198,6 +197,7 @@ export async function consumeUIMessageStream(
       if (changed) {
         onUpdate(buildMessage());
       }
+      if (done) break;
     }
   } finally {
     reader.releaseLock();

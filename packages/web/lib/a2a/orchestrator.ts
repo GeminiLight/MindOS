@@ -81,16 +81,20 @@ export function decompose(request: string, subtaskDescriptions?: string[]): SubT
     descriptions = splitIntoSubtasks(request);
   }
 
-  return descriptions.slice(0, MAX_SUBTASKS).map((desc, i) => ({
-    id: `st-${randomUUID().slice(0, 8)}`,
-    description: desc.trim(),
-    assignedAgentId: null,
-    matchedSkillId: null,
-    status: 'pending' as const,
-    result: null,
-    error: null,
-    dependsOn: [],
-  }));
+  return descriptions
+    .map(desc => desc.trim())
+    .filter(Boolean)
+    .slice(0, MAX_SUBTASKS)
+    .map(desc => ({
+      id: `st-${randomUUID().slice(0, 8)}`,
+      description: desc,
+      assignedAgentId: null,
+      matchedSkillId: null,
+      status: 'pending' as const,
+      result: null,
+      error: null,
+      dependsOn: [],
+    }));
 }
 
 /** Simple heuristic: split on "and then", "then", "also", numbered lists, semicolons */
@@ -180,10 +184,18 @@ async function executeSubtask(subtask: SubTask, token?: string): Promise<void> {
 export async function executePlan(plan: OrchestrationPlan, token?: string): Promise<OrchestrationPlan> {
   plan.status = 'executing';
 
+  if (plan.subtasks.length === 0) {
+    plan.status = 'failed';
+    plan.aggregatedResult = 'No subtasks to execute.';
+    plan.completedAt = new Date().toISOString();
+    return plan;
+  }
+
   const unassigned = plan.subtasks.filter(st => !st.assignedAgentId);
   if (unassigned.length === plan.subtasks.length) {
     plan.status = 'failed';
     plan.aggregatedResult = 'No agents available for any subtask. Discover agents first using discover_agent.';
+    plan.completedAt = new Date().toISOString();
     return plan;
   }
 

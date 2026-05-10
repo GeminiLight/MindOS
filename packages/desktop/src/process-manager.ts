@@ -10,10 +10,23 @@ import net from 'net';
 import { promisify } from 'util';
 import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync, appendFileSync } from 'fs';
 import { desktopTelemetry } from './telemetry';
-import { resolveCliPath, resolveMcpDir, resolveWebAppDir } from './mindos-runtime-layout';
+import { resolveCliPath, resolveMcpBundlePath, resolveMcpDir, resolveWebAppDir } from './mindos-runtime-layout';
 
 const IS_WIN = process.platform === 'win32';
 const execFileAsync = promisify(execFile);
+
+export function isMindosOwnedCommandLine(commandLine: string): boolean {
+  const normalized = commandLine.replace(/\\/g, '/').toLowerCase();
+  return [
+    '/.mindos/runtime/',
+    '/mindos-runtime/',
+    '/node_modules/@geminilight/mindos/',
+    '/@geminilight/mindos/',
+    '/packages/mindos/bin/cli.js',
+    '/packages/web/.next/standalone/server.js',
+    '/dist/protocols/mcp-server/index.cjs',
+  ].some((marker) => normalized.includes(marker));
+}
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -224,7 +237,7 @@ export class ProcessManager extends EventEmitter {
   private spawnMcp(): ChildProcess {
     const { projectRoot, mcpPort, webPort, authToken, verbose } = this.opts;
     const mcpDir = resolveMcpDir(projectRoot);
-    const mcpBundle = path.join(mcpDir, 'dist', 'index.cjs');
+    const mcpBundle = resolveMcpBundlePath(projectRoot);
 
     if (!existsSync(mcpBundle)) {
       throw new Error(
@@ -816,9 +829,10 @@ export class ProcessManager extends EventEmitter {
   }
 
   /**
-   * Verify a PID is a node/next process before killing it — prevents harming unrelated processes.
-   * On Windows: uses wmic/PowerShell to check process name before killing.
-   * On Unix: uses ps -p to check.
+   * Verify a PID belongs to MindOS before killing it — prevents harming
+   * unrelated Node/Next processes when PID files are stale or ports collide.
+   * On Windows: uses PowerShell/wmic to check command line before killing.
+   * On Unix: uses ps -p to check command line.
    */
   private static async killIfNodeProcess(pid: number, label: string): Promise<void> {
     const stop = desktopTelemetry.startTimer('desktop.port.kill_verify', { pid, label });
@@ -830,42 +844,42 @@ export class ProcessManager extends EventEmitter {
         try {
           const { stdout } = await execFileAsync('powershell.exe', [
             '-NoProfile', '-Command',
-            `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`,
+            `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction SilentlyContinue).CommandLine`,
           ], { encoding: 'utf-8', timeout });
-          if (!(stdout as string).trim().toLowerCase().includes('node')) {
-            stop({ pid, label, verifiedNodeProcess: false, success: true });
+          if (!isMindosOwnedCommandLine((stdout as string).trim())) {
+            stop({ pid, label, verifiedMindosProcess: false, success: true });
             return;
           }
         } catch {
           try {
-            const { stdout } = await execFileAsync('wmic', ['process', 'where', `ProcessId=${pid}`, 'get', 'Name', '/format:value'], { encoding: 'utf-8', timeout });
-            if (!(stdout as string).trim().toLowerCase().includes('node')) {
-              stop({ pid, label, verifiedNodeProcess: false, success: true });
+            const { stdout } = await execFileAsync('wmic', ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine', '/format:value'], { encoding: 'utf-8', timeout });
+            if (!isMindosOwnedCommandLine((stdout as string).trim())) {
+              stop({ pid, label, verifiedMindosProcess: false, success: true });
               return;
             }
           } catch {
-            stop({ pid, label, verifiedNodeProcess: false, success: false });
+            stop({ pid, label, verifiedMindosProcess: false, success: false });
             return;
           }
         }
       } else {
         try {
-          const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf-8', timeout: 2000 });
-          if (!(stdout as string).trim().includes('node') && !(stdout as string).trim().includes('next')) {
-            stop({ pid, label, verifiedNodeProcess: false, success: true });
+          const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf-8', timeout: 2000 });
+          if (!isMindosOwnedCommandLine((stdout as string).trim())) {
+            stop({ pid, label, verifiedMindosProcess: false, success: true });
             return;
           }
         } catch {
-          stop({ pid, label, verifiedNodeProcess: false, success: false });
+          stop({ pid, label, verifiedMindosProcess: false, success: false });
           return;
         }
       }
 
       console.warn(`[MindOS] Killing ${label} process (PID ${pid})`);
       process.kill(pid, 'SIGTERM');
-      stop({ pid, label, verifiedNodeProcess: true, success: true });
+      stop({ pid, label, verifiedMindosProcess: true, success: true });
     } catch {
-      stop({ pid, label, verifiedNodeProcess: false, success: false });
+      stop({ pid, label, verifiedMindosProcess: false, success: false });
     }
   }
 }

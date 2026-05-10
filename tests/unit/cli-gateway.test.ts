@@ -22,4 +22,42 @@ describe('mindos gateway service root resolution', () => {
     expect(source).toContain("execFileSync('launchctl', ['bootstrap', `gui/${launchctlUid()}`, LAUNCHD_PLIST]");
     expect(source).toContain("execFileSync('tail', ['-f', LOG_PATH]");
   });
+
+  it('escapes systemd unit command and environment values with spaces', async () => {
+    const { buildSystemdUnit } = await import('../../packages/mindos/bin/lib/gateway.js');
+
+    const unit = buildSystemdUnit({
+      nodeBin: '/Users/Ada Lovelace/.mindos/node/bin/node',
+      cliPath: '/Applications/MindOS Dev/app/bin/cli.js',
+      home: '/Users/Ada Lovelace',
+      path: '/opt/local/bin:/Users/Ada Lovelace/bin',
+      mindosEnvPath: '/Users/Ada Lovelace/.mindos/env',
+      logPath: '/Users/Ada Lovelace/.mindos/app log.txt',
+    });
+
+    expect(unit).toContain('ExecStart="/Users/Ada Lovelace/.mindos/node/bin/node" "/Applications/MindOS Dev/app/bin/cli.js" start');
+    expect(unit).toContain('Environment="HOME=/Users/Ada Lovelace"');
+    expect(unit).toContain('Environment="PATH=/opt/local/bin:/Users/Ada Lovelace/bin"');
+    expect(unit).toContain('EnvironmentFile=-"/Users/Ada Lovelace/.mindos/env"');
+    expect(unit).toContain('StandardOutput=append:"/Users/Ada Lovelace/.mindos/app log.txt"');
+  });
+
+  it('escapes launchd plist strings as XML text', async () => {
+    const { buildLaunchdPlist } = await import('../../packages/mindos/bin/lib/gateway.js');
+
+    const plist = buildLaunchdPlist({
+      label: 'com.mindos.app',
+      nodeBin: '/Users/Ada & Bob/.mindos/node/bin/node',
+      cliPath: '/Applications/MindOS <Dev>/app/bin/cli.js',
+      home: '/Users/Ada & Bob',
+      path: '/usr/local/bin:/Users/Ada & Bob/bin',
+      logPath: '/Users/Ada & Bob/.mindos/app.log',
+    });
+
+    expect(plist).toContain('<string>/Users/Ada &amp; Bob/.mindos/node/bin/node</string>');
+    expect(plist).toContain('<string>/Applications/MindOS &lt;Dev&gt;/app/bin/cli.js</string>');
+    expect(plist).toContain('<key>HOME</key><string>/Users/Ada &amp; Bob</string>');
+    expect(plist).toContain('<key>PATH</key><string>/usr/local/bin:/Users/Ada &amp; Bob/bin</string>');
+    expect(plist).not.toContain('/Users/Ada & Bob');
+  });
 });

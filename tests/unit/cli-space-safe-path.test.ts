@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -84,5 +84,17 @@ describe('mindos space safe path handling', () => {
     expect(result.stderr).toContain('Access denied');
     expect(existsSync(path.join(mindRoot, 'Projects'))).toBe(true);
     expect(existsSync(path.join(mindRoot, '..\\outside'))).toBe(false);
+  });
+
+  it('rejects directory creation through symlinked parents outside the knowledge base', () => {
+    const mindRoot = makeRoot();
+    const outside = makeRoot();
+    symlinkSync(outside, path.join(mindRoot, 'Linked'), 'dir');
+
+    const result = runSpaceCommand(mindRoot, ['mkdir', 'Linked/Space']);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Access denied');
+    expect(existsSync(path.join(outside, 'Space'))).toBe(false);
   });
 });

@@ -183,7 +183,7 @@ export interface InboxArchiveResult {
  */
 export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiveResult {
   const inboxDir = resolveExistingSafe(mindRoot, INBOX_DIR);
-  const processedDir = path.join(inboxDir, PROCESSED_DIR);
+  const processedDir = resolveExistingSafe(mindRoot, `${INBOX_DIR}/${PROCESSED_DIR}`);
   fs.mkdirSync(processedDir, { recursive: true });
 
   const archived: InboxArchiveResult['archived'] = [];
@@ -207,11 +207,12 @@ export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiv
       }
 
       const archivedName = `${ts}_${baseName}`;
-      const destPath = path.join(processedDir, archivedName);
+      const archivedPath = `${INBOX_DIR}/${PROCESSED_DIR}/${archivedName}`;
+      const destPath = resolveExistingSafe(mindRoot, archivedPath);
       fs.renameSync(srcPath, destPath);
       archived.push({
         original: name,
-        archivedPath: `${INBOX_DIR}/${PROCESSED_DIR}/${archivedName}`,
+        archivedPath,
       });
     } catch {
       notFound.push(name);

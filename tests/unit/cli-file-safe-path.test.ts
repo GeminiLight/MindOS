@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -72,5 +72,31 @@ describe('mindos file safe path handling', () => {
 
     expect(result.exitCode).toBe(0);
     expect(readFileSync(path.join(mindRoot, 'Projects', 'note.md'), 'utf-8')).toBe('hello');
+  });
+
+  it('rejects writes through symlinked parents outside the knowledge base', () => {
+    const mindRoot = makeRoot();
+    const outside = makeRoot();
+    symlinkSync(outside, path.join(mindRoot, 'Linked'), 'dir');
+
+    const result = runFileCommand(mindRoot, ['create', 'Linked/secret.md', '--content', 'secret']);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Access denied');
+    expect(existsSync(path.join(outside, 'secret.md'))).toBe(false);
+  });
+
+  it('rejects reads through symlinked files outside the knowledge base', () => {
+    const mindRoot = makeRoot();
+    const outside = makeRoot();
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(path.join(outside, 'secret.md'), 'secret', 'utf-8');
+    symlinkSync(path.join(outside, 'secret.md'), path.join(mindRoot, 'linked.md'), 'file');
+
+    const result = runFileCommand(mindRoot, ['read', 'linked.md']);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Access denied');
+    expect(result.stdout).not.toContain('secret');
   });
 });

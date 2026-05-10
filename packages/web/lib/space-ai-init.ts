@@ -17,6 +17,45 @@ export async function checkAiAvailable(): Promise<boolean> {
   }
 }
 
+export function findSpaceAiInitStreamError(raw: string): string | null {
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload) continue;
+    try {
+      const event = JSON.parse(payload) as { type?: unknown; message?: unknown };
+      if (event.type === 'error') return String(event.message || 'AI initialization failed');
+    } catch {
+      // Ignore malformed non-error stream lines while continuing to drain.
+    }
+  }
+  return null;
+}
+
+export async function consumeSpaceAiInitStream(body: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      const error = findSpaceAiInitStreamError(lines.join('\n'));
+      if (error) throw new Error(error);
+    }
+    if (buffer) {
+      const error = findSpaceAiInitStreamError(buffer);
+      if (error) throw new Error(error);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /**
  * Trigger AI to generate README.md and INSTRUCTION.md for a space.
  * Dispatches `mindos:ai-init` events consumed by SpaceInitToast.
@@ -45,15 +84,7 @@ export function triggerSpaceAiInit(
     }),
   }).then(async (res) => {
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-    const reader = res.body.getReader();
-    try {
-      while (true) {
-        const { done } = await reader.read();
-        if (done) break;
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    await consumeSpaceAiInitStream(res.body);
     window.dispatchEvent(new CustomEvent('mindos:ai-init', {
       detail: { spacePath, state: 'done' },
     }));

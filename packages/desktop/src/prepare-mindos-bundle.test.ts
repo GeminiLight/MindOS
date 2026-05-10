@@ -83,19 +83,269 @@ describe('materializeStandaloneAssets', () => {
     const appDir = makeTemp('mindos-app-broken-symlink-');
     writeStandaloneApp(appDir);
 
-    const fallbackPackage = path.join(appDir, 'node_modules', '@huggingface', 'transformers');
+    const fallbackPackage = path.join(appDir, 'node_modules', '@mariozechner', 'pi-ai');
     mkdirSync(path.join(fallbackPackage, 'dist'), { recursive: true });
     writeFileSync(path.join(fallbackPackage, 'dist', 'index.js'), 'ok');
 
-    const standalonePackage = path.join(appDir, '.next', 'standalone', 'node_modules', '@huggingface', 'transformers');
+    const standalonePackage = path.join(appDir, '.next', 'standalone', 'node_modules', '@mariozechner', 'pi-ai');
     rmSync(standalonePackage, { recursive: true, force: true });
     mkdirSync(path.dirname(standalonePackage), { recursive: true });
-    symlinkSync('../../../../node_modules/.pnpm/missing/node_modules/@huggingface/transformers', standalonePackage);
+    symlinkSync('../../../../node_modules/.pnpm/missing/node_modules/@mariozechner/pi-ai', standalonePackage);
 
     materializeStandaloneAssets(appDir);
 
     expect(lstatSync(standalonePackage).isSymbolicLink()).toBe(false);
     expect(readFileSync(path.join(standalonePackage, 'dist', 'index.js'), 'utf-8')).toBe('ok');
+  });
+
+  it('materializes dependencies of external standalone packages', () => {
+    const appDir = makeTemp('mindos-app-standalone-deps-');
+    writeStandaloneApp(appDir);
+
+    const externalPackage = path.join(appDir, '.next', 'standalone', 'node_modules', '@mariozechner', 'pi-ai');
+    mkdirSync(externalPackage, { recursive: true });
+    writeFileSync(path.join(externalPackage, 'package.json'), JSON.stringify({
+      name: '@mariozechner/pi-ai',
+      dependencies: { '@sinclair/typebox': '^0.34.41' },
+    }));
+
+    const fallbackDependency = path.join(appDir, 'node_modules', '@sinclair', 'typebox');
+    mkdirSync(path.join(fallbackDependency, 'build'), { recursive: true });
+    writeFileSync(path.join(fallbackDependency, 'package.json'), JSON.stringify({
+      name: '@sinclair/typebox',
+      version: '0.34.41',
+    }));
+    writeFileSync(path.join(fallbackDependency, 'build', 'index.mjs'), 'export const Type = {};');
+
+    materializeStandaloneAssets(appDir);
+
+    const materializedDependency = path.join(appDir, '.next', 'standalone', 'node_modules', '@sinclair', 'typebox');
+    expect(existsSync(materializedDependency)).toBe(true);
+    expect(readFileSync(path.join(materializedDependency, 'build', 'index.mjs'), 'utf-8')).toBe('export const Type = {};');
+  });
+
+  it('materializes transitive dependencies introduced by Next runtime packages', () => {
+    const appDir = makeTemp('mindos-app-next-runtime-transitive-deps-');
+    writeStandaloneApp(appDir);
+
+    const sourceNext = path.join(appDir, 'node_modules', 'next');
+    const standaloneNext = path.join(appDir, '.next', 'standalone', 'node_modules', 'next');
+    for (const packageDir of [sourceNext, standaloneNext]) {
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({
+        name: 'next',
+        dependencies: { postcss: '^8.4.31' },
+      }));
+      writeFileSync(path.join(packageDir, 'index.js'), 'module.exports = {};');
+    }
+
+    const sourcePostcss = path.join(appDir, 'node_modules', 'postcss');
+    mkdirSync(sourcePostcss, { recursive: true });
+    writeFileSync(path.join(sourcePostcss, 'package.json'), JSON.stringify({
+      name: 'postcss',
+      version: '8.4.31',
+      dependencies: { nanoid: '^3.3.6' },
+    }));
+
+    const sourceNanoid = path.join(appDir, 'node_modules', 'postcss', 'node_modules', 'nanoid');
+    mkdirSync(sourceNanoid, { recursive: true });
+    writeFileSync(path.join(sourceNanoid, 'package.json'), JSON.stringify({
+      name: 'nanoid',
+      version: '3.3.8',
+    }));
+    writeFileSync(path.join(sourceNanoid, 'index.js'), 'module.exports = {};');
+
+    materializeStandaloneAssets(appDir);
+
+    const postcssPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'postcss', 'package.json');
+    const nanoidPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'nanoid', 'package.json');
+    expect(JSON.parse(readFileSync(postcssPackage, 'utf-8')).version).toBe('8.4.31');
+    expect(JSON.parse(readFileSync(nanoidPackage, 'utf-8')).version).toBe('3.3.8');
+  });
+
+  it('fails when an external standalone package dependency cannot be materialized', () => {
+    const appDir = makeTemp('mindos-app-missing-standalone-dep-');
+    writeStandaloneApp(appDir);
+
+    const externalPackage = path.join(appDir, '.next', 'standalone', 'node_modules', '@mariozechner', 'pi-ai');
+    mkdirSync(externalPackage, { recursive: true });
+    writeFileSync(path.join(externalPackage, 'package.json'), JSON.stringify({
+      name: '@mariozechner/pi-ai',
+      dependencies: { '@sinclair/typebox': '^0.34.41' },
+    }));
+
+    expect(() => materializeStandaloneAssets(appDir)).toThrow(/Incomplete standalone dependency closure/);
+  });
+
+  it('preserves nested dependency versions when a top-level package name already exists', () => {
+    const appDir = makeTemp('mindos-app-nested-deps-');
+    writeStandaloneApp(appDir);
+
+    const externalPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'minimatch');
+    mkdirSync(externalPackage, { recursive: true });
+    writeFileSync(path.join(externalPackage, 'package.json'), JSON.stringify({
+      name: 'minimatch',
+      dependencies: { 'brace-expansion': '^5.0.0' },
+    }));
+
+    const staleTopLevel = path.join(appDir, '.next', 'standalone', 'node_modules', 'brace-expansion');
+    mkdirSync(staleTopLevel, { recursive: true });
+    writeFileSync(path.join(staleTopLevel, 'package.json'), JSON.stringify({
+      name: 'brace-expansion',
+      version: '1.1.14',
+    }));
+
+    const sourcePackage = path.join(appDir, 'node_modules', 'minimatch');
+    mkdirSync(sourcePackage, { recursive: true });
+    writeFileSync(path.join(sourcePackage, 'package.json'), JSON.stringify({
+      name: 'minimatch',
+      version: '10.0.3',
+      dependencies: { 'brace-expansion': '^5.0.0' },
+    }));
+
+    const sourceDependency = path.join(appDir, 'node_modules', 'minimatch', 'node_modules', 'brace-expansion');
+    mkdirSync(sourceDependency, { recursive: true });
+    writeFileSync(path.join(sourceDependency, 'package.json'), JSON.stringify({
+      name: 'brace-expansion',
+      version: '5.0.5',
+      main: 'index.js',
+    }));
+    writeFileSync(path.join(sourceDependency, 'index.js'), 'export const expand = () => [];');
+
+    materializeStandaloneAssets(appDir);
+
+    const nestedDependency = path.join(externalPackage, 'node_modules', 'brace-expansion', 'package.json');
+    expect(JSON.parse(readFileSync(nestedDependency, 'utf-8')).version).toBe('5.0.5');
+    expect(JSON.parse(readFileSync(path.join(staleTopLevel, 'package.json'), 'utf-8')).version).toBe('1.1.14');
+  });
+
+  it('deduplicates nested packages when the top-level package has the same version', () => {
+    const appDir = makeTemp('mindos-app-dedupe-deps-');
+    writeStandaloneApp(appDir);
+
+    const parentPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'parent-package');
+    const nestedPackage = path.join(parentPackage, 'node_modules', 'shared-runtime-dep');
+    const topLevelPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'shared-runtime-dep');
+    for (const packageDir of [parentPackage, nestedPackage, topLevelPackage]) {
+      mkdirSync(packageDir, { recursive: true });
+    }
+    writeFileSync(path.join(parentPackage, 'package.json'), JSON.stringify({
+      name: 'parent-package',
+      dependencies: { 'shared-runtime-dep': '^1.24.0' },
+    }));
+    writeFileSync(path.join(nestedPackage, 'package.json'), JSON.stringify({
+      name: 'shared-runtime-dep',
+      version: '1.24.3',
+    }));
+    writeFileSync(path.join(topLevelPackage, 'package.json'), JSON.stringify({
+      name: 'shared-runtime-dep',
+      version: '1.24.3',
+    }));
+
+    materializeStandaloneAssets(appDir);
+
+    expect(existsSync(nestedPackage)).toBe(false);
+    expect(existsSync(topLevelPackage)).toBe(true);
+  });
+
+  it('prunes onnxruntime-node native binaries to the target platform and arch', () => {
+    const appDir = makeTemp('mindos-app-native-prune-');
+    writeStandaloneApp(appDir);
+
+    const onnxPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'onnxruntime-node');
+    const napiDir = path.join(onnxPackage, 'bin', 'napi-v6');
+    for (const rel of [
+      'darwin/arm64/libonnxruntime.dylib',
+      'darwin/x64/libonnxruntime.dylib',
+      'linux/x64/libonnxruntime.so',
+      'win32/arm64/onnxruntime.dll',
+    ]) {
+      const file = path.join(napiDir, rel);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, rel);
+    }
+    writeFileSync(path.join(onnxPackage, 'package.json'), JSON.stringify({
+      name: 'onnxruntime-node',
+      version: '1.24.3',
+    }));
+
+    materializeStandaloneAssets(appDir, {
+      targetPlatform: 'darwin',
+      targetArch: 'arm64',
+      bundleLocalEmbeddingRuntime: true,
+    });
+
+    expect(existsSync(path.join(napiDir, 'darwin', 'arm64', 'libonnxruntime.dylib'))).toBe(true);
+    expect(existsSync(path.join(napiDir, 'darwin', 'x64'))).toBe(false);
+    expect(existsSync(path.join(napiDir, 'linux'))).toBe(false);
+    expect(existsSync(path.join(napiDir, 'win32'))).toBe(false);
+  });
+
+  it('prunes Next development payload and package type artifacts from standalone runtime', () => {
+    const appDir = makeTemp('mindos-app-dev-payload-prune-');
+    writeStandaloneApp(appDir);
+
+    const nextDist = path.join(appDir, '.next', 'standalone', 'node_modules', 'next', 'dist');
+    mkdirSync(path.join(nextDist, 'server'), { recursive: true });
+    mkdirSync(path.join(nextDist, 'esm'), { recursive: true });
+    mkdirSync(path.join(nextDist, 'build'), { recursive: true });
+    mkdirSync(path.join(nextDist, 'cli'), { recursive: true });
+    writeFileSync(path.join(nextDist, 'server', 'next.js'), 'server');
+    writeFileSync(path.join(nextDist, 'esm', 'next.js'), 'esm');
+    writeFileSync(path.join(nextDist, 'build', 'webpack.js'), 'build');
+    writeFileSync(path.join(nextDist, 'cli', 'next-test.js'), 'cli');
+
+    const packageDir = path.join(appDir, '.next', 'standalone', 'node_modules', 'runtime-package');
+    mkdirSync(path.join(packageDir, 'docs'), { recursive: true });
+    writeFileSync(path.join(packageDir, 'docs', 'guide.md'), 'docs');
+    writeFileSync(path.join(packageDir, 'index.d.ts'), 'export {};');
+    writeFileSync(path.join(packageDir, 'index.js.map'), '{}');
+    writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ name: 'runtime-package' }));
+
+    materializeStandaloneAssets(appDir);
+
+    expect(existsSync(path.join(nextDist, 'server', 'next.js'))).toBe(true);
+    expect(existsSync(path.join(nextDist, 'build', 'webpack.js'))).toBe(true);
+    expect(existsSync(path.join(nextDist, 'cli', 'next-test.js'))).toBe(true);
+    expect(existsSync(path.join(nextDist, 'esm'))).toBe(false);
+    expect(existsSync(path.join(packageDir, 'docs'))).toBe(false);
+    expect(existsSync(path.join(packageDir, 'index.d.ts'))).toBe(false);
+    expect(existsSync(path.join(packageDir, 'index.js.map'))).toBe(false);
+    expect(existsSync(path.join(packageDir, 'package.json'))).toBe(true);
+  });
+
+  it('does not bundle optional local embedding runtime packages by default', () => {
+    const appDir = makeTemp('mindos-app-optional-embedding-prune-');
+    writeStandaloneApp(appDir);
+
+    for (const packageName of ['@huggingface/transformers', 'onnxruntime-web', 'onnxruntime-node']) {
+      const packageDir = path.join(appDir, '.next', 'standalone', 'node_modules', packageName);
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ name: packageName, version: '1.0.0' }));
+    }
+
+    materializeStandaloneAssets(appDir);
+
+    for (const packageName of ['@huggingface/transformers', 'onnxruntime-web', 'onnxruntime-node']) {
+      expect(existsSync(path.join(appDir, '.next', 'standalone', 'node_modules', packageName))).toBe(false);
+    }
+  });
+
+  it('keeps optional local embedding runtime packages when explicitly requested', () => {
+    const appDir = makeTemp('mindos-app-optional-embedding-keep-');
+    writeStandaloneApp(appDir);
+
+    for (const packageName of ['@huggingface/transformers', 'onnxruntime-web', 'onnxruntime-node']) {
+      const packageDir = path.join(appDir, '.next', 'standalone', 'node_modules', packageName);
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ name: packageName, version: '1.0.0' }));
+    }
+
+    materializeStandaloneAssets(appDir, { bundleLocalEmbeddingRuntime: true });
+
+    for (const packageName of ['@huggingface/transformers', 'onnxruntime-web', 'onnxruntime-node']) {
+      expect(existsSync(path.join(appDir, '.next', 'standalone', 'node_modules', packageName))).toBe(true);
+    }
   });
 });
 
