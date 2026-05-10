@@ -13,7 +13,7 @@ import { assertPortFree } from '../lib/port.js';
 import { savePids, clearPids } from '../lib/pid.js';
 import { printStartupInfo } from '../lib/startup.js';
 import { spawnMcp } from '../lib/mcp-spawn.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile } from '../lib/shell.js';
 
 export const meta = {
   name: 'dev',
@@ -30,7 +30,7 @@ export const meta = {
 };
 
 export const run = async (args, flags) => {
-  const NEXT_BIN = resolve(WEB_APP_DIR, 'node_modules', '.bin', 'next');
+  const NEXT_CLI = resolve(WEB_APP_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
   loadConfig();
   if (!process.env.MINDOS_WEB_PORT) process.env.MINDOS_WEB_PORT = '3456';
   if (!process.env.MINDOS_MCP_PORT) process.env.MINDOS_MCP_PORT = '8781';
@@ -64,5 +64,5 @@ export const run = async (args, flags) => {
     startSyncDaemon(devMindRoot).catch(() => {});
   }
   await printStartupInfo(webPort, mcpPort);
-  execInherited(`${NEXT_BIN} dev --webpack -p ${webPort} ${args.join(' ')}`, WEB_APP_DIR);
+  execInheritedFile(process.execPath, [NEXT_CLI, 'dev', '--webpack', '-p', webPort, ...args], WEB_APP_DIR);
 };

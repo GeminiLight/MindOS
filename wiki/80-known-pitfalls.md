@@ -2139,6 +2139,12 @@ mindos onboard
 - **解决：** 改为 `execFileSync(command, ['--version'])`，`command` 只在 `npm` / `pnpm` 两个静态值之间选择。
 - **防回归：** `tests/unit/cli-build.test.ts` 增加 source contract，并断言 workspace install 分支调用 `execFileSync('pnpm', ['--version'], ...)`。
 
+### CLI 继承 stdio 的长任务也不要通过 shell 字符串执行 (2026-05-10)
+
+- **问题：** `packages/mindos/bin/lib/shell.js` 这个共享 helper 仍用 `execSync(command, { stdio: 'inherit' })`，导致 `mindos build/dev/start/update/onboard/mcp` 把 Next、setup、MCP bundle、npm install 等命令拼成 shell 字符串。参数里一旦出现空格、引号或来自用户传入的额外 Next 参数，就会重新进入 shell 解析；Windows 下 `.cmd` / 路径解析也更脆弱。
+- **解决：** 增加 `execInheritedFile(command, args, cwd, envPatch)` 和 `execNpmInherited(args, cwd, envPatch)`，所有 CLI 长任务用结构化 argv；Next 改为 `process.execPath + node_modules/next/dist/bin/next`，避免直接执行 `.bin/next` shim；npm 继续复用 `resolveNpmInvocation()`，Windows 下通过 `npm-cli.js` 执行。
+- **防回归：** `tests/unit/cli-shell-subprocess.test.ts` 禁止 `shell.js` 回退到 `execSync(`，并覆盖 `npmInstall()` 的 prefer-offline fallback argv；`tests/unit/cli-build.test.ts` 和 `tests/unit/mcp-build.test.ts` 断言 build/MCP 分支继续传 argv。
+
 ### ACP Windows taskkill 不要拼 shell 字符串 (2026-05-10)
 
 - **问题：** `packages/mindos/src/protocols/acp/subprocess.ts` 的 `killAgent()` 在 Windows 分支用 ``execSync(`taskkill /PID ${pid} /T /F`)``。PID 来自子进程对象，但仍会把进程控制交给 shell 解析，和 CLI stop/update 的 argv 安全规则不一致。

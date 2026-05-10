@@ -5,9 +5,9 @@
 import { resolve } from 'node:path';
 import { ROOT, WEB_APP_DIR } from '../lib/constants.js';
 import { ensureAppDeps, cleanNextDir, writeBuildStamp } from '../lib/build.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile } from '../lib/shell.js';
 
-const NEXT_BIN = resolve(WEB_APP_DIR, 'node_modules', '.bin', 'next');
+const NEXT_CLI = resolve(WEB_APP_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
 
 export const meta = {
   name: 'build',
@@ -17,11 +17,10 @@ export const meta = {
 };
 
 export const run = (args) => {
-  const extra = args.join(' ');
   ensureAppDeps({ force: true });
   cleanNextDir();
-  execInherited('node scripts/gen-renderer-index.js', ROOT);
-  execInherited(`${NEXT_BIN} build --webpack ${extra}`, WEB_APP_DIR, {
+  execInheritedFile(process.execPath, [resolve(ROOT, 'scripts/gen-renderer-index.js')], ROOT);
+  execInheritedFile(process.execPath, [NEXT_CLI, 'build', '--webpack', ...args], WEB_APP_DIR, {
     NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-old-space-size=8192'].filter(Boolean).join(' '),
   });
   writeBuildStamp();

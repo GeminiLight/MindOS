@@ -2,7 +2,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PACKAGE_ROOT } from './constants.js';
 import { yellow } from './colors.js';
-import { execInherited as run } from './shell.js';
+import { execNpmInherited } from './shell.js';
 
 export const MCP_DIR = PACKAGE_ROOT;
 export const MCP_SRC_DIR = resolve(PACKAGE_ROOT, 'src', 'protocols', 'mcp-server');
@@ -67,7 +67,7 @@ export function ensureMcpBundle() {
   console.log(yellow(hadBundle
     ? 'Rebuilding MCP bundle (source changed)...\n'
     : 'Building MCP bundle (first run)...\n'));
-  run('npm run build:protocols', MCP_DIR);
+  execNpmInherited(['run', 'build:protocols'], MCP_DIR);
 
   if (!existsSync(MCP_BUNDLE)) {
     throw new Error(`MCP bundle build did not produce ${MCP_BUNDLE}`);

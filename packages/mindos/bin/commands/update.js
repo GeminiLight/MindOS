@@ -10,7 +10,7 @@ import { dirname, resolve } from 'node:path';
 
 import { ROOT, BUILD_STAMP, CONFIG_PATH, LOG_PATH, MINDOS_DIR, PRODUCT_PACKAGE_JSON } from '../lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile, npmInstall } from '../lib/shell.js';
 import { safeRmSync, assertNotSymlink } from '../lib/safe-rm.js';
 import { EXIT } from '../lib/command.js';
 import { stopMindos } from '../lib/stop.js';
@@ -109,7 +109,7 @@ function buildIfNeeded(newRoot) {
 
   const newWebRoot = resolve(newRoot, 'packages', 'web');
   const newBuildStamp = resolve(newWebRoot, '.next', '.mindos-build-version');
-  const newNextBin = resolve(newWebRoot, 'node_modules', '.bin', 'next');
+  const newNextCli = resolve(newWebRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
 
   let needBuild = true;
   try {
@@ -125,7 +125,7 @@ function buildIfNeeded(newRoot) {
   console.log(yellow('\n  Building MindOS (version change detected)...\n'));
   const appPkg = resolve(newWebRoot, 'package.json');
   if (existsSync(appPkg)) {
-    execInherited('npm install', newWebRoot);
+    npmInstall(newWebRoot);
   }
     const nextDir = resolve(newWebRoot, '.next');
     if (existsSync(nextDir)) {
@@ -137,8 +137,8 @@ function buildIfNeeded(newRoot) {
         throw err;
       }
     }
-  execInherited('node scripts/gen-renderer-index.js', newRoot);
-  execInherited(`${newNextBin} build --webpack`, newWebRoot);
+  execInheritedFile(process.execPath, [resolve(newRoot, 'scripts/gen-renderer-index.js')], newRoot);
+  execInheritedFile(process.execPath, [newNextCli, 'build', '--webpack'], newWebRoot);
   const version = JSON.parse(readFileSync(resolve(newRoot, 'package.json'), 'utf-8')).version;
   writeFileSync(newBuildStamp, version, 'utf-8');
 }

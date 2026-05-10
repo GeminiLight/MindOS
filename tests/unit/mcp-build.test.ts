@@ -31,8 +31,8 @@ beforeEach(() => {
   fs.writeFileSync(path.join(srcDir, 'index.ts'), 'export const ok = true;');
   fs.writeFileSync(path.join(mcpDir, 'package.json'), JSON.stringify({ name: '@geminilight/mindos', version: '1.0.0' }));
 
-  mockRun = vi.fn((command: string) => {
-    if (command === 'npm run build:protocols') {
+  mockRun = vi.fn((args: string[]) => {
+    if (args.join(' ') === 'run build:protocols') {
       writeBundle();
     }
   });
@@ -55,7 +55,7 @@ beforeEach(() => {
     STANDALONE_STAMP: path.join(tempDir, '_standalone', '.mindos-build-version'),
   }));
   vi.doMock('../../packages/mindos/bin/lib/shell.js', () => ({
-    execInherited: mockRun,
+    execNpmInherited: mockRun,
   }));
 });
 
@@ -118,7 +118,7 @@ describe('ensureMcpBundle', () => {
 
     ensureMcpBundle();
 
-    expect(mockRun).toHaveBeenCalledWith('npm run build:protocols', mcpDir);
+    expect(mockRun).toHaveBeenCalledWith(['run', 'build:protocols'], mcpDir);
     expect(fs.existsSync(bundlePath)).toBe(true);
   });
 
@@ -132,7 +132,7 @@ describe('ensureMcpBundle', () => {
 
     ensureMcpBundle();
 
-    expect(mockRun).toHaveBeenCalledWith('npm run build:protocols', mcpDir);
+    expect(mockRun).toHaveBeenCalledWith(['run', 'build:protocols'], mcpDir);
   });
 
   it('does nothing when the bundle is already current', async () => {

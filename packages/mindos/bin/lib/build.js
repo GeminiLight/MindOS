@@ -15,7 +15,7 @@ import {
   STATIC_WEB_STAMP,
 } from './constants.js';
 import { red, dim, yellow } from './colors.js';
-import { execInherited as run, npmInstall } from './shell.js';
+import { execInheritedFile as runFile, npmInstall } from './shell.js';
 import { safeRmSync, assertNotSymlink } from './safe-rm.js';
 
 export function needsBuild() {
@@ -174,9 +174,9 @@ function installAppDependencies(usePnpmWorkspaceInstall) {
     // that are intentionally exact-versioned for npm publishing but not stable
     // in the local lockfile importer. `mindos build` should repair local deps;
     // CI should run a separate frozen install check when lock consistency is required.
-    run('pnpm install --no-frozen-lockfile', ROOT);
+    runFile('pnpm', ['install', '--no-frozen-lockfile'], ROOT);
   } else {
-    npmInstall(WEB_APP_DIR, '--no-workspaces');
+    npmInstall(WEB_APP_DIR, ['--no-workspaces']);
   }
 }
 

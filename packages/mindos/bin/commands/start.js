@@ -39,10 +39,10 @@ import { killByPort } from '../lib/stop.js';
 import { printStartupInfo } from '../lib/startup.js';
 import { spawnMcp } from '../lib/mcp-spawn.js';
 import { EXIT } from '../lib/command.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile } from '../lib/shell.js';
 
 /** Local Next.js binary (avoids a mismatched global `next`). */
-const NEXT_BIN = resolve(WEB_APP_DIR, 'node_modules', '.bin', 'next');
+const NEXT_CLI = resolve(WEB_APP_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
 
 function ensureStandaloneRuntimeDir(liveName, publishableName) {
   const standaloneDir = resolve(PACKAGE_ROOT, '_standalone');
@@ -122,7 +122,6 @@ export const run = async (args, flags) => {
     process.env.LAUNCHED_BY_LAUNCHD === '1' || !!process.env.INVOCATION_ID;
   const isDaemon = !launchedByDaemon && (Boolean(flags.daemon) || isDaemonMode());
   const isVerbose = Boolean(flags.verbose);
-  const extra = args.join(' ');
 
   // Ensure `mindos` CLI shim + PATH injection (silent, best-effort)
   const isDesktop = !!(process.env.ELECTRON_RUN_AS_NODE || process.env.MINDOS_DESKTOP);
@@ -295,8 +294,8 @@ export const run = async (args, flags) => {
   if (!useProductServer() && needsBuild()) {
     console.log(yellow('Building MindOS (first run or new version detected)...\n'));
     cleanNextDir();
-    execInherited('node scripts/gen-renderer-index.js', ROOT);
-    execInherited(`${NEXT_BIN} build --webpack`, WEB_APP_DIR, {
+    execInheritedFile(process.execPath, [resolve(ROOT, 'scripts/gen-renderer-index.js')], ROOT);
+    execInheritedFile(process.execPath, [NEXT_CLI, 'build', '--webpack'], WEB_APP_DIR, {
       NODE_OPTIONS: [process.env.NODE_OPTIONS, '--max-old-space-size=8192'].filter(Boolean).join(' '),
     });
     writeBuildStamp();
@@ -352,7 +351,7 @@ export const run = async (args, flags) => {
       process.exit(err.status || 1);
     }
   } else {
-    execInherited(`${NEXT_BIN} start -p ${webPort} ${extra}`, WEB_APP_DIR, {
+    execInheritedFile(process.execPath, [NEXT_CLI, 'start', '-p', webPort, ...args], WEB_APP_DIR, {
       HOSTNAME: webHost,
     });
   }

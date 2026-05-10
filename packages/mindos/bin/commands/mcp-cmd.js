@@ -3,7 +3,7 @@
  */
 
 import { loadConfig } from '../lib/config.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile } from '../lib/shell.js';
 import { printCommandHelp } from '../lib/command.js';
 
 export const meta = {
@@ -51,5 +51,5 @@ export const run = async (args) => {
     process.env.MCP_PORT = process.env.MINDOS_MCP_PORT || '8781';
   }
 
-  execInherited(`node "${MCP_BUNDLE}"`, MCP_DIR);
+  execInheritedFile(process.execPath, [MCP_BUNDLE], MCP_DIR);
 };

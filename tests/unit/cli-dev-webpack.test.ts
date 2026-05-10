@@ -8,7 +8,8 @@ describe('mindos dev webpack contract', () => {
   it('starts Next dev with webpack to avoid Turbopack pnpm workspace root issues', () => {
     const devCommand = readFileSync(resolve(root, 'packages/mindos/bin/commands/dev.js'), 'utf-8');
 
-    expect(devCommand).toContain('dev --webpack -p');
+    expect(devCommand).toContain("'dev', '--webpack', '-p'");
+    expect(devCommand).toContain("execInheritedFile(process.execPath, [NEXT_CLI");
     expect(devCommand).not.toContain('`${NEXT_BIN} dev -p');
   });
 });

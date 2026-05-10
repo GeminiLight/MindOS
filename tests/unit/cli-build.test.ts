@@ -236,7 +236,7 @@ describe('ensureAppDeps', () => {
     }));
 
     const mockNpmInstall = vi.fn();
-    const mockRun = vi.fn((_command: string, cwd: string) => {
+    const mockRun = vi.fn((_command: string, _args: string[], cwd: string) => {
       expect(cwd).toBe(tempDir);
       for (const dep of ['next', 'react', 'react-dom']) {
         const depDir = path.join(appDir, 'node_modules', dep);
@@ -245,7 +245,7 @@ describe('ensureAppDeps', () => {
       }
     });
     vi.doMock('../../packages/mindos/bin/lib/shell.js', () => ({
-      execInherited: mockRun,
+      execInheritedFile: mockRun,
       npmInstall: mockNpmInstall,
     }));
 
@@ -276,7 +276,7 @@ describe('ensureAppDeps', () => {
     build.ensureAppDeps();
 
     expect(mockExecFileSync).toHaveBeenCalledWith('pnpm', ['--version'], { stdio: 'pipe' });
-    expect(mockRun).toHaveBeenCalledWith('pnpm install --no-frozen-lockfile', tempDir);
+    expect(mockRun).toHaveBeenCalledWith('pnpm', ['install', '--no-frozen-lockfile'], tempDir);
     expect(mockNpmInstall).not.toHaveBeenCalled();
   });
 });

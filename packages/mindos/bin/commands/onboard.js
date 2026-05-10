@@ -4,7 +4,7 @@
 
 import { resolve } from 'node:path';
 import { ROOT } from '../lib/constants.js';
-import { execInherited } from '../lib/shell.js';
+import { execInheritedFile } from '../lib/shell.js';
 
 export const meta = {
   name: 'onboard',
@@ -20,6 +20,7 @@ export const meta = {
 };
 
 export const run = (args, flags) => {
-  const daemonFlag = flags['install-daemon'] ? ' --install-daemon' : '';
-  execInherited(`node "${resolve(ROOT, 'scripts/setup.js')}"${daemonFlag}`);
+  const setupArgs = [resolve(ROOT, 'scripts/setup.js')];
+  if (flags['install-daemon']) setupArgs.push('--install-daemon');
+  execInheritedFile(process.execPath, setupArgs);
 };
