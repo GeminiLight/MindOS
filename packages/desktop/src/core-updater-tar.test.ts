@@ -217,4 +217,17 @@ describe('extractTarGzJs — GNU LongLink support', () => {
     await expect(extractTarGzJs(TARBALL, DEST_DIR)).rejects.toThrow(/outside extraction directory/);
     expect(existsSync(path.join(TMP, 'evil.txt'))).toBe(false);
   });
+
+  it('rejects Windows drive-relative archive entries even on POSIX hosts', async () => {
+    const data = Buffer.from('owned');
+    const chunks = [
+      tarHeader('C:evil.txt', data.length, '0'),
+      paddedData(data),
+      Buffer.alloc(1024),
+    ];
+    writeFileSync(TARBALL, gzipSync(Buffer.concat(chunks)));
+
+    await expect(extractTarGzJs(TARBALL, DEST_DIR)).rejects.toThrow(/outside extraction directory/);
+    expect(existsSync(path.join(DEST_DIR, 'C:evil.txt'))).toBe(false);
+  });
 });

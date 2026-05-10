@@ -3305,6 +3305,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖 `C:secret.md` 和 `d:Projects/note.md`，要求即使在 POSIX host 上也必须抛错。
 
+### Desktop tar entry 也必须拒绝 Windows drive-relative 路径（2026-05-10）
+
+**症状**：Windows runtime updater 的 JS tar extractor 已拒绝 `../evil`、`/absolute` 和 `C:\absolute`，但在 POSIX host 上会把 `C:evil.txt` 当成普通文件名写入目标目录。
+
+**根因**：tar entry containment helper 和共享 `resolveSafe()` 有相同遗漏：`path.win32.isAbsolute('C:evil.txt')` 返回 false，不能覆盖 drive-relative / drive-prefixed 输入。
+
+**修复**：`resolveTarEntryPath()` 在原始 entry name 和 normalized entry name 上都拒绝 `/^[A-Za-z]:/`，避免跨平台 tar entry 语义分歧。
+
+**防回归**：`packages/desktop/src/core-updater-tar.test.ts` 构造 `C:evil.txt` tar entry，要求 extractor 抛出 `outside extraction directory`，且不会写入目标目录。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。

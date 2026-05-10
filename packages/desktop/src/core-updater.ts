@@ -371,6 +371,8 @@ function resolveTarEntryPath(destDir: string, entryName: string): string {
     path.posix.isAbsolute(normalizedEntryName)
     || path.win32.isAbsolute(entryName)
     || path.win32.isAbsolute(normalizedEntryName)
+    || hasWindowsDrivePrefix(entryName)
+    || hasWindowsDrivePrefix(normalizedEntryName)
     || normalizedEntryName.split('/').includes('..')
   ) {
     throw new Error(`Tar entry outside extraction directory: ${entryName}`);
@@ -388,6 +390,10 @@ function resolveTarEntryPath(destDir: string, entryName: string): string {
   }
 
   return winLongPath(entryPath);
+}
+
+function hasWindowsDrivePrefix(filePath: string): boolean {
+  return /^[A-Za-z]:/.test(filePath);
 }
 
 /** Decompress a .gz file into a Buffer using Node's built-in zlib. */
