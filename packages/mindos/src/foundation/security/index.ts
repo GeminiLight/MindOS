@@ -74,7 +74,12 @@ export function isWithinRoot(resolved: string, root: string): Result<boolean> {
  * Throws AppError if the path is outside the root.
  */
 export function resolveSafe(root: string, filePath: string): string {
-  if (path.isAbsolute(filePath)) {
+  const normalizedFilePath = normalizePath(filePath);
+  if (
+    path.isAbsolute(normalizedFilePath) ||
+    path.win32.isAbsolute(filePath) ||
+    path.win32.isAbsolute(normalizedFilePath)
+  ) {
     throw createError(
       'VALIDATION_ERROR',
       'Access denied: absolute paths are not allowed',
@@ -83,7 +88,7 @@ export function resolveSafe(root: string, filePath: string): string {
   }
 
   const rootResolved = path.resolve(root);
-  const resolved = path.resolve(path.join(rootResolved, filePath));
+  const resolved = path.resolve(path.join(rootResolved, normalizedFilePath));
   assertWithinRoot(resolved, rootResolved);
   return resolved;
 }

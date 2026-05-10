@@ -2,6 +2,18 @@
 
 # 踩坑记录 (Known Pitfalls)
 
+## Cross-platform path safety
+
+### Shared path safety 不能只按当前 OS 判断路径语义（2026-05-10）
+
+**症状**：在 macOS/Linux 上调用 `resolveSafe(root, filePath)` 时，`C:/Users/Ada/secret.md`、`C:\Users\Ada\secret.md` 或 `\\server\share\secret.md` 这类 Windows absolute path 会被当成 root 内的相对路径；`..\secret.md` 也会被当成普通文件名，而不是 Windows 语义下的目录穿越。
+
+**根因**：`path.isAbsolute()` 只使用当前宿主 OS 的路径规则。POSIX 宿主不会识别 Windows drive path / UNC path；同时 `path.join()` 不会把反斜杠当成 POSIX 分隔符。
+
+**修复**：共享安全入口先用 `normalizePath()` 把反斜杠规范成 `/`，并同时用 `path.isAbsolute()` 与 `path.win32.isAbsolute()` 拒绝 POSIX、Windows drive 和 UNC absolute path，再基于规范化后的相对路径做 root containment 校验。
+
+**防回归**：`packages/mindos/src/foundation/security/path-safety.test.ts` 覆盖 Windows absolute path 在 POSIX host 也必须拒绝、`..\secret.md` 必须被视为 traversal、`Projects\note.md` 仍能解析为 root 内安全路径。
+
 ## v1 Monorepo Migration
 
 ### v1 迁移后不要再把顶层 `app/` / `apps/` / `desktop/` / `mobile/` 当源码入口

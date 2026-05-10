@@ -96,6 +96,17 @@ describe('@mindos/security', () => {
       expect(() => resolveSafe(testRoot, '/etc/passwd')).toThrow();
     });
 
+    it('should throw for Windows absolute paths even on POSIX hosts', () => {
+      expect(() => resolveSafe(testRoot, 'C:/Users/Ada/secret.md')).toThrow();
+      expect(() => resolveSafe(testRoot, 'C:\\Users\\Ada\\secret.md')).toThrow();
+      expect(() => resolveSafe(testRoot, '\\\\server\\share\\secret.md')).toThrow();
+    });
+
+    it('should treat backslashes as path separators for traversal checks', () => {
+      expect(() => resolveSafe(testRoot, '..\\secret.md')).toThrow();
+      expect(resolveSafe(testRoot, 'Projects\\note.md')).toBe(path.join(testRoot, 'Projects', 'note.md'));
+    });
+
     it('should resolve safe paths whose segment starts with consecutive dots', () => {
       const resolved = resolveSafe(testRoot, '..notes/file.txt');
       expect(resolved).toBe(path.join(testRoot, '..notes/file.txt'));
