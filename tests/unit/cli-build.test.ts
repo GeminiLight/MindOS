@@ -167,6 +167,14 @@ describe('ensureAppDeps', () => {
     expect(source).toContain("const command = usePnpmWorkspaceInstall ? 'pnpm' : 'npm'");
   });
 
+  it('formats manual dependency repair hints through the shared path-quoting helper', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'lib', 'build.js'), 'utf-8');
+
+    expect(source).toContain('formatManualCdCommand');
+    expect(source).not.toContain('Try manually: cd ${ROOT}');
+    expect(source).not.toContain('Try manually: cd ${appDir}');
+  });
+
   it('skips install when next is present and deps hash matches', async () => {
     // Create node_modules/next/package.json
     const nextPkg = path.join(appDir, 'node_modules', 'next');

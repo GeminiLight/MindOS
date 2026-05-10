@@ -15,7 +15,7 @@ import {
   STATIC_WEB_STAMP,
 } from './constants.js';
 import { red, dim, yellow } from './colors.js';
-import { execInheritedFile as runFile, npmInstall } from './shell.js';
+import { execInheritedFile as runFile, formatManualCdCommand, npmInstall } from './shell.js';
 import { safeRmSync, assertNotSymlink } from './safe-rm.js';
 
 export function needsBuild() {
@@ -264,14 +264,13 @@ export function ensureAppDeps({ force = false } = {}) {
         console.error(red('\n✘ Failed to install dependencies after retry.\n'));
         const appDir = WEB_APP_DIR;
         if (usePnpmWorkspaceInstall) {
-          console.error(`  Try manually: cd ${ROOT} && pnpm install --no-frozen-lockfile`);
+          console.error(`  Try manually: ${formatManualCdCommand(ROOT, 'pnpm install --no-frozen-lockfile')}`);
           process.exit(1);
         }
-        if (process.platform === 'win32') {
-          console.error(`  Try manually: cd "${appDir}" && rmdir /s /q node_modules && npm install`);
-        } else {
-          console.error(`  Try manually: cd ${appDir} && rm -rf node_modules && npm install`);
-        }
+        const cleanCommand = process.platform === 'win32'
+          ? 'rmdir /s /q node_modules && npm install'
+          : 'rm -rf node_modules && npm install';
+        console.error(`  Try manually: ${formatManualCdCommand(appDir, cleanCommand)}`);
         process.exit(1);
       }
     }

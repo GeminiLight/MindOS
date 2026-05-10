@@ -2157,6 +2157,12 @@ mindos onboard
 - **解决：** 增加 `execInheritedFile(command, args, cwd, envPatch)` 和 `execNpmInherited(args, cwd, envPatch)`，所有 CLI 长任务用结构化 argv；Next 改为 `process.execPath + node_modules/next/dist/bin/next`，避免直接执行 `.bin/next` shim；npm 继续复用 `resolveNpmInvocation()`，Windows 下通过 `npm-cli.js` 执行。
 - **防回归：** `tests/unit/cli-shell-subprocess.test.ts` 禁止 `shell.js` 回退到 `execSync(`，并覆盖 `npmInstall()` 的 prefer-offline fallback argv；`tests/unit/cli-build.test.ts` 和 `tests/unit/mcp-build.test.ts` 断言 build/MCP 分支继续传 argv。
 
+### CLI 手动修复提示里的路径也要 quote (2026-05-10)
+
+- **问题：** `npmInstall()` 和 `ensureAppDeps()` 失败后打印 `cd ${path} && ...` 手动修复命令。虽然真正执行已经是 argv-safe，但用户目录 / checkout 路径只要含空格或单引号，复制这条 fallback 命令就会失败；Windows 跨盘符路径也需要 `cd /d`。
+- **解决：** 在 `packages/mindos/bin/lib/shell.js` 增加 `formatManualCdCommand()`，Unix 用 POSIX 单引号转义，Windows 用 `cd /d "..."`；`build.js` 的 pnpm / npm 依赖修复提示都复用该 helper。
+- **防回归：** `tests/unit/cli-shell-subprocess.test.ts` 覆盖含空格和单引号的路径、Windows `cd /d` 提示，以及 npm fallback 的实际输出；`tests/unit/cli-build.test.ts` 禁止 build.js 回退到裸 `cd ${ROOT}` / `cd ${appDir}`。
+
 ### setup.js 首次配置流程也不要拼 shell 字符串 (2026-05-10)
 
 - **问题：** 根目录 `scripts/setup.js` 是 `mindos onboard` 的源码，但 `packages/mindos/scripts/` 是忽略的打包副本；修首次配置问题时必须改根目录源码。该脚本历史上用 shell 字符串执行 tar、npx skills、open/xdg-open/cmd.exe、`command -v`、`npm link`、`node cli.js start/restart`，路径和 URL 一旦含空格/引号就容易解析错，Windows 的 npx/npm `.cmd` shim 也不能直接交给 `execFile`。

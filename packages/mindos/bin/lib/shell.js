@@ -6,6 +6,21 @@ import { execFileSync } from 'node:child_process';
 import { ROOT } from './constants.js';
 import { resolveNpmInvocation } from './npm-invocation.js';
 
+export function quoteManualShellArg(value, platform = process.platform) {
+  const text = String(value);
+  if (platform === 'win32') {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+export function formatManualCdCommand(cwd, command, platform = process.platform) {
+  const cd = platform === 'win32'
+    ? `cd /d ${quoteManualShellArg(cwd, platform)}`
+    : `cd ${quoteManualShellArg(cwd, platform)}`;
+  return `${cd} && ${command}`;
+}
+
 /**
  * @param {string} command
  * @param {string[]} [args]
@@ -50,7 +65,7 @@ export const npmInstall = (cwd, extraFlags = []) => {
       execFileSync(invocation.command, invocation.args, { cwd, stdio: 'inherit', env: process.env });
     } catch (err) {
       console.error(`\nFailed to install dependencies in ${cwd}`);
-      console.error(`  Try manually: cd ${cwd} && ${base}\n`);
+      console.error(`  Try manually: ${formatManualCdCommand(cwd, base)}\n`);
       process.exit(err.status || 1);
     }
   }
