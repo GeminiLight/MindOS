@@ -124,11 +124,17 @@ exit 127
   }
 }
 
+export function escapeCmdSetValue(value: string): string {
+  return value
+    .replace(/\^/g, '^^')
+    .replace(/%/g, '%%')
+    .replace(/!/g, '^^!');
+}
+
 function writeWindowsShim(cliJs: string): void {
   const nodePrivate = path.join(app.getPath('home'), '.mindos', 'node', 'node.exe');
-  // Escape for delayed expansion: ! → ^! (must escape before setting into variable)
-  const cliEsc = cliJs.replace(/!/g, '^^!');
-  const privEsc = nodePrivate.replace(/!/g, '^^!');
+  const cliEsc = escapeCmdSetValue(cliJs);
+  const privEsc = escapeCmdSetValue(nodePrivate);
   const lines = [
     '@echo off',
     'setlocal enabledelayedexpansion',

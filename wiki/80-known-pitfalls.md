@@ -2199,6 +2199,12 @@ mindos onboard
 - **解决：** 增加 `needsWindowsShell(command)`，仅 `.cmd` / `.bat` launcher 启用 shell；`powershell.exe`、Unix `tar`、其他 `.exe` 继续 argv spawn。
 - **防回归：** `packages/desktop/src/node-bootstrap.test.ts` 禁止源码重新出现 blanket Windows shell，并断言 `spawnAsync()` / npm 调用都走 `needsWindowsShell(...)`。
 
+### Desktop 生成 Windows `.cmd` shim 时要转义 `%` / `^` / `!` (2026-05-10)
+
+- **问题：** `packages/desktop/src/install-cli-shim.ts` 生成 `mindos.cmd` 时只转义 delayed expansion 的 `!`。如果用户 home 或 runtime 路径包含 `%TEMP%` 这类百分号片段，batch 文件会在 `set "CLI=..."` 前先做环境变量展开；`^` 也会被当作转义符。
+- **解决：** 抽出 `escapeCmdSetValue()`，写入 batch `set` 值前依次转义 `^`、`%`、`!`，确保路径按字面量进入变量。
+- **防回归：** `packages/desktop/src/install-cli-shim.test.ts` 覆盖 `%`、`^`、`!` 混合路径，避免只修 delayed expansion 而漏掉 batch 百分号展开。
+
 ### Desktop SSH 隧道探测不要把 ssh 路径和 host 拼进 shell (2026-05-10)
 
 - **问题：** `packages/desktop/src/ssh-tunnel.ts` 用 `execAsync("ssh ... ${host}")`、`execAsync(\`ssh-add "${resolvedKey}"\`)`、`execSync(\`"${candidate}" -V\`)` 探测 SSH。Windows 安装路径、key 路径或 host 名含空格/引号时容易解析错，也扩大了 shell 注入面。
