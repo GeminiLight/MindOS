@@ -18,6 +18,7 @@ import {
   type MindosRuntimeSettings,
 } from './runtime.js';
 import { MINDOS_SERVER_ROUTES } from './contract.js';
+import { createDefaultMcpAgents } from './mcp-agent-registry.js';
 import { handleA2aAgentsGet, handleA2aDelegationsGet, handleA2aDiscoverPost, handleA2aOptions, handleA2aPost } from './handlers/a2a.js';
 import {
   handleAcpConfigDelete,
@@ -150,6 +151,12 @@ export type MindosHttpServerOptions = {
   runtime?: MindosRuntimeOptions;
 };
 
+type DefaultMindosHttpServicesOptions = MindosRuntimeOptions & {
+  runtimeRoot?: string;
+  staticRoot?: string;
+  mcpAgents?: Record<string, MindosMcpAgentDef>;
+};
+
 export type MindosHttpServer = {
   server: Server;
   url: string;
@@ -157,7 +164,7 @@ export type MindosHttpServer = {
   close(): Promise<void>;
 };
 
-export function createDefaultMindosHttpServices(options: MindosRuntimeOptions & { runtimeRoot?: string; staticRoot?: string } = {}): MindosHttpServices {
+export function createDefaultMindosHttpServices(options: DefaultMindosHttpServicesOptions = {}): MindosHttpServices {
   const mindRoot = getDefaultMindRoot(options);
   return {
     mindRoot,
@@ -175,6 +182,7 @@ export function createDefaultMindosHttpServices(options: MindosRuntimeOptions & 
     search: (query, searchOptions) => searchMindRoot(mindRoot, query, searchOptions),
     readSettings: () => readRuntimeSettings(options),
     writeSettings: (settings) => writeRuntimeSettings(settings, options),
+    mcpAgents: options.mcpAgents ?? createDefaultMcpAgents(),
     mcpTools: {
       readMcpConfig: () => ({ mcpServers: {} }),
       readMcpToolCache: () => null,

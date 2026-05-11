@@ -1,7 +1,7 @@
 import { execFileSync } from 'child_process';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, join, resolve } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosMcpAgentDef } from './mcp-install.js';
 
@@ -145,7 +145,7 @@ export async function handleMcpAgentsGet(
         : (services.detectAgentPresence?.(key) ?? defaultDetectAgentPresence(agent, services));
       const status = isCustom
         ? detectCustomAgentInstalled(agent, services)
-        : (services.detectInstalled?.(key) ?? { installed: false });
+        : (services.detectInstalled?.(key) ?? defaultDetectAgentInstalled(agent, services));
       const skillProfile = isCustom && customDef
         ? resolveCustomSkillWorkspaceProfile(customDef, agent, services)
         : (services.resolveSkillWorkspaceProfile?.(key) ?? defaultSkillWorkspaceProfile(key, agent, services));
@@ -154,7 +154,7 @@ export async function handleMcpAgentsGet(
         : (services.detectAgentRuntimeSignals?.(key) ?? defaultRuntimeSignals(agent, services));
       const configuredMcp = isCustom && customDef
         ? detectCustomAgentConfiguredMcp(customDef, services)
-        : (services.detectAgentConfiguredMcpServers?.(key) ?? { servers: [], sources: [] });
+        : (services.detectAgentConfiguredMcpServers?.(key) ?? defaultDetectAgentConfiguredMcp(agent, services));
       const installedSkills = isCustom && customDef
         ? (services.scanCustomAgentSkills?.(customDef) ?? defaultScanCustomAgentSkills(customDef, services))
         : (services.detectAgentInstalledSkills?.(key) ?? { skills: [], sourcePath: skillProfile.workspacePath });
@@ -246,12 +246,48 @@ export function parseJsonForServers(content: string, key: string): string[] {
 export function parseTomlForServers(content: string, sectionKey: string): string[] {
   const names = new Set<string>();
   const sectionPrefix = `${sectionKey}.`;
+  let inRootSection = false;
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) continue;
-    const section = trimmed.slice(1, -1).trim();
-    if (!section.startsWith(sectionPrefix)) continue;
-    const name = section.slice(sectionPrefix.length).split('.')[0];
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const section = trimmed.slice(1, -1).trim();
+      inRootSection = section === sectionKey;
+      if (section.startsWith(sectionPrefix)) {
+        const name = section.slice(sectionPrefix.length).split('.')[0];
+        if (name) names.add(name);
+      }
+      continue;
+    }
+    if (inRootSection) {
+      const key = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=/)?.[1];
+      if (key) names.add(key);
+    }
+  }
+  return [...names].sort();
+}
+
+export function parseYamlForServers(content: string, sectionKey: string): string[] {
+  const names = new Set<string>();
+  let inSection = false;
+  let baseIndent = -1;
+  for (const line of content.split('\n')) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+    if (indent === 0 && trimmed === `${sectionKey}:`) {
+      inSection = true;
+      baseIndent = -1;
+      continue;
+    }
+    if (indent === 0 && trimmed) {
+      inSection = false;
+      continue;
+    }
+    if (!inSection) continue;
+    if (baseIndent < 0) baseIndent = indent;
+    if (indent !== baseIndent) continue;
+    const name = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/)?.[1];
     if (name) names.add(name);
   }
   return [...names].sort();
@@ -382,6 +418,187 @@ function detectCustomAgentInstalled(
   return { installed: false };
 }
 
+function defaultDetectAgentInstalled(
+  agent: MindosMcpAgentRegistryDef,
+  services: MindosMcpAgentsServices,
+): MindosMcpAgentInstallStatus {
+  for (const [scopeType, cfgPath] of [['global', agent.global], ['project', agent.project]] as Array<['global' | 'project', string | null | undefined]>) {
+    if (!cfgPath) continue;
+    const absPath = resolveAgentConfigPath(cfgPath, scopeType, services);
+    const pathExists = services.pathExists ?? existsSync;
+    if (!pathExists(absPath)) continue;
+
+    try {
+      const readTextFile = services.readTextFile ?? readFileSyncUtf8;
+      const content = readTextFile(absPath);
+      const entry = readMindosMcpEntry(content, agent, scopeType);
+      if (!entry) continue;
+      const transport = entry.type === 'stdio' || entry.command ? 'stdio' : entry.url ? 'http' : 'unknown';
+      return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
+    } catch {
+      continue;
+    }
+  }
+
+  return { installed: false };
+}
+
+function defaultDetectAgentConfiguredMcp(
+  agent: MindosMcpAgentRegistryDef,
+  services: MindosMcpAgentsServices,
+): MindosMcpAgentConfiguredServers {
+  const servers = new Set<string>();
+  const sources: string[] = [];
+  for (const [scopeType, cfgPath] of [['global', agent.global], ['project', agent.project]] as Array<['global' | 'project', string | null | undefined]>) {
+    if (!cfgPath) continue;
+    const absPath = resolveAgentConfigPath(cfgPath, scopeType, services);
+    const pathExists = services.pathExists ?? existsSync;
+    if (!pathExists(absPath)) continue;
+
+    try {
+      const readTextFile = services.readTextFile ?? readFileSyncUtf8;
+      const content = readTextFile(absPath);
+      const names = readMcpServerNames(content, agent, scopeType);
+      for (const name of names) servers.add(name);
+      if (names.length > 0) sources.push(`${scopeType}:${cfgPath}`);
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    servers: [...servers].sort((a, b) => a.localeCompare(b)),
+    sources,
+  };
+}
+
+function readMcpServerNames(
+  content: string,
+  agent: MindosMcpAgentRegistryDef,
+  scopeType: 'global' | 'project',
+): string[] {
+  if (agent.format === 'toml') return parseTomlForServers(content, agent.key);
+  if (agent.format === 'yaml') return parseYamlForServers(content, agent.key);
+  const config = parseJsonc(content);
+  const container = scopeType === 'global' && agent.globalNestedKey
+    ? readNestedRecord(config, agent.globalNestedKey)
+    : readOwnRecord(config, agent.key);
+  return Object.keys(container ?? {}).sort((a, b) => a.localeCompare(b));
+}
+
+function readMindosMcpEntry(
+  content: string,
+  agent: MindosMcpAgentRegistryDef,
+  scopeType: 'global' | 'project',
+): { type?: string; command?: string; url?: string } | null {
+  if (agent.format === 'toml') return parseTomlMcpEntry(content, agent.key, 'mindos');
+  if (agent.format === 'yaml') return parseYamlMcpEntry(content, agent.key, 'mindos');
+  const config = parseJsonc(content);
+  const container = scopeType === 'global' && agent.globalNestedKey
+    ? readNestedRecord(config, agent.globalNestedKey)
+    : readOwnRecord(config, agent.key);
+  const entry = readOwnRecord(container, 'mindos');
+  if (!entry) return null;
+  return {
+    type: typeof entry.type === 'string' ? entry.type : undefined,
+    command: typeof entry.command === 'string' ? entry.command : undefined,
+    url: typeof entry.url === 'string' ? entry.url : undefined,
+  };
+}
+
+function parseTomlMcpEntry(
+  content: string,
+  sectionKey: string,
+  serverName: string,
+): { type?: string; url?: string } | null {
+  const targetSection = `[${sectionKey}.${serverName}]`;
+  const rootSection = `[${sectionKey}]`;
+  let inTargetSection = false;
+  let inRootSection = false;
+  let foundInline = false;
+  let entry: { type?: string; url?: string } = {};
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      if ((inTargetSection || foundInline) && (entry.type || entry.url)) return entry;
+      inTargetSection = trimmed === targetSection;
+      inRootSection = trimmed === rootSection;
+      foundInline = false;
+      entry = {};
+      continue;
+    }
+
+    const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*(.+)$/);
+    if (!match) continue;
+    const key = match[1];
+    const rawValue = match[2];
+    if (!key || !rawValue) continue;
+    const value = rawValue.replace(/^["'](.+)["']$/, '$1');
+    if (inTargetSection) {
+      if (key === 'type') entry.type = value;
+      if (key === 'url') entry.url = value;
+    } else if (inRootSection && key === serverName) {
+      entry.type = rawValue.match(/type\s*=\s*["']([^"']+)["']/)?.[1];
+      entry.url = rawValue.match(/url\s*=\s*["']([^"']+)["']/)?.[1];
+      foundInline = true;
+    }
+  }
+
+  return (inTargetSection || foundInline) && (entry.type || entry.url) ? entry : null;
+}
+
+function parseYamlMcpEntry(
+  content: string,
+  sectionKey: string,
+  serverName: string,
+): { command?: string; url?: string } | null {
+  let inSection = false;
+  let inServer = false;
+  let baseIndent = -1;
+  let serverIndent = -1;
+  const entry: { command?: string; url?: string } = {};
+
+  for (const line of content.split('\n')) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+    if (indent === 0 && trimmed === `${sectionKey}:`) {
+      inSection = true;
+      inServer = false;
+      baseIndent = -1;
+      serverIndent = -1;
+      continue;
+    }
+    if (indent === 0 && trimmed) {
+      if (inServer) return Object.keys(entry).length > 0 ? entry : {};
+      inSection = false;
+      continue;
+    }
+    if (!inSection) continue;
+    if (baseIndent < 0) baseIndent = indent;
+    if (indent === baseIndent) {
+      if (inServer) return Object.keys(entry).length > 0 ? entry : {};
+      inServer = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/)?.[1] === serverName;
+      serverIndent = -1;
+      continue;
+    }
+    if (!inServer) continue;
+    if (serverIndent < 0) serverIndent = indent;
+    if (indent !== serverIndent) continue;
+    const match = trimmed.match(/^(command|url)\s*:\s*["']?([^"'\n]+)["']?\s*$/);
+    if (!match) continue;
+    const key = match[1];
+    const value = match[2];
+    if (!key || !value) continue;
+    if (key === 'command') entry.command = value.trim();
+    if (key === 'url') entry.url = value.trim();
+  }
+
+  return inServer ? entry : null;
+}
+
 function resolveCustomSkillWorkspaceProfile(
   custom: MindosCustomMcpAgentDef,
   agent: MindosMcpAgentRegistryDef,
@@ -503,6 +720,16 @@ function parseJsonc(text: string): Record<string, unknown> {
 function expandHome(path: string, homeDir?: string): string {
   if (!path.startsWith('~/') && !path.startsWith('~\\')) return path;
   return resolve(homeDir ?? homedir(), path.slice(2));
+}
+
+function resolveAgentConfigPath(
+  configPath: string,
+  scopeType: 'global' | 'project',
+  services: Pick<MindosMcpAgentsServices, 'homeDir' | 'projectRoot'>,
+): string {
+  const expanded = expandHome(configPath, services.homeDir);
+  if (scopeType !== 'project' || isAbsolute(expanded)) return expanded;
+  return resolve(services.projectRoot ?? process.cwd(), expanded);
 }
 
 function getHomeDir(services: Pick<MindosMcpAgentsServices, 'homeDir'>): string {

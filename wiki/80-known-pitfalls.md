@@ -2345,6 +2345,16 @@ mindos onboard
 - **解决：** 在 `packages/mindos/src/protocols/acp/agent-descriptors.ts` 为 Cline 增加 `%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/`，并让 `detect-local.ts` 的 `expandHome()` 同时展开 `%ENVVAR%` token。由于 Web 通过 `@geminilight/mindos/protocols/acp` 的 `dist` export 使用该逻辑，改完 source 后必须重新 build 产品包。
 - **规则：** ACP/MCP Agent descriptor 中出现 VS Code / AppData 风格路径时，必须同时覆盖 macOS、Linux、Windows，并给 `%APPDATA%` 展开加测试；不要只测当前开发机平台。
 
+### Product Server 默认不能丢 MCP Agent Registry (2026-05-11)
+
+**症状**：桌面版或产品 runtime 页面显示 “No agents detected”，但用户机器上实际存在 `~/.claude`、`~/.codex`、`~/.cursor` 等 Agent 目录，CLI/ACP 独立检测也能发现本机 agents。
+
+**根因**：Next route 会显式把 Web 侧 `MCP_AGENTS` 注入 `/api/mcp/agents` handler，但 `createDefaultMindosHttpServices()` 没有默认 `mcpAgents`。桌面/产品 runtime 走产品 HTTP server 时，handler 收到空 registry，无法扫描任何本机 agent。
+
+**修复**：在 `packages/mindos/src/server/mcp-agent-registry.ts` 提供产品 runtime 自有默认 registry，并让 `createDefaultMindosHttpServices()` 默认注入；产品 handler 同时补齐 JSON/JSONC/TOML/YAML 的 `mindos` 安装态与 configured server 扫描。
+
+**防回归**：`packages/mindos/src/server.test.ts` 覆盖默认产品服务必须返回 26 个 agents，并能在无 CLI PATH 的情况下仅凭本机隐藏目录/config 文件检测 Claude Code 与 Codex。
+
 ### Turbopack dev cache 与 webpack build cache 混用导致每请求 compile 7-8s（2026-04-05）
 
 - **症状：** 历史 `next dev`（Turbopack）每个请求 compile 7-8s，`/api/tree-version`（9 行代码）也要 15s 完成；view 页面 render 60-100s；3s 轮询不断积压，页面完全点不动

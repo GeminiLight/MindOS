@@ -522,6 +522,57 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('exposes the default MCP agent registry from the product HTTP runtime', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-product-agents-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-product-agents-root-'));
+    mkdirSync(join(home, '.claude'), { recursive: true });
+    mkdirSync(join(home, '.codex'), { recursive: true });
+    writeFileSync(join(home, '.claude.json'), JSON.stringify({
+      mcpServers: {
+        mindos: { type: 'stdio', command: 'mindos', args: ['mcp'] },
+      },
+    }), 'utf-8');
+    writeFileSync(join(home, '.codex', 'config.toml'), [
+      '[mcp_servers.mindos]',
+      'type = "stdio"',
+      'command = "mindos"',
+    ].join('\n'), 'utf-8');
+
+    const services = createDefaultMindosHttpServices({
+      homeDir: home,
+      runtimeRoot: root,
+      readSettings: () => ({ mindRoot: join(home, 'MindOS', 'mind') }),
+    });
+    const response = await handleMcpAgentsGet({
+      agents: services.mcpAgents ?? {},
+      readSettings: services.readSettings,
+      homeDir: home,
+      mindRoot: join(home, 'MindOS', 'mind'),
+      projectRoot: root,
+      env: {} as NodeJS.ProcessEnv,
+      commandExists: () => false,
+    });
+
+    expect(Object.keys(services.mcpAgents ?? {})).toHaveLength(26);
+    expect(response.status).toBe(200);
+    const agents = response.body.agents;
+    expect(agents).toHaveLength(26);
+    expect(agents.find((agent) => agent.key === 'mindos')).toMatchObject({
+      present: true,
+      installed: true,
+    });
+    expect(agents.find((agent) => agent.key === 'claude-code')).toMatchObject({
+      present: true,
+      installed: true,
+      configuredMcpServers: ['mindos'],
+    });
+    expect(agents.find((agent) => agent.key === 'codex')).toMatchObject({
+      present: true,
+      installed: true,
+      configuredMcpServers: ['mindos'],
+    });
+  });
+
   it('handles recent files and file read operations from product handlers', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-file-handler-'));
     mkdirSync(join(root, 'Space'), { recursive: true });
