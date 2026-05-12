@@ -42,11 +42,11 @@ export default memo(function AskHeader({
   const iconSize = 14;
   const hasMultipleSessions = sessions && sessions.length >= 2;
   const headerButtonClass = isPanel
-    ? 'h-9 w-9 rounded-lg'
-    : 'p-2 rounded-lg';
+    ? 'relative z-10 h-9 w-9 rounded-lg pointer-events-auto touch-manipulation'
+    : 'relative z-10 p-2 rounded-lg pointer-events-auto touch-manipulation';
   const titleTriggerClass = isPanel
-    ? 'min-h-9 rounded-lg px-2'
-    : 'rounded-lg';
+    ? 'relative z-10 min-h-9 rounded-lg px-2 pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    : 'relative z-10 rounded-lg pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const activeSession = sessions?.find(s => s.id === activeSessionId);
   const activeTitle = activeSession ? sessionTitle(activeSession) : null;
 
@@ -125,7 +125,7 @@ export default memo(function AskHeader({
   const switcherDropdown = switcherOpen && dropPos && sessions ? createPortal(
     <div
       ref={dropdownRef}
-      className="fixed z-50 rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
+      className="fixed z-[60] pointer-events-auto rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
       style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
       role="listbox"
     >
@@ -209,12 +209,12 @@ export default memo(function AskHeader({
   ) : null;
 
   return (
-    <div className={`flex items-center justify-between px-4 shrink-0 ${isPanel ? 'py-1.5' : 'py-2.5'}`}>
+    <div data-ask-header className={`relative z-20 isolate flex items-center justify-between border-b border-border/20 bg-background/95 px-4 shrink-0 backdrop-blur supports-[backdrop-filter]:bg-background/80 ${isPanel ? 'py-1.5' : 'py-2.5'}`}>
       {!isPanel && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/20 md:hidden" />
       )}
       {!hideTitle && (
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="relative z-10 flex items-center gap-2 min-w-0">
           <div className="w-6 h-6 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
             {showHistory ? <History size={13} className="text-[var(--amber)]" /> : <Sparkles size={13} className="text-[var(--amber)]" />}
           </div>
@@ -255,33 +255,33 @@ export default memo(function AskHeader({
         </div>
       )}
       {hideTitle && <div />}
-      <div className="flex items-center gap-1 shrink-0">
-        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onToggleHistory()); }} aria-pressed={showHistory} className={`${headerButtonClass} inline-flex items-center justify-center transition-colors ${showHistory ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
+      <div data-ask-header-actions className="relative z-10 flex items-center gap-1 shrink-0 pointer-events-auto">
+        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onToggleHistory()); }} aria-pressed={showHistory} className={`${headerButtonClass} inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${showHistory ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={t.hints.sessionHistory}>
           <History size={iconSize} />
         </button>
         {messages && messages.length > 0 && (
           <SaveSessionButton messages={messages} disabled={isLoading} />
         )}
-        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onReset()); }} disabled={isLoading} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40`} title={t.hints.newSession}>
+        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onReset()); }} disabled={isLoading} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`} title={t.hints.newSession}>
           <SquarePen size={iconSize} />
         </button>
         {onMaximize && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onMaximize()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onMaximize()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`} title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
             {maximized ? <Minimize2 size={iconSize} /> : <Maximize2 size={iconSize} />}
           </button>
         )}
         {onDockToPanel && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onDockToPanel()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.dockToSide ?? 'Dock to side panel'}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onDockToPanel()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`} title={t.hints.dockToSide ?? 'Dock to side panel'}>
             <PanelRight size={iconSize} />
           </button>
         )}
         {onModeSwitch && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onModeSwitch()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onModeSwitch()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`} title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
             {askMode === 'popup' ? <PanelRight size={iconSize} /> : <AppWindow size={iconSize} />}
           </button>
         )}
         {onClose && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onClose()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors`} title={t.hints.closePanel} aria-label="Close">
+          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onClose()); }} className={`${headerButtonClass} inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`} title={t.hints.closePanel} aria-label="Close">
             <X size={iconSize} />
           </button>
         )}

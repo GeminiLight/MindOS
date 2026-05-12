@@ -126,7 +126,7 @@ export default function AgentSelectorCapsule({
       ref={dropdownRef}
       role="listbox"
       aria-label={p.acpSelectAgent}
-      className="fixed z-50 min-w-[180px] max-w-[240px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+      className="fixed z-[60] pointer-events-auto min-w-[180px] max-w-[240px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
       style={{
         left: pos.left,
         ...(pos.direction === 'up'
@@ -173,46 +173,52 @@ export default function AgentSelectorCapsule({
     </div>
   ) : null;
 
+  const triggerClasses = `
+    relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5
+    text-2xs font-medium transition-colors pointer-events-auto touch-manipulation
+    border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+    ${isDefault
+      ? 'rounded-full bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+      : 'rounded-l-full bg-[var(--amber)]/10 border-[var(--amber)]/25 border-r-0 text-foreground hover:bg-[var(--amber)]/15'
+    }
+  `;
+
+  const trigger = (
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={() => setOpen(v => !v)}
+      className={triggerClasses}
+      title={p.acpChangeAgent}
+      aria-expanded={open}
+      aria-haspopup="listbox"
+    >
+      {isDefault ? (
+        <Bot size={11} className="shrink-0 text-muted-foreground" />
+      ) : (
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] shrink-0" />
+      )}
+      <span className="truncate max-w-[120px]">{displayName}</span>
+      {!selectedAgent && <ChevronDown size={10} className="shrink-0 text-muted-foreground" />}
+    </button>
+  );
+
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`
-          inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
-          text-2xs font-medium transition-colors
-          border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          ${isDefault
-            ? 'bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-            : 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'
-          }
-        `}
-        title={p.acpChangeAgent}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        {isDefault ? (
-          <Bot size={11} className="shrink-0 text-muted-foreground" />
-        ) : (
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] shrink-0" />
-        )}
-        <span className="truncate max-w-[120px]">{displayName}</span>
-        {selectedAgent ? (
-          <span
-            role="button"
-            tabIndex={0}
+      {selectedAgent ? (
+        <span className="relative z-10 inline-flex min-h-6 items-stretch rounded-full">
+          {trigger}
+          <button
+            type="button"
             onClick={handleClear}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClear(e as unknown as React.MouseEvent); } }}
-            className="p-0.5 -mr-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex min-h-6 items-center rounded-r-full border border-[var(--amber)]/25 bg-[var(--amber)]/10 px-1.5 text-muted-foreground transition-colors hover:bg-[var(--amber)]/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`Remove ${selectedAgent.name}`}
+            title={`Remove ${selectedAgent.name}`}
           >
             <X size={9} />
-          </span>
-        ) : (
-          <ChevronDown size={10} className="shrink-0 text-muted-foreground" />
-        )}
-      </button>
+          </button>
+        </span>
+      ) : trigger}
       {typeof document !== 'undefined' && dropdown && createPortal(dropdown, document.body)}
     </>
   );

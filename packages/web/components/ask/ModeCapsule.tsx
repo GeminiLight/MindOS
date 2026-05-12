@@ -118,7 +118,7 @@ export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsulePro
       ref={dropdownRef}
       role="listbox"
       aria-label="Select mode"
-      className="fixed z-50 min-w-[200px] max-w-[260px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+      className="fixed z-[60] pointer-events-auto min-w-[200px] max-w-[260px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
       style={{
         left: pos.left,
         ...(pos.direction === 'up'
@@ -157,10 +157,11 @@ export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsulePro
         onClick={() => { if (!disabled) setOpen(v => !v); }}
         disabled={disabled}
         className={`
-          inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
+          relative z-10 inline-flex min-h-6 items-center gap-1 rounded-full px-2.5 py-0.5
           text-2xs font-medium transition-colors select-none
+          pointer-events-auto touch-manipulation
           border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          disabled:opacity-40 disabled:cursor-not-allowed
+          disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed
           ${isChat
             ? 'bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
             : 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'

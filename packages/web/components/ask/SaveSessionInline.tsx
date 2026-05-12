@@ -141,11 +141,11 @@ export function SaveSessionButton({ messages, disabled }: {
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         disabled={disabled}
-        className={`h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors ${
+        className={`relative z-10 h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           open
             ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-        } disabled:opacity-40`}
+        } disabled:pointer-events-none disabled:opacity-40`}
         title={t.ask?.saveSession ?? 'Save session'}
       >
         <FolderInput size={14} />
@@ -195,7 +195,7 @@ function PopoverShell({ anchorRef, onClose, children }: {
   if (!pos || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div ref={panelRef} className="fixed z-50 rounded-xl border border-border bg-card shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
+    <div ref={panelRef} className="fixed z-[60] pointer-events-auto rounded-xl border border-border bg-card shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
       style={{ top: pos.top, right: pos.right, width: PANEL_WIDTH }}>
       {children}
     </div>,

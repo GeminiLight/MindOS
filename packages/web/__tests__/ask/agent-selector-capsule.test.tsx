@@ -31,4 +31,19 @@ describe('AgentSelectorCapsule', () => {
 
     expect(html).toContain('MindOS');
   });
+
+  it('renders selected-agent clear as a sibling button, not nested interactive content', () => {
+    const html = renderToStaticMarkup(
+      <AgentSelectorCapsule
+        selectedAgent={{ id: 'codex', name: 'Codex' }}
+        onSelect={vi.fn()}
+        installedAgents={[]}
+        loading={false}
+      />,
+    );
+
+    expect(html).toContain('Remove Codex');
+    expect(html).toContain('rounded-r-full');
+    expect(html).not.toContain('role="button"');
+  });
 });

@@ -169,7 +169,7 @@ export default function ProviderModelCapsule({
       position: 'fixed',
       left: Math.min(rect.left, window.innerWidth - 270),
       ...(goUp ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
-      zIndex: 50,
+      zIndex: 60,
     });
   }, []);
 
@@ -304,6 +304,7 @@ export default function ProviderModelCapsule({
       left: actualLeft,
       top,
       zIndex: 51,
+      pointerEvents: 'auto',
     });
   }, []);
 
@@ -568,10 +569,11 @@ export default function ProviderModelCapsule({
         }}
         disabled={disabled}
         className={`
-          inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
+          relative z-10 inline-flex min-h-6 items-center gap-1 rounded-full px-2.5 py-0.5
           text-2xs font-medium transition-colors select-none max-w-[260px]
+          pointer-events-auto touch-manipulation
           border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          disabled:opacity-40 disabled:cursor-not-allowed
+          disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed
           ${providerValue || hasModelOverride
             ? 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'
             : 'bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'

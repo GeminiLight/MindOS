@@ -65,6 +65,8 @@ describe('AskHeader panel hit area', () => {
     expect(html).toContain('title="Focus mode"');
     expect(html).toContain('h-9 w-9');
     expect(html).toContain('min-h-9');
+    expect(html).toContain('relative z-20 isolate');
+    expect(html).toContain('pointer-events-auto touch-manipulation');
     expect(html).toContain('rounded-lg');
   });
 });

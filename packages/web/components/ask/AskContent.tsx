@@ -752,10 +752,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       )}
 
       {/* Composer card — unified input area */}
-      <div className={cn('shrink-0', isHome ? 'px-2 pb-2 pt-0.5' : 'px-3 pb-2.5 pt-1')}>
+      <div className={cn('relative z-10 shrink-0', isHome ? 'px-2 pb-2 pt-0.5' : 'px-3 pb-2.5 pt-1')}>
         <div
           className={cn(
-            'rounded-xl bg-muted/40 border border-transparent transition-all focus-within:bg-muted/60',
+            'relative rounded-xl bg-muted/40 border border-transparent transition-all focus-within:bg-muted/60',
             isDragOver && 'ring-2 ring-[var(--amber)] border-[var(--amber)]/40 bg-[var(--amber)]/5 shadow-[0_0_12px_rgba(200,135,58,0.15)]',
           )}
           onDragOver={handleDragOver}
@@ -807,7 +807,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className={cn('flex items-end gap-1.5', isHome ? 'px-2 py-1.5' : 'px-3 py-2')}
+            className={cn('relative z-10 flex items-end gap-1.5', isHome ? 'px-2 py-1.5' : 'px-3 py-2')}
           >
             {/* + attach button with mini menu */}
             <div className="relative shrink-0">
@@ -826,7 +826,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             {mounted && showAttachMenu && attachMenuPos && createPortal(
               <div
                 ref={attachMenuRef}
-                className="fixed py-1 rounded-xl border border-border/60 bg-card shadow-lg z-50 min-w-[150px] animate-in fade-in-0 slide-in-from-bottom-2 duration-150"
+                className="fixed z-[60] pointer-events-auto py-1 rounded-xl border border-border/60 bg-card shadow-lg min-w-[150px] animate-in fade-in-0 slide-in-from-bottom-2 duration-150"
                 style={{
                   top: `${attachMenuPos.top}px`,
                   left: `${attachMenuPos.left}px`,
@@ -905,7 +905,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           </form>
 
           {/* Mode + Agent + Provider selector row + keyboard hint */}
-          <div className={cn('flex items-center justify-between border-t border-border/10', isPanel ? 'px-2 pb-1.5 pt-1 gap-1' : 'px-3 pb-2 pt-1.5')}>
+          <div className={cn('relative z-20 flex items-center justify-between border-t border-border/10', isPanel ? 'px-2 pb-1.5 pt-1 gap-1' : 'px-3 pb-2 pt-1.5')}>
             <div className={cn('flex items-center flex-wrap', isPanel ? 'gap-1' : 'gap-2')}>
               <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
             {mounted && (
