@@ -39,14 +39,6 @@ import {
   resolveSkillFile,
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
-import {
-  createMindosPiCodingAgentRuntime,
-} from '@geminilight/mindos/session/pi-coding-agent';
-import {
-  createWebMindosPiRuntimeHostServices,
-  getMindosWebPiRuntimePaths,
-  getMindosWebRequestTools,
-} from '@/lib/agent/mindos-pi-runtime-host';
 
 // generateSkillsXml is in lib/agent/skills-xml.ts (not inline: Next.js route export constraints)
 
@@ -288,7 +280,13 @@ export async function POST(req: NextRequest) {
   try {
     const projectRoot = getProjectRoot();
     const mindRoot = getMindRoot();
+    const {
+      createWebMindosPiRuntimeHostServices,
+      getMindosWebPiRuntimePaths,
+      getMindosWebRequestTools,
+    } = await import('@/lib/agent/mindos-pi-runtime-host');
     const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings });
+    const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
     const runtime = await createMindosPiCodingAgentRuntime({
       mode: askMode,
       messages,

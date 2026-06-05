@@ -25,6 +25,7 @@ const runtimeDependencySeeds = [
   'mammoth',
   'word-extractor',
   '@earendil-works/pi-coding-agent',
+  '@earendil-works/pi-ai',
   '@sinclair/typebox',
   'partial-json',
   'ajv',

@@ -89,10 +89,74 @@ describe('next config warning hygiene', () => {
     })).toBe(false);
   });
 
-  it('keeps Earendil PI packages bundled so Next resolves their package exports', () => {
-    expect(nextConfig.serverExternalPackages).not.toContain('@earendil-works/pi-ai');
+  it('externalizes only pi-ai so Node handles its runtime node:* probes', () => {
+    expect(nextConfig.serverExternalPackages).toContain('@earendil-works/pi-ai');
     expect(nextConfig.serverExternalPackages).not.toContain('@earendil-works/pi-agent-core');
     expect(nextConfig.serverExternalPackages).not.toContain('@earendil-works/pi-coding-agent');
+  });
+
+  it('keeps PI runtime packages out of Desktop startup route module imports', () => {
+    const appRoot = resolve(__dirname, '..');
+    const startupBoundaryFiles = [
+      'app/api/ask/route.ts',
+      'lib/agent/headless.ts',
+      'app/api/mcp/agents/route.ts',
+      'app/api/settings/list-models/route.ts',
+      'app/api/settings/test-key/route.ts',
+      'app/api/space-overview/route.ts',
+      'lib/compile.ts',
+    ];
+
+    for (const relativePath of startupBoundaryFiles) {
+      const source = readFileSync(resolve(appRoot, relativePath), 'utf-8');
+
+      expect(source, relativePath).not.toMatch(
+        /import\s+(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from ['"]@geminilight\/mindos\/session\/pi-coding-agent['"]/,
+      );
+      expect(source, relativePath).not.toMatch(
+        /import\s+(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from ['"]@earendil-works\/pi-coding-agent['"]/,
+      );
+      expect(source, relativePath).not.toMatch(
+        /import\s+(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from ['"]@earendil-works\/pi-ai['"]/,
+      );
+      expect(source, relativePath).not.toMatch(
+        /import\s+(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from ['"]@\/lib\/agent\/mindos-pi-runtime-host['"]/,
+      );
+      expect(source, relativePath).not.toMatch(
+        /import\s+(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from ['"]@\/lib\/agent\/model['"]/,
+      );
+    }
+
+    expect(readFileSync(resolve(appRoot, 'app/api/ask/route.ts'), 'utf-8')).toContain(
+      "await import('@geminilight/mindos/session/pi-coding-agent')",
+    );
+    expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
+      "await import('@geminilight/mindos/session/pi-coding-agent')",
+    );
+    expect(readFileSync(resolve(appRoot, 'app/api/mcp/agents/route.ts'), 'utf-8')).toContain(
+      "await import('@earendil-works/pi-coding-agent')",
+    );
+    expect(readFileSync(resolve(appRoot, 'app/api/settings/list-models/route.ts'), 'utf-8')).toContain(
+      "await import('@earendil-works/pi-ai')",
+    );
+    expect(readFileSync(resolve(appRoot, 'app/api/settings/test-key/route.ts'), 'utf-8')).toContain(
+      "await import('@earendil-works/pi-ai')",
+    );
+    expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
+      "await import('@earendil-works/pi-ai')",
+    );
+    expect(readFileSync(resolve(appRoot, 'app/api/ask/route.ts'), 'utf-8')).toContain(
+      "await import('@/lib/agent/mindos-pi-runtime-host')",
+    );
+    expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
+      "await import('@/lib/agent/mindos-pi-runtime-host')",
+    );
+    expect(readFileSync(resolve(appRoot, 'app/api/settings/test-key/route.ts'), 'utf-8')).toContain(
+      "await import('@/lib/agent/model')",
+    );
+    expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
+      "await import('@/lib/agent/model')",
+    );
   });
 
   it('marks API routes that import Node-only modules as nodejs runtime routes', () => {

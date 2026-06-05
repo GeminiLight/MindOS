@@ -16,12 +16,6 @@ import {
   normalizeMindosAskMode,
 } from '@geminilight/mindos/session';
 import { buildMindosAskSystemPrompt } from '@geminilight/mindos/agent';
-import { createMindosPiCodingAgentRuntime } from '@geminilight/mindos/session/pi-coding-agent';
-import {
-  createWebMindosPiRuntimeHostServices,
-  getMindosWebPiRuntimePaths,
-  getMindosWebRequestTools,
-} from '@/lib/agent/mindos-pi-runtime-host';
 
 export interface HeadlessAgentRunOptions {
   userMessage: string;
@@ -82,7 +76,13 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     warn: (message, error) => console.warn(message, error),
   });
 
+  const {
+    createWebMindosPiRuntimeHostServices,
+    getMindosWebPiRuntimePaths,
+    getMindosWebRequestTools,
+  } = await import('@/lib/agent/mindos-pi-runtime-host');
   const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings });
+  const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
   const runtime = await createMindosPiCodingAgentRuntime({
     mode: askMode,
     messages: allMessages,

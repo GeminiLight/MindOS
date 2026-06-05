@@ -1,6 +1,5 @@
 export const dynamic = 'force-dynamic';
 
-import { getModels as piGetModels } from '@earendil-works/pi-ai';
 import {
   handleSettingsListModelsPost,
   type SettingsListModelsServices,
@@ -19,8 +18,9 @@ import { findProvider, isProviderEntryId } from '@/lib/custom-endpoints';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { toNextResponse } from '../../_mindos-adapter';
 
-function getRegistryModels(provider: string): string[] {
+async function getRegistryModels(provider: string): Promise<string[]> {
   try {
+    const { getModels: piGetModels } = await import('@earendil-works/pi-ai');
     const models = piGetModels(toPiProvider(provider as ProviderId) as any);
     return models.map((model: any) => model.id as string).filter(Boolean).sort();
   } catch {

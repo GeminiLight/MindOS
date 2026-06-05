@@ -68,6 +68,7 @@ describe('Desktop release packaging contract', () => {
     expect(workflow).toContain('gh release upload "$DESIRED_TAG" "${assets[@]}" --clobber');
 
     expect(verifier).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@earendil-works/pi-ai/package.json');
     expect(verifier).toContain("import { fileURLToPath } from 'node:url'");
     expect(verifier).toContain("fileURLToPath(new URL('..', import.meta.url))");
     expect(verifier).not.toContain("new URL('..', import.meta.url).pathname");

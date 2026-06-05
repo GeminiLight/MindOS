@@ -165,6 +165,7 @@ describe('product npm publish contract', () => {
     expect(prepareStandalone).toContain("'mammoth'");
     expect(prepareStandalone).toContain("'word-extractor'");
     expect(prepareStandalone).toContain("'@earendil-works/pi-coding-agent'");
+    expect(prepareStandalone).toContain("'@earendil-works/pi-ai'");
     expect(prepareStandalone).toContain("'@sinclair/typebox'");
     expect(prepareStandalone).toContain("'partial-json'");
     expect(prepareStandalone).toContain("'openai'");

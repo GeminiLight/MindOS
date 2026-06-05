@@ -20,6 +20,7 @@ import { assertStandaloneAppFiles } from './runtime-health-contract.mjs';
 
 export const RUNTIME_DEPENDENCY_SEEDS = [
   '@sinclair/typebox',
+  '@earendil-works/pi-ai',
 ];
 
 export function materializeStandaloneAssets(appDir, options = {}) {

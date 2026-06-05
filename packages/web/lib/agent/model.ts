@@ -1,6 +1,32 @@
-import { getModel as piGetModel, type Model } from '@earendil-works/pi-ai';
 import { effectiveAiConfig } from '@/lib/settings';
 import { type ProviderId, getPreset, toPiProvider, getDefaultApi, getDefaultBaseUrl } from './providers';
+
+type Model<T = unknown> = {
+  id: string;
+  name: string;
+  api: string;
+  provider: string;
+  baseUrl: string;
+  reasoning: boolean;
+  input: readonly string[];
+  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  contextWindow: number;
+  maxTokens: number;
+  compat?: Record<string, unknown>;
+} & T & Record<string, unknown>;
+
+type PiAiRuntime = {
+  getModel?: (provider: string, model: string) => Model<any> | undefined;
+};
+
+function loadPiAiRuntime(): PiAiRuntime | null {
+  try {
+    const requireFn = (0, eval)('require') as NodeRequire;
+    return requireFn('@earendil-works/pi-ai') as PiAiRuntime;
+  } catch {
+    return null;
+  }
+}
 
 /** Check if any message in the conversation contains images */
 export function hasImages(messages: Array<{ images?: unknown[] }>): boolean {
@@ -82,7 +108,7 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
 
   // 1. Try pi-ai registry lookup
   try {
-    const resolved = piGetModel(piProvider as any, modelName as any);
+    const resolved = loadPiAiRuntime()?.getModel?.(piProvider, modelName);
     if (!resolved) throw new Error('Model not in registry');
     model = resolved;
   } catch {

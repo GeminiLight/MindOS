@@ -1,17 +1,20 @@
 export const dynamic = 'force-dynamic';
 
-import { complete } from '@earendil-works/pi-ai';
 import {
   handleSettingsTestKeyPost,
   type SettingsTestKeyModelInput,
   type SettingsTestKeyServices,
 } from '@geminilight/mindos/server';
 import { effectiveAiConfig, readBaseUrlCompat, readSettings, writeSettings } from '@/lib/settings';
-import { getModelConfig, normalizeBaseUrl } from '@/lib/agent/model';
 import { isProviderId, type ProviderId } from '@/lib/agent/providers';
 import { findProvider, isProviderEntryId } from '@/lib/custom-endpoints';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { toNextResponse } from '../../_mindos-adapter';
+
+function normalizeBaseUrl(url: string): string {
+  if (!url) return url;
+  return url.trim().replace(/\/+$/, '');
+}
 
 function clearCompatCacheForBaseUrl(baseUrl?: string) {
   try {
@@ -31,12 +34,14 @@ function clearCompatCacheForBaseUrl(baseUrl?: string) {
 }
 
 async function testModel({ provider, apiKey, model, baseUrl, signal }: SettingsTestKeyModelInput) {
+  const { getModelConfig } = await import('@/lib/agent/model');
   const { model: piModel } = getModelConfig({
     provider: provider as ProviderId,
     apiKey,
     model,
     baseUrl: baseUrl || undefined,
   });
+  const { complete } = await import('@earendil-works/pi-ai');
   await complete(piModel, {
     messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }],
   }, {

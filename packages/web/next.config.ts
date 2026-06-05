@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
     'pdfjs-dist',
     // Word extraction: extract-docx.cjs spawns outside bundler and requires these packages directly
     'mammoth', 'word-extractor',
+    // pi-ai uses runtime dynamic import('node:*') probes. If webpack bundles it,
+    // those probes become context stubs that emit MODULE_NOT_FOUND during
+    // Next page-data collection and Desktop smoke startup.
+    '@earendil-works/pi-ai',
   ],
   output: 'standalone',
   outputFileTracingRoot: projectDir,

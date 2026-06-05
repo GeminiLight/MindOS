@@ -4050,6 +4050,16 @@ const visibleNodes = useMemo(() => {
 
 **防回归**：`packages/desktop/src/prepare-mindos-bundle.test.ts` 覆盖 seed 缺失时要从 app `node_modules` 补进 standalone；`tests/desktop-release-contract.test.ts` 和 `tests/runtime-manifest-contract.test.ts` 覆盖 Desktop 与 runtime archive 发布路径必须接入 seed。
 
+### pi-ai 不能被 Next server bundle（2026-06-06）
+
+**症状**：Desktop packaged smoke 在 macOS arm64 / Linux 失败，日志出现 `Cannot find module 'node:fs'` / `node:os` / `node:path`，stack 指向 `.next/server/chunks/*.js`。本地 `next build` 的 `Collecting page data` 阶段也会打印同样错误，但 build 仍返回 0。
+
+**根因**：`@earendil-works/pi-ai` 内部会在运行时探测 `import('node:fs')` / `node:os` / `node:path`。如果 Next webpack 把它 bundle 进 server chunk，这些动态 import 会被改写成 context stub，page-data 和 Desktop smoke 启动时就会抛 `MODULE_NOT_FOUND`。
+
+**修复**：`packages/web/next.config.ts` 把 `@earendil-works/pi-ai` 加入 `serverExternalPackages`，让 Node 原生处理 `node:*` import；同时 `scripts/prepare-standalone.mjs`、`packages/desktop/scripts/prepare-mindos-bundle.mjs` 和 `scripts/verify-desktop-runtime.mjs` 必须显式 seed/验证 `@earendil-works/pi-ai` 进入 standalone runtime。
+
+**防回归**：`packages/web/__tests__/next-config-warning.test.ts` 覆盖只 externalize `pi-ai`，Ask/headless/settings/compile 入口不能顶层 import PI runtime；`tests/desktop-release-contract.test.ts` 和 `tests/package-publish-contract.test.ts` 覆盖 npm/Desktop packaging seed。
+
 ### Monorepo 迁移后 workflow 仍引用旧顶层目录（2026-04-27）
 
 **症状**：GitHub Actions 在发版或构建 Desktop/Mobile 时直接失败，常见报错是 `cd app: No such file or directory`、`cd mcp: No such file or directory`、`cd desktop: No such file or directory`。

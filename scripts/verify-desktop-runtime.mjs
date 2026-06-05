@@ -13,6 +13,7 @@ const requiredRuntimeFiles = [
   'packages/web/.next/standalone/server.js',
   'packages/web/.next/standalone/node_modules/next/package.json',
   'packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json',
+  'packages/web/.next/standalone/node_modules/@earendil-works/pi-ai/package.json',
   'dist/protocols/mcp-server/index.cjs',
   'bin/cli.js',
   'src/cli.js',

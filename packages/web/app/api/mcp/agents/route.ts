@@ -8,7 +8,6 @@ import {
   type MindosCustomMcpAgentDef,
   type MindosMcpAgentRegistryDef,
 } from '@geminilight/mindos/server';
-import { loadSkills } from '@earendil-works/pi-coding-agent';
 import {
   MCP_AGENTS,
   detectAgentConfiguredMcpServers,
@@ -27,6 +26,7 @@ import { toNextResponse } from '../../_mindos-adapter';
 export async function GET() {
   const projectRoot = getProjectRoot();
   const mindRoot = getMindRoot();
+  const { loadSkills } = await import('@earendil-works/pi-coding-agent');
 
   return toNextResponse(await handleMcpAgentsGet({
     agents: getAllAgents() as Record<string, MindosMcpAgentRegistryDef>,

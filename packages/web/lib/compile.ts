@@ -7,8 +7,6 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { complete } from '@earendil-works/pi-ai';
-import { getModelConfig } from '@/lib/agent/model';
 import { effectiveAiConfig } from '@/lib/settings';
 import { getMindRoot, collectAllFiles, invalidateCache } from '@/lib/fs';
 import { resolveExistingSafe } from '@/lib/core/security';
@@ -34,6 +32,18 @@ export interface CompileResult {
 export interface CompileError {
   code: 'no_api_key' | 'no_files' | 'llm_error';
   message: string;
+}
+
+async function completeWithPiAi(
+  model: any,
+  prompt: string,
+  apiKey: string,
+  signal?: AbortSignal,
+) {
+  const { complete } = await import('@earendil-works/pi-ai');
+  return complete(model, {
+    messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
+  }, { apiKey, signal });
 }
 
 function detectLanguage(texts: string[]): 'zh' | 'en' {
@@ -292,10 +302,9 @@ export async function compileSpaceOverview(
       const prompt = buildIncrementalPrompt(spaceName, existingReadme, changed, lang);
 
       try {
+        const { getModelConfig } = await import('@/lib/agent/model');
         const { model, apiKey } = getModelConfig();
-        const result = await complete(model, {
-          messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
-        }, { apiKey, signal });
+        const result = await completeWithPiAi(model, prompt, apiKey, signal);
 
         const content = result.content
           .filter((c: any) => c.type === 'text')
@@ -340,13 +349,9 @@ export async function compileSpaceOverview(
   const prompt = buildPrompt(spaceName, files, lang);
 
   try {
+    const { getModelConfig } = await import('@/lib/agent/model');
     const { model, apiKey } = getModelConfig();
-    const result = await complete(model, {
-      messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
-    }, {
-      apiKey,
-      signal,
-    });
+    const result = await completeWithPiAi(model, prompt, apiKey, signal);
 
     const content = result.content
       .filter((c: any) => c.type === 'text')
