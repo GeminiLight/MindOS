@@ -4135,6 +4135,16 @@ const visibleNodes = useMemo(() => {
 
 **验证**：`pnpm exec vitest run tests/workflow-migration-contract.test.ts`。
 
+### NPM 平台包创建权限不能阻断主包发布（2026-06-07）
+
+**症状**：`Publish to npm` workflow 在 `Publish platform packages to npm` 阶段失败，日志显示 `404 Not Found - PUT https://registry.npmjs.org/@geminilight%2fmindos-darwin-arm64`，npm registry 上 `@geminilight/mindos` 仍停在旧版本。
+
+**根因**：`@geminilight/mindos-*` 平台包是新的 scoped package 名称。GitHub `NPM_TOKEN` 可能有发布已有 `@geminilight/mindos` 主包的权限，但没有在 scope 下创建新 package 的权限。把平台包发布放在主包发布之前，会导致主包也发不出去。
+
+**修复**：主包 `bin/mindos-shim.cjs` 在找不到平台 optional package 时，会从 `runtime-latest/latest.json` 下载 runtime archive，校验 size / sha256 后安全解压到 `~/.mindos/runtime-cache/<version>` 并复用缓存。`publish-npm.yml` 先发布主包并设 `latest`，平台包发布改为 best-effort。
+
+**防回归**：`tests/unit/mindos-shim-runtime-fallback.test.ts` 覆盖平台包缺失时的 runtime 下载与离线缓存复用；`tests/platform-runtime-package-contract.test.ts` 覆盖 publish workflow 不再让平台包发布失败阻断主包。
+
 ### Tauri Desktop spike 也是 app，不要放回顶层目录（2026-04-27）
 
 **症状**：Tauri spike 留在顶层 `desktop-tauri/` 时，workspace、npm ignore、文档和后续 CI 都要为它维护例外路径。

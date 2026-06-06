@@ -75,15 +75,6 @@ jobs:
           echo "=== Checking main tarball size ==="
           cd packages/mindos && npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 
-      - name: Publish platform packages to npm
-        run: |
-          for pkg in packages/mindos-platforms/*; do
-            echo "Publishing $pkg"
-            (cd "$pkg" && npm publish --access public --ignore-scripts)
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish main package to npm
         run: cd packages/mindos && npm publish --access public --ignore-scripts
         env:
@@ -94,6 +85,18 @@ jobs:
           VERSION=$(node -p "require('./packages/mindos/package.json').version")
           echo "Setting latest dist-tag to ${VERSION}..."
           npm dist-tag add "@geminilight/mindos@${VERSION}" latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish platform packages to npm
+        continue-on-error: true
+        run: |
+          for pkg in packages/mindos-platforms/*; do
+            echo "Publishing $pkg"
+            if ! (cd "$pkg" && npm publish --access public --ignore-scripts); then
+              echo "::warning::Failed to publish $pkg. The main package can still run through the runtime archive fallback; check NPM_TOKEN package-creation permissions before relying on optional platform packages."
+            fi
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -119,28 +122,9 @@ jobs:
             echo "   ✓ $f"
           done
 
-          PLATFORM="@geminilight/mindos-linux-x64@${VERSION}"
-          npm pack "$PLATFORM" 2>&1
-          PTGZ=$(ls -1 geminilight-mindos-linux-x64-*.tgz 2>/dev/null | head -1)
-          if [ -z "$PTGZ" ]; then
-            echo "❌ npm pack failed — no platform .tgz file found"
-            exit 1
-          fi
-          for f in "bin/mindos" "runtime-manifest.json" "package.json"; do
-            if ! tar -tzf "$PTGZ" | grep -q "$f"; then
-              echo "❌ Published platform package missing $f!"
-              exit 1
-            fi
-            echo "   ✓ platform:$f"
-          done
-
-          if tar -tzf "$PTGZ" | grep -q "_standalone/"; then
-            echo "❌ Published Bun single-binary platform package should not expose _standalone/"
-            exit 1
-          fi
-          if tar -tzf "$PTGZ" | grep -Eq "^(package/)?(static-web/|dist/protocols/)"; then
-            echo "❌ Published Bun single-binary platform package should not expose expanded runtime assets"
+          if ! tar -xOf "$TGZ" package/bin/mindos-shim.cjs | grep -q "DEFAULT_RUNTIME_MANIFEST_URL"; then
+            echo "❌ Published CLI shim is missing runtime archive fallback"
             exit 1
           fi
 
-          echo "✅ Package integrity verified"
+          echo "✅ Main package integrity verified; platform packages are optional accelerators"

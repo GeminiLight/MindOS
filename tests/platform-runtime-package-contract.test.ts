@@ -74,6 +74,9 @@ describe('OpenCode-style platform runtime packages', () => {
 
     expect(shim).toContain('MINDOS_BIN_PATH');
     expect(shim).toContain('MINDOS_RUNTIME_PACKAGE_PATH');
+    expect(shim).toContain('DEFAULT_RUNTIME_MANIFEST_URL');
+    expect(shim).toContain('MINDOS_RUNTIME_CACHE_DIR');
+    expect(shim).toContain('extractRuntimeArchive');
     expect(shim).toContain('@geminilight/mindos-');
     expect(shim).toContain('linux-x64-musl');
     expect(shim).toContain('childProcess.spawnSync');
@@ -109,10 +112,12 @@ describe('OpenCode-style platform runtime packages', () => {
     const release = readText('scripts/release.sh');
 
     expect(workflow).toContain('"dist/protocols/mcp-server/index.cjs"');
-    expect(workflow).toContain('"bin/mindos" "runtime-manifest.json" "package.json"');
-    expect(workflow).toContain('Published Bun single-binary platform package should not expose expanded runtime assets');
+    expect(workflow).toContain('Publish main package to npm');
+    expect(workflow).toContain('Publish platform packages to npm');
+    expect(workflow).toContain('continue-on-error: true');
+    expect(workflow).toContain('platform packages are optional accelerators');
+    expect(workflow).toContain('Published CLI shim is missing runtime archive fallback');
     expect(workflow).toContain('Published package missing $f');
-    expect(workflow).toContain('Published platform package missing $f');
     expect(release).toContain('dist/index.js dist/protocols/acp/index.js dist/protocols/mcp-server/index.cjs');
     expect(release).not.toContain('dist/foundation.js dist/protocols/acp/index.js');
     expect(release).toContain('--omit=optional');
