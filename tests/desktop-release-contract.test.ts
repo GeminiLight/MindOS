@@ -37,6 +37,9 @@ describe('Desktop release packaging contract', () => {
     expect(runtimePrep).toContain('function resolveTarSymlinkTarget(destDir, entryPath, linkName)');
     expect(runtimePrep).toContain('symlinkSync(safeLinkName, entryPath)');
     expect(runtimePrep).toContain('Expand-Archive -LiteralPath');
+    expect(runtimePrep).toContain('const NODE_ZIP_EXTRACT_TIMEOUT_MS = 300000');
+    expect(runtimePrep).toContain('formatSpawnFailure(zipResult)');
+    expect(runtimePrep).toContain('signal=');
     expect(runtimePrep).toContain('Node.js tar entry outside extraction directory');
     expect(runtimePrep).toContain("const symlinkSkipRoots = [path.resolve(dest, 'node')]");
     expect(runtimePrep).toContain('official npm/npx launchers are');

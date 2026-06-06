@@ -30,6 +30,15 @@ function fail(msg) {
   process.exit(1);
 }
 
+function formatSpawnFailure(result) {
+  const details = [
+    `status=${result.status ?? 'null'}`,
+    `signal=${result.signal ?? 'null'}`,
+  ];
+  if (result.error) details.push(`error=${result.error.message}`);
+  return ` (${details.join(', ')})`;
+}
+
 const appDir = path.join(source, 'packages', 'web');
 const appNext = path.join(appDir, '.next');
 const mindosDir = path.join(source, 'packages', 'mindos');
@@ -39,6 +48,7 @@ const rootPkg = path.join(source, 'package.json');
 const productPkg = path.join(source, 'packages', 'mindos', 'package.json');
 const targetNodePlatform = process.env.MINDOS_BUNDLE_NODE_PLATFORM || process.platform;
 const targetNodeArch = process.env.MINDOS_BUNDLE_NODE_ARCH || process.arch;
+const NODE_ZIP_EXTRACT_TIMEOUT_MS = 300000;
 
 if (!existsSync(rootPkg)) fail(`Not a MindOS repo root (no package.json): ${source}`);
 if (!existsSync(productPkg)) fail(`Missing packages/mindos/package.json under ${source}`);
@@ -224,8 +234,10 @@ if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
       const zipResult = spawnSync('powershell.exe', [
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
         `Expand-Archive -LiteralPath '${psTmpFile}' -DestinationPath '${psExtractDir}' -Force`,
-      ], { stdio: 'inherit', timeout: 60000 });
-      if (zipResult.status !== 0) fail('Failed to extract Node.js zip');
+      ], { stdio: 'inherit', timeout: NODE_ZIP_EXTRACT_TIMEOUT_MS });
+      if (zipResult.status !== 0) {
+        fail(`Failed to extract Node.js zip after ${NODE_ZIP_EXTRACT_TIMEOUT_MS}ms${formatSpawnFailure(zipResult)}`);
+      }
       // Move contents up (strip top-level folder)
       const entries = readdirSync(extractDir);
       const nodeFolder = entries.find(e => e.startsWith('node-'));

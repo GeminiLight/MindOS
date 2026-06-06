@@ -76,6 +76,16 @@
 
 **防回归**：`packages/desktop/src/node-bootstrap.test.ts` 要求 Node bootstrap 不再调用 `spawnAsync('tar', ...)`，并保留 `resolveTarEntryPath()` containment helper；`tests/desktop-release-contract.test.ts` 覆盖 Desktop runtime prepare 脚本不能回退到系统 tar，且 Windows zip 解压必须使用 `-LiteralPath`。
 
+### Desktop Windows Node.js zip 解压不能用过短超时（2026-06-07）
+
+**症状**：`Build Desktop` workflow 中 Windows x64 在 `Prepare bundled runtime` 阶段失败，日志停在 `Downloading Node.js 22.16.0 (win32-x64)...` 后报 `Failed to extract Node.js zip`。Windows ARM64、macOS、Linux 可以通过，因为 x64 zip 更大，`Expand-Archive` 在 GitHub Windows runner 上可能超过 60 秒。
+
+**根因**：`packages/desktop/scripts/prepare-mindos-runtime.mjs` 的 Windows zip 分支只给 `powershell.exe Expand-Archive` 60 秒超时，并且失败日志没有输出 `status` / `signal` / `error`，导致真实原因被折叠成泛化的解压失败。
+
+**修复**：Windows zip 解压超时提升为命名常量 `NODE_ZIP_EXTRACT_TIMEOUT_MS = 300000`，失败时输出 spawn 的 `status`、`signal` 和 `error`，确保 CI 慢 runner 不会误杀正常解压，后续失败也能直接定位。
+
+**防回归**：`tests/desktop-release-contract.test.ts` 覆盖 Desktop runtime prepare 的 zip 解压必须使用 5 分钟超时和 `formatSpawnFailure(zipResult)` 诊断。
+
 ### Desktop 端口耗尽提示不要建议用户管道 kill（2026-05-12）
 
 **症状**：Desktop 本地启动时如果默认端口窗口都被占用，错误提示会建议用户运行 `lsof -ti:<port> | xargs kill`。这会把“定位占用者”和“终止进程”混在一起，容易误杀非 MindOS 服务。
