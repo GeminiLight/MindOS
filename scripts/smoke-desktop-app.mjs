@@ -208,6 +208,7 @@ function findPackagedApp() {
     join(desktopDist, 'mac', 'MindOS.app'),
     join(desktopDist, 'linux-unpacked', 'MindOS'),
     join(desktopDist, 'linux-unpacked', 'mindos'),
+    join(desktopDist, 'linux-unpacked', 'mindos-desktop'),
     join(desktopDist, 'win-unpacked', 'MindOS.exe'),
     join(desktopDist, 'win-arm64-unpacked', 'MindOS.exe'),
     ...findDistFiles(desktopDist, /\.AppImage$/),
