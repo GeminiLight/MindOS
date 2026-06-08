@@ -657,6 +657,41 @@ export function SyncTab({ t, visible }: SyncTabProps) {
     );
   }
 
+  const shouldBlockUnsafeStaleActions = stale && status && loadError && (
+    (!status.enabled && !status.configured) || !!status.needsSetup
+  );
+
+  if (shouldBlockUnsafeStaleActions) {
+    const health = getSyncHealth(status, syncT, loadError);
+    return (
+      <div className="space-y-4">
+        <div className={`rounded-xl border p-4 ${healthToneClass(health.tone)}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background/65">
+                {health.icon}
+              </div>
+              <div className="min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground">{health.title}</h3>
+                <p className="text-xs leading-relaxed text-foreground/75">{health.description}</p>
+                <p className="text-xs font-medium">{health.next}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void fetchStatus()}
+              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background/80 px-3 text-sm text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <RefreshCw size={13} />
+              {(syncT?.retry as string) ?? 'Retry'}
+            </button>
+          </div>
+        </div>
+        <SyncActionMessage message={message} />
+      </div>
+    );
+  }
+
   if (!status || (!status.enabled && !status.configured)) {
     return <SyncEmptyState t={t} onInitComplete={fetchStatus} />;
   }

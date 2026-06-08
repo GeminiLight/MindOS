@@ -189,17 +189,55 @@ export function SyncDot({ status, syncing, stale }: { status: SyncStatus | null;
   );
 }
 
-export function MobileSyncDot({ status, syncing, stale, loadError }: { status: SyncStatus | null; syncing?: boolean; stale?: boolean; loadError?: string | null }) {
+export function getMobileSyncLabel({
+  status,
+  syncing,
+  stale,
+  loadError,
+  syncT,
+  prefix = 'Sync',
+}: {
+  status: SyncStatus | null;
+  syncing?: boolean;
+  stale?: boolean;
+  loadError?: string | null;
+  syncT?: Record<string, unknown>;
+  prefix?: string;
+}) {
   if (loadError && !status) {
-    return <span className="h-1.5 w-1.5 rounded-full bg-error animate-pulse" />;
+    return `${prefix}: ${(syncT?.syncError as string) ?? 'Sync status unavailable'}`;
   }
+  if (stale && status) {
+    return `${prefix}: ${(syncT?.syncStale as string) ?? 'Sync status stale'}`;
+  }
+  const level = getStatusLevel(status, syncing ?? false);
+  return `${prefix}: ${getSyncLabel(level, status, syncT).label}`;
+}
+
+export function MobileSyncDot({ status, syncing, stale, loadError }: { status: SyncStatus | null; syncing?: boolean; stale?: boolean; loadError?: string | null }) {
   const level = stale && status ? 'error' : getStatusLevel(status, syncing ?? false);
-  if (level === 'off' || level === 'synced') return null;
+  const badgeLevel = loadError && !status ? 'error' : level;
+  const showBadge = loadError && !status ? true : level !== 'off' && level !== 'synced';
+
+  if (loadError && !status) {
+    return (
+      <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+        <RefreshCw size={18} />
+        <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-error animate-pulse" />
+      </span>
+    );
+  }
+
   return (
-    <span
-      className={`w-1.5 h-1.5 rounded-full ${DOT_COLORS[level]} ${
-        level === 'conflicts' || level === 'error' ? 'animate-pulse' : ''
-      }`}
-    />
+    <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+      <RefreshCw size={18} className={level === 'syncing' ? 'animate-spin' : ''} />
+      {showBadge && (
+        <span
+          className={`absolute right-0 top-0 h-1.5 w-1.5 rounded-full ${DOT_COLORS[badgeLevel]} ${
+            badgeLevel === 'conflicts' || badgeLevel === 'error' ? 'animate-pulse' : ''
+          }`}
+        />
+      )}
+    </span>
   );
 }

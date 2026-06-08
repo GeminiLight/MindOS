@@ -14,7 +14,7 @@ import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
 import SpaceInitToast from './SpaceInitToast';
 import OrganizeToast from './OrganizeToast';
-import { MobileSyncDot, useSyncStatus } from './SyncStatusBar';
+import { getMobileSyncLabel, MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -190,6 +190,13 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     return paths;
   }, [fileTree]);
   const { status: syncStatus, error: syncStatusError, stale: syncStatusStale, fetchStatus: syncStatusRefresh } = useSyncStatus();
+  const mobileSyncLabel = getMobileSyncLabel({
+    status: syncStatus,
+    stale: syncStatusStale,
+    loadError: syncStatusError,
+    syncT: t.sidebar?.sync as Record<string, unknown> | undefined,
+    prefix: t.sidebar?.syncLabel ?? 'Sync',
+  });
 
   const currentFile = pathname.startsWith('/view/')
     ? pathname.slice('/view/'.length).split('/').map(decodeURIComponent).join('/')
@@ -683,9 +690,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           <button
             onClick={openSyncSettings}
             className="p-3 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent flex items-center justify-center"
-            aria-label={syncStatusError && !syncStatus
-              ? ((t.sidebar?.sync?.syncError as string) ?? 'Sync status unavailable')
-              : ((t.sidebar?.syncLabel as string) ?? 'Sync status')}
+            aria-label={mobileSyncLabel}
           >
             <MobileSyncDot status={syncStatus} stale={syncStatusStale} loadError={syncStatusError} />
           </button>

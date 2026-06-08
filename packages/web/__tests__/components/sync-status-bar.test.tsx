@@ -148,4 +148,85 @@ describe('SyncStatusBar', () => {
       root.unmount();
     });
   });
+
+  it('keeps the mobile sync entry visible when sync is off or already synced', async () => {
+    const { MobileSyncDot } = await import('@/components/SyncStatusBar');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<MobileSyncDot status={null} />);
+      await Promise.resolve();
+    });
+    expect(host.querySelector('svg')).toBeTruthy();
+
+    await act(async () => {
+      root.render(<MobileSyncDot status={{
+        enabled: true,
+        configured: true,
+        remote: 'git@example.com:mind/repo.git',
+        branch: 'main',
+        conflicts: [],
+        lastError: null,
+        lastSync: '2026-06-08T00:00:00.000Z',
+        unpushed: '0',
+      }} />);
+      await Promise.resolve();
+    });
+    expect(host.querySelector('svg')).toBeTruthy();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('derives specific mobile sync labels for assistive technology', async () => {
+    const { getMobileSyncLabel } = await import('@/components/SyncStatusBar');
+
+    expect(getMobileSyncLabel({
+      status: {
+        enabled: true,
+        configured: true,
+        remote: 'git@example.com:mind/repo.git',
+        branch: 'main',
+        conflicts: [{ file: 'notes/today.md' }],
+        lastError: null,
+        lastSync: null,
+        unpushed: '0',
+      },
+      syncT: {
+        resolveConflicts: 'Resolve {n} conflicts',
+      },
+      prefix: 'Sync',
+    })).toBe('Sync: Resolve 1 conflicts');
+
+    expect(getMobileSyncLabel({
+      status: null,
+      loadError: 'server unavailable',
+      syncT: {
+        syncError: 'Sync status unavailable',
+      },
+      prefix: 'Sync',
+    })).toBe('Sync: Sync status unavailable');
+
+    expect(getMobileSyncLabel({
+      status: {
+        enabled: true,
+        configured: true,
+        remote: 'git@example.com:mind/repo.git',
+        branch: 'main',
+        conflicts: [],
+        lastError: null,
+        lastSync: '2026-06-08T00:00:00.000Z',
+        unpushed: '0',
+      },
+      stale: true,
+      loadError: 'server unavailable',
+      syncT: {
+        syncStale: 'Sync status stale',
+      },
+      prefix: 'Sync',
+    })).toBe('Sync: Sync status stale');
+  });
 });

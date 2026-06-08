@@ -3185,6 +3185,13 @@ describe('MindOS product server contract', () => {
       },
     });
 
+    expect(await handleSyncPost({ action: 'on' }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true, enabled: true },
+    });
+    expect(config.sync.enabled).toBe(true);
+    expect(daemonCalls).toContainEqual({ action: 'restart', mindRoot });
+
     config.sync.enabled = false;
     services.getRemoteUrl = () => null;
     await expect(handleSyncGet(services)).resolves.toMatchObject({
@@ -3265,6 +3272,39 @@ describe('MindOS product server contract', () => {
     expect(readFileSync(join(mindRoot, 'note.md'), 'utf-8')).toBe('local');
     expect(state).toEqual({ conflicts: [{ file: 'note.md' }], lastError: 'previous' });
     expect(writeStateCalled).toBe(false);
+  });
+
+  it('replaces the local conflict file when keep-remote succeeds', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-keep-remote-'));
+    const mindRoot = join(root, 'mind');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    writeFileSync(join(mindRoot, 'note.md'), 'local version', 'utf-8');
+    writeFileSync(join(mindRoot, 'note.md.sync-conflict'), 'remote version', 'utf-8');
+
+    let state: Record<string, any> = {
+      conflicts: [
+        { file: 'note.md', time: '2026-06-05T10:00:00.000Z' },
+        { file: 'other.md' },
+      ],
+      lastError: 'previous',
+    };
+    const services = {
+      readConfig: () => ({ mindRoot, sync: { enabled: true, provider: 'git' } }),
+      readState: () => state,
+      writeState: (next: Record<string, any>) => { state = next; },
+      syncLockDir: join(root, 'locks'),
+    };
+
+    expect(await handleSyncPost({ action: 'resolve-conflict', file: 'note.md', strategy: 'keep-remote' }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true },
+    });
+    expect(readFileSync(join(mindRoot, 'note.md'), 'utf-8')).toBe('remote version');
+    expect(existsSync(join(mindRoot, 'note.md.sync-conflict'))).toBe(false);
+    expect(state).toEqual({
+      conflicts: [{ file: 'other.md' }],
+      lastError: 'previous',
+    });
   });
 
   it('normalizes legacy sync conflicts before returning and resolving them', async () => {

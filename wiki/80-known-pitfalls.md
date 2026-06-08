@@ -4212,8 +4212,10 @@ const visibleNodes = useMemo(() => {
 5. 手动 sync 返回后必须刷新状态并按最终状态决定提示：有 conflicts/lastError/stale 时不能显示成功 toast。
 6. Settings 里隐藏 init 进度不是取消后端 Git 进程；UI 不能立刻暴露第二次 Connect，应显示后台仍在运行并等待原请求完成。
 7. `.gitignore` 保存必须补回 `*.sync-conflict` / `INSTRUCTION.md` 等受保护条目；冲突 preview 失败不能阻止 `Keep local`，因为保留本地不依赖远程备份文件。
+8. stale cached status 如果会落入未配置表单或 broken reset 分支，必须先显示 stale retry UI，不能继续暴露 Connect / Reset 这类会改 Git 配置的操作；但已配置仓库里的 `.gitignore` 保存成功 + 刷新失败仍应保留编辑器和 warning。
+9. 移动端 Sync 入口不能在 `off` / `synced` 时渲染成空按钮；必须有稳定图标，异常/待处理状态用 badge，aria-label 要用具体 sync label。
 
-**防回归**：`packages/web/__tests__/core/sync-status.test.ts` 覆盖 paused attention 优先级、unknown 和 lock 文案；`packages/web/__tests__/core/sync-action.test.tsx` 覆盖全局 in-flight、冲突/unknown 后不显示成功；`packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 stale、paused+conflicts、`.gitignore` 保存刷新、隐藏 init 进度、preview 失败后 Keep local；`packages/web/__tests__/components/sync-popover.test.tsx` 覆盖 paused conflict recovery 和窄屏 popover clamp；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 paused repo 仍显示 Sync rail 入口。
+**防回归**：`packages/web/__tests__/core/sync-status.test.ts` 覆盖 paused attention 优先级、unknown 和 lock 文案；`packages/web/__tests__/core/sync-action.test.tsx` 覆盖全局 in-flight、冲突/unknown 后不显示成功；`packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 stale、paused+conflicts、`.gitignore` 保存刷新、隐藏 init 进度、preview 失败后 Keep local、preview 成功后 Keep remote、auto-sync 开关和 interval 保存；`packages/web/__tests__/components/sync-status-bar.test.tsx` 覆盖移动端 sync 入口可见性和具体 aria label；`packages/web/__tests__/components/sync-popover.test.tsx` 覆盖 paused conflict recovery 和窄屏 popover clamp；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 paused repo 仍显示 Sync rail 入口。
 
 ### Git Sync reset/reconfigure/dirty 状态不能复用 paused 旧语义（2026-06-09）
 
