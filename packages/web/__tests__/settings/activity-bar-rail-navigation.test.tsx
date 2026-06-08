@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { getRailPanelClickDecision, type PanelId, type RoutePanelId } from '@/lib/navigation-panel';
 
 const mockRouterPush = vi.fn();
 let mockPathname = '/';
@@ -65,6 +66,17 @@ vi.mock('@/components/SyncStatusBar', () => ({
   getStatusLevel: () => 'synced',
 }));
 
+function applyRailDecision(
+  event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+  activePanel: PanelId | null,
+  targetPanel: RoutePanelId,
+  onPanelChange: (panel: PanelId | null) => void,
+) {
+  const decision = getRailPanelClickDecision(mockPathname, activePanel, targetPanel);
+  if (decision.preventDefault) event.preventDefault();
+  onPanelChange(decision.nextPanel);
+}
+
 describe('ActivityBar rail navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -97,23 +109,7 @@ describe('ActivityBar rail navigation', () => {
           onExpandedChange={vi.fn()}
           onSettingsClick={vi.fn()}
           onSyncClick={vi.fn()}
-          onSpacesClick={(event) => {
-            // Simulate the SidebarLayout onSpacesClick logic with the fix
-            const pathname = mockPathname;
-            const isHome = pathname === '/';
-            const activePanel = 'files';
-            const wasActive = activePanel === 'files';
-            const onFilesRoute = pathname === '/wiki' || pathname?.startsWith('/view/') || pathname?.startsWith('/wiki/');
-            if (isHome || !wasActive) {
-              mockPanelChange('files');
-              mockRouterPush('/wiki');
-            } else if (!onFilesRoute) {
-              mockRouterPush('/wiki');
-            } else {
-              event.preventDefault();
-              mockPanelChange(null);
-            }
-          }}
+          onSpacesClick={(event) => applyRailDecision(event, 'files', 'files', mockPanelChange)}
         />,
       );
     });
@@ -159,23 +155,7 @@ describe('ActivityBar rail navigation', () => {
           onExpandedChange={vi.fn()}
           onSettingsClick={vi.fn()}
           onSyncClick={vi.fn()}
-          onSpacesClick={(event) => {
-            // Simulate the SidebarLayout onSpacesClick logic with the fix
-            const pathname = mockPathname;
-            const isHome = pathname === '/';
-            const activePanel = 'files';
-            const wasActive = activePanel === 'files';
-            const onFilesRoute = pathname === '/wiki' || pathname?.startsWith('/view/') || pathname?.startsWith('/wiki/');
-            if (isHome || !wasActive) {
-              mockPanelChange('files');
-              mockRouterPush('/wiki');
-            } else if (!onFilesRoute) {
-              mockRouterPush('/wiki');
-            } else {
-              event.preventDefault();
-              mockPanelChange(null);
-            }
-          }}
+          onSpacesClick={(event) => applyRailDecision(event, 'files', 'files', mockPanelChange)}
         />,
       );
     });
@@ -339,8 +319,9 @@ describe('ActivityBar rail navigation', () => {
     const filesButton = host.querySelector('[data-walkthrough="files-panel"]');
     const captureButton = host.querySelector('[data-walkthrough="capture-page"]');
 
-    expect(filesButton?.getAttribute('aria-pressed')).toBe('false');
-    expect(captureButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(filesButton?.getAttribute('aria-current')).toBeNull();
+    expect(captureButton?.getAttribute('aria-current')).toBe('page');
+    expect(captureButton?.hasAttribute('aria-pressed')).toBe(false);
 
     await act(async () => {
       root.unmount();
@@ -373,8 +354,9 @@ describe('ActivityBar rail navigation', () => {
     const captureButton = host.querySelector('[data-walkthrough="capture-page"]');
     const filesButton = host.querySelector('[data-walkthrough="files-panel"]');
 
-    expect(captureButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(filesButton?.getAttribute('aria-pressed')).toBe('false');
+    expect(captureButton?.className).toContain('text-[var(--amber)]');
+    expect(captureButton?.getAttribute('aria-current')).toBeNull();
+    expect(filesButton?.getAttribute('aria-current')).toBe('page');
 
     await act(async () => {
       root.unmount();
@@ -542,6 +524,123 @@ describe('ActivityBar rail navigation', () => {
     });
   });
 
+  it('prevents a repeated active route click from bypassing the route handler', async () => {
+    mockPathname = '/agents/codex';
+    const mockPanelChange = vi.fn();
+    const mockAgentsClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+      applyRailDecision(event, 'agents', 'agents', mockPanelChange);
+    });
+
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel="agents"
+          onPanelChange={mockPanelChange}
+          onAgentsClick={mockAgentsClick}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const agentsButton = host.querySelector('[data-walkthrough="agents-panel"]');
+    expect(agentsButton).not.toBeNull();
+
+    await act(async () => {
+      agentsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      agentsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(mockAgentsClick).toHaveBeenCalledTimes(1);
+    expect(mockPanelChange).toHaveBeenCalledWith('agents');
+    expect(mockRouterPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('uses the shared rail decision when no route callback is provided', async () => {
+    mockPathname = '/agents/codex';
+    const mockPanelChange = vi.fn();
+
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel="agents"
+          onPanelChange={mockPanelChange}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const agentsButton = host.querySelector('[data-walkthrough="agents-panel"]');
+    expect(agentsButton).not.toBeNull();
+
+    await act(async () => {
+      agentsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(mockPanelChange).toHaveBeenCalledWith('agents');
+    expect(mockRouterPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('exposes sync popover state on the sync rail trigger', async () => {
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={{ enabled: true, remote: 'origin' } as any}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+          syncPopoverOpen
+          syncPopoverId="test-sync-popover"
+        />,
+      );
+    });
+
+    const syncButton = host.querySelector('[aria-label="Sync"]');
+    expect(syncButton?.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(syncButton?.getAttribute('aria-expanded')).toBe('true');
+    expect(syncButton?.getAttribute('aria-controls')).toBe('test-sync-popover');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('marks Agents active and exposes a stable /agents rail href', async () => {
     mockPathname = '/agents';
 
@@ -567,7 +666,7 @@ describe('ActivityBar rail navigation', () => {
 
     const agentsButton = host.querySelector('[data-walkthrough="agents-panel"]');
     expect(agentsButton?.getAttribute('href')).toBe('/agents');
-    expect(agentsButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(agentsButton?.getAttribute('aria-current')).toBe('page');
 
     await act(async () => {
       root.unmount();

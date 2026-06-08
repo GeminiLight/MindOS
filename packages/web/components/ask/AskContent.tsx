@@ -65,6 +65,8 @@ interface AskContentProps {
   initialMessage?: string;
   /** ACP agent pre-selected via "Use" button from A2A tab */
   initialAcpAgent?: AcpAgentSelection | null;
+  /** Runtime pre-selected by an opener; supersedes initialAcpAgent when present. */
+  initialAgentRuntime?: AgentRuntimeIdentity | null;
   onFirstMessage?: () => void;
   /** 'modal' renders close button + ESC handler; 'panel' renders compact header; 'home' renders embedded on homepage */
   variant: 'modal' | 'panel' | 'home';
@@ -80,7 +82,7 @@ interface AskContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch, onDockToPanel }: AskContentProps) {
+export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, onFirstMessage, variant, onClose, maximized, onMaximize, askMode, onModeSwitch, onDockToPanel }: AskContentProps) {
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
 
@@ -106,7 +108,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const selectedSkillRef = useRef(selectedSkill);
   const [selectedAgentRuntime, setSelectedAgentRuntime] = useState<AgentRuntimeIdentity | null>(null);
   const selectedAgentRuntimeRef = useRef(selectedAgentRuntime);
-  const pendingOpenAgentRef = useRef<AcpAgentSelection | null>(null);
+  const pendingOpenAgentRef = useRef<AgentRuntimeIdentity | null>(null);
   const [chatMode, setChatMode] = useState<AskMode>('agent');
   const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
@@ -316,7 +318,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     const fileChanged = visible && prevVisibleRef.current && currentFile !== prevFileRef.current;
 
     if (justOpened) {
-      pendingOpenAgentRef.current = initialAcpAgent ?? null;
+      const openerRuntime = initialAgentRuntime ?? toAgentRuntime(initialAcpAgent);
+      pendingOpenAgentRef.current = openerRuntime;
       setTimeout(() => inputRef.current?.focus(), 50);
       void session.initSessions();
       setInput(initialMessage || '');
@@ -327,7 +330,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       mention.resetMention();
       slash.resetSlash();
       setSelectedSkill(null);
-      setSelectedAgentRuntime(toAgentRuntime(initialAcpAgent));
+      setSelectedAgentRuntime(openerRuntime);
       setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
@@ -349,12 +352,12 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (!visible || !session.activeSessionId) return;
 
     const openerAgent = pendingOpenAgentRef.current;
-    const restoredRuntime = getSessionAgentRuntime(session.activeSession) ?? toAgentRuntime(openerAgent);
+    const restoredRuntime = getSessionAgentRuntime(session.activeSession) ?? openerAgent;
 
     setSelectedAgentRuntime(restoredRuntime);
 
     if (openerAgent && !getSessionAgentRuntime(session.activeSession) && session.activeSession?.messages.length === 0) {
-      session.setSessionDefaultAcpAgent(openerAgent);
+      session.setSessionAgentRuntimeBinding(openerAgent);
     }
 
     pendingOpenAgentRef.current = null;
@@ -364,7 +367,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     session.activeSession?.defaultAcpAgent,
     session.activeSession?.defaultAgentRuntime,
     session.activeSession?.messages.length,
-    session.setSessionDefaultAcpAgent,
+    session.setSessionAgentRuntimeBinding,
   ]);
 
   // Persist session on message changes (skip if last msg is empty assistant placeholder during loading)

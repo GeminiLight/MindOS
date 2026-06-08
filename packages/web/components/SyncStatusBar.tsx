@@ -1,23 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { SyncStatus } from './settings/types';
-import { timeAgo } from './settings/SyncTab';
+import { getStatusLevel, getSyncLabel, type StatusLevel } from '@/lib/sync-ui';
+import { useSyncAction, useSyncStatus } from '@/lib/sync-status-store';
 
-export type StatusLevel = 'synced' | 'unpushed' | 'conflicts' | 'error' | 'off' | 'syncing';
-
-export function getStatusLevel(status: SyncStatus | null, syncing: boolean): StatusLevel {
-  if (syncing) return 'syncing';
-  if (!status || !status.enabled) return 'off';
-  if (status.lastError) return 'error';
-  if (status.conflicts && status.conflicts.length > 0) return 'conflicts';
-  const unpushed = parseInt(status.unpushed || '0', 10);
-  if (unpushed > 0) return 'unpushed';
-  return 'synced';
-}
+export { getStatusLevel, getSyncLabel } from '@/lib/sync-ui';
+export { useSyncAction, useSyncStatus } from '@/lib/sync-status-store';
 
 export const DOT_COLORS: Record<StatusLevel, string> = {
   synced: 'bg-success',
@@ -42,190 +33,8 @@ function useTick(intervalMs: number) {
   }, [intervalMs]);
 }
 
-type SyncStatusSnapshot = {
-  status: SyncStatus | null;
-  loaded: boolean;
-};
-
-const SYNC_STATUS_POLL_INTERVAL = 30_000;
-let syncStatusSnapshot: SyncStatusSnapshot = { status: null, loaded: false };
-let syncStatusInFlight: Promise<void> | null = null;
-let syncStatusInFlightToken: symbol | null = null;
-let syncStatusInterval: ReturnType<typeof setInterval> | undefined;
-let syncStatusSubscribers = 0;
-const syncStatusListeners = new Set<() => void>();
-
-function emitSyncStatus() {
-  for (const listener of syncStatusListeners) listener();
-}
-
-function setSyncStatusSnapshot(next: SyncStatusSnapshot) {
-  syncStatusSnapshot = next;
-  emitSyncStatus();
-}
-
-function getSyncStatusSnapshot(): SyncStatusSnapshot {
-  return syncStatusSnapshot;
-}
-
-async function fetchSharedSyncStatus(opts: { force?: boolean } = {}) {
-  if (syncStatusInFlight && !opts.force) return syncStatusInFlight;
-  const requestToken = Symbol('sync-status-fetch');
-  syncStatusInFlightToken = requestToken;
-
-  const request = (async () => {
-    try {
-      const data = await apiFetch<SyncStatus>('/api/sync');
-      if (syncStatusInFlightToken === requestToken) {
-        setSyncStatusSnapshot({ status: data, loaded: true });
-      }
-    } catch {
-      if (syncStatusInFlightToken === requestToken) {
-        setSyncStatusSnapshot({ status: null, loaded: true });
-      }
-    } finally {
-      if (syncStatusInFlightToken === requestToken) {
-        syncStatusInFlight = null;
-        syncStatusInFlightToken = null;
-      }
-    }
-  })();
-
-  syncStatusInFlight = request;
-  return request;
-}
-
-function startSyncStatusPolling() {
-  if (syncStatusInterval) return;
-  void fetchSharedSyncStatus();
-  syncStatusInterval = setInterval(() => {
-    if (document.visibilityState === 'visible') void fetchSharedSyncStatus();
-  }, SYNC_STATUS_POLL_INTERVAL);
-}
-
-function stopSyncStatusPolling() {
-  if (!syncStatusInterval) return;
-  clearInterval(syncStatusInterval);
-  syncStatusInterval = undefined;
-}
-
-function handleSyncVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    startSyncStatusPolling();
-    void fetchSharedSyncStatus();
-  } else {
-    stopSyncStatusPolling();
-  }
-}
-
-function subscribeSyncStatus(listener: () => void) {
-  syncStatusListeners.add(listener);
-  syncStatusSubscribers += 1;
-  if (syncStatusSubscribers === 1) {
-    startSyncStatusPolling();
-    document.addEventListener('visibilitychange', handleSyncVisibilityChange);
-  }
-
-  return () => {
-    syncStatusListeners.delete(listener);
-    syncStatusSubscribers = Math.max(0, syncStatusSubscribers - 1);
-    if (syncStatusSubscribers === 0) {
-      stopSyncStatusPolling();
-      document.removeEventListener('visibilitychange', handleSyncVisibilityChange);
-    }
-  };
-}
-
-export function useSyncStatus() {
-  const { status, loaded } = useSyncExternalStore(
-    subscribeSyncStatus,
-    getSyncStatusSnapshot,
-    getSyncStatusSnapshot,
-  );
-  const fetchStatus = useCallback(() => fetchSharedSyncStatus({ force: true }), []);
-
-  return { status, loaded, fetchStatus };
-}
-
-/** Shared hook for the "Sync Now" action — avoids duplicating sync logic in SyncStatusBar & SyncPopover */
-export function useSyncAction(refreshFn: () => Promise<void>) {
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null);
-
-  const syncNow = useCallback(async () => {
-    if (syncing) return;
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      await apiFetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'now' }),
-      });
-      await refreshFn();
-      setSyncResult('success');
-    } catch {
-      await refreshFn();
-      setSyncResult('error');
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncResult(null), 2500);
-    }
-  }, [syncing, refreshFn]);
-
-  return { syncing, syncResult, syncNow };
-}
-
-/** Shared status label formatter — used by SyncStatusBar and SyncPopover */
-export function getSyncLabel(
-  level: StatusLevel,
-  status: SyncStatus | null,
-  syncT?: Record<string, string>,
-): { label: string; tooltip: string } {
-  switch (level) {
-    case 'syncing': {
-      const l = syncT?.syncing ?? 'Syncing...';
-      return { label: l, tooltip: l };
-    }
-    case 'synced': {
-      const l = `${syncT?.synced ?? 'Synced'} · ${timeAgo(status?.lastSync)}`;
-      return { label: l, tooltip: l };
-    }
-    case 'unpushed': {
-      const n = parseInt(status?.unpushed || '0', 10);
-      return {
-        label: syncT?.changesToUpload
-          ? syncT.changesToUpload.replace('{n}', String(n))
-          : `${n} changes to upload`,
-        tooltip: syncT?.changesToUploadHint
-          ?? `${n} local change(s) are not backed up yet. Run Sync now or let auto-sync upload them.`,
-      };
-    }
-    case 'conflicts': {
-      const n = status?.conflicts?.length || 0;
-      return {
-        label: syncT?.resolveConflicts
-          ? syncT.resolveConflicts.replace('{n}', String(n))
-          : `Resolve ${n} conflicts`,
-        tooltip: syncT?.resolveConflictsHint
-          ?? `${n} file(s) changed in two places. Open Settings > Sync to choose which version to keep.`,
-      };
-    }
-    case 'error':
-      return {
-        label: syncT?.syncError ?? 'Sync error',
-        tooltip: status?.lastError || (syncT?.syncError ?? 'Sync error'),
-      };
-    default: {
-      const l = syncT?.syncOff ?? 'Sync off';
-      return { label: l, tooltip: l };
-    }
-  }
-}
-
 export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncStatusBarProps) {
-  const { status, loaded, fetchStatus } = useSyncStatus();
-  const { syncing, syncResult, syncNow } = useSyncAction(fetchStatus);
+  const { status, loaded, error: loadError, fetchStatus } = useSyncStatus();
   const [toast, setToast] = useState<string | null>(null);
   const prevLevelRef = useRef<StatusLevel>('off');
   const [hintDismissed, setHintDismissed] = useState(() => {
@@ -235,6 +44,8 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
     return false;
   });
   const { t } = useLocale();
+  const syncT = t.sidebar?.sync as Record<string, string> | undefined;
+  const { syncing, syncResult, syncError, syncNow } = useSyncAction(fetchStatus, syncT);
 
   // #1 — refresh timeAgo display every 60s
   useTick(60_000);
@@ -267,10 +78,24 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
 
   const level = getStatusLevel(status, syncing);
 
+  if (loadError && !status) {
+    return (
+      <div className="hidden md:flex items-center justify-between gap-2 px-4 py-1.5 border-t border-border text-xs text-destructive shrink-0 animate-in fade-in duration-300">
+        <button
+          onClick={() => void fetchStatus()}
+          className="flex min-h-7 min-w-0 items-center gap-2 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={loadError}
+        >
+          <XCircle size={12} className="shrink-0" />
+          <span className="truncate">{syncT?.syncError ?? 'Sync status unavailable'}</span>
+        </button>
+      </div>
+    );
+  }
+
   // Task E — Show dismissible hint when sync is not configured
   if (level === 'off') {
     if (hintDismissed) return null;
-    const syncT = t.sidebar?.sync as Record<string, string> | undefined;
     return (
       <div className="hidden md:flex items-center justify-between px-4 py-1.5 border-t border-border text-xs text-muted-foreground shrink-0 animate-in fade-in duration-300">
         <button
@@ -296,8 +121,8 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
     );
   }
 
-  const syncT = t.sidebar?.sync as Record<string, string> | undefined;
   const { label, tooltip } = getSyncLabel(level, status, syncT);
+  const buttonTitle = syncError || tooltip;
 
   return (
     // #3 — fade-in via animate-in
@@ -305,7 +130,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       <button
         onClick={onOpenSyncSettings}
         className="flex min-h-7 min-w-0 items-center gap-2 rounded-md hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        title={tooltip}
+        title={buttonTitle}
       >
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${DOT_COLORS[level]} ${
@@ -319,14 +144,24 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
         {/* #2 — sync result flash */}
         {(syncResult === 'success' || toast) && <CheckCircle2 size={12} className="text-success animate-in fade-in duration-200" />}
         {syncResult === 'error' && <XCircle size={12} className="text-error animate-in fade-in duration-200" />}
-        <button
-          onClick={handleSyncNow}
-          disabled={syncing}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={syncT?.syncNow ?? 'Sync now'}
-        >
-          <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
-        </button>
+        {level === 'conflicts' ? (
+          <button
+            onClick={onOpenSyncSettings}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-error transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={syncT?.resolveConflictsHint ?? 'Open Settings > Sync to resolve conflicts'}
+          >
+            <XCircle size={12} />
+          </button>
+        ) : (
+          <button
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={syncT?.syncNow ?? 'Sync now'}
+          >
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+          </button>
+        )}
       </div>
     </div>
   );

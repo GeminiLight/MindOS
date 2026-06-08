@@ -5,65 +5,11 @@ import { RefreshCw, AlertCircle, CheckCircle2, Loader2, GitBranch, Check, Chevro
 import { PrimaryButton, SettingCard, Select } from './Primitives';
 import { apiFetch } from '@/lib/api';
 import type { SyncStatus, SyncTabProps } from './types';
+import { formatSyncError, getSyncErrorHint, getUnpushedCount, SYNC_ACTION_TIMEOUT_MS, timeAgo } from '@/lib/sync-ui';
+import { useSyncStatus } from '@/lib/sync-status-store';
+import SyncEmptyState from './SyncEmptyState';
 
-export function timeAgo(iso: string | null | undefined, syncT?: Record<string, unknown>): string {
-  if (!iso) return (syncT?.timeNever as string) ?? 'never';
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60000) return (syncT?.timeJustNow as string) ?? 'just now';
-  const m = Math.floor(diff / 60000);
-  if (diff < 3600000) return (syncT?.timeMinAgo as ((n: number) => string))?.(m) ?? `${m}m ago`;
-  const h = Math.floor(diff / 3600000);
-  if (diff < 86400000) return (syncT?.timeHourAgo as ((n: number) => string))?.(h) ?? `${h}h ago`;
-  const d = Math.floor(diff / 86400000);
-  return (syncT?.timeDayAgo as ((n: number) => string))?.(d) ?? `${d}d ago`;
-}
-
-/** Classify a raw sync error and return a user-friendly message with action hint. */
-function formatSyncError(raw: string, syncT?: Record<string, unknown>): string {
-  const hint = getSyncErrorHint(raw, undefined, syncT);
-  return hint ? `${raw}\n${hint}` : raw;
-}
-
-/** Return an actionable hint for common sync errors. */
-export function getSyncErrorHint(error: string, remote?: string | null, syncT?: Record<string, unknown>): string {
-  const lower = error.toLowerCase();
-
-  // SSH authentication failures
-  if (lower.includes('permission denied') || lower.includes('publickey')) {
-    return (syncT?.hintSshAuth as string) ?? 'SSH key may not be configured. Run: ssh-keygen -t ed25519 && ssh -T git@github.com';
-  }
-  // SSH host key / connection
-  if (lower.includes('host key') || lower.includes('known_hosts') || lower.includes('fingerprint')) {
-    return (syncT?.hintSshHost as string) ?? 'Run: ssh-keyscan github.com >> ~/.ssh/known_hosts';
-  }
-  // HTTPS auth failures
-  if (lower.includes('authentication failed') || lower.includes('invalid credentials') || lower.includes('401') || lower.includes('403')) {
-    return (syncT?.hintHttpsAuth as string) ?? 'Access token may be expired or missing. Check Settings → Developer settings → Personal access tokens.';
-  }
-  // Network / timeout
-  if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('could not resolve')) {
-    return (syncT?.hintNetwork as string) ?? 'Check your network connection and try again.';
-  }
-  // Remote not found
-  if (lower.includes('not found') || lower.includes('does not exist') || lower.includes('repository not found')) {
-    return (syncT?.hintNotFound as string) ?? 'Repository not found. Check the URL and ensure the repo exists.';
-  }
-  // Push rejected (non-fast-forward)
-  if (lower.includes('non-fast-forward') || lower.includes('rejected') || lower.includes('fetch first')) {
-    return (syncT?.hintPushRejected as string) ?? 'Remote has changes. Click "Sync Now" to pull and retry.';
-  }
-  // Merge conflicts
-  if (lower.includes('conflict') || lower.includes('merge')) {
-    return (syncT?.hintConflict as string) ?? 'Merge conflict detected. Check the Conflicts section below.';
-  }
-
-  return '';
-}
-
-function getUnpushedCount(status: SyncStatus): number {
-  const parsed = parseInt(status.unpushed || '0', 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+export { getSyncErrorHint, timeAgo } from '@/lib/sync-ui';
 
 function getSyncHealth(status: SyncStatus, syncT?: Record<string, unknown>) {
   const conflictCount = status.conflicts?.length ?? 0;
@@ -124,10 +70,6 @@ function healthToneClass(tone: 'success' | 'warning' | 'error') {
   }
 }
 
-async function loadSyncStatus(): Promise<SyncStatus> {
-  return apiFetch<SyncStatus>('/api/sync', { timeout: 10000 });
-}
-
 /* ── Conflict Row ──────────────────────────────────────────────── */
 
 function ConflictRow({ file, time, syncT, onResolved }: {
@@ -137,34 +79,57 @@ function ConflictRow({ file, time, syncT, onResolved }: {
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<{ local: string; remote: string } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  const loadPreview = async () => {
+    setRowError(null);
+    setLoadingPreview(true);
+    try {
+      const data = await apiFetch<{ local: string; remote: string }>('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'conflict-preview', file, remote: file }),
+      });
+      setPreview(data);
+      return true;
+    } catch (error) {
+      const fallback = (syncT?.conflictPreviewFailed as string) ?? 'Failed to load conflict preview';
+      const raw = error instanceof Error ? error.message : fallback;
+      const detail = formatSyncError(raw, syncT);
+      setRowError(detail.includes(fallback) ? detail : `${fallback}\n${detail}`);
+      return false;
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   const togglePreview = async () => {
     if (expanded) { setExpanded(false); return; }
-    if (!preview) {
-      setLoadingPreview(true);
-      try {
-        const data = await apiFetch<{ local: string; remote: string }>('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'conflict-preview', remote: file }),
-        });
-        setPreview(data);
-      } catch { /* ignore */ }
-      setLoadingPreview(false);
-    }
     setExpanded(true);
+    if (!preview) await loadPreview();
   };
 
   const handleResolve = async (strategy: 'keep-local' | 'keep-remote') => {
+    if (!preview) {
+      setExpanded(true);
+      await loadPreview();
+      return;
+    }
+    setRowError(null);
     setResolving(strategy === 'keep-local' ? 'local' : 'remote');
     try {
       await apiFetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'resolve-conflict', remote: file, branch: strategy }),
+        body: JSON.stringify({ action: 'resolve-conflict', file, strategy, remote: file, branch: strategy }),
       });
       onResolved();
-    } catch {
+    } catch (error) {
+      const fallback = (syncT?.conflictResolveFailed as string) ?? 'Failed to resolve conflict';
+      const raw = error instanceof Error ? error.message : fallback;
+      const detail = formatSyncError(raw, syncT);
+      setRowError(detail.includes(fallback) ? detail : `${fallback}\n${detail}`);
+    } finally {
       setResolving(null);
     }
   };
@@ -184,11 +149,16 @@ function ConflictRow({ file, time, syncT, onResolved }: {
           {file}
         </button>
         <span className="text-muted-foreground shrink-0">{timeAgo(time, syncT)}</span>
+        {!preview && (
+          <span className="text-2xs text-muted-foreground">
+            {(syncT?.viewDiffFirst as string) ?? 'View diff first'}
+          </span>
+        )}
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={() => handleResolve('keep-local')}
-            disabled={!!resolving}
+            disabled={!!resolving || !preview}
             className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title={(syncT?.keepLocalHint as string) ?? 'Keep this device\'s version'}
           >
@@ -197,7 +167,7 @@ function ConflictRow({ file, time, syncT, onResolved }: {
           <button
             type="button"
             onClick={() => handleResolve('keep-remote')}
-            disabled={!!resolving}
+            disabled={!!resolving || !preview}
             className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title={(syncT?.keepRemoteHint as string) ?? 'Replace with remote version'}
           >
@@ -228,7 +198,31 @@ function ConflictRow({ file, time, syncT, onResolved }: {
                 <pre className="whitespace-pre-wrap text-foreground/80 leading-relaxed">{preview.remote || ((syncT?.emptyFile as string) ?? '(empty)')}</pre>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="p-3 text-xs text-muted-foreground">
+              {(syncT?.previewEmptyState as string) ?? 'No preview loaded yet.'}
+            </div>
+          )}
+        </div>
+      )}
+      {rowError && (
+        <div className="flex items-start justify-between gap-2 border-t border-border/50 bg-destructive/10 p-2 text-xs text-destructive" role="alert" aria-live="polite">
+          <div className="space-y-0.5">
+            {rowError.split('\n').map((line, i) => (
+              <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : ''}`}>{line}</span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setPreview(null);
+              setExpanded(true);
+              void loadPreview();
+            }}
+            className="shrink-0 rounded-md px-2 py-1 text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {(syncT?.retry as string) ?? 'Retry'}
+          </button>
         </div>
       )}
     </div>
@@ -242,7 +236,9 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
   const [content, setContent] = useState('');
   const [saved, setSaved] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
 
   const dirty = content !== saved;
@@ -258,10 +254,17 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
     }).then(data => {
       setContent(data.content);
       setSaved(data.content);
-    }).catch(() => {}).finally(() => setLoading(false));
+      setError(null);
+    }).catch((err) => {
+      const raw = err instanceof Error ? err.message : ((syncT?.gitignoreLoadFailed as string) ?? 'Failed to load .gitignore');
+      setError(formatSyncError(raw, syncT));
+    }).finally(() => setLoading(false));
   }, [open]);
 
   const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    setSaveOk(false);
     try {
       await apiFetch('/api/sync', {
         method: 'POST',
@@ -271,7 +274,12 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
       setSaved(content);
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 2000);
-    } catch {}
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : ((syncT?.gitignoreSaveFailed as string) ?? 'Failed to save .gitignore');
+      setError(formatSyncError(raw, syncT));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -308,8 +316,10 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
                   <button
                     type="button"
                     onClick={handleSave}
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    {saving && <Loader2 size={12} className="animate-spin" />}
                     {(syncT?.gitignoreSave as string) ?? 'Save'}
                   </button>
                 )}
@@ -319,6 +329,16 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
                   </span>
                 )}
               </div>
+              {error && (
+                <div className="flex items-start gap-1.5 rounded-md bg-destructive/10 p-2 text-xs text-destructive" role="alert" aria-live="polite">
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                  <div className="space-y-0.5">
+                    {error.split('\n').map((line, i) => (
+                      <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : ''}`}>{line}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -327,17 +347,14 @@ function GitignoreEditor({ syncT }: { syncT?: Record<string, unknown> }) {
   );
 }
 
-
-import SyncEmptyState from './SyncEmptyState';
-
 /* ── Main SyncTab ──────────────────────────────────────────────── */
 
 export function SyncTab({ t, visible }: SyncTabProps) {
   const syncT = t.settings?.sync as Record<string, unknown> | undefined;
-  const [status, setStatus] = useState<SyncStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { status, loaded, error: loadError, fetchStatus } = useSyncStatus();
   const [syncing, setSyncing] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [intervalSaving, setIntervalSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showSuccess = useCallback((text: string) => {
@@ -347,46 +364,14 @@ export function SyncTab({ t, visible }: SyncTabProps) {
     }, 3000);
   }, []);
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await loadSyncStatus();
-      setStatus(data);
-    } catch {
-      // Keep existing status on refresh failure (don't flash init form during recompile)
-      // Only set null if we never had a status (first load)
-      setStatus(prev => prev ?? null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void loadSyncStatus()
-      .then((data) => {
-        if (!cancelled) setStatus(data);
-      })
-      .catch(() => {
-        if (!cancelled) setStatus(prev => prev ?? null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Refresh sync status when the tab becomes visible again (after being hidden via display:none)
   const prevVisible = useRef(visible);
   useEffect(() => {
-    if (visible && !prevVisible.current && status !== null) {
-      fetchStatus();
+    if (visible && !prevVisible.current) {
+      void fetchStatus();
     }
     prevVisible.current = visible;
-  }, [visible, status, fetchStatus]);
+  }, [visible, fetchStatus]);
 
   const handleSyncNow = async () => {
     setSyncing(true);
@@ -396,7 +381,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'now' }),
-        timeout: 120_000, // sync can take 60s+ for large repos
+        timeout: SYNC_ACTION_TIMEOUT_MS, // sync can take 60s+ for large repos
       });
       showSuccess((syncT?.syncComplete as string) ?? 'Sync complete');
       await fetchStatus();
@@ -448,7 +433,9 @@ export function SyncTab({ t, visible }: SyncTabProps) {
   };
 
   const handleUpdateIntervals = async (patch: { autoCommitInterval?: number; autoPullInterval?: number }) => {
+    if (intervalSaving) return;
     setMessage(null);
+    setIntervalSaving(true);
     try {
       await apiFetch('/api/sync', {
         method: 'POST',
@@ -460,10 +447,12 @@ export function SyncTab({ t, visible }: SyncTabProps) {
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Failed to update sync settings';
       setMessage({ type: 'error', text: formatSyncError(raw, syncT) });
+    } finally {
+      setIntervalSaving(false);
     }
   };
 
-  if (loading) {
+  if (!loaded) {
     return (
       <div className="flex justify-center py-8">
         <Loader2 size={18} className="animate-spin text-muted-foreground" />
@@ -471,8 +460,92 @@ export function SyncTab({ t, visible }: SyncTabProps) {
     );
   }
 
-  if (!status || !status.enabled) {
+  if (loadError && !status) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-lg bg-destructive/10 p-4 text-destructive">
+          <AlertCircle size={18} className="mt-0.5 shrink-0" />
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium">{(syncT?.loadFailedTitle as string) ?? 'Could not load sync status'}</h3>
+              <p className="text-xs text-destructive/80">{formatSyncError(loadError, syncT)}</p>
+            </div>
+            <PrimaryButton onClick={() => void fetchStatus()} className="flex items-center gap-2">
+              <RefreshCw size={14} />
+              {(syncT?.retry as string) ?? 'Retry'}
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!status || (!status.enabled && !status.configured)) {
     return <SyncEmptyState t={t} onInitComplete={fetchStatus} />;
+  }
+
+  if (!status.enabled && status.configured) {
+    return (
+      <div className="space-y-4">
+        <SettingCard
+          icon={<GitBranch size={15} />}
+          title={(syncT?.repositoryTitle as string) ?? 'Repository'}
+          description={status.remote || ((syncT?.notConfigured as string) ?? '(not configured)')}
+          badge={
+            <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+              {(syncT?.labelPaused as string) ?? 'Paused'}
+            </span>
+          }
+        >
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{(syncT?.labelBranch as string) ?? 'Branch'}</span>
+              <span className="font-mono text-xs">{status.branch || 'main'}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{(syncT?.labelLastSync as string) ?? 'Last sync'}</span>
+              <span className="text-xs">{timeAgo(status.lastSync, syncT)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <PrimaryButton
+              onClick={handleToggle}
+              disabled={toggling}
+              className="flex min-h-9 items-center gap-2"
+            >
+              {toggling && <Loader2 size={14} className="animate-spin" />}
+              {(syncT?.enableAutoSync as string) ?? 'Enable Auto-sync'}
+            </PrimaryButton>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={toggling}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {(syncT?.resetButton as string) ?? 'Reset & Re-configure'}
+            </button>
+          </div>
+
+          {message && (
+            <div className="flex items-start gap-1.5 text-xs" role="status" aria-live="polite">
+              {message.type === 'success' ? (
+                <><CheckCircle2 size={13} className="text-success shrink-0 mt-0.5" /><span className="text-success">{message.text}</span></>
+              ) : (
+                <>
+                  <AlertCircle size={13} className="text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    {message.text.split('\n').map((line, i) => (
+                      <span key={i} className={`block ${i > 0 ? 'text-destructive/70' : 'text-destructive'}`}>{line}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </SettingCard>
+      </div>
+    );
   }
 
   // Broken state: config says enabled but repo/remote is missing
@@ -625,7 +698,8 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <span className="text-muted-foreground">{(syncT?.autoCommitLabel as string) ?? 'Save changes every'}</span>
             <Select
               size="sm"
-              value={String(status.autoCommitInterval)}
+              value={String(status.autoCommitInterval ?? 30)}
+              disabled={intervalSaving}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 void handleUpdateIntervals({ autoCommitInterval: val });
@@ -642,7 +716,8 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <span className="text-muted-foreground">{(syncT?.autoPullLabel as string) ?? 'Check for updates every'}</span>
             <Select
               size="sm"
-              value={String(status.autoPullInterval)}
+              value={String(status.autoPullInterval ?? 300)}
+              disabled={intervalSaving}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 void handleUpdateIntervals({ autoPullInterval: val });
@@ -656,6 +731,12 @@ export function SyncTab({ t, visible }: SyncTabProps) {
               <option value="3600">60min</option>
             </Select>
           </div>
+          {intervalSaving && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status" aria-live="polite">
+              <Loader2 size={12} className="animate-spin" />
+              {(syncT?.settingsSaving as string) ?? 'Saving sync settings...'}
+            </div>
+          )}
         </div>
       </SettingCard>
 

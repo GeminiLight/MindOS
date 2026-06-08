@@ -68,8 +68,13 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
 
   const handleToggle = async (name: string, enabled: boolean) => {
     if (mcp) {
-      await mcp.toggleSkill(name, enabled);
-      setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled } : s));
+      const ok = await mcp.toggleSkill(name, enabled);
+      if (ok) {
+        setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled } : s));
+        setLoadErrors(prev => { const next = { ...prev }; delete next[name]; return next; });
+      } else {
+        setLoadErrors(prev => ({ ...prev, [name]: 'Failed to toggle skill' }));
+      }
       return;
     }
     try {

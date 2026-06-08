@@ -3,7 +3,7 @@
  * All panel sizing constants in one place for easy maintenance.
  */
 
-import type { PanelId } from '@/components/ActivityBar';
+import type { PanelId } from '@/lib/navigation-panel';
 
 // ── Left Panel (Files/Search/Agents/Echo/Discover) ──
 

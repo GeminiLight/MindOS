@@ -20,8 +20,9 @@ import { parseMindosSseLine } from '@geminilight/mindos/session';
 /** Tools that modify files — trigger files-changed notification on completion */
 const FILE_MUTATING_TOOLS = new Set([
   'write_file', 'create_file', 'batch_create_files',
-  'update_section', 'insert_after_heading', 'delete_file',
-  'rename_file', 'create_space',
+  'append_to_file', 'insert_after_heading', 'update_section',
+  'edit_lines', 'delete_file', 'rename_file', 'move_file',
+  'append_csv', 'create_space',
 ]);
 
 export interface RuntimeBindingMetadata {

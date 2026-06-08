@@ -11,6 +11,7 @@ export type MindosSelectedRuntime = {
   id: string;
   name: string;
   kind: MindosAgentRuntimeKind;
+  externalSessionId?: string;
 };
 
 export type MindosAskStreamRequest = {
@@ -101,9 +102,18 @@ function isSelectedAcpAgent(value: unknown): value is { id: string; name: string
 
 function normalizeSelectedRuntime(record: Record<string, unknown>): MindosSelectedRuntime | null | undefined {
   if (record.selectedRuntime === null) return null;
-  if (isSelectedRuntime(record.selectedRuntime)) return record.selectedRuntime;
+  if (isSelectedRuntime(record.selectedRuntime)) {
+    const runtime = record.selectedRuntime as Record<string, unknown>;
+    return {
+      id: runtime.id as string,
+      name: runtime.name as string,
+      kind: runtime.kind as MindosAgentRuntimeKind,
+      ...(typeof runtime.externalSessionId === 'string' && runtime.externalSessionId
+        ? { externalSessionId: runtime.externalSessionId }
+        : {}),
+    };
+  }
 
-  if (record.selectedRuntime !== undefined) return undefined;
   if (!isSelectedAcpAgent(record.selectedAcpAgent) || record.selectedAcpAgent === null) {
     return record.selectedAcpAgent === null ? null : undefined;
   }

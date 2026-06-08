@@ -146,6 +146,17 @@ describe('ACP Session (SDK-based)', () => {
       expect(session).toBeDefined();
       expect(mockAuthenticate).toHaveBeenCalledWith({ methodId: 'terminal' });
     });
+
+    it('declares readonly client capabilities when permissionMode is readonly', async () => {
+      await createSessionFromEntry(MOCK_ENTRY, { permissionMode: 'readonly' });
+
+      expect(mockInitialize).toHaveBeenCalledWith(expect.objectContaining({
+        clientCapabilities: {
+          fs: { readTextFile: true, writeTextFile: false },
+          terminal: false,
+        },
+      }));
+    });
   });
 
   describe('prompt', () => {
@@ -327,16 +338,15 @@ describe('ACP Session (SDK-based)', () => {
   });
 
   describe('createSessionFromEntry — edge cases', () => {
-    it('continues when session/new fails with non-auth error', async () => {
+    it('throws and cleans up when session/new fails with non-auth error', async () => {
       mockNewSession.mockRejectedValueOnce(new Error('Network timeout'));
-      const session = await createSessionFromEntry(MOCK_ENTRY);
-      expect(session).toBeDefined();
-      expect(session.agentSessionId).toBeUndefined();
+      await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('test-agent: session/new failed: Network timeout');
+      expect(getActiveSessions()).toHaveLength(0);
     });
 
     it('throws when session/new fails with auth error', async () => {
       mockNewSession.mockRejectedValueOnce(new Error('Authentication required'));
-      await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('Authentication required');
+      await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('test-agent: session/new failed: Authentication required');
     });
 
     it('enforces max total sessions limit', async () => {

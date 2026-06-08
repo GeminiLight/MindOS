@@ -131,6 +131,7 @@ export {
 } from './handlers/init.js';
 
 export {
+  getServerSyncLockPath,
   handleSyncGet,
   handleSyncPost,
   type MindosSyncConfig,

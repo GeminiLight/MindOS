@@ -13,6 +13,7 @@ import { invalidateCache } from '@/lib/fs';
 import { ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
 import { parseProviders } from '@/lib/custom-endpoints';
 import { getEmbeddingStatus } from '@/lib/core/hybrid-search';
+import { handleRouteErrorSimple } from '@/lib/errors';
 import { toNextResponse } from '../_mindos-adapter';
 
 function createSettingsServices(): MindosSettingsServices {
@@ -38,6 +39,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as Partial<ServerSettings>;
-  return toNextResponse(handleSettingsPost(body, createSettingsServices()));
+  try {
+    const body = await req.json() as Partial<ServerSettings>;
+    return toNextResponse(handleSettingsPost(body, createSettingsServices()));
+  } catch (error) {
+    return handleRouteErrorSimple(error);
+  }
 }

@@ -23,6 +23,21 @@ interface SettingsContentProps {
   onClose?: () => void;
 }
 
+function buildSettingsSaveBody(d: SettingsData) {
+  return {
+    ai: d.ai,
+    agent: d.agent,
+    embedding: d.embedding,
+    webSearch: d.webSearch,
+    mindRoot: d.mindRoot,
+    webPassword: d.webPassword,
+    authToken: d.authToken,
+    allowNetworkAccess: d.allowNetworkAccess === true,
+    skillPaths: d.skillPaths,
+    connectionMode: d.connectionMode,
+  };
+}
+
 export default function SettingsContent({ visible, initialTab, variant, onClose }: SettingsContentProps) {
   const [tab, setTab] = useState<Tab>('ai');
   const [data, setData] = useState<SettingsData | null>(null);
@@ -33,6 +48,10 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dataLoaded = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const loadRequestId = useRef(0);
+  const saveInFlight = useRef(false);
+  const saveAgain = useRef(false);
+  const latestData = useRef<SettingsData | null>(null);
 
   const [font, setFont] = useState('inter');
   const [fontSize, setFontSize] = useState('15px');
@@ -63,12 +82,22 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
   // Init data when becoming visible
   const prevVisibleRef = useRef(false);
   useEffect(() => {
+    let cancelled = false;
     const justOpened = isPanel
       ? (visible && !prevVisibleRef.current)
       : visible;
 
     if (justOpened) {
-      apiFetch<SettingsData>('/api/settings').then(d => { setData(d); dataLoaded.current = true; }).catch(() => setStatus('load-error'));
+      const requestId = ++loadRequestId.current;
+      dataLoaded.current = false;
+      apiFetch<SettingsData>('/api/settings').then(d => {
+        if (cancelled || requestId !== loadRequestId.current || !visible) return;
+        setData(d);
+        latestData.current = d;
+        dataLoaded.current = true;
+      }).catch(() => {
+        if (!cancelled && requestId === loadRequestId.current && visible) setStatus('load-error');
+      });
       setFont(localStorage.getItem('prose-font') === 'geist' ? 'inter' : localStorage.getItem('prose-font') ?? 'inter');
       setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
       // Migrate old px-based content-width to percentage
@@ -81,8 +110,12 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
       setDark(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
       setStatus('idle');
     }
-    if (!visible) { dataLoaded.current = false; }
+    if (!visible) {
+      dataLoaded.current = false;
+      loadRequestId.current++;
+    }
     prevVisibleRef.current = visible;
+    return () => { cancelled = true; };
   }, [visible, isPanel]);
 
   useEffect(() => {
@@ -123,49 +156,65 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     return () => window.removeEventListener('keydown', handler);
   }, [variant, visible, onClose]);
 
-  const doSave = useCallback(async (d: SettingsData) => {
-    setSaving(true);
-    try {
-      await apiFetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ai: d.ai,
-          agent: d.agent,
-          embedding: d.embedding,
-          webSearch: d.webSearch,
-          mindRoot: d.mindRoot,
-          webPassword: d.webPassword,
-          authToken: d.authToken,
-          allowNetworkAccess: d.allowNetworkAccess === true,
-          skillPaths: d.skillPaths,
-          connectionMode: d.connectionMode,
-        }),
-      });
-      setStatus('saved');
-      window.dispatchEvent(new Event('mindos:settings-changed'));
-      setTimeout(() => setStatus('idle'), 2500);
-    } catch {
-      setStatus('error');
-      setTimeout(() => setStatus('idle'), 2500);
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
   // Track unsaved data so we can flush on close/unmount
   const pendingData = useRef<SettingsData | null>(null);
 
+  const flushSave = useCallback(async (payload?: SettingsData | null) => {
+    const initialPayload = payload ?? pendingData.current ?? latestData.current;
+    if (!initialPayload) return;
+
+    latestData.current = initialPayload;
+    pendingData.current = null;
+
+    if (saveInFlight.current) {
+      saveAgain.current = true;
+      return;
+    }
+
+    saveInFlight.current = true;
+    setSaving(true);
+
+    let nextPayload: SettingsData | null = initialPayload;
+    while (nextPayload) {
+      const savingPayload = nextPayload;
+      saveAgain.current = false;
+      try {
+        await apiFetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildSettingsSaveBody(savingPayload)),
+        });
+        setStatus('saved');
+        window.dispatchEvent(new Event('mindos:settings-changed'));
+        setTimeout(() => setStatus('idle'), 2500);
+      } catch {
+        setStatus('error');
+        setTimeout(() => setStatus('idle'), 2500);
+      }
+
+      nextPayload = saveAgain.current ? latestData.current : null;
+    }
+
+    saveInFlight.current = false;
+    setSaving(false);
+
+    if (saveAgain.current && latestData.current) {
+      const queuedPayload = latestData.current;
+      saveAgain.current = false;
+      void flushSave(queuedPayload);
+    }
+  }, []);
+
   useEffect(() => {
     if (!data || !dataLoaded.current) return;
+    latestData.current = data;
     pendingData.current = data;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      pendingData.current = null;
-      doSave(data);
+      flushSave(data);
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [data, doSave]);
+  }, [data, flushSave]);
 
   // Flush unsaved changes when panel hides (panel variant)
   useEffect(() => {
@@ -173,9 +222,9 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
       const d = pendingData.current;
       pendingData.current = null;
       clearTimeout(saveTimer.current);
-      doSave(d);
+      flushSave(d);
     }
-  }, [visible, doSave]);
+  }, [visible, flushSave]);
 
   // Flush unsaved changes on unmount (modal variant: SettingsModal returns null when !open)
   useEffect(() => {
@@ -187,18 +236,7 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
         apiFetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ai: d.ai,
-            agent: d.agent,
-            embedding: d.embedding,
-            webSearch: d.webSearch,
-            mindRoot: d.mindRoot,
-            webPassword: d.webPassword,
-            authToken: d.authToken,
-            allowNetworkAccess: d.allowNetworkAccess === true,
-            skillPaths: d.skillPaths,
-            connectionMode: d.connectionMode,
-          }),
+          body: JSON.stringify(buildSettingsSaveBody(d)),
         }).catch(() => {});
       }
     };
@@ -215,13 +253,13 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
 
   const restoreFromEnv = useCallback(async () => {
     if (!data) return;
-    setData(d => d ? { ...d, ai: restoreAiSettingsFromEnvironment(d) } : d);
-    const DEBOUNCE_DELAY = 800;
-    const SAVE_OPERATION_TIME = 500;
+    const next = { ...data, ai: restoreAiSettingsFromEnvironment(data) };
+    setData(next);
+    await flushSave(next);
     setTimeout(() => {
       apiFetch<SettingsData>('/api/settings').then(d => { setData(d); }).catch(() => setStatus('error'));
-    }, DEBOUNCE_DELAY + SAVE_OPERATION_TIME);
-  }, [data]);
+    }, 100);
+  }, [data, flushSave]);
 
   const env = data?.envOverrides ?? {};
   const iconSize = isPanel ? 12 : 13;

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import EditorWrapper from './EditorWrapper';
+import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
 
 // WysiwygEditor uses browser APIs — load client-side only
 const WysiwygEditor = dynamic(() => import('./WysiwygEditor'), { ssr: false });
@@ -17,17 +18,21 @@ interface MarkdownEditorProps {
 const EDITOR_HEIGHT = 'calc(100vh - 160px)';
 
 export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEditorProps) {
-  const isWysiwyg = viewMode === 'wysiwyg';
+  const hasFrontmatter = splitMarkdownFrontmatter(value).frontmatter !== null;
+  const isWysiwyg = viewMode === 'wysiwyg' && !hasFrontmatter;
+  const isSource = viewMode === 'source' || (viewMode === 'wysiwyg' && hasFrontmatter);
 
   return (
     <>
-      {/* WYSIWYG: always mounted, hidden when not active to preserve editor state */}
-      <div className="min-h-[50vh]" style={{ display: isWysiwyg ? undefined : 'none' }}>
-        <WysiwygEditor value={value} onChange={onChange} />
-      </div>
+      {/* WYSIWYG normalizes markdown on mount, so do not mount it for YAML frontmatter notes. */}
+      {!hasFrontmatter && (
+        <div className="min-h-[50vh]" style={{ display: isWysiwyg ? undefined : 'none' }}>
+          <WysiwygEditor value={value} onChange={onChange} />
+        </div>
+      )}
 
       {/* Source: bordered editor container */}
-      {viewMode === 'source' && (
+      {isSource && (
         <div
           className="rounded-xl overflow-hidden border border-border flex"
           style={{ height: EDITOR_HEIGHT }}

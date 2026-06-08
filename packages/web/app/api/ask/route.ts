@@ -14,13 +14,14 @@ import { performActiveRecall } from '@/lib/agent/active-recall';
 import { metrics } from '@/lib/metrics';
 import { resolveAskCompatMode } from '@/lib/agent/ask-compat';
 import '@/lib/pi-integration/mcp-config'; // Injects --mcp-config argv before extension load
-import { createSession, promptStream, closeSession } from '@/lib/acp/session';
+import { createSession, promptStream, cancelPrompt, closeSession } from '@/lib/acp/session';
 import { getProjectRoot } from '@/lib/project-root';
 import type { Message as FrontendMessage } from '@/lib/types';
 import {
   MINDOS_SSE_HEADERS,
   encodeMindosSseEvent,
   type MindOSSSEvent,
+  buildMindosExternalRuntimePrompt,
   createMindosUploadedFileParts,
   dirnameOfMindosPath,
   expandMindosAskAttachedFiles,
@@ -83,6 +84,60 @@ function nativeAgentRuntimeFromSelection(runtime: unknown): MindosAgentRuntimeSe
     kind: record.kind,
     ...(typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
   };
+}
+
+function isMindosRuntimeSelection(runtime: unknown): boolean {
+  if (!runtime || typeof runtime !== 'object') return false;
+  const record = runtime as Partial<AgentRuntimeIdentity>;
+  return record.kind === 'mindos';
+}
+
+function getLastUserContent(messages: FrontendMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role === 'user' && typeof message.content === 'string') return message.content;
+  }
+  return '';
+}
+
+function createAskSseResponse(
+  runAgent: (send: (event: MindOSSSEvent) => void) => Promise<void>,
+  fallbackErrorMessage: (error: unknown) => string,
+): Response {
+  const encoder = new TextEncoder();
+  const requestStartTime = Date.now();
+  const stream = new ReadableStream({
+    start(controller) {
+      let streamClosed = false;
+      function send(event: MindOSSSEvent) {
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(encodeMindosSseEvent(event)));
+        } catch {
+          streamClosed = true;
+        }
+      }
+      function safeClose() {
+        if (streamClosed) return;
+        streamClosed = true;
+        try { controller.close(); } catch { /* already closed */ }
+      }
+
+      runAgent(send).then(() => {
+        metrics.recordRequest(Date.now() - requestStartTime);
+        safeClose();
+      }).catch((err) => {
+        metrics.recordRequest(Date.now() - requestStartTime);
+        metrics.recordError();
+        send({ type: 'error', message: fallbackErrorMessage(err) });
+        safeClose();
+      });
+    },
+  });
+
+  return new Response(stream, {
+    headers: MINDOS_SSE_HEADERS,
+  });
 }
 
 // SSE event contract and pi-agent event guards → @geminilight/mindos/session
@@ -150,10 +205,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles } = body;
-  const selectedAcpAgent = body.selectedRuntime === undefined
-    ? body.selectedAcpAgent
-    : acpAgentFromRuntime(body.selectedRuntime);
   const selectedNativeRuntime = nativeAgentRuntimeFromSelection(body.selectedRuntime);
+  const selectedAcpAgent = selectedNativeRuntime || body.selectedRuntime === null || isMindosRuntimeSelection(body.selectedRuntime)
+    ? null
+    : (acpAgentFromRuntime(body.selectedRuntime) ?? body.selectedAcpAgent ?? null);
   const attachedFiles = Array.isArray(rawAttached) ? expandAttachedFiles(rawAttached) : rawAttached;
   const askMode: AskModeApi = normalizeMindosAskMode(body.mode);
 
@@ -182,6 +237,74 @@ export async function POST(req: NextRequest) {
   // These are already truncated client-side (80K limit), so only apply a generous
   // server-side cap to guard against malformed requests.
   const uploadedParts = createMindosUploadedFileParts(uploadedFiles);
+
+  if (selectedNativeRuntime || selectedAcpAgent) {
+    const mindRoot = getMindRoot();
+    const lastUserContent = getLastUserContent(messages);
+    const fileContext = loadAttachedFileContext(attachedFiles, currentFile, 'external');
+    const excludePaths = [
+      ...(currentFile ? [currentFile] : []),
+      ...(Array.isArray(attachedFiles) ? attachedFiles : []),
+    ];
+    let recalledKnowledge: Array<{ path: string; content: string }> = [];
+    const activeRecall = agentConfig.activeRecall ?? {};
+    if (activeRecall.enabled !== false && lastUserContent.trim().length > 1) {
+      recalledKnowledge = await performActiveRecall(mindRoot, lastUserContent, {
+        maxTokens: activeRecall.maxTokens,
+        maxFiles: activeRecall.maxFiles,
+        minScore: activeRecall.minScore,
+        excludePaths,
+      });
+    }
+    const externalPrompt = buildMindosExternalRuntimePrompt({
+      prompt: lastUserContent,
+      fileContext,
+      uploadedParts,
+      recalledKnowledge,
+    });
+
+    return createAskSseResponse(async (send) => {
+      if (selectedNativeRuntime) {
+        await runMindosAgentRuntimeAskSession({
+          runtime: selectedNativeRuntime,
+          cwd: mindRoot,
+          prompt: externalPrompt,
+          signal: req.signal,
+          send,
+        });
+        return;
+      }
+
+      if (selectedAcpAgent) {
+        let hasContent = false;
+        await runMindosAcpAskSession({
+          agentId: selectedAcpAgent.id,
+          cwd: mindRoot,
+          prompt: externalPrompt,
+          signal: req.signal,
+          createSession: (agentId, options) => createSession(agentId, {
+            ...options,
+            permissionMode: askMode === 'chat' ? 'readonly' : 'agent',
+          }),
+          timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+          hasContent: () => hasContent,
+          onVisibleContent: () => { hasContent = true; },
+          send,
+          promptStream: async (sessionId, prompt, onUpdate) => {
+            await promptStream(sessionId, prompt, onUpdate);
+          },
+          cancelPrompt,
+          closeSession,
+          errorMessage: (error) => ((error as any).code === 'TIMEOUT'
+            ? t.agentTimeout
+            : `ACP Agent Error: ${error.message}`),
+        });
+      }
+    }, (err) => {
+      if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
+      return err instanceof Error ? err.message : String(err);
+    });
+  }
 
   let agentInitialization: MindosAskInitializationContext | undefined;
   if (askMode === 'agent') {
@@ -352,144 +475,69 @@ export async function POST(req: NextRequest) {
     } = runtime;
 
     // ── SSE Stream ──
-    const encoder = new TextEncoder();
-    const requestStartTime = Date.now();
-    const stream = new ReadableStream({
-      start(controller) {
-        let streamClosed = false;
-        function send(event: MindOSSSEvent) {
-          if (streamClosed) return;
-          try {
-            controller.enqueue(encoder.encode(encodeMindosSseEvent(event)));
-          } catch {
-            streamClosed = true;
-          }
-        }
-        function safeClose() {
-          if (streamClosed) return;
-          streamClosed = true;
-          try { controller.close(); } catch { /* already closed */ }
-        }
+    return createAskSseResponse(async (send) => {
+      // ── Proxy compatibility check ──
+      // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
+      // and go straight to the non-streaming fallback path.
+      const compatCache = readBaseUrlCompat();
+      const effectiveBaseUrlKey = baseUrl || 'default';
+      const compatMode = resolveAskCompatMode({
+        askMode,
+        provider,
+        baseUrl,
+        cachedMode: compatCache[effectiveBaseUrlKey],
+      });
+      const proxyFallbackMessages = {
+        proxyCompatMode: t.proxyCompatMode,
+        proxyCompatDetecting: t.proxyCompatDetecting,
+        proxyCompatFailed: t.proxyCompatFailed,
+        proxyCompatAlsoFailed: t.proxyCompatAlsoFailed,
+      };
+      const runProxyFallback = () => runMindosNonStreamingFallback({
+        baseUrl: baseUrl ?? '',
+        apiKey,
+        model: modelName,
+        systemPrompt,
+        historyMessages: llmHistoryMessages,
+        userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+        tools: requestTools,
+        send,
+        signal: req.signal,
+        maxSteps: stepLimit,
+      });
 
-        let hasContent = false;
-        // ── Route to native runtime / ACP agent if selected, otherwise use MindOS agent ──
-        const runAgent = async () => {
-          if (selectedNativeRuntime) {
-            await runMindosAgentRuntimeAskSession({
-              runtime: selectedNativeRuntime,
-              cwd: getMindRoot(),
-              prompt: lastUserContent,
-              signal: req.signal,
-              send,
-            });
-            safeClose();
-          } else if (selectedAcpAgent) {
-            await runMindosAcpAskSession({
-              agentId: selectedAcpAgent.id,
-              cwd: getMindRoot(),
-              prompt: lastUserContent,
-              signal: req.signal,
-              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-              hasContent: () => hasContent,
-              onVisibleContent: () => { hasContent = true; },
-              send,
-              createSession,
-              promptStream: async (sessionId, prompt, onUpdate) => {
-                await promptStream(sessionId, prompt, onUpdate);
-              },
-              closeSession,
-              errorMessage: (error) => ((error as any).code === 'TIMEOUT'
-                ? t.agentTimeout
-                : `ACP Agent Error: ${error.message}`),
-            });
-            safeClose();
-          } else {
-            // Route to MindOS agent (existing logic)
-
-            // ── Proxy compatibility check ──
-            // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
-            // and go straight to the non-streaming fallback path.
-            const compatCache = readBaseUrlCompat();
-            const effectiveBaseUrlKey = baseUrl || 'default';
-            const compatMode = resolveAskCompatMode({
-              askMode,
-              provider,
-              baseUrl,
-              cachedMode: compatCache[effectiveBaseUrlKey],
-            });
-            const proxyFallbackMessages = {
-              proxyCompatMode: t.proxyCompatMode,
-              proxyCompatDetecting: t.proxyCompatDetecting,
-              proxyCompatFailed: t.proxyCompatFailed,
-              proxyCompatAlsoFailed: t.proxyCompatAlsoFailed,
-            };
-            const runProxyFallback = () => runMindosNonStreamingFallback({
-              baseUrl: baseUrl ?? '',
-              apiKey,
-              model: modelName,
-              systemPrompt,
-              historyMessages: llmHistoryMessages,
-              userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
-              tools: requestTools,
-              send,
-              signal: req.signal,
-              maxSteps: stepLimit,
-            });
-
-            await runMindosPiAgentAskSession({
-              session: {
-                subscribe: (callback) => { session.subscribe(callback); },
-                prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
-                steer: (message) => session.steer(message),
-                abort: () => session.abort(),
-              },
-              prompt: lastUserContent,
-              promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
-              stepLimit,
-              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-              signal: req.signal,
-              provider,
-              baseUrl,
-              effectiveBaseUrlKey,
-              compatMode,
-              send,
-              runFallback: runProxyFallback,
-              proxyMessages: proxyFallbackMessages,
-              onToolExecution: () => metrics.recordToolExecution(),
-              onTokens: (input, output) => metrics.recordTokens(input, output),
-              onStep: (step, maxSteps) => {
-                if (process.env.NODE_ENV === 'development') console.log(`[ask] Step ${step}/${maxSteps}`);
-              },
-              writeCompat: (key, mode) => {
-                writeBaseUrlCompat(key, mode);
-                console.log(`[ask] Proxy compat detected: ${key} → ${mode} (cached)`);
-              },
-            });
-            metrics.recordRequest(Date.now() - requestStartTime);
-            safeClose();
-          }
-        };
-
-        runAgent().catch((err) => {
-          metrics.recordRequest(Date.now() - requestStartTime);
-          metrics.recordError();
-          
-          // Produce user-friendly error messages for known failure modes
-          let userMessage: string;
-          if (err instanceof Error && (err as any).code === 'TIMEOUT') {
-            userMessage = t.agentTimeout;
-          } else {
-            userMessage = err instanceof Error ? err.message : String(err);
-          }
-          
-          send({ type: 'error', message: userMessage });
-          safeClose();
-        });
-      },
-    });
-
-    return new Response(stream, {
-      headers: MINDOS_SSE_HEADERS,
+      await runMindosPiAgentAskSession({
+        session: {
+          subscribe: (callback) => { session.subscribe(callback); },
+          prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
+          steer: (message) => session.steer(message),
+          abort: () => session.abort(),
+        },
+        prompt: lastUserContent,
+        promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
+        stepLimit,
+        timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+        signal: req.signal,
+        provider,
+        baseUrl,
+        effectiveBaseUrlKey,
+        compatMode,
+        send,
+        runFallback: runProxyFallback,
+        proxyMessages: proxyFallbackMessages,
+        onToolExecution: () => metrics.recordToolExecution(),
+        onTokens: (input, output) => metrics.recordTokens(input, output),
+        onStep: (step, maxSteps) => {
+          if (process.env.NODE_ENV === 'development') console.log(`[ask] Step ${step}/${maxSteps}`);
+        },
+        writeCompat: (key, mode) => {
+          writeBaseUrlCompat(key, mode);
+          console.log(`[ask] Proxy compat detected: ${key} → ${mode} (cached)`);
+        },
+      });
+    }, (err) => {
+      if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
+      return err instanceof Error ? err.message : String(err);
     });
   } catch (err) {
     console.error('[ask] Failed to initialize model:', err);

@@ -155,6 +155,10 @@ function refreshExpiredCache(): FileTreeCache {
 
 /** Monotonically increasing counter — bumped on every file mutation so the
  *  client can cheaply detect changes without rebuilding the full tree. */
+export function peekTreeVersion(): number {
+  return _treeVersion;
+}
+
 export function getTreeVersion(): number {
   if (!_cache) {
     // Cache was invalidated (by watcher or explicit invalidateCache) — rebuild.

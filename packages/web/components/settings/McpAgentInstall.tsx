@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, AlertCircle, Loader2, Copy } from 'lucide-react';
 import CustomSelect from '@/components/CustomSelect';
 import { apiFetch } from '@/lib/api';
@@ -11,15 +11,26 @@ import type { AgentInfo, McpAgentInstallProps } from './types';
 
 /* ── Agent Install ─────────────────────────────────────────────── */
 
-export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activeSkillName = 'mindos' }: McpAgentInstallProps) {
+export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activeSkillName = 'mindos', status }: McpAgentInstallProps) {
   const m = t.settings?.mcp;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [transport, setTransport] = useState<'auto' | 'stdio' | 'http'>('auto');
-  const [httpUrl, setHttpUrl] = useState('http://localhost:8781/mcp');
-  const [httpToken, setHttpToken] = useState('');
+  const defaultHttpUrl = useMemo(() => status?.endpoint || `http://localhost:${status?.port ?? 8781}/mcp`, [status?.endpoint, status?.port]);
+  const [httpUrl, setHttpUrl] = useState(defaultHttpUrl);
+  const [httpToken, setHttpToken] = useState(status?.authToken ?? '');
+  const [httpUrlTouched, setHttpUrlTouched] = useState(false);
+  const [httpTokenTouched, setHttpTokenTouched] = useState(false);
   const [scopes, setScopes] = useState<Record<string, 'project' | 'global'>>({});
   const [installing, setInstalling] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!httpUrlTouched) setHttpUrl(defaultHttpUrl);
+  }, [defaultHttpUrl, httpUrlTouched]);
+
+  useEffect(() => {
+    if (!httpTokenTouched) setHttpToken(status?.authToken ?? '');
+  }, [status?.authToken, httpTokenTouched]);
 
   const getEffectiveTransport = (agent: AgentInfo) => {
     if (transport === 'auto') return agent.preferredTransport;
@@ -173,14 +184,14 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
         <div className="space-y-2 pl-5 text-xs">
           <div className="space-y-1">
             <label className="text-muted-foreground">{m?.httpUrl ?? 'MCP URL'}</label>
-            <input type="text" value={httpUrl} onChange={e => setHttpUrl(e.target.value)}
+            <input type="text" value={httpUrl} onChange={e => { setHttpUrlTouched(true); setHttpUrl(e.target.value); }}
               className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background font-mono text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring" />
           </div>
           <div className="space-y-1">
             <label className="text-muted-foreground">{m?.httpToken ?? 'Auth Token'}</label>
             <PasswordInput
               value={httpToken}
-              onChange={setHttpToken}
+              onChange={(value) => { setHttpTokenTouched(true); setHttpToken(value); }}
               placeholder="Bearer token"
               size="sm"
             />

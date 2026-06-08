@@ -1,13 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { proxy as middleware } from '@/proxy';
 import { NextRequest } from 'next/server';
+import { signJwt } from '@/lib/jwt';
 
 function makeApiRequest(headers: Record<string, string> = {}) {
   return new NextRequest('http://localhost/api/files', { headers });
 }
 
-function makePageRequest(path = '/some-page') {
-  return new NextRequest(`http://localhost${path}`);
+function makePageRequest(path = '/some-page', headers: Record<string, string> = {}) {
+  return new NextRequest(`http://localhost${path}`, { headers });
 }
 
 describe('middleware — API protection (AUTH_TOKEN)', () => {
@@ -102,6 +103,43 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
     const res = await middleware(makePageRequest('/some-page'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toContain('/login');
+  });
+
+  it('preserves the query string in login redirects', async () => {
+    process.env.WEB_PASSWORD = 'secret123';
+    const res = await middleware(makePageRequest('/agents?tab=mcp'));
+    const location = new URL(res.headers.get('location') ?? '');
+
+    expect(location.pathname).toBe('/login');
+    expect(location.searchParams.get('redirect')).toBe('/agents?tab=mcp');
+    expect(location.searchParams.get('reason')).toBeNull();
+  });
+
+  it('marks invalid existing session cookies as expired re-auth redirects', async () => {
+    process.env.WEB_PASSWORD = 'secret123';
+    const res = await middleware(makePageRequest('/view/Notes/a.md?mode=edit', {
+      cookie: 'mindos-session=bad.token.value',
+    }));
+    const location = new URL(res.headers.get('location') ?? '');
+
+    expect(location.pathname).toBe('/login');
+    expect(location.searchParams.get('reason')).toBe('expired');
+    expect(location.searchParams.get('redirect')).toBe('/view/Notes/a.md?mode=edit');
+  });
+
+  it('marks expired existing session cookies as expired re-auth redirects', async () => {
+    process.env.WEB_PASSWORD = 'secret123';
+    const expiredToken = await signJwt({
+      sub: 'user',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    }, 'secret123');
+    const res = await middleware(makePageRequest('/wiki', {
+      cookie: `mindos-session=${expiredToken}`,
+    }));
+    const location = new URL(res.headers.get('location') ?? '');
+
+    expect(location.searchParams.get('reason')).toBe('expired');
+    expect(location.searchParams.get('redirect')).toBe('/wiki');
   });
 
   it('allows /login page without cookie', async () => {

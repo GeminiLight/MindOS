@@ -2,6 +2,31 @@
 
 # 变更日志 (CHANGELOG)
 
+## v1.0.17 (2026-06-09)
+
+### 设置
+
+- **AI Provider 可重新选择和编辑**：设置面板的 provider 选择统一到 `p_*` provider entry，保留未配置 provider 的可选入口；旧配置中的 `ai.activeProvider` / `ai.provider` 会归一成可编辑 provider entry，避免用户选中某个 provider 后配置区找不到对应项。
+- **Provider legacy 清理**：移除旧的 provider modal/card 路径，保留 inline provider 编辑；空名称 autosave、协议切换、已有 provider 激活、环境变量恢复都增加了回归覆盖。
+- **设置保存更稳**：设置面板关闭、快速切换、重新打开时会忽略过期 GET 响应，并串行 flush 最新设置，避免旧请求覆盖新选择。
+
+### Git Sync
+
+- **跨进程 Git Sync 锁**：所有 Git 写入、手动 Sync Now、初始化、daemon pull/commit、`.gitignore` 保存、冲突解决和 reset 都共用 `~/.mindos/sync-locks/<mindRootHash>.lock`，避免多个 daemon / CLI / API 同时操作同一个知识库 repo。
+- **锁错误语义统一**：锁冲突返回稳定 `SYNC_LOCKED`，Product API 映射为 HTTP 423；后台 daemon 抢不到锁只跳过本轮，不再污染 UI 的 `lastError`。
+- **安全细节补强**：sync init token 改为通过 `MINDOS_SYNC_TOKEN` 传给 CLI，不再出现在 argv；sync status 会脱敏 HTTPS remote 中的用户名/密码；初始化分支名会用 Git 校验并按用户指定分支创建/切换。
+- **冲突处理更可控**：冲突状态优先于 lastError；冲突预览/解决支持明确 `file + strategy`；解决冲突前先走 diff/preview，避免误点直接覆盖。
+
+### Runtime / Product Server
+
+- **Product Server settings 兼容旧 provider payload**：`/api/settings` GET/POST 会把旧 providers dict 和 protocol activeProvider 归一化，确保静态 runtime、npm runtime 和 Web UI 的 provider 状态一致。
+- **本地 runtime 相关清理**：补齐 auth、tree-version、frontmatter、SSE stream、agent runtime、ACP session/subprocess 等 Product Server/runtime 侧回归覆盖，减少静态 runtime 与 Web dev path 的漂移。
+
+### 质量
+
+- **设置测试覆盖扩大**：新增/更新 provider selection、settings save lifecycle、sync UX、MCP settings、knowledge token copy、update badge、auth/tree-version/frontmatter 等测试。
+- **已知坑文档更新**：记录 AI Provider legacy migration 和 Git Sync 跨进程锁规则，后续改设置或 sync 时必须按这些 contract 自查。
+
 ## v0.6.82+ (未发布)
 
 ### 发布与打包

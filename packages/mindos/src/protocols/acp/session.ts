@@ -28,6 +28,7 @@ import {
   killAgent,
   type AcpConnection,
   type AcpLaunchOptions,
+  type AcpPermissionMode,
   type AcpProcess,
 } from './subprocess.js';
 import { findAcpAgent } from './registry.js';
@@ -89,6 +90,14 @@ function getMindosVersion(options?: AcpSessionOptions): string {
   return options?.clientVersion ?? process.env.npm_package_version ?? '1.0.0';
 }
 
+function clientCapabilitiesForPermissionMode(mode: AcpPermissionMode | undefined) {
+  const readonly = mode === 'readonly';
+  return {
+    fs: { readTextFile: true, writeTextFile: !readonly },
+    terminal: !readonly,
+  };
+}
+
 /* ── State ─────────────────────────────────────────────────────────────── */
 
 const sessions = new Map<string, AcpSession>();
@@ -132,10 +141,7 @@ export async function createSessionFromEntry(
   try {
     const initResult = await conn.connection.initialize({
       protocolVersion: 1,
-      clientCapabilities: {
-        fs: { readTextFile: true, writeTextFile: true },
-        terminal: true,
-      },
+      clientCapabilities: clientCapabilitiesForPermissionMode(options?.permissionMode),
       clientInfo: { name: 'mindos', version: getMindosVersion(options) },
     });
 
@@ -177,12 +183,8 @@ export async function createSessionFromEntry(
     configOptions = parseConfigOptions(newResult.configOptions);
   } catch (sessionErr) {
     const msg = (sessionErr as Error).message ?? '';
-    if (/auth/i.test(msg)) {
-      killAgent(conn.process);
-      throw new Error(`${entry.id}: ${msg}`);
-    }
-    // Non-auth errors: log and continue (session may still be usable)
-    console.warn(`ACP session/new warning for ${entry.id}: ${msg}`);
+    killAgent(conn.process);
+    throw new Error(`${entry.id}: session/new failed: ${msg}`);
   }
 
   reapStaleSessions();
@@ -228,10 +230,7 @@ export async function loadSession(
   try {
     const initResult = await conn.connection.initialize({
       protocolVersion: 1,
-      clientCapabilities: {
-        fs: { readTextFile: true, writeTextFile: true },
-        terminal: true,
-      },
+      clientCapabilities: clientCapabilitiesForPermissionMode(options?.permissionMode),
       clientInfo: { name: 'mindos', version: getMindosVersion(options) },
     });
     agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);

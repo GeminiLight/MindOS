@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore, useCallback } from 'react';
-import type { AgentIdentity } from '@/lib/types';
+import type { AgentIdentity, AgentRuntimeIdentity } from '@/lib/types';
 
 /**
  * Lightweight pub/sub store for cross-component AskModal control.
@@ -10,15 +10,17 @@ import type { AgentIdentity } from '@/lib/types';
  */
 
 export type AcpAgentSelection = AgentIdentity;
+export type AskAgentRuntimeSelection = AgentRuntimeIdentity;
 
 interface AskModalState {
   open: boolean;
   initialMessage: string;
   source: 'user' | 'guide' | 'guide-next';  // who triggered the open
   acpAgent: AcpAgentSelection | null;
+  agentRuntime: AskAgentRuntimeSelection | null;
 }
 
-let state: AskModalState = { open: false, initialMessage: '', source: 'user', acpAgent: null };
+let state: AskModalState = { open: false, initialMessage: '', source: 'user', acpAgent: null, agentRuntime: null };
 const listeners = new Set<() => void>();
 
 function emit() { listeners.forEach(l => l()); }
@@ -28,13 +30,26 @@ function subscribe(listener: () => void) {
 }
 function getSnapshot() { return state; }
 
-export function openAskModal(message = '', source: AskModalState['source'] = 'user', acpAgent: AcpAgentSelection | null = null) {
-  state = { open: true, initialMessage: message, source, acpAgent };
+function toRuntimeSelection(agent: AcpAgentSelection | AskAgentRuntimeSelection | null): AskAgentRuntimeSelection | null {
+  if (!agent) return null;
+  return 'kind' in agent ? agent : { ...agent, kind: 'acp' };
+}
+
+export function openAskModal(
+  message = '',
+  source: AskModalState['source'] = 'user',
+  agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
+) {
+  const agentRuntime = toRuntimeSelection(agent);
+  const acpAgent = agentRuntime?.kind === 'acp'
+    ? { id: agentRuntime.id, name: agentRuntime.name }
+    : null;
+  state = { open: true, initialMessage: message, source, acpAgent, agentRuntime };
   emit();
 }
 
 export function closeAskModal() {
-  state = { open: false, initialMessage: '', source: 'user', acpAgent: null };
+  state = { open: false, initialMessage: '', source: 'user', acpAgent: null, agentRuntime: null };
   emit();
 }
 
@@ -45,7 +60,12 @@ export function useAskModal() {
     initialMessage: snap.initialMessage,
     source: snap.source,
     acpAgent: snap.acpAgent,
-    openWith: useCallback((message: string, source: AskModalState['source'] = 'user', acpAgent: AcpAgentSelection | null = null) => openAskModal(message, source, acpAgent), []),
+    agentRuntime: snap.agentRuntime,
+    openWith: useCallback((
+      message: string,
+      source: AskModalState['source'] = 'user',
+      agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
+    ) => openAskModal(message, source, agent), []),
     close: useCallback(() => closeAskModal(), []),
   };
 }

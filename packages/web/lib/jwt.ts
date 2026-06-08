@@ -38,21 +38,25 @@ export async function signJwt(payload: Record<string, unknown>, secret: string):
 }
 
 export async function verifyJwt(token: string, secret: string): Promise<Record<string, unknown> | null> {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
 
-  const [header, body, sig] = parts;
-  const key = await importKey(secret);
-  const valid = await crypto.subtle.verify(
-    ALG.name,
-    key,
-    Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-    new TextEncoder().encode(`${header}.${body}`),
-  );
-  if (!valid) return null;
+    const [header, body, sig] = parts;
+    const key = await importKey(secret);
+    const valid = await crypto.subtle.verify(
+      ALG.name,
+      key,
+      Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+      new TextEncoder().encode(`${header}.${body}`),
+    );
+    if (!valid) return null;
 
-  const payload = JSON.parse(b64urlDecode(body)) as Record<string, unknown>;
-  if (typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp) return null;
+    const payload = JSON.parse(b64urlDecode(body)) as Record<string, unknown>;
+    if (typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp) return null;
 
-  return payload;
+    return payload;
+  } catch {
+    return null;
+  }
 }

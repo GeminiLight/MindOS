@@ -55,6 +55,7 @@ export type MindosSelectedRuntime = {
   id: string;
   name: string;
   kind: MindosAgentRuntimeKind;
+  externalSessionId?: string;
 };
 
 export type MindosAskStreamRequest = {

@@ -29,6 +29,7 @@ packages/web/.vscode
 
 .claude
 .claude-internal
+.cc-branch/
 .cursor
 **/.claude
 .codebuddy

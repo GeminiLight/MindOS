@@ -23,6 +23,11 @@ describe('signJwt + verifyJwt', () => {
     expect(await verifyJwt('', secret)).toBeNull();
   });
 
+  it('returns null instead of throwing for malformed three-part tokens', async () => {
+    await expect(verifyJwt('a.b.%', secret)).resolves.toBeNull();
+    await expect(verifyJwt('header.payload.signature', secret)).resolves.toBeNull();
+  });
+
   it('returns null for wrong secret', async () => {
     const token = await signJwt({ sub: 'test' }, secret);
     const verified = await verifyJwt(token, 'wrong-secret');

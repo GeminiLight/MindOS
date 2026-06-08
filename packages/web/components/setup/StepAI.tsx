@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { Field, Input, PasswordInput } from '@/components/settings/Primitives';
 import type { SetupState, SetupProvider, SetupMessages, PortStatus } from './types';
-import type { ProviderId } from '@/lib/agent/providers';
-import { PROVIDER_PRESETS, isProviderId, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
-import { generateProviderId } from '@/lib/custom-endpoints';
+import { PROVIDER_PRESETS, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import ModelInput from '@/components/shared/ModelInput';
 import StepPorts from './StepPorts';
 import { useLocale } from '@/lib/stores/locale-store';
+import { resolveAiProviderSelection } from '@/lib/ai-provider-settings';
 
 export interface StepAIProps {
   state: SetupState;
@@ -50,46 +49,20 @@ export default function StepAI({ state, update, s, onCopyToken, webPortStatus, m
   }, [current, state.providers, update]);
 
   // ── Handle provider selection from ProviderSelect ──
-  // When user picks a protocol (e.g. "anthropic"), we find-or-create a Provider for it.
+  // When user picks a protocol (e.g. "anthropic"), resolve it to a provider entry.
   const handleSelectProvider = useCallback((selectedId: string) => {
     if (selectedId === 'skip') {
       update('activeProvider', 'skip');
       return;
     }
 
-    // Check if the selected value is an existing provider ID (p_xxx)
-    const existing = state.providers.find(p => p.id === selectedId);
-    if (existing) {
-      update('activeProvider', existing.id);
-      return;
-    }
-
-    // It's a protocol ID (e.g., "anthropic") — find existing provider with that protocol,
-    // or create a new one
-    if (isProviderId(selectedId)) {
-      const byProtocol = state.providers.find(p => p.protocol === selectedId);
-      if (byProtocol) {
-        update('activeProvider', byProtocol.id);
-        return;
-      }
-
-      // Create new provider for this protocol
-      const preset = PROVIDER_PRESETS[selectedId];
-      const newProvider: SetupProvider = {
-        id: generateProviderId(),
-        name: locale === 'zh' ? preset.nameZh : preset.name,
-        protocol: selectedId,
-        apiKey: '',
-        model: preset.defaultModel,
-        baseUrl: preset.fixedBaseUrl ?? '',
-      };
-
-      // Add to providers array and set as active
-      const newProviders = [...state.providers, newProvider];
-      update('providers', newProviders);
-      update('activeProvider', newProvider.id);
-    }
-  }, [state.providers, update, locale]);
+    const next = resolveAiProviderSelection({
+      activeProvider: state.activeProvider,
+      providers: state.providers,
+    }, selectedId, locale);
+    update('providers', next.providers as SetupProvider[]);
+    update('activeProvider', next.activeProvider);
+  }, [state.activeProvider, state.providers, update, locale]);
 
   // ── Build configuredProviders set for the ProviderSelect UI ──
   // Shows green checkmark for providers that have been configured (have apiKey or apiKeyMask or fallback)

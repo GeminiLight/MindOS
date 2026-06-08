@@ -1,14 +1,21 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Puzzle } from 'lucide-react';
-import { getPluginRenderers, setRendererEnabled } from '@/lib/renderers/registry';
+import { getPluginRenderers, isRendererEnabled, loadDisabledState, setRendererEnabled } from '@/lib/renderers/registry';
 import { Toggle } from './Primitives';
 import { ObsidianImportSection } from './ObsidianImportSection';
-import { ObsidianPluginSettingsList } from './ObsidianPluginSettingsList';
 import type { PluginsTabProps } from './types';
 
 export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: PluginsTabProps) {
   const renderers = getPluginRenderers();
+  useEffect(() => {
+    loadDisabledState();
+    setPluginStates(Object.fromEntries(
+      getPluginRenderers().map((renderer) => [renderer.id, isRendererEnabled(renderer.id)]),
+    ));
+  }, [setPluginStates]);
+
   return (
     <div className="space-y-6">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.settings.plugins.title}</p>
@@ -19,7 +26,7 @@ export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: Plugi
         <div className="flex flex-col gap-3">
           {renderers.map(renderer => {
             const isCore = !!renderer.core;
-            const enabled = isCore ? true : (pluginStates[renderer.id] ?? true);
+            const enabled = isCore ? true : (pluginStates[renderer.id] ?? isRendererEnabled(renderer.id));
             return (
               <div
                 key={renderer.id}
@@ -69,13 +76,6 @@ export function PluginsTab({ pluginStates, setPluginStates, t, mindRoot }: Plugi
       )}
 
       <ObsidianImportSection mindRoot={mindRoot} />
-
-      <div className="space-y-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Obsidian Plugin Settings
-        </p>
-        <ObsidianPluginSettingsList />
-      </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground border border-border/40 bg-card/30 rounded-xl px-4 py-3">
         <Puzzle size={13} className="shrink-0" />

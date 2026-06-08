@@ -45,7 +45,9 @@ describe('MindOS copy alignment', () => {
     expect(navigationEn.sidebar.builtInSpacesTitle).toBe('Mind System');
     expect(navigationZh.sidebar.builtInSpacesTitle).toBe('Mind 系统');
     expect(navigationEn.sidebar.builtInSpacesRoot).toContain('Dao');
+    expect(navigationEn.sidebar.builtInSpacesRoot).toContain('Shu');
     expect(navigationZh.sidebar.builtInSpacesRoot).toContain('道');
+    expect(navigationZh.sidebar.builtInSpacesRoot).toContain('术');
 
     expect(knowledgeEn.home.builtInSpacesTitle).toBe('Mind System');
     expect(knowledgeZh.home.builtInSpacesTitle).toBe('Mind 系统');

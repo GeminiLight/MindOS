@@ -173,7 +173,7 @@ export function createCodexAppServerClient(
       await request('turn/start', params, input.signal);
       for await (const notification of notifications) {
         yield notification;
-        if (notification.method === 'turn/completed') break;
+        if (notification.method === 'turn/completed' || notification.method === 'turn/failed') break;
       }
     },
     async interruptTurn(input) {

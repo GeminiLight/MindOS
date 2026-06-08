@@ -5,11 +5,12 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import { useState, useCallback, useEffect } from 'react';
-import { Copy, Check, X } from 'lucide-react';
+import { useState, useCallback, useEffect, useId } from 'react';
+import { Copy, Check, X, ChevronDown } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import { resolveImagePath } from '@/lib/image';
+import { splitMarkdownFrontmatter, type FrontmatterValue } from '@/lib/parsing/frontmatter';
 import type { Components } from 'react-markdown';
 
 interface MarkdownViewProps {
@@ -140,8 +141,82 @@ function extractText(node: React.ReactNode): string {
   return '';
 }
 
+function formatPrimitiveValue(value: string | number | boolean | null | Date): string {
+  if (value === null || value === '') return 'empty';
+  if (value instanceof Date) return value.toISOString().replace(/T00:00:00\.000Z$/, '');
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return String(value);
+}
+
+function renderFrontmatterValue(value: FrontmatterValue): React.ReactNode {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="markdown-frontmatter__empty">empty list</span>;
+    }
+    return (
+      <span className="markdown-frontmatter__chips">
+        {value.map((item, index) => (
+          <span className="markdown-frontmatter__chip" key={`${index}-${JSON.stringify(item)}`}>
+            {typeof item === 'object' && item !== null && !(item instanceof Date)
+              ? JSON.stringify(item)
+              : formatPrimitiveValue(item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return <code className="markdown-frontmatter__object">{JSON.stringify(value)}</code>;
+  }
+
+  if (value === null || value === '') {
+    return <span className="markdown-frontmatter__empty">{formatPrimitiveValue(value)}</span>;
+  }
+
+  return <span>{formatPrimitiveValue(value)}</span>;
+}
+
+function FrontmatterPanel({ frontmatter }: { frontmatter: NonNullable<ReturnType<typeof splitMarkdownFrontmatter>['frontmatter']> }) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+
+  if (frontmatter.entries.length === 0) return null;
+
+  return (
+    <section className="markdown-frontmatter" aria-label="Markdown properties" data-expanded={expanded}>
+      <button
+        type="button"
+        className="markdown-frontmatter__toggle"
+        aria-expanded={expanded}
+        aria-controls={listId}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className="markdown-frontmatter__label">Properties</span>
+        <span className="markdown-frontmatter__meta">
+          <span className="markdown-frontmatter__count">
+            {frontmatter.entries.length} field{frontmatter.entries.length === 1 ? '' : 's'}
+          </span>
+          <ChevronDown className="markdown-frontmatter__chevron" size={14} aria-hidden="true" />
+        </span>
+      </button>
+      {expanded && (
+        <dl className="markdown-frontmatter__list" id={listId}>
+          {frontmatter.entries.map((entry) => (
+            <div className="markdown-frontmatter__row" key={entry.key}>
+              <dt title={entry.key}>{entry.key}</dt>
+              <dd>{renderFrontmatterValue(entry.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
 export default function MarkdownView({ content, highlightLines, onDismissHighlight, emptyPlaceholder }: MarkdownViewProps) {
   const hasHighlights = highlightLines && highlightLines.length > 0;
+  const parsedMarkdown = splitMarkdownFrontmatter(content);
 
   // Defer markdown rendering to the client to avoid hydration mismatches
   // caused by browser extensions (e.g. Twemoji) that replace emoji Unicode
@@ -186,6 +261,9 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
           )}
         </div>
       )}
+      {parsedMarkdown.frontmatter && (
+        <FrontmatterPanel frontmatter={parsedMarkdown.frontmatter} />
+      )}
       <div className="prose max-w-none">
         {mounted ? (
           <ReactMarkdown
@@ -193,7 +271,7 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
             rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
             components={components}
           >
-            {content}
+            {parsedMarkdown.body}
           </ReactMarkdown>
         ) : null}
       </div>

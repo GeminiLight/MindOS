@@ -14,7 +14,7 @@ const ENTER_SNAP_THRESHOLD = 80;
 const EXIT_SNAP_THRESHOLD = 16;
 const MIN_CONTENT_WIDTH = RIGHT_ASK_PANEL.MIN_CONTENT;
 
-import type { AcpAgentSelection } from '@/hooks/useAskModal';
+import type { AcpAgentSelection, AskAgentRuntimeSelection } from '@/hooks/useAskModal';
 
 interface RightAskPanelProps {
   open: boolean;
@@ -22,6 +22,7 @@ interface RightAskPanelProps {
   currentFile?: string;
   initialMessage?: string;
   initialAcpAgent?: AcpAgentSelection | null;
+  initialAgentRuntime?: AskAgentRuntimeSelection | null;
   onFirstMessage?: () => void;
   width: number;
   onWidthChange: (w: number) => void;
@@ -35,7 +36,7 @@ interface RightAskPanelProps {
 }
 
 export default function RightAskPanel({
-  open, onClose, currentFile, initialMessage, initialAcpAgent, onFirstMessage,
+  open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, onFirstMessage,
   width, onWidthChange, onWidthCommit, askMode, onModeSwitch,
   maximized = false, onMaximize, sidebarOffset = 0,
 }: RightAskPanelProps) {
@@ -150,6 +151,7 @@ export default function RightAskPanel({
             currentFile={open ? currentFile : undefined}
             initialMessage={initialMessage}
             initialAcpAgent={initialAcpAgent}
+            initialAgentRuntime={initialAgentRuntime}
             onFirstMessage={onFirstMessage}
             onClose={onClose}
             askMode={askMode}

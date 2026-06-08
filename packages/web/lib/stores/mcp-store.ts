@@ -153,6 +153,9 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
 
     return () => {
       abortCtrl?.abort();
+      abortCtrl = null;
+      inFlight = null;
+      inFlightToken = null;
       clearTimeout(debounceTimer);
       clearInterval(pollTimer);
       window.removeEventListener('mindos:skills-changed', onSkillsChanged);

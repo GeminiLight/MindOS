@@ -61,10 +61,13 @@ export interface AcpConnection {
   process: AcpProcess;
 }
 
+export type AcpPermissionMode = 'agent' | 'readonly';
+
 export interface AcpLaunchOptions {
   env?: Record<string, string>;
   cwd?: string;
   overrides?: Record<string, AcpAgentOverride>;
+  permissionMode?: AcpPermissionMode;
 }
 
 export interface TerminalSpawnSpec {
@@ -92,7 +95,7 @@ export function spawnAndConnect(
   const cwd = options?.cwd ?? process.cwd();
   const callbacks: AcpClientCallbacks = {};
 
-  const client = createMindosClient(proc, cwd, callbacks);
+  const client = createMindosClient(proc, cwd, callbacks, options?.permissionMode ?? 'agent');
 
   const output = Writable.toWeb(proc.proc.stdin!) as WritableStream<Uint8Array>;
   const input = Readable.toWeb(proc.proc.stdout!) as ReadableStream<Uint8Array>;
@@ -277,13 +280,23 @@ export function resolveTerminalSpawn(command: string): TerminalSpawnSpec {
 
 /* ── Client Implementation ─────────────────────────────────────────────── */
 
-function createMindosClient(
+export function createMindosClient(
   proc: AcpProcess,
   cwd: string,
   callbacks: AcpClientCallbacks,
+  permissionMode: AcpPermissionMode = 'agent',
 ): Client {
   return {
     async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
+      if (permissionMode === 'readonly') {
+        console.log(`[ACP] Reject permission in readonly mode: agent=${proc.agentId} ${JSON.stringify(params.toolCall ?? params).slice(0, 200)}`);
+        const rejectOption =
+          params.options?.find(o => o.kind === 'reject_once') ??
+          params.options?.find(o => o.kind === 'reject_always');
+        return rejectOption
+          ? { outcome: { outcome: 'selected', optionId: rejectOption.optionId } }
+          : { outcome: { outcome: 'cancelled' } };
+      }
       console.log(`[ACP] Auto-approve permission: agent=${proc.agentId} ${JSON.stringify(params.toolCall ?? params).slice(0, 200)}`);
       const options = params.options ?? [];
       const selected =
@@ -299,11 +312,15 @@ function createMindosClient(
 
     async readTextFile(params: ReadTextFileRequest): Promise<ReadTextFileResponse> {
       if (!params.path) throw RequestError.invalidParams(undefined, 'path is required');
-      if (isSensitivePath(params.path)) {
+      const resolvedPath = resolveAcpPath(params.path, cwd);
+      if (isSensitivePath(resolvedPath)) {
         throw new RequestError(-32001, `Access denied: ${params.path} is a sensitive file`);
       }
+      if (!isWithinAllowedReadPaths(resolvedPath, cwd)) {
+        throw new RequestError(-32001, `Read denied: ${params.path} is outside the working directory`);
+      }
       try {
-        let content = fs.readFileSync(params.path, 'utf-8');
+        let content = fs.readFileSync(resolvedPath, 'utf-8');
         if (params.line != null || params.limit != null) {
           const lines = content.split('\n');
           const start = ((params.line ?? 1) - 1);
@@ -329,13 +346,17 @@ function createMindosClient(
 
     async writeTextFile(params: WriteTextFileRequest): Promise<WriteTextFileResponse> {
       if (!params.path) throw RequestError.invalidParams(undefined, 'path is required');
-      if (!isWithinAllowedWritePaths(params.path, cwd)) {
+      if (permissionMode === 'readonly') {
+        throw new RequestError(-32001, `Write denied: ACP readonly mode does not allow writing ${params.path}`);
+      }
+      const resolvedPath = resolveAcpPath(params.path, cwd);
+      if (!isWithinAllowedWritePaths(resolvedPath, cwd)) {
         throw new RequestError(-32001, `Write denied: ${params.path} is outside the working directory`);
       }
       try {
-        const dir = path.dirname(params.path);
+        const dir = path.dirname(resolvedPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(params.path, params.content, 'utf-8');
+        fs.writeFileSync(resolvedPath, params.content, 'utf-8');
         return {};
       } catch (err) {
         // Type-safe error handling with proper guards
@@ -355,10 +376,13 @@ function createMindosClient(
 
     async createTerminal(params: CreateTerminalRequest): Promise<CreateTerminalResponse> {
       if (!params.command) throw RequestError.invalidParams(undefined, 'command is required');
+      if (permissionMode === 'readonly') {
+        throw new RequestError(-32001, 'Terminal denied: ACP readonly mode does not allow terminal execution');
+      }
 
       const requestedCwd = params.cwd ?? undefined;
-      const terminalCwd = requestedCwd && isWithinAllowedWritePaths(requestedCwd, cwd)
-        ? requestedCwd
+      const terminalCwd = requestedCwd && isWithinAllowedWritePaths(resolveAcpPath(requestedCwd, cwd), cwd)
+        ? resolveAcpPath(requestedCwd, cwd)
         : cwd;
 
       const envObj: Record<string, string> = {};
@@ -465,9 +489,19 @@ const SENSITIVE_PATH_PATTERNS = [
   /[/\\]\.gnupg[/\\]/i,
 ];
 
+function resolveAcpPath(filePath: string, cwd: string): string {
+  return path.resolve(path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath));
+}
+
 function isSensitivePath(filePath: string): boolean {
   const normalized = path.resolve(filePath);
   return SENSITIVE_PATH_PATTERNS.some(p => p.test(normalized));
+}
+
+function isWithinAllowedReadPaths(filePath: string, cwd: string): boolean {
+  const normalized = path.resolve(filePath);
+  const normalizedRoot = path.resolve(cwd);
+  return normalized === normalizedRoot || normalized.startsWith(normalizedRoot + path.sep);
 }
 
 function isWithinAllowedWritePaths(filePath: string, cwd: string): boolean {

@@ -467,6 +467,63 @@ export function createMindosUploadedFileParts(
   return parts;
 }
 
+export type MindosExternalRuntimePromptInput = {
+  prompt: string;
+  fileContext?: MindosAskFileContext;
+  uploadedParts?: string[];
+  recalledKnowledge?: Array<{ path: string; content: string }>;
+};
+
+export function buildMindosExternalRuntimePrompt(input: MindosExternalRuntimePromptInput): string {
+  const prompt = input.prompt.trim();
+  const contextSections: string[] = [];
+
+  if (input.fileContext?.contextParts.length) {
+    contextSections.push([
+      '## Attached MindOS Context',
+      'The following content was explicitly attached from the MindOS knowledge base for this turn.',
+      '',
+      input.fileContext.contextParts.join('\n\n---\n\n'),
+    ].join('\n'));
+  }
+
+  if (input.uploadedParts?.length) {
+    contextSections.push([
+      '## Uploaded Files',
+      'The user uploaded the following file content in MindOS for this turn.',
+      '',
+      input.uploadedParts.join('\n\n---\n\n'),
+    ].join('\n'));
+  }
+
+  if (input.recalledKnowledge?.length) {
+    const block = input.recalledKnowledge
+      .map((item) => `### ${item.path}\n\n${item.content}`)
+      .join('\n\n---\n\n');
+    contextSections.push([
+      '## Auto-Recalled MindOS Knowledge',
+      'MindOS found these related notes for the user request. Cite file paths when relying on them.',
+      '',
+      block,
+    ].join('\n'));
+  }
+
+  if (input.fileContext?.failedFiles.length) {
+    contextSections.push([
+      '## Unavailable MindOS Context',
+      `These attached files could not be loaded: ${input.fileContext.failedFiles.join(', ')}`,
+    ].join('\n'));
+  }
+
+  if (contextSections.length === 0) return prompt;
+  return [
+    prompt,
+    '---',
+    '## MindOS Turn Context',
+    ...contextSections,
+  ].filter(Boolean).join('\n\n');
+}
+
 export function safeParseMindosJsonObject(raw: string | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -668,12 +725,14 @@ function planEntryIcon(status: string | undefined): string {
 }
 
 export type MindosAcpAskSessionServices = {
-  createSession(agentId: string, options: { cwd: string }): Promise<{ id: string }>;
+  createSession(agentId: string, options: { cwd: string; permissionMode?: 'agent' | 'readonly' }): Promise<{ id: string }>;
   promptStream(
     sessionId: string,
     prompt: string,
     onUpdate: (update: MindosAcpSessionUpdate) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
+  cancelPrompt?(sessionId: string): Promise<void>;
   closeSession(sessionId: string): Promise<void>;
 };
 
@@ -721,12 +780,31 @@ export async function runMindosAcpAskSession(options: MindosAcpAskSessionOptions
         await closeCurrentSession();
         const session = await options.createSession(options.agentId, { cwd: options.cwd });
         sessionId = session.id;
+        let removeAbortListener: (() => void) | undefined;
+        const abortPrompt = new Promise<never>((_resolve, reject) => {
+          if (!options.signal) return;
+          const abortReason = () => options.signal?.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+          if (options.signal.aborted) {
+            void options.cancelPrompt?.(session.id).catch(() => {});
+            reject(abortReason());
+            return;
+          }
+          const onAbort = () => {
+            void options.cancelPrompt?.(session.id).catch(() => {});
+            reject(abortReason());
+          };
+          options.signal.addEventListener('abort', onAbort, { once: true });
+          removeAbortListener = () => options.signal?.removeEventListener('abort', onAbort);
+        });
         await runMindosWithTimeout(
-          options.promptStream(sessionId, options.prompt, (update) => {
-            const mapped = mapMindosAcpUpdateToSseEvents(update, { suppressErrors: options.hasContent() });
-            if (mapped.hasVisibleContent) options.onVisibleContent?.();
-            for (const event of mapped.events) options.send(event);
-          }),
+          Promise.race([
+            options.promptStream(sessionId, options.prompt, (update) => {
+              const mapped = mapMindosAcpUpdateToSseEvents(update, { suppressErrors: options.hasContent() });
+              if (mapped.hasVisibleContent) options.onVisibleContent?.();
+              for (const event of mapped.events) options.send(event);
+            }, options.signal),
+            abortPrompt,
+          ]).finally(() => removeAbortListener?.()),
           timeoutMs,
           options.timeoutMessage?.(timeoutMs) ?? `ACP agent execution timeout after ${timeoutMs / 1000} seconds`,
         );

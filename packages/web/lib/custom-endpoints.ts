@@ -28,24 +28,39 @@ export function isProviderEntryId(id: string): boolean {
   return typeof id === 'string' && id.startsWith(P_PREFIX);
 }
 
-/** Validate that an unknown value is a valid Provider */
-export function isValidProvider(e: unknown): e is Provider {
-  if (!e || typeof e !== 'object') return false;
+function normalizeProvider(e: unknown): Provider | null {
+  if (!e || typeof e !== 'object') return null;
   const obj = e as Record<string, unknown>;
-  return (
+  const validShape = (
     typeof obj.id === 'string' && obj.id.startsWith(P_PREFIX) &&
-    typeof obj.name === 'string' && obj.name.trim().length > 0 &&
     typeof obj.protocol === 'string' && isProviderId(obj.protocol) &&
     typeof obj.apiKey === 'string' &&
     typeof obj.model === 'string' &&
     typeof obj.baseUrl === 'string'
   );
+  if (!validShape) return null;
+
+  const protocol = obj.protocol as ProviderId;
+  const name = typeof obj.name === 'string' && obj.name.trim().length > 0
+    ? obj.name
+    : PROVIDER_PRESETS[protocol].name;
+
+  return {
+    id: obj.id as string,
+    name,
+    protocol,
+    apiKey: obj.apiKey as string,
+    model: obj.model as string,
+    baseUrl: obj.baseUrl as string,
+  };
 }
 
 /** Parse an array of providers from unknown config data, filtering invalid entries */
 export function parseProviders(raw: unknown): Provider[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter(isValidProvider);
+  return raw
+    .map(normalizeProvider)
+    .filter((provider): provider is Provider => provider !== null);
 }
 
 /** Find a provider by ID from a list */
@@ -79,7 +94,7 @@ export function migrateProviders(parsed: Record<string, unknown>): {
 
   // Old format: providers is a dict (or missing)
   const oldProviders = (ai.providers ?? {}) as Record<string, OldProviderConfig>;
-  const oldActive = (ai.provider ?? 'openai') as string;
+  const oldActive = (typeof ai.activeProvider === 'string' ? ai.activeProvider : ai.provider ?? 'openai') as string;
   const oldCustom = (parsed.customProviders ?? []) as OldCustomProvider[];
 
   const newProviders: Provider[] = [];
@@ -89,7 +104,7 @@ export function migrateProviders(parsed: Record<string, unknown>): {
   for (const [protocolId, cfg] of Object.entries(oldProviders)) {
     if (!cfg || !isProviderId(protocolId)) continue;
     // Skip empty entries (no key, no model, no baseUrl)
-    if (!cfg.apiKey && !cfg.model && !cfg.baseUrl) continue;
+    if (!cfg.apiKey && !cfg.model && !cfg.baseUrl && protocolId !== oldActive) continue;
 
     const preset = PROVIDER_PRESETS[protocolId];
     const id = generateProviderId();
@@ -98,8 +113,8 @@ export function migrateProviders(parsed: Record<string, unknown>): {
       name: preset?.name ?? protocolId,
       protocol: protocolId as ProviderId,
       apiKey: cfg.apiKey ?? '',
-      model: cfg.model ?? '',
-      baseUrl: cfg.baseUrl ?? '',
+      model: cfg.model ?? preset?.defaultModel ?? '',
+      baseUrl: cfg.baseUrl ?? preset?.fixedBaseUrl ?? '',
     });
 
     if (protocolId === oldActive) activeId = id;
@@ -143,18 +158,3 @@ export function migrateProviders(parsed: Record<string, unknown>): {
 
   return { activeProvider: activeId, providers: newProviders };
 }
-
-// ─── Backward compat re-exports (to minimize churn during migration) ──
-
-/** @deprecated Use Provider instead */
-export type CustomProvider = Provider;
-/** @deprecated Use generateProviderId instead */
-export const generateCustomProviderId = generateProviderId;
-/** @deprecated Use isProviderEntryId instead */
-export function isCustomProviderId(id: string): boolean {
-  return isProviderEntryId(id) || (typeof id === 'string' && id.startsWith('cp_'));
-}
-/** @deprecated Use parseProviders instead */
-export const parseCustomProviders = parseProviders;
-/** @deprecated Use findProvider instead */
-export const findCustomProvider = findProvider;

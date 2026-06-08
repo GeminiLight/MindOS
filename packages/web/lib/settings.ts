@@ -5,17 +5,8 @@ import { parseAcpAgentOverrides } from './acp/agent-descriptors';
 import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyFromEnv } from './agent/providers';
 import { type Provider, parseProviders, findProvider, migrateProviders, isProviderEntryId } from './custom-endpoints';
 import { effectiveMindRoot } from './mind-root';
-// Backward compat re-exports for files still importing from settings
-export type { Provider };
 
 const SETTINGS_PATH = path.join(os.homedir(), '.mindos', 'config.json');
-
-/** @deprecated Use Provider from custom-endpoints.ts */
-export interface ProviderConfig {
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-}
 
 export interface AiConfig {
   activeProvider: string;    // provider entry ID (p_*)
@@ -131,15 +122,6 @@ const DEFAULTS: ServerSettings = {
   },
   mindRoot: '',
 };
-
-/** Safely extract a string field from an unknown object, returning fallback if missing or wrong type */
-function str(obj: unknown, key: string, fallback: string): string {
-  if (obj && typeof obj === 'object') {
-    const val = (obj as Record<string, unknown>)[key];
-    if (typeof val === 'string' && val.trim() !== '') return val;
-  }
-  return fallback;
-}
 
 /** Migrate old flat ai structure to new providers dict, if needed */
 function migrateAi(parsed: Record<string, unknown>): AiConfig {

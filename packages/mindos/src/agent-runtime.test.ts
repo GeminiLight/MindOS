@@ -150,6 +150,49 @@ describe('agent runtime adapters', () => {
     })).toEqual([{ type: 'done' }]);
   });
 
+  it('ends a Codex turn stream after turn/failed', async () => {
+    const queue = new AsyncQueue<CodexAppServerMessage>();
+    const sent: unknown[] = [];
+    const transport: CodexAppServerTransport = {
+      send(message) {
+        sent.push(message);
+        const record = message as { id?: number; method?: string };
+        if (record.method === 'initialize') {
+          queue.push({ id: record.id!, result: { userAgent: 'codex-test' } });
+        }
+        if (record.method === 'thread/start') {
+          queue.push({ id: record.id!, result: { thread: { id: 'thr-new' } } });
+        }
+        if (record.method === 'turn/start') {
+          queue.push({ id: record.id!, result: { turn: { id: 'turn-1' } } });
+          queue.push({ method: 'turn/failed', params: { message: 'model unavailable' } });
+        }
+      },
+      read() {
+        return queue;
+      },
+      close() {
+        queue.close();
+      },
+    };
+
+    const client = createCodexAppServerClient(transport);
+    await client.initialize();
+    const thread = await client.startThread({ cwd: '/tmp/mind' });
+    const notifications = [];
+    for await (const notification of client.startTurn({
+      threadId: thread.threadId,
+      cwd: '/tmp/mind',
+      input: [{ type: 'text', text: 'Summarize this repo.' }],
+    })) {
+      notifications.push(notification);
+    }
+
+    expect(notifications).toEqual([
+      { method: 'turn/failed', params: { message: 'model unavailable' } },
+    ]);
+  });
+
   it('runs a Codex native Ask session and returns the external thread binding', async () => {
     const events: MindOSSSEvent[] = [];
     const transport = createFakeCodexTransport();

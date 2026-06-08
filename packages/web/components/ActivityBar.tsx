@@ -8,8 +8,14 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
 import Logo from './Logo';
-
-export type PanelId = 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
+import {
+  ROUTE_PANEL_HREF,
+  getRailActivePanel,
+  getRailPanelClickDecision,
+  isContentRouteForPanel,
+  type PanelId,
+  type RoutePanelId,
+} from '@/lib/navigation-panel';
 
 export const RAIL_WIDTH_COLLAPSED = 48;
 export const RAIL_WIDTH_EXPANDED = 180;
@@ -17,6 +23,7 @@ export const RAIL_WIDTH_EXPANDED = 180;
 interface ActivityBarProps {
   activePanel: PanelId | null;
   onPanelChange: (id: PanelId | null) => void;
+  onCaptureClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onEchoClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onAgentsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
@@ -27,6 +34,8 @@ interface ActivityBarProps {
   onExpandedChange: (expanded: boolean) => void;
   onSettingsClick: () => void;
   onSyncClick: (rect: DOMRect) => void;
+  syncPopoverOpen?: boolean;
+  syncPopoverId?: string;
 }
 
 interface RailButtonProps {
@@ -34,27 +43,40 @@ interface RailButtonProps {
   label: string;
   shortcut?: string;
   active?: boolean;
+  current?: boolean;
   expanded: boolean;
   href?: string;
   onClick: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onNavigate?: (event: { preventDefault: () => void }) => void;
   buttonRef?: React.Ref<HTMLButtonElement>;
+  pressed?: boolean;
+  ariaControls?: string;
+  ariaExpanded?: boolean;
+  ariaHaspopup?: 'dialog' | 'menu';
   /** Optional overlay badge (e.g. status dot) rendered inside the button */
   badge?: React.ReactNode;
   /** Optional data-walkthrough attribute for interactive walkthrough targeting */
   walkthroughId?: string;
 }
 
-function normalizeUrl(value: string): string {
-  try {
-    const url = new URL(value, window.location.href);
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return value;
-  }
-}
-
-function RailButton({ icon, label, shortcut, active = false, expanded, href, onClick, onNavigate, buttonRef, badge, walkthroughId }: RailButtonProps) {
+function RailButton({
+  icon,
+  label,
+  shortcut,
+  active = false,
+  current = false,
+  expanded,
+  href,
+  onClick,
+  onNavigate,
+  buttonRef,
+  pressed,
+  ariaControls,
+  ariaExpanded,
+  ariaHaspopup,
+  badge,
+  walkthroughId,
+}: RailButtonProps) {
   const tooltipText = shortcut ? `${label} (${shortcut})` : label;
   const buttonClassName = `
     relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 rounded-md transition-colors
@@ -84,20 +106,9 @@ function RailButton({ icon, label, shortcut, active = false, expanded, href, onC
 
   const handleLinkClick: React.MouseEventHandler<HTMLAnchorElement> = (event) => {
     onClick(event);
-    if (event.defaultPrevented || !href) return;
-    if (process.env.NODE_ENV === 'test') return;
-
-    const target = normalizeUrl(href);
-    window.setTimeout(() => {
-      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (current !== target) {
-        window.location.assign(href);
-      }
-    }, 1200);
   };
 
-  const sharedProps = {
-    'aria-pressed': active,
+  const commonProps = {
     'aria-label': label,
     title: expanded ? undefined : tooltipText,
     'data-walkthrough': walkthroughId,
@@ -106,14 +117,29 @@ function RailButton({ icon, label, shortcut, active = false, expanded, href, onC
 
   if (href) {
     return (
-      <Link href={href} onClick={handleLinkClick} onNavigate={onNavigate} {...sharedProps}>
+      <Link
+        href={href}
+        onClick={handleLinkClick}
+        onNavigate={onNavigate}
+        aria-current={current ? 'page' : undefined}
+        {...commonProps}
+      >
         {buttonContent}
       </Link>
     );
   }
 
   return (
-    <button type="button" ref={buttonRef} onClick={onClick} {...sharedProps}>
+    <button
+      type="button"
+      ref={buttonRef}
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-controls={ariaControls}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHaspopup}
+      {...commonProps}
+    >
       {buttonContent}
     </button>
   );
@@ -122,6 +148,7 @@ function RailButton({ icon, label, shortcut, active = false, expanded, href, onC
 export default function ActivityBar({
   activePanel,
   onPanelChange,
+  onCaptureClick,
   onEchoClick,
   onAgentsClick,
   onDiscoverClick,
@@ -132,6 +159,8 @@ export default function ActivityBar({
   onExpandedChange,
   onSettingsClick,
   onSyncClick,
+  syncPopoverOpen = false,
+  syncPopoverId = 'sync-popover',
 }: ActivityBarProps) {
   const lastClickRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
   const syncBtnRef = useRef<HTMLButtonElement>(null);
@@ -140,11 +169,10 @@ export default function ActivityBar({
   const [, startTransition] = useTransition();
   const router = useRouter();
   const isHome = pathname === '/';
-  const isCapture = pathname === '/capture' || pathname?.startsWith('/capture/');
-  const isFilesRoute = pathname === '/wiki' || pathname?.startsWith('/wiki/') || pathname?.startsWith('/view/');
-  const activeDestination = activePanel ?? (isCapture ? 'capture' : isFilesRoute ? 'files' : null);
+  const activeDestination = getRailActivePanel(pathname, activePanel);
 
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') return;
     const timer = window.setTimeout(() => {
       router.prefetch('/capture');
       router.prefetch('/wiki');
@@ -218,16 +246,41 @@ export default function ActivityBar({
   }, []);
 
   /** Debounce repeated clicks on the same rail target without swallowing destination changes. */
-  const debounced = useCallback((key: string, fn: () => void) => {
+  const debounced = useCallback((key: string, fn: () => void): boolean => {
     const now = Date.now();
-    if (lastClickRef.current.key === key && now - lastClickRef.current.at < 300) return;
+    if (lastClickRef.current.key === key && now - lastClickRef.current.at < 300) return false;
     lastClickRef.current = { key, at: now };
     fn();
+    return true;
   }, []);
+
+  const debouncedRailClick = useCallback((
+    event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+    key: string,
+    fn: () => void,
+  ) => {
+    if (!debounced(key, fn)) event.preventDefault();
+  }, [debounced]);
 
   const toggle = useCallback((id: PanelId) => {
     debounced(`panel:${id}`, () => onPanelChange(activePanel === id ? null : id));
   }, [activePanel, onPanelChange, debounced]);
+
+  const handleRouteRailClick = useCallback((
+    event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+    targetPanel: RoutePanelId,
+    onRouteClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>,
+  ) => {
+    debouncedRailClick(event, `panel:${targetPanel}`, () => {
+      if (onRouteClick) {
+        onRouteClick(event);
+        return;
+      }
+      const decision = getRailPanelClickDecision(pathname, activePanel, targetPanel);
+      if (decision.preventDefault) event.preventDefault();
+      onPanelChange(decision.nextPanel);
+    });
+  }, [activePanel, debouncedRailClick, onPanelChange, pathname]);
 
   const syncLevel = getStatusLevel(syncStatus, false);
   const showSyncDot = syncLevel !== 'off' && syncLevel !== 'synced';
@@ -243,9 +296,8 @@ export default function ActivityBar({
     <aside
       className="group hidden md:flex fixed top-0 left-0 h-screen z-[31] flex-col bg-background border-r border-border transition-[width] duration-200 ease-out"
       style={{ width: `${railWidth}px` }}
-      role="toolbar"
+      role="navigation"
       aria-label="Navigation"
-      aria-orientation="vertical"
     >
       {/* Content wrapper — overflow-hidden prevents text flash during width transitions */}
       <div className="flex flex-col h-full w-full overflow-hidden">
@@ -277,24 +329,67 @@ export default function ActivityBar({
             icon={<Inbox size={18} />}
             label={t.sidebar.capture}
             active={activeDestination === 'capture'}
+            current={isContentRouteForPanel(pathname, 'capture')}
             expanded={expanded}
-            href="/capture"
-            onClick={() => debounced('panel:capture', () => onPanelChange('capture'))}
+            href={ROUTE_PANEL_HREF.capture}
+            onClick={(event) => handleRouteRailClick(event, 'capture', onCaptureClick)}
             walkthroughId="capture-page"
           />
-          <RailButton icon={<Brain size={18} />} label={t.sidebar.files} active={activeDestination === 'files'} expanded={expanded} href="/wiki" onClick={(event) => { onSpacesClick ? debounced('panel:files', () => onSpacesClick(event)) : toggle('files'); }} walkthroughId="files-panel" />
-          {labsEcho && <RailButton icon={<Radio size={18} />} label={t.sidebar.echo} active={activePanel === 'echo'} expanded={expanded} href="/echo/about-you" onClick={(event) => { onEchoClick ? debounced('panel:echo', () => onEchoClick(event)) : toggle('echo'); }} walkthroughId="echo-panel" />}
-          <RailButton icon={<Search size={18} />} label={t.sidebar.searchTitle} shortcut="⌘K" active={activePanel === 'search'} expanded={expanded} onClick={() => toggle('search')} />
+          <RailButton
+            icon={<Brain size={18} />}
+            label={t.sidebar.files}
+            active={activeDestination === 'files'}
+            current={isContentRouteForPanel(pathname, 'files')}
+            expanded={expanded}
+            href={ROUTE_PANEL_HREF.files}
+            onClick={(event) => handleRouteRailClick(event, 'files', onSpacesClick)}
+            walkthroughId="files-panel"
+          />
+          {labsEcho && (
+            <RailButton
+              icon={<Radio size={18} />}
+              label={t.sidebar.echo}
+              active={activeDestination === 'echo'}
+              current={isContentRouteForPanel(pathname, 'echo')}
+              expanded={expanded}
+              href={ROUTE_PANEL_HREF.echo}
+              onClick={(event) => handleRouteRailClick(event, 'echo', onEchoClick)}
+              walkthroughId="echo-panel"
+            />
+          )}
+          <RailButton
+            icon={<Search size={18} />}
+            label={t.sidebar.searchTitle}
+            shortcut="⌘K"
+            active={activePanel === 'search'}
+            pressed={activePanel === 'search'}
+            expanded={expanded}
+            onClick={() => toggle('search')}
+          />
           <RailButton
             icon={<Bot size={18} />}
             label={t.sidebar.agents}
-            active={activePanel === 'agents'}
+            active={activeDestination === 'agents'}
+            current={isContentRouteForPanel(pathname, 'agents')}
             expanded={expanded}
-            href="/agents"
-            onClick={(event) => { onAgentsClick ? debounced('panel:agents', () => onAgentsClick(event)) : toggle('agents'); }}
+            href={ROUTE_PANEL_HREF.agents}
+            onClick={(event) => handleRouteRailClick(event, 'agents', onAgentsClick)}
             walkthroughId="agents-panel"
           />
-          {labsWorkflows && <RailButton icon={<Zap size={18} />} label={t.sidebar.workflows ?? 'Flows'} active={activePanel === 'workflows'} expanded={expanded} onClick={(event) => onWorkflowsClick ? debounced('panel:workflows', () => onWorkflowsClick(event)) : toggle('workflows')} />}
+          {labsWorkflows && (
+            <RailButton
+              icon={<Zap size={18} />}
+              label={t.sidebar.workflows ?? 'Flows'}
+              active={activePanel === 'workflows'}
+              pressed={activePanel === 'workflows'}
+              expanded={expanded}
+              onClick={(event) => (
+                onWorkflowsClick
+                  ? debouncedRailClick(event, 'panel:workflows', () => onWorkflowsClick(event))
+                  : toggle('workflows')
+              )}
+            />
+          )}
         </div>
 
         {/* ── Spacer ── */}
@@ -303,7 +398,15 @@ export default function ActivityBar({
         {/* ── Secondary: Explore ── */}
         <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
-          <RailButton icon={<Compass size={18} />} label={t.sidebar.discover} active={activePanel === 'discover'} expanded={expanded} href="/explore" onClick={(event) => { onDiscoverClick ? debounced('panel:discover', () => onDiscoverClick(event)) : toggle('discover'); }} />
+          <RailButton
+            icon={<Compass size={18} />}
+            label={t.sidebar.discover}
+            active={activeDestination === 'discover'}
+            current={isContentRouteForPanel(pathname, 'discover')}
+            expanded={expanded}
+            href={ROUTE_PANEL_HREF.discover}
+            onClick={(event) => handleRouteRailClick(event, 'discover', onDiscoverClick)}
+          />
         </div>
 
         {/* ── Bottom: Action buttons (not panel toggles) ── */}
@@ -326,6 +429,9 @@ export default function ActivityBar({
             expanded={expanded}
             buttonRef={syncBtnRef}
             badge={syncBadge}
+            ariaHaspopup="dialog"
+            ariaExpanded={syncPopoverOpen}
+            ariaControls={syncPopoverOpen ? syncPopoverId : undefined}
             onClick={() => debounced('action:sync', () => {
               const rect = syncBtnRef.current?.getBoundingClientRect();
               if (rect) onSyncClick(rect);

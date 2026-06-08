@@ -19,6 +19,13 @@ const sessionWithClaude: ChatSession = {
   messages: [],
   defaultAcpAgent: { id: 'claude-code', name: 'Claude Code' },
 };
+const emptySession: ChatSession = {
+  id: 's-empty',
+  createdAt: 1,
+  updatedAt: 1,
+  messages: [],
+};
+let mockActiveSession: ChatSession = sessionWithClaude;
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
@@ -68,9 +75,9 @@ vi.mock('@/lib/stores/locale-store', () => ({
 vi.mock('@/hooks/useAskSession', () => ({
   useAskSession: () => ({
     messages: [],
-    sessions: [sessionWithClaude],
-    activeSession: sessionWithClaude,
-    activeSessionId: 's1',
+    sessions: [mockActiveSession],
+    activeSession: mockActiveSession,
+    activeSessionId: mockActiveSession.id,
     initSessions: mockInitSessions,
     persistSession: mockPersistSession,
     clearPersistTimer: mockClearPersistTimer,
@@ -184,6 +191,7 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
 describe('AskContent ACP session binding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveSession = sessionWithClaude;
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -311,6 +319,51 @@ describe('AskContent ACP session binding', () => {
     expect(requestBody.selectedAcpAgent).toBeNull();
     expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
     expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex' });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('preselects a native runtime from an opener and submits it without legacy ACP routing', async () => {
+    mockActiveSession = emptySession;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AskContent
+          visible
+          variant="panel"
+          initialMessage="continue with codex"
+          initialAgentRuntime={{ id: 'codex', name: 'Codex', kind: 'codex' }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="agent-selector"]')?.textContent).toBe('Codex');
+    expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex' });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const askCall = fetchMock.mock.calls.find(([url]) => url === '/api/ask');
+    expect(askCall).toBeTruthy();
+    const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toBeNull();
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
 
     await act(async () => {
       root.unmount();

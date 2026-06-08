@@ -42,6 +42,8 @@ export default function SkillRow({
   editing, editContent, setEditContent, editError, saving,
   fullContent, loadingContent, loadErrors, m,
 }: SkillRowProps) {
+  const rowError = loadErrors[skill.name];
+
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <div
@@ -57,6 +59,13 @@ export default function SkillRow({
         </span>
         <Toggle size="sm" checked={skill.enabled} onClick={(e: React.MouseEvent) => { e.stopPropagation(); onToggle(skill.name, !skill.enabled); }} />
       </div>
+
+      {rowError && (
+        <div className="px-3 pb-2 text-2xs text-destructive flex items-center gap-1">
+          <AlertCircle size={10} />
+          <span>{rowError}</span>
+        </div>
+      )}
 
       {expanded && (
         <div className="px-3 py-2 border-t border-border text-xs space-y-2 bg-muted/20">
@@ -131,11 +140,6 @@ export default function SkillRow({
                 </div>
               )}
             </div>
-          ) : loadErrors[skill.name] ? (
-            <p className="text-2xs text-destructive flex items-center gap-1">
-              <AlertCircle size={10} />
-              {loadErrors[skill.name]}
-            </p>
           ) : null}
         </div>
       )}

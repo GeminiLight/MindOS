@@ -62,9 +62,18 @@ export async function handleSettingsTestKeyPost(
     const baseProviderId = stringValue(payload.baseProviderId);
 
     if (baseProviderId && isProviderId(baseProviderId, services)) {
-      if (!apiKey) return json({ ok: false, code: 'auth_error', error: 'No API key configured' });
-      if (!model) return json({ ok: false, code: 'unknown', error: 'Model is required' }, { status: 400 });
-      return await runConnectivityTest({ provider: baseProviderId, apiKey, model, baseUrl, services });
+      const cfg = services.effectiveAiConfig?.(baseProviderId) ?? { provider: baseProviderId, apiKey: '', model: undefined, baseUrl: undefined };
+      const resolvedKey = apiKey || cfg.apiKey || '';
+      const resolvedModel = model || cfg.model || undefined;
+      if (!resolvedKey) return json({ ok: false, code: 'auth_error', error: 'No API key configured' });
+      if (!resolvedModel) return json({ ok: false, code: 'unknown', error: 'Model is required' }, { status: 400 });
+      return await runConnectivityTest({
+        provider: baseProviderId,
+        apiKey: resolvedKey,
+        model: resolvedModel,
+        baseUrl: baseUrl || cfg.baseUrl || undefined,
+        services,
+      });
     }
 
     if (provider && isProviderEntryId(provider, services)) {
@@ -74,13 +83,14 @@ export async function handleSettingsTestKeyPost(
       if (!entry) {
         return json({ ok: false, code: 'unknown', error: 'Provider not found' }, { status: 400 });
       }
-      const resolvedKey = apiKey || entry.apiKey || '';
+      const cfg = services.effectiveAiConfig?.(provider) ?? services.effectiveAiConfig?.(entry.protocol);
+      const resolvedKey = apiKey || entry.apiKey || cfg?.apiKey || '';
       if (!resolvedKey) return json({ ok: false, code: 'auth_error', error: 'No API key configured' });
       return await runConnectivityTest({
         provider: entry.protocol,
         apiKey: resolvedKey,
-        model: model || entry.model || undefined,
-        baseUrl: baseUrl || entry.baseUrl || undefined,
+        model: model || entry.model || cfg?.model || undefined,
+        baseUrl: baseUrl || entry.baseUrl || cfg?.baseUrl || undefined,
         services,
       });
     }
@@ -99,7 +109,7 @@ export async function handleSettingsTestKeyPost(
       provider,
       apiKey: resolvedKey,
       model: model || cfg.model || undefined,
-      baseUrl: baseUrl || undefined,
+      baseUrl: baseUrl || cfg.baseUrl || undefined,
       services,
     });
   } catch (error) {

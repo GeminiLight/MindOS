@@ -103,6 +103,16 @@ import {
 } from './handlers/settings.js';
 import { handleSettingsListModelsPost } from './handlers/settings-list-models.js';
 import { handleSettingsTestKeyPost } from './handlers/settings-test-key.js';
+import {
+  MINDOS_PROVIDER_PRESETS,
+  buildMindosEndpointCandidates,
+  findMindosProvider,
+  getMindosApiKeyFromEnv,
+  isMindosProviderEntryId,
+  isMindosProviderId,
+  parseMindosProviders,
+  resolveMindosProviderConfig,
+} from './provider-settings.js';
 import { handleUninstallPost } from './handlers/uninstall.js';
 import { handleSetupCheckPort } from './handlers/setup-port.js';
 import { handleSetupGenerateToken } from './handlers/setup-token.js';
@@ -599,11 +609,17 @@ async function handleRequest(
       return;
     }
     if (route === 'POST /api/settings/test-key') {
-      writeResponse(res, await handleSettingsTestKeyPost(await readJsonBody(req)));
+      writeResponse(res, await handleSettingsTestKeyPost(
+        await readJsonBody(req),
+        createHttpSettingsTestKeyServices(services),
+      ));
       return;
     }
     if (route === 'POST /api/settings/list-models') {
-      writeResponse(res, await handleSettingsListModelsPost(await readJsonBody(req)));
+      writeResponse(res, await handleSettingsListModelsPost(
+        await readJsonBody(req),
+        createHttpSettingsListModelsServices(services),
+      ));
       return;
     }
     if (route === 'GET /api/settings') {
@@ -744,15 +760,14 @@ function isAuthorizedRequest(route: string, req: IncomingMessage, services: Mind
 }
 
 function readAuthToken(services: MindosHttpServices): string {
-  const envToken = process.env.MINDOS_AUTH_TOKEN || process.env.AUTH_TOKEN;
-  if (envToken) return envToken;
-
   try {
     const settings = services.readSettings();
-    return typeof settings.authToken === 'string' ? settings.authToken : '';
+    if (typeof settings.authToken === 'string') return settings.authToken;
   } catch {
-    return '';
+    // Fall through to environment fallback.
   }
+
+  return process.env.MINDOS_AUTH_TOKEN || process.env.AUTH_TOKEN || '';
 }
 
 function safeTokenEquals(candidate: string, expected: string): boolean {
@@ -766,7 +781,10 @@ function createHttpSettingsServices(services: MindosHttpServices): MindosSetting
   return {
     env: process.env,
     readSettings: () => normalizeSettingsForHttp(services.readSettings()),
-    writeSettings: (settings) => services.writeSettings(settings as MindosRuntimeSettings),
+    writeSettings: (settings) => {
+      const current = services.readSettings();
+      services.writeSettings({ ...current, ...(settings as MindosRuntimeSettings) });
+    },
     readWebSearchConfig: () => {
       const raw = services.readSettings().webSearch;
       return raw && typeof raw === 'object' ? raw as MindosWebSearchConfig : {};
@@ -775,13 +793,13 @@ function createHttpSettingsServices(services: MindosHttpServices): MindosSetting
       const current = services.readSettings();
       services.writeSettings({ ...current, webSearch: config });
     },
-    parseProviders: (providers) => providers,
+    parseProviders: parseMindosProviders,
     getEmbeddingStatus: () => ({ enabled: false, ready: false, building: false, docCount: 0 }),
     invalidateCache: () => {},
     providerEnv: {
-      ids: [],
-      getApiKeyEnvVar: () => undefined,
-      getApiKeyFromEnv: () => undefined,
+      ids: Object.keys(MINDOS_PROVIDER_PRESETS),
+      getApiKeyEnvVar: (id) => MINDOS_PROVIDER_PRESETS[id]?.envKeys[0],
+      getApiKeyFromEnv: (id) => getMindosApiKeyFromEnv(id),
     },
   };
 }
@@ -790,13 +808,127 @@ function normalizeSettingsForHttp(settings: MindosRuntimeSettings) {
   const ai = settings.ai && typeof settings.ai === 'object'
     ? settings.ai as { activeProvider?: string; providers?: unknown }
     : {};
+  const providers = parseMindosProviders(ai.providers, ai.activeProvider);
   return {
     ...settings,
     ai: {
-      activeProvider: ai.activeProvider ?? '',
-      providers: ai.providers ?? [],
+      activeProvider: normalizeHttpActiveProvider(ai.activeProvider, providers),
+      providers,
     },
   };
+}
+
+function normalizeHttpActiveProvider(activeProvider: unknown, providers: Array<{ id: string; protocol: string }>): string {
+  const active = typeof activeProvider === 'string' ? activeProvider : '';
+  if (active && isMindosProviderEntryId(active) && providers.some((provider) => provider.id === active)) {
+    return active;
+  }
+  if (active && isMindosProviderId(active)) {
+    return providers.find((provider) => provider.protocol === active)?.id ?? providers[0]?.id ?? '';
+  }
+  return providers[0]?.id ?? '';
+}
+
+function createHttpSettingsTestKeyServices(services: MindosHttpServices) {
+  return {
+    isProviderId: isMindosProviderId,
+    isProviderEntryId: isMindosProviderEntryId,
+    readSettings: () => normalizeSettingsForHttp(services.readSettings()),
+    findProvider: findMindosProvider,
+    effectiveAiConfig: (provider: string) => resolveMindosProviderConfig(
+      normalizeSettingsForHttp(services.readSettings()),
+      provider,
+      process.env,
+    ),
+    testModel: testProviderConnectivity,
+    clearCompatCacheForBaseUrl: () => undefined,
+  };
+}
+
+function createHttpSettingsListModelsServices(services: MindosHttpServices) {
+  return {
+    isProviderId: isMindosProviderId,
+    isProviderEntryId: isMindosProviderEntryId,
+    readSettings: () => normalizeSettingsForHttp(services.readSettings()),
+    findProvider: findMindosProvider,
+    effectiveAiConfig: (provider: string) => resolveMindosProviderConfig(
+      normalizeSettingsForHttp(services.readSettings()),
+      provider,
+      process.env,
+    ),
+    supportsListModels: (provider: string) => MINDOS_PROVIDER_PRESETS[provider]?.supportsListModels !== false,
+    getRegistryModels: (provider: string) => MINDOS_PROVIDER_PRESETS[provider]?.registryModels ?? [],
+    getProviderApiType: (provider: string) => MINDOS_PROVIDER_PRESETS[provider]?.apiType ?? 'openai-completions',
+    getDefaultBaseUrl: (provider: string) => MINDOS_PROVIDER_PRESETS[provider]?.defaultBaseUrl ?? '',
+    buildEndpointCandidates: buildMindosEndpointCandidates,
+    fetch: async (input: string, init: { headers: Record<string, string>; signal: AbortSignal }) => fetch(input, init),
+  };
+}
+
+async function testProviderConnectivity(input: {
+  provider: string;
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+  signal: AbortSignal;
+}): Promise<void> {
+  const preset = MINDOS_PROVIDER_PRESETS[input.provider];
+  const apiType = preset?.apiType ?? 'openai-completions';
+  const baseUrl = input.baseUrl || preset?.defaultBaseUrl || '';
+  const model = input.model || preset?.defaultModel || '';
+
+  if (!model) throw new Error('Model is required');
+  if (!baseUrl) throw new Error('No base URL configured');
+
+  if (apiType === 'anthropic-messages') {
+    const endpoint = buildMindosEndpointCandidates(baseUrl, '/messages', apiType)[0];
+    if (!endpoint) throw new Error('No endpoint configured');
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      signal: input.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': input.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    return;
+  }
+
+  if (apiType === 'gemini') {
+    const endpoint = `${baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(input.apiKey)}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      signal: input.signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'hi' }] }] }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    return;
+  }
+
+  const endpoint = buildMindosEndpointCandidates(baseUrl, '/chat/completions', apiType)[0];
+  if (!endpoint) throw new Error('No endpoint configured');
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    signal: input.signal,
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${input.apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1,
+      messages: [{ role: 'user', content: 'hi' }],
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
 }
 
 function createHttpSetupServices(services: MindosHttpServices) {

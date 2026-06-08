@@ -51,7 +51,7 @@ export const run = async (args, flags) => {
       await initSync(mindRoot, {
         nonInteractive: true,
         remote: typeof flags.remote === 'string' ? flags.remote : '',
-        token: typeof flags.token === 'string' ? flags.token : '',
+        token: typeof flags.token === 'string' ? flags.token : (process.env.MINDOS_SYNC_TOKEN || ''),
         branch: (typeof flags.branch === 'string' ? flags.branch : '') || 'main',
       });
     } else {

@@ -14,6 +14,7 @@ vi.mock('@/lib/api', () => ({
 describe('SyncTab UX', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
@@ -142,6 +143,164 @@ describe('SyncTab UX', () => {
     expect(host.textContent).toContain('Start with a private Git repository');
     expect(host.textContent).toContain('Paste a remote URL to continue');
     expect(host.textContent).toContain('HTTPS needs a token for private repos');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows a recoverable paused state instead of the first-time setup form', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockResolvedValue({
+      enabled: false,
+      configured: true,
+      remote: 'https://github.com/me/mind.git',
+      branch: 'main',
+      lastSync: '2026-06-05T10:00:00.000Z',
+      unpushed: '0',
+      conflicts: [],
+      lastError: null,
+      autoCommitInterval: 30,
+      autoPullInterval: 300,
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Paused');
+    expect(host.textContent).toContain('Enable Auto-sync');
+    expect(host.textContent).toContain('Reset & Re-configure');
+    expect(host.textContent).not.toContain('Connect & Start Sync');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not show first-time setup when status loading fails', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockRejectedValue(new Error('server unavailable'));
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Could not load sync status');
+    expect(host.textContent).toContain('server unavailable');
+    expect(host.textContent).not.toContain('Connect & Start Sync');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces conflict preview failures inline', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
+      const action = opts?.body ? JSON.parse(opts.body).action : undefined;
+      if (action === 'conflict-preview') throw new Error('preview service failed');
+      return {
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [{ file: 'notes/today.md', time: '2026-06-05T10:00:00.000Z' }],
+        lastError: null,
+        autoCommitInterval: 30,
+        autoPullInterval: 300,
+      };
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const fileButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('notes/today.md'));
+    expect(fileButton).toBeTruthy();
+
+    await act(async () => {
+      fileButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Failed to load conflict preview');
+    expect(host.textContent).toContain('preview service failed');
+    expect(host.textContent).toContain('Retry');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces conflict resolution failures and restores the action buttons', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
+      const action = opts?.body ? JSON.parse(opts.body).action : undefined;
+      if (action === 'conflict-preview') return { local: 'local text', remote: 'remote text' };
+      if (action === 'resolve-conflict') throw new Error('resolve failed');
+      return {
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [{ file: 'notes/today.md', time: '2026-06-05T10:00:00.000Z' }],
+        lastError: null,
+        autoCommitInterval: 30,
+        autoPullInterval: 300,
+      };
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const fileButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('notes/today.md'));
+    await act(async () => {
+      fileButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const keepLocal = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local'));
+    expect(keepLocal?.hasAttribute('disabled')).toBe(false);
+
+    await act(async () => {
+      keepLocal?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Failed to resolve conflict');
+    expect(host.textContent).toContain('resolve failed');
+    expect(Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local'))?.hasAttribute('disabled')).toBe(false);
 
     await act(async () => {
       root.unmount();

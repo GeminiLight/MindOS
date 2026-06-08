@@ -5,7 +5,7 @@
  * the frontend about the retry state. Previously, these were silently
  * ignored. After the fix, they should surface as text in the message.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import type { ToolCallPart } from '@/lib/types';
 
@@ -20,6 +20,16 @@ function makeStream(...events: object[]): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function stubWindowEventTarget(): EventTarget & Pick<Window, 'addEventListener' | 'removeEventListener' | 'dispatchEvent'> {
+  const target = new EventTarget() as EventTarget & Pick<Window, 'addEventListener' | 'removeEventListener' | 'dispatchEvent'>;
+  vi.stubGlobal('window', target);
+  return target;
 }
 
 describe('consumeUIMessageStream — status event handling', () => {
@@ -130,5 +140,48 @@ describe('consumeUIMessageStream — status event handling', () => {
     ];
     const toolPart = allParts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
     expect(toolPart?.state).toBe('error');
+  });
+
+  it.each(['append_to_file', 'edit_lines', 'move_file', 'append_csv'])(
+    'notifies files changed when %s completes successfully',
+    async (toolName) => {
+      const windowTarget = stubWindowEventTarget();
+      const onFilesChanged = vi.fn();
+      windowTarget.addEventListener('mindos:files-changed', onFilesChanged);
+
+      try {
+        const stream = makeStream(
+          { type: 'tool_start', toolCallId: 'tc1', toolName, args: { path: 'a.md' } },
+          { type: 'tool_end', toolCallId: 'tc1', output: 'ok', isError: false },
+          { type: 'done' },
+        );
+
+        await consumeUIMessageStream(stream, vi.fn());
+
+        expect(onFilesChanged).toHaveBeenCalledTimes(1);
+      } finally {
+        windowTarget.removeEventListener('mindos:files-changed', onFilesChanged);
+      }
+    },
+  );
+
+  it('does not notify files changed when a mutating tool fails', async () => {
+    const windowTarget = stubWindowEventTarget();
+    const onFilesChanged = vi.fn();
+    windowTarget.addEventListener('mindos:files-changed', onFilesChanged);
+
+    try {
+      const stream = makeStream(
+        { type: 'tool_start', toolCallId: 'tc1', toolName: 'append_to_file', args: { path: 'a.md' } },
+        { type: 'tool_end', toolCallId: 'tc1', output: 'permission denied', isError: true },
+        { type: 'done' },
+      );
+
+      await consumeUIMessageStream(stream, vi.fn());
+
+      expect(onFilesChanged).not.toHaveBeenCalled();
+    } finally {
+      windowTarget.removeEventListener('mindos:files-changed', onFilesChanged);
+    }
   });
 });

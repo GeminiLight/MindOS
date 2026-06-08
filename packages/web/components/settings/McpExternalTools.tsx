@@ -23,7 +23,7 @@ type DirectMode = 'proxy' | 'all' | 'select';
 
 function getMode(dt: boolean | string[] | false): DirectMode {
   if (dt === true) return 'all';
-  if (Array.isArray(dt) && dt.length > 0) return 'select';
+  if (Array.isArray(dt)) return 'select';
   return 'proxy';
 }
 

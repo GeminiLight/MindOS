@@ -26,6 +26,7 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
+import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -71,10 +72,12 @@ export default function ViewPageClient({
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
   const isMarkdown = extension === 'md';
+  const initialContentHasFrontmatter = isMarkdown && splitMarkdownFrontmatter(content).frontmatter !== null;
   const [editing, setEditing] = useState(() => {
     if (isBinaryFile) return false;
     // Always start in Edit for empty/new files regardless of persisted mode
     if (initialEditing || content === '') return true;
+    if (initialContentHasFrontmatter) return false;
     if (isMarkdown && typeof window !== 'undefined' && localStorage.getItem('md-view-mode') === 'preview') return false;
     return isMarkdown;
   });
@@ -137,6 +140,7 @@ export default function ViewPageClient({
   }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction]);
   const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
     if (typeof window === 'undefined') return 'wysiwyg';
+    if (initialContentHasFrontmatter) return 'preview';
     const stored = localStorage.getItem('md-view-mode');
     if (stored === 'wysiwyg' || stored === 'source' || stored === 'preview') return stored;
     return 'wysiwyg';
@@ -259,10 +263,13 @@ export default function ViewPageClient({
 
   const handleEdit = useCallback(() => {
     setEditContent(savedContent);
+    if (isMarkdown && splitMarkdownFrontmatter(savedContent).frontmatter !== null) {
+      setMdViewMode('source');
+    }
     setEditing(true);
     setSaveError(null);
     setSaveSuccess(false);
-  }, [savedContent]);
+  }, [isMarkdown, savedContent, setMdViewMode]);
 
   const handleCancel = useCallback(() => {
     if (isDraft) {
@@ -500,8 +507,11 @@ export default function ViewPageClient({
                     onClick={() => {
                       // Use startTransition to mark state updates as non-urgent
                       startTransition(() => {
-                        setMdViewMode(m.id);
-                        if (m.id === 'preview') {
+                        const nextMode = m.id === 'wysiwyg' && splitMarkdownFrontmatter(editing ? editContent : savedContent).frontmatter !== null
+                          ? 'source'
+                          : m.id;
+                        setMdViewMode(nextMode);
+                        if (nextMode === 'preview') {
                           // Sync latest edit content to savedContent before switching
                           const clean = twemojiToNative(editContent);
                           setSavedContent(clean);

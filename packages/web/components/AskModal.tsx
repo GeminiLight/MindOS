@@ -2,7 +2,7 @@
 
 import { useLocale } from '@/lib/stores/locale-store';
 import AskContent from '@/components/ask/AskContent';
-import type { AcpAgentSelection } from '@/hooks/useAskModal';
+import type { AcpAgentSelection, AskAgentRuntimeSelection } from '@/hooks/useAskModal';
 
 interface AskModalProps {
   open: boolean;
@@ -10,12 +10,13 @@ interface AskModalProps {
   currentFile?: string;
   initialMessage?: string;
   initialAcpAgent?: AcpAgentSelection | null;
+  initialAgentRuntime?: AskAgentRuntimeSelection | null;
   onFirstMessage?: () => void;
   askMode?: 'panel' | 'popup';
   onModeSwitch?: () => void;
 }
 
-export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, onFirstMessage, askMode, onModeSwitch }: AskModalProps) {
+export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, onFirstMessage, askMode, onModeSwitch }: AskModalProps) {
   const { t } = useLocale();
 
   if (!open) return null;
@@ -38,6 +39,7 @@ export default function AskModal({ open, onClose, currentFile, initialMessage, i
           currentFile={currentFile}
           initialMessage={initialMessage}
           initialAcpAgent={initialAcpAgent}
+          initialAgentRuntime={initialAgentRuntime}
           onFirstMessage={onFirstMessage}
           askMode={askMode}
           onModeSwitch={onModeSwitch}

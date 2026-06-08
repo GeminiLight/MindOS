@@ -54,10 +54,11 @@ export async function handleSettingsListModelsPost(
       const providers = Array.isArray(settings.ai?.providers) ? settings.ai.providers : [];
       const entry = services.findProvider?.(providers, provider);
       if (!entry) return json({ ok: false, error: 'Provider not found' }, { status: 404 });
+      const cfg = services.effectiveAiConfig?.(provider) ?? services.effectiveAiConfig?.(entry.protocol);
       return await listModels({
         provider: entry.protocol,
-        apiKey: apiKey || entry.apiKey || '',
-        baseUrl: baseUrl || entry.baseUrl || '',
+        apiKey: apiKey || entry.apiKey || cfg?.apiKey || '',
+        baseUrl: baseUrl || entry.baseUrl || cfg?.baseUrl || '',
         services,
       });
     }

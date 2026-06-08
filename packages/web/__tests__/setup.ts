@@ -10,6 +10,51 @@ type TestGlobal = typeof globalThis & {
 
 // --- JSDOM polyfills ---
 
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+}
+
+function installMemoryStorage(target: object, key: 'localStorage' | 'sessionStorage', fallback?: Storage): Storage {
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+  const existing = descriptor && 'value' in descriptor ? descriptor.value as Storage | undefined : undefined;
+  if (existing) return existing;
+
+  const storage = fallback ?? createMemoryStorage();
+  Object.defineProperty(target, key, {
+    configurable: true,
+    value: storage,
+  });
+  return storage;
+}
+
+const testLocalStorage = installMemoryStorage(globalThis, 'localStorage');
+const testSessionStorage = installMemoryStorage(globalThis, 'sessionStorage');
+
+if (typeof window !== 'undefined') {
+  installMemoryStorage(window, 'localStorage', testLocalStorage);
+  installMemoryStorage(window, 'sessionStorage', testSessionStorage);
+}
+
 // JSDOM doesn't implement scrollIntoView
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function () {};
@@ -103,6 +148,8 @@ vi.mock('@/lib/mind-root', () => ({
 beforeEach(() => {
   state.root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-app-test-'));
   testMindRoot = state.root;
+  localStorage.clear();
+  sessionStorage.clear();
 });
 
 afterEach(() => {

@@ -9,11 +9,15 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { type ProviderId, PROVIDER_PRESETS, ALL_PROVIDER_IDS, getApiKeyEnvVar, getDefaultBaseUrl } from '@/lib/agent/providers';
 import ProviderSelect from '@/components/shared/ProviderSelect';
 import ModelInput from '@/components/shared/ModelInput';
-import { type Provider, generateProviderId } from '@/lib/custom-endpoints';
+import { type Provider } from '@/lib/custom-endpoints';
 import { useCustomProviderForm, type TestResult } from './useCustomProviderForm';
 import CustomProviderFields from './CustomProviderFields';
 import { TestButton } from './TestButton';
 import { apiFetch } from '@/lib/api';
+import {
+  rebaseProviderProtocol,
+  resolveAiProviderSelection,
+} from '@/lib/ai-provider-settings';
 
 const MAX_STEPS_PRESETS = [10, 20, 30, 40, 50, 999] as const;
 
@@ -73,6 +77,7 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
 
   const [testResult, setTestResult] = useState<Record<string, TestResult>>({});
   const [customFormOpen, setCustomFormOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState(current?.name ?? '');
   const okTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const prevProviderRef = useRef(data.ai.activeProvider);
 
@@ -85,6 +90,10 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
   }, [data.ai.activeProvider]);
 
   useEffect(() => () => { if (okTimerRef.current) clearTimeout(okTimerRef.current); }, []);
+
+  useEffect(() => {
+    setNameDraft(current?.name ?? '');
+  }, [current?.id, current?.name]);
 
   useEffect(() => {
     const v = data.agent?.reconnectRetries ?? 3;
@@ -141,6 +150,51 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
     });
   }, [current, data.ai.providers, updateAi]);
 
+  const providerNameError = (() => {
+    if (!current) return '';
+    const trimmed = nameDraft.trim();
+    if (!trimmed) return locale === 'zh' ? '名称不能为空' : 'Name is required';
+    const duplicate = data.ai.providers.some(provider => (
+      provider.id !== current.id
+      && provider.name.trim().toLowerCase() === trimmed.toLowerCase()
+    ));
+    if (duplicate) return locale === 'zh' ? '名称已存在' : 'Name already exists';
+    return '';
+  })();
+
+  const commitProviderName = useCallback(() => {
+    if (!current) return;
+    const trimmed = nameDraft.trim();
+    const duplicate = data.ai.providers.some(provider => (
+      provider.id !== current.id
+      && provider.name.trim().toLowerCase() === trimmed.toLowerCase()
+    ));
+    if (!trimmed || duplicate) {
+      setNameDraft(current.name);
+      return;
+    }
+    if (trimmed !== current.name) patchProvider({ name: trimmed });
+  }, [current, data.ai.providers, nameDraft, patchProvider]);
+
+  const handleSelectProvider = useCallback((selectedId: string) => {
+    if (selectedId === 'skip') return;
+    const next = resolveAiProviderSelection(data.ai, selectedId, locale);
+    updateAi(next);
+    setCustomFormOpen(false);
+  }, [data.ai, locale, updateAi]);
+
+  const handleProtocolChange = useCallback((protocol: ProviderId) => {
+    if (!current || current.protocol === protocol) return;
+    const siblingNames = data.ai.providers
+      .filter(provider => provider.id !== current.id)
+      .map(provider => provider.name);
+    const rebased = rebaseProviderProtocol(current, protocol, siblingNames, locale);
+    setTestResult(prev => ({ ...prev, [current.id]: { state: 'idle' } }));
+    updateAi({
+      providers: data.ai.providers.map(provider => provider.id === current.id ? rebased : provider),
+    });
+  }, [current, data.ai.providers, locale, updateAi]);
+
   // ── Env key detection ──
   const envKeyName = current ? getApiKeyEnvVar(current.protocol) : undefined;
   const activeEnvKey = envKeyName ? env[envKeyName] : false;
@@ -175,9 +229,8 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
 
   // ── Save handler for the "Add Provider" form ──
   const handleSaveNew = useCallback((formProvider: Provider) => {
-    // The form uses `protocol` directly now (no mapping needed)
     const newProvider: Provider = {
-      id: formProvider.id || generateProviderId(),
+      id: formProvider.id,
       name: formProvider.name,
       protocol: formProvider.protocol,
       apiKey: formProvider.apiKey,
@@ -202,25 +255,11 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
         description={displayName}
       >
         <ProviderSelect
-          value={data.ai.activeProvider as ProviderId}
-          onChange={id => {
-            if (id !== 'skip') updateAi({ activeProvider: id });
-            setCustomFormOpen(false);
-          }}
+          value={data.ai.activeProvider}
+          onChange={handleSelectProvider}
           compact
-          customProviders={data.ai.providers}
+          providerEntries={data.ai.providers}
           onAdd={() => {
-            // Open form pre-filled with OpenAI defaults
-            const defaultId: ProviderId = 'openai';
-            const p = PROVIDER_PRESETS[defaultId];
-            const baseName = locale === 'zh' ? p.nameZh : p.name;
-            const names = new Set(data.ai.providers.map(cp => cp.name.toLowerCase()));
-            let finalName = baseName;
-            if (names.has(finalName.toLowerCase())) {
-              let n = 2;
-              while (names.has(`${baseName} (${n})`.toLowerCase())) n++;
-              finalName = `${baseName} (${n})`;
-            }
             setCustomFormOpen(true);
           }}
         />
@@ -243,15 +282,24 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
             <div className="grid grid-cols-2 gap-3">
               <Field label={locale === 'zh' ? '名称' : 'Name'}>
                 <Input
-                  value={current.name}
-                  onChange={e => patchProvider({ name: e.target.value })}
+                  value={nameDraft}
+                  onChange={e => setNameDraft(e.target.value)}
+                  onBlur={commitProviderName}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
                   placeholder={locale === 'zh' ? '输入名称' : 'Enter name'}
                 />
+                {providerNameError && nameDraft !== current.name && (
+                  <p className="text-xs text-destructive">{providerNameError}</p>
+                )}
               </Field>
               <Field label={locale === 'zh' ? '协议' : 'Protocol'}>
                 <Select
                   value={current.protocol}
-                  onChange={e => patchProvider({ protocol: e.target.value as ProviderId })}
+                  onChange={e => handleProtocolChange(e.target.value as ProviderId)}
                 >
                   {ALL_PROVIDER_IDS.map(id => (
                     <option key={id} value={id}>
@@ -498,29 +546,18 @@ function ProviderActions({
 /* ── Inline Custom Provider Form (uses shared hook + fields) ── */
 
 function CustomProviderForm({
-  initial, onSave, onCancel, onDelete, t, existingNames,
+  onSave, onCancel, t, existingNames,
 }: {
-  initial?: Provider;
   onSave: (provider: Provider) => void;
   onCancel: () => void;
-  onDelete?: () => void;
   t: AiTabProps['t'];
   existingNames: string[];
 }) {
   const { locale } = useLocale();
-  const form = useCustomProviderForm({ initial, onSave, locale, existingNames });
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
-
-  const formTitle = initial?.id
-    ? (locale === 'zh' ? '编辑 Provider' : 'Edit Provider')
-    : (locale === 'zh' ? '添加 Provider' : 'Add Provider');
+  const form = useCustomProviderForm({ onSave, locale, existingNames });
+  const formTitle = locale === 'zh' ? '添加 Provider' : 'Add Provider';
 
   const missingFields: string[] = [];
-  if (!form.name.trim()) missingFields.push(locale === 'zh' ? '名称' : 'Name');
-  if (!form.baseUrl.trim()) missingFields.push(locale === 'zh' ? '接口地址' : 'Base URL');
   if (!form.model.trim()) missingFields.push(locale === 'zh' ? '模型' : 'Model');
 
   return (
@@ -540,38 +577,11 @@ function CustomProviderForm({
 
       {/* Form body */}
       <div className="p-4">
-        <CustomProviderFields form={form} t={t} locale={locale} layout="compact" />
+        <CustomProviderFields form={form} t={t} locale={locale} />
 
         {/* Actions */}
         <div className="flex items-center gap-2 pt-4">
           <TestButton result={form.testResult} disabled={!form.canSave} onTest={form.handleTest} t={t} />
-
-          {/* Delete — only when editing an existing provider */}
-          {onDelete && initial?.id && (
-            <button
-              type="button"
-              onClick={() => {
-                if (confirmDelete) {
-                  onDelete();
-                  if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-                } else {
-                  setConfirmDelete(true);
-                  deleteTimerRef.current = setTimeout(() => setConfirmDelete(false), 3000);
-                }
-              }}
-              onBlur={() => { setConfirmDelete(false); if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 ${
-                confirmDelete
-                  ? 'bg-destructive/10 text-destructive border border-destructive/25 font-medium'
-                  : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Trash2 size={12} />
-              {confirmDelete
-                ? (locale === 'zh' ? '确认删除？' : 'Confirm?')
-                : (locale === 'zh' ? '删除' : 'Delete')}
-            </button>
-          )}
 
           <div className="flex-1">
             {form.isDuplicateName && (
@@ -591,7 +601,7 @@ function CustomProviderForm({
             onClick={onCancel}
             className="px-3 py-1.5 text-sm rounded-lg text-muted-foreground hover:text-foreground transition-colors"
           >
-            {t.settings?.customProviders?.modal?.buttonCancel ?? 'Cancel'}
+            {locale === 'zh' ? '取消' : 'Cancel'}
           </button>
           <button
             type="button"

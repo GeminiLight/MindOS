@@ -54,7 +54,7 @@ export type MindosSettingsServices = {
   writeSettings(settings: MindosServerSettings): void;
   readWebSearchConfig(): MindosWebSearchConfig;
   writeWebSearchConfig(config: MindosWebSearchConfig): void;
-  parseProviders(providers: unknown): unknown;
+  parseProviders(providers: unknown, activeProvider?: unknown): unknown;
   getEmbeddingStatus(): unknown;
   invalidateCache(): void;
   providerEnv: MindosProviderEnvServices;
@@ -103,6 +103,14 @@ function maskToken(token: string | undefined): string {
 
 function maskWebSearchKey(value: string | undefined) {
   return value ? '••••••' : '';
+}
+
+function maskSecret(value: string | undefined): string {
+  return value ? '••••••' : '';
+}
+
+function isMaskedSecret(value: string): boolean {
+  return value.includes('••');
 }
 
 function defaultEmbedding(): MindosEmbeddingSettings {
@@ -158,10 +166,38 @@ function resolveWebSearchPatch(incoming: unknown, current: MindosWebSearchConfig
   return { ...current, ...patch };
 }
 
+function normalizeActiveProvider(activeProvider: unknown, providers: unknown): string {
+  if (!Array.isArray(providers)) {
+    return typeof activeProvider === 'string' ? activeProvider : '';
+  }
+
+  const entries = providers
+    .filter((provider): provider is { id: string; protocol?: string } => (
+      !!provider
+      && typeof provider === 'object'
+      && typeof (provider as Record<string, unknown>).id === 'string'
+      && ((provider as Record<string, unknown>).id as string).startsWith('p_')
+    ));
+  const active = typeof activeProvider === 'string' ? activeProvider : '';
+
+  if (active && entries.some((provider) => provider.id === active)) {
+    return active;
+  }
+
+  if (active) {
+    const byProtocol = entries.find((provider) => provider.protocol === active);
+    if (byProtocol) return byProtocol.id;
+  }
+
+  return entries[0]?.id ?? '';
+}
+
 export function handleSettingsGet(services: MindosSettingsServices): MindosServerResponse<MindosSettingsPayload | { error: string }> {
   try {
     const settings = services.readSettings();
     const ai = settings.ai ?? {};
+    const providers = services.parseProviders(ai.providers ?? [], ai.activeProvider);
+    const activeProvider = normalizeActiveProvider(ai.activeProvider, providers);
     const env = services.env ?? {};
     const envOverrides: Record<string, boolean> = {
       AI_PROVIDER: !!env.AI_PROVIDER,
@@ -183,8 +219,8 @@ export function handleSettingsGet(services: MindosSettingsServices): MindosServe
     const webSearch = services.readWebSearchConfig();
     return json({
       ai: {
-        activeProvider: ai.activeProvider ?? '',
-        providers: ai.providers ?? [],
+        activeProvider,
+        providers,
       },
       embedding: settings.embedding ?? defaultEmbedding(),
       embeddingStatus: services.getEmbeddingStatus(),
@@ -195,7 +231,7 @@ export function handleSettingsGet(services: MindosSettingsServices): MindosServe
         geminiApiKey: maskWebSearchKey(webSearch.geminiApiKey),
       },
       mindRoot: settings.mindRoot,
-      webPassword: settings.webPassword ?? '',
+      webPassword: maskSecret(settings.webPassword),
       authToken: maskToken(settings.authToken),
       allowNetworkAccess: settings.allowNetworkAccess === true,
       port: Number(env.MINDOS_WEB_PORT) || settings.port || 3456,
@@ -217,23 +253,28 @@ export function handleSettingsPost(
   try {
     const current = services.readSettings();
     const resolvedAi = { ...(current.ai ?? {}) };
+    resolvedAi.providers = services.parseProviders(resolvedAi.providers ?? [], resolvedAi.activeProvider);
     if (body.ai) {
       if (body.ai.activeProvider !== undefined) resolvedAi.activeProvider = body.ai.activeProvider;
-      if (body.ai.providers !== undefined) resolvedAi.providers = services.parseProviders(body.ai.providers);
+      if (body.ai.providers !== undefined) resolvedAi.providers = services.parseProviders(body.ai.providers, resolvedAi.activeProvider);
     }
+    resolvedAi.activeProvider = normalizeActiveProvider(resolvedAi.activeProvider, resolvedAi.providers);
 
     const currentWebSearch = services.readWebSearchConfig();
     const nextWebSearch = resolveWebSearchPatch(body.webSearch, currentWebSearch);
     if (nextWebSearch) services.writeWebSearchConfig(nextWebSearch);
 
     const resolvedAuthToken = body.authToken === '' ? '' : current.authToken;
+    const resolvedWebPassword = typeof body.webPassword === 'string'
+      ? (isMaskedSecret(body.webPassword) ? current.webPassword : body.webPassword)
+      : current.webPassword;
     const next: MindosServerSettings = {
       ai: resolvedAi,
       embedding: body.embedding && typeof body.embedding === 'object' ? resolveEmbedding(body.embedding) : current.embedding,
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
       skillPaths: resolveSkillPathsPatch(current.skillPaths, body.skillPaths),
-      webPassword: body.webPassword ?? current.webPassword,
+      webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
       allowNetworkAccess: typeof body.allowNetworkAccess === 'boolean'
         ? body.allowNetworkAccess

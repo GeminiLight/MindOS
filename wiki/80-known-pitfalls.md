@@ -1119,6 +1119,13 @@ rootcause: app/api/ask/route.ts:143 直接传递 llmHistoryMessages（pi-ai Mess
 - **规则：** 配置迁移不能只迁“数据结构”，还要归一化主键字段。凡是 `active*` / `selected*` / `current*` 这类引用字段，都必须校验是否仍指向有效实体
 - **文件：** `app/lib/settings.ts`
 
+### Settings Provider 选择器隐藏未配置服务商，导致选完后难以切换（#26）
+- **现象：** 用户在 Settings → AI 里选过一个 provider 后，只看到已保存的 provider chip 和 Add 按钮，Anthropic / OpenAI / Gemini 等未配置服务商入口消失；跳过 AI 后首次进 Settings 点击内置 provider，还可能把 `activeProvider` 写成 `"openai"` 这类协议值，导致配置区不出现
+- **原因：** 设置页把“选择 provider 协议”和“选择已有 provider 配置项”混在同一个控件中；有任何 `ai.providers[]` 后，`ProviderSelect` 只渲染已有 entry。`AiTab` 的 `onChange` 又只浅写 `activeProvider`，没有像 onboarding 那样 find-or-create provider entry
+- **解决：** Settings 里选择协议时必须先查找同协议 entry，不存在则按 preset 创建 `p_*` provider entry，再把 `activeProvider` 指向 entry id；`ProviderSelect` 在已有配置时仍显示未配置的 provider 模板；`handleSettingsPost()` 写入前再次归一化 `activeProvider`
+- **规则：** UI 层永远不要把裸协议 ID 持久化为 `ai.activeProvider`。所有 provider 切换入口都应复用 find-or-create 语义；服务端写入仍要校验 active 引用是否指向有效实体
+- **文件：** `packages/web/components/settings/AiTab.tsx`、`packages/web/components/shared/ProviderSelect.tsx`、`packages/web/components/settings/provider-settings.ts`、`packages/mindos/src/server/handlers/settings.ts`
+
 ## 架构 & 设计模式
 
 ### 插件兼容 / runtime 层的假绿陷阱（2026-04-10）
@@ -1580,6 +1587,11 @@ mindos onboard
   - `gracefulShutdown` 加 `shutdownInProgress` guard
 - **教训：** (1) catch 空块是 P0 级反模式，至少 `console.error` (2) 即使命令是硬编码的，统一用 `execFileSync` 消除整个攻击面比逐行审计更可靠
 - **文件：** `bin/lib/sync.js`
+
+### Git Sync 状态必须以用户下一步为主，不要泄露 remote credential
+- **现象：** Git remote 可能包含 HTTPS token；如果 API/UI 原样显示 `remote`，截图或排查日志会泄露凭证。禁用 auto-sync 后若只返回 `{ enabled:false }`，设置页会误判为首次未配置，用户无法自然重新启用。`autoPull()` 把非冲突 pull 失败当作冲突处理时，还可能生成空的 `auto-sync: resolved conflicts` commit。
+- **解决：** `/api/sync` 和 CLI status 返回前统一脱敏 HTTPS username/password；disabled 但已有仓库时返回 `configured:true` 和仓库元数据；冲突优先级高于 `lastError`，因为用户下一步应先解决冲突；`autoPull()` 只有检测到 unmerged files 才进入冲突 fallback，禁止 `--allow-empty`；`initSync()` 在首次 pull/push 成功后才写 `sync.enabled=true`。
+- **防回归：** `packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 paused 状态、status load failure、conflict preview/resolve 失败；`packages/web/__tests__/core/sync-status.test.ts` 覆盖 conflicts 优先级；`tests/unit/cli-sync.test.ts` 覆盖 branch 生效、invalid branch、remote 脱敏和禁止 `--allow-empty`；`packages/mindos/src/server.test.ts` 覆盖 Product Server remote 脱敏和 conflict strategy 校验。
 
 ### route.ts exec() shell 注入 + context.ts Anthropic API 兼容
 - **现象（P1）：** `app/api/sync/route.ts` 的 `runCli` 用 `exec()` 拼接 shell 字符串，用户输入可注入
@@ -4109,6 +4121,68 @@ const visibleNodes = useMemo(() => {
 **修复**：rail debounce 必须按目标 key 区分，只抑制同一个目标的重复点击，不抑制 Inbox → Files、Inbox → Agents 这类跨目标切换。
 
 **防回归**：`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 Inbox 后立即点 Files 和 Agents 都必须触发目标导航。
+
+### Rail / Sidebar 路由归属必须集中在 navigation-panel（2026-06-08）
+
+**症状**：Rail、SidebarLayout 和测试各自手写 `/capture`、`/agents`、`/wiki` 等路径判断后，容易出现三类漂移：`/agents-old` 被误判成 Agents；同一 rail link 连点绕过 `preventDefault()` 导致路径变化；`/settings`、`/trash` 继承上一个 workbench panel，像是旧 sidebar 仍占住页面。
+
+**根因**：route highlight、left panel open state、route-controlled recovery、rail click decision 混在组件里实现，且 link fallback / debounce 属于 ActivityBar 私有逻辑，测试只模拟了一部分 SidebarLayout 分支。
+
+**规则**：
+1. 路由到 panel 的映射只放在 `packages/web/lib/navigation-panel.ts`，用 segment-boundary 判断（`/agents` 或 `/agents/*`），不要在组件里写裸 `startsWith('/agents')`。
+2. route-owned rail click 用 `getRailPanelClickDecision()`；同一路由内点击要按 helper 返回值决定是否 `preventDefault()`，避免 `/capture#queue` 被点击 rail 后剥掉 hash。
+3. `/settings`、`/trash` 这类 full-page utility route 要显式标为 neutral route，清理 stale workbench panel，但保留 Search / Workflows 这类临时 utility panel。
+4. Rail 里的 `href` 项是导航 link，用 `aria-current="page"`；只有无 `href` 的真实 toggle button 才用 `aria-pressed`。`aria-current` 只能表示当前 URL 所在页面，不能拿来表示 pending/optimistic 的 rail 高亮。
+5. Legacy route 只映射真实存在的页面；例如当前只保留 `/inbox/history` → `/capture/history`，不要把不存在的 `/inbox` 或 `/inbox/history/*` 误判成 Capture。
+6. 旧兼容 helper 不要偷换语义；`recoverStaleCapturePanel()` 只处理 Capture 遗留状态，通用 route panel 恢复必须显式使用 `recoverStaleRoutePanel()`。
+7. Route-derived panel 不要继承本地旧 panel 的 maximized 状态；`activeLeftPanel !== lp.activePanel` 时，宽度、`maximized` 和 `#main-content` padding 都必须使用同一套 effective 派生状态。
+8. Catch-all route 不等于 base route；`/view/[...path]` 只应匹配 `/view/*`，不要把不存在的 `/view` 当成 Files 内容页。
+
+**防回归**：`packages/web/__tests__/lib/navigation-panel.test.ts` 覆盖 segment-boundary、`/view` base route、neutral route、legacy inbox 精确匹配、legacy wrapper scope、route recovery、route-derived panel 不继承 stale maximize、rail click decision；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 same-target debounce 不能绕过 `preventDefault()`、ActivityBar 默认 route click 也走统一 helper、`aria-current` 与视觉 active 分离，以及 sync popover trigger 的 aria 关系。
+
+### Dev 轮询端点不能触发重型重建（2026-06-08）
+
+**症状**：本地 dev 版打开页面或切换 rail destination 时体感卡顿，日志里 `/api/tree-version`、`/api/mcp/status`、`/api/changes` 等全局轮询端点和页面 cold compile 叠在一起。尤其是 `/api/tree-version` 名义上是轻量版本检查，却可能在 cache TTL 过期时触发 `tree.cache.build`。
+
+**根因**：轮询端点为了返回版本号调用了 `getTreeVersion()`；该函数在 `_cache` 为空或过期时会重建完整文件树、统计文件签名，并可能让每 5s 的客户端 poll 变成周期性整树扫描。另一个放大因素是 Web 侧从 `@geminilight/mindos` 根入口 re-export foundation security API，dev 编译会反复打印 `Attempted import error`，拖慢 cold compile。
+
+**规则**：
+1. `/api/tree-version` 只能调用 `peekTreeVersion()` 这种只读计数器，不得调用会 rebuild cache 的函数。
+2. 页面真正需要文件树时再通过 `getFileTree()` / cache-aware 读路径重建；写操作和 watcher 负责 bump `_treeVersion`。
+3. Web 到产品主包的导入要走明确 public boundary，例如 `@geminilight/mindos/foundation`，不要从根入口间接 re-export 低层 API。
+4. ActivityBar 这类全局 chrome 在 dev 环境不要 mount 后立即 prefetch 额外 route；否则会主动制造额外 cold compile 压力。
+
+**防回归**：`packages/web/__tests__/api/tree-version.test.ts` 明确让旧 `getTreeVersion()` 抛错，验证 `/api/tree-version` 只调用 `peekTreeVersion()`；`packages/web` typecheck 覆盖 `@geminilight/mindos/foundation` 子入口导出。
+
+### AI Provider 旧格式必须归一到 `p_*` entry（2026-06-09）
+
+**症状**：设置面板里用户选过某个 provider 后，后续可能出现选中状态和可编辑表单脱节：列表里看起来选了某个协议，但 `AiTab` 找不到对应 `p_*` provider entry，导致配置区为空、无法继续修改，或旧 active provider 被错误迁移成默认 OpenAI。
+
+**根因**：旧配置里 active provider 可能存在两个字段名：`ai.provider` 或 `ai.activeProvider`。迁移逻辑只看 `ai.provider`，并且会跳过空配置的 provider dict entry；当用户选中的是一个空的旧 provider（例如刚选择 Anthropic 但还没填 key）时，它没有被迁移成新 `p_*` entry。
+
+**规则**：
+1. Settings UI 内部只把 `ai.activeProvider` 当成 provider entry id（`p_*`），不要把协议 id 当成可编辑 entry。
+2. 旧格式迁移必须优先识别 `ai.activeProvider`，其次才是 `ai.provider`。
+3. 即使旧 provider 配置为空，只要它是当前 active provider，也必须迁移成一个可编辑 entry，并填上默认 model/baseUrl。
+4. Product Server 的 `/api/settings` GET/POST handler 也要做归一化，不能只依赖外层 HTTP service 或 Web 侧 `readSettings()` 迁移。
+
+**防回归**：`packages/web/__tests__/settings/custom-endpoints.test.ts` 覆盖空 legacy active provider 仍迁移为可编辑 entry；`packages/mindos/src/server.test.ts` 覆盖 settings GET 把 legacy `activeProvider: 'anthropic'` 归一成 `p_anthropic`。
+
+### Git Sync 写入口必须共用跨进程锁（2026-06-09）
+
+**症状**：`mindos dev` / `mindos start` / Next instrumentation / 用户手动 `sync now` 可能在不同 Node 进程中同时启动 Git Sync。进程内 `activeWatcher` 只能防当前进程，挡不住另一个 daemon、CLI 子进程或 Product API 同时 `git pull`、`git add`、`git commit`、`git push`，也挡不住 conflict resolve 中途被后台 auto-commit 抢走。
+
+**根因**：之前只有 watcher 级别的内存 guard，没有跨进程互斥；手动同步还可能先 pull、释放锁、再 commit，让 daemon 插在中间。Product Server 的 `.gitignore-save`、`resolve-conflict`、`reset` 虽然不直接执行 Git，也会改工作树或 `sync-state.json`，必须和 Git 写操作互斥。
+
+**规则**：
+1. 所有会写 Git repo、conflict 文件、`.gitignore` 或 sync state 的入口必须使用同一个目录锁：`~/.mindos/sync-locks/<mindRootHash>.lock`。
+2. 锁 owner 必须写 `pid`、`hostname`、`operation`、`mindRoot`、`startedAt`、`token`；release 必须校验 token，不能删除后来的新 owner。
+3. dead pid lock 可以自动清理；活 pid 的老锁不能被短阈值误删，只能在 hard-stale 后恢复。
+4. `manualSync()` 必须一把 `manual-sync` 锁覆盖 `autoPullUnlocked()` + `autoCommitAndPushUnlocked()`，不能分别拿 pull/commit 两把锁。
+5. daemon 后台操作拿不到锁要跳过本轮，不要写 `lastError` 把 UI 弄红；用户/API 操作遇到锁用稳定 `SYNC_LOCKED`，HTTP 映射为 423。
+6. API `init` 传 token 给 CLI 时走 `MINDOS_SYNC_TOKEN` env override，不要把 token 放进 argv。
+
+**防回归**：`tests/unit/cli-sync.test.ts` 覆盖锁释放、旧 owner 不能误删新锁、dead pid stale recovery、manual sync 单锁覆盖；`packages/mindos/src/server.test.ts` 覆盖 direct sync file operations 遇锁 423 且不改文件/state、CLI `SYNC_LOCKED` 映射 423、init token 不进 argv。
 
 ### Platform runtime 包不能暴露和主包同名的 `mindos` bin（2026-06-06）
 

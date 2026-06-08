@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
+import { createHash } from 'node:crypto';
 import { CONFIG_PATH, MINDOS_DIR } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { stripBom } from './jsonc.js';
@@ -46,6 +47,20 @@ function getMindRoot() {
 }
 
 const SYNC_STATE_PATH = resolve(MINDOS_DIR, 'sync-state.json');
+const SYNC_LOCK_OWNER_STALE_MS = 5 * 60 * 1000;
+const SYNC_LOCK_ALIVE_HARD_STALE_MS = 30 * 60 * 1000;
+const SYNC_LOCK_RETRY_MS = 200;
+const SYNC_LOCK_DEFAULT_WAIT_MS = 5000;
+const activeSyncLockDepth = new Map();
+
+export class SyncLockedError extends Error {
+  constructor(owner) {
+    super(formatSyncLockedMessage(owner));
+    this.name = 'SyncLockedError';
+    this.code = 'SYNC_LOCKED';
+    this.owner = owner || null;
+  }
+}
 
 function loadSyncState() {
   try {
@@ -58,6 +73,141 @@ function loadSyncState() {
 function saveSyncState(state) {
   if (!existsSync(MINDOS_DIR)) mkdirSync(MINDOS_DIR, { recursive: true });
   atomicWriteJSON(SYNC_STATE_PATH, state);
+}
+
+export function getSyncLockPath(mindRoot) {
+  const normalized = resolve(mindRoot || '.');
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  return resolve(MINDOS_DIR, 'sync-locks', `${hash}.lock`);
+}
+
+function readSyncLockOwner(lockPath) {
+  try {
+    return JSON.parse(stripBom(readFileSync(resolve(lockPath, 'owner.json'), 'utf-8')));
+  } catch {
+    return null;
+  }
+}
+
+function getLockAgeMs(lockPath, owner) {
+  const startedAt = owner?.startedAt ? new Date(owner.startedAt).getTime() : NaN;
+  if (Number.isFinite(startedAt)) return Math.max(0, Date.now() - startedAt);
+  try {
+    return Math.max(0, Date.now() - statSync(lockPath).mtimeMs);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err?.code === 'EPERM';
+  }
+}
+
+function isSyncLockStale(lockPath) {
+  const owner = readSyncLockOwner(lockPath);
+  const ageMs = getLockAgeMs(lockPath, owner);
+  if (!owner || typeof owner !== 'object') return ageMs > SYNC_LOCK_OWNER_STALE_MS;
+  if (owner.hostname && owner.hostname !== hostname()) {
+    return ageMs > SYNC_LOCK_ALIVE_HARD_STALE_MS;
+  }
+  if (owner.pid && !isProcessAlive(owner.pid)) return true;
+  if (owner.pid && isProcessAlive(owner.pid)) return ageMs > SYNC_LOCK_ALIVE_HARD_STALE_MS;
+  if (!owner.pid) return ageMs > SYNC_LOCK_OWNER_STALE_MS;
+  return false;
+}
+
+function formatSyncLockedMessage(owner) {
+  const parts = [];
+  if (owner?.operation) parts.push(`owner=${owner.operation}`);
+  if (owner?.pid) parts.push(`pid=${owner.pid}`);
+  if (owner?.startedAt) parts.push(`startedAt=${owner.startedAt}`);
+  const suffix = parts.length ? ` (${parts.join(', ')})` : '';
+  return `SYNC_LOCKED: Sync is already running${suffix}`;
+}
+
+export function isSyncLockedError(error) {
+  return error?.code === 'SYNC_LOCKED' || /SYNC_LOCKED/i.test(String(error?.message || error));
+}
+
+function sleepSync(ms) {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+export function acquireSyncLock(mindRoot, operation, options = {}) {
+  const lockPath = getSyncLockPath(mindRoot);
+  const activeDepth = activeSyncLockDepth.get(lockPath);
+  if (activeDepth) {
+    activeSyncLockDepth.set(lockPath, activeDepth + 1);
+    return { lockPath, reentrant: true, token: null };
+  }
+
+  mkdirSync(dirname(lockPath), { recursive: true });
+  const token = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const waitMs = Math.max(0, options.waitMs ?? SYNC_LOCK_DEFAULT_WAIT_MS);
+  const retryMs = Math.max(25, options.retryMs ?? SYNC_LOCK_RETRY_MS);
+  const deadline = Date.now() + waitMs;
+
+  while (true) {
+    try {
+      mkdirSync(lockPath);
+      try {
+        writeFileSync(resolve(lockPath, 'owner.json'), JSON.stringify({
+          pid: process.pid,
+          hostname: hostname(),
+          operation,
+          mindRoot: resolve(mindRoot || '.'),
+          startedAt: new Date().toISOString(),
+          token,
+        }, null, 2), 'utf-8');
+      } catch (writeErr) {
+        rmSync(lockPath, { recursive: true, force: true });
+        throw writeErr;
+      }
+      activeSyncLockDepth.set(lockPath, 1);
+      return { lockPath, reentrant: false, token };
+    } catch (err) {
+      if (err?.code !== 'EEXIST') throw err;
+      if (!isSyncLockStale(lockPath)) {
+        const owner = readSyncLockOwner(lockPath);
+        if (owner?.pid === process.pid) throw new SyncLockedError(owner);
+        if (Date.now() >= deadline) throw new SyncLockedError(owner);
+        sleepSync(Math.min(retryMs, Math.max(0, deadline - Date.now())));
+        continue;
+      }
+      rmSync(lockPath, { recursive: true, force: true });
+    }
+  }
+}
+
+export function releaseSyncLock(lock) {
+  const depth = activeSyncLockDepth.get(lock.lockPath) || 0;
+  if (depth > 1) {
+    activeSyncLockDepth.set(lock.lockPath, depth - 1);
+    return;
+  }
+  activeSyncLockDepth.delete(lock.lockPath);
+  if (lock.reentrant) return;
+
+  const owner = readSyncLockOwner(lock.lockPath);
+  if (owner?.token === lock.token) {
+    rmSync(lock.lockPath, { recursive: true, force: true });
+  }
+}
+
+export function withSyncLock(mindRoot, operation, fn, options = {}) {
+  const lock = acquireSyncLock(mindRoot, operation, options);
+  try {
+    return fn();
+  } finally {
+    releaseSyncLock(lock);
+  }
 }
 
 // ── Git helpers ─────────────────────────────────────────────────────────────
@@ -75,6 +225,43 @@ function gitFailureMessage(prefix, err) {
   const stdout = err?.stdout?.toString?.().trim?.() || '';
   const detail = stderr || stdout || err?.message || 'unknown error';
   return `${prefix}: ${detail}`;
+}
+
+function normalizeBranchName(branch, cwd) {
+  const value = (branch || 'main').trim();
+  if (!value) throw new Error('Branch name is required');
+  try {
+    execFileSync('git', ['check-ref-format', '--branch', value], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 5000,
+    });
+    return value;
+  } catch {
+    throw new Error(`Invalid branch name: ${value}`);
+  }
+}
+
+function checkoutBranch(mindRoot, branch) {
+  if (getBranch(mindRoot) === branch) return;
+  try {
+    execFileSync('git', ['checkout', branch], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+  } catch {
+    execFileSync('git', ['checkout', '-b', branch], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 });
+  }
+}
+
+function redactGitRemote(remote) {
+  if (!remote || !/^https?:\/\//i.test(remote)) return remote;
+  try {
+    const parsed = new URL(remote);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return remote.replace(/^(https?:\/\/)[^/@]+@/i, '$1');
+  }
 }
 
 /** Check if URL is SSH format (git@host:path) */
@@ -160,6 +347,10 @@ export function getSyncGitignorePath(mindRoot) {
 // ── Core sync functions ─────────────────────────────────────────────────────
 
 function autoCommitAndPush(mindRoot, isSshUrl = false) {
+  return withSyncLock(mindRoot, 'commit-push', () => autoCommitAndPushUnlocked(mindRoot, isSshUrl));
+}
+
+function autoCommitAndPushUnlocked(mindRoot, isSshUrl = false) {
   const sshEnv = isSshUrl ? getSshEnv() : {};
   const pushEnv = { ...process.env, ...sshEnv };
 
@@ -189,6 +380,21 @@ function autoCommitAndPush(mindRoot, isSshUrl = false) {
 }
 
 function autoPull(mindRoot, isSshUrl = false) {
+  return withSyncLock(mindRoot, 'pull', () => autoPullUnlocked(mindRoot, isSshUrl));
+}
+
+function runBackgroundSync(mindRoot, operation, fn, options = {}) {
+  try {
+    return withSyncLock(mindRoot, operation, fn, { waitMs: 0, ...options });
+  } catch (err) {
+    if (isSyncLockedError(err)) return null;
+    const message = err?.message || String(err);
+    saveSyncState({ ...loadSyncState(), lastError: message, lastErrorTime: new Date().toISOString() });
+    return null;
+  }
+}
+
+function autoPullUnlocked(mindRoot, isSshUrl = false) {
   const sshEnv = isSshUrl ? getSshEnv() : {};
   try {
     execFileSync('git', ['pull', '--rebase', '--autostash'], { cwd: mindRoot, stdio: 'pipe', env: { ...process.env, ...sshEnv }, timeout: 60000 });
@@ -199,12 +405,21 @@ function autoPull(mindRoot, isSshUrl = false) {
     try {
       execFileSync('git', ['pull', '--no-rebase'], { cwd: mindRoot, stdio: 'pipe', env: { ...process.env, ...sshEnv }, timeout: 60000 });
       saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
-    } catch {
-      // merge conflict → keep both versions
+    } catch (mergeErr) {
       let conflicts = [];
       let conflictWarnings = [];
       try {
         conflicts = gitExec(['diff', '--name-only', '--diff-filter=U'], mindRoot).split('\n').filter(Boolean);
+        if (conflicts.length === 0) {
+          saveSyncState({
+            ...loadSyncState(),
+            lastError: gitFailureMessage('Pull failed', mergeErr),
+            lastErrorTime: new Date().toISOString(),
+          });
+          return;
+        }
+
+        // merge conflict → keep both versions
         for (const file of conflicts) {
           try {
             const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
@@ -215,14 +430,21 @@ function autoPull(mindRoot, isSshUrl = false) {
           try { execFileSync('git', ['checkout', '--ours', file], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 }); } catch {}
         }
         execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
-        // --no-edit avoids editor prompt for merge commit; --allow-empty handles edge case where ours == theirs
+        // --no-edit avoids editor prompt for merge commit. Do not create empty
+        // "resolved conflicts" commits when Git has no actual merge changes.
         try {
           execFileSync('git', ['-c', 'core.editor=true', 'commit', '--no-edit'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
-        } catch {
+        } catch (commitErr) {
           // If merge commit fails (e.g. nothing to commit), try explicit message
           try {
-            execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept local versions)', '--allow-empty'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
-          } catch {}
+            execFileSync('git', ['commit', '-m', 'auto-sync: resolved conflicts (kept local versions)'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
+          } catch {
+            saveSyncState({
+              ...loadSyncState(),
+              lastError: gitFailureMessage('Conflict commit failed', commitErr),
+              lastErrorTime: new Date().toISOString(),
+            });
+          }
         }
       } catch (err) {
         // Even if commit fails, record the error — conflicts are still saved below
@@ -299,6 +521,16 @@ export async function initSync(mindRoot, opts = {}) {
     rl.close();
   }
 
+  try {
+    branch = normalizeBranchName(branch, mindRoot);
+  } catch (err) {
+    if (nonInteractive) throw err;
+    console.error(red(`✘ ${err.message}`));
+    process.exit(1);
+  }
+
+  const initLock = acquireSyncLock(mindRoot, 'init');
+  try {
   // Pre-flight SSH validation (before git init)
   const sshValidation = validateSSHSetup(remoteUrl, mindRoot, nonInteractive);
   if (sshValidation.isSSH && !sshValidation.isValid) {
@@ -311,7 +543,23 @@ export async function initSync(mindRoot, opts = {}) {
   if (!isGitRepo(mindRoot)) {
     if (!nonInteractive) console.log(dim('Initializing git repository...'));
     execFileSync('git', ['init'], { cwd: mindRoot, stdio: 'pipe' });
-    try { execFileSync('git', ['checkout', '-b', 'main'], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    try {
+      execFileSync('git', ['checkout', '-B', branch], { cwd: mindRoot, stdio: 'pipe' });
+    } catch (err) {
+      const message = gitFailureMessage(`Failed to create branch "${branch}"`, err);
+      if (nonInteractive) throw new Error(message);
+      console.error(red(`✘ ${message}`));
+      process.exit(1);
+    }
+  } else {
+    try {
+      checkoutBranch(mindRoot, branch);
+    } catch (err) {
+      const message = gitFailureMessage(`Failed to switch to branch "${branch}"`, err);
+      if (nonInteractive) throw new Error(message);
+      console.error(red(`✘ ${message}`));
+      process.exit(1);
+    }
   }
 
   // 1b. Ensure .gitignore exists
@@ -419,7 +667,6 @@ export async function initSync(mindRoot, opts = {}) {
     process.exit(1);
   }
 
-  // 6. Save sync config
   const syncConfig = {
     enabled: true,
     provider: 'git',
@@ -428,10 +675,8 @@ export async function initSync(mindRoot, opts = {}) {
     autoCommitInterval: 30,
     autoPullInterval: 300,
   };
-  saveSyncConfig(syncConfig);
-  if (!nonInteractive) console.log(green('✔ Sync configured'));
 
-  // 7. First sync: pull if remote has content, push otherwise
+  // 6. First sync: pull if remote has content, push otherwise
   //    Reuse remoteRefs from step 5 to avoid redundant SSH connection (~3-4s saved)
   const hasRemoteContent = remoteRefs.includes('refs/heads/');
   try {
@@ -440,18 +685,28 @@ export async function initSync(mindRoot, opts = {}) {
       try {
         const pullEnv = isSshUrl ? { ...process.env, ...getSshEnv() } : process.env;
         execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit', env: pullEnv });
-      } catch {
-        if (!nonInteractive) console.log(yellow('Pull completed with warnings. Check for conflicts.'));
+      } catch (err) {
+        const message = gitFailureMessage('Initial pull failed', err);
+        saveSyncState({ ...loadSyncState(), lastError: message, lastErrorTime: new Date().toISOString() });
+        throw new Error(message);
       }
     } else {
       if (!nonInteractive) console.log(dim('Pushing to remote...'));
-      autoCommitAndPush(mindRoot, isSshUrl);
+      autoCommitAndPushUnlocked(mindRoot, isSshUrl);
     }
-  } catch {
-    if (!nonInteractive) console.log(dim('Performing initial push...'));
-    autoCommitAndPush(mindRoot, isSshUrl);
+  } catch (err) {
+    if (nonInteractive) throw err;
+    console.error(red(`✘ ${err.message}`));
+    process.exit(1);
   }
+
+  // 7. Save sync config only after the first sync succeeds.
+  saveSyncConfig(syncConfig);
+  if (!nonInteractive) console.log(green('✔ Sync configured'));
   if (!nonInteractive) console.log(green('✔ Initial sync complete\n'));
+  } finally {
+    releaseSyncLock(initLock);
+  }
 }
 
 /**
@@ -476,7 +731,7 @@ export async function startSyncDaemon(mindRoot) {
     ignoreInitial: true,
   });
   const runBackgroundCommit = () => {
-    try { autoCommitAndPush(mindRoot, isSshUrl); } catch {}
+    runBackgroundSync(mindRoot, 'daemon-commit', () => autoCommitAndPushUnlocked(mindRoot, isSshUrl));
   };
   watcher.on('all', () => {
     clearTimeout(commitTimer);
@@ -484,10 +739,13 @@ export async function startSyncDaemon(mindRoot) {
   });
 
   // Periodic pull
-  const pullInterval = setInterval(() => autoPull(mindRoot, isSshUrl), (config.autoPullInterval || 300) * 1000);
+  const runBackgroundPull = (operation) => {
+    runBackgroundSync(mindRoot, operation, () => autoPullUnlocked(mindRoot, isSshUrl));
+  };
+  const pullInterval = setInterval(() => runBackgroundPull('daemon-pull'), (config.autoPullInterval || 300) * 1000);
 
   // Pull on startup
-  autoPull(mindRoot, isSshUrl);
+  runBackgroundPull('daemon-startup-pull');
 
   // Graceful shutdown: flush pending changes before exit
   let shutdownInProgress = false;
@@ -495,7 +753,12 @@ export async function startSyncDaemon(mindRoot) {
     if (shutdownInProgress) return;
     shutdownInProgress = true;
     if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
-    try { autoCommitAndPush(mindRoot, isSshUrl); } catch {}
+    runBackgroundSync(
+      mindRoot,
+      'daemon-shutdown-commit',
+      () => autoCommitAndPushUnlocked(mindRoot, isSshUrl),
+      { waitMs: 1000 },
+    );
     stopSyncDaemon();
   };
   process.on('SIGTERM', gracefulShutdown);
@@ -545,7 +808,7 @@ export function getSyncStatus(mindRoot) {
   return {
     enabled: true,
     provider: config.provider || 'git',
-    remote: remote || '(not configured)',
+    remote: redactGitRemote(remote) || '(not configured)',
     branch: branch || 'main',
     lastSync: state.lastSync || null,
     lastPull: state.lastPull || null,
@@ -564,10 +827,12 @@ export function manualSync(mindRoot) {
   if (!mindRoot || !isGitRepo(mindRoot)) {
     throw new Error('Not a git repository. Run `mindos sync init` first.');
   }
-  const remoteUrl = getRemoteUrl(mindRoot) || '';
-  const isSshUrl = isSSHUrl(remoteUrl);
-  autoPull(mindRoot, isSshUrl);
-  autoCommitAndPush(mindRoot, isSshUrl); // throws on push failure → API returns error
+  withSyncLock(mindRoot, 'manual-sync', () => {
+    const remoteUrl = getRemoteUrl(mindRoot) || '';
+    const isSshUrl = isSSHUrl(remoteUrl);
+    autoPullUnlocked(mindRoot, isSshUrl);
+    autoCommitAndPushUnlocked(mindRoot, isSshUrl); // throws on push failure → API returns error
+  });
 }
 
 /**

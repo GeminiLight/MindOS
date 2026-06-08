@@ -22,7 +22,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ children, ...props }: any) => <a {...props}>{children}</a>,
+  default: ({ children, onNavigate: _onNavigate, ...props }: any) => <a {...props}>{children}</a>,
 }));
 
 vi.mock('next/navigation', () => ({

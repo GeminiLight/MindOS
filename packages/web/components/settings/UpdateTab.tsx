@@ -49,6 +49,7 @@ function BrowserUpdateTab() {
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const originalVersion = useRef<string>('');
+  const updateInFlightRef = useRef(false);
 
   const checkUpdate = useCallback(async () => {
     setState('checking');
@@ -83,6 +84,7 @@ function BrowserUpdateTab() {
   /** Mark update complete: clear badge, set state, schedule reload. */
   const completeUpdate = useCallback((data: UpdateInfo) => {
     cleanup();
+    updateInFlightRef.current = false;
     setInfo(data);
     setState('updated');
     localStorage.removeItem('mindos_update_latest');
@@ -94,6 +96,7 @@ function BrowserUpdateTab() {
 
   /** Start polling for update progress */
   const startPolling = useCallback(() => {
+    cleanup();
     pollRef.current = setInterval(async () => {
       try {
         const status = await apiFetch<UpdateStatus>('/api/update-status', { timeout: 5000 });
@@ -105,6 +108,7 @@ function BrowserUpdateTab() {
 
         if (status.stage === 'failed') {
           cleanup();
+          updateInFlightRef.current = false;
           localStorage.removeItem(UPDATE_STATE_KEY);
           setUpdateError(status.error || 'Update failed');
           setState('error');
@@ -137,6 +141,7 @@ function BrowserUpdateTab() {
 
     timeoutRef.current = setTimeout(() => {
       cleanup();
+      updateInFlightRef.current = false;
       localStorage.removeItem(UPDATE_STATE_KEY);
       setState('timeout');
     }, POLL_TIMEOUT);
@@ -171,6 +176,8 @@ function BrowserUpdateTab() {
   useEffect(() => cleanup, [cleanup]);
 
   const handleUpdate = useCallback(async () => {
+    if (updateInFlightRef.current || state === 'updating' || state === 'updated') return;
+    updateInFlightRef.current = true;
     setState('updating');
     setErrorMsg('');
     setUpdateError(null);
@@ -195,6 +202,7 @@ function BrowserUpdateTab() {
     } catch (err) {
       if (err instanceof ApiError) {
         localStorage.removeItem(UPDATE_STATE_KEY);
+        updateInFlightRef.current = false;
         setUpdateError(err.message || 'Update failed');
         setState('error');
         return;
@@ -203,7 +211,7 @@ function BrowserUpdateTab() {
     }
 
     startPolling();
-  }, [startPolling, info]);
+  }, [startPolling, info, state]);
 
   const handleRetry = useCallback(() => {
     setUpdateError(null);
@@ -333,6 +341,7 @@ function BrowserUpdateTab() {
           {info?.hasUpdate && state !== 'updating' && state !== 'updated' && (
             <button
               onClick={handleUpdate}
+              disabled={updateInFlightRef.current}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors"
             >
               <Download size={14} />

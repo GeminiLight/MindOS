@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
-
-const COOKIE_NAME = 'mindos-session';
+import { buildLoginRedirectTarget, WEB_SESSION_COOKIE_NAME } from '@/lib/auth-session';
 
 /** CORS headers for /api/* routes (React Native mobile app + cross-origin agents). */
 function corsHeaders(): Record<string, string> {
@@ -51,7 +50,7 @@ export async function proxy(req: NextRequest) {
 
     // Exempt authenticated web UI sessions (valid JWT cookie = logged-in browser user)
     if (webPassword) {
-      const token = req.cookies.get(COOKIE_NAME)?.value ?? '';
+      const token = req.cookies.get(WEB_SESSION_COOKIE_NAME)?.value ?? '';
       if (token && await verifyJwt(token, webPassword)) return withCors(NextResponse.next());
     }
 
@@ -71,12 +70,15 @@ export async function proxy(req: NextRequest) {
   if (pathname === '/login') return next();
 
   // Verify JWT session cookie
-  const token = req.cookies.get(COOKIE_NAME)?.value ?? '';
-  if (token && await verifyJwt(token, webPassword)) return next();
+  const token = req.cookies.get(WEB_SESSION_COOKIE_NAME)?.value ?? '';
+  const session = token ? await verifyJwt(token, webPassword) : null;
+  if (session) return next();
 
   // Not authenticated: redirect to /login
   const loginUrl = new URL('/login', req.url);
-  if (pathname !== '/') loginUrl.searchParams.set('redirect', pathname);
+  const redirectTarget = buildLoginRedirectTarget(pathname, req.nextUrl.search);
+  if (redirectTarget) loginUrl.searchParams.set('redirect', redirectTarget);
+  if (token) loginUrl.searchParams.set('reason', 'expired');
   return NextResponse.redirect(loginUrl);
 }
 

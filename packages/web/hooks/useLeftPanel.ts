@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { MIN_PANEL_WIDTH, MAX_PANEL_WIDTH_ABS, PANEL_WIDTH } from '@/components/Panel';
-import type { PanelId } from '@/components/ActivityBar';
+import type { PanelId } from '@/lib/navigation-panel';
 import { RAIL_WIDTH_COLLAPSED, RAIL_WIDTH_EXPANDED } from '@/components/ActivityBar';
 
 export interface LeftPanelState {

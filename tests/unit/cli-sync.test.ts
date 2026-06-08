@@ -13,6 +13,7 @@ beforeEach(() => {
   configPath = path.join(mindosDir, 'config.json');
 
   vi.resetModules();
+  vi.doUnmock('node:child_process');
   vi.doMock('../../packages/mindos/bin/lib/constants.js', () => ({
     CONFIG_PATH: configPath,
     MINDOS_DIR: mindosDir,
@@ -26,14 +27,21 @@ afterEach(() => {
 
 async function importSync() {
   return await import('../../packages/mindos/bin/lib/sync.js') as {
+    initSync: (mindRoot: string, opts?: { nonInteractive?: boolean; remote?: string; token?: string; branch?: string }) => Promise<void>;
     setSyncEnabled: (enabled: boolean) => void;
     getSyncStatus: (mindRoot?: string) => {
       enabled: boolean;
       provider?: string;
+      remote?: string;
+      branch?: string;
     };
     manualSync: (mindRoot: string) => void;
     getSyncConflictBackupPath: (mindRoot: string, file: string) => string;
     getSyncGitignorePath: (mindRoot: string) => string;
+    getSyncLockPath: (mindRoot: string) => string;
+    acquireSyncLock: (mindRoot: string, operation: string, options?: { waitMs?: number }) => { lockPath: string; token: string | null };
+    releaseSyncLock: (lock: { lockPath: string; token: string | null; reentrant?: boolean }) => void;
+    withSyncLock: <T>(mindRoot: string, operation: string, callback: () => T, options?: { waitMs?: number }) => T;
   };
 }
 
@@ -98,5 +106,174 @@ describe('mindos sync config persistence', () => {
     expect(() => manualSync(mindRoot)).toThrow('Commit failed: fatal: unable to auto-detect email address');
     const state = JSON.parse(fs.readFileSync(path.join(mindosDir, 'sync-state.json'), 'utf-8'));
     expect(state.lastError).toBe('Commit failed: fatal: unable to auto-detect email address');
+  });
+
+  it('uses the requested branch during non-interactive init', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'check-ref-format') return `${args[2]}\n`;
+      if (args[0] === 'ls-remote') return '';
+      if (args[0] === 'status' && args[1] === '--porcelain') return '';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://example.com/mind.git',
+      branch: 'dev',
+    });
+
+    expect(calls).toContainEqual(['checkout', '-B', 'dev']);
+    expect(calls).not.toContainEqual(['checkout', '-b', 'main']);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(config.sync.branch).toBe('dev');
+  });
+
+  it('rejects invalid branch names before configuring sync', async () => {
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await expect(initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://example.com/mind.git',
+      branch: 'bad branch',
+    })).rejects.toThrow('Invalid branch name: bad branch');
+    expect(fs.existsSync(configPath)).toBe(false);
+  });
+
+  it('redacts credentials from sync status remote URLs', async () => {
+    fs.mkdirSync(mindosDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({ sync: { enabled: true, provider: 'git' } }), 'utf-8');
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') return 'https://oauth2:ghp_secret@example.com/me/mind.git\n';
+      if (args[0] === 'rev-parse') return 'main\n';
+      if (args[0] === 'rev-list') return '0\n';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { getSyncStatus } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(path.join(mindRoot, '.git'), { recursive: true });
+
+    const status = getSyncStatus(mindRoot);
+
+    expect(status.remote).toBe('https://example.com/me/mind.git');
+    expect(status.remote).not.toContain('ghp_secret');
+  });
+
+  it('does not keep the legacy allow-empty conflict commit fallback', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/mindos/bin/lib/sync.js'), 'utf-8');
+
+    expect(source).not.toContain('--allow-empty');
+  });
+
+  it('rejects manual sync when another process owns the sync lock', async () => {
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      throw new Error(`unexpected git command: ${args.join(' ')}`);
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { manualSync, getSyncLockPath } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(path.join(mindRoot, '.git'), { recursive: true });
+    const lockPath = getSyncLockPath(mindRoot);
+    fs.mkdirSync(lockPath, { recursive: true });
+    fs.writeFileSync(path.join(lockPath, 'owner.json'), JSON.stringify({
+      pid: process.pid,
+      operation: 'pull',
+      startedAt: new Date().toISOString(),
+      token: 'other-owner',
+    }), 'utf-8');
+
+    expect(() => manualSync(mindRoot)).toThrow('SYNC_LOCKED: Sync is already running');
+    expect(execFileSyncMock).not.toHaveBeenCalled();
+  });
+
+  it('releases the sync lock when a locked operation throws', async () => {
+    const { getSyncLockPath, withSyncLock } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot, { recursive: true });
+    const lockPath = getSyncLockPath(mindRoot);
+
+    expect(() => withSyncLock(mindRoot, 'test-throw', () => {
+      throw new Error('boom');
+    })).toThrow('boom');
+
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('does not let an old owner release a replacement sync lock', async () => {
+    const { acquireSyncLock, releaseSyncLock, getSyncLockPath } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot, { recursive: true });
+    const lock = acquireSyncLock(mindRoot, 'old-owner', { waitMs: 0 });
+    const lockPath = getSyncLockPath(mindRoot);
+    const replacementOwner = {
+      pid: process.pid,
+      operation: 'new-owner',
+      startedAt: new Date().toISOString(),
+      token: 'replacement-token',
+    };
+    fs.writeFileSync(path.join(lockPath, 'owner.json'), JSON.stringify(replacementOwner), 'utf-8');
+
+    releaseSyncLock(lock);
+
+    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(lockPath, 'owner.json'), 'utf-8'))).toMatchObject(replacementOwner);
+  });
+
+  it('cleans up a stale dead-pid sync lock before manual sync', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'remote' && args[1] === 'get-url') return 'git@example.com:mind/repo.git\n';
+      if (args[0] === 'status' && args[1] === '--porcelain') return '';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { manualSync, getSyncLockPath } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(path.join(mindRoot, '.git'), { recursive: true });
+    const lockPath = getSyncLockPath(mindRoot);
+    fs.mkdirSync(lockPath, { recursive: true });
+    fs.writeFileSync(path.join(lockPath, 'owner.json'), JSON.stringify({
+      pid: 99999999,
+      operation: 'dead-owner',
+      startedAt: new Date().toISOString(),
+      token: 'dead-token',
+    }), 'utf-8');
+
+    expect(() => manualSync(mindRoot)).not.toThrow();
+
+    expect(calls).toContainEqual(['pull', '--rebase', '--autostash']);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('keeps manual sync under one manual-sync lock for pull and commit', async () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/mindos/bin/lib/sync.js'), 'utf-8');
+    const manualSyncSource = source.slice(source.indexOf('export function manualSync'), source.indexOf('/**\n * List conflict files'));
+
+    expect(manualSyncSource).toContain("withSyncLock(mindRoot, 'manual-sync'");
+    expect(manualSyncSource).toContain('autoPullUnlocked(mindRoot, isSshUrl)');
+    expect(manualSyncSource).toContain('autoCommitAndPushUnlocked(mindRoot, isSshUrl)');
+    expect(manualSyncSource).not.toContain('autoPull(mindRoot');
+    expect(manualSyncSource).not.toContain('autoCommitAndPush(mindRoot');
   });
 });

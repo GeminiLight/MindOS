@@ -312,14 +312,6 @@ function BuiltInMindSpacesSection({ slots }: { slots: MindSystemSlot[] }) {
       <SectionTitle
         icon={<Star size={14} />}
         count={pillars.length}
-        action={
-          <Link
-            href={`/view/${encodePath(pillars.find(pillar => pillar.key === 'yan')?.path ?? pillars[pillars.length - 1].path)}`}
-            className="text-xs font-medium text-[var(--amber)] transition-colors hover:opacity-80"
-          >
-            {t.home.builtInSpacesReview}
-          </Link>
-        }
       >
         {t.home.builtInSpacesTitle}
       </SectionTitle>

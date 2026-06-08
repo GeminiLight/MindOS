@@ -1,6 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { homedir, hostname } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
@@ -25,7 +26,9 @@ export type MindosSyncState = Record<string, any> & {
 export type MindosSyncPostPayload = {
   action?: string;
   remote?: string;
+  file?: string;
   branch?: string;
+  strategy?: string;
   token?: string;
   content?: string;
   autoCommitInterval?: number;
@@ -43,7 +46,8 @@ export type MindosSyncServices = {
   getRemoteUrl?(cwd: string): string | null;
   getBranch?(cwd: string): string;
   getUnpushedCount?(cwd: string): string;
-  runCli?(args: string[], timeoutMs?: number): Promise<void>;
+  runCli?(args: string[], timeoutMs?: number, envOverrides?: Record<string, string | undefined>): Promise<void>;
+  syncLockDir?: string;
   env?: Record<string, string | undefined>;
   cliPath?: string;
   nodeBin?: string;
@@ -54,6 +58,26 @@ export type MindosSyncServices = {
 const DEFAULT_MINDOS_DIR = join(homedir(), '.mindos');
 const DEFAULT_CONFIG_PATH = join(DEFAULT_MINDOS_DIR, 'config.json');
 const DEFAULT_SYNC_STATE_PATH = join(DEFAULT_MINDOS_DIR, 'sync-state.json');
+const SYNC_LOCK_OWNER_STALE_MS = 5 * 60 * 1000;
+const SYNC_LOCK_ALIVE_HARD_STALE_MS = 30 * 60 * 1000;
+
+type SyncLockOwner = {
+  pid?: number;
+  hostname?: string;
+  operation?: string;
+  mindRoot?: string;
+  startedAt?: string;
+  token?: string;
+};
+
+class SyncLockedError extends Error {
+  code = 'SYNC_LOCKED' as const;
+
+  constructor(readonly owner: SyncLockOwner | null) {
+    super(formatSyncLockedMessage(owner));
+    this.name = 'SyncLockedError';
+  }
+}
 
 export async function handleSyncGet(
   services: MindosSyncServices = {},
@@ -65,7 +89,26 @@ export async function handleSyncGet(
     const mindRoot = config.mindRoot;
 
     if (!syncConfig.enabled) {
-      return json({ enabled: false });
+      if (!mindRoot) return json({ enabled: false });
+
+      const hasRepo = callIsGitRepo(services, mindRoot);
+      const remote = hasRepo ? callGetRemoteUrl(services, mindRoot) : null;
+      if (!hasRepo || !remote) return json({ enabled: false });
+
+      return json({
+        enabled: false,
+        configured: true,
+        provider: syncConfig.provider || 'git',
+        remote: redactGitRemote(remote),
+        branch: callGetBranch(services, mindRoot) || 'main',
+        lastSync: state.lastSync || null,
+        lastPull: state.lastPull || null,
+        unpushed: callGetUnpushedCount(services, mindRoot),
+        conflicts: state.conflicts || [],
+        lastError: state.lastError || null,
+        autoCommitInterval: syncConfig.autoCommitInterval || 30,
+        autoPullInterval: syncConfig.autoPullInterval || 300,
+      });
     }
 
     const hasRepo = !!mindRoot && callIsGitRepo(services, mindRoot);
@@ -75,7 +118,7 @@ export async function handleSyncGet(
         enabled: true,
         needsSetup: true,
         provider: syncConfig.provider || 'git',
-        remote: remote || '(not configured)',
+        remote: redactGitRemote(remote) || '(not configured)',
         branch: 'main',
         lastSync: null,
         lastPull: null,
@@ -92,7 +135,7 @@ export async function handleSyncGet(
     return json({
       enabled: true,
       provider: syncConfig.provider || 'git',
-      remote,
+      remote: redactGitRemote(remote),
       branch: callGetBranch(services, mindRoot) || 'main',
       lastSync: state.lastSync || null,
       lastPull: state.lastPull || null,
@@ -103,6 +146,7 @@ export async function handleSyncGet(
       autoPullInterval: syncConfig.autoPullInterval || 300,
     });
   } catch (error) {
+    if (isSyncLockedError(error)) return syncLockedResponse(error);
     return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
@@ -140,7 +184,7 @@ export async function handleSyncPost(
       case 'gitignore-get':
         return handleGitignoreGet(mindRoot);
       case 'gitignore-save':
-        return handleGitignoreSave(mindRoot, payload);
+        return handleGitignoreSave(mindRoot, payload, services);
       case 'resolve-conflict':
         return handleResolveConflict(mindRoot, payload, services);
       case 'conflict-preview':
@@ -151,6 +195,7 @@ export async function handleSyncPost(
         return json({ error: `Unknown action: ${payload.action}` }, { status: 400 });
     }
   } catch (error) {
+    if (isSyncLockedError(error)) return syncLockedResponse(error);
     return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
@@ -159,10 +204,12 @@ function handleSyncReset(
   config: MindosSyncConfig,
   services: MindosSyncServices,
 ): MindosServerResponse<{ ok: true; enabled: false } | { error: string }> {
-  delete config.sync;
-  writeConfig(config, services);
-  try { writeState({}, services); } catch {}
-  return json({ ok: true, enabled: false });
+  return withServerSyncLock(config.mindRoot ?? null, 'reset', services, () => {
+    delete config.sync;
+    writeConfig(config, services);
+    try { writeState({}, services); } catch {}
+    return json({ ok: true, enabled: false });
+  });
 }
 
 async function handleSyncInit(
@@ -181,12 +228,13 @@ async function handleSyncInit(
 
   const branch = payload.branch?.trim() || 'main';
   const args = ['sync', 'init', '--non-interactive', '--remote', remote, '--branch', branch];
-  if (payload.token) args.push('--token', payload.token);
+  const envOverrides = payload.token ? { MINDOS_SYNC_TOKEN: payload.token } : undefined;
 
   try {
-    await runCli(args, 120000, services);
+    await runCli(args, 120000, services, envOverrides);
     return json({ success: true, message: 'Sync initialized' });
   } catch (error) {
+    if (isSyncLockedError(error)) return syncLockedResponse(error);
     return json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 }
@@ -202,6 +250,7 @@ async function handleSyncNow(
     await runCli(['sync', 'now'], 120000, services);
     return json({ ok: true });
   } catch (error) {
+    if (isSyncLockedError(error)) return syncLockedResponse(error);
     return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
@@ -217,14 +266,19 @@ function handleGitignoreGet(mindRoot: string): MindosServerResponse<{ content: s
 function handleGitignoreSave(
   mindRoot: string,
   payload: MindosSyncPostPayload,
+  services: MindosSyncServices,
 ): MindosServerResponse<{ ok: true } | { error: string }> {
   if (typeof payload.content !== 'string') {
     return json({ error: 'Missing content' }, { status: 400 });
   }
+  const content = payload.content;
   try {
-    writeFileSync(resolveExistingSafe(mindRoot, '.gitignore'), payload.content, 'utf-8');
-    return json({ ok: true });
+    return withServerSyncLock(mindRoot, 'gitignore-save', services, () => {
+      writeFileSync(resolveExistingSafe(mindRoot, '.gitignore'), content, 'utf-8');
+      return json({ ok: true });
+    });
   } catch (error) {
+    if (isSyncLockedError(error)) return syncLockedResponse(error);
     const message = error instanceof Error ? error.message : String(error);
     if (/access denied|outside root|absolute paths/i.test(message)) return json({ error: 'Access denied' }, { status: 403 });
     return json({ error: message }, { status: 500 });
@@ -236,10 +290,13 @@ function handleResolveConflict(
   payload: MindosSyncPostPayload,
   services: MindosSyncServices,
 ): MindosServerResponse<Record<string, unknown> | { error: string }> {
-  const file = payload.remote;
-  const strategy = payload.branch ?? 'keep-local';
+  const file = payload.file ?? payload.remote;
+  const strategy = payload.strategy ?? payload.branch ?? 'keep-local';
   if (!file || typeof file !== 'string') {
     return json({ error: 'Missing file path' }, { status: 400 });
+  }
+  if (strategy !== 'keep-local' && strategy !== 'keep-remote') {
+    return json({ error: 'Invalid conflict resolution strategy' }, { status: 400 });
   }
   if (!isPathWithinMindRoot(mindRoot, file)) {
     return json({ error: 'Invalid file path' }, { status: 400 });
@@ -250,26 +307,29 @@ function handleResolveConflict(
   if (!conflictPath || !originalPath) {
     return json({ error: 'Invalid file path' }, { status: 400 });
   }
-  if (strategy === 'keep-remote' && existsSync(conflictPath)) {
-    writeFileSync(originalPath, readFileSync(conflictPath, 'utf-8'), 'utf-8');
-  }
-  if (existsSync(conflictPath)) {
-    unlinkSync(conflictPath);
-  }
 
-  const state = readState(services);
-  if (state.conflicts) {
-    state.conflicts = state.conflicts.filter((conflict) => conflict.file !== file);
-    writeState(state, services);
-  }
-  return json({ ok: true });
+  return withServerSyncLock(mindRoot, 'resolve-conflict', services, () => {
+    if (strategy === 'keep-remote' && existsSync(conflictPath)) {
+      writeFileSync(originalPath, readFileSync(conflictPath, 'utf-8'), 'utf-8');
+    }
+    if (existsSync(conflictPath)) {
+      unlinkSync(conflictPath);
+    }
+
+    const state = readState(services);
+    if (state.conflicts) {
+      state.conflicts = state.conflicts.filter((conflict) => conflict.file !== file);
+      writeState(state, services);
+    }
+    return json({ ok: true });
+  });
 }
 
 function handleConflictPreview(
   mindRoot: string,
   payload: MindosSyncPostPayload,
 ): MindosServerResponse<{ local: string; remote: string } | { error: string }> {
-  const file = payload.remote;
+  const file = payload.file ?? payload.remote;
   if (!file || typeof file !== 'string') {
     return json({ error: 'Missing file path' }, { status: 400 });
   }
@@ -341,6 +401,155 @@ function writeState(state: MindosSyncState, services: MindosSyncServices): void 
   atomicWriteJson(services.statePath ?? DEFAULT_SYNC_STATE_PATH, state);
 }
 
+function withServerSyncLock<T>(
+  mindRoot: string | null | undefined,
+  operation: string,
+  services: MindosSyncServices,
+  callback: () => T,
+): T {
+  if (!mindRoot) return callback();
+  const lock = acquireServerSyncLock(mindRoot, operation, services);
+  try {
+    return callback();
+  } finally {
+    releaseServerSyncLock(lock);
+  }
+}
+
+type ServerSyncLock = {
+  lockPath: string;
+  token: string;
+};
+
+export function getServerSyncLockPath(
+  mindRoot: string,
+  services: Pick<MindosSyncServices, 'syncLockDir'> = {},
+): string {
+  const normalized = resolve(mindRoot || '.');
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  return join(services.syncLockDir ?? join(DEFAULT_MINDOS_DIR, 'sync-locks'), `${hash}.lock`);
+}
+
+function acquireServerSyncLock(
+  mindRoot: string,
+  operation: string,
+  services: MindosSyncServices,
+): ServerSyncLock {
+  const lockPath = getServerSyncLockPath(mindRoot, services);
+  mkdirSync(dirname(lockPath), { recursive: true });
+  const token = randomUUID();
+
+  while (true) {
+    try {
+      mkdirSync(lockPath);
+      try {
+        writeFileSync(join(lockPath, 'owner.json'), `${JSON.stringify({
+          pid: process.pid,
+          hostname: hostname(),
+          operation,
+          mindRoot: resolve(mindRoot),
+          startedAt: new Date().toISOString(),
+          token,
+        }, null, 2)}\n`, 'utf-8');
+      } catch (error) {
+        rmSync(lockPath, { recursive: true, force: true });
+        throw error;
+      }
+      return { lockPath, token };
+    } catch (error) {
+      if (!isFsErrorCode(error, 'EEXIST')) throw error;
+      if (!isServerSyncLockStale(lockPath)) {
+        throw new SyncLockedError(readServerSyncLockOwner(lockPath));
+      }
+      rmSync(lockPath, { recursive: true, force: true });
+    }
+  }
+}
+
+function releaseServerSyncLock(lock: ServerSyncLock): void {
+  const owner = readServerSyncLockOwner(lock.lockPath);
+  if (owner?.token === lock.token) {
+    rmSync(lock.lockPath, { recursive: true, force: true });
+  }
+}
+
+function readServerSyncLockOwner(lockPath: string): SyncLockOwner | null {
+  try {
+    return JSON.parse(readFileSync(join(lockPath, 'owner.json'), 'utf-8')) as SyncLockOwner;
+  } catch {
+    return null;
+  }
+}
+
+function isServerSyncLockStale(lockPath: string): boolean {
+  const owner = readServerSyncLockOwner(lockPath);
+  const ageMs = getServerSyncLockAgeMs(lockPath, owner);
+  if (!owner || typeof owner !== 'object') return ageMs > SYNC_LOCK_OWNER_STALE_MS;
+  if (owner.hostname && owner.hostname !== hostname()) {
+    return ageMs > SYNC_LOCK_ALIVE_HARD_STALE_MS;
+  }
+  if (owner.pid && !isProcessAlive(owner.pid)) return true;
+  if (owner.pid && isProcessAlive(owner.pid)) return ageMs > SYNC_LOCK_ALIVE_HARD_STALE_MS;
+  return ageMs > SYNC_LOCK_OWNER_STALE_MS;
+}
+
+function getServerSyncLockAgeMs(lockPath: string, owner: SyncLockOwner | null): number {
+  const startedAt = owner?.startedAt ? new Date(owner.startedAt).getTime() : NaN;
+  if (Number.isFinite(startedAt)) return Math.max(0, Date.now() - startedAt);
+  try {
+    return Math.max(0, Date.now() - statSync(lockPath).mtimeMs);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isFsErrorCode(error, 'EPERM');
+  }
+}
+
+function formatSyncLockedMessage(owner: SyncLockOwner | null): string {
+  const parts: string[] = [];
+  if (owner?.operation) parts.push(`owner=${owner.operation}`);
+  if (owner?.pid) parts.push(`pid=${owner.pid}`);
+  if (owner?.startedAt) parts.push(`startedAt=${owner.startedAt}`);
+  const suffix = parts.length ? ` (${parts.join(', ')})` : '';
+  return `SYNC_LOCKED: Sync is already running${suffix}`;
+}
+
+function isSyncLockedError(error: unknown): boolean {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  const message = error instanceof Error ? error.message : String(error);
+  return code === 'SYNC_LOCKED' || /SYNC_LOCKED/i.test(message);
+}
+
+function syncLockedResponse(error: unknown): MindosServerResponse<{ error: string }> {
+  const message = error instanceof SyncLockedError
+    ? error.message
+    : normalizeSyncLockedMessage(error instanceof Error ? error.message : String(error));
+  return json({ error: message }, { status: 423 });
+}
+
+function normalizeSyncLockedMessage(message: string): string {
+  const trimmed = stripAnsi(message).trim();
+  if (/^SYNC_LOCKED:/i.test(trimmed)) return trimmed;
+  const match = trimmed.match(/SYNC_LOCKED:.*$/ims);
+  return match ? match[0].trim() : 'SYNC_LOCKED: Sync is already running';
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+function isFsErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
 function readJsonFile<T extends Record<string, any>>(filePath: string): T {
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
@@ -385,6 +594,20 @@ function runGit(cwd: string, args: string[]): string {
   }).trim();
 }
 
+export function redactGitRemote(remote: string | null | undefined): string | null {
+  if (!remote) return null;
+  if (!/^https?:\/\//i.test(remote)) return remote;
+
+  try {
+    const parsed = new URL(remote);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return remote.replace(/^(https?:\/\/)[^/@]+@/i, '$1');
+  }
+}
+
 function isPathWithinMindRoot(mindRoot: string, filePath: string): boolean {
   return resolveMindRootPath(mindRoot, filePath) !== null;
 }
@@ -397,13 +620,18 @@ function resolveMindRootPath(mindRoot: string, filePath: string): string | null 
   }
 }
 
-async function runCli(args: string[], timeoutMs: number, services: MindosSyncServices): Promise<void> {
+async function runCli(
+  args: string[],
+  timeoutMs: number,
+  services: MindosSyncServices,
+  envOverrides?: Record<string, string | undefined>,
+): Promise<void> {
   if (services.runCli) {
-    await services.runCli(args, timeoutMs);
+    await services.runCli(args, timeoutMs, envOverrides);
     return;
   }
 
-  const env = services.env ?? process.env;
+  const env = { ...(services.env ?? process.env), ...(envOverrides ?? {}) };
   const nodeBin = services.nodeBin ?? env.MINDOS_NODE_BIN ?? process.execPath;
   const cliPath = services.cliPath ?? resolveMindosCliPath({
     env,
@@ -412,7 +640,7 @@ async function runCli(args: string[], timeoutMs: number, services: MindosSyncSer
   });
 
   await new Promise<void>((resolveDone, rejectDone) => {
-    execFile(nodeBin, [cliPath, ...args], { timeout: timeoutMs, encoding: 'utf-8' }, (error, stdout, stderr) => {
+    execFile(nodeBin, [cliPath, ...args], { timeout: timeoutMs, encoding: 'utf-8', env }, (error, stdout, stderr) => {
       if (error) rejectDone(new Error(formatProcessError(error, stdout, stderr)));
       else resolveDone();
     });

@@ -4,4 +4,4 @@ export {
   isRootProtected,
   resolveExistingSafe,
   resolveSafe,
-} from '@geminilight/mindos';
+} from '@geminilight/mindos/foundation';

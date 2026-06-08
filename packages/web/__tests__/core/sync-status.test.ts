@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { timeAgo } from '@/components/settings/SyncTab';
-import { getStatusLevel, getSyncLabel } from '@/components/SyncStatusBar';
+import { getStatusLevel, getSyncLabel, timeAgo } from '@/lib/sync-ui';
 import type { SyncStatus } from '@/components/settings/types';
 
 /* ------------------------------------------------------------------ */
@@ -71,14 +70,14 @@ describe('getStatusLevel', () => {
     expect(getStatusLevel({ ...base, lastError: 'push failed' }, false)).toBe('error');
   });
 
-  it('error takes priority over conflicts and unpushed', () => {
+  it('conflicts take priority over error and unpushed', () => {
     const status: SyncStatus = {
       ...base,
       lastError: 'network down',
       conflicts: [{ file: 'a.md', time: '2026-01-01T00:00:00Z' }],
       unpushed: '3',
     };
-    expect(getStatusLevel(status, false)).toBe('error');
+    expect(getStatusLevel(status, false)).toBe('conflicts');
   });
 
   it('returns "conflicts" when conflicts exist (and no error)', () => {

@@ -95,7 +95,7 @@ Drawer (triggered by ☰):
 | `/explore` | 探索 | `app/explore/page.tsx` | 使用案例与分类；Discover 侧栏可入 |
 | `/view/[...path]` | 查看/编辑 | `ViewPageClient` | Markdown/CSV/JSON 查看+编辑 |
 | `/setup` | 初始化向导 | `Setup` | 8 步 Wizard |
-| `/login` | 登录 | `LoginPage` | Web 密码认证 |
+| `/login` | 登录 / 重新认证 | `LoginPage` | Web 密码认证；会话过期后保留返回路径 |
 | `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
 | `/echo` | 回响入口 | `app/echo/page.tsx` | Echo 主页，导航到各 segment |
 | `/echo/[segment]` | 回响内容页 | `app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `spec-echo-content-pages.md` |
@@ -442,7 +442,11 @@ Step 8: Review   →  总览确认 → 完成
 
 ## 7. 登录页 (Login)
 
-极简布局，居中表单。
+极简布局，居中表单。页面同时承载首次登录和会话过期后的重新认证：
+
+- `redirect` 只接受同源相对路径，并保留 query string。
+- `reason=expired` 或浏览器曾成功登录过时，文案使用“重新输入密码 / 会话已锁定”语境。
+- “忘记密码”不做云端找回；说明这是本地 `webPassword`，只能在运行 MindOS 的机器上通过 CLI / 配置重置。
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -450,8 +454,10 @@ Step 8: Review   →  总览确认 → 完成
 │           MindOS Logo                        │
 │                                              │
 │      ┌────────────────────────┐              │
-│      │ Password [••••••]      │              │
-│      │ [Login]                │              │
+│      │ Session locked          │              │
+│      │ Password [••••••] [show]│              │
+│      │ [Continue]              │              │
+│      │ Forgot password?        │              │
 │      └────────────────────────┘              │
 │                                              │
 └──────────────────────────────────────────────┘

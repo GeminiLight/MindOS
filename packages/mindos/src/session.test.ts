@@ -29,6 +29,7 @@ import {
   mindosPiMessagesToOpenAI,
   reassembleMindosOpenAISse,
   createMindosPiAgentRuntime,
+  buildMindosExternalRuntimePrompt,
   runMindosAcpAskSession,
   runMindosPiAgentAskSession,
   runMindosNonStreamingFallback,
@@ -284,6 +285,28 @@ describe('MindOS session event contract', () => {
     expect(safeParseMindosJsonObject('bad')).toEqual({});
     expect(dirnameOfMindosPath('Space/note.md')).toBe('Space');
     expect(dirnameOfMindosPath('note.md')).toBeNull();
+  });
+
+  it('builds external runtime prompts with explicit MindOS turn context', () => {
+    const prompt = buildMindosExternalRuntimePrompt({
+      prompt: 'Summarize the attached plan.',
+      fileContext: {
+        contextParts: ['## Attached: Plan.md\n\nAlpha plan'],
+        failedFiles: ['Missing.md'],
+      },
+      uploadedParts: ['### upload.txt\n\nuploaded content'],
+      recalledKnowledge: [{ path: 'Recall.md', content: 'recalled content' }],
+    });
+
+    expect(prompt).toContain('Summarize the attached plan.');
+    expect(prompt).toContain('## MindOS Turn Context');
+    expect(prompt).toContain('## Attached MindOS Context');
+    expect(prompt).toContain('## Attached: Plan.md');
+    expect(prompt).toContain('## Uploaded Files');
+    expect(prompt).toContain('### upload.txt');
+    expect(prompt).toContain('## Auto-Recalled MindOS Knowledge');
+    expect(prompt).toContain('### Recall.md');
+    expect(prompt).toContain('These attached files could not be loaded: Missing.md');
   });
 
   it('owns ask retry classification and backoff policy', () => {
@@ -667,6 +690,44 @@ describe('MindOS session event contract', () => {
       { type: 'status', message: 'Request failed, retrying (1/2)...' },
       { type: 'text_delta', delta: 'ok' },
       { type: 'done' },
+    ]);
+  });
+
+  it('cancels the active ACP prompt on abort and still closes the session', async () => {
+    const controller = new AbortController();
+    const events: Array<{ type: string; message?: string }> = [];
+    const cancelled: string[] = [];
+    const closed: string[] = [];
+    let attempts = 0;
+
+    const result = await runMindosAcpAskSession({
+      agentId: 'agent-1',
+      cwd: '/mind',
+      prompt: 'hello',
+      maxRetries: 3,
+      signal: controller.signal,
+      hasContent: () => false,
+      send: (event) => events.push(event),
+      createSession: async () => {
+        attempts += 1;
+        return { id: 'session-1' };
+      },
+      promptStream: async () => {
+        controller.abort(new DOMException('The operation was aborted.', 'AbortError'));
+        await new Promise(() => {});
+      },
+      cancelPrompt: async (sessionId) => { cancelled.push(sessionId); },
+      closeSession: async (sessionId) => { closed.push(sessionId); },
+      sleep: async () => {},
+      retryDelay: () => 1,
+    });
+
+    expect(result.error?.name).toBe('AbortError');
+    expect(attempts).toBe(1);
+    expect(cancelled).toEqual(['session-1']);
+    expect(closed).toEqual(['session-1']);
+    expect(events).toEqual([
+      { type: 'error', message: 'ACP Agent Error: The operation was aborted.' },
     ]);
   });
 

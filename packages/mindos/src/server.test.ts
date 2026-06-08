@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer as createNodeServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -83,6 +84,7 @@ import {
   handleSkillsGet,
   handleSkillsPost,
   handleSpaceOverviewGet,
+  getServerSyncLockPath,
   handleSyncGet,
   handleSyncPost,
   handleSearch,
@@ -1036,6 +1038,136 @@ describe('MindOS product server contract', () => {
       })).status).toBe(200);
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('preserves unrelated Product Server config fields when settings are saved', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-http-settings-merge-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-settings-merge-root-'));
+    const configDir = join(home, '.mindos');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({
+      mindRoot: root,
+      authToken: 'secret-token',
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      webSearch: { provider: 'auto', exaApiKey: 'old-key' },
+      disabledSkills: ['legacy-skill'],
+      acpAgents: { codex: { enabled: true } },
+      customAgents: [{ key: 'local-agent', name: 'Local Agent' }],
+      installedSkillAgents: [{ agent: 'codex', skill: 'mindos', path: '/tmp/skill' }],
+    }), 'utf-8');
+
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      runtime: { homeDir: home },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const response = await fetch(`${base}/api/settings`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+        body: JSON.stringify({
+          ai: {
+            activeProvider: 'anthropic',
+            providers: [
+              { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+              { id: 'p_anthropic01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+            ],
+          },
+          webSearch: { provider: 'exa', exaApiKey: 'new-key' },
+        }),
+      });
+      expect(response.status).toBe(200);
+      const saved = JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'));
+      expect(saved.ai.activeProvider).toBe('p_anthropic01');
+      expect(saved.webSearch).toEqual({ provider: 'exa', exaApiKey: 'new-key' });
+      expect(saved.disabledSkills).toEqual(['legacy-skill']);
+      expect(saved.acpAgents).toEqual({ codex: { enabled: true } });
+      expect(saved.customAgents).toEqual([{ key: 'local-agent', name: 'Local Agent' }]);
+      expect(saved.installedSkillAgents).toEqual([{ agent: 'codex', skill: 'mindos', path: '/tmp/skill' }]);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('resolves Product Server p_* provider routes with env fallback', async () => {
+    const oldOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'env-openai-key';
+
+    const fakeApi = createNodeServer((req, res) => {
+      expect(req.headers.authorization).toBe('Bearer env-openai-key');
+      if (req.url === '/v1/models') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ data: [{ id: 'gpt-test' }] }));
+        return;
+      }
+      if (req.url === '/v1/chat/completions') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+        return;
+      }
+      res.writeHead(404);
+      res.end('not found');
+    });
+    await new Promise<void>((resolve) => fakeApi.listen(0, '127.0.0.1', resolve));
+    const fakeAddress = fakeApi.address();
+    if (!fakeAddress || typeof fakeAddress === 'string') throw new Error('expected fake TCP server address');
+    const fakeBaseUrl = `http://127.0.0.1:${fakeAddress.port}/v1`;
+
+    const home = mkdtempSync(join(tmpdir(), 'mindos-http-provider-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-provider-root-'));
+    const configDir = join(home, '.mindos');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({
+      mindRoot: root,
+      authToken: 'secret-token',
+      ai: {
+        activeProvider: 'p_saved',
+        providers: [
+          { id: 'p_saved', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-test', baseUrl: fakeBaseUrl },
+        ],
+      },
+    }), 'utf-8');
+
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      runtime: { homeDir: home },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const list = await fetch(`${base}/api/settings/list-models`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer secret-token' },
+        body: JSON.stringify({ provider: 'p_saved' }),
+      });
+      expect(list.status).toBe(200);
+      expect(await list.json()).toEqual({ ok: true, models: ['gpt-test'] });
+
+      const test = await fetch(`${base}/api/settings/test-key`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer secret-token' },
+        body: JSON.stringify({ provider: 'p_saved' }),
+      });
+      expect(test.status).toBe(200);
+      expect(await test.json()).toMatchObject({ ok: true });
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      await new Promise<void>((resolve, reject) => fakeApi.close((error) => error ? reject(error) : resolve()));
+      if (oldOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = oldOpenAiKey;
     }
   });
 
@@ -2965,44 +3097,61 @@ describe('MindOS product server contract', () => {
       lastSync: '2026-05-09T10:00:00Z',
       conflicts: [{ file: 'note.md' }],
     };
-    const cliCalls: Array<{ args: string[]; timeoutMs?: number }> = [];
+    const cliCalls: Array<{ args: string[]; timeoutMs?: number; envOverrides?: Record<string, string | undefined> }> = [];
     const services = {
       readConfig: () => config,
       writeConfig: (next: Record<string, any>) => { config = next; },
       readState: () => state,
       writeState: (next: Record<string, any>) => { state = next; },
       isGitRepo: () => true,
-      getRemoteUrl: () => 'git@example.com:mind/repo.git',
+      getRemoteUrl: () => 'https://oauth2:ghp_secret_token@example.com/mind/repo.git',
       getBranch: () => 'main',
       getUnpushedCount: () => '2',
-      runCli: async (args: string[], timeoutMs?: number) => { cliCalls.push({ args, timeoutMs }); },
+      syncLockDir: join(root, 'locks'),
+      runCli: async (args: string[], timeoutMs?: number, envOverrides?: Record<string, string | undefined>) => {
+        cliCalls.push({ args, timeoutMs, envOverrides });
+      },
     };
 
-    await expect(handleSyncGet(services)).resolves.toMatchObject({
+    const syncStatus = await handleSyncGet(services);
+    expect(syncStatus).toMatchObject({
       status: 200,
       body: {
         enabled: true,
-        remote: 'git@example.com:mind/repo.git',
+        remote: 'https://example.com/mind/repo.git',
         branch: 'main',
         unpushed: '2',
         conflicts: [{ file: 'note.md' }],
       },
     });
+    expect(JSON.stringify(syncStatus.body)).not.toContain('ghp_secret_token');
 
     await expect(handleSyncPost({ action: 'init', remote: 'https://example.com/repo.git', branch: 'dev', token: 'tok' }, services)).resolves.toMatchObject({
       status: 200,
       body: { success: true, message: 'Sync initialized' },
     });
     expect(cliCalls[0]).toEqual({
-      args: ['sync', 'init', '--non-interactive', '--remote', 'https://example.com/repo.git', '--branch', 'dev', '--token', 'tok'],
+      args: ['sync', 'init', '--non-interactive', '--remote', 'https://example.com/repo.git', '--branch', 'dev'],
       timeoutMs: 120000,
+      envOverrides: { MINDOS_SYNC_TOKEN: 'tok' },
     });
+    expect(cliCalls[0].args).not.toContain('tok');
 
     expect(await handleSyncPost({ action: 'off' }, services)).toMatchObject({
       status: 200,
       body: { ok: true, enabled: false },
     });
     expect(config.sync.enabled).toBe(false);
+
+    await expect(handleSyncGet(services)).resolves.toMatchObject({
+      status: 200,
+      body: {
+        enabled: false,
+        configured: true,
+        remote: 'https://example.com/mind/repo.git',
+        branch: 'main',
+      },
+    });
 
     expect(await handleSyncPost({ action: 'gitignore-save', content: 'node_modules\n' }, services)).toMatchObject({
       status: 200,
@@ -3022,6 +3171,10 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: 'Invalid file path' },
     });
+    expect(await handleSyncPost({ action: 'resolve-conflict', remote: 'note.md', branch: 'delete-everything' }, services)).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid conflict resolution strategy' },
+    });
     expect(await handleSyncPost({ action: 'conflict-preview', remote: '..\\outside.md' }, services)).toMatchObject({
       status: 400,
       body: { error: 'Invalid file path' },
@@ -3029,6 +3182,80 @@ describe('MindOS product server contract', () => {
     expect(await handleSyncPost({ action: 'update-intervals', autoCommitInterval: 1 }, services)).toMatchObject({
       status: 400,
       body: { error: 'autoCommitInterval must be an integer between 10 and 300 seconds' },
+    });
+  });
+
+  it('returns 423 without mutating direct sync file operations while the sync lock is owned', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-lock-'));
+    const mindRoot = join(root, 'mind');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    writeFileSync(join(mindRoot, '.gitignore'), 'original\n', 'utf-8');
+    writeFileSync(join(mindRoot, 'note.md'), 'local', 'utf-8');
+    writeFileSync(join(mindRoot, 'note.md.sync-conflict'), 'remote', 'utf-8');
+
+    let config: Record<string, any> = {
+      mindRoot,
+      sync: { enabled: true, provider: 'git' },
+    };
+    let state: Record<string, any> = {
+      conflicts: [{ file: 'note.md' }],
+      lastError: 'previous',
+    };
+    const services = {
+      readConfig: () => config,
+      writeConfig: (next: Record<string, any>) => { config = next; },
+      readState: () => state,
+      writeState: (next: Record<string, any>) => { state = next; },
+      isGitRepo: () => true,
+      getRemoteUrl: () => 'git@example.com:mind/repo.git',
+      syncLockDir: join(root, 'locks'),
+    };
+    const lockPath = getServerSyncLockPath(mindRoot, services);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(join(lockPath, 'owner.json'), JSON.stringify({
+      pid: process.pid,
+      operation: 'daemon-pull',
+      startedAt: new Date().toISOString(),
+      token: 'owner-token',
+    }), 'utf-8');
+
+    expect(await handleSyncPost({ action: 'gitignore-save', content: 'next\n' }, services)).toMatchObject({
+      status: 423,
+      body: { error: expect.stringContaining('SYNC_LOCKED') },
+    });
+    expect(readFileSync(join(mindRoot, '.gitignore'), 'utf-8')).toBe('original\n');
+
+    expect(await handleSyncPost({ action: 'resolve-conflict', file: 'note.md', strategy: 'keep-remote' }, services)).toMatchObject({
+      status: 423,
+      body: { error: expect.stringContaining('owner=daemon-pull') },
+    });
+    expect(readFileSync(join(mindRoot, 'note.md'), 'utf-8')).toBe('local');
+    expect(readFileSync(join(mindRoot, 'note.md.sync-conflict'), 'utf-8')).toBe('remote');
+    expect(state).toEqual({ conflicts: [{ file: 'note.md' }], lastError: 'previous' });
+
+    expect(await handleSyncPost({ action: 'reset' }, services)).toMatchObject({
+      status: 423,
+      body: { error: expect.stringContaining('SYNC_LOCKED') },
+    });
+    expect(config.sync).toEqual({ enabled: true, provider: 'git' });
+    expect(state).toEqual({ conflicts: [{ file: 'note.md' }], lastError: 'previous' });
+  });
+
+  it('maps CLI sync lock failures to HTTP 423 without leaking ANSI codes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-cli-lock-'));
+    const mindRoot = join(root, 'mind');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    const services = {
+      readConfig: () => ({ mindRoot, sync: { enabled: true, provider: 'git' } }),
+      isGitRepo: () => true,
+      runCli: async () => {
+        throw new Error('\x1B[31mSYNC_LOCKED: Sync is already running (owner=daemon-pull)\x1B[39m');
+      },
+    };
+
+    expect(await handleSyncPost({ action: 'now' }, services)).toMatchObject({
+      status: 423,
+      body: { error: 'SYNC_LOCKED: Sync is already running (owner=daemon-pull)' },
     });
   });
 
@@ -3071,6 +3298,7 @@ describe('MindOS product server contract', () => {
       writeConfig: () => {},
       readState: () => ({ conflicts: [{ file: 'Linked/note.md' }] }),
       writeState: () => {},
+      syncLockDir: join(root, 'locks'),
     };
 
     expect(await handleSyncPost({ action: 'gitignore-save', content: 'node_modules\n' }, services)).toMatchObject({
@@ -3793,6 +4021,53 @@ describe('MindOS product server contract', () => {
     ]);
   });
 
+  it('preserves native runtime external session ids in ask stream requests', async () => {
+    const valid = handleAskStream({
+      messages: [{ role: 'user', content: 'continue' }],
+      selectedRuntime: {
+        id: 'codex',
+        name: 'Codex',
+        kind: 'codex',
+        externalSessionId: 'thr_123',
+      },
+    }, {
+      askStream: async function* (input) {
+        yield {
+          type: 'status',
+          message: `${input.selectedRuntime?.kind}:${input.selectedRuntime?.externalSessionId ?? 'missing'}`,
+        };
+      },
+    });
+
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) throw new Error('expected ask stream');
+    const events = [];
+    for await (const event of valid.body) events.push(event);
+    expect(events).toEqual([
+      { type: 'status', message: 'codex:thr_123' },
+    ]);
+  });
+
+  it('falls back to legacy selected ACP agent when selectedRuntime is malformed', async () => {
+    const valid = handleAskStream({
+      messages: [{ role: 'user', content: 'hello' }],
+      selectedRuntime: { id: 'broken-runtime' },
+      selectedAcpAgent: { id: 'claude', name: 'Claude Code' },
+    }, {
+      askStream: async function* (input) {
+        yield { type: 'status', message: `${input.selectedRuntime?.kind}:${input.selectedRuntime?.id}` };
+      },
+    });
+
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) throw new Error('expected ask stream');
+    const events = [];
+    for await (const event of valid.body) events.push(event);
+    expect(events).toEqual([
+      { type: 'status', message: 'acp:claude' },
+    ]);
+  });
+
   it('honors an explicit null runtime selection over legacy ACP selection', async () => {
     const valid = handleAskStream({
       messages: [{ role: 'user', content: 'hello' }],
@@ -3925,6 +4200,7 @@ describe('MindOS product server contract', () => {
       readSettings: () => ({
         ai: { activeProvider: 'openai', providers: { openai: { apiKey: 'secret' } } },
         authToken: 'mindos-secret-token',
+        webPassword: 'web-secret',
         mcpPort: 8567,
       }),
       writeSettings: () => undefined,
@@ -3943,6 +4219,7 @@ describe('MindOS product server contract', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       authToken: 'mindos-••••-token',
+      webPassword: '••••••',
       allowNetworkAccess: false,
       port: 4567,
       mcpPort: 8567,
@@ -3952,10 +4229,67 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('normalizes legacy settings reads so the active provider remains editable', () => {
+    const parseLegacyProviders = (providers: unknown, activeProvider?: unknown) => {
+      if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return [];
+      const active = typeof activeProvider === 'string' ? activeProvider : '';
+      return Object.entries(providers as Record<string, Record<string, string>>)
+        .filter(([protocol, value]) => protocol === active || !!value.apiKey || !!value.model || !!value.baseUrl)
+        .map(([protocol, value]) => ({
+          id: `p_${protocol}`,
+          name: protocol === 'anthropic' ? 'Anthropic' : protocol,
+          protocol,
+          apiKey: value.apiKey ?? '',
+          model: value.model ?? (protocol === 'anthropic' ? 'claude-sonnet-4-6' : ''),
+          baseUrl: value.baseUrl ?? '',
+        }));
+    };
+
+    const res = handleSettingsGet({
+      readSettings: () => ({
+        ai: {
+          activeProvider: 'anthropic',
+          providers: { openai: {}, anthropic: {} },
+        },
+      }),
+      writeSettings: () => undefined,
+      readWebSearchConfig: () => ({}),
+      writeWebSearchConfig: () => undefined,
+      parseProviders: parseLegacyProviders,
+      getEmbeddingStatus: () => ({}),
+      invalidateCache: () => undefined,
+      providerEnv: {
+        ids: [],
+        getApiKeyEnvVar: () => undefined,
+        getApiKeyFromEnv: () => undefined,
+      },
+    });
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        ai: {
+          activeProvider: 'p_anthropic',
+          providers: [
+            {
+              id: 'p_anthropic',
+              name: 'Anthropic',
+              protocol: 'anthropic',
+              apiKey: '',
+              model: 'claude-sonnet-4-6',
+              baseUrl: '',
+            },
+          ],
+        },
+      },
+    });
+  });
+
   it('handles settings write without accepting incoming auth token replacement', () => {
     let settings: any = {
       ai: { activeProvider: 'openai', providers: { openai: {} } },
       authToken: 'keep-me',
+      webPassword: 'keep-password',
       allowNetworkAccess: false,
       mindRoot: '/old',
       skillPaths: { enableAgentsDir: true, custom: ['/old-skills'] },
@@ -3967,6 +4301,7 @@ describe('MindOS product server contract', () => {
     const res = handleSettingsPost({
       ai: { activeProvider: 'anthropic', providers: { anthropic: {} } },
       authToken: 'replace-me',
+      webPassword: '••••••',
       allowNetworkAccess: true,
       mindRoot: '/new',
       webSearch: { provider: 'perplexity', exaApiKey: '••••••' },
@@ -3995,6 +4330,7 @@ describe('MindOS product server contract', () => {
 
     expect(res).toEqual({ status: 200, body: { ok: true } });
     expect(settings.authToken).toBe('keep-me');
+    expect(settings.webPassword).toBe('keep-password');
     expect(settings.allowNetworkAccess).toBe(true);
     expect(settings.mindRoot).toBe('/new');
     expect(settings.connectionMode).toEqual({ cli: false, mcp: true });
@@ -4002,6 +4338,86 @@ describe('MindOS product server contract', () => {
     expect(settings.baseUrlCompat).toEqual({});
     expect(webSearch).toEqual({ provider: 'perplexity', exaApiKey: 'old-key' });
     expect(invalidated).toBe(true);
+  });
+
+  it('normalizes settings writes so activeProvider points to a provider entry id', () => {
+    let settings: any = {
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      mindRoot: '/mind',
+    };
+
+    const providers = [
+      { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+      { id: 'p_anthropic01', name: 'Anthropic', protocol: 'anthropic', apiKey: '', model: 'claude-sonnet-4-6', baseUrl: '' },
+    ];
+
+    const res = handleSettingsPost({
+      ai: { activeProvider: 'anthropic', providers },
+    }, {
+      readSettings: () => settings,
+      writeSettings: (next) => {
+        settings = next as typeof settings;
+      },
+      readWebSearchConfig: () => ({}),
+      writeWebSearchConfig: () => undefined,
+      parseProviders: (incoming) => incoming,
+      getEmbeddingStatus: () => ({}),
+      invalidateCache: () => undefined,
+      providerEnv: {
+        ids: [],
+        getApiKeyEnvVar: () => undefined,
+        getApiKeyFromEnv: () => undefined,
+      },
+    });
+
+    expect(res).toEqual({ status: 200, body: { ok: true } });
+    expect(settings.ai.activeProvider).toBe('p_anthropic01');
+    expect(settings.ai.providers).toEqual(providers);
+  });
+
+  it('falls back to the first provider entry when settings write references a missing activeProvider', () => {
+    let settings: any = {
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      mindRoot: '/mind',
+    };
+
+    const res = handleSettingsPost({
+      ai: {
+        activeProvider: 'p_missing',
+        providers: [
+          { id: 'p_google01', name: 'Google Gemini', protocol: 'google', apiKey: '', model: 'gemini-2.5-flash', baseUrl: '' },
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+    }, {
+      readSettings: () => settings,
+      writeSettings: (next) => {
+        settings = next as typeof settings;
+      },
+      readWebSearchConfig: () => ({}),
+      writeWebSearchConfig: () => undefined,
+      parseProviders: (incoming) => incoming,
+      getEmbeddingStatus: () => ({}),
+      invalidateCache: () => undefined,
+      providerEnv: {
+        ids: [],
+        getApiKeyEnvVar: () => undefined,
+        getApiKeyFromEnv: () => undefined,
+      },
+    });
+
+    expect(res).toEqual({ status: 200, body: { ok: true } });
+    expect(settings.ai.activeProvider).toBe('p_google01');
   });
 
   it('ignores malformed runtime custom skill paths', () => {

@@ -158,7 +158,7 @@ function CliGuide({ status, activeSkillName, agents, connectedAgents, detectedAg
             title={m?.detectedAgentsTitle ?? 'Detected Agents'}
             badge={`${connectedAgents.length + detectedAgents.length}/${agents.length}`}
           >
-            <AgentInstall agents={agents} t={t} onRefresh={onRefresh} mode="cli" activeSkillName={activeSkillName} />
+            <AgentInstall agents={agents} t={t} onRefresh={onRefresh} mode="cli" activeSkillName={activeSkillName} status={status} />
           </InlineCollapsible>
         )}
       </div>
@@ -291,7 +291,7 @@ function McpGuide({ status, agents, activeSkillName, connectedAgents, detectedAg
           title={m?.detectedAgentsTitle ?? 'Detected Agents'}
           badge={`${connectedAgents.length + detectedAgents.length}/${agents.length}`}
         >
-          <AgentInstall agents={agents} t={t} onRefresh={onRefresh} mode="mcp" activeSkillName={activeSkillName} />
+          <AgentInstall agents={agents} t={t} onRefresh={onRefresh} mode="mcp" activeSkillName={activeSkillName} status={status} />
         </InlineCollapsible>
       )}
 

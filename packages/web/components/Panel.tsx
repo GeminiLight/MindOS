@@ -3,7 +3,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronsDownUp, ChevronsUpDown, Plus, Import, RefreshCw, FileText, Layers, MoreHorizontal, Eye, EyeOff, Trash2, Inbox, History } from 'lucide-react';
-import type { PanelId } from './ActivityBar';
+import type { PanelId } from '@/lib/navigation-panel';
 import type { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import FileTree, { setShowHiddenFiles, useShowHiddenFiles } from './FileTree';

@@ -11,38 +11,34 @@ interface ProviderSelectProps {
   onChange: (id: string | 'skip') => void;
   showSkip?: boolean;
   compact?: boolean;
-  /** @deprecated Use customProviders (unified Provider[]) instead */
+  /** Protocols that already have credentials in setup, used only for checkmarks. */
   configuredProviders?: Set<ProviderId>;
-  customProviders?: Provider[];
+  /** Unified provider entries used by Settings. */
+  providerEntries?: Provider[];
   onAdd?: () => void;
 }
 
 export default function ProviderSelect({
   value, onChange, showSkip = false, compact = false, configuredProviders,
-  customProviders, onAdd,
+  providerEntries, onAdd,
 }: ProviderSelectProps) {
   const { locale } = useLocale();
   const [showMore, setShowMore] = useState(false);
   const groups = groupedProviders();
 
-  const hasConfigured = configuredProviders && configuredProviders.size > 0;
-  const hasCustom = customProviders && customProviders.length > 0;
+  const hasProviderEntries = providerEntries && providerEntries.length > 0;
 
-  // In compact settings mode: show provider list + Add button
-  // New model: customProviders IS the full list (unified Provider[])
-  // Legacy model: configuredProviders set + separate customProviders array
-  const useConfiguredMode = compact && (hasConfigured || hasCustom) && !showSkip;
+  const useProviderEntryMode = compact && hasProviderEntries && !showSkip;
 
-  // Legacy: Sorted configured provider IDs (for backward compat with old callers)
-  const configuredIds = hasConfigured
-    ? ALL_PROVIDER_IDS.filter(id => configuredProviders!.has(id))
-    : [];
-
-  // Add panel shows ALL providers as protocol templates (can add multiple of the same type)
+  // Settings: show unconfigured protocol templates next to saved provider entries.
   const { primary: primaryItems, local: localItems, more: moreItems } = groups;
   const secondaryItems = [...localItems, ...moreItems];
+  const configuredProtocolSet = new Set<ProviderId>([
+    ...(configuredProviders ? Array.from(configuredProviders) : []),
+    ...(providerEntries?.map(provider => provider.protocol) ?? []),
+  ]);
 
-  /* ── Compact tab button (for legacy builtin-only mode) ── */
+  /* ── Compact tab button ── */
   const renderCompactTab = (id: ProviderId) => {
     const preset = PROVIDER_PRESETS[id];
     const displayName = locale === 'zh' ? preset.nameZh : preset.name;
@@ -115,17 +111,19 @@ export default function ProviderSelect({
    *  MODE 1: Provider list + Add button
    *  (compact settings, has providers)
    * ════════════════════════════════════════════ */
-  if (useConfiguredMode) {
+  if (useProviderEntryMode) {
+    const unconfiguredPrimary = primaryItems.filter(id => !configuredProtocolSet.has(id));
+    const unconfiguredSecondary = secondaryItems.filter(id => !configuredProtocolSet.has(id));
+
     return (
       <div className="space-y-2">
         {/* Providers row */}
         <div className="flex flex-wrap gap-2">
-          {/* Legacy: built-in configured providers */}
-          {configuredIds.map(id => renderCompactTab(id))}
-
-          {/* Unified provider list (or legacy custom providers) */}
-          {customProviders?.map(cp => {
+          {/* Saved provider entries */}
+          {providerEntries?.map(cp => {
             const isSelected = value === cp.id;
+            const preset = PROVIDER_PRESETS[cp.protocol];
+            const displayName = cp.name.trim() || (locale === 'zh' ? preset.nameZh : preset.name);
             return (
               <button
                 key={cp.id}
@@ -138,7 +136,7 @@ export default function ProviderSelect({
                 }`}
               >
                 <span className={`font-medium ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {cp.name}
+                  {displayName}
                 </span>
                 {isSelected && (
                   <CheckCircle2 size={14} className="ml-auto shrink-0" style={{ color: 'var(--amber)' }} />
@@ -146,6 +144,8 @@ export default function ProviderSelect({
               </button>
             );
           })}
+
+          {unconfiguredPrimary.map(id => renderCompactTab(id))}
 
           {/* Add button — opens form directly */}
           {onAdd && (
@@ -159,6 +159,28 @@ export default function ProviderSelect({
             </button>
           )}
         </div>
+        {unconfiguredSecondary.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowMore(!showMore)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              <ChevronDown size={12} className={`transition-transform ${showMore ? 'rotate-180' : ''}`} />
+              {showMore
+                ? (locale === 'zh' ? '收起' : 'Show less')
+                : (locale === 'zh'
+                    ? `更多服务商 (${unconfiguredSecondary.length})`
+                    : `More providers (${unconfiguredSecondary.length})`)}
+            </button>
+
+            {showMore && (
+              <div className="flex flex-wrap gap-2">
+                {unconfiguredSecondary.map(id => renderCompactTab(id))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   }

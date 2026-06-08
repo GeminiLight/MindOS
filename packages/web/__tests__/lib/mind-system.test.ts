@@ -19,11 +19,11 @@ describe('mind-system registry', () => {
       const configPath = getMindSystemConfigPath(mindRoot);
 
       expect(fs.existsSync(configPath)).toBe(true);
-      expect(Object.keys(config.slots)).toEqual(['dao', 'fa', 'shu', 'qi', 'shi', 'yan']);
+      expect(Object.keys(config.slots)).toEqual(['dao', 'fa', 'shu', 'qi']);
       expect(config.slots.dao.path).toBe('01 道');
-      expect(config.slots.yan.path).toBe('99 验');
       expect(fs.existsSync(path.join(mindRoot, '01 道'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '99 验'))).toBe(false);
+      expect(listMindSystemSlots(mindRoot)).toEqual([]);
     } finally {
       cleanupMindRoot(mindRoot);
     }
@@ -45,6 +45,22 @@ describe('mind-system registry', () => {
             primary: true,
             enabled: true,
           },
+          shi: {
+            label: '势',
+            path: '05 势',
+            role: 'current-context',
+            order: 50,
+            primary: false,
+            enabled: true,
+          },
+          yan: {
+            label: '验',
+            path: '99 验',
+            role: 'review-loop',
+            order: 990,
+            primary: false,
+            enabled: true,
+          },
         },
       }, null, 2), 'utf-8');
 
@@ -53,25 +69,44 @@ describe('mind-system registry', () => {
       expect(config.slots.dao.path).toBe('世界模型');
       expect(config.slots.dao.role).toBe('custom-world-model');
       expect(config.slots.fa.path).toBe('02 法');
-      expect(config.slots.yan.path).toBe('99 验');
+      expect('shi' in config.slots).toBe(false);
+      expect('yan' in config.slots).toBe(false);
 
       const persisted = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as typeof config;
-      expect(Object.keys(persisted.slots)).toEqual(['dao', 'fa', 'shu', 'qi', 'shi', 'yan']);
+      expect(Object.keys(persisted.slots)).toEqual(['dao', 'fa', 'shu', 'qi']);
       expect(persisted.slots.dao.label).toBe('方向');
+      expect('shi' in persisted.slots).toBe(false);
+      expect('yan' in persisted.slots).toBe(false);
     } finally {
       cleanupMindRoot(mindRoot);
     }
   });
 
-  it('lists enabled slots in registry order and reports whether bound paths exist', () => {
+  it('lists Dao, Fa, Shu, and Qi as special UI slots while leaving Shi and Yan as normal folders', () => {
+    const mindRoot = mkTempMindRoot();
+    try {
+      for (const dir of ['01 道', '02 法', '03 术', '04 器', '05 势', '99 验']) {
+        fs.mkdirSync(path.join(mindRoot, dir), { recursive: true });
+      }
+      const slots = listMindSystemSlots(mindRoot);
+
+      expect(slots.map(slot => slot.key)).toEqual(['dao', 'fa', 'shu', 'qi']);
+      expect(mindSystemPathExists(mindRoot, slots[0])).toBe(true);
+      expect(mindSystemPathExists(mindRoot, slots[1])).toBe(true);
+    } finally {
+      cleanupMindRoot(mindRoot);
+    }
+  });
+
+  it('does not expose configured system slots when their visible folders are missing', () => {
     const mindRoot = mkTempMindRoot();
     try {
       fs.mkdirSync(path.join(mindRoot, '01 道'), { recursive: true });
+      fs.writeFileSync(path.join(mindRoot, '02 法'), '# Not a folder', 'utf-8');
       const slots = listMindSystemSlots(mindRoot);
 
-      expect(slots.map(slot => slot.key)).toEqual(['dao', 'fa', 'shu', 'qi', 'shi', 'yan']);
-      expect(mindSystemPathExists(mindRoot, slots[0])).toBe(true);
-      expect(mindSystemPathExists(mindRoot, slots[1])).toBe(false);
+      expect(slots.map(slot => slot.key)).toEqual(['dao']);
+      expect(slots.some(slot => slot.key === 'fa')).toBe(false);
     } finally {
       cleanupMindRoot(mindRoot);
     }

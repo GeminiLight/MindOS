@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, spawn } from 'child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { killAgent, resolveTerminalSpawn, spawnAcpAgent } from './subprocess';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createMindosClient, killAgent, resolveTerminalSpawn, spawnAcpAgent } from './subprocess';
 
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
@@ -181,5 +184,67 @@ describe('resolveTerminalSpawn', () => {
       command: 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd',
       shell: true,
     });
+  });
+});
+
+describe('createMindosClient permission policy', () => {
+  function makeAcpProcess() {
+    return {
+      id: 'acp-test-policy',
+      agentId: 'test-agent',
+      proc: makeChildProcess(),
+      alive: true,
+    };
+  }
+
+  beforeEach(() => {
+    mockSpawn.mockReset();
+    mockSpawn.mockReturnValue(makeChildProcess());
+  });
+
+  it('selects a reject option for readonly permission requests', async () => {
+    const client = createMindosClient(makeAcpProcess(), '/tmp/mind', {}, 'readonly');
+
+    await expect(client.requestPermission({
+      sessionId: 'ses-1',
+      toolCall: { toolCallId: 'tc-1', status: 'pending' },
+      options: [
+        { optionId: 'allow', kind: 'allow_once', name: 'Allow' },
+        { optionId: 'reject', kind: 'reject_once', name: 'Reject' },
+      ],
+    })).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'reject' },
+    });
+  });
+
+  it('rejects readonly writes and terminal creation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-acp-readonly-'));
+    const client = createMindosClient(makeAcpProcess(), root, {}, 'readonly');
+
+    await expect(client.writeTextFile({ path: join(root, 'note.md'), content: 'x' }))
+      .rejects.toThrow('readonly mode');
+    await expect(client.createTerminal({ command: 'node' }))
+      .rejects.toThrow('readonly mode');
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('resolves relative file paths against the ACP working directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-acp-paths-'));
+    writeFileSync(join(root, 'note.md'), 'hello', 'utf-8');
+    const client = createMindosClient(makeAcpProcess(), root, {}, 'agent');
+
+    await expect(client.readTextFile({ path: 'note.md' })).resolves.toEqual({ content: 'hello' });
+    await client.writeTextFile({ path: 'nested/out.md', content: 'written' });
+    expect(readFileSync(join(root, 'nested/out.md'), 'utf-8')).toBe('written');
+  });
+
+  it('denies reads outside the ACP working directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-acp-root-'));
+    const outside = mkdtempSync(join(tmpdir(), 'mindos-acp-outside-'));
+    writeFileSync(join(outside, 'secret.md'), 'secret', 'utf-8');
+    const client = createMindosClient(makeAcpProcess(), root, {}, 'agent');
+
+    await expect(client.readTextFile({ path: join(outside, 'secret.md') }))
+      .rejects.toThrow('outside the working directory');
   });
 });

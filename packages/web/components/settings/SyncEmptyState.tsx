@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   GitBranch, Loader2, Check,
   Eye, EyeOff, CheckCircle2, AlertCircle,
@@ -8,7 +8,7 @@ import {
 import type { Messages } from '@/lib/i18n';
 import { apiFetch } from '@/lib/api';
 import { Input, Field, SettingCard, PrimaryButton } from './Primitives';
-import { getSyncErrorHint } from './SyncTab';
+import { getSyncErrorHint } from '@/lib/sync-ui';
 
 function isValidGitUrl(url: string): 'https' | 'ssh' | false {
   if (/^https:\/\/.+/.test(url)) return 'https';
@@ -25,28 +25,73 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
   const [showToken, setShowToken] = useState(false);
   const [connectStep, setConnectStep] = useState<number>(-1); // -1=idle, 0..3=steps, 4=done
   const [error, setError] = useState('');
-  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [connectingRemote, setConnectingRemote] = useState('');
+  const stepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const connectRunRef = useRef(0);
 
   const connecting = connectStep >= 0 && connectStep < 4;
 
   const urlType = remoteUrl.trim() ? isValidGitUrl(remoteUrl.trim()) : null;
   const isValid = urlType === 'https' || urlType === 'ssh';
+  const branchValue = branch.trim() || 'main';
+  const branchValid = !/[\s~^:?*\[\\\]]/.test(branchValue)
+    && !branchValue.includes('..')
+    && !branchValue.startsWith('-')
+    && !branchValue.endsWith('.')
+    && branchValue !== '@';
   const showTokenField = urlType === 'https';
   const disabledReason = !remoteUrl.trim()
     ? ((syncT?.connectNeedsUrl as string) ?? 'Paste a remote URL to continue')
     : !isValid
       ? ((syncT?.connectFixUrl as string) ?? 'Fix the Git URL to continue')
+      : !branchValid
+        ? ((syncT?.connectFixBranch as string) ?? 'Use a valid Git branch name')
       : '';
 
+  const clearStepTimers = () => {
+    for (const timer of stepTimersRef.current) clearTimeout(timer);
+    stepTimersRef.current = [];
+  };
+
+  const handleCancel = () => {
+    connectRunRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    clearStepTimers();
+    setConnectStep(-1);
+    setConnectingRemote('');
+    setError('');
+  };
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      clearStepTimers();
+    };
+  }, []);
+
   const handleConnect = async () => {
+    const runId = connectRunRef.current + 1;
+    connectRunRef.current = runId;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const submittedRemote = remoteUrl.trim();
+    const submittedBranch = branchValue;
+
+    clearStepTimers();
+    setConnectingRemote(submittedRemote);
     setConnectStep(0);
     setError('');
 
     // Progress steps on a timer (visual only — actual work is one API call)
     const advanceStep = (step: number, delayMs: number) =>
-      setTimeout(() => setConnectStep(s => s >= 0 && s < 4 ? step : s), delayMs);
-    stepTimerRef.current = advanceStep(1, 2000);  // "Authenticating..." → "Syncing data..."
-    const t2 = advanceStep(2, 5000);              // → "Almost done..."
+      setTimeout(() => setConnectStep(s => (connectRunRef.current === runId && s >= 0 && s < 4) ? step : s), delayMs);
+    stepTimersRef.current = [
+      advanceStep(1, 2000),
+      advanceStep(2, 5000),
+      advanceStep(3, 9000),
+    ];
 
     try {
       await apiFetch('/api/sync', {
@@ -54,25 +99,33 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'init',
-          remote: remoteUrl.trim(),
+          remote: submittedRemote,
           token: token.trim() || undefined,
-          branch: branch.trim() || 'main',
+          branch: submittedBranch,
         }),
         timeout: 120_000,
+        signal: controller.signal,
       });
+      if (connectRunRef.current !== runId) return;
       setConnectStep(4); // success
-      setTimeout(() => onInitComplete(), 600);
+      setTimeout(() => {
+        if (connectRunRef.current === runId) onInitComplete();
+      }, 600);
     } catch (err: unknown) {
+      if (connectRunRef.current !== runId || controller.signal.aborted) return;
       let msg = err instanceof Error ? err.message : 'Connection failed';
       if (msg.includes('timed out')) {
         msg = (syncT?.timeoutError as string) ?? 'Connection timed out. The remote repository may be large or the network is slow. Please try again.';
       }
-      const hint = getSyncErrorHint(msg, remoteUrl, syncT);
+      const hint = getSyncErrorHint(msg, submittedRemote, syncT);
       setError(hint ? `${msg}\n${hint}` : msg);
       setConnectStep(-1);
     } finally {
-      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
-      clearTimeout(t2);
+      if (connectRunRef.current === runId) {
+        clearStepTimers();
+        abortRef.current = null;
+        setConnectingRemote('');
+      }
     }
   };
 
@@ -121,6 +174,7 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
             value={remoteUrl}
             onChange={e => { setRemoteUrl(e.target.value); setError(''); }}
             placeholder="git@github.com:user/repo.git"
+            disabled={connecting}
             className={`font-mono ${remoteUrl.trim() && !isValid ? 'border-destructive' : ''}`}
           />
           {!remoteUrl.trim() && (
@@ -148,11 +202,13 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
                 value={token}
                 onChange={e => setToken(e.target.value)}
                 placeholder="ghp_xxxxxxxxxxxx"
+                disabled={connecting}
                 className="pr-9 font-mono"
               />
               <button
                 type="button"
                 onClick={() => setShowToken(!showToken)}
+                disabled={connecting}
                 className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={showToken ? ((syncT?.hideToken as string) ?? 'Hide token') : ((syncT?.showToken as string) ?? 'Show token')}
               >
@@ -180,8 +236,14 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
             value={branch}
             onChange={e => setBranch(e.target.value)}
             placeholder="main"
-            className="max-w-[200px] font-mono"
+            disabled={connecting}
+            className={`max-w-[200px] font-mono ${!branchValid ? 'border-destructive' : ''}`}
           />
+          {!branchValid && (
+            <p className="text-xs text-destructive mt-1">
+              {(syncT?.invalidBranch as string) ?? 'Branch names cannot contain spaces, "..", or Git ref control characters.'}
+            </p>
+          )}
         </Field>
 
         {/* Connect button + progress */}
@@ -189,7 +251,7 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
           <div className="flex flex-wrap items-center gap-3">
             <PrimaryButton
               onClick={handleConnect}
-              disabled={!isValid}
+              disabled={!isValid || !branchValid}
               className="flex min-h-9 items-center gap-2"
             >
               {(syncT?.connectButton as string) ?? 'Connect & Start Sync'}
@@ -202,6 +264,11 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
 
         {(connecting || connectStep === 4) && (
           <div className="space-y-2 py-1">
+            {connectingRemote && (
+              <p className="text-xs text-muted-foreground">
+                {((syncT?.connectingTo as ((remote: string) => string))?.(connectingRemote)) ?? `Connecting to ${connectingRemote}`}
+              </p>
+            )}
             {connectSteps.map((label, i) => {
               const isDone = connectStep > i || connectStep === 4;
               const isActive = connectStep === i && connectStep < 4;
@@ -218,6 +285,15 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
                 </div>
               );
             })}
+            {connecting && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="inline-flex min-h-8 items-center rounded-md border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {(syncT?.cancel as string) ?? 'Cancel'}
+              </button>
+            )}
             {connectStep === 4 && (
               <div className="flex items-center gap-2 text-xs">
                 <CheckCircle2 size={13} className="text-success shrink-0" />

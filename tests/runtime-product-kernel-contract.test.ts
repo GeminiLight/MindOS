@@ -99,7 +99,8 @@ describe('MindOS runtime product kernel contract', () => {
     expect(existsSync(resolve(root, 'packages/web/app/api/file/operation-kernel.ts'))).toBe(false);
     expect(existsSync(resolve(root, 'packages/web/app/api/file/handlers.ts'))).toBe(false);
 
-    expect(webSecurity).toContain("from '@geminilight/mindos'");
+    expect(webSecurity).toContain("from '@geminilight/mindos/foundation'");
+    expect(webSecurity).not.toContain("from '@geminilight/mindos'");
     expect(webSecurity).not.toContain("from '@mindos/security'");
   });
 

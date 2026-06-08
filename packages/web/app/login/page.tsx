@@ -1,9 +1,35 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Lock } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, HelpCircle, KeyRound, Loader2, Lock } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
+import Logo from '@/components/Logo';
+import { resolveLoginMode, sanitizeLoginRedirect } from '@/lib/auth-session';
+
+const PREVIOUS_WEB_SESSION_KEY = 'mindos:had-web-session';
+
+function subscribeToPreviousSessionChange(onStoreChange: () => void): () => void {
+  window.addEventListener('storage', onStoreChange);
+  return () => window.removeEventListener('storage', onStoreChange);
+}
+
+function getPreviousSessionSnapshot(): boolean {
+  try {
+    return localStorage.getItem(PREVIOUS_WEB_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function getPreviousSessionServerSnapshot(): boolean {
+  return false;
+}
+
+function truncateRedirect(path: string): string {
+  if (path.length <= 48) return path;
+  return `${path.slice(0, 22)}...${path.slice(-22)}`;
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -12,8 +38,18 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const hadPreviousBrowserSession = useSyncExternalStore(
+    subscribeToPreviousSessionChange,
+    getPreviousSessionSnapshot,
+    getPreviousSessionServerSnapshot,
+  );
 
   const loginT = t.login;
+  const safeRedirect = sanitizeLoginRedirect(searchParams.get('redirect'));
+  const mode = resolveLoginMode(searchParams.get('reason'), hadPreviousBrowserSession);
+  const isReauth = mode === 'reauth';
+  const returnLabel = safeRedirect !== '/' ? truncateRedirect(safeRedirect) : '';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,12 +62,10 @@ function LoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        const rawRedirect = searchParams.get('redirect') ?? '/';
-        // Safety: only allow relative paths starting with / to prevent open redirect
-        const safe = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
-          ? rawRedirect
-          : '/';
-        router.replace(safe);
+        try {
+          localStorage.setItem(PREVIOUS_WEB_SESSION_KEY, '1');
+        } catch { /* localStorage unavailable; session cookie still handles auth. */ }
+        router.replace(safeRedirect);
       } else {
         setError(loginT?.incorrectPassword ?? 'Incorrect password. Please try again.');
         setPassword('');
@@ -44,83 +78,129 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-8">
-        {/* Logo + title */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" width={40} height={40} className="text-[var(--amber)]">
-            <defs>
-              <linearGradient id="lp-grad-human" x1="35" y1="40" x2="5" y2="40" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="0.8"/>
-                <stop offset="100%" stopColor="currentColor" stopOpacity="0.3"/>
-              </linearGradient>
-              <linearGradient id="lp-grad-agent" x1="35" y1="40" x2="75" y2="40" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="0.8"/>
-                <stop offset="100%" stopColor="currentColor" stopOpacity="1"/>
-              </linearGradient>
-            </defs>
-            <g transform="translate(0, 20)">
-              <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#lp-grad-human)" strokeWidth="3" strokeDasharray="2 4" strokeLinecap="round"/>
-              <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#lp-grad-agent)" strokeWidth="4.5" strokeLinecap="round"/>
-              <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
-            </g>
-          </svg>
-          <h1 className="text-2xl font-brand text-foreground">
-            MindOS
-          </h1>
-          <p className="text-xs text-muted-foreground/70 italic">
-            {loginT?.tagline ?? 'You think here, Agents act there'}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {loginT?.subtitle ?? 'Enter your password to continue'}
-          </p>
+    <main className="min-h-[100dvh] bg-background flex items-center justify-center px-4 py-10">
+      <section className="w-full max-w-[26rem]" aria-labelledby="login-title">
+        <div className="mb-5 flex items-center justify-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card shadow-sm">
+            <Logo id="login" className="h-6 w-10" />
+          </span>
+          <div className="min-w-0">
+            <h1 id="login-title" className="font-brand text-2xl leading-tight text-foreground">
+              MindOS
+            </h1>
+            <p className="text-xs italic text-muted-foreground/70">
+              {loginT?.tagline ?? 'You think here, Agents act there'}
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-2xl shadow-black/10 sm:p-7">
+          <div className="mb-6 space-y-2">
+            <div className="inline-flex items-center gap-1.5 rounded-md bg-[var(--amber-subtle)] px-2 py-1 text-xs font-medium text-[var(--amber-text)]">
+              <Lock size={12} aria-hidden />
+              {isReauth
+                ? (loginT?.reauthBadge ?? 'Session locked')
+                : (loginT?.loginBadge ?? 'Private workspace')}
+            </div>
+            <h2 className="text-lg font-semibold leading-snug text-foreground">
+              {isReauth
+                ? (loginT?.reauthTitle ?? 'Re-enter your password')
+                : (loginT?.title ?? 'Enter your Web password')}
+            </h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {isReauth
+                ? (loginT?.reauthSubtitle ?? 'Your browser session expired. Unlock MindOS to continue where you left off.')
+                : (loginT?.subtitle ?? 'Enter your password to continue')}
+            </p>
+            {returnLabel && (
+              <p className="rounded-md border border-border bg-muted/35 px-3 py-2 text-xs text-muted-foreground" title={safeRedirect}>
+                {(loginT?.returningTo ?? ((path: string) => `Returning to ${path}`))(returnLabel)}
+              </p>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground" htmlFor="password">
               {loginT?.passwordLabel ?? 'Password'}
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder={loginT?.passwordPlaceholder ?? 'Enter password'}
-              autoFocus
-              autoComplete="current-password"
-              required
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={loginT?.passwordPlaceholder ?? 'Enter password'}
+                autoFocus
+                autoComplete="current-password"
+                required
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-11 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute right-1.5 top-1.5 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={showPassword
+                  ? (loginT?.hidePassword ?? 'Hide password')
+                  : (loginT?.showPassword ?? 'Show password')}
+              >
+                {showPassword ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}
+              </button>
+            </div>
           </div>
 
           {error && (
-            <p className="text-xs text-destructive" role="alert" aria-live="polite">{error}</p>
+            <p className="rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert" aria-live="polite">
+              {error}
+            </p>
           )}
 
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2 bg-[var(--amber)] text-[var(--amber-foreground)]"
+            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--amber)] px-4 text-sm font-medium text-[var(--amber-foreground)] transition-all hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={15} className="animate-spin" aria-hidden />
             ) : (
-              <Lock size={14} />
+              <KeyRound size={15} aria-hidden />
             )}
             {loading
               ? (loginT?.signingIn ?? 'Signing in…')
-              : (loginT?.signIn ?? 'Sign in')}
+              : (isReauth
+                  ? (loginT?.continueButton ?? 'Continue')
+                  : (loginT?.signIn ?? 'Sign in'))}
           </button>
         </form>
-      </div>
-    </div>
+
+          <details className="group mt-5 rounded-lg border border-border bg-background/60">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <HelpCircle size={14} aria-hidden />
+              <span>{loginT?.forgotPassword ?? 'Forgot password?'}</span>
+              <ChevronDown size={14} className="ml-auto transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="space-y-3 border-t border-border px-3 pb-3 pt-3 text-xs leading-5 text-muted-foreground">
+              <p>{loginT?.forgotIntro ?? 'MindOS cannot recover this local Web password.'}</p>
+              <p>{loginT?.forgotReset ?? 'On the machine running MindOS, reset it with:'}</p>
+              <code className="block overflow-x-auto rounded-md border border-border bg-muted/60 px-2.5 py-2 font-mono text-[11px] text-foreground">
+                mindos config set webPassword &lt;new-password&gt;
+              </code>
+              <p>{loginT?.forgotDisable ?? 'To temporarily remove the login gate, use:'}</p>
+              <code className="block overflow-x-auto rounded-md border border-border bg-muted/60 px-2.5 py-2 font-mono text-[11px] text-foreground">
+                mindos config unset webPassword
+              </code>
+              <p>{loginT?.forgotRestart ?? 'Restart MindOS after changing the setting. If this is not your machine, ask the owner to reset it.'}</p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
   );
 }
 
 function LoginFallback() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center px-4">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin text-[var(--amber)]" aria-hidden />
         <p className="text-sm">Loading…</p>

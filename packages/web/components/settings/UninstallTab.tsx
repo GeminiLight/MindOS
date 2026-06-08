@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Trash2, AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -25,6 +25,7 @@ export function UninstallTab() {
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const uninstallInFlightRef = useRef(false);
 
   // Checkboxes — "stop services" is always on (not toggleable)
   // CLI mode: stop + config + npm uninstall (npm always runs as part of CLI uninstall)
@@ -33,6 +34,8 @@ export function UninstallTab() {
   const [removeApp, setRemoveApp] = useState(true); // Desktop only
 
   const handleUninstall = async () => {
+    if (uninstallInFlightRef.current) return;
+    uninstallInFlightRef.current = true;
     setPhase('running');
     setErrorMsg('');
     try {
@@ -59,6 +62,8 @@ export function UninstallTab() {
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
       setPhase('error');
+    } finally {
+      uninstallInFlightRef.current = false;
     }
   };
 
@@ -119,6 +124,7 @@ export function UninstallTab() {
           <div className="flex gap-2">
             <button
               onClick={handleUninstall}
+              disabled={uninstallInFlightRef.current}
               className="px-3.5 py-2 text-sm font-medium rounded-lg bg-error text-destructive-foreground hover:bg-error/90 transition-colors focus-visible:ring-1 focus-visible:ring-ring"
             >
               {u.confirmButton}

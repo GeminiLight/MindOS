@@ -9,7 +9,7 @@ import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { getChatTools, getOrganizeTools, getRequestScopedTools } from '@/lib/agent/tools';
 import { estimateStringTokens, getOllamaContextWindow } from '@/lib/agent/context';
 import { isProviderId, toPiProvider, type ProviderId } from '@/lib/agent/providers';
-import { isCustomProviderId, findCustomProvider } from '@/lib/custom-endpoints';
+import { findProvider, isProviderEntryId } from '@/lib/custom-endpoints';
 import { setKbMode } from '@/lib/agent/kb-extension';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
@@ -66,10 +66,10 @@ export function createWebMindosPiRuntimeHostServices(
       let customProviderConfig: { apiKey: string; model: string; baseUrl: string } | undefined;
 
       if (input.providerOverride) {
-        if (isCustomProviderId(input.providerOverride)) {
-          const customProvider = findCustomProvider((serverSettings.ai?.providers ?? []) as any, input.providerOverride);
+        if (isProviderEntryId(input.providerOverride)) {
+          const customProvider = findProvider((serverSettings.ai?.providers ?? []) as any, input.providerOverride);
           if (!customProvider) {
-            const error = new Error('Custom provider not found') as Error & { code?: string; status?: number };
+            const error = new Error('Provider not found') as Error & { code?: string; status?: number };
             error.code = 'INVALID_REQUEST';
             error.status = 400;
             throw error;

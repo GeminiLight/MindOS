@@ -4,7 +4,7 @@ import { resolveExistingSafe } from '@/lib/core/security';
 
 export const MIND_SYSTEM_CONFIG_RELATIVE_PATH = '.mindos/modules/mind-system.json';
 
-export type MindSystemSlotKey = 'dao' | 'fa' | 'shu' | 'qi' | 'shi' | 'yan';
+export type MindSystemSlotKey = 'dao' | 'fa' | 'shu' | 'qi';
 
 export interface MindSystemSlot {
   key: MindSystemSlotKey;
@@ -26,8 +26,6 @@ const DEFAULT_MIND_SYSTEM_SLOTS: readonly MindSystemSlot[] = [
   { key: 'fa', label: '法', path: '02 法', role: 'principles', order: 20, primary: true, enabled: true },
   { key: 'shu', label: '术', path: '03 术', role: 'methods', order: 30, primary: true, enabled: true },
   { key: 'qi', label: '器', path: '04 器', role: 'tools-assets', order: 40, primary: true, enabled: true },
-  { key: 'shi', label: '势', path: '05 势', role: 'current-context', order: 50, primary: false, enabled: true },
-  { key: 'yan', label: '验', path: '99 验', role: 'review-loop', order: 990, primary: false, enabled: true },
 ] as const;
 
 const SLOT_KEYS = new Set<MindSystemSlotKey>(DEFAULT_MIND_SYSTEM_SLOTS.map(slot => slot.key));
@@ -67,7 +65,7 @@ export function readMindSystemConfig(mindRoot: string): MindSystemConfig {
 export function listMindSystemSlots(mindRoot: string): MindSystemSlot[] {
   const config = readMindSystemConfig(mindRoot);
   return Object.values(config.slots)
-    .filter(slot => slot.enabled)
+    .filter(slot => slot.enabled && mindSystemPathExists(mindRoot, slot))
     .map(slot => ({ ...slot }))
     .sort((a, b) => a.order - b.order);
 }
@@ -75,7 +73,7 @@ export function listMindSystemSlots(mindRoot: string): MindSystemSlot[] {
 export function mindSystemPathExists(mindRoot: string, slot: Pick<MindSystemSlot, 'path'>): boolean {
   try {
     const resolved = resolveExistingSafe(mindRoot, slot.path);
-    return fs.existsSync(resolved);
+    return fs.statSync(resolved).isDirectory();
   } catch {
     return false;
   }

@@ -155,6 +155,7 @@ export interface SkillInfo {
 /** 🟢 MINOR #7: Moved from SyncTab.tsx for consistency */
 export interface SyncStatus {
   enabled: boolean;
+  configured?: boolean;
   needsSetup?: boolean;
   provider?: string;
   remote?: string;
@@ -212,24 +213,15 @@ export interface SyncTabProps {
   visible?: boolean;
 }
 
-export interface McpServerStatusProps {
-  status: McpStatus | null;
-  agents: AgentInfo[];
-  t: Messages;
-}
-
 export interface McpAgentInstallProps {
   agents: AgentInfo[];
   t: Messages;
   onRefresh: () => void;
   mode?: 'cli' | 'mcp';
   activeSkillName?: string;
+  status?: McpStatus | null;
 }
 
 export interface McpSkillsSectionProps {
-  t: Messages;
-}
-
-export interface ShortcutsTabProps {
   t: Messages;
 }

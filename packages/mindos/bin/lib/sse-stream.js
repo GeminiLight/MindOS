@@ -7,6 +7,17 @@
 
 import { dim, cyan, red } from './colors.js';
 
+function stringField(event, primary, fallback) {
+  if (typeof event[primary] === 'string') return event[primary];
+  if (typeof event[fallback] === 'string') return event[fallback];
+  return '';
+}
+
+function valueField(event, primary, fallback) {
+  if (event[primary] !== undefined) return event[primary];
+  return event[fallback];
+}
+
 /**
  * Stream an SSE response from /api/ask and print to stdout.
  *
@@ -54,13 +65,14 @@ export async function streamSSE(res, opts = {}) {
         }
 
         if (event.type === 'text_delta') {
+          const delta = stringField(event, 'delta', 'text');
           if (!firstTextPrinted && !json) {
             // Clear "Thinking..." spinner
             process.stdout.write('\r\x1b[K');
             firstTextPrinted = true;
           }
-          textBuffer += event.text;
-          if (!json) process.stdout.write(event.text);
+          textBuffer += delta;
+          if (!json) process.stdout.write(delta);
         }
 
         if (event.type === 'thinking_delta') {
@@ -72,9 +84,10 @@ export async function streamSSE(res, opts = {}) {
             process.stdout.write('\r\x1b[K');
             firstTextPrinted = true;
           }
-          const name = event.name || 'unknown';
-          const inputSnippet = event.input
-            ? JSON.stringify(event.input).slice(0, 80)
+          const name = stringField(event, 'toolName', 'name') || 'unknown';
+          const input = valueField(event, 'args', 'input');
+          const inputSnippet = input
+            ? JSON.stringify(input).slice(0, 80)
             : '';
           const toolLine = `\n  ${dim('[')}${cyan('tool')}${dim(']')} ${name}${inputSnippet ? dim(': ' + inputSnippet) : ''}`;
           process.stdout.write(toolLine);
@@ -82,10 +95,10 @@ export async function streamSSE(res, opts = {}) {
         }
 
         if (event.type === 'tool_end' && showTools && !json) {
-          const result = event.result || '';
-          const preview = typeof result === 'string'
-            ? result.slice(0, 120)
-            : JSON.stringify(result).slice(0, 120);
+          const output = valueField(event, 'output', 'result') || '';
+          const preview = typeof output === 'string'
+            ? output.slice(0, 120)
+            : JSON.stringify(output).slice(0, 120);
           if (preview) {
             process.stdout.write(dim('  → ' + preview));
           }

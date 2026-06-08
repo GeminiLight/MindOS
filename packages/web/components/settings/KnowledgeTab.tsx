@@ -134,7 +134,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   }
 
   function handleCopy() {
-    const text = revealedToken ?? data.authToken ?? '';
+    const text = revealedToken ?? '';
     if (!text) return;
     copyToClipboard(text).then((ok) => {
       if (ok) toast.copy();
@@ -226,7 +226,7 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
               <code className="flex-1 text-xs font-mono text-foreground break-all select-all">
                 {displayToken || <span className="text-muted-foreground italic">{k.tokenNotSet ?? '— not set —'}</span>}
               </code>
-              {displayToken && (
+              {revealedToken && (
                 <button
                   type="button"
                   onClick={handleCopy}

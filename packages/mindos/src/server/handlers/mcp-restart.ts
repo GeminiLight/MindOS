@@ -44,7 +44,7 @@ export async function handleMcpRestartPost(
     const settings = services.readSettings?.();
     const mcpPort = Number(env.MINDOS_MCP_PORT) || readSettingsNumber(settings, 'mcpPort') || 8781;
     const webPort = env.MINDOS_WEB_PORT || '3456';
-    const authToken = env.AUTH_TOKEN || readSettingsString(settings, 'authToken');
+    const authToken = readSettingsString(settings, 'authToken') || env.AUTH_TOKEN;
     const managed = env.MINDOS_MANAGED === '1';
 
     const kill = services.killByPort ?? killMcpProcessesByPort;
