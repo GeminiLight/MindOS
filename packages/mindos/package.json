@@ -1,6 +1,6 @@
 {
   "name": "@geminilight/mindos",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "MindOS — Human-Agent Collaborative Mind System. Local-first knowledge base that syncs your mind to all AI Agents via MCP.",
   "keywords": [
     "mindos",
@@ -121,14 +121,14 @@
     "zod": "^3.22.4"
   },
   "optionalDependencies": {
-    "@geminilight/mindos-darwin-arm64": "1.0.18",
-    "@geminilight/mindos-darwin-x64": "1.0.18",
-    "@geminilight/mindos-linux-arm64": "1.0.18",
-    "@geminilight/mindos-linux-arm64-musl": "1.0.18",
-    "@geminilight/mindos-linux-x64": "1.0.18",
-    "@geminilight/mindos-linux-x64-musl": "1.0.18",
-    "@geminilight/mindos-windows-arm64": "1.0.18",
-    "@geminilight/mindos-windows-x64": "1.0.18"
+    "@geminilight/mindos-darwin-arm64": "1.0.19",
+    "@geminilight/mindos-darwin-x64": "1.0.19",
+    "@geminilight/mindos-linux-arm64": "1.0.19",
+    "@geminilight/mindos-linux-arm64-musl": "1.0.19",
+    "@geminilight/mindos-linux-x64": "1.0.19",
+    "@geminilight/mindos-linux-x64-musl": "1.0.19",
+    "@geminilight/mindos-windows-arm64": "1.0.19",
+    "@geminilight/mindos-windows-x64": "1.0.19"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",

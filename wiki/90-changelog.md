@@ -1,8 +1,10 @@
-<!-- Last verified: 2026-06-09 | Current version: v1.0.18 -->
+<!-- Last verified: 2026-06-09 | Current version: v1.0.19 -->
 
 # 变更日志 (CHANGELOG)
 
 ## Unreleased
+
+## v1.0.19 (2026-06-09)
 
 ### Git Sync / Settings
 
