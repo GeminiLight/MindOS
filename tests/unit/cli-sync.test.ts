@@ -109,6 +109,33 @@ describe('mindos sync config persistence', () => {
     expect(state.lastError).toBe('Commit failed: fatal: unable to auto-detect email address');
   });
 
+  it('sets a repo-local Git identity before auto committing when none exists', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'remote' && args[1] === 'get-url') return 'git@example.com:mind/repo.git\n';
+      if (args[0] === 'config' && args[1] === '--get') {
+        const error = new Error(`missing ${args[2]}`);
+        throw error;
+      }
+      if (args[0] === 'status' && args[1] === '--porcelain') return ' M note.md\n';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { manualSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(path.join(mindRoot, '.git'), { recursive: true });
+
+    expect(() => manualSync(mindRoot)).not.toThrow();
+
+    expect(calls).toContainEqual(['config', 'user.email', 'mindos@local']);
+    expect(calls).toContainEqual(['config', 'user.name', 'MindOS']);
+    expect(calls.some(args => args[0] === 'commit' && args[1] === '-m')).toBe(true);
+  });
+
   it('uses the requested branch during non-interactive init', async () => {
     const calls: string[][] = [];
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
@@ -136,6 +163,123 @@ describe('mindos sync config persistence', () => {
     expect(calls).not.toContainEqual(['checkout', '-b', 'main']);
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     expect(config.sync.branch).toBe('dev');
+  });
+
+  it('pushes local changes after pulling an existing remote during non-interactive init', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'check-ref-format') return `${args[2]}\n`;
+      if (args[0] === 'ls-remote') return 'abc123\trefs/heads/main\n';
+      if (args[0] === 'config' && args[1] === '--get') return 'configured\n';
+      if (args[0] === 'status' && args[1] === '--porcelain') return '?? local.md\n';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://example.com/mind.git',
+      branch: 'main',
+    });
+
+    expect(calls).toContainEqual(['pull', 'origin', 'main', '--allow-unrelated-histories']);
+    expect(calls.some(args => args[0] === 'commit' && args[1] === '-m')).toBe(true);
+    expect(calls).toContainEqual(['push', '-u', 'origin', 'HEAD']);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(config.sync.enabled).toBe(true);
+  });
+
+  it('does not write HTTPS access tokens into the configured remote URL', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[], options?: { input?: string }) => {
+      calls.push(args);
+      if (args[0] === 'check-ref-format') return `${args[2]}\n`;
+      if (args[0] === 'credential' && args[1] === 'fill') return options?.input?.includes('username=oauth2')
+        ? 'protocol=https\nhost=example.com\nusername=oauth2\npassword=ghp_secret\n'
+        : '';
+      if (args[0] === 'ls-remote') return '';
+      if (args[0] === 'config' && args[1] === '--get') return 'configured\n';
+      if (args[0] === 'status' && args[1] === '--porcelain') return '';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://oauth2:ghp_secret@example.com/mind.git',
+      branch: 'main',
+    });
+
+    const remoteCalls = calls.filter(args => args[0] === 'remote');
+    expect(JSON.stringify(remoteCalls)).not.toContain('ghp_secret');
+    expect(remoteCalls).toContainEqual(['remote', 'add', 'origin', 'https://example.com/mind.git']);
+  });
+
+  it('strips ordinary HTTPS usernames without treating them as access tokens', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'check-ref-format') return `${args[2]}\n`;
+      if (args[0] === 'ls-remote') return '';
+      if (args[0] === 'status' && args[1] === '--porcelain') return '';
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://alice@example.com/mind.git',
+      branch: 'main',
+    });
+
+    expect(calls.some(args => args[0] === 'credential')).toBe(false);
+    expect(calls).toContainEqual(['remote', 'add', 'origin', 'https://example.com/mind.git']);
+  });
+
+  it('fails HTTPS token setup instead of falling back to an inline token remote', async () => {
+    const calls: string[][] = [];
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      calls.push(args);
+      if (args[0] === 'check-ref-format') return `${args[2]}\n`;
+      if (args[0] === 'credential' && args[1] === 'approve') throw new Error('credential helper unavailable');
+      return '';
+    });
+    vi.doMock('node:child_process', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:child_process')>();
+      return { ...actual, execFileSync: execFileSyncMock };
+    });
+    const { initSync } = await importSync();
+    const mindRoot = path.join(tempDir, 'mind');
+    fs.mkdirSync(mindRoot);
+
+    await expect(initSync(mindRoot, {
+      nonInteractive: true,
+      remote: 'https://example.com/mind.git',
+      token: 'ghp_secret',
+      branch: 'main',
+    })).rejects.toThrow('Git credential helper did not store the access token');
+
+    expect(JSON.stringify(calls)).not.toContain('ghp_secret@example.com');
+    expect(fs.existsSync(configPath)).toBe(false);
   });
 
   it('rejects invalid branch names before configuring sync', async () => {

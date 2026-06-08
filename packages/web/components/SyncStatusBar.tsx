@@ -46,7 +46,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
     return false;
   });
   const { t } = useLocale();
-  const syncT = t.sidebar?.sync as Record<string, string> | undefined;
+  const syncT = t.sidebar?.sync as Record<string, unknown> | undefined;
   const { syncing, syncResult, syncError, syncNow } = useSyncAction(fetchStatus, syncT);
 
   // #1 — refresh timeAgo display every 60s
@@ -63,7 +63,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       if ((prev === 'error' || prev === 'conflicts') && currentLevel === 'synced') {
         // Defer state update to avoid cascading renders
         setTimeout(() => {
-          setToast(syncT?.syncRestored ?? 'Sync restored');
+          setToast((syncT?.syncRestored as string) ?? 'Sync restored');
           setTimeout(() => setToast(null), 3000);
         }, 0);
       }
@@ -99,7 +99,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
           title={loadError}
         >
           <XCircle size={12} className="shrink-0" />
-          <span className="truncate">{syncT?.syncError ?? 'Sync status unavailable'}</span>
+          <span className="truncate">{(syncT?.syncError as string) ?? 'Sync status unavailable'}</span>
         </button>
       </div>
     );
@@ -113,10 +113,10 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
         <button
           onClick={onOpenSyncSettings}
           className="flex min-h-7 min-w-0 items-center gap-2 rounded-md hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={syncT?.enableHint ?? 'Set up cross-device sync'}
+          title={(syncT?.enableHint as string) ?? 'Set up cross-device sync'}
         >
           <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground/40" />
-          <span className="truncate">{syncT?.enableSync ?? 'Enable sync'} →</span>
+          <span className="truncate">{(syncT?.enableSync as string) ?? 'Enable sync'} →</span>
         </button>
         <button
           onClick={(e) => {
@@ -125,7 +125,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
             setHintDismissed(true);
           }}
           className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Dismiss"
+          title={(syncT?.dismiss as string) ?? 'Dismiss'}
         >
           <span className="text-2xs">✕</span>
         </button>
@@ -135,8 +135,8 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
 
   const { label, tooltip } = stale && status
     ? {
-      label: syncT?.syncStale ?? 'Sync status stale',
-      tooltip: loadError ?? (syncT?.syncStaleHint ?? 'MindOS could not refresh sync status. The displayed state may be outdated.'),
+      label: (syncT?.syncStale as string) ?? 'Sync status stale',
+      tooltip: loadError ?? ((syncT?.syncStaleHint as string) ?? 'MindOS could not refresh sync status. The displayed state may be outdated.'),
     }
     : getSyncLabel(level, status, syncT);
   const buttonTitle = syncError || tooltip;
@@ -168,8 +168,8 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
               level === 'conflicts' ? 'text-error' : 'text-[var(--amber-text)]'
             }`}
             title={level === 'conflicts'
-              ? (syncT?.resolveConflictsHint ?? 'Open Settings > Sync to resolve conflicts')
-              : (syncT?.syncPausedHint ?? 'Open Settings > Sync to enable auto-sync')
+              ? ((syncT?.resolveConflictsHint as string) ?? 'Open Settings > Sync to resolve conflicts')
+              : ((syncT?.syncPausedHint as string) ?? 'Open Settings > Sync to enable auto-sync')
             }
           >
             {level === 'conflicts' ? <XCircle size={12} /> : <PlayCircle size={12} />}
@@ -179,7 +179,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
             onClick={stale ? handleRetryStatus : handleSyncNow}
             disabled={!stale && syncing}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title={stale ? (syncT?.retry ?? 'Retry') : (syncT?.syncNow ?? 'Sync now')}
+            title={stale ? ((syncT?.retry as string) ?? 'Retry') : ((syncT?.syncNow as string) ?? 'Sync now')}
           >
             <RefreshCw size={12} className={!stale && syncing ? 'animate-spin' : ''} />
           </button>

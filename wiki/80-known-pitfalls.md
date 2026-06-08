@@ -1581,7 +1581,7 @@ mindos onboard
 - **现象（P1 注入）：** `remoteUrl` 和 `branch` 通过模板字符串插入 `execSync`，理论上可被 shell 注入
 - **现象（P1 竞态）：** SIGTERM + SIGINT 同时触发 `gracefulShutdown` → `autoCommitAndPush` 跑两次 → git 并发写冲突
 - **解决：**
-  - credential catch 块记日志 + fallback 到 URL 内嵌 token
+  - credential catch 块记日志；credential helper 无法持久化 token 时明确失败，禁止 fallback 到 URL 内嵌 token
   - `ls-remote` 失败时从 `err.stderr` 提取具体错误信息
   - sync.js 全部 `execSync` 迁移至 `execFileSync` 参数数组（含 `gitExec` 改为接收数组）
   - `gracefulShutdown` 加 `shutdownInProgress` guard
@@ -4198,6 +4198,21 @@ const visibleNodes = useMemo(() => {
 5. 手动 sync 返回后必须刷新状态并按最终状态决定提示：有 conflicts/lastError/stale 时不能显示成功 toast。
 
 **防回归**：`packages/web/__tests__/core/sync-status.test.ts` 覆盖 paused/unknown/lock 文案；`packages/web/__tests__/core/sync-action.test.tsx` 覆盖全局 in-flight 与冲突后不显示成功；`packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 stale 状态和 `.gitignore` 重试；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 paused repo 仍显示 Sync rail 入口。
+
+### Git Sync init/auth 不能依赖用户全局 Git 配置，也不能把 token 写入 remote（2026-06-09）
+
+**症状**：新用户第一次启用 Git Sync 时，如果机器没有全局 `user.name/user.email`，自动提交会失败；如果用户粘贴了带 HTTPS credential 的 remote，token 可能进入 `.git/config`；远端已有 README/历史提交时，init 只 pull 后就显示成功，本地笔记没有被推上去；SSH 用户使用自定义 `~/.ssh/config`、硬件密钥或平台 agent 时，默认 key 文件名预检会误判失败。
+
+**根因**：初始化流程把“Git 能提交”“凭据能安全持久化”“远端已有内容后本地也完成上传”“SSH credential 形态”都当成隐含前提，没有在 MindOS 管理的 repo 边界上显式保护。
+
+**规则**：
+1. 自动提交前要保证 repo-local `user.email` / `user.name` 存在；只能写当前 mindRoot 的 local config，不能改用户全局 Git 配置。
+2. HTTPS remote 写入 `origin` 前必须剥离 username/password；显式 token 或 embedded password 只能交给 Git credential helper。
+3. credential helper 无法通过 `git credential fill` 验证 token 已存住时，必须明确失败并写 `sync-state.json`，禁止把 token fallback 到 inline remote URL。
+4. 若 `ls-remote` 显示远端已有 refs，init 必须 pull 后继续 auto-commit/push 本地待同步文件，只有完整首轮同步成功后才能写 `sync.enabled=true`。
+5. SSH 预检不能靠默认 key 文件名或 `SSH_AUTH_SOCK` 直接拒绝；自定义 config、硬件 key、平台 agent 要交给 `git ls-remote` 作为 source of truth。
+
+**防回归**：`tests/unit/cli-sync.test.ts` 覆盖 repo-local identity fallback、远端已有内容后本地文件继续 push、HTTPS credential stripping、普通 HTTPS username 不当作 token、credential helper 失败不写 inline token remote；`packages/web/__tests__/components/sync-popover.test.tsx` 和 `packages/web/__tests__/core/sync-status.test.ts` 覆盖 conflict/stale/i18n 状态入口。
 
 ### Platform runtime 包不能暴露和主包同名的 `mindos` bin（2026-06-06）
 

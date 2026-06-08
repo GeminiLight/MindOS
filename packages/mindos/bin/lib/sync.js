@@ -227,6 +227,23 @@ function gitFailureMessage(prefix, err) {
   return `${prefix}: ${detail}`;
 }
 
+function readGitConfig(cwd, key) {
+  try {
+    return gitExec(['config', '--get', key], cwd);
+  } catch {
+    return '';
+  }
+}
+
+function ensureGitIdentity(cwd) {
+  if (!readGitConfig(cwd, 'user.email')) {
+    execFileSync('git', ['config', 'user.email', 'mindos@local'], { cwd, stdio: 'pipe', timeout: 5000 });
+  }
+  if (!readGitConfig(cwd, 'user.name')) {
+    execFileSync('git', ['config', 'user.name', 'MindOS'], { cwd, stdio: 'pipe', timeout: 5000 });
+  }
+}
+
 function normalizeBranchName(branch, cwd) {
   const value = (branch || 'main').trim();
   if (!value) throw new Error('Branch name is required');
@@ -264,6 +281,28 @@ function redactGitRemote(remote) {
   }
 }
 
+function looksLikeAccessToken(value) {
+  if (!value) return false;
+  return /^(gh[pousr]_|github_pat_|glpat-|pat_)/i.test(value);
+}
+
+function normalizeHttpsRemoteCredentials(remote, token) {
+  if (!remote || !/^https?:\/\//i.test(remote)) return { remote, token };
+  try {
+    const parsed = new URL(remote);
+    const embeddedPassword = parsed.password ? decodeURIComponent(parsed.password) : '';
+    const embeddedUsername = parsed.username ? decodeURIComponent(parsed.username) : '';
+    parsed.username = '';
+    parsed.password = '';
+    return {
+      remote: parsed.toString(),
+      token: token || embeddedPassword || (looksLikeAccessToken(embeddedUsername) ? embeddedUsername : ''),
+    };
+  } catch {
+    return { remote, token };
+  }
+}
+
 /** Check if URL is SSH format (git@host:path) */
 function isSSHUrl(url) {
   return /^git@[\w.-]+:.+/.test(url);
@@ -278,28 +317,10 @@ function getSshEnv() {
 }
 
 /** Validate SSH setup before attempting to use SSH URL */
-function validateSSHSetup(url, mindRoot, nonInteractive) {
+function validateSSHSetup(url) {
   if (!isSSHUrl(url)) return { isSSH: false };
-
-  const sshDir = resolve(homedir(), '.ssh');
-  const id_rsa = resolve(sshDir, 'id_rsa');
-  const id_ed25519 = resolve(sshDir, 'id_ed25519');
-  const hasKey = existsSync(id_rsa) || existsSync(id_ed25519);
-  const hasAgent = !!process.env.SSH_AUTH_SOCK;
-
-  if (!hasKey && !hasAgent) {
-    const hint = isSSHUrl(url)
-      ? `SSH key not found at ${sshDir}/id_rsa or id_ed25519. Create one with:\n` +
-        `  ssh-keygen -t ed25519 -f ${id_rsa}\n` +
-        `Then verify with: ssh -T git@github.com`
-      : '';
-    return {
-      isSSH: true,
-      isValid: false,
-      error: `No SSH credentials found. ${hint}`,
-    };
-  }
-
+  // Do not pre-reject SSH based on default key filenames. Users may rely on
+  // ~/.ssh/config, hardware keys, platform agents, or GIT_SSH_COMMAND.
   return { isSSH: true, isValid: true };
 }
 
@@ -356,6 +377,7 @@ function autoCommitAndPushUnlocked(mindRoot, isSshUrl = false) {
 
   // Stage and commit any pending changes
   try {
+    ensureGitIdentity(mindRoot);
     execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
     const status = gitExec(['status', '--porcelain'], mindRoot);
     if (status) {
@@ -531,179 +553,186 @@ export async function initSync(mindRoot, opts = {}) {
 
   const initLock = acquireSyncLock(mindRoot, 'init');
   try {
-  // Pre-flight SSH validation (before git init)
-  const sshValidation = validateSSHSetup(remoteUrl, mindRoot, nonInteractive);
-  if (sshValidation.isSSH && !sshValidation.isValid) {
-    const err = sshValidation.error;
-    if (nonInteractive) throw new Error(err);
-    console.error(red(`✘ ${err}`));
-    process.exit(1);
-  }
-  const isSshUrl = sshValidation.isSSH;
-  if (!isGitRepo(mindRoot)) {
-    if (!nonInteractive) console.log(dim('Initializing git repository...'));
-    execFileSync('git', ['init'], { cwd: mindRoot, stdio: 'pipe' });
-    try {
-      execFileSync('git', ['checkout', '-B', branch], { cwd: mindRoot, stdio: 'pipe' });
-    } catch (err) {
-      const message = gitFailureMessage(`Failed to create branch "${branch}"`, err);
-      if (nonInteractive) throw new Error(message);
-      console.error(red(`✘ ${message}`));
+    const normalizedRemote = normalizeHttpsRemoteCredentials(remoteUrl, token);
+    remoteUrl = normalizedRemote.remote;
+    token = normalizedRemote.token;
+
+    // Pre-flight SSH validation (before git init)
+    const sshValidation = validateSSHSetup(remoteUrl);
+    if (sshValidation.isSSH && !sshValidation.isValid) {
+      const err = sshValidation.error;
+      if (nonInteractive) throw new Error(err);
+      console.error(red(`✘ ${err}`));
       process.exit(1);
     }
-  } else {
-    try {
-      checkoutBranch(mindRoot, branch);
-    } catch (err) {
-      const message = gitFailureMessage(`Failed to switch to branch "${branch}"`, err);
-      if (nonInteractive) throw new Error(message);
-      console.error(red(`✘ ${message}`));
-      process.exit(1);
-    }
-  }
-
-  // 1b. Ensure .gitignore exists
-  // 1b. Ensure .gitignore has system file exclusions
-  const gitignorePath = getSyncGitignorePath(mindRoot);
-  const SYSTEM_IGNORES = [
-    'INSTRUCTION.md',
-  ];
-  if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, [
-      '# MindOS auto-generated',
-      '.DS_Store',
-      'Thumbs.db',
-      '*.tmp',
-      '*.bak',
-      '*.swp',
-      '*.sync-conflict',
-      'node_modules/',
-      '.obsidian/',
-      '',
-      '# MindOS system files (regenerated on update, not user content)',
-      ...SYSTEM_IGNORES,
-      '',
-    ].join('\n'), 'utf-8');
-  } else {
-    // Existing .gitignore — append missing system file entries
-    const existing = readFileSync(gitignorePath, 'utf-8');
-    const missing = SYSTEM_IGNORES.filter(f => !existing.includes(f));
-    if (missing.length > 0) {
-      const append = '\n# MindOS system files (auto-added)\n' + missing.join('\n') + '\n';
-      writeFileSync(gitignorePath, existing.trimEnd() + '\n' + append, 'utf-8');
-    }
-  }
-
-  // Remove system files from git tracking if already committed
-  for (const file of SYSTEM_IGNORES) {
-    try { execFileSync('git', ['rm', '--cached', '--ignore-unmatch', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
-  }
-
-  // Handle token for HTTPS
-  if (token && remoteUrl.startsWith('https://')) {
-    const urlObj = new URL(remoteUrl);
-    // Choose credential helper by platform
-    const platform = process.platform;
-    let helper;
-    if (platform === 'darwin') helper = 'osxkeychain';
-    else if (platform === 'win32') helper = 'manager';
-    else helper = 'store';
-    try { execFileSync('git', ['config', 'credential.helper', helper], { cwd: mindRoot, stdio: 'pipe' }); } catch (e) {
-      console.error(`[sync] credential.helper setup failed: ${e.message}`);
-    }
-    // Store the credential via git credential approve, then verify it stuck
-    let credentialStored = false;
-    try {
-      const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
-      execFileSync('git', ['credential', 'approve'], { cwd: mindRoot, input: credInput, stdio: 'pipe' });
-      // Verify: credential fill should return the password we just stored
+    const isSshUrl = sshValidation.isSSH;
+    if (!isGitRepo(mindRoot)) {
+      if (!nonInteractive) console.log(dim('Initializing git repository...'));
+      execFileSync('git', ['init'], { cwd: mindRoot, stdio: 'pipe' });
       try {
-        const fillInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\n\n`;
-        const fillResult = execFileSync('git', ['credential', 'fill'], {
-          cwd: mindRoot, input: fillInput, encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        });
-        credentialStored = fillResult.includes(`password=${token}`);
-      } catch {
-        credentialStored = false;
-      }
-    } catch (e) {
-      if (!nonInteractive) console.error(`[sync] credential approve failed: ${e.message}`);
-    }
-    // If credential helper didn't actually persist, embed token in URL
-    if (!credentialStored) {
-      if (!nonInteractive) console.log(dim('Credential helper unavailable, using inline token'));
-      const fallbackUrl = new URL(remoteUrl);
-      fallbackUrl.username = 'oauth2';
-      fallbackUrl.password = token;
-      remoteUrl = fallbackUrl.toString();
-    }
-    // For 'store' helper, restrict file permissions AFTER credential file is created
-    if (helper === 'store') {
-      const credFile = resolve(process.env.HOME || homedir(), '.git-credentials');
-      try { execFileSync('chmod', ['600', credFile], { stdio: 'pipe' }); } catch {}
-    }
-  }
-
-  // 4. Set remote
-  try {
-    execFileSync('git', ['remote', 'add', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
-  } catch {
-    execFileSync('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
-  }
-
-  // 5. Test connection (also captures refs to avoid a second SSH round-trip)
-  if (!nonInteractive) console.log(dim('Testing connection...'));
-  let remoteRefs = '';
-  try {
-    remoteRefs = gitExecSSH(['ls-remote', 'origin'], mindRoot, isSshUrl, 15000);
-    if (!nonInteractive) console.log(green('✔ Connection successful'));
-  } catch (lsErr) {
-    const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
-    const errMsg = `Remote not reachable${detail ? ': ' + detail : ''} — check URL and credentials`;
-    if (nonInteractive) throw new Error(errMsg);
-    console.error(red(`✘ ${errMsg}`));
-    process.exit(1);
-  }
-
-  const syncConfig = {
-    enabled: true,
-    provider: 'git',
-    remote: 'origin',
-    branch: branch || getBranch(mindRoot),
-    autoCommitInterval: 30,
-    autoPullInterval: 300,
-  };
-
-  // 6. First sync: pull if remote has content, push otherwise
-  //    Reuse remoteRefs from step 5 to avoid redundant SSH connection (~3-4s saved)
-  const hasRemoteContent = remoteRefs.includes('refs/heads/');
-  try {
-    if (hasRemoteContent) {
-      if (!nonInteractive) console.log(dim('Pulling from remote...'));
-      try {
-        const pullEnv = isSshUrl ? { ...process.env, ...getSshEnv() } : process.env;
-        execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit', env: pullEnv });
+        execFileSync('git', ['checkout', '-B', branch], { cwd: mindRoot, stdio: 'pipe' });
       } catch (err) {
-        const message = gitFailureMessage('Initial pull failed', err);
-        saveSyncState({ ...loadSyncState(), lastError: message, lastErrorTime: new Date().toISOString() });
-        throw new Error(message);
+        const message = gitFailureMessage(`Failed to create branch "${branch}"`, err);
+        if (nonInteractive) throw new Error(message);
+        console.error(red(`✘ ${message}`));
+        process.exit(1);
       }
     } else {
-      if (!nonInteractive) console.log(dim('Pushing to remote...'));
-      autoCommitAndPushUnlocked(mindRoot, isSshUrl);
+      try {
+        checkoutBranch(mindRoot, branch);
+      } catch (err) {
+        const message = gitFailureMessage(`Failed to switch to branch "${branch}"`, err);
+        if (nonInteractive) throw new Error(message);
+        console.error(red(`✘ ${message}`));
+        process.exit(1);
+      }
     }
-  } catch (err) {
-    if (nonInteractive) throw err;
-    console.error(red(`✘ ${err.message}`));
-    process.exit(1);
-  }
 
-  // 7. Save sync config only after the first sync succeeds.
-  saveSyncConfig(syncConfig);
-  if (!nonInteractive) console.log(green('✔ Sync configured'));
-  if (!nonInteractive) console.log(green('✔ Initial sync complete\n'));
+    // 1b. Ensure .gitignore has system file exclusions
+    const gitignorePath = getSyncGitignorePath(mindRoot);
+    const SYSTEM_IGNORES = [
+      'INSTRUCTION.md',
+    ];
+    if (!existsSync(gitignorePath)) {
+      writeFileSync(gitignorePath, [
+        '# MindOS auto-generated',
+        '.DS_Store',
+        'Thumbs.db',
+        '*.tmp',
+        '*.bak',
+        '*.swp',
+        '*.sync-conflict',
+        'node_modules/',
+        '.obsidian/',
+        '',
+        '# MindOS system files (regenerated on update, not user content)',
+        ...SYSTEM_IGNORES,
+        '',
+      ].join('\n'), 'utf-8');
+    } else {
+      // Existing .gitignore: append missing system file entries.
+      const existing = readFileSync(gitignorePath, 'utf-8');
+      const missing = SYSTEM_IGNORES.filter(f => !existing.includes(f));
+      if (missing.length > 0) {
+        const append = '\n# MindOS system files (auto-added)\n' + missing.join('\n') + '\n';
+        writeFileSync(gitignorePath, existing.trimEnd() + '\n' + append, 'utf-8');
+      }
+    }
+
+    // Remove system files from git tracking if already committed
+    for (const file of SYSTEM_IGNORES) {
+      try { execFileSync('git', ['rm', '--cached', '--ignore-unmatch', file], { cwd: mindRoot, stdio: 'pipe' }); } catch {}
+    }
+
+    // Handle token for HTTPS
+    if (token && remoteUrl.startsWith('https://')) {
+      const urlObj = new URL(remoteUrl);
+      // Choose credential helper by platform
+      const platform = process.platform;
+      let helper;
+      if (platform === 'darwin') helper = 'osxkeychain';
+      else if (platform === 'win32') helper = 'manager';
+      else helper = 'store';
+      try { execFileSync('git', ['config', 'credential.helper', helper], { cwd: mindRoot, stdio: 'pipe' }); } catch (e) {
+        console.error(`[sync] credential.helper setup failed: ${e.message}`);
+      }
+      // Store the credential via git credential approve, then verify it stuck.
+      let credentialStored = false;
+      try {
+        const credInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\npassword=${token}\n\n`;
+        execFileSync('git', ['credential', 'approve'], { cwd: mindRoot, input: credInput, stdio: 'pipe' });
+        // Verify: credential fill should return the password we just stored.
+        try {
+          const fillInput = `protocol=${urlObj.protocol.replace(':', '')}\nhost=${urlObj.host}\nusername=oauth2\n\n`;
+          const fillResult = execFileSync('git', ['credential', 'fill'], {
+            cwd: mindRoot, input: fillInput, encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
+            env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+          });
+          credentialStored = fillResult.includes(`password=${token}`);
+        } catch {
+          credentialStored = false;
+        }
+      } catch (e) {
+        if (!nonInteractive) console.error(`[sync] credential approve failed: ${e.message}`);
+      }
+      // Do not write tokens into .git/config. If the credential helper cannot
+      // persist the credential, fail explicitly so users can fix auth without
+      // leaving a secret in the repository remote URL.
+      if (!credentialStored) {
+        const message = 'Git credential helper did not store the access token. Configure a Git credential helper or use SSH, then try again.';
+        saveSyncState({ ...loadSyncState(), lastError: message, lastErrorTime: new Date().toISOString() });
+        if (nonInteractive) throw new Error(message);
+        console.error(red(`✘ ${message}`));
+        process.exit(1);
+      }
+      // For 'store' helper, restrict file permissions after credential file is created.
+      if (helper === 'store') {
+        const credFile = resolve(process.env.HOME || homedir(), '.git-credentials');
+        try { execFileSync('chmod', ['600', credFile], { stdio: 'pipe' }); } catch {}
+      }
+    }
+
+    // 4. Set remote
+    try {
+      execFileSync('git', ['remote', 'add', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
+    } catch {
+      execFileSync('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: mindRoot, stdio: 'pipe' });
+    }
+
+    // 5. Test connection (also captures refs to avoid a second SSH round-trip)
+    if (!nonInteractive) console.log(dim('Testing connection...'));
+    let remoteRefs = '';
+    try {
+      remoteRefs = gitExecSSH(['ls-remote', 'origin'], mindRoot, isSshUrl, 15000);
+      if (!nonInteractive) console.log(green('✔ Connection successful'));
+    } catch (lsErr) {
+      const detail = lsErr.stderr ? lsErr.stderr.toString().trim() : '';
+      const errMsg = `Remote not reachable${detail ? ': ' + detail : ''} — check URL and credentials`;
+      if (nonInteractive) throw new Error(errMsg);
+      console.error(red(`✘ ${errMsg}`));
+      process.exit(1);
+    }
+
+    const syncConfig = {
+      enabled: true,
+      provider: 'git',
+      remote: 'origin',
+      branch: branch || getBranch(mindRoot),
+      autoCommitInterval: 30,
+      autoPullInterval: 300,
+    };
+
+    // 6. First sync: pull if remote has content, push otherwise.
+    //    Reuse remoteRefs from step 5 to avoid redundant SSH connection.
+    const hasRemoteContent = remoteRefs.includes('refs/heads/');
+    try {
+      if (hasRemoteContent) {
+        if (!nonInteractive) console.log(dim('Pulling from remote...'));
+        try {
+          const pullEnv = isSshUrl ? { ...process.env, ...getSshEnv() } : process.env;
+          execFileSync('git', ['pull', 'origin', syncConfig.branch, '--allow-unrelated-histories'], { cwd: mindRoot, stdio: nonInteractive ? 'pipe' : 'inherit', env: pullEnv });
+          saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });
+          autoCommitAndPushUnlocked(mindRoot, isSshUrl);
+        } catch (err) {
+          const message = gitFailureMessage('Initial pull failed', err);
+          saveSyncState({ ...loadSyncState(), lastError: message, lastErrorTime: new Date().toISOString() });
+          throw new Error(message);
+        }
+      } else {
+        if (!nonInteractive) console.log(dim('Pushing to remote...'));
+        autoCommitAndPushUnlocked(mindRoot, isSshUrl);
+      }
+    } catch (err) {
+      if (nonInteractive) throw err;
+      console.error(red(`✘ ${err.message}`));
+      process.exit(1);
+    }
+
+    // 7. Save sync config only after the first sync succeeds.
+    saveSyncConfig(syncConfig);
+    if (!nonInteractive) console.log(green('✔ Sync configured'));
+    if (!nonInteractive) console.log(green('✔ Initial sync complete\n'));
   } finally {
     releaseSyncLock(initLock);
   }

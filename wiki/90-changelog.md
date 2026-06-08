@@ -2,6 +2,14 @@
 
 # 变更日志 (CHANGELOG)
 
+## Unreleased
+
+### Git Sync / Settings
+
+- **Sync init/auth 加固**：初始化时会补齐 repo-local Git identity，避免用户没配置全局 `user.name/user.email` 就无法自动提交；HTTPS remote 会先剥离 username/password，再通过 credential helper 存 token，helper 无法持久化时明确失败，不再把 token 写回 `.git/config`。
+- **首次同步语义修复**：远端已有内容时，`sync init` 会先 pull，再提交/推送本地待同步文件，避免显示初始化成功但本地笔记其实没有上传。
+- **SSH 与状态文案修复**：SSH 预检不再靠默认 key 文件名误杀自定义 `~/.ssh/config`、硬件密钥或平台 agent；底栏/Popover 的中文相对时间和关闭提示改为完整 i18n。
+
 ## v1.0.18 (2026-06-09)
 
 ### Git Sync / Settings

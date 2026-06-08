@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { formatSyncError, getStatusLevel, getSyncLabel, timeAgo } from '@/lib/sync-ui';
 import type { SyncStatus } from '@/components/settings/types';
+import { messages } from '@/lib/i18n';
 
 /* ------------------------------------------------------------------ */
 /*  timeAgo                                                           */
@@ -128,6 +129,15 @@ describe('getStatusLevel', () => {
 });
 
 describe('getSyncLabel', () => {
+  it('uses sidebar sync time localization for synced labels', () => {
+    const lastSync = new Date(Date.now() - 5 * 60_000).toISOString();
+    const label = getSyncLabel('synced', { ...base, lastSync }, messages.zh.sidebar.sync as Record<string, unknown>);
+
+    expect(label.label).toContain('已同步');
+    expect(label.label).toContain('5 分钟前');
+    expect(label.label).not.toContain('5m ago');
+  });
+
   it('uses user-facing language for pending local changes', () => {
     const label = getSyncLabel('unpushed', { ...base, unpushed: '3' });
 
