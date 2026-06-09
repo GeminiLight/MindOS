@@ -142,6 +142,8 @@ function normalizeSyncConflicts(value: unknown): NonNullable<SyncStatus['conflic
       file,
       ...(typeof record.time === 'string' && Number.isFinite(new Date(record.time).getTime()) ? { time: record.time } : {}),
       ...(record.noBackup === true ? { noBackup: true } : {}),
+      ...(typeof record.localExists === 'boolean' ? { localExists: record.localExists } : {}),
+      ...(typeof record.remoteExists === 'boolean' ? { remoteExists: record.remoteExists } : {}),
     });
   }
   return conflicts;
@@ -224,7 +226,7 @@ export function useSyncAction(refreshFn: (opts?: { throwOnError?: boolean }) => 
       });
       await refreshFn();
       const refreshedStatus = syncStatusSnapshot.status;
-      if (syncStatusSnapshot.stale && syncStatusSnapshot.error) {
+      if (syncStatusSnapshot.error) {
         setSyncError(formatSyncError(syncStatusSnapshot.error, syncT));
         setSyncResult('error');
       } else if (refreshedStatus?.conflicts?.length) {

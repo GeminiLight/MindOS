@@ -153,8 +153,15 @@ function SyncActionMessage({ message }: { message: { type: 'success' | 'error'; 
 
 /* ── Conflict Row ──────────────────────────────────────────────── */
 
-function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
-  file: string; time?: string; noBackup?: boolean; syncT?: Record<string, unknown>; onResolved: () => void;
+function ConflictRow({ file, time, noBackup, localExists, remoteExists, syncT, onResolved, disabled }: {
+  file: string;
+  time?: string;
+  noBackup?: boolean;
+  localExists?: boolean;
+  remoteExists?: boolean;
+  syncT?: Record<string, unknown>;
+  onResolved: () => Promise<boolean>;
+  disabled?: boolean;
 }) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -162,6 +169,8 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const [confirmKeepLocalWithoutPreview, setConfirmKeepLocalWithoutPreview] = useState(false);
+  const [previewBackupMissing, setPreviewBackupMissing] = useState(false);
+  const [refreshFailedAfterResolve, setRefreshFailedAfterResolve] = useState(false);
 
   useEffect(() => {
     setResolving(null);
@@ -170,11 +179,20 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
     setLoadingPreview(false);
     setRowError(null);
     setConfirmKeepLocalWithoutPreview(false);
+    setPreviewBackupMissing(false);
+    setRefreshFailedAfterResolve(false);
   }, [file]);
+
+  const remoteDeleted = remoteExists === false;
+  const localDeleted = localExists === false;
+  const backupMissing = !remoteDeleted && (!!noBackup || previewBackupMissing);
+  const canKeepLocalWithoutPreview = backupMissing;
+  const rowLocked = disabled || refreshFailedAfterResolve;
 
   const loadPreview = async () => {
     setRowError(null);
     setConfirmKeepLocalWithoutPreview(false);
+    setPreviewBackupMissing(false);
     setLoadingPreview(true);
     try {
       const data = await apiFetch<{ local: string; remote: string }>('/api/sync', {
@@ -188,6 +206,9 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
       const fallback = (syncT?.conflictPreviewFailed as string) ?? 'Failed to load conflict preview';
       const raw = error instanceof Error ? error.message : fallback;
       const detail = formatSyncError(raw, syncT);
+      if (/remote conflict backup is missing/i.test(raw)) {
+        setPreviewBackupMissing(true);
+      }
       setRowError(detail.includes(fallback) ? detail : `${fallback}\n${detail}`);
       return false;
     } finally {
@@ -202,14 +223,15 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
   };
 
   const handleResolve = async (strategy: 'keep-local' | 'keep-remote') => {
+    if (rowLocked) return;
     if (strategy === 'keep-local' && !preview) {
-      if (!rowError) return;
+      if (!canKeepLocalWithoutPreview) return;
       if (!confirmKeepLocalWithoutPreview) {
         setConfirmKeepLocalWithoutPreview(true);
         return;
       }
     }
-    if (strategy === 'keep-remote' && (!preview || noBackup)) {
+    if (strategy === 'keep-remote' && (!preview || backupMissing)) {
       return;
     }
     setRowError(null);
@@ -221,7 +243,12 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'resolve-conflict', file, strategy }),
       });
-      onResolved();
+      const refreshed = await onResolved();
+      if (!refreshed) {
+        setRefreshFailedAfterResolve(true);
+        setRowError((syncT?.conflictResolvedRefreshFailed as string)
+          ?? 'Conflict resolution may have been saved, but MindOS could not refresh sync status. Retry status refresh before continuing.');
+      }
     } catch (error) {
       const fallback = (syncT?.conflictResolveFailed as string) ?? 'Failed to resolve conflict';
       const raw = error instanceof Error ? error.message : fallback;
@@ -254,7 +281,17 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
             {(syncT?.viewDiffFirst as string) ?? 'View diff first'}
           </span>
         )}
-        {noBackup && (
+        {remoteDeleted && (
+          <span className="text-2xs text-muted-foreground">
+            {(syncT?.remoteDeleted as string) ?? 'Remote deleted'}
+          </span>
+        )}
+        {localDeleted && (
+          <span className="text-2xs text-muted-foreground">
+            {(syncT?.localDeleted as string) ?? 'Local deleted'}
+          </span>
+        )}
+        {backupMissing && (
           <span className="text-2xs text-destructive">
             {(syncT?.remoteBackupMissing as string) ?? 'Remote backup unavailable'}
           </span>
@@ -263,7 +300,7 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
           <button
             type="button"
             onClick={() => handleResolve('keep-local')}
-            disabled={!!resolving || loadingPreview || (!preview && !rowError)}
+            disabled={rowLocked || !!resolving || loadingPreview || (!preview && !canKeepLocalWithoutPreview)}
             className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title={(syncT?.keepLocalHint as string) ?? 'Keep this device\'s version'}
           >
@@ -276,10 +313,12 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
           <button
             type="button"
             onClick={() => handleResolve('keep-remote')}
-            disabled={!!resolving || !preview || !!noBackup}
+            disabled={rowLocked || !!resolving || !preview || backupMissing}
             className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title={noBackup
+            title={backupMissing
               ? ((syncT?.remoteBackupMissingHint as string) ?? 'The remote version could not be saved for preview, so it cannot be applied from the UI.')
+              : remoteDeleted
+                ? ((syncT?.keepRemoteDeletedHint as string) ?? 'Accept the remote deletion for this file')
               : ((syncT?.keepRemoteHint as string) ?? 'Replace with remote version')
             }
           >
@@ -308,8 +347,10 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
                   {(syncT?.remoteVersion as string) ?? 'Remote'}
                 </div>
                 <pre className="whitespace-pre-wrap text-foreground/80 leading-relaxed">
-                  {noBackup
+                  {backupMissing
                     ? ((syncT?.remoteBackupMissingHint as string) ?? 'The remote version could not be saved for preview, so it cannot be applied from the UI.')
+                    : remoteDeleted
+                      ? ((syncT?.remoteDeletedPreview as string) ?? '(deleted remotely)')
                     : (preview.remote || ((syncT?.emptyFile as string) ?? '(empty)'))
                   }
                 </pre>
@@ -332,6 +373,10 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
           <button
             type="button"
             onClick={() => {
+              if (refreshFailedAfterResolve) {
+                void onResolved();
+                return;
+              }
               setPreview(null);
               setExpanded(true);
               void loadPreview();
@@ -348,7 +393,11 @@ function ConflictRow({ file, time, noBackup, syncT, onResolved }: {
 
 /* ── Gitignore Editor ──────────────────────────────────────────── */
 
-function GitignoreEditor({ syncT, onSaved }: { syncT?: Record<string, unknown>; onSaved?: () => void | Promise<void> }) {
+function GitignoreEditor({ syncT, onSaved, disabled }: {
+  syncT?: Record<string, unknown>;
+  onSaved?: () => void | Promise<void>;
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
   const [saved, setSaved] = useState('');
@@ -390,6 +439,7 @@ function GitignoreEditor({ syncT, onSaved }: { syncT?: Record<string, unknown>; 
   }, [open, loadGitignore]);
 
   const handleSave = async () => {
+    if (disabled) return;
     setSaving(true);
     setError(null);
     setRefreshWarning(null);
@@ -426,8 +476,9 @@ function GitignoreEditor({ syncT, onSaved }: { syncT?: Record<string, unknown>; 
     <div className="pt-2 border-t border-border/50">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+        onClick={() => { if (!disabled) setOpen(!open); }}
+        disabled={disabled}
+        className="flex items-center gap-2 w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors py-1 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <ChevronRight size={14} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
         <FileX2 size={13} className="shrink-0" />
@@ -447,7 +498,7 @@ function GitignoreEditor({ syncT, onSaved }: { syncT?: Record<string, unknown>; 
                 value={content}
                 onChange={e => setContent(e.target.value)}
                 rows={8}
-                disabled={loadFailed}
+                disabled={disabled || loadFailed}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
                 placeholder={(syncT?.gitignorePlaceholder as string) ?? '# Files to exclude from sync\n*.tmp\nsecret/'}
                 spellCheck={false}
@@ -457,7 +508,7 @@ function GitignoreEditor({ syncT, onSaved }: { syncT?: Record<string, unknown>; 
                   <button
                     type="button"
                     onClick={handleSave}
-                    disabled={saving}
+                    disabled={disabled || saving}
                     className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving && <Loader2 size={12} className="animate-spin" />}
@@ -569,13 +620,33 @@ export function SyncTab({ t, visible }: SyncTabProps) {
     if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
   }, []);
 
+  const blockUnsafeMutation = useCallback(() => {
+    if (stale) {
+      const prefix = (syncT?.statusRefreshRequired as string)
+        ?? 'Sync status is outdated. Retry status refresh before changing sync settings.';
+      setMessage({ type: 'error', text: loadError ? `${prefix}\n${formatSyncError(loadError, syncT)}` : prefix });
+      return true;
+    }
+    if ((status?.conflicts?.length ?? 0) > 0) {
+      setMessage({
+        type: 'error',
+        text: (syncT?.resolveConflictsBeforeSettings as string)
+          ?? 'Resolve conflicts before changing sync settings.',
+      });
+      return true;
+    }
+    return false;
+  }, [loadError, stale, status?.conflicts?.length, syncT]);
+
   const handleSyncNow = () => {
+    if (blockUnsafeMutation()) return;
     setMessage(null);
     void syncNow();
   };
 
   const handleToggle = async () => {
     if (!status) return;
+    if (blockUnsafeMutation()) return;
     setToggling(true);
     setMessage(null);
     const action = status.enabled ? 'off' : 'on';
@@ -597,6 +668,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
   };
 
   const handleReset = async () => {
+    if (blockUnsafeMutation()) return;
     if (!confirmingReset) {
       setConfirmingReset(true);
       setMessage(null);
@@ -624,6 +696,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
 
   const handleUpdateIntervals = async (patch: { autoCommitInterval?: number; autoPullInterval?: number }) => {
     if (intervalSaving) return;
+    if (blockUnsafeMutation()) return;
     setMessage(null);
     setIntervalSaving(true);
     try {
@@ -756,6 +829,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
   const unpushedKnown = !hasUnknownUnpushedCount(status);
   const statusLevel = getStatusLevel(status, false);
   const showHealthSyncAction = !stale && conflicts.length === 0 && statusLevel !== 'off';
+  const settingsMutationDisabled = stale || conflicts.length > 0;
 
   return (
     <div className="space-y-4">
@@ -839,7 +913,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
               <button
                 type="button"
                 onClick={handleToggle}
-                disabled={toggling || syncing}
+                disabled={settingsMutationDisabled || toggling || syncing}
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {(syncT?.disableAutoSync as string) ?? 'Disable Auto-sync'}
@@ -847,7 +921,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={toggling || syncing}
+                disabled={settingsMutationDisabled || toggling || syncing}
                 onBlur={() => { if (confirmingReset) clearResetConfirmation(); }}
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   confirmingReset
@@ -867,7 +941,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <>
               <PrimaryButton
                 onClick={handleToggle}
-                disabled={toggling}
+                disabled={settingsMutationDisabled || toggling}
                 className="flex min-h-9 items-center gap-2"
               >
                 {toggling && <Loader2 size={14} className="animate-spin" />}
@@ -876,7 +950,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={toggling}
+                disabled={settingsMutationDisabled || toggling}
                 onBlur={() => { if (confirmingReset) clearResetConfirmation(); }}
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   confirmingReset
@@ -896,6 +970,12 @@ export function SyncTab({ t, visible }: SyncTabProps) {
         </div>
 
         <SyncActionMessage message={message} />
+        {conflicts.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {(syncT?.resolveConflictsBeforeSettings as string)
+              ?? 'Resolve conflicts before changing sync settings.'}
+          </p>
+        )}
       </SettingCard>
 
       {conflicts.length > 0 && (
@@ -910,7 +990,17 @@ export function SyncTab({ t, visible }: SyncTabProps) {
           </p>
           <div className="space-y-2">
             {conflicts.map((c, i) => (
-              <ConflictRow key={`${c.file}:${c.time ?? ''}`} file={c.file} time={c.time} noBackup={c.noBackup} syncT={syncT} onResolved={fetchStatus} />
+              <ConflictRow
+                key={`${c.file}:${c.time ?? ''}`}
+                file={c.file}
+                time={c.time}
+                noBackup={c.noBackup}
+                localExists={c.localExists}
+                remoteExists={c.remoteExists}
+                syncT={syncT}
+                disabled={stale}
+                onResolved={refreshAfterAction}
+              />
             ))}
           </div>
         </SettingCard>
@@ -929,7 +1019,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <Select
               size="sm"
               value={String(status.autoCommitInterval ?? 30)}
-              disabled={intervalSaving}
+              disabled={settingsMutationDisabled || intervalSaving}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 void handleUpdateIntervals({ autoCommitInterval: val });
@@ -947,7 +1037,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
             <Select
               size="sm"
               value={String(status.autoPullInterval ?? 300)}
-              disabled={intervalSaving}
+              disabled={settingsMutationDisabled || intervalSaving}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 void handleUpdateIntervals({ autoPullInterval: val });
@@ -970,7 +1060,11 @@ export function SyncTab({ t, visible }: SyncTabProps) {
         </div>
       </SettingCard>
 
-      <GitignoreEditor syncT={syncT} onSaved={() => fetchSharedSyncStatus({ force: true, throwOnError: true })} />
+      <GitignoreEditor
+        syncT={syncT}
+        disabled={settingsMutationDisabled}
+        onSaved={() => fetchSharedSyncStatus({ force: true, throwOnError: true })}
+      />
     </div>
   );
 }

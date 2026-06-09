@@ -22,6 +22,42 @@ export interface GitLogEntry {
   author: string;
 }
 
+function normalizeGitPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+async function findPathAtCommit(
+  mindRoot: string,
+  currentPath: string,
+  commitHash: string
+): Promise<string | null> {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['log', '--follow', '--format=%H', '--name-status', '--', currentPath],
+    { cwd: mindRoot, encoding: 'utf-8' }
+  );
+
+  let pathAtOlderCommits = normalizeGitPath(currentPath);
+  const lines = stdout.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]?.trim();
+    if (!line) continue;
+    if (/^[0-9a-f]{40}$/i.test(line)) {
+      if (line.startsWith(commitHash)) return pathAtOlderCommits;
+      continue;
+    }
+    const parts = line.split('\t');
+    if (parts[0]?.startsWith('R') && parts.length >= 3) {
+      const oldPath = normalizeGitPath(parts[1] ?? '');
+      const newPath = normalizeGitPath(parts[2] ?? '');
+      if (newPath === pathAtOlderCommits && oldPath) {
+        pathAtOlderCommits = oldPath;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Checks if the mindRoot directory is inside a git repository.
  */
@@ -102,12 +138,27 @@ export async function gitShowFile(
       // If ls-files fails, we'll try with the original path
     }
 
-    const pathToUse = relFromGitRoot || filePath;
-    const { stdout } = await execFileAsync(
-      'git',
-      ['show', `${commitHash}:${pathToUse}`],
-      { cwd: mindRoot, encoding: 'utf-8' }
-    );
+    const pathToUse = normalizeGitPath(relFromGitRoot || filePath);
+    let stdout = '';
+    try {
+      const result = await execFileAsync(
+        'git',
+        ['show', `${commitHash}:${pathToUse}`],
+        { cwd: mindRoot, encoding: 'utf-8' }
+      );
+      stdout = result.stdout;
+    } catch (showError) {
+      const historicalPath = await findPathAtCommit(mindRoot, pathToUse, commitHash);
+      if (!historicalPath || historicalPath === pathToUse) throw showError;
+      const historicalResolveResult = resolveSafeResult(mindRoot, historicalPath);
+      if (!historicalResolveResult.ok) throw showError;
+      const result = await execFileAsync(
+        'git',
+        ['show', `${commitHash}:${historicalPath}`],
+        { cwd: mindRoot, encoding: 'utf-8' }
+      );
+      stdout = result.stdout;
+    }
 
     return ok(stdout);
   } catch (error) {

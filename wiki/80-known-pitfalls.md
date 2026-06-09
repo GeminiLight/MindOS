@@ -4223,12 +4223,12 @@ const visibleNodes = useMemo(() => {
 4. 所有手动 Sync Now 和首次 Connect 入口必须共享一个 action in-flight 状态；锁冲突 `SYNC_LOCKED` 要显示友好文案，不能泄露 owner/pid。
 5. 手动 sync 返回后必须刷新状态并按最终状态决定提示：有 conflicts/lastError/stale 时不能显示成功 toast。
 6. Settings 里隐藏 init 进度不是取消后端 Git 进程；UI 不能立刻暴露第二次 Connect，应显示后台仍在运行并等待原请求完成。
-7. `.gitignore` 保存必须补回 `*.sync-conflict` / `INSTRUCTION.md` 等受保护条目；冲突 preview 失败不能阻止 `Keep local`，因为保留本地不依赖远程备份文件。
-8. stale cached status 如果会落入未配置表单或 broken reset 分支，必须先显示 stale retry UI，不能继续暴露 Connect / Reset 这类会改 Git 配置的操作；但已配置仓库里的 `.gitignore` 保存成功 + 刷新失败仍应保留编辑器和 warning。
+7. `.gitignore` 保存必须补回 `*.sync-conflict` / `INSTRUCTION.md` 等受保护条目。冲突 preview 的临时失败不能继续暴露 resolve 按钮；只有 sync state 明确标记 `noBackup` 或远端删除这类可解释状态时，才能提供带确认的保留本地/远端删除操作。
+8. stale cached status 下只能允许 Retry status refresh 和只读查看；Connect / Reset / Change repository / on-off / update-intervals / `.gitignore` save 等会改 Git 或 sync 配置的操作都必须禁用，不能基于过期状态写入。
 9. 移动端 Sync 入口不能在 `off` / `synced` 时渲染成空按钮；必须有稳定图标，异常/待处理状态用 badge，aria-label 要用具体 sync label。
 10. Settings 里的 on/off/reset/update-intervals 等 mutating action 必须在 POST 成功后再做一次严格 GET 刷新；刷新失败时只能显示刷新失败 warning，不能复用旧缓存显示成功。
 
-**防回归**：`packages/web/__tests__/core/sync-status.test.ts` 覆盖 paused attention 优先级、unknown 和 lock 文案；`packages/web/__tests__/core/sync-action.test.tsx` 覆盖全局 in-flight、冲突/unknown 后不显示成功；`packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 stale、paused+conflicts、`.gitignore` 保存刷新、隐藏 init 进度、preview 失败后 Keep local、preview 成功后 Keep remote、auto-sync 开关、interval 保存、reset 刷新失败、HTTPS token required 和首次 setup lock 格式化；`packages/web/__tests__/components/sync-status-bar.test.tsx` 覆盖移动端 sync 入口可见性和具体 aria label；`packages/web/__tests__/components/sync-popover.test.tsx` 覆盖 paused conflict recovery 和窄屏 popover clamp；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 paused repo 仍显示 Sync rail 入口。
+**防回归**：`packages/web/__tests__/core/sync-status.test.ts` 覆盖 paused attention 优先级、unknown、lock 文案和 remote-host-aware Git 指引；`packages/web/__tests__/core/sync-action.test.tsx` 覆盖全局 in-flight、冲突/unknown/lastError/refresh failure 后不显示成功；`packages/web/__tests__/settings/sync-tab-ux.test.tsx` 覆盖 stale、paused+conflicts、active stale 禁用写操作、`.gitignore` 保存刷新、隐藏 init 进度、preview 临时失败阻止 resolve、`noBackup` 确认 Keep local、remote deletion Keep remote、preview 成功后 Keep remote、auto-sync 开关、interval 保存、reset 刷新失败、HTTPS token optional 和首次 setup lock 格式化；`packages/web/__tests__/components/sync-status-bar.test.tsx` 覆盖移动端 sync 入口可见性和具体 aria label；`packages/web/__tests__/components/sync-popover.test.tsx` 覆盖 paused conflict recovery 和窄屏 popover clamp；`packages/web/__tests__/settings/activity-bar-rail-navigation.test.tsx` 覆盖 paused/off repo 仍显示 Sync rail 入口。
 
 ### Git Sync reset/reconfigure/dirty 状态不能复用 paused 旧语义（2026-06-09）
 
@@ -4243,8 +4243,11 @@ const visibleNodes = useMemo(() => {
 4. 远端已有内容时，必须确认用户选择的 branch 存在；不要只因为 `ls-remote` 有任意 `refs/heads/*` 就固定 pull `main`。
 5. `unpushed` 代表“本地还有没备份的变化”，必须同时统计未 push commits 和 dirty worktree files；否则 Keep remote 冲突解决后会假显示已备份。
 6. manual sync 的 pull 失败不能被后续 push 成功覆盖；没有生成冲突时应保留/抛出 pull error。
+7. manual sync 和 daemon pull 不能在 dirty worktree 上直接执行 `git pull --autostash`。必须先把本地 pending changes 提交成普通 commit；如果随后与远端产生冲突，记录 conflict state 后停止，不能 push，也不能写 `lastSync`。
+8. modify/delete 冲突必须记录 `localExists` / `remoteExists`。远端删除、本地修改时，`Keep remote` 要删除本地文件；本地删除、远端修改时，`Keep local` 要保持删除。不能把缺少 `:3:` 远端 blob 一律当作不可恢复的 `noBackup`。
+9. Product Server 和 CLI 读取 config 的 BOM/坏 JSON 语义要一致。BOM config 必须正常读取；malformed config 不能被吞成 `{ enabled:false }`，reset 前必须备份坏文件。
 
-**防回归**：`tests/unit/cli-sync.test.ts` 覆盖无 sync config 不推断 configured、dirty worktree 计入 unpushed、reconfigure 失败回滚 origin、缺失 remote branch 给明确错误、manual pull failure 不继续 push、daemon start 并发去重、活 pid 旧锁不清理；`packages/mindos/src/server.test.ts` 覆盖 reset 后不从残留 origin 推断 paused，以及 Product Server 状态计入 dirty worktree。
+**防回归**：`tests/unit/cli-sync.test.ts` 覆盖无 sync config 不推断 configured、dirty worktree 计入 unpushed、dirty local vs remote edit 不通过 autostash 污染远端、modify/delete conflict metadata、reconfigure 失败回滚 origin、缺失 remote branch 给明确错误、manual pull failure 不继续 push、daemon start 并发去重、活 pid 旧锁不清理；`packages/mindos/src/server.test.ts` 覆盖 reset 后不从残留 origin 推断 paused、Product Server 状态计入 dirty worktree、BOM/malformed config、remote deletion keep-remote、本地删除 keep-local。
 
 ### Git Sync init/auth 不能依赖用户全局 Git 配置，也不能把 token 写入 remote（2026-06-09）
 

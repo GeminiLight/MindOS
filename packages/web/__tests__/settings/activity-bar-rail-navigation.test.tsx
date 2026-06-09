@@ -676,6 +676,43 @@ describe('ActivityBar rail navigation', () => {
     });
   });
 
+  it('keeps the sync rail trigger visible before sync is configured', async () => {
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+    const onSyncClick = vi.fn();
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={onSyncClick}
+        />,
+      );
+    });
+
+    const syncButton = host.querySelector('[aria-label="Sync"]') as HTMLButtonElement | null;
+    expect(syncButton).not.toBeNull();
+    expect(syncButton?.querySelector('.rounded-full')).toBeNull();
+
+    await act(async () => {
+      syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(onSyncClick).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('marks Agents active and exposes a stable /agents rail href', async () => {
     mockPathname = '/agents';
 

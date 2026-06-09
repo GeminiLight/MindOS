@@ -286,7 +286,6 @@ export default function ActivityBar({
 
   const syncLevel = syncStale && syncStatus ? 'error' : getStatusLevel(syncStatus, false);
   const showSyncDot = syncLevel !== 'off' && syncLevel !== 'synced';
-  const showSyncEntry = syncLevel !== 'off';
 
   const railWidth = expanded ? RAIL_WIDTH_EXPANDED : RAIL_WIDTH_COLLAPSED;
 
@@ -425,7 +424,6 @@ export default function ActivityBar({
               <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-error`} />
             ) : undefined}
           />
-          {showSyncEntry && (
           <RailButton
             icon={<RefreshCw size={18} />}
             label={t.sidebar.syncLabel}
@@ -440,7 +438,6 @@ export default function ActivityBar({
               if (rect) onSyncClick(rect);
             })}
           />
-          )}
         </div>
       </div>
 

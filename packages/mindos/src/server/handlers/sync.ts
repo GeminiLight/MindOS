@@ -14,6 +14,8 @@ export type MindosSyncConfig = Record<string, any> & {
     autoCommitInterval?: number;
     autoPullInterval?: number;
   };
+  __readError?: string;
+  __readErrorPath?: string;
 };
 
 export type MindosSyncState = Record<string, any> & {
@@ -109,6 +111,23 @@ export async function handleSyncGet(
     const state = readState(services);
     const mindRoot = config.mindRoot;
     const conflicts = normalizeConflicts(state.conflicts);
+    const configReadError = getConfigReadError(config);
+
+    if (configReadError) {
+      return json({
+        enabled: false,
+        configured: true,
+        needsSetup: true,
+        provider: 'git',
+        remote: '(not configured)',
+        branch: 'main',
+        lastSync: state.lastSync || null,
+        lastPull: state.lastPull || null,
+        unpushed: '?',
+        conflicts,
+        lastError: configReadError,
+      });
+    }
 
     if (!syncConfig) {
       return json({ enabled: false });
@@ -218,6 +237,12 @@ export async function handleSyncPost(
   try {
     const payload = body && typeof body === 'object' ? body as MindosSyncPostPayload : {};
     const config = readConfig(services);
+    const configReadError = getConfigReadError(config);
+
+    if (configReadError && payload.action !== 'reset') {
+      return json({ error: configReadError }, { status: 500 });
+    }
+
     const mindRoot = config.mindRoot;
 
     if (payload.action === 'reset') {
@@ -244,7 +269,7 @@ export async function handleSyncPost(
       case 'resolve-conflict':
         return handleResolveConflict(mindRoot, payload, services);
       case 'conflict-preview':
-        return handleConflictPreview(mindRoot, payload);
+        return handleConflictPreview(mindRoot, payload, services);
       case 'update-intervals':
         return handleUpdateIntervals(mindRoot, payload, config, services);
       default:
@@ -276,8 +301,13 @@ function handleSyncReset(
   services: MindosSyncServices,
 ): MindosServerResponse<{ ok: true; enabled: false } | { error: string }> {
   return withServerSyncLock(config.mindRoot ?? null, 'reset', services, () => {
-    delete config.sync;
-    writeConfig(config, services);
+    if (getConfigReadError(config)) {
+      backupUnreadableConfig(services);
+      writeConfig({}, services);
+    } else {
+      delete config.sync;
+      writeConfig(stripInternalConfigFields(config), services);
+    }
     try { writeState({}, services); } catch {}
     notifySyncDaemon(services, 'stop');
     return json({ ok: true, enabled: false });
@@ -390,17 +420,23 @@ function handleResolveConflict(
   }
 
   return withServerSyncLock(mindRoot, 'resolve-conflict', services, () => {
-    if (strategy === 'keep-remote' && !existsSync(conflictPath)) {
-      return json({ error: 'Remote conflict backup is missing' }, { status: 409 });
-    }
+    const state = readState(services);
+    const conflict = findConflict(state, file);
     if (strategy === 'keep-remote') {
-      writeFileSync(originalPath, readFileSync(conflictPath, 'utf-8'), 'utf-8');
+      if (conflict?.remoteExists === false) {
+        rmSync(originalPath, { force: true });
+      } else if (existsSync(conflictPath)) {
+        writeFileSync(originalPath, readFileSync(conflictPath, 'utf-8'), 'utf-8');
+      } else {
+        return json({ error: 'Remote conflict backup is missing' }, { status: 409 });
+      }
+    } else if (conflict?.localExists === false) {
+      rmSync(originalPath, { force: true });
     }
     if (existsSync(conflictPath)) {
       unlinkSync(conflictPath);
     }
 
-    const state = readState(services);
     const nextConflicts = normalizeConflicts(state.conflicts).filter((conflict) => conflict.file !== file);
     writeState({ ...state, conflicts: nextConflicts }, services);
     return json({ ok: true });
@@ -410,6 +446,7 @@ function handleResolveConflict(
 function handleConflictPreview(
   mindRoot: string,
   payload: MindosSyncPostPayload,
+  services: MindosSyncServices,
 ): MindosServerResponse<{ local: string; remote: string } | { error: string }> {
   const file = payload.file ?? payload.remote;
   if (!file || typeof file !== 'string') {
@@ -425,11 +462,18 @@ function handleConflictPreview(
     return json({ error: 'Invalid file path' }, { status: 400 });
   }
   try {
+    const conflict = findConflict(readState(services), file);
     if (!existsSync(remotePath)) {
+      if (conflict?.remoteExists === false) {
+        return json({
+          local: conflict?.localExists === false || !existsSync(localPath) ? '' : readFileSync(localPath, 'utf-8'),
+          remote: '',
+        });
+      }
       return json({ error: 'Remote conflict backup is missing' }, { status: 409 });
     }
     return json({
-      local: existsSync(localPath) ? readFileSync(localPath, 'utf-8') : '',
+      local: conflict?.localExists === false || !existsSync(localPath) ? '' : readFileSync(localPath, 'utf-8'),
       remote: readFileSync(remotePath, 'utf-8'),
     });
   } catch (error) {
@@ -483,9 +527,17 @@ function isValidGitBranchName(input: string): boolean {
   return value.split('/').every(part => part && !part.startsWith('.') && !part.endsWith('.lock'));
 }
 
-function normalizeConflicts(value: unknown): Array<{ file: string; time?: string; noBackup?: boolean }> {
+type NormalizedSyncConflict = {
+  file: string;
+  time?: string;
+  noBackup?: boolean;
+  localExists?: boolean;
+  remoteExists?: boolean;
+};
+
+function normalizeConflicts(value: unknown): NormalizedSyncConflict[] {
   const items = Array.isArray(value) ? value : (value && typeof value === 'object' ? [value] : []);
-  const conflicts: Array<{ file: string; time?: string; noBackup?: boolean }> = [];
+  const conflicts: NormalizedSyncConflict[] = [];
   for (const item of items) {
     if (typeof item === 'string') {
       const file = item.trim();
@@ -500,9 +552,15 @@ function normalizeConflicts(value: unknown): Array<{ file: string; time?: string
       file,
       ...(typeof record.time === 'string' && record.time ? { time: record.time } : {}),
       ...(record.noBackup === true ? { noBackup: true } : {}),
+      ...(typeof record.localExists === 'boolean' ? { localExists: record.localExists } : {}),
+      ...(typeof record.remoteExists === 'boolean' ? { remoteExists: record.remoteExists } : {}),
     });
   }
   return conflicts;
+}
+
+function findConflict(state: MindosSyncState, file: string): NormalizedSyncConflict | null {
+  return normalizeConflicts(state.conflicts).find((conflict) => conflict.file === file) ?? null;
 }
 
 function notifySyncDaemon(
@@ -539,7 +597,7 @@ function notifySyncDaemon(
 
 function readConfig(services: MindosSyncServices): MindosSyncConfig {
   if (services.readConfig) return services.readConfig();
-  return readJsonFile(services.configPath ?? DEFAULT_CONFIG_PATH);
+  return readJsonFile(services.configPath ?? DEFAULT_CONFIG_PATH, { reportParseError: true });
 }
 
 function writeConfig(config: MindosSyncConfig, services: MindosSyncServices): void {
@@ -712,12 +770,45 @@ function isFsErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
 
-function readJsonFile<T extends Record<string, any>>(filePath: string): T {
+function readJsonFile<T extends Record<string, any>>(filePath: string, opts: { reportParseError?: boolean } = {}): T {
+  let raw = '';
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
+    raw = readFileSync(filePath, 'utf-8');
   } catch {
     return {} as T;
   }
+  try {
+    return JSON.parse(stripBom(raw)) as T;
+  } catch (error) {
+    if (!opts.reportParseError) return {} as T;
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      __readError: `MindOS config file could not be read: ${detail}`,
+      __readErrorPath: filePath,
+    } as unknown as T;
+  }
+}
+
+function stripBom(value: string): string {
+  return value.charCodeAt(0) === 0xFEFF ? value.slice(1) : value;
+}
+
+function getConfigReadError(config: MindosSyncConfig): string | null {
+  return typeof config.__readError === 'string' && config.__readError ? config.__readError : null;
+}
+
+function stripInternalConfigFields(config: MindosSyncConfig): MindosSyncConfig {
+  const { __readError, __readErrorPath, ...rest } = config;
+  return rest;
+}
+
+function backupUnreadableConfig(services: MindosSyncServices): void {
+  const configPath = services.configPath ?? DEFAULT_CONFIG_PATH;
+  if (services.readConfig || services.writeConfig || !existsSync(configPath)) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  try {
+    renameSync(configPath, `${configPath}.broken-${stamp}`);
+  } catch {}
 }
 
 function atomicWriteJson(filePath: string, data: unknown): void {

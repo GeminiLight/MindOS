@@ -380,6 +380,116 @@ describe('mindos sync config persistence', () => {
     expect(state.lastSync).toBeUndefined();
   });
 
+  it('commits dirty local changes before pulling so autostash conflicts cannot be pushed', async () => {
+    const remotePath = createBareRemoteWithFiles({ 'note.md': 'base\n' });
+    const mindRoot = path.join(tempDir, 'mind');
+    runGit(['clone', remotePath, mindRoot], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], mindRoot);
+    fs.writeFileSync(path.join(mindRoot, 'note.md'), 'dirty local\n', 'utf-8');
+
+    const otherPath = path.join(tempDir, 'other');
+    runGit(['clone', remotePath, otherPath], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], otherPath);
+    fs.writeFileSync(path.join(otherPath, 'note.md'), 'remote edit\n', 'utf-8');
+    commitAll(otherPath, 'remote edit');
+    runGit(['push', 'origin', 'main'], otherPath);
+
+    fs.mkdirSync(mindosDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      mindRoot,
+      sync: { enabled: true, provider: 'git', branch: 'main' },
+    }), 'utf-8');
+
+    const { manualSync, getSyncConflictBackupPath } = await importSync();
+    expect(() => manualSync(mindRoot)).not.toThrow();
+
+    expect(fs.readFileSync(path.join(mindRoot, 'note.md'), 'utf-8')).toBe('dirty local\n');
+    expect(fs.readFileSync(getSyncConflictBackupPath(mindRoot, 'note.md'), 'utf-8')).toBe('remote edit\n');
+    expect(runGit(['show', 'main:note.md'], remotePath)).toBe('remote edit');
+    expect(runGit(['show', 'main:note.md'], remotePath)).not.toContain('<<<<<<<');
+    expect(runGit(['show', 'HEAD:note.md'], mindRoot)).not.toContain('<<<<<<<');
+    const state = JSON.parse(fs.readFileSync(path.join(mindosDir, 'sync-state.json'), 'utf-8'));
+    expect(state.conflicts).toEqual([expect.objectContaining({
+      file: 'note.md',
+      localExists: true,
+      remoteExists: true,
+    })]);
+    expect(state.lastSync).toBeUndefined();
+  });
+
+  it('records remote deletion conflicts so keep-remote can delete the local file later', async () => {
+    const remotePath = createBareRemoteWithFiles({ 'note.md': 'base\n' });
+    const mindRoot = path.join(tempDir, 'mind');
+    runGit(['clone', remotePath, mindRoot], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], mindRoot);
+    fs.writeFileSync(path.join(mindRoot, 'note.md'), 'local edit\n', 'utf-8');
+    commitAll(mindRoot, 'local edit');
+
+    const otherPath = path.join(tempDir, 'other');
+    runGit(['clone', remotePath, otherPath], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], otherPath);
+    fs.rmSync(path.join(otherPath, 'note.md'));
+    commitAll(otherPath, 'remote delete');
+    runGit(['push', 'origin', 'main'], otherPath);
+
+    fs.mkdirSync(mindosDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      mindRoot,
+      sync: { enabled: true, provider: 'git', branch: 'main' },
+    }), 'utf-8');
+
+    const { manualSync, getSyncConflictBackupPath } = await importSync();
+    expect(() => manualSync(mindRoot)).not.toThrow();
+
+    expect(fs.readFileSync(path.join(mindRoot, 'note.md'), 'utf-8')).toBe('local edit\n');
+    expect(fs.existsSync(getSyncConflictBackupPath(mindRoot, 'note.md'))).toBe(false);
+    expect(runGit(['ls-tree', '-r', '--name-only', 'main'], remotePath).split('\n').filter(Boolean)).not.toContain('note.md');
+    const state = JSON.parse(fs.readFileSync(path.join(mindosDir, 'sync-state.json'), 'utf-8'));
+    expect(state.conflicts).toEqual([expect.objectContaining({
+      file: 'note.md',
+      localExists: true,
+      remoteExists: false,
+    })]);
+    expect(state.conflicts[0].noBackup).toBeUndefined();
+    expect(state.lastSync).toBeUndefined();
+  });
+
+  it('records local deletion conflicts so keep-local can preserve the deletion later', async () => {
+    const remotePath = createBareRemoteWithFiles({ 'note.md': 'base\n' });
+    const mindRoot = path.join(tempDir, 'mind');
+    runGit(['clone', remotePath, mindRoot], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], mindRoot);
+    fs.rmSync(path.join(mindRoot, 'note.md'));
+    commitAll(mindRoot, 'local delete');
+
+    const otherPath = path.join(tempDir, 'other');
+    runGit(['clone', remotePath, otherPath], tempDir);
+    runGit(['checkout', '-B', 'main', 'origin/main'], otherPath);
+    fs.writeFileSync(path.join(otherPath, 'note.md'), 'remote edit\n', 'utf-8');
+    commitAll(otherPath, 'remote edit');
+    runGit(['push', 'origin', 'main'], otherPath);
+
+    fs.mkdirSync(mindosDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      mindRoot,
+      sync: { enabled: true, provider: 'git', branch: 'main' },
+    }), 'utf-8');
+
+    const { manualSync, getSyncConflictBackupPath } = await importSync();
+    expect(() => manualSync(mindRoot)).not.toThrow();
+
+    expect(fs.existsSync(path.join(mindRoot, 'note.md'))).toBe(false);
+    expect(fs.readFileSync(getSyncConflictBackupPath(mindRoot, 'note.md'), 'utf-8')).toBe('remote edit\n');
+    expect(runGit(['show', 'main:note.md'], remotePath)).toBe('remote edit');
+    const state = JSON.parse(fs.readFileSync(path.join(mindosDir, 'sync-state.json'), 'utf-8'));
+    expect(state.conflicts).toEqual([expect.objectContaining({
+      file: 'note.md',
+      localExists: false,
+      remoteExists: true,
+    })]);
+    expect(state.lastSync).toBeUndefined();
+  });
+
   it('does not write HTTPS access tokens into the configured remote URL', async () => {
     const calls: string[][] = [];
     const execFileSyncMock = vi.fn((_command: string, args: string[], options?: { input?: string }) => {

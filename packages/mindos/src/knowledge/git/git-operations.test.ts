@@ -109,5 +109,33 @@ describe('Git Operations', () => {
       const result = await gitShowFile(testDir, 'test.md', 'invalid-hash');
       expect(result.ok).toBe(false);
     });
+
+    it('should show older content for a followed file rename', async () => {
+      const renameDir = await fs.mkdtemp(path.join(os.tmpdir(), 'git-rename-test-'));
+      try {
+        await execFileAsync('git', ['init'], { cwd: renameDir });
+        await execFileAsync('git', ['config', 'user.name', 'Test User'], { cwd: renameDir });
+        await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: renameDir });
+        await fs.writeFile(path.join(renameDir, 'old.md'), 'Old content\n');
+        await execFileAsync('git', ['add', 'old.md'], { cwd: renameDir });
+        await execFileAsync('git', ['commit', '-m', 'Add old file'], { cwd: renameDir });
+        const oldCommit = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: renameDir, encoding: 'utf-8' })).stdout.trim();
+        await execFileAsync('git', ['mv', 'old.md', 'new.md'], { cwd: renameDir });
+        await execFileAsync('git', ['commit', '-m', 'Rename file'], { cwd: renameDir });
+
+        const logResult = await gitLog(renameDir, 'new.md', 10);
+        expect(logResult.ok).toBe(true);
+        if (!logResult.ok) return;
+        expect(logResult.value.map(entry => entry.message)).toContain('Add old file');
+
+        const showResult = await gitShowFile(renameDir, 'new.md', oldCommit);
+        expect(showResult.ok).toBe(true);
+        if (showResult.ok) {
+          expect(showResult.value).toBe('Old content\n');
+        }
+      } finally {
+        await fs.rm(renameDir, { recursive: true, force: true });
+      }
+    });
   });
 });

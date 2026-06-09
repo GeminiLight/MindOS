@@ -98,6 +98,17 @@ describe('SyncTab UX', () => {
     expect(host.textContent).not.toContain('Sync Now');
     expect((Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local')) as HTMLButtonElement | undefined)?.disabled).toBe(true);
     expect((Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined)?.disabled).toBe(true);
+    const changeRepository = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Change repository')) as HTMLButtonElement | undefined;
+    expect(changeRepository?.disabled).toBe(true);
+
+    await act(async () => {
+      changeRepository?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockApiFetch).not.toHaveBeenCalledWith('/api/sync', expect.objectContaining({
+      body: JSON.stringify({ action: 'reset' }),
+    }));
 
     await act(async () => {
       root.unmount();
@@ -1253,6 +1264,71 @@ describe('SyncTab UX', () => {
     });
   });
 
+  it('disables active sync mutations when the cached status is stale', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockResolvedValueOnce({
+      enabled: true,
+      configured: true,
+      remote: 'git@github.com:me/mind.git',
+      branch: 'main',
+      lastSync: '2026-06-05T10:00:00.000Z',
+      unpushed: '0',
+      conflicts: [],
+      lastError: null,
+      autoCommitInterval: 30,
+      autoPullInterval: 300,
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    mockApiFetch.mockRejectedValueOnce(new Error('server unavailable'));
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible={false} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Sync status may be outdated');
+    const disableButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Disable Auto-sync')) as HTMLButtonElement | undefined;
+    const changeButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Change repository')) as HTMLButtonElement | undefined;
+    const intervalButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('30s')) as HTMLButtonElement | undefined;
+    expect(disableButton?.disabled).toBe(true);
+    expect(changeButton?.disabled).toBe(true);
+    expect(intervalButton?.disabled).toBe(true);
+
+    await act(async () => {
+      disableButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      changeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      intervalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const writeCalls = mockApiFetch.mock.calls.filter(([, opts]) => {
+      const body = (opts as { body?: string } | undefined)?.body;
+      if (!body) return false;
+      const action = JSON.parse(body).action;
+      return action === 'off' || action === 'reset' || action === 'update-intervals';
+    });
+    expect(writeCalls).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('blocks first-time setup actions when the cached unconfigured status is stale', async () => {
     const { SyncTab } = await import('@/components/settings/SyncTab');
     mockApiFetch.mockResolvedValueOnce({ enabled: false });
@@ -1930,12 +2006,11 @@ describe('SyncTab UX', () => {
     });
   });
 
-  it('allows keeping the local file when conflict preview fails', async () => {
+  it('does not allow resolving a conflict after a transient preview failure', async () => {
     const { SyncTab } = await import('@/components/settings/SyncTab');
     mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
       const action = opts?.body ? JSON.parse(opts.body).action : undefined;
       if (action === 'conflict-preview') throw new Error('preview service failed');
-      if (action === 'resolve-conflict') return { ok: true };
       return {
         enabled: true,
         remote: 'git@github.com:me/mind.git',
@@ -1968,7 +2043,7 @@ describe('SyncTab UX', () => {
 
     const keepLocal = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local')) as HTMLButtonElement | undefined;
     const keepRemote = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined;
-    expect(keepLocal?.disabled).toBe(false);
+    expect(keepLocal?.disabled).toBe(true);
     expect(keepRemote?.disabled).toBe(true);
 
     await act(async () => {
@@ -1982,6 +2057,51 @@ describe('SyncTab UX', () => {
       return body ? JSON.parse(body).action === 'resolve-conflict' : false;
     });
     expect(resolveCallsAfterFirstClick).toHaveLength(0);
+    expect(host.textContent).not.toContain('Confirm keep local?');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('allows confirmed keep-local when the remote backup is explicitly unavailable', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
+      const action = opts?.body ? JSON.parse(opts.body).action : undefined;
+      if (action === 'resolve-conflict') return { ok: true };
+      return {
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [{ file: 'notes/today.md', time: '2026-06-05T10:00:00.000Z', noBackup: true }],
+        lastError: null,
+        autoCommitInterval: 30,
+        autoPullInterval: 300,
+      };
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Remote backup unavailable');
+    const keepLocal = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local')) as HTMLButtonElement | undefined;
+    const keepRemote = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined;
+    expect(keepLocal?.disabled).toBe(false);
+    expect(keepRemote?.disabled).toBe(true);
+
+    await act(async () => {
+      keepLocal?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
     expect(host.textContent).toContain('Confirm keep local?');
 
     await act(async () => {
@@ -1992,14 +2112,65 @@ describe('SyncTab UX', () => {
       await Promise.resolve();
     });
 
-    const resolveCalls = mockApiFetch.mock.calls.filter(([, opts]) => {
-      const body = (opts as { body?: string } | undefined)?.body;
-      return body ? JSON.parse(body).action === 'resolve-conflict' : false;
-    });
-    expect(resolveCalls).toHaveLength(1);
-    expect(resolveCalls[0]).toEqual(['/api/sync', expect.objectContaining({
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/sync', expect.objectContaining({
       body: JSON.stringify({ action: 'resolve-conflict', file: 'notes/today.md', strategy: 'keep-local' }),
-    })]);
+    }));
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('allows keeping a remote deletion after the deletion preview loads', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
+      const body = opts?.body ? JSON.parse(opts.body) : {};
+      if (body.action === 'conflict-preview') return { local: 'local text', remote: '' };
+      if (body.action === 'resolve-conflict') return { ok: true };
+      return {
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [{ file: 'notes/deleted.md', localExists: true, remoteExists: false }],
+        lastError: null,
+        autoCommitInterval: 30,
+        autoPullInterval: 300,
+      };
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Remote deleted');
+    const fileButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('notes/deleted.md'));
+    await act(async () => {
+      fileButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('(deleted remotely)');
+    const keepRemote = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined;
+    expect(keepRemote?.disabled).toBe(false);
+
+    await act(async () => {
+      keepRemote?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/sync', expect.objectContaining({
+      body: JSON.stringify({ action: 'resolve-conflict', file: 'notes/deleted.md', strategy: 'keep-remote' }),
+    }));
 
     await act(async () => {
       root.unmount();
@@ -2123,6 +2294,62 @@ describe('SyncTab UX', () => {
     expect(host.textContent).toContain('Failed to resolve conflict');
     expect(host.textContent).toContain('resolve failed');
     expect(Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep local'))?.hasAttribute('disabled')).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('reports refresh failure separately after a conflict resolution succeeds', async () => {
+    const { SyncTab } = await import('@/components/settings/SyncTab');
+    let statusReads = 0;
+    mockApiFetch.mockImplementation(async (_url: string, opts?: { body?: string }) => {
+      const action = opts?.body ? JSON.parse(opts.body).action : undefined;
+      if (action === 'conflict-preview') return { local: 'local text', remote: 'remote text' };
+      if (action === 'resolve-conflict') return { ok: true };
+      statusReads += 1;
+      if (statusReads > 1) throw new Error('status refresh failed');
+      return {
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [{ file: 'notes/today.md', time: '2026-06-05T10:00:00.000Z' }],
+        lastError: null,
+        autoCommitInterval: 30,
+        autoPullInterval: 300,
+      };
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<SyncTab t={messages.en} visible />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const fileButton = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('notes/today.md'));
+    await act(async () => {
+      fileButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const keepRemote = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined;
+    await act(async () => {
+      keepRemote?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Conflict resolution may have been saved');
+    expect(host.textContent).toContain('Retry status refresh');
+    expect(host.textContent).not.toContain('Failed to resolve conflict');
+    expect((Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('Keep remote')) as HTMLButtonElement | undefined)?.disabled).toBe(true);
 
     await act(async () => {
       root.unmount();

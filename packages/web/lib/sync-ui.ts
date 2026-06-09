@@ -44,17 +44,60 @@ export function getStatusLevel(status: SyncStatus | null, syncing: boolean): Sta
 }
 
 /** Return an actionable hint for common sync errors. */
-export function getSyncErrorHint(error: string, _remote?: string | null, syncT?: Record<string, unknown>): string {
+export function getGitRemoteHost(remote?: string | null): string | null {
+  const value = remote?.trim();
+  if (!value) return null;
+  const scpLike = value.match(/^[^@\s]+@([^:\s]+):/);
+  if (scpLike?.[1]) return scpLike[1];
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+function getHttpsAuthHint(remote?: string | null, syncT?: Record<string, unknown>): string {
+  const host = getGitRemoteHost(remote);
+  if (!host) {
+    return (syncT?.hintHttpsAuth as string)
+      ?? 'Access token or Git credentials may be expired or missing. Check this Git host\'s credential settings.';
+  }
+  if (typeof syncT?.hintHttpsAuthForHost === 'function') {
+    return (syncT.hintHttpsAuthForHost as (host: string) => string)(host);
+  }
+  if (host?.toLowerCase().includes('github.com')) {
+    return 'Access token may be expired or missing. Check GitHub Developer settings -> Personal access tokens.';
+  }
+  if (host?.toLowerCase().includes('gitlab.com')) {
+    return 'Access token may be expired or missing. Check GitLab User Settings -> Access Tokens.';
+  }
+  return `Access token or Git credentials may be expired or missing. Check the credential settings for ${host}.`;
+}
+
+/** Return an actionable hint for common sync errors. */
+export function getSyncErrorHint(error: string, remote?: string | null, syncT?: Record<string, unknown>): string {
   const lower = error.toLowerCase();
+  const host = getGitRemoteHost(remote);
 
   if (lower.includes('sync_locked') || lower.includes('sync is already running')) {
     return (syncT?.hintSyncLocked as string) ?? 'Another sync operation is already running. Wait a moment, then try again.';
   }
   if (lower.includes('permission denied') || lower.includes('publickey')) {
-    return (syncT?.hintSshAuth as string) ?? 'SSH key may not be configured. Run: ssh-keygen -t ed25519 && ssh -T git@github.com';
+    if (host) {
+      return (syncT?.hintSshAuthForHost as ((host: string) => string))?.(host)
+        ?? `SSH key may not be configured. Run: ssh-keygen -t ed25519 && ssh -T git@${host}`;
+    }
+    return (syncT?.hintSshAuth as string)
+      ?? 'SSH key may not be configured. Check the SSH key for this Git host.';
   }
   if (lower.includes('host key') || lower.includes('known_hosts') || lower.includes('fingerprint')) {
-    return (syncT?.hintSshHost as string) ?? 'Run: ssh-keyscan github.com >> ~/.ssh/known_hosts';
+    if (host) {
+      return (syncT?.hintSshHostForHost as ((host: string) => string))?.(host)
+        ?? `Run: ssh-keyscan ${host} >> ~/.ssh/known_hosts`;
+    }
+    return (syncT?.hintSshHost as string)
+      ?? 'Add this Git host to ~/.ssh/known_hosts with ssh-keyscan.';
   }
   if (
     lower.includes('authentication failed') ||
@@ -65,7 +108,7 @@ export function getSyncErrorHint(error: string, _remote?: string | null, syncT?:
     lower.includes('401') ||
     lower.includes('403')
   ) {
-    return (syncT?.hintHttpsAuth as string) ?? 'Access token may be expired or missing. Check Settings -> Developer settings -> Personal access tokens.';
+    return getHttpsAuthHint(remote, syncT);
   }
   if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('could not resolve')) {
     return (syncT?.hintNetwork as string) ?? 'Check your network connection and try again.';

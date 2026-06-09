@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer as createNodeServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -3295,6 +3295,66 @@ describe('MindOS product server contract', () => {
     expect(writeStateCalled).toBe(false);
   });
 
+  it('accepts a remote deletion conflict when keep-remote is selected', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-remote-delete-'));
+    const mindRoot = join(root, 'mind');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    writeFileSync(join(mindRoot, 'note.md'), 'local version', 'utf-8');
+
+    let state: Record<string, any> = {
+      conflicts: [{ file: 'note.md', localExists: true, remoteExists: false }],
+      lastError: 'previous',
+    };
+    const services = {
+      readConfig: () => ({ mindRoot, sync: { enabled: true, provider: 'git' } }),
+      readState: () => state,
+      writeState: (next: Record<string, any>) => { state = next; },
+      syncLockDir: join(root, 'locks'),
+    };
+
+    expect(await handleSyncPost({ action: 'conflict-preview', file: 'note.md' }, services)).toMatchObject({
+      status: 200,
+      body: { local: 'local version', remote: '' },
+    });
+    expect(await handleSyncPost({ action: 'resolve-conflict', file: 'note.md', strategy: 'keep-remote' }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true },
+    });
+    expect(existsSync(join(mindRoot, 'note.md'))).toBe(false);
+    expect(state).toEqual({ conflicts: [], lastError: 'previous' });
+  });
+
+  it('preserves a local deletion conflict when keep-local is selected', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-local-delete-'));
+    const mindRoot = join(root, 'mind');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    writeFileSync(join(mindRoot, 'note.md'), 'remote currently applied', 'utf-8');
+    writeFileSync(join(mindRoot, 'note.md.sync-conflict'), 'remote version', 'utf-8');
+
+    let state: Record<string, any> = {
+      conflicts: [{ file: 'note.md', localExists: false, remoteExists: true }],
+      lastError: 'previous',
+    };
+    const services = {
+      readConfig: () => ({ mindRoot, sync: { enabled: true, provider: 'git' } }),
+      readState: () => state,
+      writeState: (next: Record<string, any>) => { state = next; },
+      syncLockDir: join(root, 'locks'),
+    };
+
+    expect(await handleSyncPost({ action: 'conflict-preview', file: 'note.md' }, services)).toMatchObject({
+      status: 200,
+      body: { local: '', remote: 'remote version' },
+    });
+    expect(await handleSyncPost({ action: 'resolve-conflict', file: 'note.md', strategy: 'keep-local' }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true },
+    });
+    expect(existsSync(join(mindRoot, 'note.md'))).toBe(false);
+    expect(existsSync(join(mindRoot, 'note.md.sync-conflict'))).toBe(false);
+    expect(state).toEqual({ conflicts: [], lastError: 'previous' });
+  });
+
   it('replaces the local conflict file when keep-remote succeeds', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-sync-keep-remote-'));
     const mindRoot = join(root, 'mind');
@@ -3377,6 +3437,59 @@ describe('MindOS product server contract', () => {
       status: 409,
       body: { error: 'Remote conflict backup is missing' },
     });
+  });
+
+  it('reads a BOM-prefixed sync config instead of reporting setup as unconfigured', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-bom-config-'));
+    const mindRoot = join(root, 'mind');
+    const configPath = join(root, 'config.json');
+    const statePath = join(root, 'sync-state.json');
+    mkdirSync(join(mindRoot, '.git'), { recursive: true });
+    writeFileSync(configPath, `\uFEFF${JSON.stringify({ mindRoot, sync: { enabled: true, provider: 'git' } })}`, 'utf-8');
+    writeFileSync(statePath, JSON.stringify({ lastSync: '2026-05-09T10:00:00Z' }), 'utf-8');
+
+    expect(await handleSyncGet({
+      configPath,
+      statePath,
+      isGitRepo: () => true,
+      getRemoteUrl: () => 'git@example.com:mind/repo.git',
+      getBranch: () => 'main',
+      getUnpushedCount: () => '0',
+    })).toMatchObject({
+      status: 200,
+      body: {
+        enabled: true,
+        remote: 'git@example.com:mind/repo.git',
+        lastSync: '2026-05-09T10:00:00Z',
+      },
+    });
+  });
+
+  it('reports and backs up a malformed sync config during reset', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-sync-bad-config-'));
+    const configPath = join(root, 'config.json');
+    const statePath = join(root, 'sync-state.json');
+    writeFileSync(configPath, '{ "mindRoot": "/tmp/mind", "sync": ', 'utf-8');
+    writeFileSync(statePath, JSON.stringify({ conflicts: ['note.md'] }), 'utf-8');
+
+    expect(await handleSyncGet({ configPath, statePath })).toMatchObject({
+      status: 200,
+      body: {
+        enabled: false,
+        configured: true,
+        needsSetup: true,
+        conflicts: [{ file: 'note.md' }],
+        lastError: expect.stringContaining('MindOS config file could not be read'),
+      },
+    });
+
+    expect(await handleSyncPost({ action: 'reset' }, { configPath, statePath })).toMatchObject({
+      status: 200,
+      body: { ok: true, enabled: false },
+    });
+    expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({});
+    expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({});
+    expect(readdirSync(root).some(name => name.startsWith('config.json.broken-'))).toBe(true);
   });
 
   it('returns an unconfigured sync status after reset instead of inferring paused from a leftover origin', async () => {

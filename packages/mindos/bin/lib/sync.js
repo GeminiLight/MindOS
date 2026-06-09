@@ -102,6 +102,8 @@ function normalizeConflicts(value) {
       file,
       ...(typeof item.time === 'string' && item.time ? { time: item.time } : {}),
       ...(item.noBackup === true ? { noBackup: true } : {}),
+      ...(typeof item.localExists === 'boolean' ? { localExists: item.localExists } : {}),
+      ...(typeof item.remoteExists === 'boolean' ? { remoteExists: item.remoteExists } : {}),
     });
   }
   return conflicts;
@@ -428,6 +430,26 @@ export function getSyncGitignorePath(mindRoot) {
 
 // ── Core sync functions ─────────────────────────────────────────────────────
 
+function getConflictStageInfo(mindRoot, file) {
+  const stages = new Set();
+  try {
+    const raw = gitExec(['ls-files', '-u', '--', file], mindRoot);
+    for (const line of raw.split('\n')) {
+      const match = line.match(/^\d+\s+[0-9a-f]+\s+([123])\t/);
+      if (match) stages.add(Number(match[1]));
+    }
+  } catch {}
+
+  return {
+    localExists: stages.has(2),
+    remoteExists: stages.has(3),
+  };
+}
+
+function removeWorkingTreeFile(mindRoot, file) {
+  rmSync(resolveInsideRoot(mindRoot, file), { force: true });
+}
+
 function ensureProtectedSyncGitignore(mindRoot) {
   const gitignorePath = getSyncGitignorePath(mindRoot);
   if (!existsSync(gitignorePath)) {
@@ -466,6 +488,15 @@ function stageSyncContentUnlocked(mindRoot) {
   execFileSync('git', ['add', '-A'], { cwd: mindRoot, stdio: 'pipe', timeout: 60000 });
 }
 
+function hasPendingChangesUnlocked(mindRoot) {
+  try {
+    const status = gitExec(['status', '--porcelain'], mindRoot);
+    return status.split('\n').some(line => line.trim() && !line.slice(3).endsWith('.sync-conflict'));
+  } catch {
+    return true;
+  }
+}
+
 function autoCommitAndPush(mindRoot, isSshUrl = false) {
   return withSyncLock(mindRoot, 'commit-push', () => autoCommitAndPushUnlocked(mindRoot, isSshUrl));
 }
@@ -480,6 +511,7 @@ function commitPendingChangesUnlocked(mindRoot) {
   // sync needs this too, otherwise a populated remote can overwrite untracked
   // local notes before MindOS has put them under version control.
   try {
+    if (!hasPendingChangesUnlocked(mindRoot)) return;
     ensureGitIdentity(mindRoot);
     stageSyncContentUnlocked(mindRoot);
     const status = gitExec(['status', '--porcelain'], mindRoot);
@@ -511,7 +543,7 @@ function pushHeadUnlocked(mindRoot, isSshUrl = false) {
 
 function resolveMergeConflictsKeepingLocal(mindRoot, mergeErr, failurePrefix = 'Pull failed') {
   let conflicts = [];
-  let conflictWarnings = [];
+  const conflictDetails = [];
   try {
     conflicts = gitExec(['diff', '--name-only', '--diff-filter=U'], mindRoot).split('\n').filter(Boolean);
     if (conflicts.length === 0) {
@@ -530,13 +562,22 @@ function resolveMergeConflictsKeepingLocal(mindRoot, mergeErr, failurePrefix = '
     // settings UI can offer an explicit keep-local / keep-remote choice.
     ensureProtectedSyncGitignore(mindRoot);
     for (const file of conflicts) {
-      try {
-        const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
-        writeFileSync(getSyncConflictBackupPath(mindRoot, file), theirs, 'utf-8');
-      } catch {
-        conflictWarnings.push(file);
+      const stageInfo = getConflictStageInfo(mindRoot, file);
+      let noBackup = false;
+      if (stageInfo.remoteExists) {
+        try {
+          const theirs = execFileSync('git', ['show', `:3:${file}`], { cwd: mindRoot, encoding: 'utf-8' });
+          writeFileSync(getSyncConflictBackupPath(mindRoot, file), theirs, 'utf-8');
+        } catch {
+          noBackup = true;
+        }
       }
-      try { execFileSync('git', ['checkout', '--ours', file], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 }); } catch {}
+      if (stageInfo.localExists) {
+        try { execFileSync('git', ['checkout', '--ours', '--', file], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 }); } catch {}
+      } else {
+        try { removeWorkingTreeFile(mindRoot, file); } catch {}
+      }
+      conflictDetails.push({ file, localExists: stageInfo.localExists, remoteExists: stageInfo.remoteExists, noBackup });
     }
     stageSyncContentUnlocked(mindRoot);
     try {
@@ -562,7 +603,13 @@ function resolveMergeConflictsKeepingLocal(mindRoot, mergeErr, failurePrefix = '
     saveSyncState({
       ...loadSyncState(),
       lastPull: now,
-      conflicts: conflicts.map(f => ({ file: f, time: now, noBackup: conflictWarnings.includes(f) })),
+      conflicts: conflictDetails.map(detail => ({
+        file: detail.file,
+        time: now,
+        localExists: detail.localExists,
+        remoteExists: detail.remoteExists,
+        ...(detail.noBackup ? { noBackup: true } : {}),
+      })),
     });
   }
   return conflicts;
@@ -586,6 +633,7 @@ function runBackgroundSync(mindRoot, operation, fn, options = {}) {
 function autoPullUnlocked(mindRoot, isSshUrl = false) {
   const sshEnv = isSshUrl ? getSshEnv() : {};
   let hasConflicts = false;
+  commitPendingChangesUnlocked(mindRoot);
   try {
     execFileSync('git', ['pull', '--rebase', '--autostash'], { cwd: mindRoot, stdio: 'pipe', env: { ...process.env, ...sshEnv }, timeout: 60000 });
     saveSyncState({ ...loadSyncState(), lastPull: new Date().toISOString() });

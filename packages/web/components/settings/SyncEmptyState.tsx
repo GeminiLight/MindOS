@@ -8,7 +8,7 @@ import {
 import type { Messages } from '@/lib/i18n';
 import { apiFetch } from '@/lib/api';
 import { Input, Field, SettingCard, PrimaryButton } from './Primitives';
-import { formatSyncError, getSyncErrorHint } from '@/lib/sync-ui';
+import { formatSyncError, getGitRemoteHost, getSyncErrorHint } from '@/lib/sync-ui';
 
 function isValidGitUrl(url: string): 'https' | 'ssh' | false {
   if (/^https:\/\/.+/.test(url)) return 'https';
@@ -90,6 +90,7 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
   const branchValue = branch.trim() || 'main';
   const branchValid = isValidGitBranchName(branchValue);
   const showTokenField = urlType === 'https';
+  const remoteHost = getGitRemoteHost(remoteUrl);
   const disabledReason = !remoteUrl.trim()
     ? ((syncT?.connectNeedsUrl as string) ?? 'Paste a remote URL to continue')
     : !isValid
@@ -275,7 +276,8 @@ export default function SyncEmptyState({ t, onInitComplete }: { t: Messages; onI
           htmlFor="sync-remote-url"
           label={(syncT?.remoteUrl as string) ?? 'Git Remote URL'}
           hint={urlType === 'ssh'
-            ? ((syncT?.sshHint as string) ?? 'Requires SSH key on this machine. Verify with: ssh -T git@github.com')
+            ? ((syncT?.sshHintForHost as ((host: string) => string))?.(remoteHost ?? 'github.com')
+              ?? `Requires SSH key on this machine. Verify with: ssh -T git@${remoteHost ?? 'github.com'}`)
             : undefined
           }
         >

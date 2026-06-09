@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatSyncError, getStatusLevel, getSyncLabel, getUnpushedCount, hasUnknownUnpushedCount, timeAgo } from '@/lib/sync-ui';
+import { formatSyncError, getGitRemoteHost, getStatusLevel, getSyncErrorHint, getSyncLabel, getUnpushedCount, hasUnknownUnpushedCount, timeAgo } from '@/lib/sync-ui';
 import type { SyncStatus } from '@/components/settings/types';
 import { messages } from '@/lib/i18n';
 
@@ -218,5 +218,24 @@ describe('getSyncLabel', () => {
     expect(message).toContain('Sync is already running');
     expect(message).not.toContain('pid=123');
     expect(message).toContain('Another sync operation is already running');
+  });
+});
+
+describe('sync error hints', () => {
+  it('derives SSH host commands from the configured remote', () => {
+    expect(getGitRemoteHost('git@gitlab.com:me/mind.git')).toBe('gitlab.com');
+    expect(getGitRemoteHost('ssh://git@git.my-company.com/team/mind.git')).toBe('git.my-company.com');
+    expect(getSyncErrorHint('Permission denied (publickey)', 'git@gitlab.com:me/mind.git'))
+      .toContain('ssh -T git@gitlab.com');
+    expect(getSyncErrorHint('Host key verification failed', 'ssh://git@git.my-company.com/team/mind.git'))
+      .toContain('ssh-keyscan git.my-company.com');
+  });
+
+  it('does not show GitHub token guidance for GitLab and self-hosted HTTPS remotes', () => {
+    expect(getSyncErrorHint('Authentication failed', 'https://gitlab.com/me/mind.git'))
+      .toContain('GitLab User Settings');
+    const selfHosted = getSyncErrorHint('Authentication failed', 'https://git.my-company.com/team/mind.git');
+    expect(selfHosted).toContain('git.my-company.com');
+    expect(selfHosted).not.toContain('GitHub');
   });
 });

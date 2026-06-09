@@ -231,6 +231,96 @@ describe('useSyncAction', () => {
     });
   });
 
+  it('does not flash success when the refreshed status contains lastError', async () => {
+    const { fetchSharedSyncStatus, resetSyncStatusStoreForTests, useSyncAction } = await import('@/lib/sync-status-store');
+    resetSyncStatusStoreForTests();
+    mockApiFetch
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        enabled: true,
+        remote: 'git@github.com:me/mind.git',
+        branch: 'main',
+        lastSync: null,
+        unpushed: '0',
+        conflicts: [],
+        lastError: 'Push failed: auth denied',
+      });
+
+    function Harness() {
+      const { syncNow, syncResult, syncError } = useSyncAction(() => fetchSharedSyncStatus({ force: true }));
+      return (
+        <div>
+          <button type="button" onClick={() => void syncNow()}>sync</button>
+          <p>{syncResult ?? 'none'}</p>
+          <p>{syncError}</p>
+        </div>
+      );
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('error');
+    expect(host.textContent).toContain('Push failed: auth denied');
+    expect(host.textContent).not.toContain('success');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces refresh failure after a successful sync POST instead of flashing success', async () => {
+    const { fetchSharedSyncStatus, resetSyncStatusStoreForTests, useSyncAction } = await import('@/lib/sync-status-store');
+    resetSyncStatusStoreForTests();
+    mockApiFetch
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('status refresh failed'));
+
+    function Harness() {
+      const { syncNow, syncResult, syncError } = useSyncAction(() => fetchSharedSyncStatus({ force: true }));
+      return (
+        <div>
+          <button type="button" onClick={() => void syncNow()}>sync</button>
+          <p>{syncResult ?? 'none'}</p>
+          <p>{syncError}</p>
+        </div>
+      );
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('error');
+    expect(host.textContent).toContain('status refresh failed');
+    expect(host.textContent).not.toContain('success');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('does not flash success when the refreshed status cannot confirm unpushed changes', async () => {
     const { fetchSharedSyncStatus, resetSyncStatusStoreForTests, useSyncAction } = await import('@/lib/sync-status-store');
     resetSyncStatusStoreForTests();
