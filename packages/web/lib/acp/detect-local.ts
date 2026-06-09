@@ -16,6 +16,11 @@ import {
   detectLocalAcpAgents as detectLocalAcpAgentsCore,
   type LocalAcpDetectionOptions,
 } from '@geminilight/mindos/protocols/acp';
+import {
+  defaultCheckNativeRuntimeHealth,
+  type NativeRuntimeHealthInput,
+  type NativeRuntimeHealthResult,
+} from '@geminilight/mindos/server';
 import { readSettings, type ServerSettings } from '@/lib/settings';
 
 type LegacyDetectionSettings = Pick<ServerSettings, 'acpAgents'>;
@@ -30,4 +35,10 @@ export async function detectLocalAcpAgents(
     options = { overrides: (settingsOrOptions as LegacyDetectionSettings).acpAgents };
   }
   return detectLocalAcpAgentsCore(options);
+}
+
+export async function checkNativeRuntimeHealth(
+  input: NativeRuntimeHealthInput,
+): Promise<NativeRuntimeHealthResult> {
+  return defaultCheckNativeRuntimeHealth(input);
 }

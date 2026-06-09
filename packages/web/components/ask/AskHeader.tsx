@@ -1,10 +1,12 @@
 import { memo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
+import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
 import { SaveSessionButton } from './SaveSessionInline';
+import RuntimeIconSwitcher from './RuntimeIconSwitcher';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { ChatSession } from '@/lib/types';
+import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, RuntimeSessionBinding } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
+import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 
 interface AskHeaderProps {
   isPanel: boolean;
@@ -29,18 +31,28 @@ interface AskHeaderProps {
   onTogglePinSession?: (id: string) => void;
   /** Current session messages — used by Save Session button */
   messages?: import('@/lib/types').Message[];
+  /** Current Chat Panel runtime selection */
+  selectedAgentRuntime?: AgentRuntimeIdentity | null;
+  onSelectAgentRuntime?: (agent: AgentRuntimeIdentity | null) => void;
+  runtimeSessionBinding?: RuntimeSessionBinding | null;
+  nativeRuntimes?: Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName'>>>;
+  notInstalledAgents?: NotInstalledAgent[];
+  agentLoading?: boolean;
+  agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
 }
 
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
   maximized, onMaximize, askMode, onModeSwitch, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
-  messages,
+  messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
+  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
   const iconSize = 14;
-  const hasMultipleSessions = sessions && sessions.length >= 2;
+  const isNativeRuntime = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude';
+  const canOpenSessionSwitcher = !!sessions && (sessions.length >= 2 || isNativeRuntime);
   const headerButtonClass = 'relative z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg pointer-events-auto touch-manipulation transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const titleTriggerClass = 'relative z-10 inline-flex min-h-9 items-center rounded-lg px-2 pointer-events-auto touch-manipulation transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const activeSession = sessions?.find(s => s.id === activeSessionId);
@@ -125,6 +137,36 @@ export default memo(function AskHeader({
       style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
       role="listbox"
     >
+      {isNativeRuntime && (
+        <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+          <span className="truncate text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+            {selectedAgentRuntime?.kind === 'codex'
+              ? 'Codex threads'
+              : selectedAgentRuntime?.kind === 'claude'
+                ? 'Claude Code sessions'
+                : `${selectedAgentRuntime?.name ?? 'Runtime'} sessions`}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              startTransition(() => {
+                onReset();
+                setSwitcherOpen(false);
+              });
+            }}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors duration-75 hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <SquarePen size={10} />
+            New chat
+          </button>
+        </div>
+      )}
+      {sessions.length === 0 && (
+        <div className="px-3 py-3 text-xs text-muted-foreground/60">
+          {t.ask?.noSessions ?? 'No saved sessions.'}
+        </div>
+      )}
       {sessions.map((s) => {
         const isActive = s.id === activeSessionId;
         const title = sessionTitle(s);
@@ -211,31 +253,44 @@ export default memo(function AskHeader({
       )}
       {!hideTitle && (
         <div className="relative z-10 flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
-            {showHistory ? <History size={13} className="text-[var(--amber)]" /> : <Sparkles size={13} className="text-[var(--amber)]" />}
-          </div>
+          {onSelectAgentRuntime ? (
+            <RuntimeIconSwitcher
+              selectedRuntime={selectedAgentRuntime ?? null}
+              onSelect={onSelectAgentRuntime}
+              runtimeSessionBinding={runtimeSessionBinding ?? null}
+              nativeRuntimes={nativeRuntimes}
+              notInstalledAgents={notInstalledAgents}
+              loading={agentLoading}
+              loadingByKind={agentLoadingByKind}
+              disabled={isLoading}
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
+              <img src="/logo-square.svg" alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
+            </div>
+          )}
           {showHistory ? (
             <span className="text-sm font-medium text-[var(--amber)]">
               {t.ask?.sessionHistory ?? 'Session History'}
             </span>
-          ) : hasMultipleSessions && activeTitle ? (
+          ) : canOpenSessionSwitcher ? (
             <button
               ref={switcherRef}
               type="button"
               onClick={() => {
                 startTransition(() => {
-                  if (sessions && sessions.length >= 2) {
-                    setSwitcherOpen(v => !v);
-                  } else {
-                    onToggleHistory();
-                  }
+                  setSwitcherOpen(v => !v);
                 });
               }}
               className={`min-w-0 gap-1 text-sm font-medium text-[var(--amber)] hover:text-[var(--amber)]/80 hover:bg-muted/40 ${titleTriggerClass}`}
               aria-expanded={switcherOpen}
               aria-haspopup="listbox"
             >
-              <span className="truncate max-w-[180px]">{activeTitle === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : activeTitle}</span>
+              <span className="truncate max-w-[180px]">
+                {activeTitle
+                  ? activeTitle === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : activeTitle
+                  : isNativeRuntime ? `${selectedAgentRuntime?.name ?? 'Runtime'} sessions` : (t.hints?.newChat ?? 'New chat')}
+              </span>
               <ChevronDown size={12} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${switcherOpen ? 'rotate-180' : ''}`} />
             </button>
           ) : activeTitle ? (

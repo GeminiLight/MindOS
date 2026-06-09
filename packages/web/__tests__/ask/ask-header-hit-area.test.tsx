@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import AskHeader from '@/components/ask/AskHeader';
 
@@ -34,6 +36,11 @@ vi.mock('@/components/ask/SaveSessionInline', () => ({
 }));
 
 describe('AskHeader panel hit area', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
   it('uses larger hit targets for panel header buttons and session switcher', () => {
     const html = renderToStaticMarkup(
       <AskHeader
@@ -68,5 +75,56 @@ describe('AskHeader panel hit area', () => {
     expect(html).toContain('relative z-20 isolate');
     expect(html).toContain('pointer-events-auto touch-manipulation');
     expect(html).toContain('rounded-lg');
+  });
+
+  it('opens the session dropdown for a single selected Claude Code session', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AskHeader
+          isPanel
+          showHistory={false}
+          onToggleHistory={vi.fn()}
+          onReset={vi.fn()}
+          isLoading={false}
+          sessions={[
+            {
+              id: 'claude-session',
+              title: 'Claude review',
+              messages: [{ role: 'user', content: 'review' }],
+              defaultAgentRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+            } as any,
+          ]}
+          activeSessionId="claude-session"
+          onLoadSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onTogglePinSession={vi.fn()}
+          selectedAgentRuntime={{ id: 'claude', name: 'Claude Code', kind: 'claude' }}
+          onSelectAgentRuntime={vi.fn()}
+          nativeRuntimes={[{ id: 'claude', name: 'Claude Code', kind: 'claude' }]}
+          messages={[]}
+        />,
+      );
+    });
+
+    const titleButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Claude review')) as HTMLButtonElement;
+    expect(titleButton).toBeTruthy();
+
+    await act(async () => {
+      titleButton.click();
+    });
+
+    expect(document.body.textContent).toContain('Claude Code sessions');
+    expect(document.body.textContent).toContain('Claude review');
+    expect(document.body.textContent).toContain('New chat');
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

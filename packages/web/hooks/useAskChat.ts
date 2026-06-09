@@ -1,10 +1,10 @@
 'use client';
 
 import { useRef, useState, useCallback, useLayoutEffect } from 'react';
-import type { AgentIdentity, AgentRuntimeIdentity, Message, ImagePart, AskMode, LocalAttachment } from '@/lib/types';
+import type { AgentIdentity, AgentRuntimeIdentity, Message, ImagePart, AskMode, LocalAttachment, RuntimeSessionBinding } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
-import { annotateMessageWithAgentRuntime } from '@/lib/ask-agent';
+import { annotateMessageWithAgentRuntime, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
@@ -16,10 +16,13 @@ export interface AskChatRefs {
   imageUploadRef: React.RefObject<{ images: ImagePart[]; clearImages: () => void }>;
   sessionRef: React.RefObject<{
     activeSession?: {
+      runtimeSessionBinding?: RuntimeSessionBinding | null;
       externalAgentBinding?: {
         runtime: 'acp' | 'codex' | 'claude';
         externalSessionId?: string;
         cwd?: string;
+        status?: 'active' | 'missing' | 'signed-out';
+        updatedAt: number;
       } | null;
     } | null;
     messages: Message[];
@@ -154,9 +157,12 @@ export function useAskChat({
     const acpAgent: AgentIdentity | null = selectedRuntimeBase?.kind === 'acp'
       ? { id: selectedRuntimeBase.id, name: selectedRuntimeBase.name }
       : null;
-    const activeBinding = sess.activeSession?.externalAgentBinding;
-    const selectedRuntime = selectedRuntimeBase && activeBinding?.runtime === selectedRuntimeBase.kind && activeBinding.externalSessionId
-      ? { ...selectedRuntimeBase, externalSessionId: activeBinding.externalSessionId }
+    const matchingRuntimeBinding = getMatchingRuntimeSessionBinding(sess.activeSession, selectedRuntimeBase);
+    const selectedRuntime = selectedRuntimeBase && matchingRuntimeBinding?.externalSessionId
+      ? {
+          ...selectedRuntimeBase,
+          externalSessionId: matchingRuntimeBinding.externalSessionId,
+        }
       : selectedRuntimeBase;
     const runtimeForMessage = selectedRuntimeBase ?? null;
     const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
@@ -224,9 +230,10 @@ export function useAskChat({
       })),
       selectedAcpAgent: acpAgent,
       selectedRuntime,
+      runtimeBinding: matchingRuntimeBinding ?? null,
       mode: chatMode,
-      providerOverride: providerOverride ?? undefined,
-      modelOverride: modelOverride ?? undefined,
+      providerOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : providerOverride ?? undefined,
+      modelOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : modelOverride ?? undefined,
     });
 
     const doFetch = async (): Promise<{ finalMessage: Message }> => {

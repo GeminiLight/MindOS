@@ -90,11 +90,61 @@ export interface AgentRuntimeIdentity extends AgentIdentity {
   kind: AgentRuntimeKind;
 }
 
+export type AgentRuntimeStatus = 'available' | 'missing' | 'signed-out' | 'error';
+
+export interface AgentRuntimeCapabilities {
+  ownsModelSelection: boolean;
+  supportsResume: boolean;
+  supportsFreshSession: boolean;
+  supportsListSessions: boolean;
+  supportsAttachExisting: boolean;
+  supportsFork: boolean;
+  supportsArchive: boolean;
+  supportsInterrupt: boolean;
+  supportsModelList: boolean;
+}
+
+export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
+  status: AgentRuntimeStatus;
+  capabilities: AgentRuntimeCapabilities;
+  description?: string;
+  sourceAgentId?: string;
+  canonicalAgentId?: string;
+  mcpAgentKey?: string;
+  aliases?: string[];
+  binaryPath?: string;
+  resolvedCommand?: {
+    cmd: string;
+    args: string[];
+    source: 'user-override' | 'descriptor' | 'registry';
+  };
+  installCmd?: string;
+  packageName?: string;
+  availability?: {
+    checkedAt: string;
+    sources: Array<'acp-detect' | 'acp-registry' | 'mcp-agents' | 'native-health' | 'settings'>;
+    reason?: string;
+    stale?: boolean;
+  };
+}
+
 export interface ExternalAgentBinding {
   runtime: Exclude<AgentRuntimeKind, 'mindos'>;
   externalSessionId?: string;
   cwd?: string;
   status?: 'active' | 'missing' | 'signed-out';
+  updatedAt: number;
+}
+
+export type RuntimeSessionKind = 'codex-thread' | 'claude-session' | 'acp-session';
+
+export interface RuntimeSessionBinding {
+  kind: RuntimeSessionKind;
+  runtime: Exclude<AgentRuntimeKind, 'mindos'>;
+  runtimeId: string;
+  externalSessionId?: string;
+  cwd?: string;
+  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
   updatedAt: number;
 }
 
@@ -155,4 +205,6 @@ export interface ChatSession {
   defaultAgentRuntime?: AgentRuntimeIdentity | null;
   /** External runtime session metadata for native runtimes such as Codex or Claude. */
   externalAgentBinding?: ExternalAgentBinding | null;
+  /** Typed external runtime session metadata. Prefer this over externalAgentBinding. */
+  runtimeSessionBinding?: RuntimeSessionBinding | null;
 }

@@ -32,6 +32,7 @@ import {
   handleAcpSessionPost,
 } from './handlers/acp.js';
 import { handleAgentActivity } from './handlers/agent-activity.js';
+import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
 import {
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
@@ -320,6 +321,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-activity') {
       writeResponse(res, await handleAgentActivity(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes') {
+      writeResponse(res, await handleAgentRuntimesGet(url.searchParams, services));
       return;
     }
     if (route === 'OPTIONS /api/a2a') {

@@ -48,6 +48,7 @@ describe('Product server extraction contract', () => {
     expect(http).toContain('/api/backlinks');
     expect(http).toContain('/api/graph');
     expect(http).toContain('/api/agent-activity');
+    expect(http).toContain('/api/agent-runtimes');
     expect(http).toContain('/api/ask-sessions');
     expect(http).toContain('/api/space-overview');
     expect(http).toContain('/api/git');
@@ -120,6 +121,8 @@ describe('Product server extraction contract', () => {
     expect(contract).toContain("path: '/api/graph'");
     expect(contract).toContain("id: 'agent-activity'");
     expect(contract).toContain("path: '/api/agent-activity'");
+    expect(contract).toContain("id: 'agent-runtimes'");
+    expect(contract).toContain("path: '/api/agent-runtimes'");
     expect(contract).toContain("id: 'ask-sessions'");
     expect(contract).toContain("path: '/api/ask-sessions'");
     expect(contract).toContain("id: 'space-overview'");
@@ -231,6 +234,7 @@ describe('Product server extraction contract', () => {
       'packages/web/app/api/backlinks/route.ts',
       'packages/web/app/api/graph/route.ts',
       'packages/web/app/api/agent-activity/route.ts',
+      'packages/web/app/api/agent-runtimes/route.ts',
       'packages/web/app/api/ask-sessions/route.ts',
       'packages/web/app/api/space-overview/route.ts',
       'packages/web/app/api/git/route.ts',

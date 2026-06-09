@@ -6,8 +6,9 @@ import path from 'path';
 import { getFileContent, getMindRoot, collectAllFiles } from '@/lib/fs';
 import { validateFileSize } from '@/lib/api-file-size-validation';
 import { truncate } from '@/lib/agent/tools';
-import type { AgentRuntimeIdentity, AskModeApi } from '@/lib/types';
+import type { AgentRuntimeIdentity, AskModeApi, RuntimeSessionBinding } from '@/lib/types';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
+import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { performActiveRecall } from '@/lib/agent/active-recall';
@@ -38,6 +39,10 @@ import {
   type MindosAgentRuntimeSelection,
 } from '@geminilight/mindos/agent-runtime';
 import {
+  handleAgentRuntimesGet,
+  type AgentRuntimesServices,
+} from '@geminilight/mindos/server';
+import {
   buildMindosAskSystemPrompt,
   type MindosAskInitializationContext,
 } from '@geminilight/mindos/agent';
@@ -56,7 +61,7 @@ function loadAttachedFileContext(
   return loadMindosAskFileContext(attachedFiles, currentFile, mode, {
     readFile: getFileContent,
     truncate,
-    validateFileSize,
+    validateFileSize: (filePath, cumulativeSize) => validateFileSize(path.join(getMindRoot(), filePath), cumulativeSize),
     warn: (message: string, error?: unknown) => console.warn(message, error instanceof Error ? error.message : error),
   });
 }
@@ -73,16 +78,18 @@ function acpAgentFromRuntime(runtime: unknown): { id: string; name: string } | n
   return { id: record.id, name: record.name };
 }
 
-function nativeAgentRuntimeFromSelection(runtime: unknown): MindosAgentRuntimeSelection | null {
+function nativeAgentRuntimeFromSelection(runtime: unknown, binding?: unknown): MindosAgentRuntimeSelection | null {
   if (!runtime || typeof runtime !== 'object') return null;
   const record = runtime as Partial<AgentRuntimeIdentity> & { externalSessionId?: unknown };
   if (record.kind !== 'codex' && record.kind !== 'claude') return null;
   if (typeof record.id !== 'string' || typeof record.name !== 'string') return null;
+  const bindingExternalSessionId = externalSessionIdFromRuntimeBinding(record, binding);
   return {
     id: record.id,
     name: record.name,
     kind: record.kind,
-    ...(typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
+    ...(bindingExternalSessionId ? { externalSessionId: bindingExternalSessionId } : {}),
+    ...(!bindingExternalSessionId && typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
   };
 }
 
@@ -98,6 +105,21 @@ function getLastUserContent(messages: FrontendMessage[]): string {
     if (message?.role === 'user' && typeof message.content === 'string') return message.content;
   }
   return '';
+}
+
+function externalSessionIdFromRuntimeBinding(
+  runtime: Partial<AgentRuntimeIdentity>,
+  binding: unknown,
+): string | null {
+  if (!binding || typeof binding !== 'object') return null;
+  const record = binding as Partial<RuntimeSessionBinding>;
+  if (record.runtime !== runtime.kind || record.runtimeId !== runtime.id) return null;
+  if (runtime.kind === 'codex' && record.kind !== 'codex-thread') return null;
+  if (runtime.kind === 'claude' && record.kind !== 'claude-session') return null;
+  if (record.status && record.status !== 'active') return null;
+  return typeof record.externalSessionId === 'string' && record.externalSessionId.trim()
+    ? record.externalSessionId
+    : null;
 }
 
 function createAskSseResponse(
@@ -138,6 +160,31 @@ function createAskSseResponse(
   return new Response(stream, {
     headers: MINDOS_SSE_HEADERS,
   });
+}
+
+async function assertNativeRuntimeAvailable(runtime: MindosAgentRuntimeSelection): Promise<string | null> {
+  const services: AgentRuntimesServices = {
+    readSettings: readSettings as AgentRuntimesServices['readSettings'],
+    detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
+    resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
+    checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
+  };
+  const res = await handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services);
+  const body = res.body;
+  if (res.status !== 200 || !body || !('runtime' in body)) {
+    return `Unable to verify ${runtime.name} before starting the turn.`;
+  }
+  const descriptor = body.runtime;
+  if (descriptor.kind !== runtime.kind || descriptor.id !== runtime.id) {
+    return `${runtime.name} is not available.`;
+  }
+  if (descriptor.status === 'available') return null;
+  const statusText = descriptor.status === 'signed-out'
+    ? 'signed out'
+    : descriptor.status === 'missing'
+      ? 'not installed'
+      : 'unavailable';
+  return `${descriptor.name} is ${statusText}.${descriptor.availability?.reason ? ` ${descriptor.availability.reason}` : ''}`;
 }
 
 // SSE event contract and pi-agent event guards → @geminilight/mindos/session
@@ -193,6 +240,8 @@ export async function POST(req: NextRequest) {
     selectedAcpAgent?: { id: string; name: string } | null;
     /** Unified runtime selection. ACP values mirror selectedAcpAgent for compatibility. */
     selectedRuntime?: (AgentRuntimeIdentity & { externalSessionId?: string }) | null;
+    /** Typed external runtime binding for native Codex/Claude resume. */
+    runtimeBinding?: RuntimeSessionBinding | null;
     /** Per-request provider override from the chat panel capsule */
     providerOverride?: string;
     /** Per-request model override from the inline model picker */
@@ -205,10 +254,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles } = body;
-  const selectedNativeRuntime = nativeAgentRuntimeFromSelection(body.selectedRuntime);
+  const selectedNativeRuntime = nativeAgentRuntimeFromSelection(body.selectedRuntime, body.runtimeBinding);
   const selectedAcpAgent = selectedNativeRuntime || body.selectedRuntime === null || isMindosRuntimeSelection(body.selectedRuntime)
     ? null
-    : (acpAgentFromRuntime(body.selectedRuntime) ?? body.selectedAcpAgent ?? null);
+    : (body.selectedRuntime === undefined
+      ? body.selectedAcpAgent ?? null
+      : acpAgentFromRuntime(body.selectedRuntime));
   const attachedFiles = Array.isArray(rawAttached) ? expandAttachedFiles(rawAttached) : rawAttached;
   const askMode: AskModeApi = normalizeMindosAskMode(body.mode);
 
@@ -220,6 +271,12 @@ export async function POST(req: NextRequest) {
   // Read agent config from settings
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
+  if (selectedNativeRuntime) {
+    const unavailableReason = await assertNativeRuntimeAvailable(selectedNativeRuntime);
+    if (unavailableReason) {
+      return apiError(ErrorCodes.INVALID_REQUEST, unavailableReason, 409);
+    }
+  }
 
   // Detect locale from Accept-Language header for i18n status messages
   const acceptLang = req.headers.get('accept-language') ?? '';

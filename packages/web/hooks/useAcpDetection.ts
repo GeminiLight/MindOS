@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { AgentRuntimeDescriptor, AgentRuntimeStatus } from '@/lib/types';
 
 export interface DetectedAgent {
   id: string;
   name: string;
   binaryPath: string;
+  status?: Exclude<AgentRuntimeStatus, 'missing'>;
+  reason?: string;
   resolvedCommand?: {
     cmd: string;
     args: string[];
@@ -23,18 +26,22 @@ export interface NotInstalledAgent {
 interface AcpDetectionState {
   installedAgents: DetectedAgent[];
   notInstalledAgents: NotInstalledAgent[];
+  runtimes: AgentRuntimeDescriptor[];
   loading: boolean;
   error: string | null;
   refresh: () => void;
 }
 
-const STORAGE_KEY = 'mindos:acp-detection';
+const STORAGE_KEY = 'mindos:acp-detection:v2';
+const LEGACY_STORAGE_KEY = 'mindos:acp-detection';
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
+const DETECTION_TIMEOUT_MS = 30000;
 
 export interface DetectionCache {
   installed: DetectedAgent[];
   notInstalled: NotInstalledAgent[];
+  runtimes?: AgentRuntimeDescriptor[];
   ts: number;
 }
 
@@ -59,6 +66,7 @@ export function readAcpDetectionCacheFromStorage(): DetectionCache | null {
     return {
       installed: parsed.installed as DetectedAgent[],
       notInstalled: parsed.notInstalled as NotInstalledAgent[],
+      ...(Array.isArray(parsed.runtimes) ? { runtimes: parsed.runtimes as AgentRuntimeDescriptor[] } : {}),
       ts: parsed.ts,
     };
   } catch {
@@ -66,18 +74,27 @@ export function readAcpDetectionCacheFromStorage(): DetectionCache | null {
   }
 }
 
-function writeStorage(installed: DetectedAgent[], notInstalled: NotInstalledAgent[]) {
+function writeStorage(installed: DetectedAgent[], notInstalled: NotInstalledAgent[], runtimes: AgentRuntimeDescriptor[]) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ installed, notInstalled, ts: Date.now() }));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ installed, notInstalled, runtimes, ts: Date.now() }));
   } catch { /* quota exceeded */ }
+}
+
+function hasUnavailableNativeRuntime(cache: DetectionCache | null): boolean {
+  return (cache?.runtimes ?? []).some((runtime) => (
+    (runtime.kind === 'codex' || runtime.kind === 'claude') &&
+    (runtime.status === 'error' || runtime.status === 'signed-out' || runtime.status === 'missing')
+  ));
 }
 
 export function useAcpDetection(): AcpDetectionState {
   const [initialCache] = useState<DetectionCache | null>(() => readAcpDetectionCacheFromStorage());
+  const [shouldRevalidateInitialCache] = useState(() => hasUnavailableNativeRuntime(initialCache));
   const cached = useRef<DetectionCache | null>(initialCache);
   const [installedAgents, setInstalledAgents] = useState<DetectedAgent[]>(() => initialCache?.installed ?? []);
   const [notInstalledAgents, setNotInstalledAgents] = useState<NotInstalledAgent[]>(() => initialCache?.notInstalled ?? []);
-  const [loading, setLoading] = useState(() => !initialCache);
+  const [runtimes, setRuntimes] = useState<AgentRuntimeDescriptor[]>(() => initialCache?.runtimes ?? []);
+  const [loading, setLoading] = useState(() => !initialCache || shouldRevalidateInitialCache);
   const [error, setError] = useState<string | null>(null);
   const [trigger, setTrigger] = useState(0);
   const inflight = useRef(false);
@@ -86,6 +103,7 @@ export function useAcpDetection(): AcpDetectionState {
 
   const refresh = useCallback(() => {
     try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* ignore */ }
     cached.current = null;
     forceRef.current = true;
     setTrigger((n) => n + 1);
@@ -101,7 +119,9 @@ export function useAcpDetection(): AcpDetectionState {
     const isForce = forceRef.current;
     forceRef.current = false;
 
-    const fresh = cached.current && Date.now() - cached.current.ts < REVALIDATE_TTL_MS;
+    const fresh = cached.current &&
+      Date.now() - cached.current.ts < REVALIDATE_TTL_MS &&
+      !hasUnavailableNativeRuntime(cached.current);
     if (fresh && trigger === 0) return;
 
     if (inflight.current) return;
@@ -113,7 +133,10 @@ export function useAcpDetection(): AcpDetectionState {
 
     let cancelled = false;
 
-    fetch(`/api/acp/detect${isForce ? '?force=1' : ''}`)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DETECTION_TIMEOUT_MS);
+
+    fetch(`/api/agent-runtimes${isForce ? '?force=1' : ''}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -122,22 +145,33 @@ export function useAcpDetection(): AcpDetectionState {
         if (cancelled) return;
         const inst: DetectedAgent[] = data.installed ?? [];
         const notInst: NotInstalledAgent[] = data.notInstalled ?? [];
-        writeStorage(inst, notInst);
-        cached.current = { installed: inst, notInstalled: notInst, ts: Date.now() };
+        const runtimeData: AgentRuntimeDescriptor[] = Array.isArray(data.runtimes) ? data.runtimes : [];
+        writeStorage(inst, notInst, runtimeData);
+        cached.current = { installed: inst, notInstalled: notInst, runtimes: runtimeData, ts: Date.now() };
         setInstalledAgents(inst);
         setNotInstalledAgents(notInst);
+        setRuntimes(runtimeData);
       })
       .catch((err) => {
         if (cancelled) return;
-        if (!hasCachedData) setError((err as Error).message);
+        const message = err instanceof DOMException && err.name === 'AbortError'
+          ? `Agent runtime detection timed out after ${DETECTION_TIMEOUT_MS}ms.`
+          : (err as Error).message;
+        if (!hasCachedData) setError(message);
       })
       .finally(() => {
+        clearTimeout(timeout);
         inflight.current = false;
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; inflight.current = false; };
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
+      inflight.current = false;
+    };
   }, [trigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { installedAgents, notInstalledAgents, loading, error, refresh };
+  return { installedAgents, notInstalledAgents, runtimes, loading, error, refresh };
 }

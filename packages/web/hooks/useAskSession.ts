@@ -2,19 +2,23 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react';
 import type { AgentIdentity, AgentRuntimeIdentity, Message, ChatSession } from '@/lib/types';
-import { bindSessionAgent, bindSessionAgentRuntime } from '@/lib/ask-agent';
+import { bindSessionAgent, bindSessionAgentRuntime, isSessionInRuntimeLane } from '@/lib/ask-agent';
 
 const MAX_SESSIONS = 30;
 
-function createSession(currentFile?: string): ChatSession {
+function createSession(currentFile?: string, runtime?: AgentRuntimeIdentity | null): ChatSession {
   const ts = Date.now();
-  return {
+  const session: ChatSession = {
     id: `${ts}-${Math.random().toString(36).slice(2, 8)}`,
     currentFile,
     createdAt: ts,
     updatedAt: ts,
     messages: [],
   };
+
+  if (!runtime || runtime.kind === 'mindos') return session;
+  if (runtime.kind === 'acp') return bindSessionAgent(session, { id: runtime.id, name: runtime.name });
+  return bindSessionAgentRuntime(session, runtime, { updatedAt: ts });
 }
 
 export function sessionTitle(s: ChatSession): string {
@@ -159,13 +163,13 @@ export function useAskSession(currentFile?: string) {
   }, []);
 
   /** Create a brand-new session (memory only). If current session is already empty, reuse it. */
-  const resetSession = useCallback(() => {
+  const resetSession = useCallback((runtime?: AgentRuntimeIdentity | null) => {
     setSessions((prev) => {
       const active = prev.find((s) => s.id === activeSessionId);
-      // Already on an empty session — just clear input, don't create another
-      if (active && active.messages.length === 0) return prev;
+      // Already on an empty session in this runtime lane — just clear input.
+      if (active && active.messages.length === 0 && isSessionInRuntimeLane(active, runtime)) return prev;
 
-      const fresh = createSession(currentFile);
+      const fresh = createSession(currentFile, runtime);
       setActiveSessionId(fresh.id);
       setMessages([]);
       // Memory only — no upsertSession call. Will be persisted on first message.
@@ -195,7 +199,7 @@ export function useAskSession(currentFile?: string) {
 
   /** Delete a session. If it's the active one, create fresh (memory only). */
   const deleteSession = useCallback(
-    (id: string) => {
+    (id: string, runtime?: AgentRuntimeIdentity | null) => {
       const target = sessions.find((s) => s.id === id);
       // Only call removeSession if the session has messages (i.e. was persisted)
       if (target && target.messages.length > 0) void removeSession(id);
@@ -204,7 +208,7 @@ export function useAskSession(currentFile?: string) {
       setSessions(remaining);
 
       if (activeSessionId === id) {
-        const fresh = createSession(currentFile);
+        const fresh = createSession(currentFile, runtime);
         setActiveSessionId(fresh.id);
         setMessages([]);
         setSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
@@ -300,17 +304,26 @@ export function useAskSession(currentFile?: string) {
     }
   }, [activeSessionId, currentFile, sessions]);
 
-  const clearAllSessions = useCallback(() => {
-    // Only delete sessions that have messages (were persisted)
-    const persistedIds = sessions.filter(s => s.messages.length > 0).map(s => s.id);
+  const clearSessions = useCallback((ids?: string[], runtime?: AgentRuntimeIdentity | null) => {
+    const targetIds = ids
+      ? new Set(ids)
+      : new Set(sessions.map((s) => s.id));
+    const persistedIds = sessions
+      .filter((s) => targetIds.has(s.id) && s.messages.length > 0)
+      .map((s) => s.id);
     if (persistedIds.length > 0) void removeSessions(persistedIds);
 
-    const fresh = createSession(currentFile);
+    const remaining = sessions.filter((s) => !targetIds.has(s.id));
+    const fresh = createSession(currentFile, runtime);
     setActiveSessionId(fresh.id);
     setMessages([]);
-    setSessions([fresh]);
+    setSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
     // No upsertSession — memory only
   }, [currentFile, sessions]);
+
+  const clearAllSessions = useCallback(() => {
+    clearSessions(undefined, null);
+  }, [clearSessions]);
 
   /** Sessions sorted: pinned first, then by updatedAt desc */
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => {
@@ -339,6 +352,7 @@ export function useAskSession(currentFile?: string) {
     togglePinSession,
     setSessionDefaultAcpAgent,
     setSessionAgentRuntimeBinding,
+    clearSessions,
     clearAllSessions,
   };
 }

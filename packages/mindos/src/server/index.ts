@@ -37,6 +37,24 @@ export {
 } from './handlers/agent-activity.js';
 
 export {
+  buildAgentRuntimesPayload,
+  checkCodexProviderEnvironment,
+  defaultCheckNativeRuntimeHealth,
+  handleAgentRuntimesGet,
+  type AgentRuntimeCapabilities,
+  type AgentRuntimeDescriptor,
+  type AgentRuntimeKind,
+  type AgentRuntimePayload,
+  type AgentRuntimeStatus,
+  type AgentRuntimesPayload,
+  type AgentRuntimesServices,
+  type DetectedRuntimeAgent,
+  type MissingRuntimeAgent,
+  type NativeRuntimeHealthInput,
+  type NativeRuntimeHealthResult,
+} from './handlers/agent-runtimes.js';
+
+export {
   handleAskSessionsDelete,
   handleAskSessionsGet,
   handleAskSessionsPost,

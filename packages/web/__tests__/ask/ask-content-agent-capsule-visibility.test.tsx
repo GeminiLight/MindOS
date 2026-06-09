@@ -147,7 +147,11 @@ vi.mock('@/components/ask/MentionPopover', () => ({ default: () => null }));
 vi.mock('@/components/ask/SlashCommandPopover', () => ({ default: () => null }));
 vi.mock('@/components/ask/SessionHistory', () => ({ default: () => null }));
 vi.mock('@/components/ask/SessionHistoryPanel', () => ({ default: () => null }));
-vi.mock('@/components/ask/AskHeader', () => ({ default: () => <div /> }));
+vi.mock('@/components/ask/AskHeader', () => ({
+  default: ({ selectedAgentRuntime }: { selectedAgentRuntime: { name: string } | null }) => (
+    <div data-testid="runtime-switcher">{selectedAgentRuntime?.name ?? 'MindOS'}</div>
+  ),
+}));
 vi.mock('@/components/ask/FileChip', () => ({ default: () => null }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => <div data-testid="mode-capsule">mode</div>,
@@ -164,14 +168,14 @@ vi.mock('@/components/ask/AgentSelectorCapsule', () => ({
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 
-describe('AskContent agent selector capsule visibility', () => {
+describe('AskContent runtime selector placement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockInstalledAgents.length = 0;
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it('keeps the agent selector capsule visible in panel mode even with no detected ACP agents', async () => {
+  it('keeps runtime selection in the header and provider controls in the MindOS composer row', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -186,7 +190,8 @@ describe('AskContent agent selector capsule visibility', () => {
 
     expect(host.querySelector('[data-testid="mode-capsule"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="provider-capsule"]')).toBeTruthy();
-    expect(host.querySelector('[data-testid="agent-selector"]')?.textContent).toBe('MindOS');
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('MindOS');
+    expect(host.querySelector('[data-testid="agent-selector"]')).toBeNull();
 
     await act(async () => {
       root.unmount();

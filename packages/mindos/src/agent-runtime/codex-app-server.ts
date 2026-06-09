@@ -54,6 +54,7 @@ export type CodexAppServerClient = {
 };
 
 type PendingRequest = {
+  method: string;
   resolve(value: unknown): void;
   reject(error: Error): void;
 };
@@ -118,7 +119,7 @@ export function createCodexAppServerClient(
             if (!request) continue;
             pending.delete(message.id);
             if (message.error) {
-              request.reject(new Error(message.error.message ?? `Codex app-server error ${message.error.code ?? ''}`.trim()));
+              request.reject(new Error(formatCodexJsonRpcError(request.method, message.error)));
             } else {
               request.resolve(message.result);
             }
@@ -140,7 +141,7 @@ export function createCodexAppServerClient(
     startReadLoop(signal);
     const id = nextId++;
     const response = new Promise<unknown>((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      pending.set(id, { method, resolve, reject });
     });
     await transport.send({ method, id, params });
     return response;
@@ -219,6 +220,10 @@ export function createCodexAppServerStdioTransport(options: {
 }
 
 export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppServerNotification): MindOSSSEvent[] {
+  if (notification.method === 'error') {
+    return [{ type: 'error', message: getCodexNotificationErrorMessage(notification.params) ?? 'Codex app-server error' }];
+  }
+
   if (notification.method === 'item/agentMessage/delta') {
     const delta = getStringParam(notification.params, 'delta') ?? getStringParam(notification.params, 'text');
     return delta ? [{ type: 'text_delta', delta }] : [];
@@ -229,15 +234,52 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
     return delta ? [{ type: 'thinking_delta', delta }] : [];
   }
 
+  if (
+    notification.method === 'item/reasoning/textDelta'
+    || notification.method === 'item/reasoning/summaryTextDelta'
+    || notification.method === 'item/reasoning/summaryPartAdded'
+  ) {
+    const delta = getStringParam(notification.params, 'delta')
+      ?? getStringParam(notification.params, 'text')
+      ?? getStringParam(notification.params, 'summary');
+    return delta ? [{ type: 'thinking_delta', delta }] : [];
+  }
+
   if (notification.method === 'turn/completed') {
+    const turn = asRecord(notification.params?.turn);
+    const status = getStringParam(notification.params, 'status')
+      ?? (typeof turn?.status === 'string' ? turn.status : undefined);
+    if (status && status !== 'completed') {
+      return [{
+        type: 'error',
+        message: getCodexNotificationErrorMessage(notification.params) ?? `Codex turn ${status}`,
+      }];
+    }
     return [{ type: 'done' }];
   }
 
   if (notification.method === 'turn/failed') {
-    return [{ type: 'error', message: getStringParam(notification.params, 'message') ?? 'Codex turn failed' }];
+    return [{ type: 'error', message: getCodexNotificationErrorMessage(notification.params) ?? 'Codex turn failed' }];
   }
 
   return [];
+}
+
+function formatCodexJsonRpcError(method: string, error: { code?: number; message?: string; data?: unknown }): string {
+  const parts = [
+    error.message?.trim() || `Codex app-server ${method} failed`,
+    typeof error.code === 'number' ? `method=${method} code=${error.code}` : `method=${method}`,
+    error.data !== undefined ? `data=${safeJson(error.data)}` : '',
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function isCodexResponse(message: CodexAppServerMessage): message is CodexAppServerResponse {
@@ -250,6 +292,22 @@ function isCodexNotification(message: CodexAppServerMessage): message is CodexAp
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function getNestedString(value: unknown, keys: string[]): string | undefined {
+  let current: unknown = value;
+  for (const key of keys) {
+    const record = asRecord(current);
+    if (!record) return undefined;
+    current = record[key];
+  }
+  return typeof current === 'string' && current.trim() ? current : undefined;
+}
+
+function getCodexNotificationErrorMessage(params: Record<string, unknown> | undefined): string | undefined {
+  return getStringParam(params, 'message')
+    ?? getNestedString(params, ['error', 'message'])
+    ?? getNestedString(params, ['turn', 'error', 'message']);
 }
 
 function getThreadId(result: unknown, method: string): string {

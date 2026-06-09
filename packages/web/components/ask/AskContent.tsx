@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import { createPortal } from 'react-dom';
 import { Send, StopCircle, X, Plus, FileText, ImageIcon } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AgentRuntimeIdentity, AskMode, Message } from '@/lib/types';
+import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, AskMode, Message } from '@/lib/types';
 import ModeCapsule, { getPersistedMode } from '@/components/ask/ModeCapsule';
 import { useAskSession } from '@/hooks/useAskSession';
 import { useFileUpload } from '@/hooks/useFileUpload';
@@ -18,13 +18,20 @@ import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistoryPanel from '@/components/ask/SessionHistoryPanel';
 import AskHeader from '@/components/ask/AskHeader';
 import FileChip from '@/components/ask/FileChip';
-import AgentSelectorCapsule from '@/components/ask/AgentSelectorCapsule';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import type { ProviderId } from '@/lib/agent/providers';
 import { useAskChat } from '@/hooks/useAskChat';
-import { getMessageAgentRuntime, getSessionAgentRuntime, toAgentRuntime } from '@/lib/ask-agent';
+import {
+  filterSessionsByRuntimeLane,
+  getMatchingRuntimeSessionBinding,
+  getMessageAgentRuntime,
+  getSessionAgentRuntime,
+  isSessionInRuntimeLane,
+  toAgentRuntime,
+} from '@/lib/ask-agent';
 import { cn } from '@/lib/utils';
 import { useAcpDetection } from '@/hooks/useAcpDetection';
+import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
@@ -32,6 +39,13 @@ const TEXTAREA_MAX_VISIBLE_LINES = 8;
 
 /** Per-element cached metrics to avoid getComputedStyle on every keystroke */
 const _metricsCache = new WeakMap<HTMLTextAreaElement, { maxH: number }>();
+
+function runtimeStatusLabel(status: AgentRuntimeDescriptor['status']): string {
+  if (status === 'signed-out') return 'signed out';
+  if (status === 'error') return 'unavailable';
+  if (status === 'missing') return 'not installed';
+  return 'available';
+}
 
 /** Auto-size textarea height to fit content, capped at maxVisibleLines */
 function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number): void {
@@ -113,6 +127,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
 
+  const updateSelectedAgentRuntime = useCallback((runtime: AgentRuntimeIdentity | null) => {
+    selectedAgentRuntimeRef.current = runtime;
+    setSelectedAgentRuntime(runtime);
+  }, []);
+
   useEffect(() => {
     setChatMode(getPersistedMode());
     const persisted = getPersistedProviderModel();
@@ -157,25 +176,58 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const mention = useMention();
   const slash = useSlashCommand();
   const acpDetection = useAcpDetection();
-  const nativeRuntimes = useMemo<AgentRuntimeIdentity[]>(() => {
-    const installed = acpDetection.installedAgents;
-    const hasCodex = installed.some((agent) => agent.id === 'codex' || agent.id === 'codex-acp' || agent.name.toLowerCase() === 'codex');
-    const hasClaude = installed.some((agent) => agent.id === 'claude' || agent.id === 'claude-code' || agent.name.toLowerCase().includes('claude'));
-    return [
-      ...(hasCodex ? [{ id: 'codex', name: 'Codex', kind: 'codex' as const }] : []),
-      ...(hasClaude ? [{ id: 'claude', name: 'Claude Code', kind: 'claude' as const }] : []),
-    ];
-  }, [acpDetection.installedAgents]);
-  const visibleAcpAgents = useMemo(() => {
-    const hasNativeCodex = nativeRuntimes.some((agent) => agent.kind === 'codex');
-    const hasNativeClaude = nativeRuntimes.some((agent) => agent.kind === 'claude');
-    return acpDetection.installedAgents.filter((agent) => {
-      const lowerName = agent.name.toLowerCase();
-      if (hasNativeCodex && (agent.id === 'codex' || agent.id === 'codex-acp' || lowerName === 'codex')) return false;
-      if (hasNativeClaude && (agent.id === 'claude' || agent.id === 'claude-code' || lowerName.includes('claude'))) return false;
-      return true;
-    });
-  }, [acpDetection.installedAgents, nativeRuntimes]);
+  const nativeDetection = useNativeRuntimeDetection();
+  const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName'>>>>(() => {
+    return nativeDetection.runtimes
+      .filter((runtime) => runtime.kind === 'codex' || runtime.kind === 'claude')
+      .map((runtime) => ({
+        id: runtime.id,
+        name: runtime.name,
+        kind: runtime.kind,
+        status: runtime.status,
+        availability: runtime.availability,
+        ...(runtime.installCmd ? { installCmd: runtime.installCmd } : {}),
+        ...(runtime.packageName ? { packageName: runtime.packageName } : {}),
+      }));
+  }, [nativeDetection.runtimes]);
+  const isMindosRuntime = !selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos';
+  const selectedRuntimeUnavailable = useMemo(() => {
+    if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return null;
+    const nativeKind = selectedAgentRuntime.kind;
+    if (nativeKind !== 'codex' && nativeKind !== 'claude') return null;
+    const descriptor = nativeDetection.runtimes.find((runtime) => (
+      runtime.kind === nativeKind && runtime.id === selectedAgentRuntime.id
+    ));
+    if (!descriptor) {
+      if (nativeDetection.loadingByKind[nativeKind]) return null;
+      return {
+        status: 'missing' as const,
+        reason: 'Local runtime was not detected.',
+      };
+    }
+    if (descriptor.status === 'available') return null;
+    return {
+      status: descriptor.status,
+      reason: descriptor.availability?.reason,
+    };
+  }, [nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
+  const activeRuntimeSessionBinding = useMemo(
+    () => getMatchingRuntimeSessionBinding(session.activeSession, selectedAgentRuntime),
+    [
+      selectedAgentRuntime,
+      session.activeSession?.externalAgentBinding,
+      session.activeSession?.runtimeSessionBinding,
+    ],
+  );
+  const runtimeScopedSessions = useMemo(() => {
+    return filterSessionsByRuntimeLane(session.sessions, selectedAgentRuntime);
+  }, [selectedAgentRuntime, session.sessions]);
+  const runtimeScopedActiveSessionId = useMemo(
+    () => runtimeScopedSessions.some((item) => item.id === session.activeSessionId)
+      ? session.activeSessionId
+      : null,
+    [runtimeScopedSessions, session.activeSessionId],
+  );
 
   const imageUploadRef = useRef(imageUploadRuntime);
   const mentionRef = useRef(mention);
@@ -209,9 +261,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (userMessage.skillName) {
       slashRef.current.resetSlash();
     }
-    setSelectedAgentRuntime(getMessageAgentRuntime(userMessage));
+    updateSelectedAgentRuntime(getMessageAgentRuntime(userMessage));
     setTimeout(() => inputRef.current?.focus(), 50);
-  }, []);
+  }, [updateSelectedAgentRuntime]);
 
   const chatRefs = useMemo(() => ({
     inputValueRef,
@@ -239,20 +291,74 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const handleSubmit = chat.submit;
   const handleStop = chat.stop;
 
-  const handleSelectAgentRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
-    setSelectedAgentRuntime(agent);
+  const clearTransientComposerState = useCallback(() => {
+    setInput('');
+    setAttachedFiles(currentFile ? [currentFile] : []);
+    uploadRef.current.clearAttachments();
+    imageUploadRef.current.clearImages();
+    mentionRef.current.resetMention();
+    slashRef.current.resetSlash();
+    setSelectedSkill(null);
+    pendingOpenAgentRef.current = null;
+    setShowHistory(false);
+    chat.firstMessageFired.current = false;
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [chat.firstMessageFired, currentFile]);
+
+  const bindActiveSessionToRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
     if (!agent || agent.kind === 'mindos') {
-      session.setSessionDefaultAcpAgent(null);
+      sessionRef.current.setSessionDefaultAcpAgent(null);
       return;
     }
     if (agent.kind === 'acp') {
-      session.setSessionDefaultAcpAgent({ id: agent.id, name: agent.name });
+      sessionRef.current.setSessionDefaultAcpAgent({ id: agent.id, name: agent.name });
       return;
     }
-    session.setSessionAgentRuntimeBinding(agent);
-  }, [session]);
+    sessionRef.current.setSessionAgentRuntimeBinding(agent);
+  }, []);
+
+  const handleSelectAgentRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
+    if (chat.isLoadingRef.current) return;
+    updateSelectedAgentRuntime(agent);
+
+    const currentSession = sessionRef.current.activeSession;
+    const currentIsEmpty = !currentSession || currentSession.messages.length === 0;
+    const currentAlreadyInLane = currentSession ? isSessionInRuntimeLane(currentSession, agent) : false;
+
+    if (currentAlreadyInLane) {
+      if (currentIsEmpty) bindActiveSessionToRuntime(agent);
+      return;
+    }
+
+    const target = sessionRef.current.sessions.find((item) => isSessionInRuntimeLane(item, agent));
+    if (target) {
+      sessionRef.current.loadSession(target.id);
+      clearTransientComposerState();
+      return;
+    }
+
+    if (currentIsEmpty) {
+      bindActiveSessionToRuntime(agent);
+      return;
+    }
+
+    sessionRef.current.resetSession(agent);
+    clearTransientComposerState();
+  }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+
   const hasLoadingAttachments = localAttachments.some((f) => f.status === 'loading');
-  const composerStatusMessage = uploadError || imageError || dropError || '';
+  const runtimeUnavailableMessage = selectedAgentRuntime && selectedRuntimeUnavailable
+    ? `${selectedAgentRuntime.name} is ${runtimeStatusLabel(selectedRuntimeUnavailable.status)}.${selectedRuntimeUnavailable.reason ? ` ${selectedRuntimeUnavailable.reason}` : ''}`
+    : '';
+  const composerStatusMessage = uploadError || imageError || dropError || runtimeUnavailableMessage;
+
+  const handleSubmitWithRuntimeGuard = useCallback((event: React.FormEvent) => {
+    if (selectedRuntimeUnavailable) {
+      event.preventDefault();
+      return;
+    }
+    void handleSubmit(event);
+  }, [handleSubmit, selectedRuntimeUnavailable]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -330,7 +436,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       mention.resetMention();
       slash.resetSlash();
       setSelectedSkill(null);
-      setSelectedAgentRuntime(openerRuntime);
+      updateSelectedAgentRuntime(openerRuntime);
       setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
@@ -351,13 +457,19 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   useEffect(() => {
     if (!visible || !session.activeSessionId) return;
 
-    const openerAgent = pendingOpenAgentRef.current;
-    const restoredRuntime = getSessionAgentRuntime(session.activeSession) ?? openerAgent;
+    const openerRuntime = pendingOpenAgentRef.current;
+    const sessionRuntime = getSessionAgentRuntime(session.activeSession);
+    const currentRuntime = selectedAgentRuntimeRef.current;
+    const keepNativeRuntime =
+      currentRuntime?.kind === 'codex' || currentRuntime?.kind === 'claude'
+        ? currentRuntime
+        : null;
+    const restoredRuntime = sessionRuntime ?? openerRuntime ?? keepNativeRuntime;
 
-    setSelectedAgentRuntime(restoredRuntime);
+    updateSelectedAgentRuntime(restoredRuntime);
 
-    if (openerAgent && !getSessionAgentRuntime(session.activeSession) && session.activeSession?.messages.length === 0) {
-      session.setSessionAgentRuntimeBinding(openerAgent);
+    if (openerRuntime && !getSessionAgentRuntime(session.activeSession) && session.activeSession?.messages.length === 0) {
+      bindActiveSessionToRuntime(openerRuntime);
     }
 
     pendingOpenAgentRef.current = null;
@@ -367,7 +479,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     session.activeSession?.defaultAcpAgent,
     session.activeSession?.defaultAgentRuntime,
     session.activeSession?.messages.length,
-    session.setSessionAgentRuntimeBinding,
+    bindActiveSessionToRuntime,
+    updateSelectedAgentRuntime,
   ]);
 
   // Persist session on message changes (skip if last msg is empty assistant placeholder during loading)
@@ -554,20 +667,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const handleResetSession = useCallback(() => {
     if (chat.isLoadingRef.current) return;
-    sessionRef.current.resetSession();
-    setInput('');
-    setAttachedFiles(currentFile ? [currentFile] : []);
-    uploadRef.current.clearAttachments();
-    imageUploadRef.current.clearImages();
-    mentionRef.current.resetMention();
-    slashRef.current.resetSlash();
-    setSelectedSkill(null);
-    setSelectedAgentRuntime(null);
-    pendingOpenAgentRef.current = null;
-    setShowHistory(false);
-    chat.firstMessageFired.current = false;
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }, [currentFile]);
+    const runtime = selectedAgentRuntimeRef.current;
+    sessionRef.current.resetSession(runtime);
+    updateSelectedAgentRuntime(runtime);
+    clearTransientComposerState();
+  }, [clearTransientComposerState, updateSelectedAgentRuntime]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     // Accept mindos file paths and image drops
@@ -642,9 +746,30 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     mentionRef.current.resetMention();
     slashRef.current.resetSlash();
     setSelectedSkill(null);
-    setSelectedAgentRuntime(getSessionAgentRuntime(targetSession));
+    updateSelectedAgentRuntime(getSessionAgentRuntime(targetSession));
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [currentFile, session.sessions]);
+  }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    if (chat.isLoadingRef.current) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    sessionRef.current.deleteSession(id, runtime);
+    if (sessionRef.current.activeSessionId === id) {
+      updateSelectedAgentRuntime(runtime);
+      clearTransientComposerState();
+    }
+  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+
+  const handleClearRuntimeHistory = useCallback(() => {
+    if (chat.isLoadingRef.current) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    const ids = sessionRef.current.sessions
+      .filter((item) => isSessionInRuntimeLane(item, runtime))
+      .map((item) => item.id);
+    sessionRef.current.clearSessions(ids, runtime);
+    updateSelectedAgentRuntime(runtime);
+    clearTransientComposerState();
+  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
 
   const toggleHistory = useCallback(() => setShowHistory(v => !v), []);
   const inputIconSize = 15;
@@ -700,24 +825,31 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         onModeSwitch={isHome ? undefined : onModeSwitch}
         onClose={isHome ? undefined : onClose}
         onDockToPanel={maximized ? onDockToPanel : undefined}
-        sessions={session.sessions}
-        activeSessionId={session.activeSessionId}
+        sessions={runtimeScopedSessions}
+        activeSessionId={runtimeScopedActiveSessionId}
         onLoadSession={handleLoadSession}
-        onDeleteSession={session.deleteSession}
+        onDeleteSession={handleDeleteSession}
         onRenameSession={session.renameSession}
         onTogglePinSession={session.togglePinSession}
         messages={session.messages}
+        selectedAgentRuntime={selectedAgentRuntime}
+        onSelectAgentRuntime={handleSelectAgentRuntime}
+        runtimeSessionBinding={activeRuntimeSessionBinding}
+        nativeRuntimes={nativeRuntimes}
+        notInstalledAgents={[]}
+        agentLoading={false}
+        agentLoadingByKind={nativeDetection.loadingByKind}
       />
 
       {showHistory && (
         <SessionHistoryPanel
-          sessions={session.sessions}
-          activeSessionId={session.activeSessionId}
+          sessions={runtimeScopedSessions}
+          activeSessionId={runtimeScopedActiveSessionId}
           onLoad={handleLoadSession}
-          onDelete={session.deleteSession}
+          onDelete={handleDeleteSession}
           onRename={session.renameSession}
           onTogglePin={session.togglePinSession}
-          onClearAll={session.clearAllSessions}
+          onClearAll={handleClearRuntimeHistory}
           onClose={() => setShowHistory(false)}
           onNewChat={handleResetSession}
         />
@@ -792,7 +924,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           onDrop={handleDrop}
         >
           {/* Unified context chip flow */}
-          {(attachedFiles.length > 0 || localAttachments.length > 0 || images.length > 0 || selectedSkill || selectedAgentRuntime || uploadError || imageError) && (
+          {(attachedFiles.length > 0 || localAttachments.length > 0 || images.length > 0 || selectedSkill || composerStatusMessage) && (
             <div className={cn('px-3 pt-2.5 pb-2 border-b border-border/30', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
               <div className="flex flex-wrap gap-1.5">
                 {attachedFiles.map(f => (
@@ -818,16 +950,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                     onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
                   />
                 )}
-                {selectedAgentRuntime && (
-                  <FileChip
-                    path={selectedAgentRuntime.name}
-                    variant="agent"
-                    onRemove={() => { handleSelectAgentRuntime(null); inputRef.current?.focus(); }}
-                  />
-                )}
               </div>
               {composerStatusMessage && (
-                <div className="mt-1 text-xs text-error">{composerStatusMessage}</div>
+                <div className="mt-1 text-xs text-error">
+                  {composerStatusMessage}
+                </div>
               )}
             </div>
           )}
@@ -835,7 +962,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           {/* Input form */}
           <form
             ref={formRef}
-            onSubmit={handleSubmit}
+            onSubmit={handleSubmitWithRuntimeGuard}
             className={cn('relative z-10 flex items-end gap-1.5', isHome ? 'px-2 py-1.5' : 'px-3 py-2')}
           >
             {/* + attach button with mini menu */}
@@ -927,26 +1054,17 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
               </button>
             ) : (
-              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : t.ask.send} disabled={hasLoadingAttachments || (!input.trim() && images.length === 0)} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
+              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeUnavailableMessage || t.ask.send} disabled={hasLoadingAttachments || !!selectedRuntimeUnavailable || (!input.trim() && images.length === 0)} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
                 <Send size={14} />
               </button>
             )}
           </form>
 
-          {/* Mode + Agent + Provider selector row + keyboard hint */}
+          {/* Mode + provider selector row + keyboard hint */}
           <div className={cn('relative z-20 flex items-center justify-between border-t border-border/10', isPanel ? 'px-2 pb-1.5 pt-1 gap-1' : 'px-3 pb-2 pt-1.5')}>
             <div className={cn('flex items-center flex-wrap', isPanel ? 'gap-1' : 'gap-2')}>
               <ModeCapsule mode={chatMode} onChange={setChatMode} disabled={isLoading} />
-            {mounted && (
-              <AgentSelectorCapsule
-                selectedAgent={selectedAgentRuntime}
-                onSelect={handleSelectAgentRuntime}
-                installedAgents={visibleAcpAgents}
-                nativeRuntimes={nativeRuntimes}
-                loading={acpDetection.loading}
-              />
-            )}
-            {mounted && (
+            {mounted && isMindosRuntime && (
               <ProviderModelCapsule
                 providerValue={providerOverride}
                 onProviderChange={handleProviderChange}

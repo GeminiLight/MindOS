@@ -145,9 +145,71 @@ describe('agent runtime adapters', () => {
     })).toEqual([{ type: 'thinking_delta', delta: 'Thinking' }]);
 
     expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'item/reasoning/textDelta',
+      params: { text: 'Reasoning' },
+    })).toEqual([{ type: 'thinking_delta', delta: 'Reasoning' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
       method: 'turn/completed',
       params: { status: 'completed' },
     })).toEqual([{ type: 'done' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'turn/completed',
+      params: { status: 'failed', message: 'Missing credentials' },
+    })).toEqual([{ type: 'error', message: 'Missing credentials' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'turn/completed',
+      params: {
+        turn: {
+          status: 'failed',
+          error: { message: 'Missing environment variable: `STAFF_KEY`.' },
+        },
+      },
+    })).toEqual([{ type: 'error', message: 'Missing environment variable: `STAFF_KEY`.' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { message: 'Codex app-server unavailable' },
+    })).toEqual([{ type: 'error', message: 'Codex app-server unavailable' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { error: { message: 'Missing environment variable: `STAFF_KEY`.' } },
+    })).toEqual([{ type: 'error', message: 'Missing environment variable: `STAFF_KEY`.' }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'turn/failed',
+      params: { error: { message: 'Provider env is missing' } },
+    })).toEqual([{ type: 'error', message: 'Provider env is missing' }]);
+  });
+
+  it('includes the Codex JSON-RPC method, code, and data when a request fails', async () => {
+    const queue = new AsyncQueue<CodexAppServerMessage>();
+    const transport: CodexAppServerTransport = {
+      send(message) {
+        const record = message as { id?: number; method?: string };
+        if (record.method === 'initialize') {
+          queue.push({
+            id: record.id!,
+            error: {
+              code: -32600,
+              message: '',
+              data: { expected: ['thread/start', 'turn/start'] },
+            },
+          });
+        }
+      },
+      read() {
+        return queue;
+      },
+    };
+
+    const client = createCodexAppServerClient(transport);
+    await expect(client.initialize()).rejects.toThrow(
+      'Codex app-server initialize failed method=initialize code=-32600 data={"expected":["thread/start","turn/start"]}',
+    );
   });
 
   it('ends a Codex turn stream after turn/failed', async () => {

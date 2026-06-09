@@ -14,6 +14,16 @@ export type MindosSelectedRuntime = {
   externalSessionId?: string;
 };
 
+export type MindosRuntimeSessionBinding = {
+  kind: 'codex-thread' | 'claude-session' | 'acp-session';
+  runtime: Exclude<MindosAgentRuntimeKind, 'mindos'>;
+  runtimeId: string;
+  externalSessionId?: string;
+  cwd?: string;
+  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
+  updatedAt: number;
+};
+
 export type MindosAskStreamRequest = {
   messages: MindosAskMessage[];
   currentFile?: string;
@@ -22,6 +32,7 @@ export type MindosAskStreamRequest = {
   maxSteps?: number;
   mode?: 'chat' | 'agent' | 'organize';
   selectedRuntime?: MindosSelectedRuntime | null;
+  runtimeBinding?: MindosRuntimeSessionBinding | null;
   selectedAcpAgent?: { id: string; name: string } | null;
   providerOverride?: string;
   modelOverride?: string;
@@ -68,6 +79,7 @@ function parseAskStreamRequest(body: unknown):
   }
 
   const selectedRuntime = normalizeSelectedRuntime(record);
+  const runtimeBinding = normalizeRuntimeSessionBinding(record.runtimeBinding);
 
   return {
     ok: true,
@@ -79,6 +91,7 @@ function parseAskStreamRequest(body: unknown):
       ...(typeof record.maxSteps === 'number' && Number.isFinite(record.maxSteps) ? { maxSteps: record.maxSteps } : {}),
       ...(mode ? { mode } : {}),
       ...(selectedRuntime !== undefined ? { selectedRuntime } : {}),
+      ...(runtimeBinding !== undefined ? { runtimeBinding } : {}),
       ...(isSelectedAcpAgent(record.selectedAcpAgent) ? { selectedAcpAgent: record.selectedAcpAgent } : {}),
       ...(typeof record.providerOverride === 'string' ? { providerOverride: record.providerOverride } : {}),
       ...(typeof record.modelOverride === 'string' ? { modelOverride: record.modelOverride } : {}),
@@ -98,6 +111,36 @@ function isSelectedAcpAgent(value: unknown): value is { id: string; name: string
   if (!value || typeof value !== 'object') return false;
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && typeof record.name === 'string';
+}
+
+function normalizeRuntimeSessionBinding(value: unknown): MindosRuntimeSessionBinding | null | undefined {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  if (!isRuntimeSessionKind(record.kind) || !isExternalRuntimeKind(record.runtime)) return undefined;
+  if (typeof record.runtimeId !== 'string' || typeof record.updatedAt !== 'number' || !Number.isFinite(record.updatedAt)) return undefined;
+  const binding: MindosRuntimeSessionBinding = {
+    kind: record.kind,
+    runtime: record.runtime,
+    runtimeId: record.runtimeId,
+    updatedAt: record.updatedAt,
+  };
+  if (typeof record.externalSessionId === 'string') binding.externalSessionId = record.externalSessionId;
+  if (typeof record.cwd === 'string') binding.cwd = record.cwd;
+  if (isRuntimeSessionStatus(record.status)) binding.status = record.status;
+  return binding;
+}
+
+function isRuntimeSessionKind(value: unknown): value is MindosRuntimeSessionBinding['kind'] {
+  return value === 'codex-thread' || value === 'claude-session' || value === 'acp-session';
+}
+
+function isExternalRuntimeKind(value: unknown): value is MindosRuntimeSessionBinding['runtime'] {
+  return value === 'acp' || value === 'codex' || value === 'claude';
+}
+
+function isRuntimeSessionStatus(value: unknown): value is NonNullable<MindosRuntimeSessionBinding['status']> {
+  return value === 'active' || value === 'missing' || value === 'signed-out' || value === 'archived' || value === 'failed';
 }
 
 function normalizeSelectedRuntime(record: Record<string, unknown>): MindosSelectedRuntime | null | undefined {

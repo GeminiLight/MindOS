@@ -22,6 +22,7 @@ import {
   handleAcpSessionDelete,
   handleAcpSessionGet,
   handleAcpSessionPost,
+  checkCodexProviderEnvironment,
   resolveNpmInvocation,
   handleAskSessionsDelete,
   handleAskSessionsGet,
@@ -37,6 +38,7 @@ import {
   handleGraph,
   handleAskStream,
   handleAgentActivity,
+  handleAgentRuntimesGet,
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
   handleCustomAgentsDelete,
@@ -4392,6 +4394,318 @@ describe('MindOS product server contract', () => {
     expect(res.headers?.['Cache-Control']).toBe('private, max-age=0');
   });
 
+  it('aggregates Chat Panel runtime availability through a product handler', async () => {
+    const res = await handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      checkNativeRuntimeHealth: async () => ({ status: 'available' }),
+      detectLocalAcpAgents: async () => ({
+        installed: [
+          { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex' },
+          { id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' },
+        ],
+        notInstalled: [
+          { id: 'claude-code', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' },
+        ],
+      }),
+    });
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({ id: 'mindos', kind: 'mindos', status: 'available' }),
+          expect.objectContaining({
+            id: 'codex',
+            kind: 'codex',
+            status: 'available',
+            sourceAgentId: 'codex-acp',
+            mcpAgentKey: 'codex',
+          }),
+          expect.objectContaining({
+            id: 'claude',
+            kind: 'claude',
+            status: 'missing',
+            sourceAgentId: 'claude-code',
+            mcpAgentKey: 'claude-code',
+          }),
+          expect.objectContaining({ id: 'gemini', kind: 'acp', status: 'available' }),
+        ]),
+      },
+    });
+    expect(res.body).toMatchObject({
+      installed: [
+        expect.objectContaining({ id: 'codex-acp' }),
+        expect.objectContaining({ id: 'gemini' }),
+      ],
+      notInstalled: [
+        expect.objectContaining({ id: 'claude-code' }),
+      ],
+    });
+  });
+
+  it('keeps native runtime detection out of ACP installed payload lists', async () => {
+    const res = await handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents: async () => ({
+        installed: [
+          { id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' },
+        ],
+        notInstalled: [],
+      }),
+      resolveRuntimeCommand: async (command) => {
+        if (command === 'codex') return '/usr/local/bin/codex';
+        if (command === 'claude') return '/usr/local/bin/claude';
+        return null;
+      },
+      checkNativeRuntimeHealth: async () => ({ status: 'available' }),
+    });
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({ id: 'codex', kind: 'codex', status: 'available' }),
+          expect.objectContaining({ id: 'claude', kind: 'claude', status: 'available' }),
+          expect.objectContaining({ id: 'gemini', kind: 'acp', status: 'available' }),
+        ]),
+        installed: [
+          expect.objectContaining({ id: 'gemini' }),
+        ],
+        notInstalled: [],
+      },
+    });
+  });
+
+  it('checks native runtime health before marking installed Codex or Claude available', async () => {
+    const health = vi.fn(async () => ({ status: 'signed-out' as const, reason: 'Run codex login first.' }));
+    const res = await handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      checkNativeRuntimeHealth: health,
+      resolveRuntimeCommand: async (command) => command === 'codex' ? '/usr/local/bin/codex' : null,
+      detectLocalAcpAgents: async () => ({
+        installed: [
+          { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex' },
+        ],
+        notInstalled: [
+          { id: 'claude-code', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' },
+        ],
+      }),
+    });
+
+    expect(health).toHaveBeenCalledWith({
+      runtime: 'codex',
+      agent: expect.objectContaining({ id: 'codex-acp', binaryPath: '/usr/local/bin/codex' }),
+      timeoutMs: 20000,
+    });
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'codex',
+            status: 'signed-out',
+            availability: expect.objectContaining({ reason: 'Run codex login first.' }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('marks Codex signed out when its configured provider requires a missing environment key', () => {
+    const result = checkCodexProviderEnvironment({
+      env: {},
+      configText: [
+        'model_provider = "subhub-prod-responses"',
+        '',
+        '[model_providers.subhub-prod-responses]',
+        'name = "OpenAI Prod Subhub Pool"',
+        'env_key = "STAFF_KEY"',
+        'wire_api = "responses"',
+      ].join('\n'),
+    });
+
+    expect(result).toEqual({
+      status: 'signed-out',
+      reason: 'Codex model provider "subhub-prod-responses" requires STAFF_KEY, but MindOS cannot see that environment variable. Export STAFF_KEY before starting MindOS, or switch Codex to a provider that does not require it.',
+    });
+  });
+
+  it('keeps Codex available when the configured provider environment key is visible', () => {
+    const result = checkCodexProviderEnvironment({
+      env: { STAFF_KEY: 'present' },
+      configText: [
+        'model_provider = "subhub-prod-responses"',
+        '',
+        '[model_providers.subhub-prod-responses]',
+        'env_key = "STAFF_KEY"',
+      ].join('\n'),
+    });
+
+    expect(result).toEqual({ status: 'available' });
+  });
+
+  it('keeps local native runtime detection independent when ACP detection times out', async () => {
+    vi.useFakeTimers();
+    const pendingDetection = new Promise<{ installed: unknown[]; notInstalled: unknown[] }>(() => {});
+    const result = handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents: async () => pendingDetection,
+      resolveRuntimeCommand: async () => null,
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    const res = await result;
+    vi.useRealTimers();
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({ id: 'mindos', kind: 'mindos', status: 'available' }),
+          expect.objectContaining({
+            id: 'codex',
+            kind: 'codex',
+            status: 'missing',
+            availability: expect.objectContaining({
+              reason: 'Codex executable was not detected.',
+              sources: ['native-health'],
+            }),
+          }),
+          expect.objectContaining({
+            id: 'claude',
+            kind: 'claude',
+            status: 'missing',
+            availability: expect.objectContaining({
+              reason: 'Claude Code executable was not detected.',
+              sources: ['native-health'],
+            }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('keeps native Claude available while ACP detection times out', async () => {
+    vi.useFakeTimers();
+    const pendingDetection = new Promise<{ installed: unknown[]; notInstalled: unknown[] }>(() => {});
+    const result = handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents: async () => pendingDetection,
+      resolveRuntimeCommand: async (command) => command === 'claude' ? '/usr/local/bin/claude' : null,
+      checkNativeRuntimeHealth: async ({ runtime }) => (
+        runtime === 'claude'
+          ? { status: 'available' }
+          : { status: 'error', reason: 'not checked' }
+      ),
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    const res = await result;
+    vi.useRealTimers();
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'claude',
+            kind: 'claude',
+            status: 'available',
+            binaryPath: '/usr/local/bin/claude',
+            availability: expect.objectContaining({ sources: ['native-health'] }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('detects one native runtime without waiting for ACP or sibling native runtime checks', async () => {
+    const detectLocalAcpAgents = vi.fn(async () => ({
+      installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' }],
+      notInstalled: [],
+    }));
+    const checkNativeRuntimeHealth = vi.fn(async () => ({ status: 'available' as const }));
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=claude'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents,
+      resolveRuntimeCommand: async (command) => command === 'claude' ? '/usr/local/bin/claude' : null,
+      checkNativeRuntimeHealth,
+    });
+
+    expect(detectLocalAcpAgents).not.toHaveBeenCalled();
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledTimes(1);
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledWith({
+      runtime: 'claude',
+      agent: expect.objectContaining({ id: 'claude', binaryPath: '/usr/local/bin/claude' }),
+      timeoutMs: 20000,
+    });
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtime: expect.objectContaining({
+          id: 'claude',
+          kind: 'claude',
+          status: 'available',
+          availability: expect.objectContaining({ sources: ['native-health'] }),
+        }),
+      },
+    });
+  });
+
+  it('preserves unavailable runtime status and reason from runtime detection', async () => {
+    const res = await handleAgentRuntimesGet(new URLSearchParams(), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents: async () => ({
+        installed: [
+          { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'signed-out', reason: 'Run codex login first.' },
+          { id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini', status: 'error', reason: 'Config file is invalid.' },
+        ],
+        notInstalled: [
+          { id: 'claude-code', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' },
+        ],
+      }),
+      resolveRuntimeCommand: async (command) => command === 'codex' ? '/usr/local/bin/codex' : null,
+      checkNativeRuntimeHealth: async ({ runtime }) => (
+        runtime === 'codex'
+          ? { status: 'signed-out', reason: 'Run codex login first.' }
+          : { status: 'error', reason: 'not checked' }
+      ),
+    });
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'codex',
+            kind: 'codex',
+            status: 'signed-out',
+            availability: expect.objectContaining({
+              reason: 'Run codex login first.',
+              sources: ['native-health'],
+            }),
+          }),
+          expect.objectContaining({
+            id: 'gemini',
+            kind: 'acp',
+            status: 'error',
+            availability: expect.objectContaining({
+              reason: 'Config file is invalid.',
+              sources: ['acp-detect', 'native-health'],
+            }),
+          }),
+        ]),
+      },
+    });
+  });
+
   it('validates ask stream requests and returns a product-owned SSE stream', async () => {
     const invalid = handleAskStream({}, {
       askStream: async function* () {
@@ -4409,10 +4723,19 @@ describe('MindOS product server contract', () => {
       mode: 'chat',
       attachedFiles: ['note.md', 123],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thr_123',
+        status: 'active',
+        updatedAt: 123,
+      },
       selectedAcpAgent: { id: 'claude', name: 'Claude Code' },
     }, {
       askStream: async function* (input) {
         yield { type: 'status', message: `mode=${input.mode};runtime=${input.selectedRuntime?.kind}:${input.selectedRuntime?.id}` };
+        yield { type: 'status', message: `binding=${input.runtimeBinding?.kind}:${input.runtimeBinding?.externalSessionId}` };
         yield { type: 'text_delta', delta: String(input.messages[0]?.content ?? '') };
         yield { type: 'done' };
       },
@@ -4424,6 +4747,7 @@ describe('MindOS product server contract', () => {
     for await (const event of valid.body) events.push(event);
     expect(events).toEqual([
       { type: 'status', message: 'mode=chat;runtime=codex:codex' },
+      { type: 'status', message: 'binding=codex-thread:thr_123' },
       { type: 'text_delta', delta: 'hello' },
       { type: 'done' },
     ]);

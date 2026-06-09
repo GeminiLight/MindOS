@@ -71,6 +71,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/acp/registry', 'medium'),
   migrated('/api/acp/session', 'high'),
   migrated('/api/agent-activity'),
+  migrated('/api/agent-runtimes', 'medium'),
   migrated('/api/agents/copy-skill', 'high'),
   migrated('/api/agents/custom/detect', 'medium'),
   migrated('/api/agents/custom', 'high'),
