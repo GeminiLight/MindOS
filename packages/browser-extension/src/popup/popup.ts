@@ -335,8 +335,6 @@ btnConnect.addEventListener('click', async () => {
   const testConfig: ClipperConfig = {
     mindosUrl: url,
     authToken: token,
-    defaultSpace: 'Inbox',
-    connected: false,
   };
 
   const result = await testConnection(testConfig);
@@ -348,7 +346,7 @@ btnConnect.addEventListener('click', async () => {
   }
 
   // Save and proceed
-  config = await saveConfig({ ...testConfig, connected: true });
+  config = await saveConfig(testConfig);
   setButtonLoading(btnConnect, false);
 
   // Now extract content

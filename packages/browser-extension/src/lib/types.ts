@@ -4,8 +4,6 @@
 export interface ClipperConfig {
   mindosUrl: string;       // e.g. "http://localhost:3456"
   authToken: string;       // e.g. "abcd-1234-efgh-..."
-  defaultSpace: string;    // e.g. "Clips"
-  connected: boolean;      // last health check passed
 }
 
 /** Extracted page content before conversion */

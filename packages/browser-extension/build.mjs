@@ -1,5 +1,5 @@
 import { build, context } from 'esbuild';
-import { cpSync, mkdirSync } from 'fs';
+import { cpSync, mkdirSync, rmSync } from 'fs';
 
 const isWatch = process.argv.includes('--watch');
 const OUT = 'extension';
@@ -13,6 +13,7 @@ const shared = {
 };
 
 async function run() {
+  rmSync(OUT, { recursive: true, force: true });
   mkdirSync(`${OUT}/popup`, { recursive: true });
   mkdirSync(`${OUT}/background`, { recursive: true });
   mkdirSync(`${OUT}/content`, { recursive: true });
