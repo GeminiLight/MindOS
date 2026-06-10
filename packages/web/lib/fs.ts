@@ -57,6 +57,7 @@ import { effectiveMindRoot } from './mind-root';
 import { extractPdfText } from './core/pdf-text';
 import { telemetry } from './telemetry';
 import { ensureDefaultMindSystemUpgrade } from './mind-system-upgrade';
+import { isDefaultMindSystemScaffoldFile } from './mind-system-scaffold';
 
 // ─── Root helpers ─────────────────────────────────────────────────────────────
 
@@ -117,7 +118,9 @@ function buildCache(root: string): FileTreeCache {
   let directoryCount = 0;
   function collect(nodes: FileNode[]) {
     for (const n of nodes) {
-      if (n.type === 'file') allFiles.push(n.path);
+      if (n.type === 'file') {
+        if (!isDefaultMindSystemScaffoldFile(root, n.path)) allFiles.push(n.path);
+      }
       else if (n.children) {
         directoryCount++;
         collect(n.children);
@@ -420,7 +423,8 @@ function buildAllFiles(dirPath: string): string[] {
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
       if (ALLOWED_EXTENSIONS.has(ext)) {
-        files.push(path.relative(root, fullPath));
+        const relativePath = path.relative(root, fullPath);
+        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
       }
     }
   }

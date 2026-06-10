@@ -2,6 +2,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import type { FileNode } from './types';
+import { isDefaultMindSystemScaffoldFile } from '../mind-system-scaffold';
 
 /** Normalize path separators to forward slash (POSIX) for cross-platform consistency.
  *  All relative paths stored in FileNode.path use '/' regardless of OS. */
@@ -128,7 +129,8 @@ export function collectAllFiles(
       if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (allowedExtensions.has(ext)) {
-        files.push(toPosix(path.relative(root, fullPath)));
+        const relativePath = toPosix(path.relative(root, fullPath));
+        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
       }
     }
   }

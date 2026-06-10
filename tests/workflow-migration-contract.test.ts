@@ -217,7 +217,7 @@ describe('GitHub workflow migration contract', () => {
     expect(clipperPkg.scripts?.package).not.toMatch(/\bzip\b|rm -rf/);
     expect(clipperPkg.scripts?.clean).not.toMatch(/\brm -rf\b/);
     expect(clipperPkg.devDependencies).toHaveProperty('archiver');
-    expect(readText('packages/browser-extension/build.mjs')).toContain('rmSync(OUT, { recursive: true, force: true })');
+    expect(readText('packages/browser-extension/build.mjs')).toContain('rmSync(resolve(ROOT, OUT), { recursive: true, force: true })');
     expect(packageScript).toContain('archiver');
     expect(packageScript).not.toContain('zip -r');
     expect(clipperReadme).toContain('pnpm install');

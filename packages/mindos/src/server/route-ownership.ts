@@ -71,6 +71,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/acp/registry', 'medium'),
   migrated('/api/acp/session', 'high'),
   migrated('/api/agent-activity'),
+  host('/api/agent-runs', 'Agent run timeline state is currently stored in the Web host ledger and should stay classified until Product Server owns run persistence.', 'medium'),
   migrated('/api/agent-runtimes', 'medium'),
   migrated('/api/agent-runtimes/codex/threads', 'medium'),
   migrated('/api/agent-runtimes/codex/threads/[threadId]', 'medium'),

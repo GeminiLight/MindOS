@@ -105,10 +105,14 @@ async function fetchAgentRuns(input: {
     cache: 'no-store',
     ...(input.signal ? { signal: input.signal } : {}),
   };
-  const response = await fetch(url, init);
-  if (!response.ok) return [];
-  const body = await response.json() as AgentRunsResponse;
-  return Array.isArray(body.runs) ? body.runs : [];
+  try {
+    const response = await fetch(url, init);
+    if (!response.ok || typeof response.json !== 'function') return [];
+    const body = await response.json() as AgentRunsResponse;
+    return Array.isArray(body.runs) ? body.runs : [];
+  } catch {
+    return [];
+  }
 }
 
 export function useAgentRunTimeline(input: {
