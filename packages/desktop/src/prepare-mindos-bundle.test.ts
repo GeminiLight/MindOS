@@ -182,6 +182,124 @@ describe('materializeStandaloneAssets', () => {
     expect(readFileSync(path.join(tracedDependency, 'build', 'index.mjs'), 'utf-8')).toBe('export const Type = {};');
   });
 
+  it('prunes direct development tooling before dependency closure checks', () => {
+    const appDir = makeTemp('mindos-app-dev-tooling-prune-');
+    writeStandaloneApp(appDir);
+
+    const standaloneNodeModules = path.join(appDir, '.next', 'standalone', 'node_modules');
+    const devPackages = {
+      eslint: { '@eslint/js': '^9.39.4' },
+      'eslint-plugin-react-hooks': { '@babel/core': '^7.24.4' },
+      tsx: { esbuild: '~0.27.0' },
+      'typescript-eslint': { '@typescript-eslint/parser': '8.59.0' },
+      vitest: { vite: '^5.0.0' },
+    };
+    for (const [packageName, dependencies] of Object.entries(devPackages)) {
+      const packageDir = path.join(standaloneNodeModules, packageName);
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({
+        name: packageName,
+        version: '1.0.0',
+        dependencies,
+      }));
+    }
+    const eslintScope = path.join(standaloneNodeModules, '@eslint');
+    mkdirSync(path.join(eslintScope, 'config-array'), { recursive: true });
+    writeFileSync(path.join(eslintScope, 'config-array', 'package.json'), JSON.stringify({
+      name: '@eslint/config-array',
+      version: '1.0.0',
+    }));
+
+    materializeStandaloneAssets(appDir);
+
+    for (const packageName of Object.keys(devPackages)) {
+      expect(existsSync(path.join(standaloneNodeModules, packageName))).toBe(false);
+    }
+    expect(existsSync(eslintScope)).toBe(false);
+  });
+
+  it('keeps runtime @types packages when production packages declare them as dependencies', () => {
+    const appDir = makeTemp('mindos-app-runtime-types-');
+    writeStandaloneApp(appDir);
+
+    const standaloneNodeModules = path.join(appDir, '.next', 'standalone', 'node_modules');
+    const runtimePackage = path.join(standaloneNodeModules, '@discordjs', 'ws');
+    mkdirSync(runtimePackage, { recursive: true });
+    writeFileSync(path.join(runtimePackage, 'package.json'), JSON.stringify({
+      name: '@discordjs/ws',
+      version: '1.2.3',
+      dependencies: { '@types/ws': '^8.5.10' },
+    }));
+
+    const sourceTypes = path.join(appDir, 'node_modules', '@types', 'ws');
+    mkdirSync(sourceTypes, { recursive: true });
+    writeFileSync(path.join(sourceTypes, 'package.json'), JSON.stringify({
+      name: '@types/ws',
+      version: '8.5.10',
+    }));
+
+    materializeStandaloneAssets(appDir);
+
+    expect(existsSync(path.join(standaloneNodeModules, '@types', 'ws', 'package.json'))).toBe(true);
+  });
+
+  it('does not copy the repo root when resolving package names that also exist as Node builtins', () => {
+    const repoRoot = makeTemp('mindos-repo-root-');
+    const appDir = path.join(repoRoot, 'packages', 'web');
+    mkdirSync(appDir, { recursive: true });
+    writeStandaloneApp(appDir);
+    writeFileSync(path.join(repoRoot, 'package.json'), JSON.stringify({
+      name: 'mindos-dev',
+      version: '1.1.3',
+    }));
+
+    const parentPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'readable-stream');
+    mkdirSync(parentPackage, { recursive: true });
+    writeFileSync(path.join(parentPackage, 'package.json'), JSON.stringify({
+      name: 'readable-stream',
+      version: '2.3.8',
+      dependencies: { string_decoder: '~1.1.1' },
+    }));
+
+    const sourceStringDecoder = path.join(
+      repoRoot,
+      'node_modules',
+      '.pnpm',
+      'string_decoder@1.1.1',
+      'node_modules',
+      'string_decoder',
+    );
+    mkdirSync(path.join(sourceStringDecoder, 'lib'), { recursive: true });
+    writeFileSync(path.join(sourceStringDecoder, 'package.json'), JSON.stringify({
+      name: 'string_decoder',
+      version: '1.1.1',
+      dependencies: { 'safe-buffer': '~5.1.0' },
+    }));
+    writeFileSync(path.join(sourceStringDecoder, 'lib', 'string_decoder.js'), 'exports.StringDecoder = function() {};');
+
+    const sourceSafeBuffer = path.join(
+      repoRoot,
+      'node_modules',
+      '.pnpm',
+      'safe-buffer@5.1.2',
+      'node_modules',
+      'safe-buffer',
+    );
+    mkdirSync(sourceSafeBuffer, { recursive: true });
+    writeFileSync(path.join(sourceSafeBuffer, 'package.json'), JSON.stringify({
+      name: 'safe-buffer',
+      version: '5.1.2',
+    }));
+    writeFileSync(path.join(sourceSafeBuffer, 'index.js'), 'module.exports = Buffer;');
+
+    materializeStandaloneAssets(appDir);
+
+    const bundledStringDecoder = path.join(appDir, '.next', 'standalone', 'node_modules', 'string_decoder');
+    expect(JSON.parse(readFileSync(path.join(bundledStringDecoder, 'package.json'), 'utf-8')).name).toBe('string_decoder');
+    expect(existsSync(path.join(bundledStringDecoder, 'packages'))).toBe(false);
+    expect(existsSync(path.join(bundledStringDecoder, 'lib', 'string_decoder.js'))).toBe(true);
+  });
+
   it('materializes transitive dependencies introduced by Next runtime packages', () => {
     const appDir = makeTemp('mindos-app-next-runtime-transitive-deps-');
     writeStandaloneApp(appDir);
@@ -219,6 +337,35 @@ describe('materializeStandaloneAssets', () => {
     const nanoidPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'nanoid', 'package.json');
     expect(JSON.parse(readFileSync(postcssPackage, 'utf-8')).version).toBe('8.4.31');
     expect(JSON.parse(readFileSync(nanoidPackage, 'utf-8')).version).toBe('3.3.8');
+  });
+
+  it('does not materialize optional Next peer dependencies into the runtime', () => {
+    const appDir = makeTemp('mindos-app-next-optional-peer-deps-');
+    writeStandaloneApp(appDir);
+
+    const sourceNext = path.join(appDir, 'node_modules', 'next');
+    const standaloneNext = path.join(appDir, '.next', 'standalone', 'node_modules', 'next');
+    for (const packageDir of [sourceNext, standaloneNext]) {
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({
+        name: 'next',
+        version: '16.1.6',
+        peerDependencies: { '@playwright/test': '^1.51.1' },
+        peerDependenciesMeta: { '@playwright/test': { optional: true } },
+      }));
+      writeFileSync(path.join(packageDir, 'index.js'), 'module.exports = {};');
+    }
+
+    const sourcePlaywright = path.join(appDir, 'node_modules', '@playwright', 'test');
+    mkdirSync(sourcePlaywright, { recursive: true });
+    writeFileSync(path.join(sourcePlaywright, 'package.json'), JSON.stringify({
+      name: '@playwright/test',
+      version: '1.51.1',
+    }));
+
+    materializeStandaloneAssets(appDir);
+
+    expect(existsSync(path.join(appDir, '.next', 'standalone', 'node_modules', '@playwright', 'test'))).toBe(false);
   });
 
   it('fails when an external standalone package dependency cannot be materialized', () => {

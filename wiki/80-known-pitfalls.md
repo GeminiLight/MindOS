@@ -155,6 +155,26 @@
 
 **防回归**：`packages/desktop/src/prepare-mindos-bundle.test.ts` 覆盖 pnpm virtual store 中 `@mindos/web -> appDir` 自引用时，不会复制出嵌套 `.next/standalone`，并清理 standalone `node_modules/.pnpm`。
 
+### Standalone 闭包校验不能把 dev tooling 当 runtime 依赖（2026-06-11）
+
+**症状**：`Publish to npm` 在 `Build standalone package` 阶段失败，或 `Publish Runtime` 在 `Smoke test standalone server` 阶段失败，日志报 `[prepare-mindos-bundle] Incomplete standalone dependency closure`，缺失项集中在 `eslint -> @eslint/*`、`eslint-plugin-react-hooks -> @babel/*`、`tsx -> esbuild`、`typescript-eslint -> @typescript-eslint/*`、`vitest -> vite/@vitest/*`。
+
+**根因**：Next standalone 可能把 app/package 根部的开发工具包目录带入 `.next/standalone/node_modules`。这些包不属于运行时能力，尤其不应该在清理 `.pnpm` virtual store 后再参与 runtime dependency closure 校验。
+
+**修复**：`prepare-mindos-bundle` 在补齐 runtime package deps 前后清理顶层 `eslint` / `vitest` / `tsx` / `typescript-eslint` / `typescript` 及 `@eslint` / `@vitest` 等 dev-only package，确保 closure 校验只覆盖实际发布 runtime。不要删除整个 `@types` scope：`@discordjs/ws`、`p-retry`、`protobufjs` 等生产包会把 `@types/*` 声明在 `dependencies`。
+
+**防回归**：`packages/desktop/src/prepare-mindos-bundle.test.ts` 覆盖 standalone 中残留 dev tooling 且其依赖缺失时，materialize 不应失败，并且这些顶层 dev package 会被删除；同时覆盖 runtime `@types/*` dependency 必须保留。
+
+### Standalone package resolver 必须校验 package name（2026-06-11）
+
+**症状**：`packages/web/.next/standalone/node_modules/string_decoder` 异常变成整个 repo 根目录，包含 `.git`、`packages/`、`wiki/`、根 `node_modules/` 等，导致 standalone 体积膨胀到 GB 级，并引入大量 unrelated dev dependency closure 错误。
+
+**根因**：`createRequire(...).resolve('string_decoder')` 对 Node builtin 名称会返回裸字符串 `string_decoder`。如果 `findPackageRoot()` 再落到 `.`，而 `packageAtPathSatisfies()` 只检查 version range、不检查 package name，就可能把根 `package.json` 当成 `string_decoder` 包源复制进 runtime。
+
+**修复**：`packageAtPathSatisfies()` 必须接收并校验 expected package name；`resolvePackageDir()`、dependency closure、nested dependency 选择都要用 `pkg.name === dependencyName` 作为前置条件。Next optional peer 也不能当 runtime dependency materialize，尤其是 `@playwright/test`、`sass`、`@opentelemetry/api`、`babel-plugin-react-compiler`。
+
+**防回归**：`packages/desktop/src/prepare-mindos-bundle.test.ts` 覆盖 `string_decoder` 这类 builtin 同名包不会复制 repo 根，并覆盖 Next optional peer 即使本地存在也不进入 standalone runtime。
+
 ### Capture AI organize 不能只测 SSE，要验证工具真实落盘（2026-05-16）
 
 **症状**：暂存台 AI 整理的 `/api/ask mode=organize` 返回 200，SSE 里也有 `tool_start`，但知识库没有新增/更新文件；进一步看 stream 才发现 `list_files` / `create_file` 返回 `Tool ... not found`。

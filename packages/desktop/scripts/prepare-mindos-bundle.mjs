@@ -50,6 +50,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   materializeStandaloneNodeModules(appDir, standaloneDir);
   materializeNextServerLib(appDir, standaloneDir);
   materializeRuntimeDependencySeeds(appDir, standaloneDir, options.runtimeDependencySeeds ?? []);
+  pruneDirectDevelopmentPackages(standaloneDir);
   materializeStandalonePackageDependencies(appDir, standaloneDir);
   prunePnpmVirtualStores(standaloneDir);
   pruneNextProductionServerPayload(standaloneDir);
@@ -64,6 +65,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
     bundleLocalEmbeddingRuntime: options.bundleLocalEmbeddingRuntime === true
       || process.env.MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME === '1',
   });
+  pruneDirectDevelopmentPackages(standaloneDir);
   assertStandalonePackageDependencyClosure(standaloneDir);
   pruneStandaloneBuildJunk(standaloneDir);
   assertStandaloneAppFiles(appDir, 'prepare-mindos-bundle');
@@ -138,7 +140,7 @@ function materializePackageDependencies(appDir, standaloneDir, packageName, pack
     if (dependencySource) sourceByPackageName.set(dependencyName, dependencySource);
     const nestedDependencyDir = path.join(packageDir, 'node_modules', dependencyName);
     const topLevelDependencyDir = path.join(standaloneDir, 'node_modules', dependencyName);
-    const dependencyDir = packageAtPathSatisfies(nestedDependencyDir, dependencyRange)
+    const dependencyDir = packageAtPathSatisfies(nestedDependencyDir, dependencyRange, dependencyName)
       ? nestedDependencyDir
       : topLevelDependencyDir;
     materializePackageDependencies(
@@ -186,8 +188,8 @@ function assertStandalonePackageDependencyClosure(standaloneDir) {
 }
 
 function dependencyResolvableFromStandalonePackage(nodeModulesDir, packageDir, dependencyName, dependencyRange) {
-  return packageAtPathSatisfies(path.join(packageDir, 'node_modules', dependencyName), dependencyRange)
-    || packageAtPathSatisfies(path.join(nodeModulesDir, dependencyName), dependencyRange);
+  return packageAtPathSatisfies(path.join(packageDir, 'node_modules', dependencyName), dependencyRange, dependencyName)
+    || packageAtPathSatisfies(path.join(nodeModulesDir, dependencyName), dependencyRange, dependencyName);
 }
 
 function isNodeBuiltin(packageName) {
@@ -285,8 +287,11 @@ function materializeNextDependencies(appDir, standaloneDir, sourceNext) {
   const nextPackage = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
   const runtimeDeps = {
     ...(nextPackage.dependencies ?? {}),
-    ...(nextPackage.peerDependencies ?? {}),
   };
+  for (const [packageName, packageRange] of Object.entries(nextPackage.peerDependencies ?? {})) {
+    if (nextPackage.peerDependenciesMeta?.[packageName]?.optional === true) continue;
+    runtimeDeps[packageName] = packageRange;
+  }
   for (const packageName of Object.keys(runtimeDeps)) {
     materializePackage(appDir, standaloneDir, packageName, sourceNext);
   }
@@ -346,6 +351,27 @@ function pruneOptionalLocalEmbeddingRuntime(standaloneDir, { bundleLocalEmbeddin
     rmSync(path.join(nodeModulesDir, packageName), { recursive: true, force: true });
   }
   pruneEmptyParents(path.join(nodeModulesDir, '@huggingface', 'transformers'), nodeModulesDir);
+}
+
+function pruneDirectDevelopmentPackages(standaloneDir) {
+  const nodeModulesDir = path.join(standaloneDir, 'node_modules');
+  if (!existsSync(nodeModulesDir)) return;
+
+  for (const packageName of [
+    '@eslint',
+    '@vitest',
+    'eslint',
+    'eslint-config-next',
+    'eslint-plugin-react-hooks',
+    'tsx',
+    'typescript',
+    'typescript-eslint',
+    'vitest',
+  ]) {
+    const packageDir = path.join(nodeModulesDir, packageName);
+    rmSync(packageDir, { recursive: true, force: true });
+    pruneEmptyParents(packageDir, nodeModulesDir);
+  }
 }
 
 function pruneDevOnlyDirs(currentDir) {
@@ -483,10 +509,10 @@ function materializePackage(appDir, standaloneDir, packageName, fromDir = appDir
   }
 
   if (parentPackageDir) {
-    if (packageAtPathSatisfies(destPackage, dependencyRange)) return sourcePackage;
+    if (packageAtPathSatisfies(destPackage, dependencyRange, packageName)) return sourcePackage;
 
     const nestedDest = path.join(parentPackageDir, 'node_modules', packageName);
-    if (packageAtPathSatisfies(nestedDest, dependencyRange)) return sourcePackage;
+    if (packageAtPathSatisfies(nestedDest, dependencyRange, packageName)) return sourcePackage;
 
     rmSync(nestedDest, { recursive: true, force: true });
     mkdirSync(path.dirname(nestedDest), { recursive: true });
@@ -495,11 +521,12 @@ function materializePackage(appDir, standaloneDir, packageName, fromDir = appDir
   return sourcePackage;
 }
 
-function packageAtPathSatisfies(packageDir, dependencyRange = '*') {
+function packageAtPathSatisfies(packageDir, dependencyRange = '*', expectedPackageName = null) {
   const packageJsonPath = path.join(packageDir, 'package.json');
   if (!existsSync(packageJsonPath)) return false;
   try {
     const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    if (expectedPackageName && pkg.name !== expectedPackageName) return false;
     if (typeof pkg.version !== 'string' && !isWildcardRange(dependencyRange)) return false;
     return versionSatisfiesRange(pkg.version, dependencyRange);
   } catch {
@@ -562,19 +589,19 @@ function compareSemver(a, b) {
 function resolvePackageDir(appDir, packageName, fromDir = appDir, dependencyRange = '*') {
   const direct = path.join(appDir, 'node_modules', packageName);
   const packageLocal = path.join(fromDir, 'node_modules', packageName);
-  if (packageAtPathSatisfies(packageLocal, dependencyRange)) return realpathSync(packageLocal);
-  if (packageAtPathSatisfies(direct, dependencyRange)) return realpathSync(direct);
+  if (packageAtPathSatisfies(packageLocal, dependencyRange, packageName)) return realpathSync(packageLocal);
+  if (packageAtPathSatisfies(direct, dependencyRange, packageName)) return realpathSync(direct);
 
   try {
     const requireFromPackage = createRequire(path.join(realpathSync(fromDir), 'package.json'));
     const entrypoint = requireFromPackage.resolve(packageName);
     const packageRoot = findPackageRoot(entrypoint);
-    if (packageAtPathSatisfies(packageRoot, dependencyRange)) return packageRoot;
+    if (packageAtPathSatisfies(packageRoot, dependencyRange, packageName)) return packageRoot;
   } catch {
     // Fall through to pnpm store scan below.
   }
 
-  if (packageAtPathSatisfies(direct, dependencyRange)) return realpathSync(direct);
+  if (packageAtPathSatisfies(direct, dependencyRange, packageName)) return realpathSync(direct);
 
   const repoRoot = path.resolve(appDir, '..', '..');
   const pnpmDir = path.join(repoRoot, 'node_modules', '.pnpm');
@@ -584,7 +611,7 @@ function resolvePackageDir(appDir, packageName, fromDir = appDir, dependencyRang
   for (const entry of readdirSync(pnpmDir)) {
     if (!entry.startsWith(`${encodedName}@`)) continue;
     const candidate = path.join(pnpmDir, entry, 'node_modules', packageName);
-    if (packageAtPathSatisfies(candidate, dependencyRange)) return candidate;
+    if (packageAtPathSatisfies(candidate, dependencyRange, packageName)) return candidate;
   }
   return direct;
 }
