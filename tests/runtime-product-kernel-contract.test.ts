@@ -47,6 +47,7 @@ describe('MindOS runtime product kernel contract', () => {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       name?: string;
       dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
       exports?: Record<string, unknown>;
       scripts?: Record<string, string>;
     };
@@ -55,7 +56,6 @@ describe('MindOS runtime product kernel contract', () => {
     expect(manifest.scripts?.build).toBe('tsc && pnpm run build:protocols');
     expect(manifest.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
-      '@anthropic-ai/claude-agent-sdk',
       '@anthropic-ai/sdk',
       '@modelcontextprotocol/sdk',
       'chokidar',
@@ -63,6 +63,7 @@ describe('MindOS runtime product kernel contract', () => {
       'pino-pretty',
       'zod',
     ]);
+    expect(manifest.devDependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk');
     expect(Object.keys(manifest.exports ?? {}).sort()).toEqual([
       '.',
       './agent',
